@@ -11,7 +11,7 @@
 
 ## 2. Protocol and authoritative server
 
-- [ ] 2.1 Raise the protocol version and define strict game snapshot, repair/upgrade command, and
+- [x] 2.1 Raise the protocol version and define strict game snapshot, repair/upgrade command, and
       error schemas; verify with protocol runtime-schema tests.
 - [ ] 2.2 Extend Colyseus state with assigned sectors and the public game snapshot; verify schema
       mapping with server tests.

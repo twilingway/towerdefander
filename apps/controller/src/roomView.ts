@@ -4,8 +4,17 @@ import {
   type PublicRoomView
 } from "@town-defenders/protocol";
 
+interface NetworkPlayerState {
+  playerId: string;
+  playerName: string;
+  ready: boolean;
+  connected: boolean;
+  signalCount: number;
+  sectorId?: 0 | 1 | null;
+}
+
 interface PlayerCollection {
-  values(): IterableIterator<PublicPlayerView>;
+  values(): IterableIterator<NetworkPlayerState>;
 }
 
 export interface NetworkRoomState {
@@ -35,7 +44,8 @@ export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoo
       playerName: player.playerName,
       ready: player.ready,
       connected: player.connected,
-      signalCount: player.signalCount
+      signalCount: player.signalCount,
+      sectorId: player.sectorId ?? null
     }))
   });
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
@@ -8,13 +8,54 @@ export type ClientRole = z.infer<typeof clientRoleSchema>;
 export const roomPhaseSchema = z.enum(["lobby", "active", "finished"]);
 export type RoomPhase = z.infer<typeof roomPhaseSchema>;
 
+export const sectorIdSchema = z.union([z.literal(0), z.literal(1)]);
+export type SectorId = z.infer<typeof sectorIdSchema>;
+
+export const defenseResultSchema = z.enum(["in_progress", "victory", "defeat"]);
+export type DefenseResult = z.infer<typeof defenseResultSchema>;
+
+export const publicSectorViewSchema = z
+  .object({
+    sectorId: sectorIdSchema,
+    assignedPlayerId: z.string().min(1).nullable(),
+    gateHealth: z.number().int().nonnegative(),
+    gateMaxHealth: z.number().int().positive(),
+    defenseLevel: z.number().int().positive(),
+    defenseDamage: z.number().int().positive()
+  })
+  .strict();
+export type PublicSectorView = z.infer<typeof publicSectorViewSchema>;
+
+export const publicEnemyViewSchema = z
+  .object({
+    enemyId: z.string().min(1),
+    sectorId: sectorIdSchema,
+    health: z.number().int().positive(),
+    progress: z.number().int().nonnegative()
+  })
+  .strict();
+export type PublicEnemyView = z.infer<typeof publicEnemyViewSchema>;
+
+export const publicGameSnapshotSchema = z
+  .object({
+    tick: z.number().int().nonnegative(),
+    elapsedMs: z.number().int().nonnegative(),
+    treasury: z.number().int().nonnegative(),
+    result: defenseResultSchema,
+    sectors: z.array(publicSectorViewSchema).length(2),
+    enemies: z.array(publicEnemyViewSchema)
+  })
+  .strict();
+export type PublicGameSnapshot = z.infer<typeof publicGameSnapshotSchema>;
+
 export const publicPlayerViewSchema = z
   .object({
     playerId: z.string().min(1),
     playerName: z.string().min(1).max(24),
     ready: z.boolean(),
     connected: z.boolean(),
-    signalCount: z.number().int().nonnegative()
+    signalCount: z.number().int().nonnegative(),
+    sectorId: sectorIdSchema.nullable().default(null)
   })
   .strict();
 export type PublicPlayerView = z.infer<typeof publicPlayerViewSchema>;
@@ -24,7 +65,8 @@ export const publicRoomViewSchema = z
     roomId: z.string().min(1),
     phase: roomPhaseSchema,
     displayConnected: z.boolean(),
-    players: z.array(publicPlayerViewSchema).max(2)
+    players: z.array(publicPlayerViewSchema).max(2),
+    game: publicGameSnapshotSchema.nullable().default(null)
   })
   .strict();
 export type PublicRoomView = z.infer<typeof publicRoomViewSchema>;
@@ -62,9 +104,21 @@ export const signalCommandSchema = z
   .strict();
 export type SignalCommand = z.infer<typeof signalCommandSchema>;
 
+export const resourceActionCommandSchema = z
+  .object({
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    roomId: z.string().min(1),
+    playerId: z.string().min(1),
+    actionId: z.uuid()
+  })
+  .strict();
+export type ResourceActionCommand = z.infer<typeof resourceActionCommandSchema>;
+
 export const clientMessage = {
   ready: "player:ready",
-  signal: "player:signal"
+  signal: "player:signal",
+  repair: "player:repair",
+  upgrade: "player:upgrade"
 } as const;
 
 export const serverMessage = {
@@ -78,7 +132,10 @@ export const serverErrorCodeSchema = z.enum([
   "room_not_found",
   "not_controller",
   "invalid_phase",
-  "reconnect_expired"
+  "reconnect_expired",
+  "identity_mismatch",
+  "insufficient_funds",
+  "action_not_available"
 ]);
 export type ServerErrorCode = z.infer<typeof serverErrorCodeSchema>;
 

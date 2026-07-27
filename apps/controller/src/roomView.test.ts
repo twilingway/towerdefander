@@ -17,7 +17,8 @@ describe("controller room view", () => {
       playerName: "Sam",
       ready: false,
       connected: true,
-      signalCount: 0
+      signalCount: 0,
+      sectorId: 1 as const
     };
 
     expect(
@@ -26,13 +27,15 @@ describe("controller room view", () => {
           roomId: "ROOM1",
           phase: "lobby",
           displayConnected: true,
+          game: null,
           players: [
             {
               playerId: "player-1",
               playerName: "Alex",
               ready: true,
               connected: true,
-              signalCount: 1
+              signalCount: 1,
+              sectorId: 0
             },
             player
           ]

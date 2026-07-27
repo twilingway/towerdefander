@@ -25,7 +25,8 @@ describe("display room view", () => {
       playerName: "Alex",
       ready: true,
       connected: true,
-      signalCount: 2
+      signalCount: 2,
+      sectorId: null
     };
 
     expect(
@@ -39,7 +40,8 @@ describe("display room view", () => {
       roomId: "ROOM1",
       phase: "active",
       displayConnected: true,
-      players: [player]
+      players: [player],
+      game: null
     });
   });
 });

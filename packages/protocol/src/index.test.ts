@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   PROTOCOL_VERSION,
   joinOptionsSchema,
+  publicGameSnapshotSchema,
   publicRoomViewSchema,
   readyCommandSchema,
+  resourceActionCommandSchema,
   signalCommandSchema
 } from "./index.js";
 
@@ -41,6 +43,49 @@ describe("protocol schemas", () => {
     ).toBe(false);
   });
 
+  it("requires a complete resource-action identity envelope", () => {
+    const command = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: "ROOM123",
+      playerId: "session-1",
+      actionId: "00000000-0000-4000-8000-000000000001"
+    };
+
+    expect(resourceActionCommandSchema.parse(command)).toEqual(command);
+    expect(resourceActionCommandSchema.safeParse({ ...command, roomId: "" }).success).toBe(false);
+    expect(resourceActionCommandSchema.safeParse({ ...command, sectorId: 1 }).success).toBe(false);
+  });
+
+  it("validates a compact two-sector game snapshot", () => {
+    expect(
+      publicGameSnapshotSchema.parse({
+        tick: 3,
+        elapsedMs: 1500,
+        treasury: 42,
+        result: "in_progress",
+        sectors: [
+          {
+            sectorId: 0,
+            assignedPlayerId: "session-1",
+            gateHealth: 80,
+            gateMaxHealth: 100,
+            defenseLevel: 1,
+            defenseDamage: 3
+          },
+          {
+            sectorId: 1,
+            assignedPlayerId: null,
+            gateHealth: 100,
+            gateMaxHealth: 100,
+            defenseLevel: 2,
+            defenseDamage: 5
+          }
+        ],
+        enemies: [{ enemyId: "enemy-1", sectorId: 0, health: 6, progress: 2 }]
+      })
+    ).toMatchObject({ tick: 3, treasury: 42, result: "in_progress" });
+  });
+
   it("rejects unknown fields at the trust boundary", () => {
     expect(
       joinOptionsSchema.safeParse({
@@ -71,25 +116,27 @@ describe("protocol schemas", () => {
   });
 
   it("defines the complete public room view", () => {
-    expect(
-      publicRoomViewSchema.parse({
-        roomId: "ROOM123",
-        phase: "lobby",
-        displayConnected: true,
-        players: [
-          {
-            playerId: "session-1",
-            playerName: "Alex",
-            ready: false,
-            connected: true,
-            signalCount: 0
-          }
-        ]
-      })
-    ).toMatchObject({
+    const view = publicRoomViewSchema.parse({
       roomId: "ROOM123",
       phase: "lobby",
-      displayConnected: true
+      displayConnected: true,
+      players: [
+        {
+          playerId: "session-1",
+          playerName: "Alex",
+          ready: false,
+          connected: true,
+          signalCount: 0
+        }
+      ]
+    });
+
+    expect(view).toMatchObject({
+      roomId: "ROOM123",
+      phase: "lobby",
+      displayConnected: true,
+      game: null,
+      players: [{ sectorId: null }]
     });
   });
 });

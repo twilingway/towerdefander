@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@colyseus/sdk";
 
 const port = 35_677;
+const protocolVersion = 2;
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const serverEntry = fileURLToPath(new URL("../../server/dist/index.js", import.meta.url));
@@ -29,30 +30,30 @@ try {
 
   display = await new Client(endpoint).create("town_defenders", {
     role: "display",
-    protocolVersion: 1
+    protocolVersion
   });
   first = await new Client(endpoint).joinById(display.roomId, {
     role: "controller",
-    protocolVersion: 1,
+    protocolVersion,
     playerName: "Alex"
   });
   second = await new Client(endpoint).joinById(display.roomId, {
     role: "controller",
-    protocolVersion: 1,
+    protocolVersion,
     playerName: "Sam"
   });
 
   await waitFor(() => display.state.players.size === 2);
 
-  first.send("player:ready", { protocolVersion: 1, ready: true });
-  second.send("player:ready", { protocolVersion: 1, ready: true });
+  first.send("player:ready", { protocolVersion, ready: true });
+  second.send("player:ready", { protocolVersion, ready: true });
   await waitFor(() => display.state.phase === "active");
 
   const invalidMessageError = new Promise((resolve) => {
     first.onMessage("server:error", resolve);
   });
   first.send("player:signal", {
-    protocolVersion: 2,
+    protocolVersion: protocolVersion + 1,
     actionId: crypto.randomUUID()
   });
   const invalidMessageResult = await Promise.race([
@@ -72,11 +73,11 @@ try {
 
   const actionId = crypto.randomUUID();
   first.send("player:signal", {
-    protocolVersion: 1,
+    protocolVersion,
     actionId
   });
   await waitFor(() => display.state.players.get(first.sessionId)?.signalCount === 1);
-  second.send("player:signal", { protocolVersion: 1, actionId });
+  second.send("player:signal", { protocolVersion, actionId });
   await new Promise((resolve) => {
     setTimeout(resolve, 100);
   });
@@ -103,7 +104,7 @@ try {
   try {
     await new Client(endpoint).joinById(display.roomId, {
       role: "display",
-      protocolVersion: 1
+      protocolVersion
     });
   } catch {
     secondDisplayWasRejected = true;
@@ -149,7 +150,7 @@ async function expectControllerCreationToFail() {
   try {
     controllerRoom = await new Client(endpoint).create("town_defenders", {
       role: "controller",
-      protocolVersion: 1,
+      protocolVersion,
       playerName: "Invalid creator"
     });
   } catch {

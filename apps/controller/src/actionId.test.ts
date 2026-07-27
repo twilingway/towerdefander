@@ -1,4 +1,4 @@
-import { signalCommandSchema } from "@town-defenders/protocol";
+import { PROTOCOL_VERSION, signalCommandSchema } from "@town-defenders/protocol";
 import { describe, expect, it } from "vitest";
 
 import { createActionId, type RandomSource } from "./actionId.js";
@@ -19,7 +19,7 @@ describe("createActionId", () => {
     expect(actionId).toBe("00112233-4455-4677-8899-aabbccddeeff");
     expect(
       signalCommandSchema.safeParse({
-        protocolVersion: 1,
+        protocolVersion: PROTOCOL_VERSION,
         actionId
       }).success
     ).toBe(true);
