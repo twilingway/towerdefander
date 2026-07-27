@@ -14,6 +14,12 @@ importers:
       '@fission-ai/openspec':
         specifier: latest
         version: 1.6.0(@types/node@26.1.1)
+      '@playwright/test':
+        specifier: 1.62.0
+        version: 1.62.0
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
       cross-env:
         specifier: latest
         version: 10.1.0
@@ -120,7 +126,7 @@ importers:
         version: link:../../packages/protocol
       colyseus:
         specifier: latest
-        version: 0.17.10(@colyseus/auth@0.17.9(@colyseus/core@0.17.45)(express@5.2.1))(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/core@0.17.45)(@colyseus/redis-driver@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/redis-presence@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/uwebsockets-transport@0.17.21(@colyseus/core@0.17.45))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.17.10(@colyseus/auth@0.17.9(@colyseus/core@0.17.45)(express@5.2.1))(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/core@0.17.45)(@colyseus/redis-driver@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/redis-presence@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/uwebsockets-transport@0.17.21(@colyseus/core@0.17.45))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3)
     devDependencies:
       '@types/express':
         specifier: latest
@@ -139,7 +145,7 @@ importers:
         version: 6.0.2
       vitest:
         specifier: latest
-        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/config: {}
 
@@ -153,7 +159,7 @@ importers:
         version: 6.0.2
       vitest:
         specifier: latest
-        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))
+        version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/protocol:
     dependencies:
@@ -881,6 +887,11 @@ packages:
 
   '@oxc-project/types@0.139.0':
     resolution: {integrity: sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw==}
+
+  '@playwright/test@1.62.0':
+    resolution: {integrity: sha512-9zOJ6ZQRAena31MpOH9VSzIz8Ou3YJ/wtY/eQm5T2uhfhG7/U3COrMS8xOtUrZrp9OgdmzEnIYODye3nY1VqzA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@pm2/io@6.1.0':
     resolution: {integrity: sha512-IxHuYURa3+FQ6BKePlgChZkqABUKFYH6Bwbw7V/pWU1pP6iR1sCI26l7P9ThUEB385ruZn/tZS3CXDUF5IA1NQ==}
@@ -1732,6 +1743,11 @@ packages:
     resolution: {integrity: sha512-Rx/WycZ60HOaqLKAi6cHRKKI7zxWbJ31MhntmtwMoaTeF7XFH9hhBp8vITaMidfljRQ6eYWCKkaTK+ykVJHP2A==}
     engines: {node: '>= 0.8'}
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
@@ -2180,6 +2196,16 @@ packages:
 
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
+
+  playwright-core@1.62.0:
+    resolution: {integrity: sha512-nsNRyq0r2zsG8AcRHWknc9QRA5XCueC7gWMrs+Gx2tlZn9hcl8zudfh00lhJPY1DE7NmZ6bDsT9g2yey8mXljA==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.62.0:
+    resolution: {integrity: sha512-Z14dG305dgaLu6foB1TXQagFiW8JfSUIUaUuPaKQ6NtBPKF1P/qXcqfh6c6K/icPqdy37JmjbiBXf6JNg6Sylw==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   postcss-load-config@6.0.1:
     resolution: {integrity: sha512-oPtTM4oerL+UXmx+93ytZVN82RrlY/wPUV8IeDxFrzIjXOLF1pN+EmKPLbubvKHT2HC20xXsCAH2Z+CKV6Oz/g==}
@@ -3281,6 +3307,10 @@ snapshots:
 
   '@oxc-project/types@0.139.0': {}
 
+  '@playwright/test@1.62.0':
+    dependencies:
+      playwright: 1.62.0
+
   '@pm2/io@6.1.0':
     dependencies:
       async: 2.6.4
@@ -3770,7 +3800,7 @@ snapshots:
 
   color-name@1.1.4: {}
 
-  colyseus@0.17.10(@colyseus/auth@0.17.9(@colyseus/core@0.17.45)(express@5.2.1))(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/core@0.17.45)(@colyseus/redis-driver@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/redis-presence@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/uwebsockets-transport@0.17.21(@colyseus/core@0.17.45))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3):
+  colyseus@0.17.10(@colyseus/auth@0.17.9(@colyseus/core@0.17.45)(express@5.2.1))(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/core@0.17.45)(@colyseus/redis-driver@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/redis-presence@0.17.7(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/uwebsockets-transport@0.17.21(@colyseus/core@0.17.45))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))(zod@4.4.3):
     dependencies:
       '@colyseus/auth': 0.17.9(@colyseus/core@0.17.45)(express@5.2.1)
       '@colyseus/core': 0.17.45(@colyseus/better-call@1.3.3(zod@4.4.3))(@colyseus/schema@4.0.30(typescript@6.0.2))(@colyseus/ws-transport@0.17.13(@colyseus/core@0.17.45)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.4.3)
@@ -3783,7 +3813,7 @@ snapshots:
       '@colyseus/uwebsockets-transport': 0.17.21(@colyseus/core@0.17.45)
       '@colyseus/ws-transport': 0.17.13(@colyseus/core@0.17.45)(express@5.2.1)
     optionalDependencies:
-      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.27.7)(tsx@4.23.1)(yaml@2.9.0)
+      vite: 8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@colyseus/better-call'
       - '@pm2/io'
@@ -4145,6 +4175,9 @@ snapshots:
   forwarded@0.2.0: {}
 
   fresh@2.0.0: {}
+
+  fsevents@2.3.2:
+    optional: true
 
   fsevents@2.3.3:
     optional: true
@@ -4562,6 +4595,14 @@ snapshots:
       confbox: 0.1.8
       mlly: 1.8.2
       pathe: 2.0.3
+
+  playwright-core@1.62.0: {}
+
+  playwright@1.62.0:
+    dependencies:
+      playwright-core: 1.62.0
+    optionalDependencies:
+      fsevents: 2.3.2
 
   postcss-load-config@6.0.1(postcss@8.5.23)(tsx@4.23.1)(yaml@2.9.0):
     dependencies:

@@ -8,6 +8,7 @@ import {
 } from "@town-defenders/protocol";
 import { useEffect, useRef, useState } from "react";
 
+import { createActionId } from "./actionId.js";
 import {
   findCurrentPlayer,
   getRoomFromLocation,
@@ -163,7 +164,7 @@ export function ControllerApp() {
   function sendSignal() {
     roomReference.current?.send(clientMessage.signal, {
       protocolVersion: PROTOCOL_VERSION,
-      actionId: crypto.randomUUID()
+      actionId: createActionId()
     });
   }
 

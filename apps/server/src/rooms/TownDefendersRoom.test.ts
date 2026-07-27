@@ -116,11 +116,47 @@ describe("TownDefendersRoom", () => {
       protocolVersion: PROTOCOL_VERSION,
       playerName: "Alex"
     });
+    vi.spyOn(room, "allowReconnection").mockRejectedValue(
+      new Error("display reconnection expired")
+    );
 
     await room.onLeave(display.client, 1006);
 
     expect(room.state.displayConnected).toBe(false);
     expect(room.state.players.get("player-1")?.playerName).toBe("Alex");
+  });
+
+  it("restores display presence during the reconnection grace period", async () => {
+    const room = createRoom();
+    const display = createClient("display");
+    room.onJoin(display.client, {
+      role: "display",
+      protocolVersion: PROTOCOL_VERSION
+    });
+    const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(display.client);
+
+    await room.onLeave(display.client, 1006);
+
+    expect(allowReconnection).toHaveBeenCalledWith(display.client, 30);
+    expect(room.state.displayConnected).toBe(true);
+  });
+
+  it("reserves the display role for its reconnecting identity", () => {
+    const room = createRoom();
+    const display = createClient("display");
+    const intruder = createClient("other-display");
+    room.onJoin(display.client, {
+      role: "display",
+      protocolVersion: PROTOCOL_VERSION
+    });
+    room.state.displayConnected = false;
+
+    expect(() => {
+      room.onJoin(intruder.client, {
+        role: "display",
+        protocolVersion: PROTOCOL_VERSION
+      });
+    }).toThrow("room_full");
   });
 
   it("applies a signal action only once", () => {

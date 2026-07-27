@@ -9,6 +9,7 @@ import {
 } from "@town-defenders/protocol";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
 
+import { readServerConfig } from "../config.js";
 import { PlayerState, TownDefendersState } from "./TownDefendersState.js";
 
 type ConnectionRole = "display" | "controller";
@@ -17,8 +18,11 @@ interface RuntimeSchema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false };
 }
 
+const { reconnectionGraceSeconds } = readServerConfig();
+
 export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
-  override maxClients = 3;
+  // One spare transport seat lets onJoin return a typed room_full error.
+  override maxClients = 4;
   override maxMessagesPerSecond = 20;
   override state = new TownDefendersState();
 
@@ -54,7 +58,13 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     }
 
     if (result.data.role === "display") {
-      if (this.state.displayConnected) {
+      const reservedDisplaySessionId = [...this.roles.entries()].find(
+        ([, role]) => role === "display"
+      )?.[0];
+      if (
+        this.state.displayConnected ||
+        (reservedDisplaySessionId !== undefined && reservedDisplaySessionId !== client.sessionId)
+      ) {
         throw new ServerError(4001, "room_full");
       }
 
@@ -80,7 +90,16 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
 
     if (role === "display") {
       this.state.displayConnected = false;
-      this.roles.delete(client.sessionId);
+      try {
+        if (code === CloseCode.CONSENTED) {
+          throw new Error("consented leave");
+        }
+
+        await this.allowReconnection(client, reconnectionGraceSeconds);
+        this.state.displayConnected = true;
+      } catch {
+        this.roles.delete(client.sessionId);
+      }
       return;
     }
 
@@ -96,7 +115,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         throw new Error("consented leave");
       }
 
-      await this.allowReconnection(client, 30);
+      await this.allowReconnection(client, reconnectionGraceSeconds);
       player.connected = true;
       this.updatePhase();
     } catch {

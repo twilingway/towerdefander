@@ -47,6 +47,10 @@ Colyseus Schema содержит фазу, display presence и игроков. �
 является единственным писателем синхронизируемого состояния. Служебный `Set` применённых `actionId`
 остаётся несинхронизируемым server-only state.
 
+Публичный vertical-slice roster намеренно одинаков для display и controllers: он содержит только
+имя, ready/connected и подтверждённый test counter двух игроков. Приватные ресурсы, cooldowns и
+детали будущей симуляции в этот view не входят и будут фильтроваться отдельным контрактом.
+
 Альтернатива: TV-hosted simulation. Отклонена из-за потери матча при lifecycle событии display и
 невозможности атомарно разрешать будущие траты общей казны.
 
@@ -81,8 +85,11 @@ art direction.
 - **Разные hostnames при LAN-разработке** → вычислять server hostname из `window.location.hostname`,
   слушать `0.0.0.0`, документировать firewall.
 - **Повтор сообщения после reconnect** → обязательный `actionId` и server-side deduplication.
-- **Display disconnect уничтожает UX комнаты** → room не завершается сразу и display presence
-  отражается в состоянии; identity recovery display-клиента остаётся вне этого изменения.
+- **Рост `Set<actionId>`** → Set живёт только вместе с room и удаляется при dispose; полноценный
+  матч получит ограниченную длительность, после которой dedupe state освобождается целиком.
+- **Display disconnect уничтожает UX комнаты** → room сохраняет display identity 30 секунд, отражает
+  presence в состоянии и использует встроенный SDK reconnect; восстановление после полного reload с
+  постоянным token остаётся вне этого изменения.
 - **Colyseus API изменится** → закрепить версии lockfile и покрыть room-level tests.
 - **Android TV WebView отличается от desktop browser** → не заявлять TV support в этом change;
   провести real-device gate при Capacitor change.
@@ -104,4 +111,5 @@ Rollback: удалить новые workspace packages и change artifacts; по
 ## Open Questions
 
 - Production hosting provider и Redis adapter выбираются перед первым публичным deployment.
-- Политика восстановления display-клиента будет уточнена вместе с полноценным матчем.
+- Политика восстановления display-клиента после полного reload и постоянного хранения token будет
+  уточнена вместе с полноценным матчем; краткий reconnect живого клиента входит в этот change.

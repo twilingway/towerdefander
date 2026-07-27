@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { createControllerJoinUrl, toPublicRoomView, type NetworkRoomState } from "./roomView.js";
 
-type DisplayStatus = "idle" | "connecting" | "connected" | "error";
+type DisplayStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 
 const gameServerUrl = readStringEnvironment(
@@ -59,6 +59,14 @@ export function DisplayApp() {
         setError(message ?? "Сервер сообщил об ошибке.");
         setStatus("error");
       });
+      room.onDrop(() => {
+        setError("Связь с сервером прервана. Переподключаемся…");
+        setStatus("reconnecting");
+      });
+      room.onReconnect(() => {
+        setError("");
+        setStatus("connected");
+      });
       room.onLeave(() => {
         setError("Соединение с комнатой закрыто.");
         setStatus("error");
@@ -79,7 +87,7 @@ export function DisplayApp() {
     setStatus("connected");
   }
 
-  if (status !== "connected" || view === undefined) {
+  if ((status !== "connected" && status !== "reconnecting") || view === undefined) {
     return (
       <main className="display-shell display-shell--centered">
         <section className="hero-card">
@@ -108,6 +116,7 @@ export function DisplayApp() {
         </div>
         <div className={`phase-badge phase-badge--${view.phase}`}>{phaseLabel(view.phase)}</div>
       </header>
+      {error.length > 0 && <p className="error-message">{error}</p>}
 
       <section className="lobby-layout">
         <div className="join-card">

@@ -71,6 +71,7 @@ Colyseus endpoint. Для интернет-режима потребуется �
 pnpm check
 pnpm spec:validate
 pnpm smoke:network
+pnpm test:e2e
 ```
 
 ## OpenSpec

@@ -35,15 +35,17 @@
       component and view-model tests.
 - [x] 4.4 Implement controller ready, signal, confirmed-count, reconnect, and error flows; verify
       with reconnection-session tests, a production build, and the network smoke test.
-- [ ] 4.5 Add browser interaction tests for QR, roster, phase, ready, signal/count, reconnect, and
+- [x] 4.5 Add browser interaction tests for QR, roster, phase, ready, signal/count, reconnect, and
       error rendering.
-- [ ] 4.6 Ensure display and controller endpoints use LAN-safe configurable URLs; verify from a
+- [x] 4.6 Ensure display and controller endpoints use LAN-safe configurable URLs; verify from a
       second browser/device hostname.
+- [x] 4.7 Preserve display identity during a 30-second transient disconnect; verify with room and
+      network integration tests.
 
 ## 5. Integrated verification
 
-- [ ] 5.1 Add a two-controller browser smoke test covering create, join, ready, active, and signal
+- [x] 5.1 Add a two-controller browser smoke test covering create, join, ready, active, and signal
       confirmation.
-- [ ] 5.2 Add reconnect and invalid/duplicate command integration checks.
-- [ ] 5.3 Run `pnpm check` and `pnpm spec:validate`, request reviewer-agent inspection, and
+- [x] 5.2 Add reconnect and invalid/duplicate command integration checks.
+- [x] 5.3 Run `pnpm check` and `pnpm spec:validate`, request reviewer-agent inspection, and
       reconcile all findings before marking the change complete.
