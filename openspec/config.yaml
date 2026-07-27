@@ -1,0 +1,27 @@
+schema: spec-driven
+
+context: |
+  Product: cooperative couch-party Tower Defense for 2–6 players.
+  Shared display: desktop browser or Android TV shell from one web codebase.
+  Controllers: responsive browsers on phones, tablets, or computers.
+  Stack: strict TypeScript, pnpm workspaces, React/Vite, Phaser, Node.js,
+  Colyseus, Vitest, ESLint, and Prettier.
+  Authority: the server validates intents and owns trusted game state.
+  Boundaries: game-core is deterministic and independent of DOM, Phaser, React,
+  networking, wall-clock timers, and unseeded randomness.
+  Language: specifications and product docs may be Russian; code identifiers
+  are English.
+
+rules:
+  proposal:
+    - Include explicit goals and non-goals.
+    - Call out material product, dependency, deployment, and compatibility decisions.
+  specs:
+    - Describe observable behavior with testable scenarios.
+    - Include failure and reconnect scenarios for realtime features.
+  design:
+    - Document authority boundaries, protocol ownership, and rejected alternatives.
+    - Identify performance and compatibility risks for desktop browsers and Android TV.
+  tasks:
+    - Keep tasks small enough to implement and verify independently.
+    - Give each implementation group an explicit verification command or observable check.

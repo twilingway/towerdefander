@@ -1,0 +1,5 @@
+interface:
+  display_name: "Realtime Game Contract"
+  short_description: "Protect multiplayer protocol and simulation rules"
+  default_prompt:
+    "Use $realtime-game-contract to design or review this multiplayer protocol change."

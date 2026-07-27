@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenSpec Workflow"
+  short_description: "Guide changes through the OpenSpec lifecycle"
+  default_prompt: "Use $openspec-workflow to plan and execute this change through OpenSpec."

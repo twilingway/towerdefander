@@ -1,0 +1,19 @@
+{
+  "name": "@town-defenders/game-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "latest",
+    "typescript": "6.0.2",
+    "vitest": "latest"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@town-defenders/controller",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --host 0.0.0.0 --port 5174",
+    "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "smoke:network": "node scripts/network-smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "latest",
+    "@town-defenders/protocol": "workspace:*",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "typescript": "6.0.2",
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@town-defenders/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --platform node --dts --clean",
+    "dev": "node --env-file-if-exists=../../.env.local --import tsx --watch src/index.ts",
+    "start": "node --env-file-if-exists=../../.env.local dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@colyseus/schema": "latest",
+    "@town-defenders/game-core": "workspace:*",
+    "@town-defenders/protocol": "workspace:*",
+    "colyseus": "latest"
+  },
+  "devDependencies": {
+    "@types/express": "latest",
+    "@types/node": "latest",
+    "tsup": "latest",
+    "tsx": "latest",
+    "typescript": "6.0.2",
+    "vitest": "latest"
+  }
+}

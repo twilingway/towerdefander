@@ -1,0 +1,35 @@
+{
+  "name": "town-defenders",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @town-defenders/server --filter @town-defenders/display --filter @town-defenders/controller dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -r test",
+    "smoke:network": "pnpm --filter @town-defenders/server build && pnpm --filter @town-defenders/controller smoke:network",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "spec": "cross-env OPENSPEC_TELEMETRY=0 openspec",
+    "spec:status": "cross-env OPENSPEC_TELEMETRY=0 openspec status",
+    "spec:validate": "cross-env OPENSPEC_TELEMETRY=0 openspec validate --all"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "@fission-ai/openspec": "latest",
+    "cross-env": "latest",
+    "eslint": "latest",
+    "prettier": "latest",
+    "typescript": "6.0.2",
+    "typescript-eslint": "latest",
+    "vitest": "latest"
+  }
+}

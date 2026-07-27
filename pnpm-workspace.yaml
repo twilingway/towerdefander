@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - packages/*
+
+confirmModulesPurge: false
+
+onlyBuiltDependencies:
+  - esbuild
+  - msgpackr-extract
+
+ignoredBuiltDependencies:
+  - "@fission-ai/openspec"
