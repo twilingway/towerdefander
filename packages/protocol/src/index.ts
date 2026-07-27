@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 2 as const;
+export const PROTOCOL_VERSION = 3 as const;
 
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
@@ -14,6 +14,12 @@ export type SectorId = z.infer<typeof sectorIdSchema>;
 export const defenseResultSchema = z.enum(["in_progress", "victory", "defeat"]);
 export type DefenseResult = z.infer<typeof defenseResultSchema>;
 
+export const defenseStageSchema = z.enum(["intermission", "combat"]);
+export type DefenseStage = z.infer<typeof defenseStageSchema>;
+
+export const enemyTypeSchema = z.enum(["balanced", "fast", "heavy", "boss"]);
+export type EnemyType = z.infer<typeof enemyTypeSchema>;
+
 export const publicSectorViewSchema = z
   .object({
     sectorId: sectorIdSchema,
@@ -22,7 +28,9 @@ export const publicSectorViewSchema = z
     gateMaxHealth: z.number().int().positive(),
     defenseLevel: z.number().int().positive(),
     defenseDamage: z.number().int().positive(),
-    nextUpgradeCost: z.number().int().positive().nullable()
+    nextUpgradeCost: z.number().int().positive().nullable(),
+    enemyCount: z.number().int().nonnegative(),
+    airstrikeTargetAvailable: z.boolean()
   })
   .strict();
 export type PublicSectorView = z.infer<typeof publicSectorViewSchema>;
@@ -31,11 +39,24 @@ export const publicEnemyViewSchema = z
   .object({
     enemyId: z.string().min(1),
     sectorId: sectorIdSchema,
+    enemyType: enemyTypeSchema,
     health: z.number().int().positive(),
+    maxHealth: z.number().int().positive(),
     progress: z.number().int().nonnegative()
   })
   .strict();
 export type PublicEnemyView = z.infer<typeof publicEnemyViewSchema>;
+
+export const publicAirstrikeEffectSchema = z
+  .object({
+    sequence: z.number().int().positive(),
+    actionId: z.uuid(),
+    playerId: z.string().min(1),
+    targetSectorId: sectorIdSchema,
+    appliedTick: z.number().int().nonnegative()
+  })
+  .strict();
+export type PublicAirstrikeEffect = z.infer<typeof publicAirstrikeEffectSchema>;
 
 export const publicGameSnapshotSchema = z
   .object({
@@ -45,6 +66,14 @@ export const publicGameSnapshotSchema = z
     pathLength: z.number().int().positive(),
     repairCost: z.number().int().positive(),
     result: defenseResultSchema,
+    waveNumber: z.number().int().min(1).max(5),
+    totalWaves: z.literal(5),
+    stage: defenseStageSchema,
+    intermissionRemainingSeconds: z.number().int().nonnegative(),
+    airstrikeCharge: z.number().int().min(0).max(100),
+    airstrikeChargeRequired: z.literal(100),
+    airstrikeDamage: z.number().int().positive(),
+    lastAirstrikeEffect: publicAirstrikeEffectSchema.nullable(),
     sectors: z.array(publicSectorViewSchema).length(2),
     enemies: z.array(publicEnemyViewSchema)
   })
@@ -108,10 +137,18 @@ export const resourceActionCommandSchema = z
   .strict();
 export type ResourceActionCommand = z.infer<typeof resourceActionCommandSchema>;
 
+export const airstrikeCommandSchema = resourceActionCommandSchema
+  .extend({
+    targetSectorId: sectorIdSchema
+  })
+  .strict();
+export type AirstrikeCommand = z.infer<typeof airstrikeCommandSchema>;
+
 export const clientMessage = {
   ready: "player:ready",
   repair: "player:repair",
-  upgrade: "player:upgrade"
+  upgrade: "player:upgrade",
+  airstrike: "player:airstrike"
 } as const;
 
 export const serverMessage = {

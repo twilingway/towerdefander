@@ -180,14 +180,27 @@ export function ControllerApp() {
     });
   }
 
+  function sendAirstrike(targetSectorId: 0 | 1) {
+    const room = roomReference.current;
+    if (room === undefined || view === undefined || currentPlayer === undefined) {
+      return;
+    }
+
+    setError("");
+    room.send(clientMessage.airstrike, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: currentPlayer.playerId,
+      actionId: createActionId(),
+      targetSectorId
+    });
+  }
+
   const ownSector =
     currentPlayer?.sectorId === null || currentPlayer?.sectorId === undefined
       ? undefined
       : view?.game?.sectors.find((sector) => sector.sectorId === currentPlayer.sectorId);
-  const ownEnemies =
-    ownSector === undefined
-      ? 0
-      : (view?.game?.enemies.filter((enemy) => enemy.sectorId === ownSector.sectorId).length ?? 0);
+  const ownEnemies = ownSector?.enemyCount ?? 0;
 
   if (status === "join" || status === "joining" || status === "disconnected") {
     return (
@@ -266,6 +279,20 @@ export function ControllerApp() {
           <>
             <div className="sector-summary">
               <div>
+                <span>Волна</span>
+                <strong>
+                  {view.game?.waveNumber ?? 1}/{view.game?.totalWaves ?? 5}
+                </strong>
+              </div>
+              <div>
+                <span>{view.game?.stage === "intermission" ? "До волны" : "Этап"}</span>
+                <strong>
+                  {view.game?.stage === "intermission"
+                    ? `${String(view.game.intermissionRemainingSeconds)} с`
+                    : "Бой"}
+                </strong>
+              </div>
+              <div>
                 <span>Общая казна</span>
                 <strong>{view.game?.treasury ?? 0}</strong>
               </div>
@@ -311,6 +338,39 @@ export function ControllerApp() {
                   : `Улучшить · ${String(ownSector?.nextUpgradeCost ?? 0)}`}
               </button>
             </div>
+            <section className="airstrike-card" aria-label="Общий авиаудар">
+              <div className="airstrike-heading">
+                <span>Общий авиаудар</span>
+                <strong>
+                  {view.game?.airstrikeCharge ?? 0}/{view.game?.airstrikeChargeRequired ?? 100}
+                </strong>
+              </div>
+              <div className="charge-meter">
+                <span
+                  style={{
+                    width: `${String(
+                      ((view.game?.airstrikeCharge ?? 0) /
+                        (view.game?.airstrikeChargeRequired ?? 100)) *
+                        100
+                    )}%`
+                  }}
+                />
+              </div>
+              <div className="airstrike-actions">
+                {([0, 1] as const).map((sectorId) => (
+                  <button
+                    type="button"
+                    key={sectorId}
+                    onClick={() => {
+                      sendAirstrike(sectorId);
+                    }}
+                    disabled={status === "reconnecting" || !canTargetAirstrike(view.game, sectorId)}
+                  >
+                    {sectorId === currentPlayer?.sectorId ? "Свой сектор" : "Помочь соседу"}
+                  </button>
+                ))}
+              </div>
+            </section>
           </>
         ) : (
           <div className={`result-card result-card--${view?.game?.result ?? "unknown"}`}>
@@ -332,6 +392,15 @@ function resultLabel(result: NonNullable<PublicRoomView["game"]>["result"] | und
     default:
       return "Раунд завершён";
   }
+}
+
+function canTargetAirstrike(game: PublicRoomView["game"] | undefined, sectorId: 0 | 1): boolean {
+  const sector = game?.sectors.find((candidate) => candidate.sectorId === sectorId);
+  return (
+    game?.stage === "combat" &&
+    game.airstrikeCharge >= game.airstrikeChargeRequired &&
+    sector?.airstrikeTargetAvailable === true
+  );
 }
 
 function toServerError(code: string, fallback: string): string {

@@ -6,8 +6,8 @@ const testHost =
     ? "127.0.0.1"
     : configuredTestHost;
 const expectedJoinHost = process.env.E2E_EXPECT_JOIN_HOST?.trim();
-const displayUrl = `http://${testHost}:5173`;
-const controllerUrl = `http://${testHost}:5174`;
+const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
+const controllerUrl = process.env.E2E_CONTROLLER_URL ?? `http://${testHost}:5174`;
 
 test("display and two browser controllers complete a deterministic defense match", async ({
   browser
@@ -55,7 +55,22 @@ test("display and two browser controllers complete a deterministic defense match
     await expect(display.locator(".phase-badge")).toHaveText("Раунд начался");
     await expect(first.getByRole("button", { name: /Улучшить/ })).toBeVisible();
     await expect(second.getByRole("button", { name: /Ремонт/ })).toBeVisible();
-    await expect(display.locator(".sector-card")).toHaveCount(2);
+    await expect(display.getByTestId("battlefield-canvas")).toBeVisible();
+    await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
+    await expect(display.locator(".sector-status-strip > div")).toHaveCount(2);
+    await expect
+      .poll(
+        async () =>
+          Number(
+            (await display.locator(".battlefield-shell").getAttribute("data-enemy-count")) ?? 0
+          ),
+        { timeout: 10_000 }
+      )
+      .toBeGreaterThan(0);
+    await display.setViewportSize({ width: 1_600, height: 900 });
+    const battlefieldBounds = await display.locator(".battlefield-canvas canvas").boundingBox();
+    expect(battlefieldBounds?.width).toBeGreaterThan(0);
+    expect(battlefieldBounds?.height).toBeGreaterThan(0);
 
     await second.getByRole("button", { name: /Ремонт/ }).click();
     await expect(second.locator(".error-message")).toHaveText("Сейчас это действие недоступно.");
@@ -64,9 +79,9 @@ test("display and two browser controllers complete a deterministic defense match
     await expect(first.locator(".sector-summary").filter({ hasText: "Защита" })).toContainText(
       "ур. 2"
     );
-    await expect(display.locator(".sector-card").filter({ hasText: "Алекс" })).toContainText(
-      "Защита · ур. 2"
-    );
+    await expect(
+      display.locator(".sector-status-strip > div").filter({ hasText: "Алекс" })
+    ).toContainText("Башня ур. 2");
     await first.getByRole("button", { name: /Улучшить/ }).click();
     await expect(first.locator(".sector-summary")).toContainText("ур. 3");
     await second.getByRole("button", { name: /Улучшить/ }).click();
@@ -91,6 +106,14 @@ test("display and two browser controllers complete a deterministic defense match
     );
     await unknownRoom.getByLabel("Код комнаты").fill(roomCode);
     await expect(unknownRoom.getByLabel("Код комнаты")).toHaveValue(roomCode);
+
+    const cooperativeAirstrike = first.getByRole("button", { name: "Помочь соседу" });
+    await expect(cooperativeAirstrike).toBeEnabled({ timeout: 20_000 });
+    await cooperativeAirstrike.click();
+    await expect(display.locator(".battlefield-shell")).toHaveAttribute(
+      "data-airstrike-sequence",
+      "1"
+    );
 
     const secondGate = second
       .locator(".sector-summary div")

@@ -8,6 +8,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/node_modules/**",
       "eslint.config.js",
+      "scripts/**",
       "apps/controller/scripts/**",
       "apps/display/android/**"
     ]

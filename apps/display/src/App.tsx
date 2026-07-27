@@ -3,6 +3,7 @@ import { PROTOCOL_VERSION, type PublicRoomView } from "@town-defenders/protocol"
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { BattlefieldCanvas } from "./BattlefieldCanvas.js";
 import { createControllerJoinUrl, toPublicRoomView, type NetworkRoomState } from "./roomView.js";
 
 type DisplayStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -22,6 +23,7 @@ export function DisplayApp() {
   const [status, setStatus] = useState<DisplayStatus>("idle");
   const [view, setView] = useState<PublicRoomView>();
   const [error, setError] = useState("");
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
 
   const joinUrl = useMemo(
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
@@ -62,6 +64,7 @@ export function DisplayApp() {
       room.onDrop(() => {
         setError("Связь с сервером прервана. Переподключаемся…");
         setStatus("reconnecting");
+        setConnectionEpoch((epoch) => epoch + 1);
       });
       room.onReconnect(() => {
         setError("");
@@ -118,7 +121,7 @@ export function DisplayApp() {
       </header>
       {error.length > 0 && <p className="error-message">{error}</p>}
 
-      <section className="lobby-layout">
+      <section className={`lobby-layout ${view.game === null ? "" : "lobby-layout--battle"}`}>
         <div className="join-card">
           <QRCodeSVG value={joinUrl} size={220} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
           <div>
@@ -165,67 +168,53 @@ export function DisplayApp() {
         <section id="game-canvas" className="game-stage" aria-label="Область игрового поля">
           <header className="battle-header">
             <div>
+              <span>Волна</span>
+              <strong>
+                {view.game.waveNumber}/{view.game.totalWaves}
+              </strong>
+            </div>
+            <div>
+              <span>{view.game.stage === "intermission" ? "До атаки" : "Этап"}</span>
+              <strong>
+                {view.game.stage === "intermission"
+                  ? `${String(view.game.intermissionRemainingSeconds)} с`
+                  : "Бой"}
+              </strong>
+            </div>
+            <div>
               <span>Общая казна</span>
               <strong>{view.game.treasury} золота</strong>
             </div>
             <div>
-              <span>Шаг боя</span>
-              <strong>{view.game.tick}</strong>
+              <span>Авиаудар</span>
+              <strong>
+                {view.game.airstrikeCharge}/{view.game.airstrikeChargeRequired}
+              </strong>
             </div>
             <div className={`battle-result battle-result--${view.game.result}`}>
               {battleResultLabel(view.game.result)}
             </div>
           </header>
-          <div className="sector-grid">
+          <BattlefieldCanvas
+            game={view.game}
+            players={view.players}
+            connectionEpoch={connectionEpoch}
+          />
+          <div className="sector-status-strip">
             {view.game.sectors.map((sector) => {
-              const enemies = view.game?.enemies.filter(
-                (enemy) => enemy.sectorId === sector.sectorId
-              );
               const owner = view.players.find(
                 (player) => player.playerId === sector.assignedPlayerId
               );
               return (
-                <article className="sector-card" key={sector.sectorId}>
-                  <header>
-                    <div>
-                      <p className="eyebrow">Сектор {sector.sectorId + 1}</p>
-                      <h2>{owner?.playerName ?? "Ожидает защитника"}</h2>
-                    </div>
-                    <strong className="gate-health">
-                      Ворота {sector.gateHealth}/{sector.gateMaxHealth}
-                    </strong>
-                  </header>
-                  <div
-                    className="gate-meter"
-                    aria-label={`Здоровье ворот сектора ${String(sector.sectorId + 1)}`}
-                  >
-                    <span
-                      style={{
-                        width: `${String((sector.gateHealth / sector.gateMaxHealth) * 100)}%`
-                      }}
-                    />
-                  </div>
-                  <div className="defense-stats">
-                    <span>Защита · ур. {sector.defenseLevel}</span>
-                    <span>Урон · {sector.defenseDamage}</span>
-                    <span>Враги · {enemies?.length ?? 0}</span>
-                  </div>
-                  <div className="enemy-lane">
-                    {(enemies?.length ?? 0) === 0 ? (
-                      <span className="lane-empty">Подступы свободны</span>
-                    ) : (
-                      enemies?.map((enemy) => (
-                        <div className="enemy-chip" key={enemy.enemyId}>
-                          <strong>Враг</strong>
-                          <span>HP {enemy.health}</span>
-                          <span>
-                            Путь {enemy.progress}/{view.game?.pathLength ?? 0}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </article>
+                <div key={sector.sectorId}>
+                  <span>
+                    Сектор {sector.sectorId + 1} · {owner?.playerName ?? "Без защитника"}
+                  </span>
+                  <strong>
+                    Ворота {sector.gateHealth}/{sector.gateMaxHealth} · Башня ур.{" "}
+                    {sector.defenseLevel}
+                  </strong>
+                </div>
               );
             })}
           </div>

@@ -7,7 +7,9 @@ describe("readServerConfig", () => {
     expect(readServerConfig({})).toEqual({
       host: "0.0.0.0",
       port: 2567,
-      reconnectionGraceSeconds: 30
+      reconnectionGraceSeconds: 30,
+      simulationIntervalMs: 1000,
+      gracefullyShutdown: true
     });
   });
 
@@ -15,7 +17,9 @@ describe("readServerConfig", () => {
     expect(readServerConfig({ HOST: "127.0.0.1", PORT: "3000" })).toEqual({
       host: "127.0.0.1",
       port: 3000,
-      reconnectionGraceSeconds: 30
+      reconnectionGraceSeconds: 30,
+      simulationIntervalMs: 1000,
+      gracefullyShutdown: true
     });
   });
 
@@ -27,5 +31,16 @@ describe("readServerConfig", () => {
     expect(readServerConfig({ RECONNECTION_GRACE_SECONDS: "0.25" }).reconnectionGraceSeconds).toBe(
       0.25
     );
+  });
+
+  it("supports a faster scheduler without changing fixed simulation steps", () => {
+    expect(readServerConfig({ SIMULATION_INTERVAL_MS: "25" }).simulationIntervalMs).toBe(25);
+    expect(() => readServerConfig({ SIMULATION_INTERVAL_MS: "5" })).toThrow(
+      "SIMULATION_INTERVAL_MS"
+    );
+  });
+
+  it("allows test runners to disable graceful process shutdown", () => {
+    expect(readServerConfig({ GRACEFUL_SHUTDOWN: "false" }).gracefullyShutdown).toBe(false);
   });
 });

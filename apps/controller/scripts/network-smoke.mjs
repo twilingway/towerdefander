@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@colyseus/sdk";
 
 const port = 35_677;
-const protocolVersion = 2;
+const protocolVersion = 3;
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const serverEntry = fileURLToPath(new URL("../../server/dist/index.js", import.meta.url));
@@ -13,7 +13,8 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
     ...process.env,
     HOST: "127.0.0.1",
     PORT: String(port),
-    RECONNECTION_GRACE_SECONDS: "1"
+    RECONNECTION_GRACE_SECONDS: "1",
+    SIMULATION_INTERVAL_MS: "100"
   },
   stdio: "ignore",
   windowsHide: true
@@ -146,23 +147,60 @@ try {
     () => display.state.players.get(replacement.sessionId)?.sectorId === expiredSectorId
   );
 
+  await waitFor(
+    () =>
+      display.state.game.waveNumber >= 3 &&
+      display.state.game.stage === "combat" &&
+      display.state.game.airstrikeCharge === display.state.game.airstrikeChargeRequired &&
+      display.state.game.enemies.length > 0,
+    500
+  );
+  const airstrikeTargetSectorId = display.state.game.enemies[0].sectorId;
+  if ((replacement.state.game.enemies?.length ?? 0) !== 0) {
+    throw new Error("Controller received the display-only enemy collection.");
+  }
+  const compactTargetSector = replacement.state.game.sectors[airstrikeTargetSectorId];
+  if (
+    (compactTargetSector?.enemyCount ?? 0) <= 0 ||
+    compactTargetSector?.airstrikeTargetAvailable !== true
+  ) {
+    throw new Error("Controller did not receive the compact sector projection.");
+  }
+  const airstrikeActionId = crypto.randomUUID();
+  replacement.send("player:airstrike", {
+    protocolVersion,
+    roomId: display.roomId,
+    playerId: replacement.sessionId,
+    actionId: airstrikeActionId,
+    targetSectorId: airstrikeTargetSectorId
+  });
+  await waitFor(() => display.state.game.lastAirstrikeSequence === 1);
+  const treasuryAfterAirstrike = display.state.game.treasury;
+  replacement.send("player:airstrike", {
+    protocolVersion,
+    roomId: display.roomId,
+    playerId: replacement.sessionId,
+    actionId: airstrikeActionId,
+    targetSectorId: airstrikeTargetSectorId
+  });
+  await delay(150);
+  if (
+    display.state.game.lastAirstrikeSequence !== 1 ||
+    display.state.game.treasury !== treasuryAfterAirstrike
+  ) {
+    throw new Error("Airstrike actionId deduplication failed.");
+  }
+
   const replacementSector = () => display.state.game.sectors[expiredSectorId];
   await waitFor(() => replacementSector()?.gateHealth < replacementSector()?.gateMaxHealth, 500);
   const healthBeforeRepair = replacementSector().gateHealth;
-  const treasuryBeforeRepair = display.state.game.treasury;
   replacement.send("player:repair", {
     protocolVersion,
     roomId: display.roomId,
     playerId: replacement.sessionId,
     actionId: crypto.randomUUID()
   });
-  await waitFor(
-    () =>
-      replacementSector()?.gateHealth > healthBeforeRepair &&
-      display.state.game.treasury === treasuryBeforeRepair - display.state.game.repairCost
-  );
-
-  await waitFor(() => display.state.phase === "finished", 800);
+  await waitFor(() => replacementSector()?.gateHealth > healthBeforeRepair);
 
   console.log(
     JSON.stringify({
@@ -170,6 +208,8 @@ try {
       players: display.state.players.size,
       phase: display.state.phase,
       result: display.state.game.result,
+      waveNumber: display.state.game.waveNumber,
+      airstrikeSequence: display.state.game.lastAirstrikeSequence,
       repairedGateHealth: replacementSector().gateHealth,
       upgradedDefenseLevel: firstSector().defenseLevel
     })

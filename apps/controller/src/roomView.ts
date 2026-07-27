@@ -1,6 +1,8 @@
 import {
   publicRoomViewSchema,
   type DefenseResult,
+  type DefenseStage,
+  type EnemyType,
   type PublicPlayerView,
   type PublicRoomView
 } from "@town-defenders/protocol";
@@ -25,12 +27,16 @@ interface NetworkSectorState {
   defenseLevel: number;
   defenseDamage: number;
   nextUpgradeCost: number;
+  enemyCount: number;
+  airstrikeTargetAvailable: boolean;
 }
 
 interface NetworkEnemyState {
   enemyId: string;
   sectorId: number;
+  enemyType: EnemyType;
   health: number;
+  maxHealth: number;
   progress: number;
 }
 
@@ -41,8 +47,20 @@ interface NetworkGameState {
   pathLength: number;
   repairCost: number;
   result: DefenseResult;
+  waveNumber: number;
+  totalWaves: number;
+  stage: DefenseStage;
+  intermissionRemainingSeconds: number;
+  airstrikeCharge: number;
+  airstrikeChargeRequired: number;
+  airstrikeDamage: number;
+  lastAirstrikeSequence: number;
+  lastAirstrikeActionId: string;
+  lastAirstrikePlayerId: string;
+  lastAirstrikeTargetSectorId: number;
+  lastAirstrikeAppliedTick: number;
   sectors: ValueCollection<NetworkSectorState>;
-  enemies: ValueCollection<NetworkEnemyState>;
+  enemies?: ValueCollection<NetworkEnemyState>;
 }
 
 export interface NetworkRoomState {
@@ -85,6 +103,25 @@ export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoo
             pathLength: state.game.pathLength,
             repairCost: state.game.repairCost,
             result: state.game.result,
+            waveNumber: state.game.waveNumber,
+            totalWaves: state.game.totalWaves,
+            stage: state.game.stage,
+            intermissionRemainingSeconds: state.game.intermissionRemainingSeconds,
+            airstrikeCharge: state.game.airstrikeCharge,
+            airstrikeChargeRequired: state.game.airstrikeChargeRequired,
+            airstrikeDamage: state.game.airstrikeDamage,
+            lastAirstrikeEffect:
+              state.game.lastAirstrikeSequence > 0 &&
+              (state.game.lastAirstrikeTargetSectorId === 0 ||
+                state.game.lastAirstrikeTargetSectorId === 1)
+                ? {
+                    sequence: state.game.lastAirstrikeSequence,
+                    actionId: state.game.lastAirstrikeActionId,
+                    playerId: state.game.lastAirstrikePlayerId,
+                    targetSectorId: state.game.lastAirstrikeTargetSectorId,
+                    appliedTick: state.game.lastAirstrikeAppliedTick
+                  }
+                : null,
             sectors: [...state.game.sectors.values()].map((sector) => ({
               sectorId: sector.sectorId,
               assignedPlayerId: sector.assignedPlayerId.length > 0 ? sector.assignedPlayerId : null,
@@ -92,12 +129,16 @@ export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoo
               gateMaxHealth: sector.gateMaxHealth,
               defenseLevel: sector.defenseLevel,
               defenseDamage: sector.defenseDamage,
-              nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null
+              nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null,
+              enemyCount: sector.enemyCount,
+              airstrikeTargetAvailable: sector.airstrikeTargetAvailable
             })),
-            enemies: [...state.game.enemies.values()].map((enemy) => ({
+            enemies: [...(state.game.enemies?.values() ?? [])].map((enemy) => ({
               enemyId: enemy.enemyId,
               sectorId: enemy.sectorId,
+              enemyType: enemy.enemyType,
               health: enemy.health,
+              maxHealth: enemy.maxHealth,
               progress: enemy.progress
             }))
           }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   PROTOCOL_VERSION,
+  airstrikeCommandSchema,
   joinOptionsSchema,
   publicGameSnapshotSchema,
   publicRoomViewSchema,
@@ -31,6 +32,12 @@ describe("protocol schemas", () => {
         protocolVersion: PROTOCOL_VERSION + 1
       })
     ).toThrow();
+    expect(
+      joinOptionsSchema.safeParse({
+        role: "display",
+        protocolVersion: 2
+      }).success
+    ).toBe(false);
   });
 
   it("requires UUID action identifiers", () => {
@@ -57,6 +64,20 @@ describe("protocol schemas", () => {
     expect(resourceActionCommandSchema.safeParse({ ...command, sectorId: 1 }).success).toBe(false);
   });
 
+  it("validates the strict v3 airstrike envelope", () => {
+    const command = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: "ROOM123",
+      playerId: "session-1",
+      actionId: "00000000-0000-4000-8000-000000000001",
+      targetSectorId: 1
+    };
+
+    expect(airstrikeCommandSchema.parse(command)).toEqual(command);
+    expect(airstrikeCommandSchema.safeParse({ ...command, damage: 999 }).success).toBe(false);
+    expect(airstrikeCommandSchema.safeParse({ ...command, targetSectorId: 2 }).success).toBe(false);
+  });
+
   it("validates a compact two-sector game snapshot", () => {
     expect(
       publicGameSnapshotSchema.parse({
@@ -66,6 +87,20 @@ describe("protocol schemas", () => {
         pathLength: 8,
         repairCost: 15,
         result: "in_progress",
+        waveNumber: 2,
+        totalWaves: 5,
+        stage: "combat",
+        intermissionRemainingSeconds: 0,
+        airstrikeCharge: 55,
+        airstrikeChargeRequired: 100,
+        airstrikeDamage: 30,
+        lastAirstrikeEffect: {
+          sequence: 1,
+          actionId: "00000000-0000-4000-8000-000000000001",
+          playerId: "session-1",
+          targetSectorId: 1,
+          appliedTick: 2
+        },
         sectors: [
           {
             sectorId: 0,
@@ -74,7 +109,9 @@ describe("protocol schemas", () => {
             gateMaxHealth: 100,
             defenseLevel: 1,
             defenseDamage: 3,
-            nextUpgradeCost: 20
+            nextUpgradeCost: 20,
+            enemyCount: 1,
+            airstrikeTargetAvailable: true
           },
           {
             sectorId: 1,
@@ -83,12 +120,29 @@ describe("protocol schemas", () => {
             gateMaxHealth: 100,
             defenseLevel: 2,
             defenseDamage: 5,
-            nextUpgradeCost: null
+            nextUpgradeCost: null,
+            enemyCount: 0,
+            airstrikeTargetAvailable: false
           }
         ],
-        enemies: [{ enemyId: "enemy-1", sectorId: 0, health: 6, progress: 2 }]
+        enemies: [
+          {
+            enemyId: "enemy-1",
+            sectorId: 0,
+            enemyType: "fast",
+            health: 6,
+            maxHealth: 12,
+            progress: 2
+          }
+        ]
       })
-    ).toMatchObject({ tick: 3, treasury: 42, result: "in_progress" });
+    ).toMatchObject({
+      tick: 3,
+      treasury: 42,
+      waveNumber: 2,
+      airstrikeCharge: 55,
+      result: "in_progress"
+    });
   });
 
   it("rejects unknown fields at the trust boundary", () => {

@@ -4,10 +4,10 @@ import type { Request, Response } from "express";
 import { readServerConfig } from "./config.js";
 import { TownDefendersRoom } from "./rooms/TownDefendersRoom.js";
 
-const { host, port } = readServerConfig();
+const { host, port, gracefullyShutdown } = readServerConfig();
 
 const gameServer = defineServer({
-  gracefullyShutdown: true,
+  gracefullyShutdown,
   rooms: {
     town_defenders: defineRoom(TownDefendersRoom)
   },

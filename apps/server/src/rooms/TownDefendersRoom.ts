@@ -3,6 +3,7 @@ import {
   applyDefenseAction,
   createDefenseState,
   getDefenseDamage,
+  getIntermissionRemainingSeconds,
   getUpgradeCost,
   prototypeDefenseConfig,
   type DefenseAction,
@@ -11,16 +12,19 @@ import {
 } from "@town-defenders/game-core";
 import {
   PROTOCOL_VERSION,
+  airstrikeCommandSchema,
   clientMessage,
   joinOptionsSchema,
   readyCommandSchema,
   resourceActionCommandSchema,
   serverMessage,
+  type AirstrikeCommand,
   type ResourceActionCommand,
   type ServerErrorCode
 } from "@town-defenders/protocol";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
 import { randomInt } from "node:crypto";
+import { StateView } from "@colyseus/schema";
 
 import { readServerConfig } from "../config.js";
 import {
@@ -31,7 +35,7 @@ import {
 } from "./TownDefendersState.js";
 
 type ConnectionRole = "display" | "controller";
-type ResourceActionType = DefenseAction["type"];
+type ResourceActionType = Extract<DefenseAction["type"], "repair" | "upgrade">;
 
 interface RuntimeSchema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false };
@@ -49,7 +53,7 @@ interface RejectedActionOutcome {
 
 type ActionOutcome = { readonly accepted: true } | RejectedActionOutcome;
 
-const { reconnectionGraceSeconds } = readServerConfig();
+const { reconnectionGraceSeconds, simulationIntervalMs } = readServerConfig();
 
 export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   // One spare transport seat lets onJoin return a typed room_full error.
@@ -71,6 +75,9 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     },
     [clientMessage.upgrade]: (client: Client, payload: unknown) => {
       this.handleResourceAction(client, payload, "upgrade");
+    },
+    [clientMessage.airstrike]: (client: Client, payload: unknown) => {
+      this.handleAirstrike(client, payload);
     }
   };
 
@@ -97,6 +104,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       this.joinDisplay(client);
       return;
     }
+
+    client.view = new StateView();
 
     if (this.state.players.size >= 2 || this.state.phase === "finished") {
       throw new ServerError(4001, "room_full");
@@ -215,6 +224,32 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.replayOutcome(client, outcome);
   }
 
+  handleAirstrike(client: Client, unsafePayload: unknown): void {
+    const payload = this.parseMessage(client, airstrikeCommandSchema, unsafePayload);
+    if (payload === undefined) {
+      return;
+    }
+
+    const player = this.getController(client);
+    if (player === undefined) {
+      return;
+    }
+    if (payload.roomId !== this.roomId || payload.playerId !== player.playerId) {
+      this.sendError(client, "identity_mismatch", "Room or player identity does not match.");
+      return;
+    }
+
+    const previousOutcome = this.actionOutcomes.get(payload.actionId);
+    if (previousOutcome !== undefined) {
+      this.replayOutcome(client, previousOutcome);
+      return;
+    }
+
+    const outcome = this.applyNewAirstrike(payload);
+    this.actionOutcomes.set(payload.actionId, outcome);
+    this.replayOutcome(client, outcome);
+  }
+
   advanceGameStep(): void {
     if (this.state.phase !== "active" || this.defenseState === undefined) {
       return;
@@ -241,6 +276,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     }
 
     this.roles.set(client.sessionId, "display");
+    client.view = new StateView();
+    client.view.add(this.state.game, 1);
     this.state.displayConnected = true;
   }
 
@@ -270,6 +307,26 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         return this.rejected("invalid_phase", "The battle has already finished.");
       }
       return this.rejected("action_not_available", "This action is not available now.");
+    }
+
+    this.defenseState = result.state;
+    this.syncDefenseState();
+    return { accepted: true };
+  }
+
+  private applyNewAirstrike(payload: AirstrikeCommand): ActionOutcome {
+    if (this.state.phase !== "active" || this.defenseState === undefined) {
+      return this.rejected("invalid_phase", "Airstrike is accepted only during an active match.");
+    }
+
+    const result = applyDefenseAction(this.defenseState, prototypeDefenseConfig, {
+      type: "airstrike",
+      targetSectorId: payload.targetSectorId,
+      actionId: payload.actionId,
+      playerId: payload.playerId
+    });
+    if (!result.accepted) {
+      return this.rejected("action_not_available", "Airstrike is not available for this sector.");
     }
 
     this.defenseState = result.state;
@@ -341,7 +398,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
 
     this.simulationTimer = this.clock.setInterval(() => {
       this.advanceGameStep();
-    }, prototypeDefenseConfig.fixedStepMs);
+    }, simulationIntervalMs);
   }
 
   private stopSimulation(): void {
@@ -363,6 +420,21 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     game.pathLength = prototypeDefenseConfig.pathLength;
     game.repairCost = prototypeDefenseConfig.repairCost;
     game.result = defenseState.result;
+    game.waveNumber = defenseState.waveNumber;
+    game.totalWaves = prototypeDefenseConfig.waves.length;
+    game.stage = defenseState.stage;
+    game.intermissionRemainingSeconds = getIntermissionRemainingSeconds(
+      defenseState,
+      prototypeDefenseConfig
+    );
+    game.airstrikeCharge = defenseState.airstrikeCharge;
+    game.airstrikeChargeRequired = prototypeDefenseConfig.airstrike.chargeRequired;
+    game.airstrikeDamage = prototypeDefenseConfig.airstrike.damage;
+    game.lastAirstrikeSequence = defenseState.lastAirstrikeEffect?.sequence ?? 0;
+    game.lastAirstrikeActionId = defenseState.lastAirstrikeEffect?.actionId ?? "";
+    game.lastAirstrikePlayerId = defenseState.lastAirstrikeEffect?.playerId ?? "";
+    game.lastAirstrikeTargetSectorId = defenseState.lastAirstrikeEffect?.targetSectorId ?? -1;
+    game.lastAirstrikeAppliedTick = defenseState.lastAirstrikeEffect?.appliedTick ?? 0;
     game.sectors.clear();
     game.enemies.clear();
 
@@ -380,6 +452,10 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         sector.defenseLevel >= prototypeDefenseConfig.maxDefenseLevel
           ? -1
           : getUpgradeCost(prototypeDefenseConfig, sector.defenseLevel);
+      schema.enemyCount = defenseState.enemies.filter(
+        (enemy) => enemy.sectorId === sector.sectorId
+      ).length;
+      schema.airstrikeTargetAvailable = schema.enemyCount > 0;
       game.sectors.push(schema);
     }
 
@@ -387,7 +463,9 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       const schema = new DefenseEnemyState();
       schema.enemyId = enemy.enemyId;
       schema.sectorId = enemy.sectorId;
+      schema.enemyType = enemy.enemyType;
       schema.health = enemy.health;
+      schema.maxHealth = enemy.maxHealth;
       schema.progress = enemy.progress;
       game.enemies.push(schema);
     }

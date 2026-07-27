@@ -1,10 +1,4 @@
-# shared-defense-economy Specification
-
-## Purpose
-
-TBD - created by archiving change implement-first-defense-loop. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Ремонт ворот применяется атомарно
 
@@ -74,30 +68,3 @@ TBD - created by archiving change implement-first-defense-loop. Update Purpose a
 
 - **WHEN** controller отправляет upgrade в lobby или finished
 - **THEN** сервер возвращает `invalid_phase` без изменения состояния
-
-### Requirement: Игровые действия идемпотентны в пределах комнаты
-
-Сервер SHALL валидировать версию протокола, `roomId`, `playerId` и UUID `actionId`. После успешной
-проверки envelope и identity сервер SHALL сохранить итог первой обработки `actionId` во всей
-комнате, включая успешный результат и бизнес-ошибку, и SHALL никогда не вычислять его заново.
-
-#### Scenario: Повтор успешного действия
-
-- **WHEN** сервер повторно получает ранее успешно применённый `actionId`
-- **THEN** состояние, казна и уровень защиты не изменяются повторно
-
-#### Scenario: Игрок подменяет identity
-
-- **WHEN** контроллер отправляет действие с `roomId` другой комнаты или чужим `playerId`
-- **THEN** сервер возвращает `identity_mismatch` и не изменяет игровое состояние
-
-#### Scenario: Действие вне активного боя
-
-- **WHEN** контроллер отправляет `repair` или `upgrade` в lobby или после завершения боя
-- **THEN** сервер возвращает `invalid_phase` и не изменяет игровое состояние
-
-#### Scenario: Повтор ранее отклонённого действия
-
-- **WHEN** ранее допустимый по envelope и identity `actionId` получил `insufficient_funds`,
-  `action_not_available` или `invalid_phase`, а затем доставлен повторно после изменения состояния
-- **THEN** сервер повторяет исходный результат без повторной проверки и без изменения состояния

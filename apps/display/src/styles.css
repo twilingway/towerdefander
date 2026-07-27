@@ -199,6 +199,23 @@ p {
   padding: clamp(1.25rem, 2vw, 2rem);
 }
 
+.lobby-layout--battle {
+  grid-template-columns: minmax(20rem, 0.7fr) minmax(24rem, 1.3fr);
+}
+
+.lobby-layout--battle .join-card,
+.lobby-layout--battle .players-card {
+  padding: 1rem;
+}
+
+.lobby-layout--battle .join-card svg {
+  max-width: 120px;
+}
+
+.lobby-layout--battle .join-card p {
+  display: none;
+}
+
 .game-stage--waiting {
   place-items: center;
   color: #6f8983;
@@ -239,6 +256,62 @@ p {
 .battle-result--defeat {
   color: #28100f;
   background: #ff9d91;
+}
+
+.battlefield-shell {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: #071714;
+  aspect-ratio: 16 / 9;
+}
+
+.battlefield-canvas,
+.battlefield-canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.battlefield-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  margin: 0;
+  padding: 2rem;
+  color: #ffb8af;
+  background: #102624;
+  place-items: center;
+  text-align: center;
+}
+
+.sector-status-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.sector-status-strip > div {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  color: #a9bdb7;
+  background: #102624;
+}
+
+.sector-status-strip strong {
+  color: #f1d58e;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .sector-grid {
@@ -319,6 +392,10 @@ p {
   }
 
   .sector-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sector-status-strip {
     grid-template-columns: 1fr;
   }
 }

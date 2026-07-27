@@ -68,6 +68,18 @@ describe("controller room view", () => {
         pathLength: 8,
         repairCost: 15,
         result: "in_progress",
+        waveNumber: 2,
+        totalWaves: 5,
+        stage: "combat",
+        intermissionRemainingSeconds: 0,
+        airstrikeCharge: 45,
+        airstrikeChargeRequired: 100,
+        airstrikeDamage: 30,
+        lastAirstrikeSequence: 0,
+        lastAirstrikeActionId: "",
+        lastAirstrikePlayerId: "",
+        lastAirstrikeTargetSectorId: -1,
+        lastAirstrikeAppliedTick: 0,
         sectors: [
           {
             sectorId: 0,
@@ -76,7 +88,9 @@ describe("controller room view", () => {
             gateMaxHealth: 100,
             defenseLevel: 2,
             defenseDamage: 5,
-            nextUpgradeCost: 30
+            nextUpgradeCost: 30,
+            enemyCount: 1,
+            airstrikeTargetAvailable: true
           },
           {
             sectorId: 1,
@@ -85,15 +99,9 @@ describe("controller room view", () => {
             gateMaxHealth: 100,
             defenseLevel: 3,
             defenseDamage: 7,
-            nextUpgradeCost: -1
-          }
-        ],
-        enemies: [
-          {
-            enemyId: "enemy-1",
-            sectorId: 0,
-            health: 6,
-            progress: 3
+            nextUpgradeCost: -1,
+            enemyCount: 0,
+            airstrikeTargetAvailable: false
           }
         ]
       }
@@ -104,9 +112,12 @@ describe("controller room view", () => {
       treasury: 35,
       pathLength: 8,
       repairCost: 15,
+      waveNumber: 2,
+      airstrikeCharge: 45,
+      enemies: [],
       sectors: [
-        { assignedPlayerId: "player-1", nextUpgradeCost: 30 },
-        { assignedPlayerId: null, nextUpgradeCost: null }
+        { assignedPlayerId: "player-1", nextUpgradeCost: 30, enemyCount: 1 },
+        { assignedPlayerId: null, nextUpgradeCost: null, enemyCount: 0 }
       ]
     });
   });

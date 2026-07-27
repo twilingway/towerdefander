@@ -2,10 +2,12 @@ import {
   PROTOCOL_VERSION,
   serverErrorSchema,
   serverMessage,
+  type AirstrikeCommand,
   type ReadyCommand,
   type ResourceActionCommand,
   type ServerErrorCode
 } from "@town-defenders/protocol";
+import type { DefenseState } from "@town-defenders/game-core";
 import { CloseCode, type Client } from "colyseus";
 import { describe, expect, it, vi } from "vitest";
 
@@ -70,10 +72,25 @@ function action(playerId: string, actionId: string): ResourceActionCommand {
   };
 }
 
-function advanceUntil(room: TownDefendersRoom, predicate: () => boolean, maximumSteps = 50): void {
+function advanceUntil(room: TownDefendersRoom, predicate: () => boolean, maximumSteps = 250): void {
   for (let index = 0; index < maximumSteps && !predicate(); index += 1) {
     room.advanceGameStep();
   }
+}
+
+function updateDefenseState(
+  room: TownDefendersRoom,
+  update: (state: DefenseState) => DefenseState
+): void {
+  const testRoom = room as unknown as {
+    defenseState: DefenseState | undefined;
+    syncDefenseState(): void;
+  };
+  if (testRoom.defenseState === undefined) {
+    throw new Error("Expected an active defense state.");
+  }
+  testRoom.defenseState = update(testRoom.defenseState);
+  testRoom.syncDefenseState();
 }
 
 function countSentErrors(client: TestClient, code: ServerErrorCode): number {
@@ -194,7 +211,13 @@ describe("TownDefendersRoom simulation", () => {
     startBattle(room);
 
     room.advanceGameStep();
-    expect(room.state.game).toMatchObject({ tick: 1, elapsedMs: 1000 });
+    expect(room.state.game).toMatchObject({
+      tick: 1,
+      elapsedMs: 1000,
+      stage: "intermission",
+      waveNumber: 1
+    });
+    advanceUntil(room, () => room.state.game.enemies.length > 0);
     expect(room.state.game.enemies.length).toBeGreaterThan(0);
 
     advanceUntil(room, () => room.state.phase === "finished");
@@ -241,7 +264,7 @@ describe("TownDefendersRoom resource actions", () => {
     expect(room.state.game.treasury).toBe(30);
     expect(room.state.game.sectors[0]).toMatchObject({
       defenseLevel: 2,
-      defenseDamage: 5
+      defenseDamage: 6
     });
     expect(room.state.game.sectors[1]?.defenseLevel).toBe(1);
   });
@@ -249,7 +272,10 @@ describe("TownDefendersRoom resource actions", () => {
   it("repairs damaged gates atomically", () => {
     const room = createRoom();
     const [first] = startBattle(room);
-    advanceUntil(room, () => (room.state.game.sectors[0]?.gateHealth ?? 100) < 100);
+    updateDefenseState(room, (state) => ({
+      ...state,
+      sectors: [{ ...state.sectors[0], gateHealth: 70 }, state.sectors[1]]
+    }));
     const healthBefore = room.state.game.sectors[0]?.gateHealth ?? 0;
     const treasuryBefore = room.state.game.treasury;
 
@@ -350,5 +376,49 @@ describe("TownDefendersRoom resource actions", () => {
       message: "Unsupported protocol version."
     });
     expect(room.state.game.treasury).toBe(50);
+  });
+
+  it("applies an airstrike once and keeps its public effect stable on duplicate delivery", () => {
+    const room = createRoom();
+    const [first] = startBattle(room);
+    updateDefenseState(room, (state) => ({
+      ...state,
+      stage: "combat",
+      intermissionRemainingSteps: 0,
+      airstrikeCharge: 100,
+      enemies: [
+        {
+          enemyId: "airstrike-target",
+          sectorId: 1,
+          enemyType: "heavy",
+          health: 20,
+          maxHealth: 34,
+          progress: 3
+        }
+      ]
+    }));
+    const command: AirstrikeCommand = {
+      ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000010"),
+      targetSectorId: 1
+    };
+
+    room.handleAirstrike(first.client, command);
+    const firstEffect = {
+      sequence: room.state.game.lastAirstrikeSequence,
+      tick: room.state.game.lastAirstrikeAppliedTick,
+      treasury: room.state.game.treasury
+    };
+    room.handleAirstrike(first.client, command);
+
+    expect(room.state.game.enemies).toHaveLength(0);
+    expect(firstEffect.sequence).toBe(1);
+    expect(room.state.game).toMatchObject({
+      lastAirstrikeSequence: firstEffect.sequence,
+      lastAirstrikeTargetSectorId: 1,
+      lastAirstrikeActionId: command.actionId,
+      lastAirstrikePlayerId: first.client.sessionId,
+      lastAirstrikeAppliedTick: firstEffect.tick,
+      treasury: firstEffect.treasury
+    });
   });
 });
