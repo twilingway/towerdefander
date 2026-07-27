@@ -9,18 +9,18 @@
 Готовы:
 
 - pnpm monorepo;
-- OpenSpec workflow и первое активное изменение;
+- OpenSpec workflow и спецификации игрового цикла;
 - Codex project rules, read-only agents и repo-scoped skills;
 - display/controller/server приложения;
 - общий типизированный protocol package;
-- чистая детерминированная основа game-core;
-- авторитетная Colyseus-комната с двумя игроками, ready/start, дедупликацией команд и reconnect;
-- display создаёт комнату и показывает код, ссылку, QR и серверное состояние игроков;
-- controller входит по ссылке/коду, управляет ready и тестовым сигналом;
+- чистая детерминированная симуляция двух секторов, врагов, ворот и результата;
+- авторитетная Colyseus-комната с общей казной, `repair`/`upgrade`, дедупликацией и reconnect;
+- display создаёт комнату и показывает QR, игроков и серверный снимок поля боя;
+- controller входит по ссылке/коду, управляет ready, ремонтом и улучшением своего сектора;
 - format, lint, typecheck, unit tests и production builds;
-- server health endpoint и воспроизводимый сетевой smoke-тест.
+- server health endpoint, сетевой smoke и Playwright-тест полного короткого матча.
 
-Следующий этап — интерактивная проверка с физическим телефоном в LAN и игровое поле Phaser.
+Следующий этап — ручная балансировка и перенос отображения поля в Phaser.
 
 ## Требования
 
@@ -76,14 +76,16 @@ pnpm test:e2e
 
 ## OpenSpec
 
-Активные изменения:
+Активные изменения отсутствуют. Основные спецификации:
 
 ```powershell
 pnpm spec list
-pnpm spec status --change bootstrap-network-vertical-slice
+pnpm spec show shared-room-session --type spec
+pnpm spec show deterministic-defense-loop --type spec
+pnpm spec show shared-defense-economy --type spec
 ```
 
-Артефакты первого изменения находятся в `openspec/changes/bootstrap-network-vertical-slice/`.
+Завершённые изменения находятся в `openspec/changes/archive/`.
 
 ## Структура
 

@@ -25,7 +25,6 @@ describe("display room view", () => {
       playerName: "Alex",
       ready: true,
       connected: true,
-      signalCount: 2,
       sectorId: null
     };
 

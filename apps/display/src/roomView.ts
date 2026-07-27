@@ -1,23 +1,56 @@
-import { publicRoomViewSchema, type PublicRoomView } from "@town-defenders/protocol";
+import {
+  publicRoomViewSchema,
+  type DefenseResult,
+  type PublicRoomView
+} from "@town-defenders/protocol";
 
 interface NetworkPlayerState {
   playerId: string;
   playerName: string;
   ready: boolean;
   connected: boolean;
-  signalCount: number;
-  sectorId?: 0 | 1 | null;
+  sectorId?: number | null;
 }
 
-interface PlayerCollection {
-  values(): IterableIterator<NetworkPlayerState>;
+interface ValueCollection<T> {
+  values(): IterableIterator<T>;
+}
+
+interface NetworkSectorState {
+  sectorId: number;
+  assignedPlayerId: string;
+  gateHealth: number;
+  gateMaxHealth: number;
+  defenseLevel: number;
+  defenseDamage: number;
+  nextUpgradeCost: number;
+}
+
+interface NetworkEnemyState {
+  enemyId: string;
+  sectorId: number;
+  health: number;
+  progress: number;
+}
+
+interface NetworkGameState {
+  tick: number;
+  elapsedMs: number;
+  treasury: number;
+  pathLength: number;
+  repairCost: number;
+  result: DefenseResult;
+  sectors: ValueCollection<NetworkSectorState>;
+  enemies: ValueCollection<NetworkEnemyState>;
 }
 
 export interface NetworkRoomState {
   roomId?: string;
   phase?: PublicRoomView["phase"];
   displayConnected?: boolean;
-  players?: PlayerCollection;
+  players?: ValueCollection<NetworkPlayerState>;
+  hasGame?: boolean;
+  game?: NetworkGameState;
 }
 
 export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoomView | undefined {
@@ -40,9 +73,34 @@ export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoo
       playerName: player.playerName,
       ready: player.ready,
       connected: player.connected,
-      signalCount: player.signalCount,
-      sectorId: player.sectorId ?? null
-    }))
+      sectorId: player.sectorId === 0 || player.sectorId === 1 ? player.sectorId : null
+    })),
+    game:
+      state.hasGame === true && state.game !== undefined
+        ? {
+            tick: state.game.tick,
+            elapsedMs: state.game.elapsedMs,
+            treasury: state.game.treasury,
+            pathLength: state.game.pathLength,
+            repairCost: state.game.repairCost,
+            result: state.game.result,
+            sectors: [...state.game.sectors.values()].map((sector) => ({
+              sectorId: sector.sectorId,
+              assignedPlayerId: sector.assignedPlayerId.length > 0 ? sector.assignedPlayerId : null,
+              gateHealth: sector.gateHealth,
+              gateMaxHealth: sector.gateMaxHealth,
+              defenseLevel: sector.defenseLevel,
+              defenseDamage: sector.defenseDamage,
+              nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null
+            })),
+            enemies: [...state.game.enemies.values()].map((enemy) => ({
+              enemyId: enemy.enemyId,
+              sectorId: enemy.sectorId,
+              health: enemy.health,
+              progress: enemy.progress
+            }))
+          }
+        : null
   });
 }
 

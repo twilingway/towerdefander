@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --platform node --dts --clean",
+    "build": "tsup --config tsup.config.ts",
     "dev": "node --env-file-if-exists=../../.env.local --import tsx --watch src/index.ts",
     "start": "node --env-file-if-exists=../../.env.local dist/index.js",
     "typecheck": "tsc --noEmit",

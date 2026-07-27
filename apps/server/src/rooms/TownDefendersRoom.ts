@@ -1,22 +1,53 @@
 import {
+  advanceDefense,
+  applyDefenseAction,
+  createDefenseState,
+  getDefenseDamage,
+  getUpgradeCost,
+  prototypeDefenseConfig,
+  type DefenseAction,
+  type DefenseState,
+  type SectorId
+} from "@town-defenders/game-core";
+import {
   PROTOCOL_VERSION,
   clientMessage,
   joinOptionsSchema,
   readyCommandSchema,
+  resourceActionCommandSchema,
   serverMessage,
-  signalCommandSchema,
+  type ResourceActionCommand,
   type ServerErrorCode
 } from "@town-defenders/protocol";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
+import { randomInt } from "node:crypto";
 
 import { readServerConfig } from "../config.js";
-import { PlayerState, TownDefendersState } from "./TownDefendersState.js";
+import {
+  DefenseEnemyState,
+  DefenseSectorState,
+  PlayerState,
+  TownDefendersState
+} from "./TownDefendersState.js";
 
 type ConnectionRole = "display" | "controller";
+type ResourceActionType = DefenseAction["type"];
 
 interface RuntimeSchema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false };
 }
+
+interface RoomTimer {
+  clear(): void;
+}
+
+interface RejectedActionOutcome {
+  readonly accepted: false;
+  readonly code: ServerErrorCode;
+  readonly message: string;
+}
+
+type ActionOutcome = { readonly accepted: true } | RejectedActionOutcome;
 
 const { reconnectionGraceSeconds } = readServerConfig();
 
@@ -27,14 +58,19 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   override state = new TownDefendersState();
 
   private readonly roles = new Map<string, ConnectionRole>();
-  private readonly appliedActions = new Set<string>();
+  private readonly actionOutcomes = new Map<string, ActionOutcome>();
+  private defenseState: DefenseState | undefined;
+  private simulationTimer: RoomTimer | undefined;
 
   override messages = {
     [clientMessage.ready]: (client: Client, payload: unknown) => {
       this.handleReady(client, payload);
     },
-    [clientMessage.signal]: (client: Client, payload: unknown) => {
-      this.handleSignal(client, payload);
+    [clientMessage.repair]: (client: Client, payload: unknown) => {
+      this.handleResourceAction(client, payload, "repair");
+    },
+    [clientMessage.upgrade]: (client: Client, payload: unknown) => {
+      this.handleResourceAction(client, payload, "upgrade");
     }
   };
 
@@ -58,22 +94,11 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     }
 
     if (result.data.role === "display") {
-      const reservedDisplaySessionId = [...this.roles.entries()].find(
-        ([, role]) => role === "display"
-      )?.[0];
-      if (
-        this.state.displayConnected ||
-        (reservedDisplaySessionId !== undefined && reservedDisplaySessionId !== client.sessionId)
-      ) {
-        throw new ServerError(4001, "room_full");
-      }
-
-      this.roles.set(client.sessionId, "display");
-      this.state.displayConnected = true;
+      this.joinDisplay(client);
       return;
     }
 
-    if (this.state.players.size >= 2) {
+    if (this.state.players.size >= 2 || this.state.phase === "finished") {
       throw new ServerError(4001, "room_full");
     }
 
@@ -81,8 +106,18 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     player.playerId = client.sessionId;
     player.playerName = result.data.playerName;
 
+    if (this.state.phase === "active") {
+      const sectorId = this.findAvailableSector();
+      if (sectorId === undefined) {
+        throw new ServerError(4001, "room_full");
+      }
+      player.ready = true;
+      player.sectorId = sectorId;
+    }
+
     this.roles.set(client.sessionId, "controller");
     this.state.players.set(client.sessionId, player);
+    this.syncDefenseState();
   }
 
   override async onLeave(client: Client, code: number): Promise<void> {
@@ -121,7 +156,12 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     } catch {
       this.state.players.delete(client.sessionId);
       this.roles.delete(client.sessionId);
+      this.syncDefenseState();
     }
+  }
+
+  override onDispose(): void {
+    this.stopSimulation();
   }
 
   handleReady(client: Client, unsafePayload: unknown): void {
@@ -144,8 +184,12 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.updatePhase();
   }
 
-  handleSignal(client: Client, unsafePayload: unknown): void {
-    const payload = this.parseMessage(client, signalCommandSchema, unsafePayload);
+  handleResourceAction(
+    client: Client,
+    unsafePayload: unknown,
+    actionType: ResourceActionType
+  ): void {
+    const payload = this.parseMessage(client, resourceActionCommandSchema, unsafePayload);
     if (payload === undefined) {
       return;
     }
@@ -155,17 +199,82 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
-    if (this.state.phase !== "active") {
-      this.sendError(client, "invalid_phase", "Signals are accepted only in an active room.");
+    if (payload.roomId !== this.roomId || payload.playerId !== player.playerId) {
+      this.sendError(client, "identity_mismatch", "Room or player identity does not match.");
       return;
     }
 
-    if (this.appliedActions.has(payload.actionId)) {
+    const previousOutcome = this.actionOutcomes.get(payload.actionId);
+    if (previousOutcome !== undefined) {
+      this.replayOutcome(client, previousOutcome);
       return;
     }
 
-    this.appliedActions.add(payload.actionId);
-    player.signalCount += 1;
+    const outcome = this.applyNewResourceAction(payload, player, actionType);
+    this.actionOutcomes.set(payload.actionId, outcome);
+    this.replayOutcome(client, outcome);
+  }
+
+  advanceGameStep(): void {
+    if (this.state.phase !== "active" || this.defenseState === undefined) {
+      return;
+    }
+
+    this.defenseState = advanceDefense(this.defenseState, prototypeDefenseConfig);
+    this.syncDefenseState();
+
+    if (this.defenseState.result !== "in_progress") {
+      this.state.phase = "finished";
+      this.stopSimulation();
+    }
+  }
+
+  private joinDisplay(client: Client): void {
+    const reservedDisplaySessionId = [...this.roles.entries()].find(
+      ([, role]) => role === "display"
+    )?.[0];
+    if (
+      this.state.displayConnected ||
+      (reservedDisplaySessionId !== undefined && reservedDisplaySessionId !== client.sessionId)
+    ) {
+      throw new ServerError(4001, "room_full");
+    }
+
+    this.roles.set(client.sessionId, "display");
+    this.state.displayConnected = true;
+  }
+
+  private applyNewResourceAction(
+    _payload: ResourceActionCommand,
+    player: PlayerState,
+    actionType: ResourceActionType
+  ): ActionOutcome {
+    if (this.state.phase !== "active" || this.defenseState === undefined) {
+      return this.rejected("invalid_phase", "Game actions are accepted only during a battle.");
+    }
+
+    const sectorId = this.toSectorId(player.sectorId);
+    if (sectorId === undefined) {
+      return this.rejected("action_not_available", "No sector is assigned to this player.");
+    }
+
+    const result = applyDefenseAction(this.defenseState, prototypeDefenseConfig, {
+      type: actionType,
+      sectorId
+    });
+    if (!result.accepted) {
+      if (result.reason === "insufficient_funds") {
+        return this.rejected("insufficient_funds", "Not enough gold in the shared treasury.");
+      }
+      if (result.reason === "battle_finished") {
+        return this.rejected("invalid_phase", "The battle has already finished.");
+      }
+      return this.rejected("action_not_available", "This action is not available now.");
+    }
+
+    this.defenseState = result.state;
+    this.syncDefenseState();
+    return { accepted: true };
   }
 
   private parseMessage<T>(
@@ -210,13 +319,101 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
-    const canStart = [...this.state.players.values()].every(
-      (player) => player.connected && player.ready
-    );
-
-    if (canStart) {
-      this.state.phase = "active";
+    const players = [...this.state.players.values()];
+    const canStart = players.every((player) => player.connected && player.ready);
+    if (!canStart) {
+      return;
     }
+
+    players.forEach((player, index) => {
+      player.sectorId = index;
+    });
+    this.defenseState = createDefenseState(prototypeDefenseConfig, randomInt(0, 2_147_483_647));
+    this.state.phase = "active";
+    this.syncDefenseState();
+    this.startSimulation();
+  }
+
+  private startSimulation(): void {
+    if (this.simulationTimer !== undefined) {
+      return;
+    }
+
+    this.simulationTimer = this.clock.setInterval(() => {
+      this.advanceGameStep();
+    }, prototypeDefenseConfig.fixedStepMs);
+  }
+
+  private stopSimulation(): void {
+    this.simulationTimer?.clear();
+    this.simulationTimer = undefined;
+  }
+
+  private syncDefenseState(): void {
+    const defenseState = this.defenseState;
+    if (defenseState === undefined) {
+      return;
+    }
+
+    const game = this.state.game;
+    this.state.hasGame = true;
+    game.tick = defenseState.clock.tick;
+    game.elapsedMs = defenseState.clock.elapsedMs;
+    game.treasury = defenseState.treasury;
+    game.pathLength = prototypeDefenseConfig.pathLength;
+    game.repairCost = prototypeDefenseConfig.repairCost;
+    game.result = defenseState.result;
+    game.sectors.clear();
+    game.enemies.clear();
+
+    for (const sector of defenseState.sectors) {
+      const schema = new DefenseSectorState();
+      schema.sectorId = sector.sectorId;
+      schema.assignedPlayerId =
+        [...this.state.players.values()].find((player) => player.sectorId === sector.sectorId)
+          ?.playerId ?? "";
+      schema.gateHealth = sector.gateHealth;
+      schema.gateMaxHealth = prototypeDefenseConfig.gateMaxHealth;
+      schema.defenseLevel = sector.defenseLevel;
+      schema.defenseDamage = getDefenseDamage(prototypeDefenseConfig, sector.defenseLevel);
+      schema.nextUpgradeCost =
+        sector.defenseLevel >= prototypeDefenseConfig.maxDefenseLevel
+          ? -1
+          : getUpgradeCost(prototypeDefenseConfig, sector.defenseLevel);
+      game.sectors.push(schema);
+    }
+
+    for (const enemy of defenseState.enemies) {
+      const schema = new DefenseEnemyState();
+      schema.enemyId = enemy.enemyId;
+      schema.sectorId = enemy.sectorId;
+      schema.health = enemy.health;
+      schema.progress = enemy.progress;
+      game.enemies.push(schema);
+    }
+  }
+
+  private findAvailableSector(): SectorId | undefined {
+    const occupied = new Set(
+      [...this.state.players.values()]
+        .map((player) => this.toSectorId(player.sectorId))
+        .filter((sectorId): sectorId is SectorId => sectorId !== undefined)
+    );
+    return ([0, 1] as const).find((sectorId) => !occupied.has(sectorId));
+  }
+
+  private toSectorId(value: number): SectorId | undefined {
+    return value === 0 || value === 1 ? value : undefined;
+  }
+
+  private replayOutcome(client: Client, outcome: ActionOutcome): void {
+    if (!outcome.accepted) {
+      this.sendError(client, outcome.code, outcome.message);
+    }
+  }
+
+  private rejected(code: ServerErrorCode, message: string): RejectedActionOutcome {
+    return { accepted: false, code, message };
   }
 
   private sendError(client: Client, code: ServerErrorCode, message: string): void {

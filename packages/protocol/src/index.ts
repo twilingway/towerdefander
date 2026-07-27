@@ -21,7 +21,8 @@ export const publicSectorViewSchema = z
     gateHealth: z.number().int().nonnegative(),
     gateMaxHealth: z.number().int().positive(),
     defenseLevel: z.number().int().positive(),
-    defenseDamage: z.number().int().positive()
+    defenseDamage: z.number().int().positive(),
+    nextUpgradeCost: z.number().int().positive().nullable()
   })
   .strict();
 export type PublicSectorView = z.infer<typeof publicSectorViewSchema>;
@@ -41,6 +42,8 @@ export const publicGameSnapshotSchema = z
     tick: z.number().int().nonnegative(),
     elapsedMs: z.number().int().nonnegative(),
     treasury: z.number().int().nonnegative(),
+    pathLength: z.number().int().positive(),
+    repairCost: z.number().int().positive(),
     result: defenseResultSchema,
     sectors: z.array(publicSectorViewSchema).length(2),
     enemies: z.array(publicEnemyViewSchema)
@@ -54,7 +57,6 @@ export const publicPlayerViewSchema = z
     playerName: z.string().min(1).max(24),
     ready: z.boolean(),
     connected: z.boolean(),
-    signalCount: z.number().int().nonnegative(),
     sectorId: sectorIdSchema.nullable().default(null)
   })
   .strict();
@@ -96,14 +98,6 @@ export const readyCommandSchema = z
   .strict();
 export type ReadyCommand = z.infer<typeof readyCommandSchema>;
 
-export const signalCommandSchema = z
-  .object({
-    protocolVersion: z.literal(PROTOCOL_VERSION),
-    actionId: z.uuid()
-  })
-  .strict();
-export type SignalCommand = z.infer<typeof signalCommandSchema>;
-
 export const resourceActionCommandSchema = z
   .object({
     protocolVersion: z.literal(PROTOCOL_VERSION),
@@ -116,7 +110,6 @@ export type ResourceActionCommand = z.infer<typeof resourceActionCommandSchema>;
 
 export const clientMessage = {
   ready: "player:ready",
-  signal: "player:signal",
   repair: "player:repair",
   upgrade: "player:upgrade"
 } as const;

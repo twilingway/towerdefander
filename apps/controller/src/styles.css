@@ -92,8 +92,7 @@ button:disabled {
   text-align: center;
 }
 
-.status-row,
-.counter {
+.status-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -121,25 +120,57 @@ button:disabled {
   background: #183330;
 }
 
-.signal-button {
-  min-height: 9rem;
-  border-radius: 50%;
-  font-size: 1.5rem;
-  box-shadow: 0 0 0 0.5rem rgb(230 184 92 / 12%);
+.sector-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
 }
 
-.signal-button:active {
-  transform: scale(0.97);
-}
-
-.counter {
-  padding: 1rem;
+.sector-summary div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem;
   border-radius: 0.9rem;
   color: #cad7d3;
   background: #132827;
 }
 
-.counter strong {
+.sector-summary strong {
   color: #e6b85c;
+  font-size: 1.4rem;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.action-grid button {
+  min-height: 5rem;
+}
+
+.upgrade-button {
+  color: #f6f4e8;
+  background: #28665b;
+}
+
+.result-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: #132827;
+}
+
+.result-card strong {
   font-size: 2rem;
+}
+
+.result-card--victory strong {
+  color: #78d39c;
+}
+
+.result-card--defeat strong {
+  color: #ff9d91;
 }

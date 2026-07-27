@@ -144,9 +144,12 @@ export function DisplayApp() {
                     <small>{player.connected ? "в сети" : "переподключается"}</small>
                   </span>
                   <span className={player.ready ? "ready" : "waiting"}>
-                    {player.ready ? "Готов" : "Не готов"}
+                    {player.sectorId === null
+                      ? player.ready
+                        ? "Готов"
+                        : "Не готов"
+                      : `Сектор ${String(player.sectorId + 1)}`}
                   </span>
-                  <b>{player.signalCount}</b>
                 </div>
               );
             })}
@@ -154,11 +157,93 @@ export function DisplayApp() {
         </div>
       </section>
 
-      <section id="game-canvas" className="game-stage" aria-label="Область игрового поля">
-        <span>Игровое поле Phaser будет подключено на следующем этапе</span>
-      </section>
+      {view.game === null ? (
+        <section id="game-canvas" className="game-stage game-stage--waiting">
+          <span>Игровое поле появится, когда оба защитника будут готовы</span>
+        </section>
+      ) : (
+        <section id="game-canvas" className="game-stage" aria-label="Область игрового поля">
+          <header className="battle-header">
+            <div>
+              <span>Общая казна</span>
+              <strong>{view.game.treasury} золота</strong>
+            </div>
+            <div>
+              <span>Шаг боя</span>
+              <strong>{view.game.tick}</strong>
+            </div>
+            <div className={`battle-result battle-result--${view.game.result}`}>
+              {battleResultLabel(view.game.result)}
+            </div>
+          </header>
+          <div className="sector-grid">
+            {view.game.sectors.map((sector) => {
+              const enemies = view.game?.enemies.filter(
+                (enemy) => enemy.sectorId === sector.sectorId
+              );
+              const owner = view.players.find(
+                (player) => player.playerId === sector.assignedPlayerId
+              );
+              return (
+                <article className="sector-card" key={sector.sectorId}>
+                  <header>
+                    <div>
+                      <p className="eyebrow">Сектор {sector.sectorId + 1}</p>
+                      <h2>{owner?.playerName ?? "Ожидает защитника"}</h2>
+                    </div>
+                    <strong className="gate-health">
+                      Ворота {sector.gateHealth}/{sector.gateMaxHealth}
+                    </strong>
+                  </header>
+                  <div
+                    className="gate-meter"
+                    aria-label={`Здоровье ворот сектора ${String(sector.sectorId + 1)}`}
+                  >
+                    <span
+                      style={{
+                        width: `${String((sector.gateHealth / sector.gateMaxHealth) * 100)}%`
+                      }}
+                    />
+                  </div>
+                  <div className="defense-stats">
+                    <span>Защита · ур. {sector.defenseLevel}</span>
+                    <span>Урон · {sector.defenseDamage}</span>
+                    <span>Враги · {enemies?.length ?? 0}</span>
+                  </div>
+                  <div className="enemy-lane">
+                    {(enemies?.length ?? 0) === 0 ? (
+                      <span className="lane-empty">Подступы свободны</span>
+                    ) : (
+                      enemies?.map((enemy) => (
+                        <div className="enemy-chip" key={enemy.enemyId}>
+                          <strong>Враг</strong>
+                          <span>HP {enemy.health}</span>
+                          <span>
+                            Путь {enemy.progress}/{view.game?.pathLength ?? 0}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </main>
   );
+}
+
+function battleResultLabel(result: NonNullable<PublicRoomView["game"]>["result"]): string {
+  switch (result) {
+    case "in_progress":
+      return "Бой идёт";
+    case "victory":
+      return "Победа!";
+    case "defeat":
+      return "Поражение";
+  }
 }
 
 function phaseLabel(phase: PublicRoomView["phase"]): string {

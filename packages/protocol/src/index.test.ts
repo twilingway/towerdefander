@@ -6,8 +6,7 @@ import {
   publicGameSnapshotSchema,
   publicRoomViewSchema,
   readyCommandSchema,
-  resourceActionCommandSchema,
-  signalCommandSchema
+  resourceActionCommandSchema
 } from "./index.js";
 
 describe("protocol schemas", () => {
@@ -36,8 +35,10 @@ describe("protocol schemas", () => {
 
   it("requires UUID action identifiers", () => {
     expect(
-      signalCommandSchema.safeParse({
+      resourceActionCommandSchema.safeParse({
         protocolVersion: PROTOCOL_VERSION,
+        roomId: "ROOM123",
+        playerId: "session-1",
         actionId: "duplicate"
       }).success
     ).toBe(false);
@@ -62,6 +63,8 @@ describe("protocol schemas", () => {
         tick: 3,
         elapsedMs: 1500,
         treasury: 42,
+        pathLength: 8,
+        repairCost: 15,
         result: "in_progress",
         sectors: [
           {
@@ -70,7 +73,8 @@ describe("protocol schemas", () => {
             gateHealth: 80,
             gateMaxHealth: 100,
             defenseLevel: 1,
-            defenseDamage: 3
+            defenseDamage: 3,
+            nextUpgradeCost: 20
           },
           {
             sectorId: 1,
@@ -78,7 +82,8 @@ describe("protocol schemas", () => {
             gateHealth: 100,
             gateMaxHealth: 100,
             defenseLevel: 2,
-            defenseDamage: 5
+            defenseDamage: 5,
+            nextUpgradeCost: null
           }
         ],
         enemies: [{ enemyId: "enemy-1", sectorId: 0, health: 6, progress: 2 }]
@@ -125,8 +130,7 @@ describe("protocol schemas", () => {
           playerId: "session-1",
           playerName: "Alex",
           ready: false,
-          connected: true,
-          signalCount: 0
+          connected: true
         }
       ]
     });

@@ -22,10 +22,10 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
 let display;
 let first;
 let second;
+let replacement;
 
 try {
   await waitForServer();
-
   await expectControllerCreationToFail();
 
   display = await new Client(endpoint).create("town_defenders", {
@@ -44,45 +44,49 @@ try {
   });
 
   await waitFor(() => display.state.players.size === 2);
-
   first.send("player:ready", { protocolVersion, ready: true });
   second.send("player:ready", { protocolVersion, ready: true });
-  await waitFor(() => display.state.phase === "active");
+  await waitFor(() => display.state.phase === "active" && display.state.hasGame === true);
 
-  const invalidMessageError = new Promise((resolve) => {
-    first.onMessage("server:error", resolve);
-  });
-  first.send("player:signal", {
+  const firstPlayerId = first.sessionId;
+  const secondPlayerId = second.sessionId;
+  const firstSectorId = display.state.players.get(firstPlayerId).sectorId;
+  const firstSector = () => display.state.game.sectors[firstSectorId];
+
+  const invalidMessageError = nextServerError(first);
+  const treasuryBeforeInvalid = display.state.game.treasury;
+  first.send("player:upgrade", {
     protocolVersion: protocolVersion + 1,
+    roomId: display.roomId,
+    playerId: firstPlayerId,
     actionId: crypto.randomUUID()
   });
-  const invalidMessageResult = await Promise.race([
-    invalidMessageError,
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("Server did not reject an invalid protocol version."));
-      }, 1_000);
-    })
-  ]);
+  const invalidMessageResult = await invalidMessageError;
   if (
     invalidMessageResult?.code !== "protocol_mismatch" ||
-    display.state.players.get(first.sessionId)?.signalCount !== 0
+    display.state.game.treasury !== treasuryBeforeInvalid
   ) {
     throw new Error("Invalid command changed authoritative state.");
   }
 
-  const actionId = crypto.randomUUID();
-  first.send("player:signal", {
+  const upgradeActionId = crypto.randomUUID();
+  first.send("player:upgrade", {
     protocolVersion,
-    actionId
+    roomId: display.roomId,
+    playerId: firstPlayerId,
+    actionId: upgradeActionId
   });
-  await waitFor(() => display.state.players.get(first.sessionId)?.signalCount === 1);
-  second.send("player:signal", { protocolVersion, actionId });
-  await new Promise((resolve) => {
-    setTimeout(resolve, 100);
+  await waitFor(() => firstSector()?.defenseLevel === 2);
+  const treasuryAfterUpgrade = display.state.game.treasury;
+  second.send("player:upgrade", {
+    protocolVersion,
+    roomId: display.roomId,
+    playerId: secondPlayerId,
+    actionId: upgradeActionId
   });
-  if (display.state.players.get(second.sessionId)?.signalCount !== 0) {
-    throw new Error("Room-level actionId deduplication failed.");
+  await delay(150);
+  if (firstSector()?.defenseLevel !== 2 || display.state.game.treasury !== treasuryAfterUpgrade) {
+    throw new Error("Room-wide actionId deduplication failed.");
   }
 
   const firstSessionId = first.sessionId;
@@ -116,11 +120,12 @@ try {
   await waitFor(() => first.state.displayConnected === true);
 
   const expiredSessionId = second.sessionId;
+  const expiredSectorId = display.state.players.get(expiredSessionId).sectorId;
   const expiredReconnectionToken = second.reconnectionToken;
   second.reconnection.enabled = false;
   second.connection.close();
   await waitFor(() => display.state.players.get(expiredSessionId)?.connected === false);
-  await waitFor(() => !display.state.players.has(expiredSessionId));
+  await waitFor(() => !display.state.players.has(expiredSessionId), 100);
   let expiredTokenWasRejected = false;
   try {
     await new Client(endpoint).reconnect(expiredReconnectionToken);
@@ -132,16 +137,50 @@ try {
   }
   second = undefined;
 
+  replacement = await new Client(endpoint).joinById(display.roomId, {
+    role: "controller",
+    protocolVersion,
+    playerName: "Replacement"
+  });
+  await waitFor(
+    () => display.state.players.get(replacement.sessionId)?.sectorId === expiredSectorId
+  );
+
+  const replacementSector = () => display.state.game.sectors[expiredSectorId];
+  await waitFor(() => replacementSector()?.gateHealth < replacementSector()?.gateMaxHealth, 500);
+  const healthBeforeRepair = replacementSector().gateHealth;
+  const treasuryBeforeRepair = display.state.game.treasury;
+  replacement.send("player:repair", {
+    protocolVersion,
+    roomId: display.roomId,
+    playerId: replacement.sessionId,
+    actionId: crypto.randomUUID()
+  });
+  await waitFor(
+    () =>
+      replacementSector()?.gateHealth > healthBeforeRepair &&
+      display.state.game.treasury === treasuryBeforeRepair - display.state.game.repairCost
+  );
+
+  await waitFor(() => display.state.phase === "finished", 800);
+
   console.log(
     JSON.stringify({
       roomId: display.roomId,
       players: display.state.players.size,
       phase: display.state.phase,
-      confirmedSignals: display.state.players.get(first.sessionId).signalCount
+      result: display.state.game.result,
+      repairedGateHealth: replacementSector().gateHealth,
+      upgradedDefenseLevel: firstSector().defenseLevel
     })
   );
 } finally {
-  await Promise.allSettled([first?.leave(), second?.leave(), display?.leave()]);
+  await Promise.allSettled([
+    first?.leave(),
+    second?.leave(),
+    replacement?.leave(),
+    display?.leave()
+  ]);
   serverProcess.kill();
 }
 
@@ -173,15 +212,32 @@ async function waitForServer() {
   });
 }
 
-async function waitFor(predicate) {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+async function waitFor(predicate, maximumAttempts = 60) {
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
     if (await predicate()) {
       return;
     }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await delay(50);
   }
 
   throw new Error("Network smoke-test timed out.");
+}
+
+async function nextServerError(room) {
+  return await Promise.race([
+    new Promise((resolve) => {
+      room.onMessage("server:error", resolve);
+    }),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Server did not return the expected error."));
+      }, 1_000);
+    })
+  ]);
+}
+
+async function delay(milliseconds) {
+  await new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }

@@ -68,9 +68,9 @@ export type DefenseActionResult =
     };
 
 export const prototypeDefenseConfig: DefenseConfig = {
-  fixedStepMs: 500,
+  fixedStepMs: 1000,
   sectorCount: 2,
-  pathLength: 6,
+  pathLength: 8,
   gateMaxHealth: 100,
   startingTreasury: 50,
   baseDefenseDamage: 3,
@@ -81,7 +81,7 @@ export const prototypeDefenseConfig: DefenseConfig = {
   upgradeBaseCost: 20,
   upgradeCostStep: 10,
   enemy: {
-    maxHealth: 9,
+    maxHealth: 12,
     speedPerStep: 1,
     gateDamage: 20,
     reward: 8
@@ -94,7 +94,9 @@ export const prototypeDefenseConfig: DefenseConfig = {
     { tick: 3, sectorId: 0 },
     { tick: 3, sectorId: 1 },
     { tick: 5, sectorId: 0 },
-    { tick: 5, sectorId: 1 }
+    { tick: 5, sectorId: 1 },
+    { tick: 15, sectorId: 0 },
+    { tick: 15, sectorId: 1 }
   ]
 };
 

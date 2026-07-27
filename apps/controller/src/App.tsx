@@ -116,7 +116,11 @@ export function ControllerApp() {
     applyRoomState(room.state);
     room.onMessage(serverMessage.error, (payload: unknown) => {
       const result = serverErrorSchema.safeParse(payload);
-      setError(result.success ? result.data.message : "Сервер отклонил команду.");
+      setError(
+        result.success
+          ? toServerError(result.data.code, result.data.message)
+          : "Сервер отклонил команду."
+      );
     });
     room.onDrop(() => {
       setStatus("reconnecting");
@@ -161,12 +165,29 @@ export function ControllerApp() {
     });
   }
 
-  function sendSignal() {
-    roomReference.current?.send(clientMessage.signal, {
+  function sendResourceAction(action: "repair" | "upgrade") {
+    const room = roomReference.current;
+    if (room === undefined || view === undefined || currentPlayer === undefined) {
+      return;
+    }
+
+    setError("");
+    room.send(clientMessage[action], {
       protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: currentPlayer.playerId,
       actionId: createActionId()
     });
   }
+
+  const ownSector =
+    currentPlayer?.sectorId === null || currentPlayer?.sectorId === undefined
+      ? undefined
+      : view?.game?.sectors.find((sector) => sector.sectorId === currentPlayer.sectorId);
+  const ownEnemies =
+    ownSector === undefined
+      ? 0
+      : (view?.game?.enemies.filter((enemy) => enemy.sectorId === ownSector.sectorId).length ?? 0);
 
   if (status === "join" || status === "joining" || status === "disconnected") {
     return (
@@ -224,7 +245,11 @@ export function ControllerApp() {
         </div>
         <h1>{currentPlayer?.playerName ?? playerName}</h1>
         <p className="phase-copy">
-          {view?.phase === "active" ? "Раунд начался" : "Ждём защитников"}
+          {view?.phase === "active"
+            ? `Вы защищаете сектор ${String((currentPlayer?.sectorId ?? 0) + 1)}`
+            : view?.phase === "finished"
+              ? resultLabel(view.game?.result)
+              : "Ждём защитников"}
         </p>
         {error.length > 0 && <p className="error-message">{error}</p>}
 
@@ -237,24 +262,93 @@ export function ControllerApp() {
           >
             {currentPlayer?.ready === true ? "Отменить готовность" : "Я готов"}
           </button>
+        ) : view?.phase === "active" ? (
+          <>
+            <div className="sector-summary">
+              <div>
+                <span>Общая казна</span>
+                <strong>{view.game?.treasury ?? 0}</strong>
+              </div>
+              <div>
+                <span>Ворота</span>
+                <strong>
+                  {ownSector?.gateHealth ?? 0}/{ownSector?.gateMaxHealth ?? 0}
+                </strong>
+              </div>
+              <div>
+                <span>Защита</span>
+                <strong>ур. {ownSector?.defenseLevel ?? 1}</strong>
+              </div>
+              <div>
+                <span>Враги</span>
+                <strong>{ownEnemies}</strong>
+              </div>
+            </div>
+            <div className="action-grid">
+              <button
+                type="button"
+                onClick={() => {
+                  sendResourceAction("repair");
+                }}
+                disabled={status === "reconnecting" || ownSector === undefined}
+              >
+                Ремонт · {view.game?.repairCost ?? 0}
+              </button>
+              <button
+                className="upgrade-button"
+                type="button"
+                onClick={() => {
+                  sendResourceAction("upgrade");
+                }}
+                disabled={
+                  status === "reconnecting" ||
+                  ownSector?.nextUpgradeCost === undefined ||
+                  ownSector.nextUpgradeCost === null
+                }
+              >
+                {ownSector?.nextUpgradeCost === null
+                  ? "Максимальный уровень"
+                  : `Улучшить · ${String(ownSector?.nextUpgradeCost ?? 0)}`}
+              </button>
+            </div>
+          </>
         ) : (
-          <button
-            className="signal-button"
-            type="button"
-            onClick={sendSignal}
-            disabled={status === "reconnecting"}
-          >
-            Сигнал
-          </button>
+          <div className={`result-card result-card--${view?.game?.result ?? "unknown"}`}>
+            <strong>{resultLabel(view?.game?.result)}</strong>
+            <span>Матч завершён на {view?.game?.tick ?? 0} шаге</span>
+          </div>
         )}
-
-        <div className="counter">
-          <span>Подтверждено сервером</span>
-          <strong>{currentPlayer?.signalCount ?? 0}</strong>
-        </div>
       </section>
     </main>
   );
+}
+
+function resultLabel(result: NonNullable<PublicRoomView["game"]>["result"] | undefined) {
+  switch (result) {
+    case "victory":
+      return "Победа!";
+    case "defeat":
+      return "Поражение";
+    default:
+      return "Раунд завершён";
+  }
+}
+
+function toServerError(code: string, fallback: string): string {
+  switch (code) {
+    case "insufficient_funds":
+      return "В общей казне недостаточно золота.";
+    case "action_not_available":
+      return "Сейчас это действие недоступно.";
+    case "invalid_phase":
+      return "Действие недоступно на текущем этапе матча.";
+    case "identity_mismatch":
+      return "Сервер не подтвердил вашу игровую сессию.";
+    case "protocol_mismatch":
+      return "Версия игры устарела. Обновите страницу.";
+    default:
+      return fallback;
+  }
 }
 
 function toJoinError(reason: unknown): string {

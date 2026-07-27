@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const configuredTestHost = process.env.E2E_HOST?.trim();
 const testHost =
@@ -9,7 +9,10 @@ const expectedJoinHost = process.env.E2E_EXPECT_JOIN_HOST?.trim();
 const displayUrl = `http://${testHost}:5173`;
 const controllerUrl = `http://${testHost}:5174`;
 
-test("display and two browser controllers complete the lobby flow", async ({ browser }) => {
+test("display and two browser controllers complete a deterministic defense match", async ({
+  browser
+}) => {
+  test.setTimeout(50_000);
   const displayContext = await browser.newContext();
   const firstContext = await browser.newContext();
   const secondContext = await browser.newContext();
@@ -50,18 +53,28 @@ test("display and two browser controllers complete the lobby flow", async ({ bro
     await second.getByRole("button", { name: "Я готов" }).click();
 
     await expect(display.locator(".phase-badge")).toHaveText("Раунд начался");
-    await expect(first.getByRole("button", { name: "Сигнал" })).toBeVisible();
-    await expect(second.getByRole("button", { name: "Сигнал" })).toBeVisible();
+    await expect(first.getByRole("button", { name: /Улучшить/ })).toBeVisible();
+    await expect(second.getByRole("button", { name: /Ремонт/ })).toBeVisible();
+    await expect(display.locator(".sector-card")).toHaveCount(2);
 
-    await first.getByRole("button", { name: "Сигнал" }).click();
-    await expect(first.locator(".counter strong")).toHaveText("1");
-    await expect(
-      display.locator(".player-slot").filter({ hasText: "Алекс" }).locator("b")
-    ).toHaveText("1");
+    await second.getByRole("button", { name: /Ремонт/ }).click();
+    await expect(second.locator(".error-message")).toHaveText("Сейчас это действие недоступно.");
+
+    await first.getByRole("button", { name: /Улучшить/ }).click();
+    await expect(first.locator(".sector-summary").filter({ hasText: "Защита" })).toContainText(
+      "ур. 2"
+    );
+    await expect(display.locator(".sector-card").filter({ hasText: "Алекс" })).toContainText(
+      "Защита · ур. 2"
+    );
+    await first.getByRole("button", { name: /Улучшить/ }).click();
+    await expect(first.locator(".sector-summary")).toContainText("ур. 3");
+    await second.getByRole("button", { name: /Улучшить/ }).click();
+    await expect(second.locator(".error-message")).toHaveText("В общей казне недостаточно золота.");
 
     await first.reload();
     await expect(first.locator(".connection")).toHaveText("В сети");
-    await expect(first.locator(".counter strong")).toHaveText("1");
+    await expect(first.locator(".sector-summary")).toContainText("ур. 3");
 
     const third = await thirdContext.newPage();
     await third.goto(`${controllerUrl}/?room=${encodeURIComponent(roomCode)}`);
@@ -78,6 +91,21 @@ test("display and two browser controllers complete the lobby flow", async ({ bro
     );
     await unknownRoom.getByLabel("Код комнаты").fill(roomCode);
     await expect(unknownRoom.getByLabel("Код комнаты")).toHaveValue(roomCode);
+
+    const secondGate = second
+      .locator(".sector-summary div")
+      .filter({ hasText: "Ворота" })
+      .locator("strong");
+    await expect.poll(() => readCurrentHealth(secondGate), { timeout: 25_000 }).toBeLessThan(100);
+    const healthBeforeRepair = await readCurrentHealth(secondGate);
+    await second.getByRole("button", { name: /Ремонт/ }).click();
+    await expect
+      .poll(() => readCurrentHealth(secondGate), { timeout: 5_000 })
+      .toBeGreaterThan(healthBeforeRepair);
+
+    await expect(display.locator(".battle-result")).toHaveText("Победа!", {
+      timeout: 30_000
+    });
   } finally {
     await Promise.all([
       displayContext.close(),
@@ -88,6 +116,11 @@ test("display and two browser controllers complete the lobby flow", async ({ bro
     ]);
   }
 });
+
+async function readCurrentHealth(locator: Locator): Promise<number> {
+  const text = (await locator.textContent()) ?? "0";
+  return Number(text.split("/")[0]?.trim() ?? "0");
+}
 
 async function joinController(page: Page, roomCode: string, playerName: string): Promise<void> {
   await page.goto(`${controllerUrl}/?room=${encodeURIComponent(roomCode)}`);
