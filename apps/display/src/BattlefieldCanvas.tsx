@@ -1,4 +1,8 @@
-import type { PublicGameSnapshot, PublicPlayerView } from "@town-defenders/protocol";
+import type {
+  PlayerCapacity,
+  PublicGameSnapshot,
+  PublicPlayerView
+} from "@town-defenders/protocol";
 import { useEffect, useRef, useState } from "react";
 
 import type { BattlefieldRuntime, BattlefieldViewSnapshot } from "./game/BattlefieldRuntime.js";
@@ -6,15 +10,21 @@ import type { BattlefieldRuntime, BattlefieldViewSnapshot } from "./game/Battlef
 interface BattlefieldCanvasProps {
   readonly game: PublicGameSnapshot;
   readonly players: readonly PublicPlayerView[];
+  readonly playerCapacity: PlayerCapacity;
   readonly connectionEpoch: number;
 }
 
-export function BattlefieldCanvas({ game, players, connectionEpoch }: BattlefieldCanvasProps) {
+export function BattlefieldCanvas({
+  game,
+  players,
+  playerCapacity,
+  connectionEpoch
+}: BattlefieldCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<BattlefieldRuntime | undefined>(undefined);
-  const latestSnapshot = useRef<BattlefieldViewSnapshot>({ game, players });
+  const latestSnapshot = useRef<BattlefieldViewSnapshot>({ game, players, playerCapacity });
   const [failed, setFailed] = useState(false);
-  latestSnapshot.current = { game, players };
+  latestSnapshot.current = { game, players, playerCapacity };
 
   useEffect(() => {
     let disposed = false;
@@ -50,14 +60,16 @@ export function BattlefieldCanvas({ game, players, connectionEpoch }: Battlefiel
   }, [connectionEpoch]);
 
   useEffect(() => {
-    runtimeReference.current?.update({ game, players });
-  }, [game, players]);
+    runtimeReference.current?.update({ game, players, playerCapacity });
+  }, [game, players, playerCapacity]);
 
   return (
     <div
       className="battlefield-shell"
       data-airstrike-sequence={game.lastAirstrikeEffect?.sequence ?? 0}
       data-enemy-count={game.enemies.length}
+      data-player-capacity={playerCapacity}
+      data-sector-count={game.sectors.length}
     >
       <div
         ref={hostReference}

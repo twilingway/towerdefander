@@ -1,21 +1,22 @@
 import {
-  publicRoomViewSchema,
+  displayRoomViewSchema,
   type DefenseResult,
   type DefenseStage,
-  type EnemyType,
-  type PublicRoomView
+  type DisplayRoomView,
+  type EnemyType
 } from "@town-defenders/protocol";
+
+interface ValueCollection<T> {
+  values(): IterableIterator<T>;
+}
 
 interface NetworkPlayerState {
   playerId: string;
   playerName: string;
   ready: boolean;
   connected: boolean;
-  sectorId?: number | null;
-}
-
-interface ValueCollection<T> {
-  values(): IterableIterator<T>;
+  sectorId: number;
+  airstrikeTargetSectorIds: ValueCollection<number>;
 }
 
 interface NetworkSectorState {
@@ -39,6 +40,20 @@ interface NetworkEnemyState {
   progress: number;
 }
 
+interface NetworkAirstrikeEffectState {
+  sequence: number;
+  actionId: string;
+  playerId: string;
+  targetSectorId: number;
+  appliedTick: number;
+}
+
+interface NetworkDisplayGameState {
+  enemies: ValueCollection<NetworkEnemyState>;
+  hasLastAirstrikeEffect: boolean;
+  lastAirstrikeEffect: NetworkAirstrikeEffectState;
+}
+
 interface NetworkGameState {
   tick: number;
   elapsedMs: number;
@@ -53,86 +68,65 @@ interface NetworkGameState {
   airstrikeCharge: number;
   airstrikeChargeRequired: number;
   airstrikeDamage: number;
-  lastAirstrikeSequence: number;
-  lastAirstrikeActionId: string;
-  lastAirstrikePlayerId: string;
-  lastAirstrikeTargetSectorId: number;
-  lastAirstrikeAppliedTick: number;
   sectors: ValueCollection<NetworkSectorState>;
-  enemies: ValueCollection<NetworkEnemyState>;
+  display?: NetworkDisplayGameState;
 }
 
 export interface NetworkRoomState {
   roomId?: string;
-  phase?: PublicRoomView["phase"];
+  phase?: DisplayRoomView["phase"];
   displayConnected?: boolean;
+  playerCapacity?: number;
   players?: ValueCollection<NetworkPlayerState>;
   hasGame?: boolean;
   game?: NetworkGameState;
 }
 
-export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoomView | undefined {
+export function toDisplayRoomView(
+  state: NetworkRoomState | undefined
+): DisplayRoomView | undefined {
   if (
     state === undefined ||
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
     typeof state.displayConnected !== "boolean" ||
+    typeof state.playerCapacity !== "number" ||
     state.players === undefined
   ) {
     return undefined;
   }
 
-  return publicRoomViewSchema.parse({
-    roomId: state.roomId,
-    phase: state.phase,
-    displayConnected: state.displayConnected,
-    players: [...state.players.values()].map((player) => ({
+  const players = [...state.players.values()]
+    .map((player) => ({
       playerId: player.playerId,
       playerName: player.playerName,
       ready: player.ready,
       connected: player.connected,
-      sectorId: player.sectorId === 0 || player.sectorId === 1 ? player.sectorId : null
-    })),
+      sectorId: player.sectorId,
+      airstrikeTargetSectorIds: [...player.airstrikeTargetSectorIds.values()]
+    }))
+    .sort((left, right) => left.sectorId - right.sectorId);
+
+  return displayRoomViewSchema.parse({
+    roomId: state.roomId,
+    phase: state.phase,
+    displayConnected: state.displayConnected,
+    playerCapacity: state.playerCapacity,
+    players,
     game:
-      state.hasGame === true && state.game !== undefined
+      state.hasGame === true && state.game?.display !== undefined
         ? {
-            tick: state.game.tick,
-            elapsedMs: state.game.elapsedMs,
-            treasury: state.game.treasury,
-            pathLength: state.game.pathLength,
-            repairCost: state.game.repairCost,
-            result: state.game.result,
-            waveNumber: state.game.waveNumber,
-            totalWaves: state.game.totalWaves,
-            stage: state.game.stage,
-            intermissionRemainingSeconds: state.game.intermissionRemainingSeconds,
-            airstrikeCharge: state.game.airstrikeCharge,
-            airstrikeChargeRequired: state.game.airstrikeChargeRequired,
-            airstrikeDamage: state.game.airstrikeDamage,
-            lastAirstrikeEffect:
-              state.game.lastAirstrikeSequence > 0 &&
-              (state.game.lastAirstrikeTargetSectorId === 0 ||
-                state.game.lastAirstrikeTargetSectorId === 1)
-                ? {
-                    sequence: state.game.lastAirstrikeSequence,
-                    actionId: state.game.lastAirstrikeActionId,
-                    playerId: state.game.lastAirstrikePlayerId,
-                    targetSectorId: state.game.lastAirstrikeTargetSectorId,
-                    appliedTick: state.game.lastAirstrikeAppliedTick
-                  }
-                : null,
-            sectors: [...state.game.sectors.values()].map((sector) => ({
-              sectorId: sector.sectorId,
-              assignedPlayerId: sector.assignedPlayerId.length > 0 ? sector.assignedPlayerId : null,
-              gateHealth: sector.gateHealth,
-              gateMaxHealth: sector.gateMaxHealth,
-              defenseLevel: sector.defenseLevel,
-              defenseDamage: sector.defenseDamage,
-              nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null,
-              enemyCount: sector.enemyCount,
-              airstrikeTargetAvailable: sector.airstrikeTargetAvailable
-            })),
-            enemies: [...state.game.enemies.values()].map((enemy) => ({
+            ...toSharedGameView(state.game),
+            lastAirstrikeEffect: state.game.display.hasLastAirstrikeEffect
+              ? {
+                  sequence: state.game.display.lastAirstrikeEffect.sequence,
+                  actionId: state.game.display.lastAirstrikeEffect.actionId,
+                  playerId: state.game.display.lastAirstrikeEffect.playerId,
+                  targetSectorId: state.game.display.lastAirstrikeEffect.targetSectorId,
+                  appliedTick: state.game.display.lastAirstrikeEffect.appliedTick
+                }
+              : null,
+            enemies: [...state.game.display.enemies.values()].map((enemy) => ({
               enemyId: enemy.enemyId,
               sectorId: enemy.sectorId,
               enemyType: enemy.enemyType,
@@ -143,6 +137,37 @@ export function toPublicRoomView(state: NetworkRoomState | undefined): PublicRoo
           }
         : null
   });
+}
+
+export const toPublicRoomView = toDisplayRoomView;
+
+function toSharedGameView(game: NetworkGameState) {
+  return {
+    tick: game.tick,
+    elapsedMs: game.elapsedMs,
+    treasury: game.treasury,
+    pathLength: game.pathLength,
+    repairCost: game.repairCost,
+    result: game.result,
+    waveNumber: game.waveNumber,
+    totalWaves: game.totalWaves,
+    stage: game.stage,
+    intermissionRemainingSeconds: game.intermissionRemainingSeconds,
+    airstrikeCharge: game.airstrikeCharge,
+    airstrikeChargeRequired: game.airstrikeChargeRequired,
+    airstrikeDamage: game.airstrikeDamage,
+    sectors: [...game.sectors.values()].map((sector) => ({
+      sectorId: sector.sectorId,
+      assignedPlayerId: sector.assignedPlayerId.length > 0 ? sector.assignedPlayerId : null,
+      gateHealth: sector.gateHealth,
+      gateMaxHealth: sector.gateMaxHealth,
+      defenseLevel: sector.defenseLevel,
+      defenseDamage: sector.defenseDamage,
+      nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null,
+      enemyCount: sector.enemyCount,
+      airstrikeTargetAvailable: sector.airstrikeTargetAvailable
+    }))
+  };
 }
 
 export function createControllerJoinUrl(controllerUrl: string, roomId: string): string {

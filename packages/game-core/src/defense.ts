@@ -1,6 +1,10 @@
 import { advanceClock, type SimulationClock } from "./primitives.js";
 
-export type SectorId = 0 | 1;
+export const MIN_SECTOR_COUNT = 2;
+export const MAX_SECTOR_COUNT = 6;
+export const STARTING_TREASURY_PER_SECTOR = 25;
+
+export type SectorId = 0 | 1 | 2 | 3 | 4 | 5;
 export type DefenseResult = "in_progress" | "victory" | "defeat";
 export type DefenseStage = "intermission" | "combat";
 export type EnemyType = "balanced" | "fast" | "heavy" | "boss";
@@ -29,7 +33,6 @@ export interface DefenseConfig {
   readonly sectorCount: number;
   readonly pathLength: number;
   readonly gateMaxHealth: number;
-  readonly startingTreasury: number;
   readonly baseDefenseDamage: number;
   readonly damagePerUpgrade: number;
   readonly maxDefenseLevel: number;
@@ -77,7 +80,7 @@ export interface DefenseState {
   readonly waveNumber: number;
   readonly waveStep: number;
   readonly intermissionRemainingSteps: number;
-  readonly sectors: readonly [SectorState, SectorState];
+  readonly sectors: readonly SectorState[];
   readonly enemies: readonly EnemyState[];
   readonly nextSpawnIndex: number;
   readonly enemySequence: number;
@@ -90,6 +93,7 @@ export type DefenseAction =
   | { readonly type: "upgrade"; readonly sectorId: SectorId }
   | {
       readonly type: "airstrike";
+      readonly sourceSectorId: SectorId;
       readonly targetSectorId: SectorId;
       readonly actionId: string;
       readonly playerId: string;
@@ -105,112 +109,160 @@ export type DefenseActionResult =
       readonly state: DefenseState;
     };
 
-export const prototypeDefenseConfig: DefenseConfig = {
-  fixedStepMs: 1000,
-  intermissionDurationMs: 10_000,
-  sectorCount: 2,
-  pathLength: 12,
-  gateMaxHealth: 100,
-  startingTreasury: 50,
-  baseDefenseDamage: 4,
-  damagePerUpgrade: 2,
-  maxDefenseLevel: 4,
-  repairCost: 15,
-  repairAmount: 20,
-  upgradeBaseCost: 20,
-  upgradeCostStep: 10,
-  enemyArchetypes: {
-    balanced: {
-      maxHealth: 18,
-      speedPerStep: 1,
-      gateDamage: 15,
-      reward: 8,
-      airstrikeCharge: 14
-    },
-    fast: {
-      maxHealth: 12,
-      speedPerStep: 2,
-      gateDamage: 12,
-      reward: 7,
-      airstrikeCharge: 12
-    },
-    heavy: {
-      maxHealth: 34,
-      speedPerStep: 1,
-      gateDamage: 24,
-      reward: 14,
-      airstrikeCharge: 20
-    },
-    boss: {
-      maxHealth: 90,
-      speedPerStep: 1,
-      gateDamage: 45,
-      reward: 40,
-      airstrikeCharge: 35
-    }
-  },
-  waves: [
-    {
-      spawns: [
-        { step: 1, sectorId: 0, enemyType: "balanced" },
-        { step: 1, sectorId: 1, enemyType: "balanced" },
-        { step: 5, sectorId: 0, enemyType: "balanced" },
-        { step: 5, sectorId: 1, enemyType: "balanced" }
-      ]
-    },
-    {
-      spawns: [
-        { step: 1, sectorId: 0, enemyType: "fast" },
-        { step: 1, sectorId: 1, enemyType: "fast" },
-        { step: 4, sectorId: 0, enemyType: "balanced" },
-        { step: 4, sectorId: 1, enemyType: "balanced" },
-        { step: 7, sectorId: 0, enemyType: "fast" },
-        { step: 7, sectorId: 1, enemyType: "fast" }
-      ]
-    },
-    {
-      spawns: [
-        { step: 1, sectorId: 0, enemyType: "heavy" },
-        { step: 1, sectorId: 1, enemyType: "heavy" },
-        { step: 4, sectorId: 0, enemyType: "fast" },
-        { step: 4, sectorId: 1, enemyType: "fast" },
-        { step: 8, sectorId: 0, enemyType: "balanced" },
-        { step: 8, sectorId: 1, enemyType: "balanced" }
-      ]
-    },
-    {
-      spawns: [
-        { step: 1, sectorId: 0, enemyType: "heavy" },
-        { step: 1, sectorId: 1, enemyType: "heavy" },
-        { step: 3, sectorId: 0, enemyType: "fast" },
-        { step: 3, sectorId: 1, enemyType: "fast" },
-        { step: 6, sectorId: 0, enemyType: "heavy" },
-        { step: 6, sectorId: 1, enemyType: "heavy" },
-        { step: 9, sectorId: 0, enemyType: "balanced" },
-        { step: 9, sectorId: 1, enemyType: "balanced" }
-      ]
-    },
-    {
-      spawns: [
-        { step: 1, sectorId: 0, enemyType: "heavy" },
-        { step: 1, sectorId: 1, enemyType: "heavy" },
-        { step: 4, sectorId: 0, enemyType: "fast" },
-        { step: 4, sectorId: 1, enemyType: "fast" },
-        { step: 7, sectorId: 0, enemyType: "boss" },
-        { step: 10, sectorId: 1, enemyType: "heavy" }
-      ]
-    }
+interface WaveSpawnTemplate {
+  readonly step: number;
+  readonly enemyType: EnemyType;
+}
+
+const enemyTypes: readonly EnemyType[] = ["balanced", "fast", "heavy", "boss"];
+
+const prototypeWaveTemplates: readonly (readonly WaveSpawnTemplate[])[] = [
+  [
+    { step: 1, enemyType: "balanced" },
+    { step: 5, enemyType: "balanced" }
   ],
-  airstrike: {
-    chargeRequired: 100,
-    damage: 30
+  [
+    { step: 1, enemyType: "fast" },
+    { step: 4, enemyType: "balanced" },
+    { step: 7, enemyType: "fast" }
+  ],
+  [
+    { step: 1, enemyType: "heavy" },
+    { step: 4, enemyType: "fast" },
+    { step: 8, enemyType: "balanced" }
+  ],
+  [
+    { step: 1, enemyType: "heavy" },
+    { step: 3, enemyType: "fast" },
+    { step: 6, enemyType: "heavy" },
+    { step: 9, enemyType: "balanced" }
+  ],
+  [
+    { step: 1, enemyType: "heavy" },
+    { step: 4, enemyType: "fast" },
+    { step: 7, enemyType: "boss" },
+    { step: 10, enemyType: "heavy" }
+  ]
+];
+
+const prototypeEnemyArchetypes: Readonly<Record<EnemyType, EnemyArchetypeConfig>> = {
+  balanced: {
+    maxHealth: 18,
+    speedPerStep: 1,
+    gateDamage: 15,
+    reward: 8,
+    airstrikeCharge: 14
+  },
+  fast: {
+    maxHealth: 12,
+    speedPerStep: 2,
+    gateDamage: 12,
+    reward: 7,
+    airstrikeCharge: 12
+  },
+  heavy: {
+    maxHealth: 34,
+    speedPerStep: 1,
+    gateDamage: 24,
+    reward: 14,
+    airstrikeCharge: 20
+  },
+  boss: {
+    maxHealth: 90,
+    speedPerStep: 1,
+    gateDamage: 45,
+    reward: 40,
+    airstrikeCharge: 35
   }
 };
 
-export function validateDefenseConfig(config: DefenseConfig): void {
-  if (config.sectorCount !== 2) {
-    throw new RangeError("sectorCount must be exactly 2");
+export function createPrototypeDefenseConfig(sectorCount: number): DefenseConfig {
+  assertSectorCount(sectorCount);
+
+  const waves = prototypeWaveTemplates.map((template) => ({
+    spawns: expandWaveTemplate(template, sectorCount)
+  }));
+
+  const config: DefenseConfig = {
+    fixedStepMs: 1000,
+    intermissionDurationMs: 10_000,
+    sectorCount,
+    pathLength: 12,
+    gateMaxHealth: 100,
+    baseDefenseDamage: 4,
+    damagePerUpgrade: 2,
+    maxDefenseLevel: 4,
+    repairCost: 15,
+    repairAmount: 20,
+    upgradeBaseCost: 20,
+    upgradeCostStep: 10,
+    enemyArchetypes: prototypeEnemyArchetypes,
+    waves,
+    airstrike: {
+      chargeRequired: 100,
+      damage: 30
+    }
+  };
+
+  validateDefenseConfig(config);
+  return config;
+}
+
+export const prototypeDefenseConfig: DefenseConfig = createPrototypeDefenseConfig(2);
+
+export function isSectorId(value: number): value is SectorId {
+  return Number.isSafeInteger(value) && value >= 0 && value < MAX_SECTOR_COUNT;
+}
+
+export function isSectorIdInDefense(value: number, sectorCount: number): value is SectorId {
+  return isValidSectorCount(sectorCount) && isSectorId(value) && value < sectorCount;
+}
+
+export function getAirstrikeTargetSectorIds(
+  sourceSectorId: SectorId,
+  sectorCount: number
+): readonly SectorId[] {
+  assertSectorCount(sectorCount);
+  if (!isSectorIdInDefense(sourceSectorId, sectorCount)) {
+    throw new RangeError("sourceSectorId must exist in the defense");
   }
+
+  const candidates = [
+    sourceSectorId,
+    (sourceSectorId - 1 + sectorCount) % sectorCount,
+    (sourceSectorId + 1) % sectorCount
+  ];
+  const uniqueTargets: SectorId[] = [];
+
+  for (const candidate of candidates) {
+    if (!isSectorIdInDefense(candidate, sectorCount)) {
+      throw new RangeError("airstrike target calculation produced an invalid sector");
+    }
+    if (!uniqueTargets.includes(candidate)) {
+      uniqueTargets.push(candidate);
+    }
+  }
+
+  return uniqueTargets;
+}
+
+export function isAirstrikeTargetAllowed(
+  sourceSectorId: number,
+  targetSectorId: number,
+  sectorCount: number
+): boolean {
+  if (
+    !isSectorIdInDefense(sourceSectorId, sectorCount) ||
+    !isSectorIdInDefense(targetSectorId, sectorCount)
+  ) {
+    return false;
+  }
+
+  return getAirstrikeTargetSectorIds(sourceSectorId, sectorCount).includes(targetSectorId);
+}
+
+export function validateDefenseConfig(config: DefenseConfig): void {
+  assertSectorCount(config.sectorCount);
   if (config.waves.length !== 5) {
     throw new RangeError("waves must contain exactly 5 entries");
   }
@@ -251,11 +303,8 @@ export function validateDefenseConfig(config: DefenseConfig): void {
   if (config.intermissionDurationMs % config.fixedStepMs !== 0) {
     throw new RangeError("intermissionDurationMs must be divisible by fixedStepMs");
   }
-  if (!Number.isSafeInteger(config.startingTreasury) || config.startingTreasury < 0) {
-    throw new RangeError("startingTreasury must be a non-negative safe integer");
-  }
 
-  let bossCount = 0;
+  const bossSectors = new Set<SectorId>();
   config.waves.forEach((wave, waveIndex) => {
     let previousStep = 0;
     for (const spawn of wave.spawns) {
@@ -265,6 +314,9 @@ export function validateDefenseConfig(config: DefenseConfig): void {
       if (spawn.step < previousStep) {
         throw new RangeError("wave spawns must be sorted by step");
       }
+      if (!isSectorIdInDefense(spawn.sectorId, config.sectorCount)) {
+        throw new RangeError("spawn.sectorId must exist in the defense");
+      }
       if (!enemyTypes.includes(spawn.enemyType)) {
         throw new RangeError("spawn.enemyType is unknown");
       }
@@ -272,14 +324,17 @@ export function validateDefenseConfig(config: DefenseConfig): void {
         if (waveIndex !== 4) {
           throw new RangeError("boss may only spawn in wave 5");
         }
-        bossCount += 1;
+        if (bossSectors.has(spawn.sectorId)) {
+          throw new RangeError("wave 5 must contain exactly one boss per sector");
+        }
+        bossSectors.add(spawn.sectorId);
       }
       previousStep = spawn.step;
     }
   });
 
-  if (bossCount !== 1) {
-    throw new RangeError("wave 5 must contain exactly one boss");
+  if (bossSectors.size !== config.sectorCount) {
+    throw new RangeError("wave 5 must contain exactly one boss per sector");
   }
 }
 
@@ -292,16 +347,17 @@ export function createDefenseState(config: DefenseConfig, seed: number): Defense
   return {
     seed,
     clock: { tick: 0, elapsedMs: 0 },
-    treasury: config.startingTreasury,
+    treasury: STARTING_TREASURY_PER_SECTOR * config.sectorCount,
     result: "in_progress",
     stage: "intermission",
     waveNumber: 1,
     waveStep: 0,
     intermissionRemainingSteps: config.intermissionDurationMs / config.fixedStepMs,
-    sectors: [
-      { sectorId: 0, gateHealth: config.gateMaxHealth, defenseLevel: 1 },
-      { sectorId: 1, gateHealth: config.gateMaxHealth, defenseLevel: 1 }
-    ],
+    sectors: createSectorIds(config.sectorCount).map((sectorId) => ({
+      sectorId,
+      gateHealth: config.gateMaxHealth,
+      defenseLevel: 1
+    })),
     enemies: [],
     nextSpawnIndex: 0,
     enemySequence: 0,
@@ -401,23 +457,29 @@ export function advanceDefense(state: DefenseState, config: DefenseConfig): Defe
     }
   }
 
-  const gateHealth: [number, number] = [state.sectors[0].gateHealth, state.sectors[1].gateHealth];
+  const gateHealthBySector = new Map(
+    state.sectors.map((sector) => [sector.sectorId, sector.gateHealth] as const)
+  );
   const activeEnemies: EnemyState[] = [];
 
   for (const enemy of survivingAfterAttack) {
     const archetype = config.enemyArchetypes[enemy.enemyType];
     const progress = enemy.progress + archetype.speedPerStep;
     if (progress >= config.pathLength) {
-      gateHealth[enemy.sectorId] = Math.max(0, gateHealth[enemy.sectorId] - archetype.gateDamage);
+      const gateHealth = gateHealthBySector.get(enemy.sectorId);
+      if (gateHealth === undefined) {
+        throw new RangeError("enemy references a missing sector");
+      }
+      gateHealthBySector.set(enemy.sectorId, Math.max(0, gateHealth - archetype.gateDamage));
     } else {
       activeEnemies.push({ ...enemy, progress });
     }
   }
 
-  const sectors: [SectorState, SectorState] = [
-    { ...state.sectors[0], gateHealth: gateHealth[0] },
-    { ...state.sectors[1], gateHealth: gateHealth[1] }
-  ];
+  const sectors = state.sectors.map((sector) => ({
+    ...sector,
+    gateHealth: gateHealthBySector.get(sector.sectorId) ?? sector.gateHealth
+  }));
   const defeated = sectors.some((sector) => sector.gateHealth === 0);
   const waveCleared = nextSpawnIndex === wave.spawns.length && activeEnemies.length === 0;
 
@@ -494,7 +556,16 @@ export function applyDefenseAction(
     return applyAirstrike(state, config, action);
   }
 
-  const sector = state.sectors[action.sectorId];
+  const sectorIndex = state.sectors.findIndex((sector) => sector.sectorId === action.sectorId);
+  const sector = state.sectors[sectorIndex];
+  if (
+    sectorIndex < 0 ||
+    sector === undefined ||
+    !isSectorIdInDefense(action.sectorId, config.sectorCount)
+  ) {
+    return { accepted: false, reason: "not_available", state };
+  }
+
   const cost =
     action.type === "repair" ? config.repairCost : getUpgradeCost(config, sector.defenseLevel);
 
@@ -515,15 +586,15 @@ export function applyDefenseAction(
           gateHealth: Math.min(config.gateMaxHealth, sector.gateHealth + config.repairAmount)
         }
       : { ...sector, defenseLevel: sector.defenseLevel + 1 };
-  const sectors: [SectorState, SectorState] =
-    action.sectorId === 0 ? [updatedSector, state.sectors[1]] : [state.sectors[0], updatedSector];
 
   return {
     accepted: true,
     state: {
       ...state,
       treasury: state.treasury - cost,
-      sectors
+      sectors: state.sectors.map((currentSector, index) =>
+        index === sectorIndex ? updatedSector : currentSector
+      )
     }
   };
 }
@@ -533,8 +604,17 @@ function applyAirstrike(
   config: DefenseConfig,
   action: Extract<DefenseAction, { type: "airstrike" }>
 ): DefenseActionResult {
-  const targets = state.enemies.filter((enemy) => enemy.sectorId === action.targetSectorId);
+  const targetAllowed = isAirstrikeTargetAllowed(
+    action.sourceSectorId,
+    action.targetSectorId,
+    config.sectorCount
+  );
+  const targets = targetAllowed
+    ? state.enemies.filter((enemy) => enemy.sectorId === action.targetSectorId)
+    : [];
+
   if (
+    !targetAllowed ||
     state.stage !== "combat" ||
     state.airstrikeCharge < config.airstrike.chargeRequired ||
     targets.length === 0
@@ -584,6 +664,41 @@ function applyAirstrike(
   };
 }
 
+function expandWaveTemplate(
+  template: readonly WaveSpawnTemplate[],
+  sectorCount: number
+): readonly WaveSpawn[] {
+  return template.flatMap(({ step, enemyType }) =>
+    createSectorIds(sectorCount).map((sectorId) => ({ step, sectorId, enemyType }))
+  );
+}
+
+function createSectorIds(sectorCount: number): readonly SectorId[] {
+  assertSectorCount(sectorCount);
+  return Array.from({ length: sectorCount }, (_, sectorId) => {
+    if (!isSectorId(sectorId)) {
+      throw new RangeError("sector builder produced an invalid sector");
+    }
+    return sectorId;
+  });
+}
+
+function assertSectorCount(sectorCount: number): void {
+  if (!isValidSectorCount(sectorCount)) {
+    throw new RangeError(
+      `sectorCount must be a safe integer from ${String(MIN_SECTOR_COUNT)} to ${String(MAX_SECTOR_COUNT)}`
+    );
+  }
+}
+
+function isValidSectorCount(sectorCount: number): boolean {
+  return (
+    Number.isSafeInteger(sectorCount) &&
+    sectorCount >= MIN_SECTOR_COUNT &&
+    sectorCount <= MAX_SECTOR_COUNT
+  );
+}
+
 function rewardForEnemy(
   config: DefenseConfig,
   enemy: EnemyState
@@ -591,5 +706,3 @@ function rewardForEnemy(
   const archetype = config.enemyArchetypes[enemy.enemyType];
   return { treasury: archetype.reward, airstrikeCharge: archetype.airstrikeCharge };
 }
-
-const enemyTypes: readonly EnemyType[] = ["balanced", "fast", "heavy", "boss"];

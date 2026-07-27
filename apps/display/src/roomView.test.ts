@@ -19,27 +19,30 @@ describe("display room view", () => {
     );
   });
 
-  it("copies only the public state fields", () => {
+  it("maps capacity, stable sector and server targets in the lobby", () => {
     const player = {
       playerId: "player-1",
       playerName: "Alex",
       ready: true,
       connected: true,
-      sectorId: null
+      sectorId: 0,
+      airstrikeTargetSectorIds: [0, 1]
     };
 
     expect(
       toPublicRoomView({
         roomId: "ROOM1",
-        phase: "active",
+        phase: "lobby",
         displayConnected: true,
+        playerCapacity: 2,
         players: new Map([["player-1", player]])
       })
     ).toEqual({
       roomId: "ROOM1",
-      phase: "active",
+      phase: "lobby",
       displayConnected: true,
-      players: [player],
+      playerCapacity: 2,
+      players: [{ ...player, airstrikeTargetSectorIds: [0, 1] }],
       game: null
     });
   });

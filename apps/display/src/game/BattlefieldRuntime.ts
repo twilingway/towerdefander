@@ -1,14 +1,18 @@
-import type { PublicGameSnapshot, PublicPlayerView } from "@town-defenders/protocol";
+import type {
+  PlayerCapacity,
+  PublicGameSnapshot,
+  PublicPlayerView,
+  SectorId
+} from "@town-defenders/protocol";
 import Phaser from "phaser";
 
 import { BattlefieldSnapshotFeed, type BattlefieldFrame } from "./battlefieldModel.js";
 import {
   BATTLEFIELD_HEIGHT,
   BATTLEFIELD_WIDTH,
-  CASTLE_ENVIRONMENT_KEY,
-  CASTLE_ENVIRONMENT_URL,
-  CASTLE_LAYOUT,
   EnvironmentLayerController,
+  getCastleEnvironmentAsset,
+  getCastleLayout,
   getLanePoint,
   getWorldPoint,
   type EnvironmentLayerState
@@ -17,6 +21,7 @@ import {
 export interface BattlefieldViewSnapshot {
   readonly game: PublicGameSnapshot;
   readonly players: readonly PublicPlayerView[];
+  readonly playerCapacity: PlayerCapacity;
 }
 
 interface EnemyVisual {
@@ -60,44 +65,48 @@ class BattlefieldScene extends Phaser.Scene {
   }
 
   private drawWorld(): void {
-    const world = this.add.graphics().setDepth(0);
-    this.fallbackWorld = world;
-    world.fillGradientStyle(0x102a24, 0x102a24, 0x071714, 0x071714, 1);
-    world.fillRect(0, 0, BATTLEFIELD_WIDTH, BATTLEFIELD_HEIGHT);
+    const playerCapacity = this.snapshot?.playerCapacity ?? 2;
+    const layout = getCastleLayout(playerCapacity);
+    const backdrop = this.add.graphics().setDepth(0);
+    const world = this.add.graphics().setDepth(2);
+    this.fallbackWorld = backdrop;
+    backdrop.fillGradientStyle(0x102a24, 0x102a24, 0x071714, 0x071714, 1);
+    backdrop.fillRect(0, 0, BATTLEFIELD_WIDTH, BATTLEFIELD_HEIGHT);
 
     for (let index = 0; index < 55; index += 1) {
       const x = (index * 137) % BATTLEFIELD_WIDTH;
       const y = (index * 83) % BATTLEFIELD_HEIGHT;
-      world.fillStyle(index % 3 === 0 ? 0x183e32 : 0x123128, 0.9);
-      world.fillCircle(x, y, 10 + (index % 5) * 3);
+      backdrop.fillStyle(index % 3 === 0 ? 0x183e32 : 0x123128, 0.9);
+      backdrop.fillCircle(x, y, 10 + (index % 5) * 3);
     }
 
-    this.drawFallbackCastle(world);
+    this.drawFallbackCastle(backdrop);
 
-    ([0, 1] as const).forEach((sectorId) => {
-      let previous = getLanePoint(sectorId, 0, 1);
+    layout.sectors.forEach((sector) => {
+      const sectorId = sector.sectorId;
+      let previous = getLanePoint(playerCapacity, sectorId, 0, 1);
       world.lineStyle(92, 0x322b20, 0.82);
       for (let index = 1; index <= 32; index += 1) {
-        const next = getLanePoint(sectorId, index / 32, 1);
+        const next = getLanePoint(playerCapacity, sectorId, index / 32, 1);
         world.lineBetween(previous.x, previous.y, next.x, next.y);
         previous = next;
       }
-      previous = getLanePoint(sectorId, 0, 1);
+      previous = getLanePoint(playerCapacity, sectorId, 0, 1);
       world.lineStyle(72, 0x9a7345, 1);
       for (let index = 1; index <= 32; index += 1) {
-        const next = getLanePoint(sectorId, index / 32, 1);
+        const next = getLanePoint(playerCapacity, sectorId, index / 32, 1);
         world.lineBetween(previous.x, previous.y, next.x, next.y);
         previous = next;
       }
 
-      const gate = getWorldPoint(CASTLE_LAYOUT[sectorId].gate);
-      const tower = getWorldPoint(CASTLE_LAYOUT[sectorId].tower);
-      const label = getWorldPoint(CASTLE_LAYOUT[sectorId].label);
+      const gate = getWorldPoint(sector.gate);
+      const tower = getWorldPoint(sector.tower);
+      const label = getWorldPoint(sector.label);
       this.drawGate(world, gate.x, gate.y);
-      this.drawTower(world, tower.x, tower.y, sectorId);
+      this.drawTower(world, tower.x, tower.y, getWorldPoint(sector.lane[0]));
       this.add
         .text(label.x, label.y, `СЕКТОР ${String(sectorId + 1)}`, {
-          color: sectorId === 0 ? "#7de0bf" : "#8dc4ff",
+          color: sectorId % 2 === 0 ? "#7de0bf" : "#8dc4ff",
           fontFamily: "Inter, sans-serif",
           fontSize: "20px",
           fontStyle: "bold",
@@ -148,14 +157,17 @@ class BattlefieldScene extends Phaser.Scene {
     graphics: Phaser.GameObjects.Graphics,
     x: number,
     y: number,
-    sectorId: 0 | 1
+    roadStart: { readonly x: number; readonly y: number }
   ): void {
     graphics.fillStyle(0x64736b, 1);
     graphics.fillCircle(x, y, 36);
     graphics.fillStyle(0xe6b85c, 1);
     graphics.fillCircle(x, y, 14);
     graphics.lineStyle(8, 0xcbd2c8, 1);
-    graphics.lineBetween(x + (sectorId === 0 ? -6 : 6), y, x + (sectorId === 0 ? -58 : 58), y);
+    const directionX = roadStart.x - x;
+    const directionY = roadStart.y - y;
+    const length = Math.hypot(directionX, directionY) || 1;
+    graphics.lineBetween(x, y, x + (directionX / length) * 58, y + (directionY / length) * 58);
   }
 
   private drawFallbackCastle(graphics: Phaser.GameObjects.Graphics): void {
@@ -173,27 +185,28 @@ class BattlefieldScene extends Phaser.Scene {
   }
 
   private startEnvironmentLoad(): void {
-    if (this.textures.exists(CASTLE_ENVIRONMENT_KEY)) {
-      this.resolveEnvironment();
+    const asset = getCastleEnvironmentAsset(this.snapshot?.playerCapacity ?? 2);
+    if (asset === null) {
+      this.environmentLayer.resolve(false, () => undefined);
+      return;
+    }
+    if (this.textures.exists(asset.key)) {
+      this.resolveEnvironment(asset.key);
       return;
     }
 
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      this.resolveEnvironment();
+      this.resolveEnvironment(asset.key);
     });
-    this.load.image(CASTLE_ENVIRONMENT_KEY, CASTLE_ENVIRONMENT_URL);
+    this.load.image(asset.key, asset.url);
     this.load.start();
   }
 
-  private resolveEnvironment(): void {
-    this.environmentLayer.resolve(this.textures.exists(CASTLE_ENVIRONMENT_KEY), () => {
+  private resolveEnvironment(key: string): void {
+    this.environmentLayer.resolve(this.textures.exists(key), () => {
       let environment: Phaser.GameObjects.Image | undefined;
       try {
-        environment = this.add.image(
-          BATTLEFIELD_WIDTH / 2,
-          BATTLEFIELD_HEIGHT / 2,
-          CASTLE_ENVIRONMENT_KEY
-        );
+        environment = this.add.image(BATTLEFIELD_WIDTH / 2, BATTLEFIELD_HEIGHT / 2, key);
         environment.setDisplaySize(BATTLEFIELD_WIDTH, BATTLEFIELD_HEIGHT).setDepth(1);
         this.fallbackWorld?.setVisible(false);
       } catch (error) {
@@ -209,8 +222,13 @@ class BattlefieldScene extends Phaser.Scene {
     const activeIds = new Set(snapshot.enemies.map((enemy) => enemy.enemyId));
 
     snapshot.enemies.forEach((enemy) => {
-      const sectorId: 0 | 1 = enemy.sectorId === 1 ? 1 : 0;
-      const point = getLanePoint(sectorId, enemy.progress, snapshot.pathLength);
+      const sectorId = enemy.sectorId;
+      const point = getLanePoint(
+        this.snapshot?.playerCapacity ?? 2,
+        sectorId,
+        enemy.progress,
+        snapshot.pathLength
+      );
       let visual = this.enemyVisuals.get(enemy.enemyId);
       if (visual === undefined) {
         visual = this.createEnemyVisual(enemy.enemyType, enemy.health);
@@ -324,8 +342,12 @@ class BattlefieldScene extends Phaser.Scene {
     graphics.fillRoundedRect(-28, -38, 56 * Math.max(0, ratio), 7, 3);
   }
 
-  private showProjectile(sectorId: 0 | 1, targetX: number, targetY: number): void {
-    const tower = getWorldPoint(CASTLE_LAYOUT[sectorId].tower);
+  private showProjectile(sectorId: SectorId, targetX: number, targetY: number): void {
+    const sector = getCastleLayout(this.snapshot?.playerCapacity ?? 2).sectors[sectorId];
+    if (sector === undefined) {
+      return;
+    }
+    const tower = getWorldPoint(sector.tower);
     const projectile = this.add.circle(tower.x, tower.y, 6, 0xffe18f, 1).setDepth(9);
     this.tweens.add({
       targets: projectile,
@@ -349,8 +371,9 @@ class BattlefieldScene extends Phaser.Scene {
   }
 
   private showAirstrike(sectorId: number): void {
-    const normalizedSectorId: 0 | 1 = sectorId === 1 ? 1 : 0;
-    const laneCenter = getLanePoint(normalizedSectorId, 0.45, 1);
+    const playerCapacity = this.snapshot?.playerCapacity ?? 2;
+    const normalizedSectorId = sectorId as SectorId;
+    const laneCenter = getLanePoint(playerCapacity, normalizedSectorId, 0.45, 1);
     const flash = this.add
       .ellipse(laneCenter.x, laneCenter.y, 520, 230, 0xffd36c, 0.58)
       .setDepth(15);
@@ -363,7 +386,7 @@ class BattlefieldScene extends Phaser.Scene {
       }
     });
     for (let index = 0; index < 8; index += 1) {
-      const blastPoint = getLanePoint(normalizedSectorId, 0.1 + index * 0.09, 1);
+      const blastPoint = getLanePoint(playerCapacity, normalizedSectorId, 0.1 + index * 0.09, 1);
       const blast = this.add
         .circle(blastPoint.x, blastPoint.y + (index % 2 === 0 ? -22 : 20), 18, 0xff693d, 0.9)
         .setDepth(16);

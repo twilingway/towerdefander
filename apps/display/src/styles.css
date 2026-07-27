@@ -87,6 +87,25 @@ button:disabled {
   box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
 }
 
+.capacity-picker {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1.5rem;
+  color: #c8d9d5;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.capacity-picker select {
+  min-height: 3.25rem;
+  padding-inline: 1rem;
+  border: 1px solid #54746d;
+  border-radius: 0.8rem;
+  color: #f6f4e8;
+  font: inherit;
+  background: #132d2a;
+}
+
 .eyebrow {
   margin: 0;
   color: #e6b85c;
@@ -184,6 +203,7 @@ p {
 
 .player-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
@@ -192,7 +212,7 @@ p {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 1rem;
-  min-height: 5rem;
+  min-height: 4.25rem;
   padding: 1rem 1.25rem;
   border-radius: 1rem;
   background: #132d2a;

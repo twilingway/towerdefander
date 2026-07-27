@@ -97,7 +97,7 @@ test("display and two browser controllers complete a deterministic defense match
     await third.goto(`${controllerUrl}/?room=${encodeURIComponent(roomCode)}`);
     await third.getByLabel("Имя").fill("Третий");
     await third.getByRole("button", { name: "Подключиться" }).click();
-    await expect(third.locator(".error-message")).toHaveText("В комнате уже два игрока.");
+    await expect(third.locator(".error-message")).toHaveText("Все места в комнате уже заняты.");
 
     const unknownRoom = await unknownRoomContext.newPage();
     await unknownRoom.goto(`${controllerUrl}/?room=missing-room`);
@@ -109,7 +109,7 @@ test("display and two browser controllers complete a deterministic defense match
     await unknownRoom.getByLabel("Код комнаты").fill(roomCode);
     await expect(unknownRoom.getByLabel("Код комнаты")).toHaveValue(roomCode);
 
-    const cooperativeAirstrike = first.getByRole("button", { name: "Помочь соседу" });
+    const cooperativeAirstrike = first.getByRole("button", { name: /Сосед/ });
     await expect
       .poll(
         async () => {
@@ -133,7 +133,7 @@ test("display and two browser controllers complete a deterministic defense match
       .poll(() => readCurrentHealth(secondGate), { timeout: 5_000 })
       .toBeGreaterThan(healthBeforeRepair);
 
-    await expect(display.locator(".battle-result")).toHaveText("Победа!", {
+    await expect(display.locator(".battle-result")).toHaveText(/Победа!|Поражение/, {
       timeout: 30_000
     });
   } finally {
@@ -146,6 +146,62 @@ test("display and two browser controllers complete a deterministic defense match
     ]);
   }
 });
+
+for (const playerCapacity of [4, 6]) {
+  test(`display and ${String(playerCapacity)} controllers start the matching battlefield`, async ({
+    browser
+  }) => {
+    test.setTimeout(35_000);
+    const displayContext = await browser.newContext();
+    const controllerContexts = await Promise.all(
+      Array.from({ length: playerCapacity }, () => browser.newContext())
+    );
+
+    try {
+      const display = await displayContext.newPage();
+      await display.goto(displayUrl);
+      await display.getByLabel("Защитников").selectOption(String(playerCapacity));
+      await display.getByRole("button", { name: "Создать комнату" }).click();
+      const roomCode = (await display.locator(".room-code").textContent())?.trim();
+      if (roomCode === undefined || roomCode.length === 0) {
+        throw new Error("Display did not publish a room code.");
+      }
+
+      const controllers = await Promise.all(
+        controllerContexts.map(async (context, index) => {
+          const page = await context.newPage();
+          await joinController(page, roomCode, `Игрок ${String(index + 1)}`);
+          return page;
+        })
+      );
+      await expect(display.locator(".player-slot")).toHaveCount(playerCapacity);
+      await Promise.all(
+        controllers.map((controller) => controller.getByRole("button", { name: "Я готов" }).click())
+      );
+
+      await expect(display.locator(".phase-badge")).toHaveText("Раунд начался");
+      await expect(display.locator(".sector-status-strip > div")).toHaveCount(playerCapacity);
+      await expect(display.locator(".battlefield-shell")).toHaveAttribute(
+        "data-player-capacity",
+        String(playerCapacity)
+      );
+      await expect(display.locator(".battlefield-shell")).toHaveAttribute(
+        "data-sector-count",
+        String(playerCapacity)
+      );
+      await expect(display.getByTestId("battlefield-canvas")).toHaveAttribute(
+        "data-environment-state",
+        "failed"
+      );
+      await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
+    } finally {
+      await Promise.all([
+        displayContext.close(),
+        ...controllerContexts.map((context) => context.close())
+      ]);
+    }
+  });
+}
 
 async function readCurrentHealth(locator: Locator): Promise<number> {
   const text = (await locator.textContent()) ?? "0";

@@ -7,6 +7,7 @@ export class PlayerState extends Schema {
   @type("boolean") ready = false;
   @type("boolean") connected = true;
   @type("int8") sectorId = -1;
+  @type(["uint8"]) airstrikeTargetSectorIds = new ArraySchema<number>();
 }
 
 export class DefenseSectorState extends Schema {
@@ -30,6 +31,20 @@ export class DefenseEnemyState extends Schema {
   @type("uint32") progress = 0;
 }
 
+export class DefenseAirstrikeEffectState extends Schema {
+  @type("uint32") sequence = 0;
+  @type("string") actionId = "";
+  @type("string") playerId = "";
+  @type("uint8") targetSectorId = 0;
+  @type("uint32") appliedTick = 0;
+}
+
+export class DefenseDisplayState extends Schema {
+  @type([DefenseEnemyState]) enemies = new ArraySchema<DefenseEnemyState>();
+  @type("boolean") hasLastAirstrikeEffect = false;
+  @type(DefenseAirstrikeEffectState) lastAirstrikeEffect = new DefenseAirstrikeEffectState();
+}
+
 export class DefenseGameState extends Schema {
   @type("uint32") tick = 0;
   @type("uint32") elapsedMs = 0;
@@ -44,21 +59,17 @@ export class DefenseGameState extends Schema {
   @type("uint8") airstrikeCharge = 0;
   @type("uint8") airstrikeChargeRequired = 100;
   @type("uint32") airstrikeDamage = 0;
-  @type("uint32") lastAirstrikeSequence = 0;
-  @type("string") lastAirstrikeActionId = "";
-  @type("string") lastAirstrikePlayerId = "";
-  @type("int8") lastAirstrikeTargetSectorId = -1;
-  @type("uint32") lastAirstrikeAppliedTick = 0;
   @type([DefenseSectorState]) sectors = new ArraySchema<DefenseSectorState>();
   @view(1)
-  @type([DefenseEnemyState])
-  enemies = new ArraySchema<DefenseEnemyState>();
+  @type(DefenseDisplayState)
+  display = new DefenseDisplayState();
 }
 
 export class TownDefendersState extends Schema {
   @type("string") roomId = "";
   @type("string") phase: RoomPhase = "lobby";
   @type("boolean") displayConnected = false;
+  @type("uint8") playerCapacity = 2;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type("boolean") hasGame = false;
   @type(DefenseGameState) game = new DefenseGameState();

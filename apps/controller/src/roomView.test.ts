@@ -17,7 +17,8 @@ describe("controller room view", () => {
       playerName: "Sam",
       ready: false,
       connected: true,
-      sectorId: 1 as const
+      sectorId: 1 as const,
+      airstrikeTargetSectorIds: [1 as const, 0 as const]
     };
 
     expect(
@@ -26,6 +27,7 @@ describe("controller room view", () => {
           roomId: "ROOM1",
           phase: "lobby",
           displayConnected: true,
+          playerCapacity: 2,
           game: null,
           players: [
             {
@@ -33,7 +35,8 @@ describe("controller room view", () => {
               playerName: "Alex",
               ready: true,
               connected: true,
-              sectorId: 0
+              sectorId: 0,
+              airstrikeTargetSectorIds: [0, 1]
             },
             player
           ]
@@ -48,6 +51,7 @@ describe("controller room view", () => {
       roomId: "ROOM1",
       phase: "active",
       displayConnected: true,
+      playerCapacity: 2,
       players: new Map([
         [
           "player-1",
@@ -56,7 +60,8 @@ describe("controller room view", () => {
             playerName: "Alex",
             ready: true,
             connected: true,
-            sectorId: 0
+            sectorId: 0,
+            airstrikeTargetSectorIds: [0, 1]
           }
         ]
       ]),
@@ -75,11 +80,6 @@ describe("controller room view", () => {
         airstrikeCharge: 45,
         airstrikeChargeRequired: 100,
         airstrikeDamage: 30,
-        lastAirstrikeSequence: 0,
-        lastAirstrikeActionId: "",
-        lastAirstrikePlayerId: "",
-        lastAirstrikeTargetSectorId: -1,
-        lastAirstrikeAppliedTick: 0,
         sectors: [
           {
             sectorId: 0,
@@ -114,7 +114,6 @@ describe("controller room view", () => {
       repairCost: 15,
       waveNumber: 2,
       airstrikeCharge: 45,
-      enemies: [],
       sectors: [
         { assignedPlayerId: "player-1", nextUpgradeCost: 30, enemyCount: 1 },
         { assignedPlayerId: null, nextUpgradeCost: null, enemyCount: 0 }

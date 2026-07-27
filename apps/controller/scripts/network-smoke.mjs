@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@colyseus/sdk";
 
 const port = 35_677;
-const protocolVersion = 3;
+const protocolVersion = 4;
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const serverEntry = fileURLToPath(new URL("../../server/dist/index.js", import.meta.url));
@@ -31,7 +31,8 @@ try {
 
   display = await new Client(endpoint).create("town_defenders", {
     role: "display",
-    protocolVersion
+    protocolVersion,
+    playerCapacity: 2
   });
   first = await new Client(endpoint).joinById(display.roomId, {
     role: "controller",
@@ -79,14 +80,20 @@ try {
   });
   await waitFor(() => firstSector()?.defenseLevel === 2);
   const treasuryAfterUpgrade = display.state.game.treasury;
+  const collisionError = nextServerError(second);
   second.send("player:upgrade", {
     protocolVersion,
     roomId: display.roomId,
     playerId: secondPlayerId,
     actionId: upgradeActionId
   });
+  const collisionResult = await collisionError;
   await delay(150);
-  if (firstSector()?.defenseLevel !== 2 || display.state.game.treasury !== treasuryAfterUpgrade) {
+  if (
+    collisionResult?.code !== "invalid_message" ||
+    firstSector()?.defenseLevel !== 2 ||
+    display.state.game.treasury !== treasuryAfterUpgrade
+  ) {
     throw new Error("Room-wide actionId deduplication failed.");
   }
 
@@ -152,11 +159,11 @@ try {
       display.state.game.waveNumber >= 3 &&
       display.state.game.stage === "combat" &&
       display.state.game.airstrikeCharge === display.state.game.airstrikeChargeRequired &&
-      display.state.game.enemies.length > 0,
+      display.state.game.display.enemies.length > 0,
     500
   );
-  const airstrikeTargetSectorId = display.state.game.enemies[0].sectorId;
-  if ((replacement.state.game.enemies?.length ?? 0) !== 0) {
+  const airstrikeTargetSectorId = display.state.game.display.enemies[0].sectorId;
+  if (replacement.state.game.display !== undefined) {
     throw new Error("Controller received the display-only enemy collection.");
   }
   const compactTargetSector = replacement.state.game.sectors[airstrikeTargetSectorId];
@@ -174,7 +181,11 @@ try {
     actionId: airstrikeActionId,
     targetSectorId: airstrikeTargetSectorId
   });
-  await waitFor(() => display.state.game.lastAirstrikeSequence === 1);
+  await waitFor(
+    () =>
+      display.state.game.display.hasLastAirstrikeEffect === true &&
+      display.state.game.display.lastAirstrikeEffect.sequence === 1
+  );
   const treasuryAfterAirstrike = display.state.game.treasury;
   replacement.send("player:airstrike", {
     protocolVersion,
@@ -185,7 +196,7 @@ try {
   });
   await delay(150);
   if (
-    display.state.game.lastAirstrikeSequence !== 1 ||
+    display.state.game.display.lastAirstrikeEffect.sequence !== 1 ||
     display.state.game.treasury !== treasuryAfterAirstrike
   ) {
     throw new Error("Airstrike actionId deduplication failed.");
@@ -209,7 +220,7 @@ try {
       phase: display.state.phase,
       result: display.state.game.result,
       waveNumber: display.state.game.waveNumber,
-      airstrikeSequence: display.state.game.lastAirstrikeSequence,
+      airstrikeSequence: display.state.game.display.lastAirstrikeEffect.sequence,
       repairedGateHealth: replacementSector().gateHealth,
       upgradedDefenseLevel: firstSector().defenseLevel
     })

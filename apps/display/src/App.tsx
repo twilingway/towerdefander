@@ -1,10 +1,14 @@
 import { Client, type Room } from "@colyseus/sdk";
-import { PROTOCOL_VERSION, type PublicRoomView } from "@town-defenders/protocol";
+import {
+  PROTOCOL_VERSION,
+  type DisplayRoomView,
+  type PlayerCapacity
+} from "@town-defenders/protocol";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BattlefieldCanvas } from "./BattlefieldCanvas.js";
-import { createControllerJoinUrl, toPublicRoomView, type NetworkRoomState } from "./roomView.js";
+import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 
 type DisplayStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -21,7 +25,8 @@ const controllerUrl = readStringEnvironment(
 export function DisplayApp() {
   const roomReference = useRef<DisplayRoom>(undefined);
   const [status, setStatus] = useState<DisplayStatus>("idle");
-  const [view, setView] = useState<PublicRoomView>();
+  const [view, setView] = useState<DisplayRoomView>();
+  const [playerCapacity, setPlayerCapacity] = useState<PlayerCapacity>(2);
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
 
@@ -49,7 +54,8 @@ export function DisplayApp() {
       const client = new Client(gameServerUrl);
       const room = await client.create<NetworkRoomState>("town_defenders", {
         role: "display",
-        protocolVersion: PROTOCOL_VERSION
+        protocolVersion: PROTOCOL_VERSION,
+        playerCapacity
       });
       roomReference.current = room;
 
@@ -81,7 +87,7 @@ export function DisplayApp() {
   }
 
   function applyRoomState(state: NetworkRoomState) {
-    const nextView = toPublicRoomView(state);
+    const nextView = toDisplayRoomView(state);
     if (nextView === undefined) {
       return;
     }
@@ -97,6 +103,22 @@ export function DisplayApp() {
           <p className="eyebrow">Общий экран</p>
           <h1>Town Defenders</h1>
           <p>Откройте этот экран на телевизоре, проекторе или большом мониторе.</p>
+          <label className="capacity-picker">
+            Защитников
+            <select
+              value={playerCapacity}
+              disabled={status === "connecting"}
+              onChange={(event) => {
+                setPlayerCapacity(Number(event.target.value) as PlayerCapacity);
+              }}
+            >
+              {[2, 3, 4, 5, 6].map((capacity) => (
+                <option key={capacity} value={capacity}>
+                  {capacity}
+                </option>
+              ))}
+            </select>
+          </label>
           {error.length > 0 && <p className="error-message">{error}</p>}
           <button
             type="button"
@@ -132,13 +154,15 @@ export function DisplayApp() {
         </div>
 
         <div className="players-card">
-          <h2>Защитники · {view.players.length}/2</h2>
+          <h2>
+            Защитники · {view.players.length}/{view.playerCapacity}
+          </h2>
           <div className="player-list">
-            {[0, 1].map((slot) => {
-              const player = view.players[slot];
+            {Array.from({ length: view.playerCapacity }, (_, slot) => {
+              const player = view.players.find((candidate) => candidate.sectorId === slot);
               return player === undefined ? (
                 <div className="player-slot player-slot--empty" key={slot}>
-                  Ожидаем игрока…
+                  Сектор {slot + 1} · ожидаем игрока…
                 </div>
               ) : (
                 <div className="player-slot" key={player.playerId}>
@@ -147,11 +171,9 @@ export function DisplayApp() {
                     <small>{player.connected ? "в сети" : "переподключается"}</small>
                   </span>
                   <span className={player.ready ? "ready" : "waiting"}>
-                    {player.sectorId === null
-                      ? player.ready
-                        ? "Готов"
-                        : "Не готов"
-                      : `Сектор ${String(player.sectorId + 1)}`}
+                    {`Сектор ${String(player.sectorId + 1)} · ${
+                      player.ready ? "готов" : "не готов"
+                    }`}
                   </span>
                 </div>
               );
@@ -162,7 +184,9 @@ export function DisplayApp() {
 
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
-          <span>Игровое поле появится, когда оба защитника будут готовы</span>
+          <span>
+            Игровое поле появится, когда все {view.playerCapacity} защитников будут готовы
+          </span>
         </section>
       ) : (
         <section id="game-canvas" className="game-stage" aria-label="Область игрового поля">
@@ -198,6 +222,7 @@ export function DisplayApp() {
           <BattlefieldCanvas
             game={view.game}
             players={view.players}
+            playerCapacity={view.playerCapacity}
             connectionEpoch={connectionEpoch}
           />
           <div className="sector-status-strip">
@@ -224,7 +249,7 @@ export function DisplayApp() {
   );
 }
 
-function battleResultLabel(result: NonNullable<PublicRoomView["game"]>["result"]): string {
+function battleResultLabel(result: NonNullable<DisplayRoomView["game"]>["result"]): string {
   switch (result) {
     case "in_progress":
       return "Бой идёт";
@@ -235,7 +260,7 @@ function battleResultLabel(result: NonNullable<PublicRoomView["game"]>["result"]
   }
 }
 
-function phaseLabel(phase: PublicRoomView["phase"]): string {
+function phaseLabel(phase: DisplayRoomView["phase"]): string {
   switch (phase) {
     case "lobby":
       return "Лобби";

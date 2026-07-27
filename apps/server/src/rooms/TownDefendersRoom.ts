@@ -1,24 +1,31 @@
 import {
   advanceDefense,
   applyDefenseAction,
+  createPrototypeDefenseConfig,
   createDefenseState,
   getDefenseDamage,
   getIntermissionRemainingSeconds,
   getUpgradeCost,
+  isSectorIdInDefense,
   prototypeDefenseConfig,
   type DefenseAction,
+  type DefenseConfig,
   type DefenseState,
   type SectorId
 } from "@town-defenders/game-core";
 import {
+  MAX_PLAYER_CAPACITY,
   PROTOCOL_VERSION,
   airstrikeCommandSchema,
   clientMessage,
+  displayCreateOptionsSchema,
+  getAirstrikeTargetSectorIds,
   joinOptionsSchema,
   readyCommandSchema,
   resourceActionCommandSchema,
   serverMessage,
   type AirstrikeCommand,
+  type PlayerCapacity,
   type ResourceActionCommand,
   type ServerErrorCode
 } from "@town-defenders/protocol";
@@ -53,16 +60,23 @@ interface RejectedActionOutcome {
 
 type ActionOutcome = { readonly accepted: true } | RejectedActionOutcome;
 
+interface ActionJournalEntry {
+  readonly actorId: string;
+  readonly fingerprint: string;
+  readonly outcome: ActionOutcome;
+}
+
 const { reconnectionGraceSeconds, simulationIntervalMs } = readServerConfig();
 
 export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   // One spare transport seat lets onJoin return a typed room_full error.
-  override maxClients = 4;
+  override maxClients = MAX_PLAYER_CAPACITY + 2;
   override maxMessagesPerSecond = 20;
   override state = new TownDefendersState();
 
   private readonly roles = new Map<string, ConnectionRole>();
-  private readonly actionOutcomes = new Map<string, ActionOutcome>();
+  private readonly actionJournal = new Map<string, ActionJournalEntry>();
+  private defenseConfig: DefenseConfig = prototypeDefenseConfig;
   private defenseState: DefenseState | undefined;
   private simulationTimer: RoomTimer | undefined;
 
@@ -82,12 +96,18 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   };
 
   override onCreate(unsafeOptions: unknown): void {
-    const result = joinOptionsSchema.safeParse(unsafeOptions);
-    if (!result.success || result.data.role !== "display") {
-      throw new ServerError(4000, "Only the display may create a room.");
+    if (this.hasProtocolMismatch(unsafeOptions)) {
+      throw new ServerError(4000, "protocol_mismatch");
+    }
+
+    const result = displayCreateOptionsSchema.safeParse(unsafeOptions);
+    if (!result.success) {
+      throw new ServerError(4000, "invalid_message");
     }
 
     this.state.roomId = this.roomId;
+    this.state.playerCapacity = result.data.playerCapacity;
+    this.defenseConfig = createPrototypeDefenseConfig(result.data.playerCapacity);
   }
 
   override onJoin(client: Client, unsafeOptions: unknown): void {
@@ -101,27 +121,37 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     }
 
     if (result.data.role === "display") {
+      if (
+        "playerCapacity" in result.data &&
+        result.data.playerCapacity !== this.state.playerCapacity
+      ) {
+        throw new ServerError(4000, "invalid_message");
+      }
       this.joinDisplay(client);
       return;
     }
 
     client.view = new StateView();
 
-    if (this.state.players.size >= 2 || this.state.phase === "finished") {
+    if (this.state.players.size >= this.state.playerCapacity || this.state.phase === "finished") {
+      throw new ServerError(4001, "room_full");
+    }
+
+    const sectorId = this.findAvailableSector();
+    if (sectorId === undefined) {
       throw new ServerError(4001, "room_full");
     }
 
     const player = new PlayerState();
     player.playerId = client.sessionId;
     player.playerName = result.data.playerName;
+    player.sectorId = sectorId;
+    player.airstrikeTargetSectorIds.push(
+      ...getAirstrikeTargetSectorIds(sectorId, this.state.playerCapacity as PlayerCapacity)
+    );
 
     if (this.state.phase === "active") {
-      const sectorId = this.findAvailableSector();
-      if (sectorId === undefined) {
-        throw new ServerError(4001, "room_full");
-      }
       player.ready = true;
-      player.sectorId = sectorId;
     }
 
     this.roles.set(client.sessionId, "controller");
@@ -213,14 +243,17 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
-    const previousOutcome = this.actionOutcomes.get(payload.actionId);
-    if (previousOutcome !== undefined) {
-      this.replayOutcome(client, previousOutcome);
+    const fingerprint = actionType;
+    if (this.replayJournalEntry(client, payload.actionId, player.playerId, fingerprint)) {
       return;
     }
 
     const outcome = this.applyNewResourceAction(payload, player, actionType);
-    this.actionOutcomes.set(payload.actionId, outcome);
+    this.actionJournal.set(payload.actionId, {
+      actorId: player.playerId,
+      fingerprint,
+      outcome
+    });
     this.replayOutcome(client, outcome);
   }
 
@@ -239,14 +272,17 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
-    const previousOutcome = this.actionOutcomes.get(payload.actionId);
-    if (previousOutcome !== undefined) {
-      this.replayOutcome(client, previousOutcome);
+    const fingerprint = `airstrike:${String(payload.targetSectorId)}`;
+    if (this.replayJournalEntry(client, payload.actionId, player.playerId, fingerprint)) {
       return;
     }
 
-    const outcome = this.applyNewAirstrike(payload);
-    this.actionOutcomes.set(payload.actionId, outcome);
+    const outcome = this.applyNewAirstrike(payload, player);
+    this.actionJournal.set(payload.actionId, {
+      actorId: player.playerId,
+      fingerprint,
+      outcome
+    });
     this.replayOutcome(client, outcome);
   }
 
@@ -255,7 +291,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
-    this.defenseState = advanceDefense(this.defenseState, prototypeDefenseConfig);
+    this.defenseState = advanceDefense(this.defenseState, this.defenseConfig);
     this.syncDefenseState();
 
     if (this.defenseState.result !== "in_progress") {
@@ -295,7 +331,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return this.rejected("action_not_available", "No sector is assigned to this player.");
     }
 
-    const result = applyDefenseAction(this.defenseState, prototypeDefenseConfig, {
+    const result = applyDefenseAction(this.defenseState, this.defenseConfig, {
       type: actionType,
       sectorId
     });
@@ -314,13 +350,19 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     return { accepted: true };
   }
 
-  private applyNewAirstrike(payload: AirstrikeCommand): ActionOutcome {
+  private applyNewAirstrike(payload: AirstrikeCommand, player: PlayerState): ActionOutcome {
     if (this.state.phase !== "active" || this.defenseState === undefined) {
       return this.rejected("invalid_phase", "Airstrike is accepted only during an active match.");
     }
 
-    const result = applyDefenseAction(this.defenseState, prototypeDefenseConfig, {
+    const sourceSectorId = this.toSectorId(player.sectorId);
+    if (sourceSectorId === undefined) {
+      return this.rejected("action_not_available", "No sector is assigned to this player.");
+    }
+
+    const result = applyDefenseAction(this.defenseState, this.defenseConfig, {
       type: "airstrike",
+      sourceSectorId,
       targetSectorId: payload.targetSectorId,
       actionId: payload.actionId,
       playerId: payload.playerId
@@ -372,7 +414,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   }
 
   private updatePhase(): void {
-    if (this.state.phase !== "lobby" || this.state.players.size !== 2) {
+    if (this.state.phase !== "lobby" || this.state.players.size !== this.state.playerCapacity) {
       return;
     }
 
@@ -382,10 +424,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
-    players.forEach((player, index) => {
-      player.sectorId = index;
-    });
-    this.defenseState = createDefenseState(prototypeDefenseConfig, randomInt(0, 2_147_483_647));
+    this.defenseState = createDefenseState(this.defenseConfig, randomInt(0, 2_147_483_647));
     this.state.phase = "active";
     this.syncDefenseState();
     this.startSimulation();
@@ -417,26 +456,29 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     game.tick = defenseState.clock.tick;
     game.elapsedMs = defenseState.clock.elapsedMs;
     game.treasury = defenseState.treasury;
-    game.pathLength = prototypeDefenseConfig.pathLength;
-    game.repairCost = prototypeDefenseConfig.repairCost;
+    game.pathLength = this.defenseConfig.pathLength;
+    game.repairCost = this.defenseConfig.repairCost;
     game.result = defenseState.result;
     game.waveNumber = defenseState.waveNumber;
-    game.totalWaves = prototypeDefenseConfig.waves.length;
+    game.totalWaves = this.defenseConfig.waves.length;
     game.stage = defenseState.stage;
     game.intermissionRemainingSeconds = getIntermissionRemainingSeconds(
       defenseState,
-      prototypeDefenseConfig
+      this.defenseConfig
     );
     game.airstrikeCharge = defenseState.airstrikeCharge;
-    game.airstrikeChargeRequired = prototypeDefenseConfig.airstrike.chargeRequired;
-    game.airstrikeDamage = prototypeDefenseConfig.airstrike.damage;
-    game.lastAirstrikeSequence = defenseState.lastAirstrikeEffect?.sequence ?? 0;
-    game.lastAirstrikeActionId = defenseState.lastAirstrikeEffect?.actionId ?? "";
-    game.lastAirstrikePlayerId = defenseState.lastAirstrikeEffect?.playerId ?? "";
-    game.lastAirstrikeTargetSectorId = defenseState.lastAirstrikeEffect?.targetSectorId ?? -1;
-    game.lastAirstrikeAppliedTick = defenseState.lastAirstrikeEffect?.appliedTick ?? 0;
+    game.airstrikeChargeRequired = this.defenseConfig.airstrike.chargeRequired;
+    game.airstrikeDamage = this.defenseConfig.airstrike.damage;
+    game.display.hasLastAirstrikeEffect = defenseState.lastAirstrikeEffect !== null;
+    game.display.lastAirstrikeEffect.sequence = defenseState.lastAirstrikeEffect?.sequence ?? 0;
+    game.display.lastAirstrikeEffect.actionId = defenseState.lastAirstrikeEffect?.actionId ?? "";
+    game.display.lastAirstrikeEffect.playerId = defenseState.lastAirstrikeEffect?.playerId ?? "";
+    game.display.lastAirstrikeEffect.targetSectorId =
+      defenseState.lastAirstrikeEffect?.targetSectorId ?? 0;
+    game.display.lastAirstrikeEffect.appliedTick =
+      defenseState.lastAirstrikeEffect?.appliedTick ?? 0;
     game.sectors.clear();
-    game.enemies.clear();
+    game.display.enemies.clear();
 
     for (const sector of defenseState.sectors) {
       const schema = new DefenseSectorState();
@@ -445,13 +487,13 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         [...this.state.players.values()].find((player) => player.sectorId === sector.sectorId)
           ?.playerId ?? "";
       schema.gateHealth = sector.gateHealth;
-      schema.gateMaxHealth = prototypeDefenseConfig.gateMaxHealth;
+      schema.gateMaxHealth = this.defenseConfig.gateMaxHealth;
       schema.defenseLevel = sector.defenseLevel;
-      schema.defenseDamage = getDefenseDamage(prototypeDefenseConfig, sector.defenseLevel);
+      schema.defenseDamage = getDefenseDamage(this.defenseConfig, sector.defenseLevel);
       schema.nextUpgradeCost =
-        sector.defenseLevel >= prototypeDefenseConfig.maxDefenseLevel
+        sector.defenseLevel >= this.defenseConfig.maxDefenseLevel
           ? -1
-          : getUpgradeCost(prototypeDefenseConfig, sector.defenseLevel);
+          : getUpgradeCost(this.defenseConfig, sector.defenseLevel);
       schema.enemyCount = defenseState.enemies.filter(
         (enemy) => enemy.sectorId === sector.sectorId
       ).length;
@@ -467,7 +509,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       schema.health = enemy.health;
       schema.maxHealth = enemy.maxHealth;
       schema.progress = enemy.progress;
-      game.enemies.push(schema);
+      game.display.enemies.push(schema);
     }
   }
 
@@ -477,11 +519,40 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         .map((player) => this.toSectorId(player.sectorId))
         .filter((sectorId): sectorId is SectorId => sectorId !== undefined)
     );
-    return ([0, 1] as const).find((sectorId) => !occupied.has(sectorId));
+    for (let value = 0; value < this.state.playerCapacity; value += 1) {
+      const sectorId = this.toSectorId(value);
+      if (sectorId !== undefined && !occupied.has(sectorId)) {
+        return sectorId;
+      }
+    }
+    return undefined;
   }
 
   private toSectorId(value: number): SectorId | undefined {
-    return value === 0 || value === 1 ? value : undefined;
+    return isSectorIdInDefense(value, this.state.playerCapacity) ? value : undefined;
+  }
+
+  private replayJournalEntry(
+    client: Client,
+    actionId: string,
+    actorId: string,
+    fingerprint: string
+  ): boolean {
+    const entry = this.actionJournal.get(actionId);
+    if (entry === undefined) {
+      return false;
+    }
+    if (entry.actorId !== actorId || entry.fingerprint !== fingerprint) {
+      this.sendError(
+        client,
+        "invalid_message",
+        "This action ID is already bound to another command."
+      );
+      return true;
+    }
+
+    this.replayOutcome(client, entry.outcome);
+    return true;
   }
 
   private replayOutcome(client: Client, outcome: ActionOutcome): void {

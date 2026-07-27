@@ -4,7 +4,8 @@ import {
   clientMessage,
   serverErrorSchema,
   serverMessage,
-  type PublicRoomView
+  type ControllerRoomView,
+  type SectorId
 } from "@town-defenders/protocol";
 import { useEffect, useRef, useState } from "react";
 
@@ -12,7 +13,7 @@ import { createActionId } from "./actionId.js";
 import {
   findCurrentPlayer,
   getRoomFromLocation,
-  toPublicRoomView,
+  toControllerRoomView,
   type NetworkRoomState
 } from "./roomView.js";
 import {
@@ -36,7 +37,7 @@ export function ControllerApp() {
   const [playerName, setPlayerName] = useState("");
   const [playerId, setPlayerId] = useState("");
   const [status, setStatus] = useState<ConnectionStatus>("join");
-  const [view, setView] = useState<PublicRoomView>();
+  const [view, setView] = useState<ControllerRoomView>();
   const [error, setError] = useState("");
   const currentPlayer = findCurrentPlayer(view, playerId);
 
@@ -144,7 +145,7 @@ export function ControllerApp() {
   }
 
   function applyRoomState(state: NetworkRoomState) {
-    const nextView = toPublicRoomView(state);
+    const nextView = toControllerRoomView(state);
     if (nextView === undefined) {
       return;
     }
@@ -180,7 +181,7 @@ export function ControllerApp() {
     });
   }
 
-  function sendAirstrike(targetSectorId: 0 | 1) {
+  function sendAirstrike(targetSectorId: SectorId) {
     const room = roomReference.current;
     if (room === undefined || view === undefined || currentPlayer === undefined) {
       return;
@@ -196,10 +197,9 @@ export function ControllerApp() {
     });
   }
 
-  const ownSector =
-    currentPlayer?.sectorId === null || currentPlayer?.sectorId === undefined
-      ? undefined
-      : view?.game?.sectors.find((sector) => sector.sectorId === currentPlayer.sectorId);
+  const ownSector = view?.game?.sectors.find(
+    (sector) => sector.sectorId === currentPlayer?.sectorId
+  );
   const ownEnemies = ownSector?.enemyCount ?? 0;
 
   if (status === "join" || status === "joining" || status === "disconnected") {
@@ -267,14 +267,30 @@ export function ControllerApp() {
         {error.length > 0 && <p className="error-message">{error}</p>}
 
         {view?.phase === "lobby" ? (
-          <button
-            className={currentPlayer?.ready === true ? "secondary-button" : ""}
-            type="button"
-            onClick={sendReady}
-            disabled={status === "reconnecting" || currentPlayer === undefined}
-          >
-            {currentPlayer?.ready === true ? "Отменить готовность" : "Я готов"}
-          </button>
+          <>
+            <div className="controller-roster">
+              <strong>
+                Защитники {view.players.length}/{view.playerCapacity}
+              </strong>
+              {Array.from({ length: view.playerCapacity }, (_, sectorId) => {
+                const player = view.players.find((candidate) => candidate.sectorId === sectorId);
+                return (
+                  <span key={sectorId}>
+                    {sectorId + 1}. {player?.playerName ?? "свободно"}{" "}
+                    {player?.ready === true ? "✓" : ""}
+                  </span>
+                );
+              })}
+            </div>
+            <button
+              className={currentPlayer?.ready === true ? "secondary-button" : ""}
+              type="button"
+              onClick={sendReady}
+              disabled={status === "reconnecting" || currentPlayer === undefined}
+            >
+              {currentPlayer?.ready === true ? "Отменить готовность" : "Я готов"}
+            </button>
+          </>
         ) : view?.phase === "active" ? (
           <>
             <div className="sector-summary">
@@ -357,7 +373,7 @@ export function ControllerApp() {
                 />
               </div>
               <div className="airstrike-actions">
-                {([0, 1] as const).map((sectorId) => (
+                {(currentPlayer?.airstrikeTargetSectorIds ?? []).map((sectorId, targetIndex) => (
                   <button
                     type="button"
                     key={sectorId}
@@ -366,7 +382,11 @@ export function ControllerApp() {
                     }}
                     disabled={status === "reconnecting" || !canTargetAirstrike(view.game, sectorId)}
                   >
-                    {sectorId === currentPlayer?.sectorId ? "Свой сектор" : "Помочь соседу"}
+                    {airstrikeTargetLabel(
+                      sectorId,
+                      targetIndex,
+                      currentPlayer?.airstrikeTargetSectorIds.length ?? 0
+                    )}
                   </button>
                 ))}
               </div>
@@ -383,7 +403,7 @@ export function ControllerApp() {
   );
 }
 
-function resultLabel(result: NonNullable<PublicRoomView["game"]>["result"] | undefined) {
+function resultLabel(result: NonNullable<ControllerRoomView["game"]>["result"] | undefined) {
   switch (result) {
     case "victory":
       return "Победа!";
@@ -394,13 +414,30 @@ function resultLabel(result: NonNullable<PublicRoomView["game"]>["result"] | und
   }
 }
 
-function canTargetAirstrike(game: PublicRoomView["game"] | undefined, sectorId: 0 | 1): boolean {
+function canTargetAirstrike(
+  game: ControllerRoomView["game"] | undefined,
+  sectorId: SectorId
+): boolean {
   const sector = game?.sectors.find((candidate) => candidate.sectorId === sectorId);
   return (
     game?.stage === "combat" &&
     game.airstrikeCharge >= game.airstrikeChargeRequired &&
     sector?.airstrikeTargetAvailable === true
   );
+}
+
+function airstrikeTargetLabel(
+  sectorId: SectorId,
+  targetIndex: number,
+  targetCount: number
+): string {
+  if (targetIndex === 0) {
+    return `Свой · ${String(sectorId + 1)}`;
+  }
+  if (targetCount === 2) {
+    return `Сосед · ${String(sectorId + 1)}`;
+  }
+  return `${targetIndex === 1 ? "Слева" : "Справа"} · ${String(sectorId + 1)}`;
 }
 
 function toServerError(code: string, fallback: string): string {
@@ -426,7 +463,7 @@ function toJoinError(reason: unknown): string {
   }
 
   if (reason.message.includes("room_full")) {
-    return "В комнате уже два игрока.";
+    return "Все места в комнате уже заняты.";
   }
   if (reason.message.includes("not found")) {
     return "Комната не найдена. Проверьте код.";

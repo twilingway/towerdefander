@@ -3,6 +3,7 @@ import {
   serverErrorSchema,
   serverMessage,
   type AirstrikeCommand,
+  type PlayerCapacity,
   type ReadyCommand,
   type ResourceActionCommand,
   type ServerErrorCode
@@ -30,12 +31,13 @@ function createClient(sessionId: string): TestClient {
   };
 }
 
-function createRoom(): TownDefendersRoom {
+function createRoom(playerCapacity = 2): TownDefendersRoom {
   const room = new TownDefendersRoom();
   room.roomId = "ROOM123";
   room.onCreate({
     role: "display",
-    protocolVersion: PROTOCOL_VERSION
+    protocolVersion: PROTOCOL_VERSION,
+    playerCapacity
   });
   return room;
 }
@@ -61,6 +63,20 @@ function startBattle(room: TownDefendersRoom): [TestClient, TestClient] {
   room.handleReady(first.client, ready);
   room.handleReady(second.client, ready);
   return [first, second];
+}
+
+function fillAndStartBattle(room: TownDefendersRoom, playerCapacity: PlayerCapacity): TestClient[] {
+  const controllers = Array.from({ length: playerCapacity }, (_, index) =>
+    createClient(`player-${String(index + 1)}`)
+  );
+  controllers.forEach((controller, index) => {
+    joinController(room, controller, `Player ${String(index + 1)}`);
+    room.handleReady(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      ready: true
+    });
+  });
+  return controllers;
 }
 
 function action(playerId: string, actionId: string): ResourceActionCommand {
@@ -111,7 +127,7 @@ describe("TownDefendersRoom lobby and lifecycle", () => {
         protocolVersion: PROTOCOL_VERSION,
         playerName: "Alex"
       });
-    }).toThrow("Only the display may create a room.");
+    }).toThrow("invalid_message");
   });
 
   it("starts one authoritative battle after two controllers are ready", () => {
@@ -130,6 +146,61 @@ describe("TownDefendersRoom lobby and lifecycle", () => {
     expect(room.state.players.get(first.client.sessionId)?.sectorId).toBe(0);
     expect(room.state.players.get(second.client.sessionId)?.sectorId).toBe(1);
     expect(setInterval).toHaveBeenCalledTimes(1);
+  });
+
+  for (const playerCapacity of [2, 3, 4, 5, 6] as const) {
+    it(`starts exactly ${String(playerCapacity)} stable sectors`, () => {
+      const room = createRoom(playerCapacity);
+      const controllers = fillAndStartBattle(room, playerCapacity);
+
+      expect(room.state.phase).toBe("active");
+      expect(room.state.playerCapacity).toBe(playerCapacity);
+      expect(room.state.game.treasury).toBe(25 * playerCapacity);
+      expect([...room.state.game.sectors].map((sector) => sector.sectorId)).toEqual(
+        Array.from({ length: playerCapacity }, (_, index) => index)
+      );
+      controllers.forEach((controller, index) => {
+        const player = room.state.players.get(controller.client.sessionId);
+        expect(player?.sectorId).toBe(index);
+        expect([...(player?.airstrikeTargetSectorIds ?? [])]).toEqual([
+          index,
+          (index - 1 + playerCapacity) % playerCapacity,
+          ...((index + 1) % playerCapacity === (index - 1 + playerCapacity) % playerCapacity
+            ? []
+            : [(index + 1) % playerCapacity])
+        ]);
+      });
+    });
+  }
+
+  it("waits for every configured player to be ready", () => {
+    const room = createRoom(3);
+    const controllers = Array.from({ length: 3 }, (_, index) =>
+      createClient(`player-${String(index + 1)}`)
+    );
+    controllers.forEach((controller, index) => {
+      joinController(room, controller, `Player ${String(index + 1)}`);
+    });
+    const [first, second] = controllers;
+    if (first === undefined || second === undefined) {
+      throw new Error("Expected two controllers.");
+    }
+    room.handleReady(first.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      ready: true
+    });
+    room.handleReady(second.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      ready: true
+    });
+
+    expect(room.state.phase).toBe("lobby");
+    expect(room.state.hasGame).toBe(false);
+  });
+
+  it("keeps one spare transport seat for a typed room_full rejection", () => {
+    const room = createRoom(6);
+    expect(room.maxClients).toBe(8);
   });
 
   it("rejects a third controller without displacing players", () => {
@@ -194,6 +265,25 @@ describe("TownDefendersRoom lobby and lifecycle", () => {
     expect(room.state.game.sectors[0]?.assignedPlayerId).toBe("replacement");
   });
 
+  it("keeps a finished snapshot while an expired player owner is removed", async () => {
+    const room = createRoom();
+    const [first] = startBattle(room);
+    room.state.phase = "finished";
+    const tick = room.state.game.tick;
+    const result = room.state.game.result;
+    vi.spyOn(room, "allowReconnection").mockRejectedValue(new Error("reconnection expired"));
+
+    await room.onLeave(first.client, 1006);
+
+    expect(room.state.players.has(first.client.sessionId)).toBe(false);
+    expect(room.state.game.sectors[0]?.assignedPlayerId).toBe("");
+    expect(room.state.game.tick).toBe(tick);
+    expect(room.state.game.result).toBe(result);
+    expect(() => {
+      joinController(room, createClient("late-player"), "Late");
+    }).toThrow("room_full");
+  });
+
   it("removes a deliberately disconnected lobby controller", async () => {
     const room = createRoom();
     const controller = createClient("player-1");
@@ -217,8 +307,8 @@ describe("TownDefendersRoom simulation", () => {
       stage: "intermission",
       waveNumber: 1
     });
-    advanceUntil(room, () => room.state.game.enemies.length > 0);
-    expect(room.state.game.enemies.length).toBeGreaterThan(0);
+    advanceUntil(room, () => room.state.game.display.enemies.length > 0);
+    expect(room.state.game.display.enemies.length).toBeGreaterThan(0);
 
     advanceUntil(room, () => room.state.phase === "finished");
     expect(room.state.phase).toBe("finished");
@@ -274,7 +364,9 @@ describe("TownDefendersRoom resource actions", () => {
     const [first] = startBattle(room);
     updateDefenseState(room, (state) => ({
       ...state,
-      sectors: [{ ...state.sectors[0], gateHealth: 70 }, state.sectors[1]]
+      sectors: state.sectors.map((sector) =>
+        sector.sectorId === 0 ? { ...sector, gateHealth: 70 } : sector
+      )
     }));
     const healthBefore = room.state.game.sectors[0]?.gateHealth ?? 0;
     const treasuryBefore = room.state.game.treasury;
@@ -404,21 +496,86 @@ describe("TownDefendersRoom resource actions", () => {
 
     room.handleAirstrike(first.client, command);
     const firstEffect = {
-      sequence: room.state.game.lastAirstrikeSequence,
-      tick: room.state.game.lastAirstrikeAppliedTick,
+      sequence: room.state.game.display.lastAirstrikeEffect.sequence,
+      tick: room.state.game.display.lastAirstrikeEffect.appliedTick,
       treasury: room.state.game.treasury
     };
     room.handleAirstrike(first.client, command);
 
-    expect(room.state.game.enemies).toHaveLength(0);
+    expect(room.state.game.display.enemies).toHaveLength(0);
     expect(firstEffect.sequence).toBe(1);
-    expect(room.state.game).toMatchObject({
-      lastAirstrikeSequence: firstEffect.sequence,
-      lastAirstrikeTargetSectorId: 1,
-      lastAirstrikeActionId: command.actionId,
-      lastAirstrikePlayerId: first.client.sessionId,
-      lastAirstrikeAppliedTick: firstEffect.tick,
-      treasury: firstEffect.treasury
+    expect(room.state.game.display).toMatchObject({
+      hasLastAirstrikeEffect: true,
+      lastAirstrikeEffect: {
+        sequence: firstEffect.sequence,
+        targetSectorId: 1,
+        actionId: command.actionId,
+        playerId: first.client.sessionId,
+        appliedTick: firstEffect.tick
+      }
+    });
+    expect(room.state.game.treasury).toBe(firstEffect.treasury);
+  });
+
+  it("rejects a non-neighbor airstrike in a larger room", () => {
+    const room = createRoom(4);
+    const [first] = fillAndStartBattle(room, 4);
+    if (first === undefined) {
+      throw new Error("Expected the first controller.");
+    }
+    updateDefenseState(room, (state) => ({
+      ...state,
+      stage: "combat",
+      intermissionRemainingSteps: 0,
+      airstrikeCharge: 100,
+      enemies: [
+        {
+          enemyId: "remote-target",
+          sectorId: 2,
+          enemyType: "heavy",
+          health: 20,
+          maxHealth: 34,
+          progress: 3
+        }
+      ]
+    }));
+
+    room.handleAirstrike(first.client, {
+      ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000011"),
+      targetSectorId: 2
+    });
+
+    expect(countSentErrors(first, "action_not_available")).toBe(1);
+    expect(room.state.game.airstrikeCharge).toBe(100);
+    expect(room.state.game.display.enemies).toHaveLength(1);
+  });
+
+  it("journals a target outside room capacity as unavailable", () => {
+    const room = createRoom();
+    const [first] = startBattle(room);
+    const command: AirstrikeCommand = {
+      ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000012"),
+      targetSectorId: 5
+    };
+
+    room.handleAirstrike(first.client, command);
+    room.handleAirstrike(first.client, command);
+
+    expect(countSentErrors(first, "action_not_available")).toBe(2);
+  });
+
+  it("rejects an actionId collision with a different command fingerprint", () => {
+    const room = createRoom();
+    const [first] = startBattle(room);
+    const command = action(first.client.sessionId, "00000000-0000-4000-8000-000000000013");
+
+    room.handleResourceAction(first.client, command, "upgrade");
+    room.handleResourceAction(first.client, command, "repair");
+
+    expect(countSentErrors(first, "invalid_message")).toBe(1);
+    expect(room.state.game.sectors[0]).toMatchObject({
+      defenseLevel: 2,
+      gateHealth: 100
     });
   });
 });
