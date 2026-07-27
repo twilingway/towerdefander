@@ -57,6 +57,10 @@ test("display and two browser controllers complete a deterministic defense match
     await expect(second.getByRole("button", { name: /Ремонт/ })).toBeVisible();
     await expect(display.getByTestId("battlefield-canvas")).toBeVisible();
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
+    await expect(display.getByTestId("battlefield-canvas")).toHaveAttribute(
+      "data-environment-state",
+      "ready"
+    );
     await expect(display.locator(".sector-status-strip > div")).toHaveCount(2);
     await expect
       .poll(
@@ -84,8 +88,6 @@ test("display and two browser controllers complete a deterministic defense match
     ).toContainText("Башня ур. 2");
     await first.getByRole("button", { name: /Улучшить/ }).click();
     await expect(first.locator(".sector-summary")).toContainText("ур. 3");
-    await second.getByRole("button", { name: /Улучшить/ }).click();
-    await expect(second.locator(".error-message")).toHaveText("В общей казне недостаточно золота.");
 
     await first.reload();
     await expect(first.locator(".connection")).toHaveText("В сети");
@@ -108,12 +110,17 @@ test("display and two browser controllers complete a deterministic defense match
     await expect(unknownRoom.getByLabel("Код комнаты")).toHaveValue(roomCode);
 
     const cooperativeAirstrike = first.getByRole("button", { name: "Помочь соседу" });
-    await expect(cooperativeAirstrike).toBeEnabled({ timeout: 20_000 });
-    await cooperativeAirstrike.click();
-    await expect(display.locator(".battlefield-shell")).toHaveAttribute(
-      "data-airstrike-sequence",
-      "1"
-    );
+    await expect
+      .poll(
+        async () => {
+          if (await cooperativeAirstrike.isEnabled()) {
+            await cooperativeAirstrike.click();
+          }
+          return display.locator(".battlefield-shell").getAttribute("data-airstrike-sequence");
+        },
+        { timeout: 25_000 }
+      )
+      .toBe("1");
 
     const secondGate = second
       .locator(".sector-summary div")

@@ -49,6 +49,35 @@ button:disabled {
   text-align: center;
 }
 
+.display-shell--battle {
+  min-height: 100vh;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.display-shell--battle .room-code {
+  font-size: clamp(1.35rem, 2.2vw, 2.25rem);
+}
+
+.display-shell--battle .room-header .eyebrow {
+  display: none;
+}
+
+.display-shell--battle .lobby-layout--battle {
+  display: none;
+}
+
+.display-shell--battle .game-stage {
+  gap: 0.65rem;
+  min-height: 0;
+  padding: 0.75rem;
+}
+
+.display-shell--battle .battlefield-shell {
+  width: min(100%, calc((100vh - 13rem) * 16 / 9));
+  margin-inline: auto;
+}
+
 .hero-card {
   width: min(48rem, 100%);
   padding: clamp(2rem, 6vw, 5rem);

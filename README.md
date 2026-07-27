@@ -16,14 +16,15 @@
 - чистая детерминированная симуляция двух секторов, пяти волн, трёх обычных типов врагов и босса;
 - авторитетная Colyseus-комната protocol v3 с общей казной, `repair`/`upgrade`, авиаударом,
   дедупликацией и reconnect;
-- display создаёт комнату, показывает QR и визуализирует бой в responsive Phaser-сцене;
+- display создаёт комнату, показывает QR и визуализирует бой в responsive Phaser-сцене с рисованным
+  центральным замком, двумя дорогами и боковыми пушечными башнями;
 - controller входит по ссылке/коду, управляет ready, ремонтом, улучшением и направляет общий
   авиаудар в свой или соседний сектор;
 - format, lint, typecheck, unit tests и production builds;
 - server health endpoint, сетевой smoke и Playwright-тест полного пяти-волнового матча.
 
-Следующий этап — ручная балансировка, улучшение code-native анимаций, звук и выбор финального
-визуального стиля. Расширение с 2 до 3–6 игроков будет отдельным изменением.
+Следующий художественный этап — отдельные sprite-анимации врагов, визуальные уровни башен и звук.
+Расширение с 2 до 3–6 игроков будет отдельным изменением.
 
 ## Требования
 
@@ -79,14 +80,15 @@ pnpm test:e2e
 
 ## OpenSpec
 
-Визуальный wave-MVP завершён и сохранён в архиве как `2026-07-27-build-visual-wave-mvp`. Основные
-актуальные спецификации:
+Визуальный wave-MVP и художественный проход центрального замка завершены и сохранены в архивах
+`2026-07-27-build-visual-wave-mvp` и `2026-07-27-castle-art-pass`. Основные актуальные спецификации:
 
 ```powershell
 pnpm spec list
 pnpm spec show shared-room-session --type spec
 pnpm spec show deterministic-defense-loop --type spec
 pnpm spec show shared-defense-economy --type spec
+pnpm spec show visual-battlefield-rendering --type spec
 ```
 
 Завершённые изменения находятся в `openspec/changes/archive/`.

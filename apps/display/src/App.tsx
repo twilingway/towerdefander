@@ -111,7 +111,7 @@ export function DisplayApp() {
   }
 
   return (
-    <main className="display-shell">
+    <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
       <header className="room-header">
         <div>
           <p className="eyebrow">Комната</p>

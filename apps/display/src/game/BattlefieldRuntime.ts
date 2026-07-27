@@ -2,6 +2,17 @@ import type { PublicGameSnapshot, PublicPlayerView } from "@town-defenders/proto
 import Phaser from "phaser";
 
 import { BattlefieldSnapshotFeed, type BattlefieldFrame } from "./battlefieldModel.js";
+import {
+  BATTLEFIELD_HEIGHT,
+  BATTLEFIELD_WIDTH,
+  CASTLE_ENVIRONMENT_KEY,
+  CASTLE_ENVIRONMENT_URL,
+  CASTLE_LAYOUT,
+  EnvironmentLayerController,
+  getLanePoint,
+  getWorldPoint,
+  type EnvironmentLayerState
+} from "./castleLayout.js";
 
 export interface BattlefieldViewSnapshot {
   readonly game: PublicGameSnapshot;
@@ -17,17 +28,21 @@ interface EnemyVisual {
 
 class BattlefieldScene extends Phaser.Scene {
   private readonly enemyVisuals = new Map<string, EnemyVisual>();
+  private readonly environmentLayer: EnvironmentLayerController;
   private readonly feed = new BattlefieldSnapshotFeed();
   private readonly gateHealthLabels: Phaser.GameObjects.Text[] = [];
+  private fallbackWorld: Phaser.GameObjects.Graphics | undefined;
   private snapshot: BattlefieldViewSnapshot | undefined;
   private intermissionLabel: Phaser.GameObjects.Text | undefined;
 
-  constructor() {
+  constructor(onEnvironmentStateChange: (state: EnvironmentLayerState) => void) {
     super("battlefield");
+    this.environmentLayer = new EnvironmentLayerController(onEnvironmentStateChange);
   }
 
   create(): void {
     this.drawWorld();
+    this.startEnvironmentLoad();
     if (this.snapshot !== undefined) {
       this.reconcile(this.feed.next(this.snapshot.game));
     }
@@ -45,54 +60,73 @@ class BattlefieldScene extends Phaser.Scene {
   }
 
   private drawWorld(): void {
-    const world = this.add.graphics();
+    const world = this.add.graphics().setDepth(0);
+    this.fallbackWorld = world;
     world.fillGradientStyle(0x102a24, 0x102a24, 0x071714, 0x071714, 1);
-    world.fillRect(0, 0, 1280, 720);
+    world.fillRect(0, 0, BATTLEFIELD_WIDTH, BATTLEFIELD_HEIGHT);
 
     for (let index = 0; index < 55; index += 1) {
-      const x = (index * 137) % 1280;
-      const y = (index * 83) % 720;
+      const x = (index * 137) % BATTLEFIELD_WIDTH;
+      const y = (index * 83) % BATTLEFIELD_HEIGHT;
       world.fillStyle(index % 3 === 0 ? 0x183e32 : 0x123128, 0.9);
       world.fillCircle(x, y, 10 + (index % 5) * 3);
     }
 
-    [235, 500].forEach((laneY, sectorId) => {
-      world.fillStyle(0x071310, 0.78);
-      world.fillRoundedRect(70, laneY - 78, 1140, 156, 38);
-      world.lineStyle(4, sectorId === 0 ? 0x59c7a3 : 0x6a9fd8, 0.65);
-      world.strokeRoundedRect(82, laneY - 64, 1115, 128, 28);
-      world.lineStyle(2, 0xd9b871, 0.24);
-      world.lineBetween(120, laneY, 1060, laneY);
+    this.drawFallbackCastle(world);
 
-      this.drawGate(world, 1110, laneY);
-      this.drawTower(world, 1018, laneY);
+    ([0, 1] as const).forEach((sectorId) => {
+      let previous = getLanePoint(sectorId, 0, 1);
+      world.lineStyle(92, 0x322b20, 0.82);
+      for (let index = 1; index <= 32; index += 1) {
+        const next = getLanePoint(sectorId, index / 32, 1);
+        world.lineBetween(previous.x, previous.y, next.x, next.y);
+        previous = next;
+      }
+      previous = getLanePoint(sectorId, 0, 1);
+      world.lineStyle(72, 0x9a7345, 1);
+      for (let index = 1; index <= 32; index += 1) {
+        const next = getLanePoint(sectorId, index / 32, 1);
+        world.lineBetween(previous.x, previous.y, next.x, next.y);
+        previous = next;
+      }
+
+      const gate = getWorldPoint(CASTLE_LAYOUT[sectorId].gate);
+      const tower = getWorldPoint(CASTLE_LAYOUT[sectorId].tower);
+      const label = getWorldPoint(CASTLE_LAYOUT[sectorId].label);
+      this.drawGate(world, gate.x, gate.y);
+      this.drawTower(world, tower.x, tower.y, sectorId);
       this.add
-        .text(95, laneY - 55, `СЕКТОР ${String(sectorId + 1)}`, {
+        .text(label.x, label.y, `СЕКТОР ${String(sectorId + 1)}`, {
           color: sectorId === 0 ? "#7de0bf" : "#8dc4ff",
           fontFamily: "Inter, sans-serif",
           fontSize: "20px",
-          fontStyle: "bold"
+          fontStyle: "bold",
+          stroke: "#071714",
+          strokeThickness: 6
         })
-        .setDepth(2);
+        .setOrigin(0.5)
+        .setDepth(4);
       this.gateHealthLabels.push(
         this.add
-          .text(1160, laneY, "100", {
+          .text(gate.x, gate.y + 64, "100", {
             color: "#f6e8bd",
             fontFamily: "Inter, sans-serif",
             fontSize: "18px",
-            fontStyle: "bold"
+            fontStyle: "bold",
+            stroke: "#071714",
+            strokeThickness: 5
           })
           .setOrigin(0.5)
-          .setDepth(2)
+          .setDepth(4)
       );
     });
 
     this.intermissionLabel = this.add
-      .text(640, 360, "", {
+      .text(BATTLEFIELD_WIDTH / 2, 655, "", {
         align: "center",
         color: "#fff4d0",
         fontFamily: "Inter, sans-serif",
-        fontSize: "44px",
+        fontSize: "38px",
         fontStyle: "bold",
         stroke: "#06110f",
         strokeThickness: 8
@@ -103,20 +137,71 @@ class BattlefieldScene extends Phaser.Scene {
 
   private drawGate(graphics: Phaser.GameObjects.Graphics, x: number, y: number): void {
     graphics.fillStyle(0x807561, 1);
-    graphics.fillRoundedRect(x, y - 58, 70, 116, 8);
+    graphics.fillRoundedRect(x - 35, y - 58, 70, 116, 8);
     graphics.fillStyle(0x302d28, 1);
-    graphics.fillRoundedRect(x + 15, y - 35, 40, 93, 16);
+    graphics.fillRoundedRect(x - 20, y - 35, 40, 93, 16);
     graphics.lineStyle(4, 0xbcae8e, 0.8);
-    graphics.strokeRoundedRect(x, y - 58, 70, 116, 8);
+    graphics.strokeRoundedRect(x - 35, y - 58, 70, 116, 8);
   }
 
-  private drawTower(graphics: Phaser.GameObjects.Graphics, x: number, y: number): void {
+  private drawTower(
+    graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    sectorId: 0 | 1
+  ): void {
     graphics.fillStyle(0x64736b, 1);
     graphics.fillCircle(x, y, 36);
     graphics.fillStyle(0xe6b85c, 1);
     graphics.fillCircle(x, y, 14);
     graphics.lineStyle(8, 0xcbd2c8, 1);
-    graphics.lineBetween(x - 6, y, x - 58, y);
+    graphics.lineBetween(x + (sectorId === 0 ? -6 : 6), y, x + (sectorId === 0 ? -58 : 58), y);
+  }
+
+  private drawFallbackCastle(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.fillStyle(0x47534f, 1);
+    graphics.fillRoundedRect(450, 155, 380, 315, 22);
+    graphics.fillStyle(0x2a3533, 1);
+    graphics.fillRoundedRect(515, 105, 250, 345, 18);
+    graphics.fillStyle(0xc99746, 0.9);
+    for (const x of [545, 610, 675, 740]) {
+      graphics.fillRoundedRect(x, 190, 18, 34, 7);
+      graphics.fillRoundedRect(x, 280, 18, 34, 7);
+    }
+    graphics.lineStyle(8, 0x89928a, 0.8);
+    graphics.strokeRoundedRect(450, 155, 380, 315, 22);
+  }
+
+  private startEnvironmentLoad(): void {
+    if (this.textures.exists(CASTLE_ENVIRONMENT_KEY)) {
+      this.resolveEnvironment();
+      return;
+    }
+
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.resolveEnvironment();
+    });
+    this.load.image(CASTLE_ENVIRONMENT_KEY, CASTLE_ENVIRONMENT_URL);
+    this.load.start();
+  }
+
+  private resolveEnvironment(): void {
+    this.environmentLayer.resolve(this.textures.exists(CASTLE_ENVIRONMENT_KEY), () => {
+      let environment: Phaser.GameObjects.Image | undefined;
+      try {
+        environment = this.add.image(
+          BATTLEFIELD_WIDTH / 2,
+          BATTLEFIELD_HEIGHT / 2,
+          CASTLE_ENVIRONMENT_KEY
+        );
+        environment.setDisplaySize(BATTLEFIELD_WIDTH, BATTLEFIELD_HEIGHT).setDepth(1);
+        this.fallbackWorld?.setVisible(false);
+      } catch (error) {
+        environment?.destroy();
+        this.fallbackWorld?.setVisible(true);
+        throw error;
+      }
+    });
   }
 
   private reconcile(frame: BattlefieldFrame): void {
@@ -124,16 +209,16 @@ class BattlefieldScene extends Phaser.Scene {
     const activeIds = new Set(snapshot.enemies.map((enemy) => enemy.enemyId));
 
     snapshot.enemies.forEach((enemy) => {
-      const laneY = enemy.sectorId === 0 ? 235 : 500;
-      const x = 125 + (Math.min(snapshot.pathLength, enemy.progress) / snapshot.pathLength) * 850;
+      const sectorId: 0 | 1 = enemy.sectorId === 1 ? 1 : 0;
+      const point = getLanePoint(sectorId, enemy.progress, snapshot.pathLength);
       let visual = this.enemyVisuals.get(enemy.enemyId);
       if (visual === undefined) {
         visual = this.createEnemyVisual(enemy.enemyType, enemy.health);
-        visual.container.setPosition(x, laneY);
+        visual.container.setPosition(point.x, point.y);
         this.enemyVisuals.set(enemy.enemyId, visual);
       } else {
         if (enemy.health < visual.previousHealth) {
-          this.showProjectile(enemy.sectorId, visual.container.x, laneY);
+          this.showProjectile(sectorId, visual.container.x, visual.container.y);
           this.tweens.add({
             targets: visual.body,
             alpha: 0.25,
@@ -144,8 +229,8 @@ class BattlefieldScene extends Phaser.Scene {
         this.tweens.killTweensOf(visual.container);
         this.tweens.add({
           targets: visual.container,
-          x,
-          y: laneY,
+          x: point.x,
+          y: point.y,
           duration: 650,
           ease: "Sine.Out"
         });
@@ -239,17 +324,19 @@ class BattlefieldScene extends Phaser.Scene {
     graphics.fillRoundedRect(-28, -38, 56 * Math.max(0, ratio), 7, 3);
   }
 
-  private showProjectile(sectorId: number, targetX: number, laneY: number): void {
-    const projectile = this.add.circle(1000, laneY, 6, 0xffe18f, 1).setDepth(9);
+  private showProjectile(sectorId: 0 | 1, targetX: number, targetY: number): void {
+    const tower = getWorldPoint(CASTLE_LAYOUT[sectorId].tower);
+    const projectile = this.add.circle(tower.x, tower.y, 6, 0xffe18f, 1).setDepth(9);
     this.tweens.add({
       targets: projectile,
       x: targetX,
+      y: targetY,
       duration: 160,
       onComplete: () => {
         projectile.destroy();
       }
     });
-    const muzzle = this.add.circle(980, sectorId === 0 ? 235 : 500, 16, 0xffd46d, 0.8);
+    const muzzle = this.add.circle(tower.x, tower.y, 16, 0xffd46d, 0.8).setDepth(9);
     this.tweens.add({
       targets: muzzle,
       alpha: 0,
@@ -262,8 +349,11 @@ class BattlefieldScene extends Phaser.Scene {
   }
 
   private showAirstrike(sectorId: number): void {
-    const laneY = sectorId === 0 ? 235 : 500;
-    const flash = this.add.rectangle(640, laneY, 1140, 150, 0xffd36c, 0.7).setDepth(15);
+    const normalizedSectorId: 0 | 1 = sectorId === 1 ? 1 : 0;
+    const laneCenter = getLanePoint(normalizedSectorId, 0.45, 1);
+    const flash = this.add
+      .ellipse(laneCenter.x, laneCenter.y, 520, 230, 0xffd36c, 0.58)
+      .setDepth(15);
     this.tweens.add({
       targets: flash,
       alpha: 0,
@@ -273,8 +363,9 @@ class BattlefieldScene extends Phaser.Scene {
       }
     });
     for (let index = 0; index < 8; index += 1) {
+      const blastPoint = getLanePoint(normalizedSectorId, 0.1 + index * 0.09, 1);
       const blast = this.add
-        .circle(180 + index * 115, laneY + (index % 2 === 0 ? -22 : 20), 18, 0xff693d, 0.9)
+        .circle(blastPoint.x, blastPoint.y + (index % 2 === 0 ? -22 : 20), 18, 0xff693d, 0.9)
         .setDepth(16);
       this.tweens.add({
         targets: blast,
@@ -299,13 +390,16 @@ export function createBattlefieldRuntime(
   parent: HTMLElement,
   initialSnapshot: BattlefieldViewSnapshot
 ): BattlefieldRuntime {
-  const scene = new BattlefieldScene();
+  parent.dataset.environmentState = "loading";
+  const scene = new BattlefieldScene((state) => {
+    parent.dataset.environmentState = state;
+  });
   scene.applySnapshot(initialSnapshot);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
-    width: 1280,
-    height: 720,
+    width: BATTLEFIELD_WIDTH,
+    height: BATTLEFIELD_HEIGHT,
     backgroundColor: "#071714",
     transparent: false,
     scene,
