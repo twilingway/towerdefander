@@ -1,48 +1,47 @@
 import {
-  advanceDefense,
-  applyDefenseAction,
-  createPrototypeDefenseConfig,
-  createDefenseState,
-  getDefenseDamage,
-  getIntermissionRemainingSeconds,
-  getUpgradeCost,
-  isSectorIdInDefense,
-  prototypeDefenseConfig,
-  type DefenseAction,
-  type DefenseConfig,
-  type DefenseState,
-  type SectorId
+  advanceFlyingCastle,
+  applyGunnerInput,
+  applyPilotInput,
+  applyShieldInput,
+  createFlyingCastleConfig,
+  createFlyingCastleState,
+  type FlyingCastleConfig,
+  type FlyingCastleState
 } from "@town-defenders/game-core";
 import {
-  MAX_PLAYER_CAPACITY,
+  CREW_ROLES,
+  PLAYER_CAPACITY,
   PROTOCOL_VERSION,
-  airstrikeCommandSchema,
   clientMessage,
   displayCreateOptionsSchema,
-  getAirstrikeTargetSectorIds,
+  gunnerInputCommandSchema,
   joinOptionsSchema,
+  pilotInputCommandSchema,
   readyCommandSchema,
-  resourceActionCommandSchema,
   serverMessage,
-  type AirstrikeCommand,
-  type PlayerCapacity,
-  type ResourceActionCommand,
-  type ServerErrorCode
+  shieldInputCommandSchema,
+  type CrewRole,
+  type GunnerInputCommand,
+  type PilotInputCommand,
+  type ServerErrorCode,
+  type ShieldInputCommand
 } from "@town-defenders/protocol";
-import { CloseCode, Room, ServerError, type Client } from "colyseus";
-import { randomInt } from "node:crypto";
 import { StateView } from "@colyseus/schema";
+import { CloseCode, Room, ServerError, type Client } from "colyseus";
 
 import { readServerConfig } from "../config.js";
 import {
-  DefenseEnemyState,
-  DefenseSectorState,
+  ObstacleState,
   PlayerState,
+  ProjectileState,
   TownDefendersState
 } from "./TownDefendersState.js";
 
 type ConnectionRole = "display" | "controller";
-type ResourceActionType = Extract<DefenseAction["type"], "repair" | "upgrade">;
+type InputMessageType =
+  | typeof clientMessage.pilotInput
+  | typeof clientMessage.gunnerInput
+  | typeof clientMessage.shieldInput;
 
 interface RuntimeSchema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false };
@@ -52,46 +51,62 @@ interface RoomTimer {
   clear(): void;
 }
 
-interface RejectedActionOutcome {
-  readonly accepted: false;
-  readonly code: ServerErrorCode;
-  readonly message: string;
-}
+const { reconnectionGraceSeconds } = readServerConfig();
+const flyingCastleConfig = createFlyingCastleConfig();
 
-type ActionOutcome = { readonly accepted: true } | RejectedActionOutcome;
-
-interface ActionJournalEntry {
-  readonly actorId: string;
-  readonly fingerprint: string;
-  readonly outcome: ActionOutcome;
-}
-
-const { reconnectionGraceSeconds, simulationIntervalMs } = readServerConfig();
+const DECORATIVE_OBSTACLES = [
+  { obstacleId: "island-west", kind: "circle" as const, x: 420, y: 430, radius: 105 },
+  {
+    obstacleId: "ruins-north",
+    kind: "rectangle" as const,
+    x: 1120,
+    y: 260,
+    width: 250,
+    height: 120
+  },
+  {
+    obstacleId: "cloud-bank",
+    kind: "rectangle" as const,
+    x: 1780,
+    y: 620,
+    width: 330,
+    height: 150
+  },
+  { obstacleId: "island-south", kind: "circle" as const, x: 820, y: 1270, radius: 135 },
+  {
+    obstacleId: "ruins-east",
+    kind: "rectangle" as const,
+    x: 1990,
+    y: 1260,
+    width: 220,
+    height: 180
+  }
+] as const;
 
 export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
-  // One spare transport seat lets onJoin return a typed room_full error.
-  override maxClients = MAX_PLAYER_CAPACITY + 2;
+  override maxClients = PLAYER_CAPACITY + 2;
   override maxMessagesPerSecond = 20;
   override state = new TownDefendersState();
 
-  private readonly roles = new Map<string, ConnectionRole>();
-  private readonly actionJournal = new Map<string, ActionJournalEntry>();
-  private defenseConfig: DefenseConfig = prototypeDefenseConfig;
-  private defenseState: DefenseState | undefined;
+  private readonly connectionRoles = new Map<string, ConnectionRole>();
+  private readonly sequenceWatermarks = new Map<string, Map<InputMessageType, number>>();
+  private displaySessionId: string | undefined;
+  private gameConfig: FlyingCastleConfig = flyingCastleConfig;
+  private gameState: FlyingCastleState | undefined;
   private simulationTimer: RoomTimer | undefined;
 
   override messages = {
     [clientMessage.ready]: (client: Client, payload: unknown) => {
       this.handleReady(client, payload);
     },
-    [clientMessage.repair]: (client: Client, payload: unknown) => {
-      this.handleResourceAction(client, payload, "repair");
+    [clientMessage.pilotInput]: (client: Client, payload: unknown) => {
+      this.handlePilotInput(client, payload);
     },
-    [clientMessage.upgrade]: (client: Client, payload: unknown) => {
-      this.handleResourceAction(client, payload, "upgrade");
+    [clientMessage.gunnerInput]: (client: Client, payload: unknown) => {
+      this.handleGunnerInput(client, payload);
     },
-    [clientMessage.airstrike]: (client: Client, payload: unknown) => {
-      this.handleAirstrike(client, payload);
+    [clientMessage.shieldInput]: (client: Client, payload: unknown) => {
+      this.handleShieldInput(client, payload);
     }
   };
 
@@ -99,103 +114,85 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     if (this.hasProtocolMismatch(unsafeOptions)) {
       throw new ServerError(4000, "protocol_mismatch");
     }
-
-    const result = displayCreateOptionsSchema.safeParse(unsafeOptions);
-    if (!result.success) {
+    if (!displayCreateOptionsSchema.safeParse(unsafeOptions).success) {
       throw new ServerError(4000, "invalid_message");
     }
-
     this.state.roomId = this.roomId;
-    this.state.playerCapacity = result.data.playerCapacity;
-    this.defenseConfig = createPrototypeDefenseConfig(result.data.playerCapacity);
   }
 
   override onJoin(client: Client, unsafeOptions: unknown): void {
     const result = joinOptionsSchema.safeParse(unsafeOptions);
-
     if (!result.success) {
-      const code = this.hasProtocolMismatch(unsafeOptions)
-        ? "protocol_mismatch"
-        : "invalid_message";
-      throw new ServerError(4000, code);
+      throw new ServerError(
+        4000,
+        this.hasProtocolMismatch(unsafeOptions) ? "protocol_mismatch" : "invalid_message"
+      );
     }
 
     if (result.data.role === "display") {
-      if (
-        "playerCapacity" in result.data &&
-        result.data.playerCapacity !== this.state.playerCapacity
-      ) {
-        throw new ServerError(4000, "invalid_message");
-      }
       this.joinDisplay(client);
       return;
     }
 
+    if (this.state.players.size >= PLAYER_CAPACITY) {
+      throw new ServerError(4001, "room_full");
+    }
+    const role = this.findAvailableRole();
+    if (role === undefined) {
+      throw new ServerError(4001, "room_full");
+    }
+
     client.view = new StateView();
-
-    if (this.state.players.size >= this.state.playerCapacity || this.state.phase === "finished") {
-      throw new ServerError(4001, "room_full");
-    }
-
-    const sectorId = this.findAvailableSector();
-    if (sectorId === undefined) {
-      throw new ServerError(4001, "room_full");
-    }
-
     const player = new PlayerState();
     player.playerId = client.sessionId;
     player.playerName = result.data.playerName;
-    player.sectorId = sectorId;
-    player.airstrikeTargetSectorIds.push(
-      ...getAirstrikeTargetSectorIds(sectorId, this.state.playerCapacity as PlayerCapacity)
-    );
-
-    if (this.state.phase === "active") {
-      player.ready = true;
-    }
-
-    this.roles.set(client.sessionId, "controller");
+    player.role = role;
+    player.ready = this.state.phase === "active";
+    this.connectionRoles.set(client.sessionId, "controller");
+    this.sequenceWatermarks.set(client.sessionId, new Map());
     this.state.players.set(client.sessionId, player);
-    this.syncDefenseState();
   }
 
   override async onLeave(client: Client, code: number): Promise<void> {
-    const role = this.roles.get(client.sessionId);
-
-    if (role === "display") {
+    const connectionRole = this.connectionRoles.get(client.sessionId);
+    if (connectionRole === "display") {
       this.state.displayConnected = false;
+      if (code === CloseCode.CONSENTED) {
+        await this.disposeHeadlessRoom(client.sessionId);
+        return;
+      }
       try {
-        if (code === CloseCode.CONSENTED) {
-          throw new Error("consented leave");
-        }
-
-        await this.allowReconnection(client, reconnectionGraceSeconds);
+        const reconnected = await this.allowReconnection(client, reconnectionGraceSeconds);
+        this.connectionRoles.set(reconnected.sessionId, "display");
+        this.displaySessionId = reconnected.sessionId;
         this.state.displayConnected = true;
       } catch {
-        this.roles.delete(client.sessionId);
+        await this.disposeHeadlessRoom(client.sessionId);
       }
       return;
     }
 
-    const player = this.state.players.get(client.sessionId);
-    if (role !== "controller" || player === undefined) {
+    if (connectionRole !== "controller") {
       return;
     }
-
+    this.neutralizeRole(client.sessionId);
+    const player = this.state.players.get(client.sessionId);
+    if (player === undefined) {
+      return;
+    }
     player.connected = false;
+    if (code === CloseCode.CONSENTED) {
+      this.removeController(client.sessionId);
+      return;
+    }
 
     try {
-      if (code === CloseCode.CONSENTED) {
-        throw new Error("consented leave");
-      }
-
-      await this.allowReconnection(client, reconnectionGraceSeconds);
+      const reconnected = await this.allowReconnection(client, reconnectionGraceSeconds);
       player.connected = true;
-      this.updatePhase();
+      this.connectionRoles.set(reconnected.sessionId, "controller");
+      this.sequenceWatermarks.set(reconnected.sessionId, new Map());
     } catch {
-      this.state.players.delete(client.sessionId);
-      this.roles.delete(client.sessionId);
-      this.syncDefenseState();
+      this.removeController(client.sessionId);
     }
   }
 
@@ -204,240 +201,262 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   }
 
   handleReady(client: Client, unsafePayload: unknown): void {
-    const payload = this.parseMessage(client, readyCommandSchema, unsafePayload);
-    if (payload === undefined) {
+    const command = this.parseControllerCommand(client, unsafePayload, readyCommandSchema);
+    if (command === undefined) {
       return;
     }
-
-    const player = this.getController(client);
-    if (player === undefined) {
-      return;
-    }
-
     if (this.state.phase !== "lobby") {
-      this.sendError(client, "invalid_phase", "Ready state can only change in the lobby.");
+      this.sendError(client, "invalid_phase", "Ready is only available in the lobby.");
       return;
     }
-
-    player.ready = payload.ready;
-    this.updatePhase();
+    const player = this.state.players.get(client.sessionId);
+    if (player === undefined) {
+      this.sendError(client, "identity_mismatch", "Player identity does not match connection.");
+      return;
+    }
+    player.ready = true;
+    this.tryStartGame();
   }
 
-  handleResourceAction(
-    client: Client,
-    unsafePayload: unknown,
-    actionType: ResourceActionType
-  ): void {
-    const payload = this.parseMessage(client, resourceActionCommandSchema, unsafePayload);
-    if (payload === undefined) {
+  handlePilotInput(client: Client, unsafePayload: unknown): void {
+    const command = this.parseRoleInput(
+      client,
+      unsafePayload,
+      pilotInputCommandSchema,
+      "pilot",
+      clientMessage.pilotInput
+    );
+    if (command === undefined || this.gameState === undefined) {
       return;
     }
-
-    const player = this.getController(client);
-    if (player === undefined) {
-      return;
-    }
-
-    if (payload.roomId !== this.roomId || payload.playerId !== player.playerId) {
-      this.sendError(client, "identity_mismatch", "Room or player identity does not match.");
-      return;
-    }
-
-    const fingerprint = actionType;
-    if (this.replayJournalEntry(client, payload.actionId, player.playerId, fingerprint)) {
-      return;
-    }
-
-    const outcome = this.applyNewResourceAction(payload, player, actionType);
-    this.actionJournal.set(payload.actionId, {
-      actorId: player.playerId,
-      fingerprint,
-      outcome
+    this.gameState = applyPilotInput(this.gameState, {
+      vector: command.vector,
+      receivedTick: this.gameState.clock.tick
     });
-    this.replayOutcome(client, outcome);
   }
 
-  handleAirstrike(client: Client, unsafePayload: unknown): void {
-    const payload = this.parseMessage(client, airstrikeCommandSchema, unsafePayload);
-    if (payload === undefined) {
+  handleGunnerInput(client: Client, unsafePayload: unknown): void {
+    const command = this.parseRoleInput(
+      client,
+      unsafePayload,
+      gunnerInputCommandSchema,
+      "gunner",
+      clientMessage.gunnerInput
+    );
+    if (command === undefined || this.gameState === undefined) {
       return;
     }
-
-    const player = this.getController(client);
-    if (player === undefined) {
-      return;
-    }
-    if (payload.roomId !== this.roomId || payload.playerId !== player.playerId) {
-      this.sendError(client, "identity_mismatch", "Room or player identity does not match.");
-      return;
-    }
-
-    const fingerprint = `airstrike:${String(payload.targetSectorId)}`;
-    if (this.replayJournalEntry(client, payload.actionId, player.playerId, fingerprint)) {
-      return;
-    }
-
-    const outcome = this.applyNewAirstrike(payload, player);
-    this.actionJournal.set(payload.actionId, {
-      actorId: player.playerId,
-      fingerprint,
-      outcome
+    this.gameState = applyGunnerInput(this.gameState, {
+      vector: command.aim,
+      firing: command.firing,
+      receivedTick: this.gameState.clock.tick
     });
-    this.replayOutcome(client, outcome);
+  }
+
+  handleShieldInput(client: Client, unsafePayload: unknown): void {
+    const command = this.parseRoleInput(
+      client,
+      unsafePayload,
+      shieldInputCommandSchema,
+      "shield",
+      clientMessage.shieldInput
+    );
+    if (command === undefined || this.gameState === undefined) {
+      return;
+    }
+    this.gameState = applyShieldInput(this.gameState, {
+      vector: command.aim,
+      active: command.active,
+      receivedTick: this.gameState.clock.tick
+    });
   }
 
   advanceGameStep(): void {
-    if (this.state.phase !== "active" || this.defenseState === undefined) {
+    if (this.state.phase !== "active" || this.gameState === undefined) {
       return;
     }
-
-    this.defenseState = advanceDefense(this.defenseState, this.defenseConfig);
-    this.syncDefenseState();
-
-    if (this.defenseState.result !== "in_progress") {
-      this.state.phase = "finished";
-      this.stopSimulation();
-    }
+    this.gameState = advanceFlyingCastle(this.gameState, this.gameConfig);
+    this.syncGameState();
   }
 
-  private joinDisplay(client: Client): void {
-    const reservedDisplaySessionId = [...this.roles.entries()].find(
-      ([, role]) => role === "display"
-    )?.[0];
-    if (
-      this.state.displayConnected ||
-      (reservedDisplaySessionId !== undefined && reservedDisplaySessionId !== client.sessionId)
-    ) {
-      throw new ServerError(4001, "room_full");
-    }
-
-    this.roles.set(client.sessionId, "display");
-    client.view = new StateView();
-    client.view.add(this.state.game, 1);
-    this.state.displayConnected = true;
-  }
-
-  private applyNewResourceAction(
-    _payload: ResourceActionCommand,
-    player: PlayerState,
-    actionType: ResourceActionType
-  ): ActionOutcome {
-    if (this.state.phase !== "active" || this.defenseState === undefined) {
-      return this.rejected("invalid_phase", "Game actions are accepted only during a battle.");
-    }
-
-    const sectorId = this.toSectorId(player.sectorId);
-    if (sectorId === undefined) {
-      return this.rejected("action_not_available", "No sector is assigned to this player.");
-    }
-
-    const result = applyDefenseAction(this.defenseState, this.defenseConfig, {
-      type: actionType,
-      sectorId
-    });
-    if (!result.accepted) {
-      if (result.reason === "insufficient_funds") {
-        return this.rejected("insufficient_funds", "Not enough gold in the shared treasury.");
-      }
-      if (result.reason === "battle_finished") {
-        return this.rejected("invalid_phase", "The battle has already finished.");
-      }
-      return this.rejected("action_not_available", "This action is not available now.");
-    }
-
-    this.defenseState = result.state;
-    this.syncDefenseState();
-    return { accepted: true };
-  }
-
-  private applyNewAirstrike(payload: AirstrikeCommand, player: PlayerState): ActionOutcome {
-    if (this.state.phase !== "active" || this.defenseState === undefined) {
-      return this.rejected("invalid_phase", "Airstrike is accepted only during an active match.");
-    }
-
-    const sourceSectorId = this.toSectorId(player.sectorId);
-    if (sourceSectorId === undefined) {
-      return this.rejected("action_not_available", "No sector is assigned to this player.");
-    }
-
-    const result = applyDefenseAction(this.defenseState, this.defenseConfig, {
-      type: "airstrike",
-      sourceSectorId,
-      targetSectorId: payload.targetSectorId,
-      actionId: payload.actionId,
-      playerId: payload.playerId
-    });
-    if (!result.accepted) {
-      return this.rejected("action_not_available", "Airstrike is not available for this sector.");
-    }
-
-    this.defenseState = result.state;
-    this.syncDefenseState();
-    return { accepted: true };
-  }
-
-  private parseMessage<T>(
+  private parseRoleInput<T extends PilotInputCommand | GunnerInputCommand | ShieldInputCommand>(
     client: Client,
+    unsafePayload: unknown,
     schema: RuntimeSchema<T>,
-    unsafePayload: unknown
+    role: CrewRole,
+    messageType: InputMessageType
+  ): T | undefined {
+    const command = this.parseControllerCommand(client, unsafePayload, schema);
+    if (command === undefined) {
+      return undefined;
+    }
+    const player = this.state.players.get(client.sessionId);
+    if (player?.role !== role) {
+      this.sendError(client, "role_mismatch", `Only ${role} may send this input.`);
+      return undefined;
+    }
+    if (this.state.phase !== "active" || this.gameState === undefined) {
+      this.sendError(client, "invalid_phase", "Gameplay input requires an active match.");
+      return undefined;
+    }
+    const watermarks =
+      this.sequenceWatermarks.get(client.sessionId) ?? new Map<InputMessageType, number>();
+    const previous = watermarks.get(messageType) ?? 0;
+    if (command.sequence <= previous) {
+      return undefined;
+    }
+    watermarks.set(messageType, command.sequence);
+    this.sequenceWatermarks.set(client.sessionId, watermarks);
+    return command;
+  }
+
+  private parseControllerCommand<T>(
+    client: Client,
+    unsafePayload: unknown,
+    schema: RuntimeSchema<T>
   ): T | undefined {
     if (this.hasProtocolMismatch(unsafePayload)) {
-      this.sendError(client, "protocol_mismatch", "Unsupported protocol version.");
+      this.sendError(client, "protocol_mismatch", "Protocol version does not match server.");
       return undefined;
     }
-
     const result = schema.safeParse(unsafePayload);
     if (!result.success) {
-      this.sendError(client, "invalid_message", "Message payload is invalid.");
+      this.sendError(client, "invalid_message", "Message does not match the strict schema.");
       return undefined;
     }
-
+    if (this.connectionRoles.get(client.sessionId) !== "controller") {
+      this.sendError(client, "not_controller", "Only controllers may send gameplay messages.");
+      return undefined;
+    }
+    const envelope = result.data as { roomId: string; playerId: string };
+    if (envelope.roomId !== this.roomId || envelope.playerId !== client.sessionId) {
+      this.sendError(
+        client,
+        "identity_mismatch",
+        "Room or player identity does not match connection."
+      );
+      return undefined;
+    }
     return result.data;
   }
 
-  private hasProtocolMismatch(value: unknown): boolean {
-    return (
-      typeof value === "object" &&
-      value !== null &&
-      "protocolVersion" in value &&
-      value.protocolVersion !== PROTOCOL_VERSION
-    );
-  }
-
-  private getController(client: Client): PlayerState | undefined {
-    if (this.roles.get(client.sessionId) !== "controller") {
-      this.sendError(client, "not_controller", "Only controllers may perform this action.");
-      return undefined;
-    }
-
-    return this.state.players.get(client.sessionId);
-  }
-
-  private updatePhase(): void {
-    if (this.state.phase !== "lobby" || this.state.players.size !== this.state.playerCapacity) {
+  private tryStartGame(): void {
+    if (this.state.phase !== "lobby" || this.state.players.size !== PLAYER_CAPACITY) {
       return;
     }
-
     const players = [...this.state.players.values()];
-    const canStart = players.every((player) => player.connected && player.ready);
-    if (!canStart) {
+    if (!players.every((player) => player.connected && player.ready)) {
       return;
     }
-
-    this.defenseState = createDefenseState(this.defenseConfig, randomInt(0, 2_147_483_647));
+    this.gameConfig = createFlyingCastleConfig();
+    this.gameState = createFlyingCastleState(this.gameConfig);
     this.state.phase = "active";
-    this.syncDefenseState();
-    this.startSimulation();
-  }
-
-  private startSimulation(): void {
-    if (this.simulationTimer !== undefined) {
-      return;
-    }
-
+    this.state.hasGame = true;
+    this.initializeDecorations();
+    this.syncGameState();
     this.simulationTimer = this.clock.setInterval(() => {
       this.advanceGameStep();
-    }, simulationIntervalMs);
+    }, this.gameConfig.fixedStepMs);
+  }
+
+  private initializeDecorations(): void {
+    this.state.game.display.obstacles.clear();
+    for (const obstacle of DECORATIVE_OBSTACLES) {
+      const state = new ObstacleState();
+      state.obstacleId = obstacle.obstacleId;
+      state.kind = obstacle.kind;
+      state.x = obstacle.x;
+      state.y = obstacle.y;
+      state.width = "width" in obstacle ? obstacle.width : 0;
+      state.height = "height" in obstacle ? obstacle.height : 0;
+      state.radius = "radius" in obstacle ? obstacle.radius : 0;
+      state.rotation = 0;
+      this.state.game.display.obstacles.push(state);
+    }
+  }
+
+  private syncGameState(): void {
+    const game = this.gameState;
+    if (game === undefined) {
+      return;
+    }
+    const target = this.state.game;
+    target.tick = game.clock.tick;
+    target.elapsedMs = game.clock.elapsedMs;
+    target.worldWidth = this.gameConfig.worldWidth;
+    target.worldHeight = this.gameConfig.worldHeight;
+    target.castle.x = game.castle.x;
+    target.castle.y = game.castle.y;
+    target.castle.velocityX = game.castle.velocity.x;
+    target.castle.velocityY = game.castle.velocity.y;
+    target.castle.radius = this.gameConfig.castleRadius;
+    target.turretAngle = game.turretAngle;
+    target.shield.angle = game.shieldAngle;
+    target.shield.active = game.shieldActive;
+    target.display.projectiles.clear();
+    for (const projectile of game.projectiles) {
+      const state = new ProjectileState();
+      state.projectileId = projectile.projectileId;
+      state.x = projectile.x;
+      state.y = projectile.y;
+      state.velocityX = projectile.velocity.x;
+      state.velocityY = projectile.velocity.y;
+      state.radius = this.gameConfig.projectileRadius;
+      target.display.projectiles.push(state);
+    }
+  }
+
+  private neutralizeRole(playerId: string): void {
+    if (this.gameState === undefined) {
+      return;
+    }
+    const role = this.state.players.get(playerId)?.role;
+    const receivedTick = this.gameState.clock.tick;
+    if (role === "pilot") {
+      this.gameState = applyPilotInput(this.gameState, { vector: { x: 0, y: 0 }, receivedTick });
+    } else if (role === "gunner") {
+      this.gameState = applyGunnerInput(this.gameState, {
+        vector: { x: 0, y: 0 },
+        firing: false,
+        receivedTick
+      });
+    } else if (role === "shield") {
+      this.gameState = applyShieldInput(this.gameState, {
+        vector: { x: 0, y: 0 },
+        active: false,
+        receivedTick
+      });
+    }
+    this.syncGameState();
+  }
+
+  private joinDisplay(client: Client): void {
+    if (this.displaySessionId !== undefined) {
+      throw new ServerError(4001, "display_already_connected");
+    }
+    client.view = new StateView();
+    client.view.add(this.state.game, 1);
+    this.displaySessionId = client.sessionId;
+    this.connectionRoles.set(client.sessionId, "display");
+    this.state.displayConnected = true;
+  }
+
+  private findAvailableRole(): CrewRole | undefined {
+    const occupied = new Set([...this.state.players.values()].map((player) => player.role));
+    return CREW_ROLES.find((role) => !occupied.has(role));
+  }
+
+  private removeController(playerId: string): void {
+    this.state.players.delete(playerId);
+    this.connectionRoles.delete(playerId);
+    this.sequenceWatermarks.delete(playerId);
+  }
+
+  private async disposeHeadlessRoom(displayId: string): Promise<void> {
+    this.connectionRoles.delete(displayId);
+    this.displaySessionId = undefined;
+    this.stopSimulation();
+    await this.disconnect();
   }
 
   private stopSimulation(): void {
@@ -445,124 +464,13 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.simulationTimer = undefined;
   }
 
-  private syncDefenseState(): void {
-    const defenseState = this.defenseState;
-    if (defenseState === undefined) {
-      return;
-    }
-
-    const game = this.state.game;
-    this.state.hasGame = true;
-    game.tick = defenseState.clock.tick;
-    game.elapsedMs = defenseState.clock.elapsedMs;
-    game.treasury = defenseState.treasury;
-    game.pathLength = this.defenseConfig.pathLength;
-    game.repairCost = this.defenseConfig.repairCost;
-    game.result = defenseState.result;
-    game.waveNumber = defenseState.waveNumber;
-    game.totalWaves = this.defenseConfig.waves.length;
-    game.stage = defenseState.stage;
-    game.intermissionRemainingSeconds = getIntermissionRemainingSeconds(
-      defenseState,
-      this.defenseConfig
+  private hasProtocolMismatch(payload: unknown): boolean {
+    return (
+      typeof payload === "object" &&
+      payload !== null &&
+      "protocolVersion" in payload &&
+      (payload as { protocolVersion?: unknown }).protocolVersion !== PROTOCOL_VERSION
     );
-    game.airstrikeCharge = defenseState.airstrikeCharge;
-    game.airstrikeChargeRequired = this.defenseConfig.airstrike.chargeRequired;
-    game.airstrikeDamage = this.defenseConfig.airstrike.damage;
-    game.display.hasLastAirstrikeEffect = defenseState.lastAirstrikeEffect !== null;
-    game.display.lastAirstrikeEffect.sequence = defenseState.lastAirstrikeEffect?.sequence ?? 0;
-    game.display.lastAirstrikeEffect.actionId = defenseState.lastAirstrikeEffect?.actionId ?? "";
-    game.display.lastAirstrikeEffect.playerId = defenseState.lastAirstrikeEffect?.playerId ?? "";
-    game.display.lastAirstrikeEffect.targetSectorId =
-      defenseState.lastAirstrikeEffect?.targetSectorId ?? 0;
-    game.display.lastAirstrikeEffect.appliedTick =
-      defenseState.lastAirstrikeEffect?.appliedTick ?? 0;
-    game.sectors.clear();
-    game.display.enemies.clear();
-
-    for (const sector of defenseState.sectors) {
-      const schema = new DefenseSectorState();
-      schema.sectorId = sector.sectorId;
-      schema.assignedPlayerId =
-        [...this.state.players.values()].find((player) => player.sectorId === sector.sectorId)
-          ?.playerId ?? "";
-      schema.gateHealth = sector.gateHealth;
-      schema.gateMaxHealth = this.defenseConfig.gateMaxHealth;
-      schema.defenseLevel = sector.defenseLevel;
-      schema.defenseDamage = getDefenseDamage(this.defenseConfig, sector.defenseLevel);
-      schema.nextUpgradeCost =
-        sector.defenseLevel >= this.defenseConfig.maxDefenseLevel
-          ? -1
-          : getUpgradeCost(this.defenseConfig, sector.defenseLevel);
-      schema.enemyCount = defenseState.enemies.filter(
-        (enemy) => enemy.sectorId === sector.sectorId
-      ).length;
-      schema.airstrikeTargetAvailable = schema.enemyCount > 0;
-      game.sectors.push(schema);
-    }
-
-    for (const enemy of defenseState.enemies) {
-      const schema = new DefenseEnemyState();
-      schema.enemyId = enemy.enemyId;
-      schema.sectorId = enemy.sectorId;
-      schema.enemyType = enemy.enemyType;
-      schema.health = enemy.health;
-      schema.maxHealth = enemy.maxHealth;
-      schema.progress = enemy.progress;
-      game.display.enemies.push(schema);
-    }
-  }
-
-  private findAvailableSector(): SectorId | undefined {
-    const occupied = new Set(
-      [...this.state.players.values()]
-        .map((player) => this.toSectorId(player.sectorId))
-        .filter((sectorId): sectorId is SectorId => sectorId !== undefined)
-    );
-    for (let value = 0; value < this.state.playerCapacity; value += 1) {
-      const sectorId = this.toSectorId(value);
-      if (sectorId !== undefined && !occupied.has(sectorId)) {
-        return sectorId;
-      }
-    }
-    return undefined;
-  }
-
-  private toSectorId(value: number): SectorId | undefined {
-    return isSectorIdInDefense(value, this.state.playerCapacity) ? value : undefined;
-  }
-
-  private replayJournalEntry(
-    client: Client,
-    actionId: string,
-    actorId: string,
-    fingerprint: string
-  ): boolean {
-    const entry = this.actionJournal.get(actionId);
-    if (entry === undefined) {
-      return false;
-    }
-    if (entry.actorId !== actorId || entry.fingerprint !== fingerprint) {
-      this.sendError(
-        client,
-        "invalid_message",
-        "This action ID is already bound to another command."
-      );
-      return true;
-    }
-
-    this.replayOutcome(client, entry.outcome);
-    return true;
-  }
-
-  private replayOutcome(client: Client, outcome: ActionOutcome): void {
-    if (!outcome.accepted) {
-      this.sendError(client, outcome.code, outcome.message);
-    }
-  }
-
-  private rejected(code: ServerErrorCode, message: string): RejectedActionOutcome {
-    return { accepted: false, code, message };
   }
 
   private sendError(client: Client, code: ServerErrorCode, message: string): void {

@@ -1,76 +1,70 @@
 import { ArraySchema, MapSchema, Schema, type, view } from "@colyseus/schema";
-import type { DefenseResult, DefenseStage, EnemyType, RoomPhase } from "@town-defenders/protocol";
+import type { CrewRole, RoomPhase } from "@town-defenders/protocol";
 
 export class PlayerState extends Schema {
   @type("string") playerId = "";
   @type("string") playerName = "";
+  @type("string") role: CrewRole = "pilot";
   @type("boolean") ready = false;
   @type("boolean") connected = true;
-  @type("int8") sectorId = -1;
-  @type(["uint8"]) airstrikeTargetSectorIds = new ArraySchema<number>();
 }
 
-export class DefenseSectorState extends Schema {
-  @type("uint8") sectorId = 0;
-  @type("string") assignedPlayerId = "";
-  @type("uint32") gateHealth = 0;
-  @type("uint32") gateMaxHealth = 0;
-  @type("uint8") defenseLevel = 1;
-  @type("uint32") defenseDamage = 0;
-  @type("int32") nextUpgradeCost = -1;
-  @type("uint16") enemyCount = 0;
-  @type("boolean") airstrikeTargetAvailable = false;
+export class CastleState extends Schema {
+  @type("float64") x = 0;
+  @type("float64") y = 0;
+  @type("float64") velocityX = 0;
+  @type("float64") velocityY = 0;
+  @type("float64") radius = 0;
 }
 
-export class DefenseEnemyState extends Schema {
-  @type("string") enemyId = "";
-  @type("uint8") sectorId = 0;
-  @type("string") enemyType: EnemyType = "balanced";
-  @type("uint32") health = 0;
-  @type("uint32") maxHealth = 0;
-  @type("uint32") progress = 0;
+export class ShieldState extends Schema {
+  @type("float64") angle = 0;
+  @type("boolean") active = false;
 }
 
-export class DefenseAirstrikeEffectState extends Schema {
-  @type("uint32") sequence = 0;
-  @type("string") actionId = "";
-  @type("string") playerId = "";
-  @type("uint8") targetSectorId = 0;
-  @type("uint32") appliedTick = 0;
+export class ObstacleState extends Schema {
+  @type("string") obstacleId = "";
+  @type("string") kind: "rectangle" | "circle" = "rectangle";
+  @type("float64") x = 0;
+  @type("float64") y = 0;
+  @type("float64") width = 0;
+  @type("float64") height = 0;
+  @type("float64") radius = 0;
+  @type("float64") rotation = 0;
 }
 
-export class DefenseDisplayState extends Schema {
-  @type([DefenseEnemyState]) enemies = new ArraySchema<DefenseEnemyState>();
-  @type("boolean") hasLastAirstrikeEffect = false;
-  @type(DefenseAirstrikeEffectState) lastAirstrikeEffect = new DefenseAirstrikeEffectState();
+export class ProjectileState extends Schema {
+  @type("string") projectileId = "";
+  @type("float64") x = 0;
+  @type("float64") y = 0;
+  @type("float64") velocityX = 0;
+  @type("float64") velocityY = 0;
+  @type("float64") radius = 0;
 }
 
-export class DefenseGameState extends Schema {
+export class FlyingCastleDisplayState extends Schema {
+  @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
+  @type([ProjectileState]) projectiles = new ArraySchema<ProjectileState>();
+}
+
+export class FlyingCastleGameState extends Schema {
   @type("uint32") tick = 0;
   @type("uint32") elapsedMs = 0;
-  @type("uint32") treasury = 0;
-  @type("uint32") pathLength = 0;
-  @type("uint32") repairCost = 0;
-  @type("string") result: DefenseResult = "in_progress";
-  @type("uint8") waveNumber = 1;
-  @type("uint8") totalWaves = 5;
-  @type("string") stage: DefenseStage = "intermission";
-  @type("uint32") intermissionRemainingSeconds = 0;
-  @type("uint8") airstrikeCharge = 0;
-  @type("uint8") airstrikeChargeRequired = 100;
-  @type("uint32") airstrikeDamage = 0;
-  @type([DefenseSectorState]) sectors = new ArraySchema<DefenseSectorState>();
+  @type("uint16") worldWidth = 2400;
+  @type("uint16") worldHeight = 1600;
+  @type(CastleState) castle = new CastleState();
+  @type("float64") turretAngle = 0;
+  @type(ShieldState) shield = new ShieldState();
   @view(1)
-  @type(DefenseDisplayState)
-  display = new DefenseDisplayState();
+  @type(FlyingCastleDisplayState)
+  display = new FlyingCastleDisplayState();
 }
 
 export class TownDefendersState extends Schema {
   @type("string") roomId = "";
   @type("string") phase: RoomPhase = "lobby";
   @type("boolean") displayConnected = false;
-  @type("uint8") playerCapacity = 2;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type("boolean") hasGame = false;
-  @type(DefenseGameState) game = new DefenseGameState();
+  @type(FlyingCastleGameState) game = new FlyingCastleGameState();
 }

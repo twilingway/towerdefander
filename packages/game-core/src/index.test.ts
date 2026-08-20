@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceClock, createSeededRandom } from "./index.js";
+import { advanceClock, createFlyingCastleConfig, createSeededRandom } from "./index.js";
 
 describe("deterministic game core primitives", () => {
   it("generates the same sequence for the same seed", () => {
@@ -38,5 +38,13 @@ describe("deterministic game core primitives", () => {
     expect(() => advanceClock({ tick: 1, elapsedMs: Number.MAX_SAFE_INTEGER }, 50)).toThrow(
       RangeError
     );
+  });
+
+  it("exports the flying castle core from the package entrypoint", () => {
+    expect(createFlyingCastleConfig()).toMatchObject({
+      fixedStepMs: 50,
+      worldWidth: 2400,
+      worldHeight: 1600
+    });
   });
 });

@@ -6,91 +6,11 @@ TBD - created by archiving change build-visual-wave-mvp. Update Purpose after ar
 
 ## Requirements
 
-### Requirement: Убийства заряжают общую способность
+### Requirement: Legacy airstrike недоступен в flying-castle room
 
-Авторитетный бой SHALL хранить общий целочисленный `airstrikeCharge` от 0 до 100. Каждое уничтожение
-врага SHALL добавлять настроенный заряд для его типа, не превышая 100.
+Protocol v5 SHALL NOT принимать airstrike command и SHALL NOT публиковать charge или sector targets.
 
-#### Scenario: Враг уничтожен
+#### Scenario: Controller отправляет legacy airstrike message
 
-- **WHEN** защита или авиаудар уничтожает врага и заряд меньше 100
-- **THEN** сервер атомарно начисляет награду в казну и заряд способности согласно типу врага
-
-#### Scenario: Заряд достиг максимума
-
-- **WHEN** очередное убийство увеличило бы заряд выше 100
-- **THEN** snapshot содержит ровно 100 и контроллеры показывают готовый авиаудар
-
-### Requirement: Игрок направляет авиаудар в любой сектор
-
-Controller SHALL отправлять `player:airstrike` с `protocolVersion`, `roomId`, `playerId`, `actionId`
-и `targetSectorId`. Сервер SHALL сверять identity, active combat stage и полный заряд, затем SHALL
-атомарно списывать 100 заряда, наносить настроенный урон всем активным врагам выбранного сектора,
-начислять reward и новый charge за уничтоженных врагов от нулевой базы с пределом 100. Пустой target
-sector SHALL отклоняться как `action_not_available` без расхода заряда.
-
-#### Scenario: Помощь соседнему сектору
-
-- **WHEN** игрок с полным зарядом выбирает сектор другого игрока и отправляет допустимую команду
-- **THEN** сервер применяет урон ко всем врагам выбранного сектора, независимо от собственного
-  назначения отправителя
-
-#### Scenario: Заряд неполный
-
-- **WHEN** controller отправляет авиаудар при `airstrikeCharge` меньше 100
-- **THEN** сервер возвращает `action_not_available` и не изменяет заряд или врагов
-
-#### Scenario: Intermission
-
-- **WHEN** controller отправляет авиаудар во время intermission
-- **THEN** сервер возвращает `action_not_available` и сохраняет заряд для следующей combat stage
-
-#### Scenario: Авиаудар уничтожает несколько врагов
-
-- **WHEN** принятый авиаудар с зарядом 100 уничтожает несколько врагов выбранного сектора
-- **THEN** ядро сначала расходует 100, а затем начисляет их настроенные reward и charge от нулевой
-  базы с пределом 100
-
-#### Scenario: В целевом секторе нет врагов
-
-- **WHEN** controller отправляет допустимый авиаудар в сектор без активных врагов
-- **THEN** сервер возвращает `action_not_available` и не изменяет charge или last effect
-
-#### Scenario: Авиаудар отправлен вне активного матча
-
-- **WHEN** controller отправляет авиаудар в lobby или finished
-- **THEN** сервер возвращает `invalid_phase` без изменения игрового состояния
-
-#### Scenario: Целевой сектор некорректен
-
-- **WHEN** payload не соответствует strict v3 schema или содержит неизвестный sector
-- **THEN** сервер возвращает `invalid_message` без записи business outcome
-
-### Requirement: Авиаудар идемпотентен
-
-Сервер SHALL записывать результат `player:airstrike` в общий журнал `actionId` по тем же правилам,
-что repair и upgrade. Повтор SHALL вернуть исходный результат без второго урона или сброса заряда.
-Каждый принятый авиаудар SHALL монотонно увеличить публичный `lastAirstrikeEffect.sequence` ровно на
-один и SHALL записать в эффект `targetSectorId` и `appliedTick`. Отклонённая или повторная команда
-SHALL NOT изменять этот эффект.
-
-#### Scenario: Повтор успешного авиаудара
-
-- **WHEN** успешно применённый `actionId` авиаудара доставлен повторно
-- **THEN** здоровье врагов и заряд не изменяются повторно
-
-#### Scenario: Повтор отклонённого авиаудара после зарядки
-
-- **WHEN** отклонённый из-за неполного заряда `actionId` повторяется после достижения 100
-- **THEN** сервер повторяет исходный `action_not_available` без применения урона
-
-#### Scenario: Принятый авиаудар публикует эффект
-
-- **WHEN** сервер принимает новый авиаудар по сектору 1 на текущем шаге боя
-- **THEN** snapshot увеличивает `lastAirstrikeEffect.sequence` ровно на один и публикует сектор 1 и
-  текущий `appliedTick`
-
-#### Scenario: Повтор не создаёт новый эффект
-
-- **WHEN** ранее принятый `actionId` авиаудара доставлен повторно
-- **THEN** `lastAirstrikeEffect.sequence`, `targetSectorId` и `appliedTick` не изменяются
+- **WHEN** protocol v5 controller отправляет неизвестный message type `player:airstrike`
+- **THEN** server не регистрирует handler и state не изменяется

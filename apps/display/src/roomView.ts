@@ -1,9 +1,8 @@
 import {
+  CREW_ROLES,
   displayRoomViewSchema,
-  type DefenseResult,
-  type DefenseStage,
-  type DisplayRoomView,
-  type EnemyType
+  type CrewRole,
+  type DisplayRoomView
 } from "@town-defenders/protocol";
 
 interface ValueCollection<T> {
@@ -13,70 +12,54 @@ interface ValueCollection<T> {
 interface NetworkPlayerState {
   playerId: string;
   playerName: string;
+  role: CrewRole;
   ready: boolean;
   connected: boolean;
-  sectorId: number;
-  airstrikeTargetSectorIds: ValueCollection<number>;
 }
 
-interface NetworkSectorState {
-  sectorId: number;
-  assignedPlayerId: string;
-  gateHealth: number;
-  gateMaxHealth: number;
-  defenseLevel: number;
-  defenseDamage: number;
-  nextUpgradeCost: number;
-  enemyCount: number;
-  airstrikeTargetAvailable: boolean;
+interface NetworkObstacleState {
+  obstacleId: string;
+  kind: "rectangle" | "circle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
 }
 
-interface NetworkEnemyState {
-  enemyId: string;
-  sectorId: number;
-  enemyType: EnemyType;
-  health: number;
-  maxHealth: number;
-  progress: number;
-}
-
-interface NetworkAirstrikeEffectState {
-  sequence: number;
-  actionId: string;
-  playerId: string;
-  targetSectorId: number;
-  appliedTick: number;
-}
-
-interface NetworkDisplayGameState {
-  enemies: ValueCollection<NetworkEnemyState>;
-  hasLastAirstrikeEffect: boolean;
-  lastAirstrikeEffect: NetworkAirstrikeEffectState;
+interface NetworkProjectileState {
+  projectileId: string;
+  x: number;
+  y: number;
+  velocityX: number;
+  velocityY: number;
+  radius: number;
 }
 
 interface NetworkGameState {
   tick: number;
   elapsedMs: number;
-  treasury: number;
-  pathLength: number;
-  repairCost: number;
-  result: DefenseResult;
-  waveNumber: number;
-  totalWaves: number;
-  stage: DefenseStage;
-  intermissionRemainingSeconds: number;
-  airstrikeCharge: number;
-  airstrikeChargeRequired: number;
-  airstrikeDamage: number;
-  sectors: ValueCollection<NetworkSectorState>;
-  display?: NetworkDisplayGameState;
+  worldWidth: number;
+  worldHeight: number;
+  castle: {
+    x: number;
+    y: number;
+    velocityX: number;
+    velocityY: number;
+    radius: number;
+  };
+  turretAngle: number;
+  shield: { angle: number; active: boolean };
+  display?: {
+    obstacles: ValueCollection<NetworkObstacleState>;
+    projectiles: ValueCollection<NetworkProjectileState>;
+  };
 }
 
 export interface NetworkRoomState {
   roomId?: string;
   phase?: DisplayRoomView["phase"];
   displayConnected?: boolean;
-  playerCapacity?: number;
   players?: ValueCollection<NetworkPlayerState>;
   hasGame?: boolean;
   game?: NetworkGameState;
@@ -90,7 +73,6 @@ export function toDisplayRoomView(
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
     typeof state.displayConnected !== "boolean" ||
-    typeof state.playerCapacity !== "number" ||
     state.players === undefined
   ) {
     return undefined;
@@ -100,74 +82,57 @@ export function toDisplayRoomView(
     .map((player) => ({
       playerId: player.playerId,
       playerName: player.playerName,
+      role: player.role,
       ready: player.ready,
-      connected: player.connected,
-      sectorId: player.sectorId,
-      airstrikeTargetSectorIds: [...player.airstrikeTargetSectorIds.values()]
+      connected: player.connected
     }))
-    .sort((left, right) => left.sectorId - right.sectorId);
+    .sort((left, right) => CREW_ROLES.indexOf(left.role) - CREW_ROLES.indexOf(right.role));
 
+  const game = state.game;
   return displayRoomViewSchema.parse({
     roomId: state.roomId,
     phase: state.phase,
     displayConnected: state.displayConnected,
-    playerCapacity: state.playerCapacity,
     players,
     game:
-      state.hasGame === true && state.game?.display !== undefined
+      state.hasGame === true && game?.display !== undefined
         ? {
-            ...toSharedGameView(state.game),
-            lastAirstrikeEffect: state.game.display.hasLastAirstrikeEffect
-              ? {
-                  sequence: state.game.display.lastAirstrikeEffect.sequence,
-                  actionId: state.game.display.lastAirstrikeEffect.actionId,
-                  playerId: state.game.display.lastAirstrikeEffect.playerId,
-                  targetSectorId: state.game.display.lastAirstrikeEffect.targetSectorId,
-                  appliedTick: state.game.display.lastAirstrikeEffect.appliedTick
-                }
-              : null,
-            enemies: [...state.game.display.enemies.values()].map((enemy) => ({
-              enemyId: enemy.enemyId,
-              sectorId: enemy.sectorId,
-              enemyType: enemy.enemyType,
-              health: enemy.health,
-              maxHealth: enemy.maxHealth,
-              progress: enemy.progress
+            tick: game.tick,
+            elapsedMs: game.elapsedMs,
+            worldWidth: game.worldWidth,
+            worldHeight: game.worldHeight,
+            castle: { ...game.castle },
+            turretAngle: game.turretAngle,
+            shield: { ...game.shield },
+            obstacles: [...game.display.obstacles.values()].map((obstacle) =>
+              obstacle.kind === "circle"
+                ? {
+                    obstacleId: obstacle.obstacleId,
+                    kind: obstacle.kind,
+                    x: obstacle.x,
+                    y: obstacle.y,
+                    radius: obstacle.radius
+                  }
+                : {
+                    obstacleId: obstacle.obstacleId,
+                    kind: obstacle.kind,
+                    x: obstacle.x,
+                    y: obstacle.y,
+                    width: obstacle.width,
+                    height: obstacle.height
+                  }
+            ),
+            projectiles: [...game.display.projectiles.values()].map((projectile) => ({
+              projectileId: projectile.projectileId,
+              x: projectile.x,
+              y: projectile.y,
+              velocityX: projectile.velocityX,
+              velocityY: projectile.velocityY,
+              radius: projectile.radius
             }))
           }
         : null
   });
-}
-
-export const toPublicRoomView = toDisplayRoomView;
-
-function toSharedGameView(game: NetworkGameState) {
-  return {
-    tick: game.tick,
-    elapsedMs: game.elapsedMs,
-    treasury: game.treasury,
-    pathLength: game.pathLength,
-    repairCost: game.repairCost,
-    result: game.result,
-    waveNumber: game.waveNumber,
-    totalWaves: game.totalWaves,
-    stage: game.stage,
-    intermissionRemainingSeconds: game.intermissionRemainingSeconds,
-    airstrikeCharge: game.airstrikeCharge,
-    airstrikeChargeRequired: game.airstrikeChargeRequired,
-    airstrikeDamage: game.airstrikeDamage,
-    sectors: [...game.sectors.values()].map((sector) => ({
-      sectorId: sector.sectorId,
-      assignedPlayerId: sector.assignedPlayerId.length > 0 ? sector.assignedPlayerId : null,
-      gateHealth: sector.gateHealth,
-      gateMaxHealth: sector.gateMaxHealth,
-      defenseLevel: sector.defenseLevel,
-      defenseDamage: sector.defenseDamage,
-      nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null,
-      enemyCount: sector.enemyCount,
-      airstrikeTargetAvailable: sector.airstrikeTargetAvailable
-    }))
-  };
 }
 
 export function createControllerJoinUrl(controllerUrl: string, roomId: string): string {

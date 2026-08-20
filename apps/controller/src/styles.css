@@ -236,3 +236,104 @@ button:disabled {
 .result-card--defeat strong {
   color: #ff9d91;
 }
+
+.role-badge {
+  justify-self: center;
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border: 1px solid rgb(230 184 92 / 45%);
+  border-radius: 999px;
+  color: #ffd783;
+  background: rgb(77 45 22 / 50%);
+  font-weight: 800;
+}
+
+.role-control {
+  display: grid;
+  gap: 1rem;
+  place-items: center;
+  touch-action: none;
+  user-select: none;
+}
+
+.virtual-stick {
+  position: relative;
+  width: min(56vw, 12.5rem);
+  border: 3px solid #52736c;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1b3937 0 20%, #132827 22% 64%, #0d1d1e 66%);
+  aspect-ratio: 1;
+  box-shadow: inset 0 0 2.5rem rgb(0 0 0 / 35%);
+  touch-action: none;
+}
+
+.virtual-stick::before,
+.virtual-stick::after {
+  position: absolute;
+  content: "";
+  background: rgb(120 211 156 / 18%);
+}
+
+.virtual-stick::before {
+  top: 50%;
+  right: 8%;
+  left: 8%;
+  height: 2px;
+}
+
+.virtual-stick::after {
+  top: 8%;
+  bottom: 8%;
+  left: 50%;
+  width: 2px;
+}
+
+.virtual-stick__knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 4.25rem;
+  border: 4px solid #dff8ed;
+  border-radius: 50%;
+  background: #48a98d;
+  box-shadow: 0 0.6rem 1.5rem rgb(0 0 0 / 35%);
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+
+.hold-action {
+  width: 100%;
+  min-height: 5.5rem;
+  color: #10201f;
+  touch-action: none;
+}
+
+.hold-action--gunner {
+  background: linear-gradient(135deg, #ffb54a, #e56b3d);
+}
+
+.hold-action--shield {
+  color: #e9f8ff;
+  background: linear-gradient(135deg, #377dbb, #4da9d8);
+}
+
+.hold-action:active {
+  transform: scale(0.98);
+  filter: brightness(1.2);
+}
+
+@media (orientation: landscape) and (height <= 620px) {
+  .card.play-card {
+    grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 1.4fr);
+    width: min(100%, 52rem);
+    align-items: center;
+  }
+
+  .status-row,
+  .play-card > h1,
+  .role-badge,
+  .play-card > .error-message {
+    grid-column: 1 / -1;
+  }
+}

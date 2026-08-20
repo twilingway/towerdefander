@@ -7,8 +7,8 @@ describe("DisplayApp", () => {
   it("renders the shared-screen room creation state", () => {
     const markup = renderToStaticMarkup(<DisplayApp />);
 
-    expect(markup).toContain("Town Defenders");
+    expect(markup).toContain("Flying Castle");
     expect(markup).toContain("Создать комнату");
-    expect(markup).toContain("телевизоре, проекторе или большом мониторе");
+    expect(markup).toContain("движение, пушки и щит");
   });
 });

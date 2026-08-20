@@ -1,128 +1,116 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_PLAYER_CAPACITY,
-  MIN_PLAYER_CAPACITY,
+  CREW_ROLES,
+  PLAYER_CAPACITY,
+  PROJECTILE_WORLD_PADDING,
   PROTOCOL_VERSION,
-  airstrikeCommandSchema,
-  airstrikeTargetSectorIdsSchema,
+  clientMessage,
   controllerJoinOptionsSchema,
   controllerRoomViewSchema,
   displayCreateOptionsSchema,
   displayJoinOptionsSchema,
   displayRoomViewSchema,
-  getAirstrikeTargetSectorIds,
+  gunnerInputCommandSchema,
   joinOptionsSchema,
-  playerCapacitySchema,
-  publicPlayerViewSchema,
+  pilotInputCommandSchema,
+  publicObstacleViewSchema,
   readyCommandSchema,
-  resourceActionCommandSchema,
-  sectorIdSchema,
   serverErrorSchema,
-  type ControllerGameSnapshot,
+  shieldInputCommandSchema,
+  vector2Schema,
   type ControllerRoomView,
-  type DisplayGameSnapshot,
   type DisplayRoomView,
-  type PlayerCapacity,
-  type PublicPlayerView,
-  type PublicSectorView,
-  type SectorId
+  type PublicPlayerView
 } from "./index.js";
 
-const ACTION_ID = "11111111-1111-4111-8111-111111111111";
+const ROOM_ID = "ROOM01";
+const PLAYER_ID = "player-1";
 
-function makePlayer(
-  playerCapacity: PlayerCapacity,
-  sectorId: SectorId,
-  playerId = `player-${String(sectorId)}`
-): PublicPlayerView {
-  return {
-    playerId,
-    playerName: `Player ${String(sectorId)}`,
+function makePlayers(): PublicPlayerView[] {
+  return CREW_ROLES.map((role, index) => ({
+    playerId: `player-${String(index + 1)}`,
+    playerName: `Player ${String(index + 1)}`,
+    role,
     ready: true,
-    connected: true,
-    sectorId,
-    airstrikeTargetSectorIds: getAirstrikeTargetSectorIds(sectorId, playerCapacity)
-  };
-}
-
-function makeSectors(
-  playerCapacity: PlayerCapacity,
-  players: PublicPlayerView[]
-): PublicSectorView[] {
-  return Array.from({ length: playerCapacity }, (_, sectorId) => ({
-    sectorId: sectorId as SectorId,
-    assignedPlayerId: players.find((player) => player.sectorId === sectorId)?.playerId ?? null,
-    gateHealth: 100,
-    gateMaxHealth: 100,
-    defenseLevel: 1,
-    defenseDamage: 3,
-    nextUpgradeCost: 20,
-    enemyCount: sectorId === 0 ? 1 : 0,
-    airstrikeTargetAvailable: sectorId === 0
+    connected: true
   }));
 }
 
-function makeControllerRoom(playerCapacity: PlayerCapacity = 2): ControllerRoomView {
-  const players = [makePlayer(playerCapacity, 0), makePlayer(playerCapacity, 1)];
-
+function makeControllerRoom(): ControllerRoomView {
   return {
-    roomId: "ROOM01",
+    roomId: ROOM_ID,
     phase: "active",
     displayConnected: true,
-    playerCapacity,
-    players,
+    players: makePlayers(),
     game: {
       tick: 10,
       elapsedMs: 500,
-      treasury: 50,
-      pathLength: 700,
-      repairCost: 20,
-      result: "in_progress",
-      waveNumber: 1,
-      totalWaves: 5,
-      stage: "combat",
-      intermissionRemainingSeconds: 0,
-      airstrikeCharge: 100,
-      airstrikeChargeRequired: 100,
-      airstrikeDamage: 40,
-      sectors: makeSectors(playerCapacity, players)
+      worldWidth: 2400,
+      worldHeight: 1600,
+      castle: {
+        x: 1200,
+        y: 800,
+        velocityX: 100,
+        velocityY: 0,
+        radius: 52
+      },
+      turretAngle: 0,
+      shield: { angle: Math.PI, active: true }
     }
   };
 }
 
-function makeDisplayRoom(playerCapacity: PlayerCapacity = 2): DisplayRoomView {
-  const controllerRoom = makeControllerRoom(playerCapacity);
-  const game = requireControllerGame(controllerRoom);
+function makeDisplayRoom(): DisplayRoomView {
+  const compact = makeControllerRoom();
+  if (compact.game === null) {
+    throw new Error("Expected an active game snapshot.");
+  }
 
   return {
-    ...controllerRoom,
+    ...compact,
     game: {
-      ...game,
-      lastAirstrikeEffect: null,
-      enemies: [
+      ...compact.game,
+      obstacles: [
         {
-          enemyId: "enemy-1",
-          sectorId: 0,
-          enemyType: "balanced",
-          health: 20,
-          maxHealth: 20,
-          progress: 10
+          obstacleId: "rock-1",
+          kind: "circle",
+          x: 400,
+          y: 300,
+          radius: 70
+        },
+        {
+          obstacleId: "ruin-1",
+          kind: "rectangle",
+          x: 1800,
+          y: 1200,
+          width: 180,
+          height: 100
+        }
+      ],
+      projectiles: [
+        {
+          projectileId: "projectile-1",
+          x: 1300,
+          y: 800,
+          velocityX: 720,
+          velocityY: 0,
+          radius: 8
         }
       ]
     }
   };
 }
 
-function requireControllerGame(room: ControllerRoomView): ControllerGameSnapshot {
+function requireControllerGame(room: ControllerRoomView) {
   if (room.game === null) {
-    throw new Error("Expected a controller game snapshot.");
+    throw new Error("Expected an active controller game snapshot.");
   }
   return room.game;
 }
 
-function requireDisplayGame(room: DisplayRoomView): DisplayGameSnapshot {
+function requireDisplayGame(room: DisplayRoomView) {
   if (room.game === null) {
-    throw new Error("Expected a display game snapshot.");
+    throw new Error("Expected an active display game snapshot.");
   }
   return room.game;
 }
@@ -135,310 +123,325 @@ function requireItem<T>(items: readonly T[], index: number): T {
   return item;
 }
 
-describe("protocol v4 bounds", () => {
-  it("publishes capacity 2-6 and global sector IDs 0-5", () => {
-    expect(PROTOCOL_VERSION).toBe(4);
-    expect(MIN_PLAYER_CAPACITY).toBe(2);
-    expect(MAX_PLAYER_CAPACITY).toBe(6);
-
-    for (const capacity of [2, 3, 4, 5, 6]) {
-      expect(playerCapacitySchema.safeParse(capacity).success).toBe(true);
-    }
-    for (const capacity of [1, 7, 2.5]) {
-      expect(playerCapacitySchema.safeParse(capacity).success).toBe(false);
-    }
-    for (const sectorId of [0, 1, 2, 3, 4, 5]) {
-      expect(sectorIdSchema.safeParse(sectorId).success).toBe(true);
-    }
-    for (const sectorId of [-1, 6, 1.5]) {
-      expect(sectorIdSchema.safeParse(sectorId).success).toBe(false);
-    }
+describe("protocol v5 handshakes and crew", () => {
+  it("publishes a fixed three-role protocol", () => {
+    expect(PROTOCOL_VERSION).toBe(5);
+    expect(PLAYER_CAPACITY).toBe(3);
+    expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("derives ordered and deduplicated ring targets", () => {
-    expect(getAirstrikeTargetSectorIds(0, 2)).toEqual([0, 1]);
-    expect(getAirstrikeTargetSectorIds(0, 6)).toEqual([0, 5, 1]);
-    expect(getAirstrikeTargetSectorIds(2, 6)).toEqual([2, 1, 3]);
-    expect(() => getAirstrikeTargetSectorIds(5, 2)).toThrow(RangeError);
-    expect(airstrikeTargetSectorIdsSchema.safeParse([0, 0]).success).toBe(false);
-  });
-});
+  it("uses the same strict display shape for create and reconnect", () => {
+    const options = { role: "display", protocolVersion: 5 };
 
-describe("strict v4 options and existing command envelopes", () => {
-  it("separates display create from display join", () => {
+    expect(displayCreateOptionsSchema.safeParse(options).success).toBe(true);
+    expect(displayJoinOptionsSchema.safeParse(options).success).toBe(true);
+    expect(displayCreateOptionsSchema.safeParse({ ...options, playerCapacity: 3 }).success).toBe(
+      false
+    );
     expect(
-      displayCreateOptionsSchema.safeParse({
-        role: "display",
-        protocolVersion: 4,
-        playerCapacity: 4
-      }).success
-    ).toBe(true);
-    expect(
-      displayCreateOptionsSchema.safeParse({
-        role: "display",
-        protocolVersion: 4
-      }).success
-    ).toBe(false);
-    expect(
-      displayJoinOptionsSchema.safeParse({
-        role: "display",
-        protocolVersion: 4
-      }).success
-    ).toBe(true);
-    expect(
-      displayJoinOptionsSchema.safeParse({
-        role: "display",
-        protocolVersion: 4,
-        playerCapacity: 4
-      }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 4 }).success
     ).toBe(false);
   });
 
-  it("trims controller names and forbids controller capacity", () => {
+  it("trims controller names and rejects requested roles and v4", () => {
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 4,
+        protocolVersion: 5,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 4,
+        protocolVersion: 5,
         playerName: "Ada",
-        playerCapacity: 4
+        requestedRole: "pilot"
+      }).success
+    ).toBe(false);
+    expect(
+      controllerJoinOptionsSchema.safeParse({
+        role: "controller",
+        protocolVersion: 4,
+        playerName: "Ada"
       }).success
     ).toBe(false);
   });
 
-  it("accepts all join shapes and rejects v3", () => {
-    for (const options of [
-      { role: "display", protocolVersion: 4, playerCapacity: 6 },
-      { role: "display", protocolVersion: 4 },
-      { role: "controller", protocolVersion: 4, playerName: "Ada" }
-    ]) {
-      expect(joinOptionsSchema.safeParse(options).success).toBe(true);
-    }
+  it("accepts only the two v5 join variants", () => {
+    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 5 }).success).toBe(true);
     expect(
       joinOptionsSchema.safeParse({
-        role: "display",
-        protocolVersion: 3
-      }).success
-    ).toBe(false);
-  });
-
-  it("preserves ready, resource, and airstrike payload semantics", () => {
-    expect(
-      readyCommandSchema.safeParse({
-        protocolVersion: 4,
-        ready: true
+        role: "controller",
+        protocolVersion: 5,
+        playerName: "Ada"
       }).success
     ).toBe(true);
     expect(
-      resourceActionCommandSchema.safeParse({
-        protocolVersion: 4,
-        roomId: "ROOM01",
-        playerId: "player-0",
-        actionId: ACTION_ID
-      }).success
-    ).toBe(true);
-    expect(
-      airstrikeCommandSchema.safeParse({
-        protocolVersion: 4,
-        roomId: "ROOM01",
-        playerId: "player-0",
-        actionId: ACTION_ID,
-        targetSectorId: 5
-      }).success
-    ).toBe(true);
-  });
-
-  it("keeps action commands strict and rejects v3", () => {
-    expect(
-      resourceActionCommandSchema.safeParse({
-        protocolVersion: 4,
-        roomId: "ROOM01",
-        playerId: "player-0",
-        actionId: ACTION_ID,
-        sectorId: 0
-      }).success
-    ).toBe(false);
-    expect(
-      airstrikeCommandSchema.safeParse({
-        protocolVersion: 3,
-        roomId: "ROOM01",
-        playerId: "player-0",
-        actionId: ACTION_ID,
-        targetSectorId: 0
-      }).success
-    ).toBe(false);
-  });
-
-  it("preserves the strict server error payload", () => {
-    expect(
-      serverErrorSchema.safeParse({
-        code: "action_not_available",
-        message: "No active target."
-      }).success
-    ).toBe(true);
-    expect(
-      serverErrorSchema.safeParse({
-        code: "action_not_available",
-        message: "No active target.",
-        actionId: ACTION_ID
+      joinOptionsSchema.safeParse({
+        role: "controller",
+        protocolVersion: 5,
+        playerName: "Ada",
+        playerCapacity: 3
       }).success
     ).toBe(false);
   });
 });
 
-describe("strict display and controller room projections", () => {
-  it("requires non-null player sectors and target IDs", () => {
-    expect(publicPlayerViewSchema.safeParse(makePlayer(6, 0)).success).toBe(true);
-    expect(
-      publicPlayerViewSchema.safeParse({
-        ...makePlayer(6, 0),
-        sectorId: null
-      }).success
-    ).toBe(false);
-    const player = makePlayer(6, 0);
-    const withoutTargets = {
-      playerId: player.playerId,
-      playerName: player.playerName,
-      ready: player.ready,
-      connected: player.connected,
-      sectorId: player.sectorId
-    };
-    expect(publicPlayerViewSchema.safeParse(withoutTargets).success).toBe(false);
+describe("strict v5 controller intents", () => {
+  const envelope = {
+    protocolVersion: 5,
+    roomId: ROOM_ID,
+    playerId: PLAYER_ID
+  } as const;
+
+  it("requires an authenticated ready envelope without v4 toggle state", () => {
+    expect(readyCommandSchema.safeParse(envelope).success).toBe(true);
+    expect(readyCommandSchema.safeParse({ protocolVersion: 5 }).success).toBe(false);
+    expect(readyCommandSchema.safeParse({ ...envelope, ready: true }).success).toBe(false);
+    expect(readyCommandSchema.safeParse({ ...envelope, protocolVersion: 4 }).success).toBe(false);
   });
 
-  it("accepts a controller lobby without game data", () => {
-    const capacity = 3;
+  it("accepts strict role-specific input shapes", () => {
     expect(
-      controllerRoomViewSchema.safeParse({
-        roomId: "ROOM01",
-        phase: "lobby",
-        displayConnected: true,
-        playerCapacity: capacity,
-        players: [makePlayer(capacity, 0)],
-        game: null
+      pilotInputCommandSchema.safeParse({
+        ...envelope,
+        sequence: 1,
+        vector: { x: 1, y: 0 }
+      }).success
+    ).toBe(true);
+    expect(
+      gunnerInputCommandSchema.safeParse({
+        ...envelope,
+        sequence: 2,
+        aim: { x: 0, y: -1 },
+        firing: true
+      }).success
+    ).toBe(true);
+    expect(
+      shieldInputCommandSchema.safeParse({
+        ...envelope,
+        sequence: 3,
+        aim: { x: -1, y: 0 },
+        active: true
       }).success
     ).toBe(true);
   });
 
-  it("accepts dynamic six-sector controller data", () => {
-    expect(controllerRoomViewSchema.safeParse(makeControllerRoom(6)).success).toBe(true);
+  it("rejects missing flags, extra fields, and invalid sequences", () => {
+    expect(
+      gunnerInputCommandSchema.safeParse({
+        ...envelope,
+        sequence: 1,
+        aim: { x: 1, y: 0 }
+      }).success
+    ).toBe(false);
+    expect(
+      shieldInputCommandSchema.safeParse({
+        ...envelope,
+        sequence: 1,
+        aim: { x: 1, y: 0 },
+        active: true,
+        firing: true
+      }).success
+    ).toBe(false);
+
+    for (const sequence of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(
+        pilotInputCommandSchema.safeParse({
+          ...envelope,
+          sequence,
+          vector: { x: 0, y: 0 }
+        }).success
+      ).toBe(false);
+    }
   });
 
-  it("excludes enemies and effects from controller views", () => {
-    expect(controllerRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(false);
+  it("rejects non-finite and out-of-range vectors", () => {
+    expect(vector2Schema.safeParse({ x: 1, y: -1 }).success).toBe(true);
+
+    for (const vector of [
+      { x: Number.NaN, y: 0 },
+      { x: Number.POSITIVE_INFINITY, y: 0 },
+      { x: 0, y: Number.NEGATIVE_INFINITY },
+      { x: 1.01, y: 0 },
+      { x: 0, y: -1.01 }
+    ]) {
+      expect(vector2Schema.safeParse(vector).success).toBe(false);
+    }
   });
 
-  it("requires enemies and effects in display views", () => {
-    expect(displayRoomViewSchema.safeParse(makeDisplayRoom(6)).success).toBe(true);
-    expect(displayRoomViewSchema.safeParse(makeControllerRoom(6)).success).toBe(false);
+  it("publishes stable message names", () => {
+    expect(clientMessage).toEqual({
+      ready: "controller:ready",
+      pilotInput: "pilot:input",
+      gunnerInput: "gunner:input",
+      shieldInput: "shield:input"
+    });
+  });
+});
+
+describe("strict full and compact room projections", () => {
+  it("accepts valid active controller and display projections", () => {
+    expect(controllerRoomViewSchema.safeParse(makeControllerRoom()).success).toBe(true);
+    expect(displayRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(true);
   });
 
-  it("allows a historical effect actor absent from the roster", () => {
-    const room = makeDisplayRoom(6);
-    requireDisplayGame(room).lastAirstrikeEffect = {
-      sequence: 1,
-      actionId: ACTION_ID,
-      playerId: "departed-player",
-      targetSectorId: 5,
-      appliedTick: 9
-    };
-
-    expect(displayRoomViewSchema.safeParse(room).success).toBe(true);
-  });
-
-  it("enforces phase-to-game consistency", () => {
+  it("accepts a partial crew only in a lobby without a game snapshot", () => {
     expect(
       controllerRoomViewSchema.safeParse({
-        ...makeControllerRoom(),
+        roomId: ROOM_ID,
+        phase: "lobby",
+        displayConnected: true,
+        players: [makePlayers()[0]],
         game: null
       }).success
+    ).toBe(true);
+
+    expect(
+      controllerRoomViewSchema.safeParse({ ...makeControllerRoom(), phase: "lobby" }).success
     ).toBe(false);
     expect(
-      controllerRoomViewSchema.safeParse({
-        ...makeControllerRoom(),
-        phase: "lobby"
+      controllerRoomViewSchema.safeParse({ ...makeControllerRoom(), game: null }).success
+    ).toBe(false);
+  });
+
+  it("excludes display-only obstacles and projectiles from controller views", () => {
+    expect(controllerRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(false);
+    expect(displayRoomViewSchema.safeParse(makeControllerRoom()).success).toBe(false);
+  });
+
+  it("enforces unique player identities and crew roles", () => {
+    const duplicateId = makeControllerRoom();
+    duplicateId.players[1] = {
+      ...requireItem(duplicateId.players, 1),
+      playerId: requireItem(duplicateId.players, 0).playerId
+    };
+
+    const duplicateRole = makeControllerRoom();
+    duplicateRole.players[1] = {
+      ...requireItem(duplicateRole.players, 1),
+      role: requireItem(duplicateRole.players, 0).role
+    };
+
+    const tooMany = makeControllerRoom();
+    tooMany.players.push({
+      playerId: "player-4",
+      playerName: "Player 4",
+      role: "pilot",
+      ready: true,
+      connected: true
+    });
+
+    expect(controllerRoomViewSchema.safeParse(duplicateId).success).toBe(false);
+    expect(controllerRoomViewSchema.safeParse(duplicateRole).success).toBe(false);
+    expect(controllerRoomViewSchema.safeParse(tooMany).success).toBe(false);
+  });
+
+  it("requires the castle radius to remain inside finite world bounds", () => {
+    const outside = makeControllerRoom();
+    requireControllerGame(outside).castle.x = 30;
+    expect(controllerRoomViewSchema.safeParse(outside).success).toBe(false);
+
+    const impossibleRadius = makeControllerRoom();
+    requireControllerGame(impossibleRadius).castle.radius = 900;
+    expect(controllerRoomViewSchema.safeParse(impossibleRadius).success).toBe(false);
+
+    const nonFinite = makeControllerRoom();
+    requireControllerGame(nonFinite).turretAngle = Number.NaN;
+    expect(controllerRoomViewSchema.safeParse(nonFinite).success).toBe(false);
+  });
+
+  it("rejects duplicate or excessively out-of-bounds projectiles", () => {
+    const duplicate = makeDisplayRoom();
+    requireDisplayGame(duplicate).projectiles.push({
+      ...requireItem(requireDisplayGame(duplicate).projectiles, 0)
+    });
+    expect(displayRoomViewSchema.safeParse(duplicate).success).toBe(false);
+
+    const outside = makeDisplayRoom();
+    requireItem(requireDisplayGame(outside).projectiles, 0).x =
+      requireDisplayGame(outside).worldWidth + PROJECTILE_WORLD_PADDING + 1;
+    expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
+
+    const atPadding = makeDisplayRoom();
+    requireItem(requireDisplayGame(atPadding).projectiles, 0).x = -PROJECTILE_WORLD_PADDING;
+    expect(displayRoomViewSchema.safeParse(atPadding).success).toBe(true);
+  });
+
+  it("rejects duplicate or off-world obstacle centers", () => {
+    const duplicate = makeDisplayRoom();
+    requireDisplayGame(duplicate).obstacles.push({
+      obstacleId: "rock-1",
+      kind: "circle",
+      x: 200,
+      y: 200,
+      radius: 20
+    });
+    expect(displayRoomViewSchema.safeParse(duplicate).success).toBe(false);
+
+    const outside = makeDisplayRoom();
+    requireItem(requireDisplayGame(outside).obstacles, 0).x =
+      requireDisplayGame(outside).worldWidth + 1;
+    expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
+  });
+
+  it("keeps obstacle unions strict by shape", () => {
+    expect(
+      publicObstacleViewSchema.safeParse({
+        obstacleId: "rock-1",
+        kind: "circle",
+        x: 100,
+        y: 100,
+        radius: 30,
+        width: 50
+      }).success
+    ).toBe(false);
+    expect(
+      publicObstacleViewSchema.safeParse({
+        obstacleId: "wall-1",
+        kind: "rectangle",
+        x: 100,
+        y: 100,
+        width: 50,
+        height: 40,
+        radius: 10
       }).success
     ).toBe(false);
   });
 
-  it("enforces capacity and unique roster assignments", () => {
-    const tooManyPlayers = makeControllerRoom(2);
-    tooManyPlayers.players.push(makePlayer(2, 0, "player-2"));
+  it("rejects legacy defense fields in v5 projections", () => {
+    expect(
+      displayRoomViewSchema.safeParse({ ...makeDisplayRoom(), playerCapacity: 3 }).success
+    ).toBe(false);
 
-    const duplicatePlayerId = makeControllerRoom(3);
-    duplicatePlayerId.players.push(makePlayer(3, 2, "player-0"));
-    requireControllerGame(duplicatePlayerId).sectors = makeSectors(3, duplicatePlayerId.players);
-
-    expect(controllerRoomViewSchema.safeParse(tooManyPlayers).success).toBe(false);
-    expect(controllerRoomViewSchema.safeParse(duplicatePlayerId).success).toBe(false);
+    const room = makeDisplayRoom();
+    expect(
+      displayRoomViewSchema.safeParse({
+        ...room,
+        game: { ...room.game, treasury: 50, sectors: [] }
+      }).success
+    ).toBe(false);
   });
+});
 
-  it("enforces room-specific player sector and target order", () => {
-    const outsideCapacity = makeControllerRoom(2);
-    outsideCapacity.players[0] = {
-      ...requireItem(outsideCapacity.players, 0),
-      sectorId: 5,
-      airstrikeTargetSectorIds: [5, 0, 1]
-    };
-
-    const wrongOrder = makeControllerRoom(6);
-    requireItem(wrongOrder.players, 0).airstrikeTargetSectorIds = [0, 1, 5];
-
-    expect(controllerRoomViewSchema.safeParse(outsideCapacity).success).toBe(false);
-    expect(controllerRoomViewSchema.safeParse(wrongOrder).success).toBe(false);
-  });
-
-  it("enforces exact ordered sectors and roster ownership", () => {
-    const wrongCount = makeControllerRoom(3);
-    requireControllerGame(wrongCount).sectors.pop();
-
-    const wrongOrder = makeControllerRoom(3);
-    requireItem(requireControllerGame(wrongOrder).sectors, 1).sectorId = 2;
-
-    const wrongOwner = makeControllerRoom(3);
-    requireItem(requireControllerGame(wrongOwner).sectors, 0).assignedPlayerId = null;
-
-    expect(controllerRoomViewSchema.safeParse(wrongCount).success).toBe(false);
-    expect(controllerRoomViewSchema.safeParse(wrongOrder).success).toBe(false);
-    expect(controllerRoomViewSchema.safeParse(wrongOwner).success).toBe(false);
-  });
-
-  it("enforces target availability from enemy count", () => {
-    const room = makeControllerRoom();
-    requireItem(requireControllerGame(room).sectors, 0).airstrikeTargetAvailable = false;
-    expect(controllerRoomViewSchema.safeParse(room).success).toBe(false);
-  });
-
-  it("rejects display enemy and effect sectors outside room capacity", () => {
-    const invalidEnemy = makeDisplayRoom(2);
-    requireItem(requireDisplayGame(invalidEnemy).enemies, 0).sectorId = 5;
-
-    const invalidEffect = makeDisplayRoom(2);
-    requireDisplayGame(invalidEffect).lastAirstrikeEffect = {
-      sequence: 1,
-      actionId: ACTION_ID,
-      playerId: "departed-player",
-      targetSectorId: 5,
-      appliedTick: 9
-    };
-
-    expect(displayRoomViewSchema.safeParse(invalidEnemy).success).toBe(false);
-    expect(displayRoomViewSchema.safeParse(invalidEffect).success).toBe(false);
-  });
-
-  it("allows free sectors after roster expiry in a finished room", () => {
-    const room = makeControllerRoom();
-    room.phase = "finished";
-    requireControllerGame(room).result = "victory";
-    room.players = [];
-    requireControllerGame(room).sectors = makeSectors(2, []);
-
-    expect(controllerRoomViewSchema.safeParse(room).success).toBe(true);
+describe("server errors", () => {
+  it("includes role mismatch and keeps payloads strict", () => {
+    expect(
+      serverErrorSchema.safeParse({
+        code: "role_mismatch",
+        message: "Only the pilot can move the castle."
+      }).success
+    ).toBe(true);
+    expect(
+      serverErrorSchema.safeParse({
+        code: "role_mismatch",
+        message: "Only the pilot can move the castle.",
+        role: "shield"
+      }).success
+    ).toBe(false);
+    expect(
+      serverErrorSchema.safeParse({ code: "action_not_available", message: "Legacy." }).success
+    ).toBe(false);
   });
 });

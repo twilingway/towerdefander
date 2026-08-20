@@ -1,123 +1,44 @@
 import { describe, expect, it } from "vitest";
 
-import { findCurrentPlayer, getRoomFromLocation, toPublicRoomView } from "./roomView.js";
+import {
+  findCurrentPlayer,
+  getRoomFromLocation,
+  toControllerRoomView,
+  type NetworkRoomState
+} from "./roomView.js";
+
+function collection<T>(values: T[]) {
+  return new Map(values.map((value, index) => [index, value]));
+}
 
 describe("controller room view", () => {
-  it("waits for the first complete Colyseus snapshot", () => {
-    expect(toPublicRoomView(undefined)).toBeUndefined();
-  });
-
-  it("reads a room code from a direct link", () => {
-    expect(getRoomFromLocation("?room=ROOM%207")).toBe("ROOM 7");
-  });
-
-  it("finds only the server-assigned player identity", () => {
-    const player = {
-      playerId: "player-2",
-      playerName: "Sam",
-      ready: false,
-      connected: true,
-      sectorId: 1 as const,
-      airstrikeTargetSectorIds: [1 as const, 0 as const]
-    };
-
-    expect(
-      findCurrentPlayer(
-        {
-          roomId: "ROOM1",
-          phase: "lobby",
-          displayConnected: true,
-          playerCapacity: 2,
-          game: null,
-          players: [
-            {
-              playerId: "player-1",
-              playerName: "Alex",
-              ready: true,
-              connected: true,
-              sectorId: 0,
-              airstrikeTargetSectorIds: [0, 1]
-            },
-            player
-          ]
-        },
-        "player-2"
-      )
-    ).toEqual(player);
-  });
-
-  it("maps the authoritative game snapshot", () => {
-    const view = toPublicRoomView({
-      roomId: "ROOM1",
+  it("decodes compact v5 state and sorts canonical roles", () => {
+    const state: NetworkRoomState = {
+      roomId: "ROOM123",
       phase: "active",
       displayConnected: true,
-      playerCapacity: 2,
-      players: new Map([
-        [
-          "player-1",
-          {
-            playerId: "player-1",
-            playerName: "Alex",
-            ready: true,
-            connected: true,
-            sectorId: 0,
-            airstrikeTargetSectorIds: [0, 1]
-          }
-        ]
+      players: collection([
+        { playerId: "p2", playerName: "Sam", role: "shield", ready: true, connected: true },
+        { playerId: "p1", playerName: "Alex", role: "pilot", ready: true, connected: true }
       ]),
       hasGame: true,
       game: {
-        tick: 4,
-        elapsedMs: 4000,
-        treasury: 35,
-        pathLength: 8,
-        repairCost: 15,
-        result: "in_progress",
-        waveNumber: 2,
-        totalWaves: 5,
-        stage: "combat",
-        intermissionRemainingSeconds: 0,
-        airstrikeCharge: 45,
-        airstrikeChargeRequired: 100,
-        airstrikeDamage: 30,
-        sectors: [
-          {
-            sectorId: 0,
-            assignedPlayerId: "player-1",
-            gateHealth: 80,
-            gateMaxHealth: 100,
-            defenseLevel: 2,
-            defenseDamage: 5,
-            nextUpgradeCost: 30,
-            enemyCount: 1,
-            airstrikeTargetAvailable: true
-          },
-          {
-            sectorId: 1,
-            assignedPlayerId: "",
-            gateHealth: 100,
-            gateMaxHealth: 100,
-            defenseLevel: 3,
-            defenseDamage: 7,
-            nextUpgradeCost: -1,
-            enemyCount: 0,
-            airstrikeTargetAvailable: false
-          }
-        ]
+        tick: 1,
+        elapsedMs: 50,
+        worldWidth: 2400,
+        worldHeight: 1600,
+        castle: { x: 1200, y: 800, velocityX: 0, velocityY: 0, radius: 52 },
+        turretAngle: 0,
+        shield: { angle: Math.PI, active: true }
       }
-    });
+    };
+    const view = toControllerRoomView(state);
+    expect(view?.players.map((player) => player.role)).toEqual(["pilot", "shield"]);
+    expect(view?.game).not.toHaveProperty("projectiles");
+    expect(findCurrentPlayer(view, "p2")?.role).toBe("shield");
+  });
 
-    expect(view?.game).toMatchObject({
-      tick: 4,
-      treasury: 35,
-      pathLength: 8,
-      repairCost: 15,
-      waveNumber: 2,
-      airstrikeCharge: 45,
-      sectors: [
-        { assignedPlayerId: "player-1", nextUpgradeCost: 30, enemyCount: 1 },
-        { assignedPlayerId: null, nextUpgradeCost: null, enemyCount: 0 }
-      ]
-    });
+  it("reads trimmed room code from URL", () => {
+    expect(getRoomFromLocation("?room=%20ABC123%20")).toBe("ABC123");
   });
 });

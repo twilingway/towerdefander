@@ -1,581 +1,332 @@
 import {
+  CREW_ROLES,
+  PLAYER_CAPACITY,
   PROTOCOL_VERSION,
   serverErrorSchema,
-  serverMessage,
-  type AirstrikeCommand,
-  type PlayerCapacity,
-  type ReadyCommand,
-  type ResourceActionCommand,
+  type CrewRole,
   type ServerErrorCode
 } from "@town-defenders/protocol";
-import type { DefenseState } from "@town-defenders/game-core";
 import { CloseCode, type Client } from "colyseus";
 import { describe, expect, it, vi } from "vitest";
 
 import { TownDefendersRoom } from "./TownDefendersRoom.js";
 
 interface TestClient {
-  client: Client;
-  send: ReturnType<typeof vi.fn>;
+  readonly client: Client;
+  readonly send: ReturnType<typeof vi.fn>;
 }
 
 function createClient(sessionId: string): TestClient {
   const send = vi.fn();
-
-  return {
-    client: {
-      sessionId,
-      send
-    } as unknown as Client,
-    send
-  };
+  return { client: { sessionId, send } as unknown as Client, send };
 }
 
-function createRoom(playerCapacity = 2): TownDefendersRoom {
+function createRoom(): TownDefendersRoom {
   const room = new TownDefendersRoom();
   room.roomId = "ROOM123";
-  room.onCreate({
-    role: "display",
-    protocolVersion: PROTOCOL_VERSION,
-    playerCapacity
-  });
+  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
   return room;
 }
 
-function joinController(room: TownDefendersRoom, client: TestClient, playerName: string): void {
-  room.onJoin(client.client, {
+function joinDisplay(room: TownDefendersRoom): TestClient {
+  const display = createClient("display");
+  room.onJoin(display.client, { role: "display", protocolVersion: PROTOCOL_VERSION });
+  return display;
+}
+
+function joinController(room: TownDefendersRoom, index: number): TestClient {
+  const controller = createClient(`player-${String(index + 1)}`);
+  room.onJoin(controller.client, {
     role: "controller",
     protocolVersion: PROTOCOL_VERSION,
-    playerName
+    playerName: `Player ${String(index + 1)}`
+  });
+  return controller;
+}
+
+function ready(room: TownDefendersRoom, controller: TestClient): void {
+  room.handleReady(controller.client, {
+    protocolVersion: PROTOCOL_VERSION,
+    roomId: room.roomId,
+    playerId: controller.client.sessionId
   });
 }
 
-function startBattle(room: TownDefendersRoom): [TestClient, TestClient] {
-  const first = createClient("player-1");
-  const second = createClient("player-2");
-  joinController(room, first, "Alex");
-  joinController(room, second, "Sam");
-
-  const ready: ReadyCommand = {
-    protocolVersion: PROTOCOL_VERSION,
-    ready: true
-  };
-  room.handleReady(first.client, ready);
-  room.handleReady(second.client, ready);
-  return [first, second];
-}
-
-function fillAndStartBattle(room: TownDefendersRoom, playerCapacity: PlayerCapacity): TestClient[] {
-  const controllers = Array.from({ length: playerCapacity }, (_, index) =>
-    createClient(`player-${String(index + 1)}`)
+function startGame(room = createRoom()): { room: TownDefendersRoom; controllers: TestClient[] } {
+  const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+    joinController(room, index)
   );
-  controllers.forEach((controller, index) => {
-    joinController(room, controller, `Player ${String(index + 1)}`);
-    room.handleReady(controller.client, {
-      protocolVersion: PROTOCOL_VERSION,
-      ready: true
-    });
+  controllers.forEach((controller) => {
+    ready(room, controller);
   });
-  return controllers;
+  return { room, controllers };
 }
 
-function action(playerId: string, actionId: string): ResourceActionCommand {
-  return {
-    protocolVersion: PROTOCOL_VERSION,
-    roomId: "ROOM123",
-    playerId,
-    actionId
-  };
+function controllerAt(controllers: readonly TestClient[], index: number): TestClient {
+  const controller = controllers[index];
+  if (controller === undefined) throw new Error(`Missing controller at index ${String(index)}.`);
+  return controller;
 }
 
-function advanceUntil(room: TownDefendersRoom, predicate: () => boolean, maximumSteps = 250): void {
-  for (let index = 0; index < maximumSteps && !predicate(); index += 1) {
-    room.advanceGameStep();
-  }
-}
-
-function updateDefenseState(
-  room: TownDefendersRoom,
-  update: (state: DefenseState) => DefenseState
-): void {
-  const testRoom = room as unknown as {
-    defenseState: DefenseState | undefined;
-    syncDefenseState(): void;
-  };
-  if (testRoom.defenseState === undefined) {
-    throw new Error("Expected an active defense state.");
-  }
-  testRoom.defenseState = update(testRoom.defenseState);
-  testRoom.syncDefenseState();
-}
-
-function countSentErrors(client: TestClient, code: ServerErrorCode): number {
+function countErrors(client: TestClient, code: ServerErrorCode): number {
   return (client.send.mock.calls as unknown[][]).filter((call) => {
-    const result = serverErrorSchema.safeParse(call[1]);
-    return result.success && result.data.code === code;
+    const parsed = serverErrorSchema.safeParse(call[1]);
+    return parsed.success && parsed.data.code === code;
   }).length;
 }
 
-describe("TownDefendersRoom lobby and lifecycle", () => {
-  it("allows only a display to create a room", () => {
+function playerByRole(room: TownDefendersRoom, role: CrewRole): TestClient["client"] | undefined {
+  const player = [...room.state.players.values()].find((candidate) => candidate.role === role);
+  return player === undefined
+    ? undefined
+    : ({ sessionId: player.playerId, send: vi.fn() } as unknown as Client);
+}
+
+describe("TownDefendersRoom v5 lifecycle", () => {
+  it("accepts only strict protocol v5 display create options", () => {
     const room = new TownDefendersRoom();
     room.roomId = "ROOM123";
-
     expect(() => {
-      room.onCreate({
-        role: "controller",
-        protocolVersion: PROTOCOL_VERSION,
-        playerName: "Alex"
-      });
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, capacity: 3 });
     }).toThrow("invalid_message");
+    expect(() => {
+      room.onCreate({ role: "display", protocolVersion: 4 });
+    }).toThrow("protocol_mismatch");
   });
 
-  it("starts one authoritative battle after two controllers are ready", () => {
+  it("assigns canonical roles and starts only when all three are ready", () => {
     const room = createRoom();
     const setInterval = vi.spyOn(room.clock, "setInterval");
-    const [first, second] = startBattle(room);
+    const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+      joinController(room, index)
+    );
+    expect([...room.state.players.values()].map((player) => player.role)).toEqual(CREW_ROLES);
+
+    ready(room, controllerAt(controllers, 0));
+    ready(room, controllerAt(controllers, 1));
+    expect(room.state.phase).toBe("lobby");
+    ready(room, controllerAt(controllers, 2));
 
     expect(room.state.phase).toBe("active");
     expect(room.state.hasGame).toBe(true);
-    expect(room.state.game).toMatchObject({
-      tick: 0,
-      treasury: 50,
-      result: "in_progress"
-    });
-    expect([...room.state.game.sectors]).toHaveLength(2);
-    expect(room.state.players.get(first.client.sessionId)?.sectorId).toBe(0);
-    expect(room.state.players.get(second.client.sessionId)?.sectorId).toBe(1);
+    expect(room.state.game.castle).toMatchObject({ x: 1200, y: 800, radius: 52 });
+    expect(room.state.game.display.obstacles).toHaveLength(5);
     expect(setInterval).toHaveBeenCalledTimes(1);
   });
 
-  for (const playerCapacity of [2, 3, 4, 5, 6] as const) {
-    it(`starts exactly ${String(playerCapacity)} stable sectors`, () => {
-      const room = createRoom(playerCapacity);
-      const controllers = fillAndStartBattle(room, playerCapacity);
+  it("keeps one spare transport seat and rejects a fourth controller", () => {
+    const { room } = startGame();
+    expect(room.maxClients).toBe(5);
+    expect(() => joinController(room, 3)).toThrow("room_full");
+  });
 
-      expect(room.state.phase).toBe("active");
-      expect(room.state.playerCapacity).toBe(playerCapacity);
-      expect(room.state.game.treasury).toBe(25 * playerCapacity);
-      expect([...room.state.game.sectors].map((sector) => sector.sectorId)).toEqual(
-        Array.from({ length: playerCapacity }, (_, index) => index)
-      );
-      controllers.forEach((controller, index) => {
-        const player = room.state.players.get(controller.client.sessionId);
-        expect(player?.sectorId).toBe(index);
-        expect([...(player?.airstrikeTargetSectorIds ?? [])]).toEqual([
-          index,
-          (index - 1 + playerCapacity) % playerCapacity,
-          ...((index + 1) % playerCapacity === (index - 1 + playerCapacity) % playerCapacity
-            ? []
-            : [(index + 1) % playerCapacity])
-        ]);
-      });
-    });
-  }
-
-  it("waits for every configured player to be ready", () => {
-    const room = createRoom(3);
-    const controllers = Array.from({ length: 3 }, (_, index) =>
-      createClient(`player-${String(index + 1)}`)
+  it("makes ready idempotent in lobby and rejects it in active phase", () => {
+    const room = createRoom();
+    const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+      joinController(room, index)
     );
-    controllers.forEach((controller, index) => {
-      joinController(room, controller, `Player ${String(index + 1)}`);
+    ready(room, controllerAt(controllers, 0));
+    ready(room, controllerAt(controllers, 0));
+    controllers.slice(1).forEach((controller) => {
+      ready(room, controller);
     });
-    const [first, second] = controllers;
-    if (first === undefined || second === undefined) {
-      throw new Error("Expected two controllers.");
-    }
-    room.handleReady(first.client, {
+    ready(room, controllerAt(controllers, 0));
+    expect(countErrors(controllerAt(controllers, 0), "invalid_phase")).toBe(1);
+  });
+
+  it("reserves and restores controller identity and role", async () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    room.handlePilotInput(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      sequence: 99,
+      vector: { x: 1, y: 0 }
+    });
+    const allow = vi.spyOn(room, "allowReconnection").mockResolvedValue(pilot.client);
+
+    await room.onLeave(pilot.client, 1006);
+
+    expect(allow).toHaveBeenCalledWith(pilot.client, 30);
+    expect(room.state.players.get(pilot.client.sessionId)).toMatchObject({
+      role: "pilot",
+      connected: true
+    });
+    room.handlePilotInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      sequence: 1,
+      vector: { x: -1, y: 0 }
+    });
+    room.advanceGameStep();
+    expect(room.state.game.castle.velocityX).toBe(-320);
+  });
+
+  it("releases an expired role for an active replacement", async () => {
+    const { room, controllers } = startGame();
+    const gunner = controllerAt(controllers, 1);
+    vi.spyOn(room, "allowReconnection").mockRejectedValue(new Error("expired"));
+    await room.onLeave(gunner.client, 1006);
+    expect(room.state.players.has(gunner.client.sessionId)).toBe(false);
+
+    const replacement = joinController(room, 9);
+    expect(room.state.players.get(replacement.client.sessionId)).toMatchObject({
+      role: "gunner",
       ready: true
     });
-    room.handleReady(second.client, {
-      protocolVersion: PROTOCOL_VERSION,
-      ready: true
-    });
-
-    expect(room.state.phase).toBe("lobby");
-    expect(room.state.hasGame).toBe(false);
   });
 
-  it("keeps one spare transport seat for a typed room_full rejection", () => {
-    const room = createRoom(6);
-    expect(room.maxClients).toBe(8);
-  });
-
-  it("rejects a third controller without displacing players", () => {
+  it("disposes a room after display reconnect grace expires", async () => {
     const room = createRoom();
-    startBattle(room);
-
-    expect(() => {
-      joinController(room, createClient("player-3"), "Third");
-    }).toThrow("room_full");
-    expect(room.state.players.size).toBe(2);
-  });
-
-  it("reserves and restores display presence during reconnection", async () => {
-    const room = createRoom();
-    const display = createClient("display");
-    room.onJoin(display.client, {
-      role: "display",
-      protocolVersion: PROTOCOL_VERSION
-    });
-    const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(display.client);
-
+    const display = joinDisplay(room);
+    vi.spyOn(room, "allowReconnection").mockRejectedValue(new Error("expired"));
+    const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
     await room.onLeave(display.client, 1006);
-
-    expect(allowReconnection).toHaveBeenCalledWith(display.client, 30);
-    expect(room.state.displayConnected).toBe(true);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(room.state.displayConnected).toBe(false);
   });
+});
 
-  it("keeps the battle and assignment during controller reconnection", async () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
+describe("TownDefendersRoom v5 authoritative inputs", () => {
+  it("moves the castle from fresh pilot input and ignores stale sequence", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId
+    } as const;
+    room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: 1, y: 0 } });
+    room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: -1, y: 0 } });
     room.advanceGameStep();
-    const tick = room.state.game.tick;
-    const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(first.client);
-
-    await room.onLeave(first.client, 1006);
-
-    expect(allowReconnection).toHaveBeenCalledWith(first.client, 30);
-    expect(room.state.players.get("player-1")).toMatchObject({
-      playerName: "Alex",
-      connected: true,
-      sectorId: 0
-    });
-    expect(room.state.game.tick).toBe(tick);
+    expect(room.state.game.castle).toMatchObject({ x: 1216, velocityX: 320, velocityY: 0 });
   });
 
-  it("releases an expired active sector for a replacement controller", async () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-    vi.spyOn(room, "allowReconnection").mockRejectedValue(new Error("reconnection expired"));
-
-    await room.onLeave(first.client, 1006);
-    expect(room.state.players.has("player-1")).toBe(false);
-    expect(room.state.game.sectors[0]?.assignedPlayerId).toBe("");
-
-    const replacement = createClient("replacement");
-    joinController(room, replacement, "New defender");
-
-    expect(room.state.players.get("replacement")).toMatchObject({
-      ready: true,
-      sectorId: 0
+  it("limits held gunner fire by simulation cooldown", () => {
+    const { room, controllers } = startGame();
+    const gunner = controllerAt(controllers, 1);
+    room.handleGunnerInput(gunner.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: gunner.client.sessionId,
+      sequence: 1,
+      aim: { x: 0, y: -1 },
+      firing: true
     });
-    expect(room.state.game.sectors[0]?.assignedPlayerId).toBe("replacement");
+    room.advanceGameStep();
+    room.advanceGameStep();
+    expect(room.state.game.display.projectiles).toHaveLength(1);
+    expect(room.state.game.turretAngle).toBeCloseTo(-Math.PI / 2);
+    for (let index = 0; index < 2; index += 1) room.advanceGameStep();
+    room.handleGunnerInput(gunner.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: gunner.client.sessionId,
+      sequence: 2,
+      aim: { x: 0, y: -1 },
+      firing: true
+    });
+    for (let index = 0; index < 2; index += 1) room.advanceGameStep();
+    expect(room.state.game.display.projectiles).toHaveLength(2);
   });
 
-  it("keeps a finished snapshot while an expired player owner is removed", async () => {
+  it("aims and activates the shield", () => {
+    const { room, controllers } = startGame();
+    const shield = controllerAt(controllers, 2);
+    room.handleShieldInput(shield.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: shield.client.sessionId,
+      sequence: 1,
+      aim: { x: -1, y: 0 },
+      active: true
+    });
+    room.advanceGameStep();
+    expect(room.state.game.shield.active).toBe(true);
+    expect(Math.abs(room.state.game.shield.angle)).toBeCloseTo(Math.PI);
+  });
+
+  it("rejects malformed, wrong-role, spoofed and lobby inputs without mutation", () => {
+    const lobby = createRoom();
+    const lobbyPilot = joinController(lobby, 0);
+    lobby.handlePilotInput(lobbyPilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: lobby.roomId,
+      playerId: lobbyPilot.client.sessionId,
+      sequence: 1,
+      vector: { x: 1, y: 0 }
+    });
+    expect(countErrors(lobbyPilot, "invalid_phase")).toBe(1);
+
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    room.handleGunnerInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      sequence: 1,
+      aim: { x: 1, y: 0 },
+      firing: true
+    });
+    expect(countErrors(pilot, "role_mismatch")).toBe(1);
+    room.handlePilotInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: "someone-else",
+      sequence: 1,
+      vector: { x: 1, y: 0 }
+    });
+    expect(countErrors(pilot, "identity_mismatch")).toBe(1);
+    room.handlePilotInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      sequence: 1,
+      vector: { x: 1, y: 0 },
+      extra: true
+    });
+    expect(countErrors(pilot, "invalid_message")).toBe(1);
+  });
+
+  it("neutralizes held controls immediately on disconnect", async () => {
+    const { room, controllers } = startGame();
+    const shield = controllerAt(controllers, 2);
+    room.handleShieldInput(shield.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: shield.client.sessionId,
+      sequence: 1,
+      aim: { x: 1, y: 0 },
+      active: true
+    });
+    room.advanceGameStep();
+    expect(room.state.game.shield.active).toBe(true);
+    vi.spyOn(room, "allowReconnection").mockResolvedValue(shield.client);
+    await room.onLeave(shield.client, 1006);
+    room.advanceGameStep();
+    expect(room.state.game.shield.active).toBe(false);
+  });
+
+  it("does not expose a role requested by the controller", () => {
     const room = createRoom();
-    const [first] = startBattle(room);
-    room.state.phase = "finished";
-    const tick = room.state.game.tick;
-    const result = room.state.game.result;
-    vi.spyOn(room, "allowReconnection").mockRejectedValue(new Error("reconnection expired"));
-
-    await room.onLeave(first.client, 1006);
-
-    expect(room.state.players.has(first.client.sessionId)).toBe(false);
-    expect(room.state.game.sectors[0]?.assignedPlayerId).toBe("");
-    expect(room.state.game.tick).toBe(tick);
-    expect(room.state.game.result).toBe(result);
+    const attacker = createClient("attacker");
     expect(() => {
-      joinController(room, createClient("late-player"), "Late");
-    }).toThrow("room_full");
+      room.onJoin(attacker.client, {
+        role: "controller",
+        protocolVersion: PROTOCOL_VERSION,
+        playerName: "Attacker",
+        requestedRole: "gunner"
+      });
+    }).toThrow("invalid_message");
+    expect(playerByRole(room, "gunner")).toBeUndefined();
   });
 
-  it("removes a deliberately disconnected lobby controller", async () => {
-    const room = createRoom();
-    const controller = createClient("player-1");
-    joinController(room, controller, "Alex");
-
-    await room.onLeave(controller.client, CloseCode.CONSENTED);
-
-    expect(room.state.players.has("player-1")).toBe(false);
-  });
-});
-
-describe("TownDefendersRoom simulation", () => {
-  it("advances fixed steps and publishes a terminal result", () => {
-    const room = createRoom();
-    startBattle(room);
-
-    room.advanceGameStep();
-    expect(room.state.game).toMatchObject({
-      tick: 1,
-      elapsedMs: 1000,
-      stage: "intermission",
-      waveNumber: 1
-    });
-    advanceUntil(room, () => room.state.game.display.enemies.length > 0);
-    expect(room.state.game.display.enemies.length).toBeGreaterThan(0);
-
-    advanceUntil(room, () => room.state.phase === "finished");
-    expect(room.state.phase).toBe("finished");
-    expect(["victory", "defeat"]).toContain(room.state.game.result);
-
-    const terminalTick = room.state.game.tick;
-    room.advanceGameStep();
-    expect(room.state.game.tick).toBe(terminalTick);
-  });
-
-  it("continues simulation while clients are marked disconnected", () => {
-    const room = createRoom();
-    startBattle(room);
-    const first = room.state.players.get("player-1");
-    const second = room.state.players.get("player-2");
-    if (first === undefined || second === undefined) {
-      throw new Error("Expected both players.");
-    }
-    first.connected = false;
-    second.connected = false;
-    room.state.displayConnected = false;
-
-    room.advanceGameStep();
-
-    expect(room.state.game.tick).toBe(1);
-  });
-});
-
-describe("TownDefendersRoom resource actions", () => {
-  it("applies upgrade once and deduplicates it room-wide", () => {
-    const room = createRoom();
-    const [first, second] = startBattle(room);
-    const command = action(first.client.sessionId, "00000000-0000-4000-8000-000000000001");
-
-    room.handleResourceAction(first.client, command, "upgrade");
-    room.handleResourceAction(first.client, command, "upgrade");
-    room.handleResourceAction(
-      second.client,
-      { ...command, playerId: second.client.sessionId },
-      "upgrade"
-    );
-
-    expect(room.state.game.treasury).toBe(30);
-    expect(room.state.game.sectors[0]).toMatchObject({
-      defenseLevel: 2,
-      defenseDamage: 6
-    });
-    expect(room.state.game.sectors[1]?.defenseLevel).toBe(1);
-  });
-
-  it("repairs damaged gates atomically", () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-    updateDefenseState(room, (state) => ({
-      ...state,
-      sectors: state.sectors.map((sector) =>
-        sector.sectorId === 0 ? { ...sector, gateHealth: 70 } : sector
-      )
-    }));
-    const healthBefore = room.state.game.sectors[0]?.gateHealth ?? 0;
-    const treasuryBefore = room.state.game.treasury;
-
-    room.handleResourceAction(
-      first.client,
-      action(first.client.sessionId, "00000000-0000-4000-8000-000000000002"),
-      "repair"
-    );
-
-    expect(room.state.game.sectors[0]?.gateHealth).toBe(Math.min(100, healthBefore + 20));
-    expect(room.state.game.treasury).toBe(treasuryBefore - 15);
-  });
-
-  it("rejects a mismatched room or player identity", () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-
-    room.handleResourceAction(
-      first.client,
-      {
-        ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000003"),
-        playerId: "player-2"
-      },
-      "upgrade"
-    );
-
-    expect(first.send).toHaveBeenCalledWith(serverMessage.error, {
-      code: "identity_mismatch",
-      message: "Room or player identity does not match."
-    });
-    expect(room.state.game.treasury).toBe(50);
-  });
-
-  it("replays an invalid-phase result after the battle starts", () => {
-    const room = createRoom();
-    const first = createClient("player-1");
-    const second = createClient("player-2");
-    joinController(room, first, "Alex");
-    const command = action(first.client.sessionId, "00000000-0000-4000-8000-000000000004");
-
-    room.handleResourceAction(first.client, command, "upgrade");
-    joinController(room, second, "Sam");
-    room.handleReady(first.client, {
-      protocolVersion: PROTOCOL_VERSION,
-      ready: true
-    });
-    room.handleReady(second.client, {
-      protocolVersion: PROTOCOL_VERSION,
-      ready: true
-    });
-    room.handleResourceAction(first.client, command, "upgrade");
-
-    expect(countSentErrors(first, "invalid_phase")).toBe(2);
-    expect(room.state.game.sectors[0]?.defenseLevel).toBe(1);
-    expect(room.state.game.treasury).toBe(50);
-  });
-
-  it("replays insufficient funds after rewards replenish the treasury", () => {
-    const room = createRoom();
-    const [first, second] = startBattle(room);
-    room.handleResourceAction(
-      first.client,
-      action(first.client.sessionId, "00000000-0000-4000-8000-000000000005"),
-      "upgrade"
-    );
-    room.handleResourceAction(
-      first.client,
-      action(first.client.sessionId, "00000000-0000-4000-8000-000000000006"),
-      "upgrade"
-    );
-    const rejected = action(second.client.sessionId, "00000000-0000-4000-8000-000000000007");
-    room.handleResourceAction(second.client, rejected, "upgrade");
-    advanceUntil(room, () => room.state.game.treasury >= 20);
-    const treasuryBeforeReplay = room.state.game.treasury;
-
-    room.handleResourceAction(second.client, rejected, "upgrade");
-
-    expect(countSentErrors(second, "insufficient_funds")).toBe(2);
-    expect(room.state.game.sectors[1]?.defenseLevel).toBe(1);
-    expect(room.state.game.treasury).toBe(treasuryBeforeReplay);
-  });
-
-  it("rejects protocol mismatch without mutation", () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-
-    room.handleResourceAction(
-      first.client,
-      {
-        ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000008"),
-        protocolVersion: PROTOCOL_VERSION + 1
-      },
-      "upgrade"
-    );
-
-    expect(first.send).toHaveBeenCalledWith(serverMessage.error, {
-      code: "protocol_mismatch",
-      message: "Unsupported protocol version."
-    });
-    expect(room.state.game.treasury).toBe(50);
-  });
-
-  it("applies an airstrike once and keeps its public effect stable on duplicate delivery", () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-    updateDefenseState(room, (state) => ({
-      ...state,
-      stage: "combat",
-      intermissionRemainingSteps: 0,
-      airstrikeCharge: 100,
-      enemies: [
-        {
-          enemyId: "airstrike-target",
-          sectorId: 1,
-          enemyType: "heavy",
-          health: 20,
-          maxHealth: 34,
-          progress: 3
-        }
-      ]
-    }));
-    const command: AirstrikeCommand = {
-      ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000010"),
-      targetSectorId: 1
-    };
-
-    room.handleAirstrike(first.client, command);
-    const firstEffect = {
-      sequence: room.state.game.display.lastAirstrikeEffect.sequence,
-      tick: room.state.game.display.lastAirstrikeEffect.appliedTick,
-      treasury: room.state.game.treasury
-    };
-    room.handleAirstrike(first.client, command);
-
-    expect(room.state.game.display.enemies).toHaveLength(0);
-    expect(firstEffect.sequence).toBe(1);
-    expect(room.state.game.display).toMatchObject({
-      hasLastAirstrikeEffect: true,
-      lastAirstrikeEffect: {
-        sequence: firstEffect.sequence,
-        targetSectorId: 1,
-        actionId: command.actionId,
-        playerId: first.client.sessionId,
-        appliedTick: firstEffect.tick
-      }
-    });
-    expect(room.state.game.treasury).toBe(firstEffect.treasury);
-  });
-
-  it("rejects a non-neighbor airstrike in a larger room", () => {
-    const room = createRoom(4);
-    const [first] = fillAndStartBattle(room, 4);
-    if (first === undefined) {
-      throw new Error("Expected the first controller.");
-    }
-    updateDefenseState(room, (state) => ({
-      ...state,
-      stage: "combat",
-      intermissionRemainingSteps: 0,
-      airstrikeCharge: 100,
-      enemies: [
-        {
-          enemyId: "remote-target",
-          sectorId: 2,
-          enemyType: "heavy",
-          health: 20,
-          maxHealth: 34,
-          progress: 3
-        }
-      ]
-    }));
-
-    room.handleAirstrike(first.client, {
-      ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000011"),
-      targetSectorId: 2
-    });
-
-    expect(countSentErrors(first, "action_not_available")).toBe(1);
-    expect(room.state.game.airstrikeCharge).toBe(100);
-    expect(room.state.game.display.enemies).toHaveLength(1);
-  });
-
-  it("journals a target outside room capacity as unavailable", () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-    const command: AirstrikeCommand = {
-      ...action(first.client.sessionId, "00000000-0000-4000-8000-000000000012"),
-      targetSectorId: 5
-    };
-
-    room.handleAirstrike(first.client, command);
-    room.handleAirstrike(first.client, command);
-
-    expect(countSentErrors(first, "action_not_available")).toBe(2);
-  });
-
-  it("rejects an actionId collision with a different command fingerprint", () => {
-    const room = createRoom();
-    const [first] = startBattle(room);
-    const command = action(first.client.sessionId, "00000000-0000-4000-8000-000000000013");
-
-    room.handleResourceAction(first.client, command, "upgrade");
-    room.handleResourceAction(first.client, command, "repair");
-
-    expect(countSentErrors(first, "invalid_message")).toBe(1);
-    expect(room.state.game.sectors[0]).toMatchObject({
-      defenseLevel: 2,
-      gateHealth: 100
-    });
+  it("removes a controller immediately after consented leave", async () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    await room.onLeave(pilot.client, CloseCode.CONSENTED);
+    expect(room.state.players.has(pilot.client.sessionId)).toBe(false);
   });
 });

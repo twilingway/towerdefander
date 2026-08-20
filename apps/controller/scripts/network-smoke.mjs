@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@colyseus/sdk";
 
 const port = 35_677;
-const protocolVersion = 4;
+const protocolVersion = 5;
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const serverEntry = fileURLToPath(new URL("../../server/dist/index.js", import.meta.url));
@@ -13,250 +13,130 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
     ...process.env,
     HOST: "127.0.0.1",
     PORT: String(port),
-    RECONNECTION_GRACE_SECONDS: "1",
-    SIMULATION_INTERVAL_MS: "100"
+    RECONNECTION_GRACE_SECONDS: "0.25"
   },
   stdio: "ignore",
   windowsHide: true
 });
 
 let display;
-let first;
-let second;
+let pilot;
+let gunner;
+let shield;
 let replacement;
 
 try {
   await waitForServer();
-  await expectControllerCreationToFail();
-
   display = await new Client(endpoint).create("town_defenders", {
     role: "display",
-    protocolVersion,
-    playerCapacity: 2
+    protocolVersion
   });
-  first = await new Client(endpoint).joinById(display.roomId, {
-    role: "controller",
-    protocolVersion,
-    playerName: "Alex"
-  });
-  second = await new Client(endpoint).joinById(display.roomId, {
-    role: "controller",
-    protocolVersion,
-    playerName: "Sam"
-  });
+  pilot = await joinController(display.roomId, "Pilot");
+  gunner = await joinController(display.roomId, "Gunner");
+  shield = await joinController(display.roomId, "Shield");
+  await waitFor(() => display.state.players.size === 3);
 
-  await waitFor(() => display.state.players.size === 2);
-  first.send("player:ready", { protocolVersion, ready: true });
-  second.send("player:ready", { protocolVersion, ready: true });
+  const roles = [...display.state.players.values()].map((player) => player.role);
+  if (roles.join(",") !== "pilot,gunner,shield")
+    throw new Error(`Unexpected roles: ${roles.join(",")}`);
+
+  for (const controller of [pilot, gunner, shield]) {
+    controller.send("controller:ready", envelope(display.roomId, controller.sessionId));
+  }
   await waitFor(() => display.state.phase === "active" && display.state.hasGame === true);
+  if (pilot.state.game.display !== undefined)
+    throw new Error("Controller received display-only world collections.");
 
-  const firstPlayerId = first.sessionId;
-  const secondPlayerId = second.sessionId;
-  const firstSectorId = display.state.players.get(firstPlayerId).sectorId;
-  const firstSector = () => display.state.game.sectors[firstSectorId];
-
-  const invalidMessageError = nextServerError(first);
-  const treasuryBeforeInvalid = display.state.game.treasury;
-  first.send("player:upgrade", {
-    protocolVersion: protocolVersion + 1,
-    roomId: display.roomId,
-    playerId: firstPlayerId,
-    actionId: crypto.randomUUID()
+  const startX = display.state.game.castle.x;
+  pilot.send("pilot:input", {
+    ...envelope(display.roomId, pilot.sessionId),
+    sequence: 1,
+    vector: { x: 1, y: 0 }
   });
-  const invalidMessageResult = await invalidMessageError;
-  if (
-    invalidMessageResult?.code !== "protocol_mismatch" ||
-    display.state.game.treasury !== treasuryBeforeInvalid
-  ) {
-    throw new Error("Invalid command changed authoritative state.");
-  }
+  await waitFor(() => display.state.game.castle.x > startX);
 
-  const upgradeActionId = crypto.randomUUID();
-  first.send("player:upgrade", {
-    protocolVersion,
-    roomId: display.roomId,
-    playerId: firstPlayerId,
-    actionId: upgradeActionId
+  gunner.send("gunner:input", {
+    ...envelope(display.roomId, gunner.sessionId),
+    sequence: 1,
+    aim: { x: 0, y: -1 },
+    firing: true
   });
-  await waitFor(() => firstSector()?.defenseLevel === 2);
-  const treasuryAfterUpgrade = display.state.game.treasury;
-  const collisionError = nextServerError(second);
-  second.send("player:upgrade", {
-    protocolVersion,
-    roomId: display.roomId,
-    playerId: secondPlayerId,
-    actionId: upgradeActionId
+  await waitFor(() => display.state.game.display.projectiles.length > 0);
+
+  shield.send("shield:input", {
+    ...envelope(display.roomId, shield.sessionId),
+    sequence: 1,
+    aim: { x: -1, y: 0 },
+    active: true
   });
-  const collisionResult = await collisionError;
-  await delay(150);
-  if (
-    collisionResult?.code !== "invalid_message" ||
-    firstSector()?.defenseLevel !== 2 ||
-    display.state.game.treasury !== treasuryAfterUpgrade
-  ) {
-    throw new Error("Room-wide actionId deduplication failed.");
-  }
+  await waitFor(() => display.state.game.shield.active === true);
 
-  const firstSessionId = first.sessionId;
-  const firstReconnectionToken = first.reconnectionToken;
-  first.reconnection.enabled = false;
-  first.connection.close();
-  await waitFor(() => display.state.players.get(firstSessionId)?.connected === false);
-  first = await new Client(endpoint).reconnect(firstReconnectionToken);
-  await waitFor(() => display.state.players.get(firstSessionId)?.connected === true);
-  if (first.sessionId !== firstSessionId) {
-    throw new Error("Controller identity changed after reconnection.");
-  }
-
-  const displayReconnectionToken = display.reconnectionToken;
-  display.reconnection.enabled = false;
-  display.connection.close();
-  await waitFor(() => first.state.displayConnected === false);
-  let secondDisplayWasRejected = false;
-  try {
-    await new Client(endpoint).joinById(display.roomId, {
-      role: "display",
-      protocolVersion
-    });
-  } catch {
-    secondDisplayWasRejected = true;
-  }
-  if (!secondDisplayWasRejected) {
-    throw new Error("A second display occupied a reserved display identity.");
-  }
-  display = await new Client(endpoint).reconnect(displayReconnectionToken);
-  await waitFor(() => first.state.displayConnected === true);
-
-  const expiredSessionId = second.sessionId;
-  const expiredSectorId = display.state.players.get(expiredSessionId).sectorId;
-  const expiredReconnectionToken = second.reconnectionToken;
-  second.reconnection.enabled = false;
-  second.connection.close();
-  await waitFor(() => display.state.players.get(expiredSessionId)?.connected === false);
-  await waitFor(() => !display.state.players.has(expiredSessionId), 100);
-  let expiredTokenWasRejected = false;
-  try {
-    await new Client(endpoint).reconnect(expiredReconnectionToken);
-  } catch {
-    expiredTokenWasRejected = true;
-  }
-  if (!expiredTokenWasRejected) {
-    throw new Error("An expired reconnection token was accepted.");
-  }
-  second = undefined;
-
-  replacement = await new Client(endpoint).joinById(display.roomId, {
-    role: "controller",
-    protocolVersion,
-    playerName: "Replacement"
+  const roleError = nextServerError(shield);
+  shield.send("pilot:input", {
+    ...envelope(display.roomId, shield.sessionId),
+    sequence: 2,
+    vector: { x: -1, y: 0 }
   });
-  await waitFor(
-    () => display.state.players.get(replacement.sessionId)?.sectorId === expiredSectorId
-  );
+  if ((await roleError).code !== "role_mismatch")
+    throw new Error("Wrong-role input was not rejected.");
 
-  await waitFor(
-    () =>
-      display.state.game.waveNumber >= 3 &&
-      display.state.game.stage === "combat" &&
-      display.state.game.airstrikeCharge === display.state.game.airstrikeChargeRequired &&
-      display.state.game.display.enemies.length > 0,
-    500
-  );
-  const airstrikeTargetSectorId = display.state.game.display.enemies[0].sectorId;
-  if (replacement.state.game.display !== undefined) {
-    throw new Error("Controller received the display-only enemy collection.");
-  }
-  const compactTargetSector = replacement.state.game.sectors[airstrikeTargetSectorId];
-  if (
-    (compactTargetSector?.enemyCount ?? 0) <= 0 ||
-    compactTargetSector?.airstrikeTargetAvailable !== true
-  ) {
-    throw new Error("Controller did not receive the compact sector projection.");
-  }
-  const airstrikeActionId = crypto.randomUUID();
-  replacement.send("player:airstrike", {
-    protocolVersion,
-    roomId: display.roomId,
-    playerId: replacement.sessionId,
-    actionId: airstrikeActionId,
-    targetSectorId: airstrikeTargetSectorId
+  const pilotId = pilot.sessionId;
+  const pilotToken = pilot.reconnectionToken;
+  pilot.reconnection.enabled = false;
+  pilot.connection.close();
+  await waitFor(() => display.state.players.get(pilotId)?.connected === false);
+  pilot = await new Client(endpoint).reconnect(pilotToken);
+  await waitFor(() => display.state.players.get(pilotId)?.connected === true);
+  const xBeforeReconnectInput = display.state.game.castle.x;
+  pilot.send("pilot:input", {
+    ...envelope(display.roomId, pilot.sessionId),
+    sequence: 1,
+    vector: { x: -1, y: 0 }
   });
-  await waitFor(
-    () =>
-      display.state.game.display.hasLastAirstrikeEffect === true &&
-      display.state.game.display.lastAirstrikeEffect.sequence === 1
-  );
-  const treasuryAfterAirstrike = display.state.game.treasury;
-  replacement.send("player:airstrike", {
-    protocolVersion,
-    roomId: display.roomId,
-    playerId: replacement.sessionId,
-    actionId: airstrikeActionId,
-    targetSectorId: airstrikeTargetSectorId
-  });
-  await delay(150);
-  if (
-    display.state.game.display.lastAirstrikeEffect.sequence !== 1 ||
-    display.state.game.treasury !== treasuryAfterAirstrike
-  ) {
-    throw new Error("Airstrike actionId deduplication failed.");
-  }
+  await waitFor(() => display.state.game.castle.x < xBeforeReconnectInput);
 
-  const replacementSector = () => display.state.game.sectors[expiredSectorId];
-  await waitFor(() => replacementSector()?.gateHealth < replacementSector()?.gateMaxHealth, 500);
-  const healthBeforeRepair = replacementSector().gateHealth;
-  replacement.send("player:repair", {
-    protocolVersion,
-    roomId: display.roomId,
-    playerId: replacement.sessionId,
-    actionId: crypto.randomUUID()
-  });
-  await waitFor(() => replacementSector()?.gateHealth > healthBeforeRepair);
+  const gunnerId = gunner.sessionId;
+  gunner.reconnection.enabled = false;
+  gunner.connection.close();
+  await waitFor(() => !display.state.players.has(gunnerId), 80);
+  gunner = undefined;
+  replacement = await joinController(display.roomId, "Replacement");
+  await waitFor(() => display.state.players.get(replacement.sessionId)?.role === "gunner");
 
   console.log(
     JSON.stringify({
       roomId: display.roomId,
-      players: display.state.players.size,
       phase: display.state.phase,
-      result: display.state.game.result,
-      waveNumber: display.state.game.waveNumber,
-      airstrikeSequence: display.state.game.display.lastAirstrikeEffect.sequence,
-      repairedGateHealth: replacementSector().gateHealth,
-      upgradedDefenseLevel: firstSector().defenseLevel
+      players: display.state.players.size,
+      castleX: display.state.game.castle.x,
+      projectiles: display.state.game.display.projectiles.length,
+      shieldActive: display.state.game.shield.active,
+      replacementRole: display.state.players.get(replacement.sessionId).role
     })
   );
 } finally {
   await Promise.allSettled([
-    first?.leave(),
-    second?.leave(),
+    pilot?.leave(),
+    gunner?.leave(),
+    shield?.leave(),
     replacement?.leave(),
     display?.leave()
   ]);
   serverProcess.kill();
 }
 
-async function expectControllerCreationToFail() {
-  let controllerRoom;
-  try {
-    controllerRoom = await new Client(endpoint).create("town_defenders", {
-      role: "controller",
-      protocolVersion,
-      playerName: "Invalid creator"
-    });
-  } catch {
-    return;
-  } finally {
-    await controllerRoom?.leave();
-  }
+function envelope(roomId, playerId) {
+  return { protocolVersion, roomId, playerId };
+}
 
-  throw new Error("A controller unexpectedly created a room.");
+async function joinController(roomId, playerName) {
+  return new Client(endpoint).joinById(roomId, { role: "controller", protocolVersion, playerName });
 }
 
 async function waitForServer() {
   await waitFor(async () => {
     try {
-      const response = await fetch(healthEndpoint);
-      return response.ok;
+      return (await fetch(healthEndpoint)).ok;
     } catch {
       return false;
     }
@@ -265,30 +145,15 @@ async function waitForServer() {
 
 async function waitFor(predicate, maximumAttempts = 60) {
   for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
-    if (await predicate()) {
-      return;
-    }
-    await delay(50);
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-
   throw new Error("Network smoke-test timed out.");
 }
 
 async function nextServerError(room) {
-  return await Promise.race([
-    new Promise((resolve) => {
-      room.onMessage("server:error", resolve);
-    }),
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("Server did not return the expected error."));
-      }, 1_000);
-    })
+  return Promise.race([
+    new Promise((resolve) => room.onMessage("server:error", resolve)),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Expected server:error.")), 1000))
   ]);
-}
-
-async function delay(milliseconds) {
-  await new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
 }

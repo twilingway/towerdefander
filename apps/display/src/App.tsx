@@ -1,17 +1,18 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  CREW_ROLES,
   PROTOCOL_VERSION,
-  type DisplayRoomView,
-  type PlayerCapacity
+  type CrewRole,
+  type DisplayRoomView
 } from "@town-defenders/protocol";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { BattlefieldCanvas } from "./BattlefieldCanvas.js";
+import { FlyingCastleCanvas } from "./FlyingCastleCanvas.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 
-type DisplayStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 type DisplayRoom = Room<unknown, NetworkRoomState>;
+type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
 
 const gameServerUrl = readStringEnvironment(
   import.meta.env.VITE_GAME_SERVER_URL,
@@ -23,13 +24,11 @@ const controllerUrl = readStringEnvironment(
 );
 
 export function DisplayApp() {
-  const roomReference = useRef<DisplayRoom>(undefined);
-  const [status, setStatus] = useState<DisplayStatus>("idle");
+  const roomReference = useRef<DisplayRoom | undefined>(undefined);
+  const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [view, setView] = useState<DisplayRoomView>();
-  const [playerCapacity, setPlayerCapacity] = useState<PlayerCapacity>(2);
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
-
   const joinUrl = useMemo(
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
     [view]
@@ -39,61 +38,51 @@ export function DisplayApp() {
     () => () => {
       const room = roomReference.current;
       roomReference.current = undefined;
-      if (room !== undefined) {
-        void room.leave();
-      }
+      if (room !== undefined) void room.leave();
     },
     []
   );
 
-  async function createRoom() {
+  async function createRoom(): Promise<void> {
     setStatus("connecting");
     setError("");
-
     try {
-      const client = new Client(gameServerUrl);
-      const room = await client.create<NetworkRoomState>("town_defenders", {
+      const room = await new Client(gameServerUrl).create<NetworkRoomState>("town_defenders", {
         role: "display",
-        protocolVersion: PROTOCOL_VERSION,
-        playerCapacity
+        protocolVersion: PROTOCOL_VERSION
       });
       roomReference.current = room;
-
-      room.onStateChange((state) => {
-        applyRoomState(state);
-      });
+      room.onStateChange(applyRoomState);
       applyRoomState(room.state);
-      room.onError((_code, message) => {
-        setError(message ?? "Сервер сообщил об ошибке.");
-        setStatus("error");
-      });
       room.onDrop(() => {
-        setError("Связь с сервером прервана. Переподключаемся…");
         setStatus("reconnecting");
-        setConnectionEpoch((epoch) => epoch + 1);
+        setError("Связь прервана. Восстанавливаем общий экран…");
+        setConnectionEpoch((value) => value + 1);
       });
       room.onReconnect(() => {
-        setError("");
         setStatus("connected");
+        setError("");
+      });
+      room.onError((_code, message) => {
+        setStatus("error");
+        setError(message ?? "Сервер сообщил об ошибке.");
       });
       room.onLeave(() => {
-        setError("Соединение с комнатой закрыто.");
         setStatus("error");
+        setError("Комната закрыта. Создайте новую сессию.");
       });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось создать комнату.");
       setStatus("error");
+      setError(reason instanceof Error ? reason.message : "Не удалось создать комнату.");
     }
   }
 
-  function applyRoomState(state: NetworkRoomState) {
-    const nextView = toDisplayRoomView(state);
-    if (nextView === undefined) {
-      return;
+  function applyRoomState(state: NetworkRoomState): void {
+    const next = toDisplayRoomView(state);
+    if (next !== undefined) {
+      setView(next);
+      setStatus("connected");
     }
-
-    setView(nextView);
-    setStatus("connected");
   }
 
   if ((status !== "connected" && status !== "reconnecting") || view === undefined) {
@@ -101,24 +90,8 @@ export function DisplayApp() {
       <main className="display-shell display-shell--centered">
         <section className="hero-card">
           <p className="eyebrow">Общий экран</p>
-          <h1>Town Defenders</h1>
-          <p>Откройте этот экран на телевизоре, проекторе или большом мониторе.</p>
-          <label className="capacity-picker">
-            Защитников
-            <select
-              value={playerCapacity}
-              disabled={status === "connecting"}
-              onChange={(event) => {
-                setPlayerCapacity(Number(event.target.value) as PlayerCapacity);
-              }}
-            >
-              {[2, 3, 4, 5, 6].map((capacity) => (
-                <option key={capacity} value={capacity}>
-                  {capacity}
-                </option>
-              ))}
-            </select>
-          </label>
+          <h1>Flying Castle</h1>
+          <p>Три игрока управляют одним летающим замком: движение, пушки и щит.</p>
           {error.length > 0 && <p className="error-message">{error}</p>}
           <button
             type="button"
@@ -139,41 +112,39 @@ export function DisplayApp() {
           <p className="eyebrow">Комната</p>
           <strong className="room-code">{view.roomId}</strong>
         </div>
-        <div className={`phase-badge phase-badge--${view.phase}`}>{phaseLabel(view.phase)}</div>
+        <div className={`phase-badge phase-badge--${view.phase}`}>
+          {view.phase === "active" ? "Замок в полёте" : "Собираем экипаж"}
+        </div>
       </header>
       {error.length > 0 && <p className="error-message">{error}</p>}
 
       <section className={`lobby-layout ${view.game === null ? "" : "lobby-layout--battle"}`}>
         <div className="join-card">
-          <QRCodeSVG value={joinUrl} size={220} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
+          <QRCodeSVG value={joinUrl} size={180} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
           <div>
-            <h2>Подключите телефоны</h2>
-            <p>Отсканируйте QR-код или откройте ссылку и введите код комнаты.</p>
+            <h2>Подключите три контроллера</h2>
+            <p>Первый игрок — pilot, второй — gunner, третий — shield.</p>
             <a href={joinUrl}>{joinUrl}</a>
           </div>
         </div>
-
         <div className="players-card">
-          <h2>
-            Защитники · {view.players.length}/{view.playerCapacity}
-          </h2>
+          <h2>Экипаж · {view.players.length}/3</h2>
           <div className="player-list">
-            {Array.from({ length: view.playerCapacity }, (_, slot) => {
-              const player = view.players.find((candidate) => candidate.sectorId === slot);
-              return player === undefined ? (
-                <div className="player-slot player-slot--empty" key={slot}>
-                  Сектор {slot + 1} · ожидаем игрока…
-                </div>
-              ) : (
-                <div className="player-slot" key={player.playerId}>
+            {CREW_ROLES.map((role) => {
+              const player = view.players.find((candidate) => candidate.role === role);
+              return (
+                <div
+                  className={`player-slot ${player === undefined ? "player-slot--empty" : ""}`}
+                  key={role}
+                >
                   <span>
-                    <strong>{player.playerName}</strong>
-                    <small>{player.connected ? "в сети" : "переподключается"}</small>
+                    <strong>{roleLabel(role)}</strong>
+                    <small>{player?.playerName ?? "ожидаем игрока…"}</small>
                   </span>
-                  <span className={player.ready ? "ready" : "waiting"}>
-                    {`Сектор ${String(player.sectorId + 1)} · ${
-                      player.ready ? "готов" : "не готов"
-                    }`}
+                  <span className={player?.ready === true ? "ready" : "waiting"}>
+                    {player === undefined
+                      ? "свободно"
+                      : `${player.connected ? "в сети" : "переподключается"} · ${player.ready ? "готов" : "не готов"}`}
                   </span>
                 </div>
               );
@@ -184,91 +155,39 @@ export function DisplayApp() {
 
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
-          <span>
-            Игровое поле появится, когда все {view.playerCapacity} защитников будут готовы
-          </span>
+          <span>Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»</span>
         </section>
       ) : (
-        <section id="game-canvas" className="game-stage" aria-label="Область игрового поля">
-          <header className="battle-header">
+        <section id="game-canvas" className="game-stage" aria-label="Карта летающего замка">
+          <header className="battle-header flying-hud">
             <div>
-              <span>Волна</span>
+              <span>Координаты</span>
               <strong>
-                {view.game.waveNumber}/{view.game.totalWaves}
+                {Math.round(view.game.castle.x)} × {Math.round(view.game.castle.y)}
               </strong>
             </div>
             <div>
-              <span>{view.game.stage === "intermission" ? "До атаки" : "Этап"}</span>
-              <strong>
-                {view.game.stage === "intermission"
-                  ? `${String(view.game.intermissionRemainingSeconds)} с`
-                  : "Бой"}
-              </strong>
+              <span>Снаряды</span>
+              <strong>{view.game.projectiles.length}</strong>
             </div>
             <div>
-              <span>Общая казна</span>
-              <strong>{view.game.treasury} золота</strong>
+              <span>Щит</span>
+              <strong>{view.game.shield.active ? "АКТИВЕН" : "выключен"}</strong>
             </div>
             <div>
-              <span>Авиаудар</span>
-              <strong>
-                {view.game.airstrikeCharge}/{view.game.airstrikeChargeRequired}
-              </strong>
-            </div>
-            <div className={`battle-result battle-result--${view.game.result}`}>
-              {battleResultLabel(view.game.result)}
+              <span>Tick</span>
+              <strong>{view.game.tick}</strong>
             </div>
           </header>
-          <BattlefieldCanvas
-            game={view.game}
-            players={view.players}
-            playerCapacity={view.playerCapacity}
-            connectionEpoch={connectionEpoch}
-          />
-          <div className="sector-status-strip">
-            {view.game.sectors.map((sector) => {
-              const owner = view.players.find(
-                (player) => player.playerId === sector.assignedPlayerId
-              );
-              return (
-                <div key={sector.sectorId}>
-                  <span>
-                    Сектор {sector.sectorId + 1} · {owner?.playerName ?? "Без защитника"}
-                  </span>
-                  <strong>
-                    Ворота {sector.gateHealth}/{sector.gateMaxHealth} · Башня ур.{" "}
-                    {sector.defenseLevel}
-                  </strong>
-                </div>
-              );
-            })}
-          </div>
+          <FlyingCastleCanvas game={view.game} connectionEpoch={connectionEpoch} />
         </section>
       )}
     </main>
   );
 }
 
-function battleResultLabel(result: NonNullable<DisplayRoomView["game"]>["result"]): string {
-  switch (result) {
-    case "in_progress":
-      return "Бой идёт";
-    case "victory":
-      return "Победа!";
-    case "defeat":
-      return "Поражение";
-  }
-}
-
-function phaseLabel(phase: DisplayRoomView["phase"]): string {
-  switch (phase) {
-    case "lobby":
-      return "Лобби";
-    case "active":
-      return "Раунд начался";
-    case "finished":
-      return "Раунд завершён";
-  }
+function roleLabel(role: CrewRole): string {
+  return role === "pilot" ? "Пилот" : role === "gunner" ? "Наводчик" : "Оператор щита";
 }
 
 function readStringEnvironment(value: unknown, fallback: string): string {
@@ -276,18 +195,11 @@ function readStringEnvironment(value: unknown, fallback: string): string {
 }
 
 function createDefaultGameServerUrl(): string {
-  if (typeof window === "undefined") {
-    return "ws://localhost:2567";
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.hostname}:2567`;
+  if (typeof window === "undefined") return "ws://localhost:2567";
+  return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:2567`;
 }
 
 function createDefaultControllerUrl(): string {
-  if (typeof window === "undefined") {
-    return "http://localhost:5174";
-  }
-
+  if (typeof window === "undefined") return "http://localhost:5174";
   return `${window.location.protocol}//${window.location.hostname}:5174`;
 }

@@ -1,8 +1,8 @@
 import {
+  CREW_ROLES,
   controllerRoomViewSchema,
   type ControllerRoomView,
-  type DefenseResult,
-  type DefenseStage,
+  type CrewRole,
   type PublicPlayerView
 } from "@town-defenders/protocol";
 
@@ -13,46 +13,31 @@ interface ValueCollection<T> {
 interface NetworkPlayerState {
   playerId: string;
   playerName: string;
+  role: CrewRole;
   ready: boolean;
   connected: boolean;
-  sectorId: number;
-  airstrikeTargetSectorIds: ValueCollection<number>;
-}
-
-interface NetworkSectorState {
-  sectorId: number;
-  assignedPlayerId: string;
-  gateHealth: number;
-  gateMaxHealth: number;
-  defenseLevel: number;
-  defenseDamage: number;
-  nextUpgradeCost: number;
-  enemyCount: number;
-  airstrikeTargetAvailable: boolean;
 }
 
 interface NetworkGameState {
   tick: number;
   elapsedMs: number;
-  treasury: number;
-  pathLength: number;
-  repairCost: number;
-  result: DefenseResult;
-  waveNumber: number;
-  totalWaves: number;
-  stage: DefenseStage;
-  intermissionRemainingSeconds: number;
-  airstrikeCharge: number;
-  airstrikeChargeRequired: number;
-  airstrikeDamage: number;
-  sectors: ValueCollection<NetworkSectorState>;
+  worldWidth: number;
+  worldHeight: number;
+  castle: {
+    x: number;
+    y: number;
+    velocityX: number;
+    velocityY: number;
+    radius: number;
+  };
+  turretAngle: number;
+  shield: { angle: number; active: boolean };
 }
 
 export interface NetworkRoomState {
   roomId?: string;
   phase?: ControllerRoomView["phase"];
   displayConnected?: boolean;
-  playerCapacity?: number;
   players?: ValueCollection<NetworkPlayerState>;
   hasGame?: boolean;
   game?: NetworkGameState;
@@ -66,7 +51,6 @@ export function toControllerRoomView(
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
     typeof state.displayConnected !== "boolean" ||
-    typeof state.playerCapacity !== "number" ||
     state.players === undefined
   ) {
     return undefined;
@@ -76,52 +60,32 @@ export function toControllerRoomView(
     .map((player) => ({
       playerId: player.playerId,
       playerName: player.playerName,
+      role: player.role,
       ready: player.ready,
-      connected: player.connected,
-      sectorId: player.sectorId,
-      airstrikeTargetSectorIds: [...player.airstrikeTargetSectorIds.values()]
+      connected: player.connected
     }))
-    .sort((left, right) => left.sectorId - right.sectorId);
+    .sort((left, right) => CREW_ROLES.indexOf(left.role) - CREW_ROLES.indexOf(right.role));
+  const game = state.game;
 
   return controllerRoomViewSchema.parse({
     roomId: state.roomId,
     phase: state.phase,
     displayConnected: state.displayConnected,
-    playerCapacity: state.playerCapacity,
     players,
     game:
-      state.hasGame === true && state.game !== undefined
+      state.hasGame === true && game !== undefined
         ? {
-            tick: state.game.tick,
-            elapsedMs: state.game.elapsedMs,
-            treasury: state.game.treasury,
-            pathLength: state.game.pathLength,
-            repairCost: state.game.repairCost,
-            result: state.game.result,
-            waveNumber: state.game.waveNumber,
-            totalWaves: state.game.totalWaves,
-            stage: state.game.stage,
-            intermissionRemainingSeconds: state.game.intermissionRemainingSeconds,
-            airstrikeCharge: state.game.airstrikeCharge,
-            airstrikeChargeRequired: state.game.airstrikeChargeRequired,
-            airstrikeDamage: state.game.airstrikeDamage,
-            sectors: [...state.game.sectors.values()].map((sector) => ({
-              sectorId: sector.sectorId,
-              assignedPlayerId: sector.assignedPlayerId.length > 0 ? sector.assignedPlayerId : null,
-              gateHealth: sector.gateHealth,
-              gateMaxHealth: sector.gateMaxHealth,
-              defenseLevel: sector.defenseLevel,
-              defenseDamage: sector.defenseDamage,
-              nextUpgradeCost: sector.nextUpgradeCost >= 0 ? sector.nextUpgradeCost : null,
-              enemyCount: sector.enemyCount,
-              airstrikeTargetAvailable: sector.airstrikeTargetAvailable
-            }))
+            tick: game.tick,
+            elapsedMs: game.elapsedMs,
+            worldWidth: game.worldWidth,
+            worldHeight: game.worldHeight,
+            castle: { ...game.castle },
+            turretAngle: game.turretAngle,
+            shield: { ...game.shield }
           }
         : null
   });
 }
-
-export const toPublicRoomView = toControllerRoomView;
 
 export function getRoomFromLocation(search: string): string {
   return new URLSearchParams(search).get("room")?.trim() ?? "";

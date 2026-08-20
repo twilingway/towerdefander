@@ -1,185 +1,219 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 4 as const;
-export const MIN_PLAYER_CAPACITY = 2 as const;
-export const MAX_PLAYER_CAPACITY = 6 as const;
-
-export const playerCapacitySchema = z.union([
-  z.literal(2),
-  z.literal(3),
-  z.literal(4),
-  z.literal(5),
-  z.literal(6)
-]);
-export type PlayerCapacity = z.infer<typeof playerCapacitySchema>;
+export const PROTOCOL_VERSION = 5 as const;
+export const PLAYER_CAPACITY = 3 as const;
+export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
+export const PROJECTILE_WORLD_PADDING = 256 as const;
 
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
 
-export const roomPhaseSchema = z.enum(["lobby", "active", "finished"]);
+export const crewRoleSchema = z.enum(CREW_ROLES);
+export type CrewRole = z.infer<typeof crewRoleSchema>;
+
+export const roomPhaseSchema = z.enum(["lobby", "active"]);
 export type RoomPhase = z.infer<typeof roomPhaseSchema>;
 
-export const sectorIdSchema = z.union([
-  z.literal(0),
-  z.literal(1),
-  z.literal(2),
-  z.literal(3),
-  z.literal(4),
-  z.literal(5)
-]);
-export type SectorId = z.infer<typeof sectorIdSchema>;
+// Zod numbers reject NaN and infinities by default.
+const finiteNumberSchema = z.number();
+const worldSizeSchema = finiteNumberSchema.positive();
+const worldCoordinateSchema = finiteNumberSchema.nonnegative();
 
-export const defenseResultSchema = z.enum(["in_progress", "victory", "defeat"]);
-export type DefenseResult = z.infer<typeof defenseResultSchema>;
-
-export const defenseStageSchema = z.enum(["intermission", "combat"]);
-export type DefenseStage = z.infer<typeof defenseStageSchema>;
-
-export const enemyTypeSchema = z.enum(["balanced", "fast", "heavy", "boss"]);
-export type EnemyType = z.infer<typeof enemyTypeSchema>;
-
-export function getAirstrikeTargetSectorIds(
-  sectorId: SectorId,
-  playerCapacity: PlayerCapacity
-): SectorId[] {
-  if (sectorId >= playerCapacity) {
-    throw new RangeError(
-      `Sector ${String(sectorId)} is outside player capacity ${String(playerCapacity)}.`
-    );
-  }
-
-  const candidates = [
-    sectorId,
-    (sectorId - 1 + playerCapacity) % playerCapacity,
-    (sectorId + 1) % playerCapacity
-  ] as SectorId[];
-
-  return candidates.filter((candidate, index) => candidates.indexOf(candidate) === index);
-}
-
-export const airstrikeTargetSectorIdsSchema = z
-  .array(sectorIdSchema)
-  .min(2)
-  .max(3)
-  .superRefine((sectorIds, context) => {
-    if (new Set(sectorIds).size !== sectorIds.length) {
-      context.addIssue({
-        code: "custom",
-        message: "Airstrike target sector IDs must be unique."
-      });
-    }
-  });
-
-export const publicSectorViewSchema = z
+export const vector2Schema = z
   .object({
-    sectorId: sectorIdSchema,
-    assignedPlayerId: z.string().min(1).nullable(),
-    gateHealth: z.number().int().nonnegative(),
-    gateMaxHealth: z.number().int().positive(),
-    defenseLevel: z.number().int().positive(),
-    defenseDamage: z.number().int().positive(),
-    nextUpgradeCost: z.number().int().positive().nullable(),
-    enemyCount: z.number().int().nonnegative(),
-    airstrikeTargetAvailable: z.boolean()
-  })
-  .strict()
-  .superRefine((sector, context) => {
-    if (sector.airstrikeTargetAvailable !== sector.enemyCount > 0) {
-      context.addIssue({
-        code: "custom",
-        path: ["airstrikeTargetAvailable"],
-        message: "Airstrike target availability must equal whether enemies are present."
-      });
-    }
-  });
-export type PublicSectorView = z.infer<typeof publicSectorViewSchema>;
-
-export const publicEnemyViewSchema = z
-  .object({
-    enemyId: z.string().min(1),
-    sectorId: sectorIdSchema,
-    enemyType: enemyTypeSchema,
-    health: z.number().int().positive(),
-    maxHealth: z.number().int().positive(),
-    progress: z.number().int().nonnegative()
+    x: finiteNumberSchema.min(-1).max(1),
+    y: finiteNumberSchema.min(-1).max(1)
   })
   .strict();
-export type PublicEnemyView = z.infer<typeof publicEnemyViewSchema>;
-
-export const publicAirstrikeEffectSchema = z
-  .object({
-    sequence: z.number().int().positive(),
-    actionId: z.uuid(),
-    playerId: z.string().min(1),
-    targetSectorId: sectorIdSchema,
-    appliedTick: z.number().int().nonnegative()
-  })
-  .strict();
-export type PublicAirstrikeEffect = z.infer<typeof publicAirstrikeEffectSchema>;
+export type Vector2 = z.infer<typeof vector2Schema>;
 
 export const publicPlayerViewSchema = z
   .object({
     playerId: z.string().min(1),
     playerName: z.string().min(1).max(24),
+    role: crewRoleSchema,
     ready: z.boolean(),
-    connected: z.boolean(),
-    sectorId: sectorIdSchema,
-    airstrikeTargetSectorIds: airstrikeTargetSectorIdsSchema
+    connected: z.boolean()
   })
   .strict();
 export type PublicPlayerView = z.infer<typeof publicPlayerViewSchema>;
 
+export const publicCastleViewSchema = z
+  .object({
+    x: worldCoordinateSchema,
+    y: worldCoordinateSchema,
+    velocityX: finiteNumberSchema,
+    velocityY: finiteNumberSchema,
+    radius: finiteNumberSchema.positive()
+  })
+  .strict();
+export type PublicCastleView = z.infer<typeof publicCastleViewSchema>;
+
+export const publicShieldViewSchema = z
+  .object({
+    angle: finiteNumberSchema,
+    active: z.boolean()
+  })
+  .strict();
+export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
+
+const publicRectangleObstacleViewSchema = z
+  .object({
+    obstacleId: z.string().min(1),
+    kind: z.literal("rectangle"),
+    x: worldCoordinateSchema,
+    y: worldCoordinateSchema,
+    width: finiteNumberSchema.positive(),
+    height: finiteNumberSchema.positive()
+  })
+  .strict();
+
+const publicCircleObstacleViewSchema = z
+  .object({
+    obstacleId: z.string().min(1),
+    kind: z.literal("circle"),
+    x: worldCoordinateSchema,
+    y: worldCoordinateSchema,
+    radius: finiteNumberSchema.positive()
+  })
+  .strict();
+
+export const publicObstacleViewSchema = z.discriminatedUnion("kind", [
+  publicRectangleObstacleViewSchema,
+  publicCircleObstacleViewSchema
+]);
+export type PublicObstacleView = z.infer<typeof publicObstacleViewSchema>;
+
+export const publicProjectileViewSchema = z
+  .object({
+    projectileId: z.string().min(1),
+    x: finiteNumberSchema,
+    y: finiteNumberSchema,
+    velocityX: finiteNumberSchema,
+    velocityY: finiteNumberSchema,
+    radius: finiteNumberSchema.positive()
+  })
+  .strict();
+export type PublicProjectileView = z.infer<typeof publicProjectileViewSchema>;
+
 const gameSnapshotBaseShape = {
   tick: z.number().int().nonnegative(),
   elapsedMs: z.number().int().nonnegative(),
-  treasury: z.number().int().nonnegative(),
-  pathLength: z.number().int().positive(),
-  repairCost: z.number().int().positive(),
-  result: defenseResultSchema,
-  waveNumber: z.number().int().min(1).max(5),
-  totalWaves: z.literal(5),
-  stage: defenseStageSchema,
-  intermissionRemainingSeconds: z.number().int().nonnegative(),
-  airstrikeCharge: z.number().int().min(0).max(100),
-  airstrikeChargeRequired: z.literal(100),
-  airstrikeDamage: z.number().int().positive(),
-  sectors: z.array(publicSectorViewSchema).min(MIN_PLAYER_CAPACITY).max(MAX_PLAYER_CAPACITY)
+  worldWidth: worldSizeSchema,
+  worldHeight: worldSizeSchema,
+  castle: publicCastleViewSchema,
+  turretAngle: finiteNumberSchema,
+  shield: publicShieldViewSchema
 } satisfies z.ZodRawShape;
 
-export const controllerGameSnapshotSchema = z.object(gameSnapshotBaseShape).strict();
+interface WorldForRefinement {
+  worldWidth: number;
+  worldHeight: number;
+  castle: PublicCastleView;
+  obstacles?: PublicObstacleView[];
+  projectiles?: PublicProjectileView[];
+}
+
+function addWorldIssues(world: WorldForRefinement, context: z.RefinementCtx): void {
+  const { castle, worldHeight, worldWidth } = world;
+
+  if (
+    castle.radius * 2 > worldWidth ||
+    castle.x < castle.radius ||
+    castle.x > worldWidth - castle.radius
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["castle", "x"],
+      message: "Castle and its radius must remain inside the horizontal world bounds."
+    });
+  }
+
+  if (
+    castle.radius * 2 > worldHeight ||
+    castle.y < castle.radius ||
+    castle.y > worldHeight - castle.radius
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["castle", "y"],
+      message: "Castle and its radius must remain inside the vertical world bounds."
+    });
+  }
+
+  const obstacleIds = new Set<string>();
+  world.obstacles?.forEach((obstacle, index) => {
+    if (obstacleIds.has(obstacle.obstacleId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["obstacles", index, "obstacleId"],
+        message: "Obstacle IDs must be unique."
+      });
+    }
+    obstacleIds.add(obstacle.obstacleId);
+
+    if (obstacle.x > worldWidth || obstacle.y > worldHeight) {
+      context.addIssue({
+        code: "custom",
+        path: ["obstacles", index],
+        message: "Obstacle centers must remain inside the world bounds."
+      });
+    }
+  });
+
+  const projectileIds = new Set<string>();
+  world.projectiles?.forEach((projectile, index) => {
+    if (projectileIds.has(projectile.projectileId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["projectiles", index, "projectileId"],
+        message: "Projectile IDs must be unique."
+      });
+    }
+    projectileIds.add(projectile.projectileId);
+
+    if (
+      projectile.x < -PROJECTILE_WORLD_PADDING ||
+      projectile.x > worldWidth + PROJECTILE_WORLD_PADDING ||
+      projectile.y < -PROJECTILE_WORLD_PADDING ||
+      projectile.y > worldHeight + PROJECTILE_WORLD_PADDING
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["projectiles", index],
+        message: "Projectile positions must remain inside the padded world bounds."
+      });
+    }
+  });
+}
+
+export const controllerGameSnapshotSchema = z
+  .object(gameSnapshotBaseShape)
+  .strict()
+  .superRefine(addWorldIssues);
 export type ControllerGameSnapshot = z.infer<typeof controllerGameSnapshotSchema>;
 
 export const displayGameSnapshotSchema = z
   .object({
     ...gameSnapshotBaseShape,
-    lastAirstrikeEffect: publicAirstrikeEffectSchema.nullable(),
-    enemies: z.array(publicEnemyViewSchema)
+    obstacles: z.array(publicObstacleViewSchema),
+    projectiles: z.array(publicProjectileViewSchema)
   })
-  .strict();
+  .strict()
+  .superRefine(addWorldIssues);
 export type DisplayGameSnapshot = z.infer<typeof displayGameSnapshotSchema>;
 
-interface RoomViewForRefinement {
+interface RoomForRefinement {
   phase: RoomPhase;
-  playerCapacity: PlayerCapacity;
   players: PublicPlayerView[];
   game: ControllerGameSnapshot | DisplayGameSnapshot | null;
 }
 
-function addRoomViewIssues(room: RoomViewForRefinement, context: z.RefinementCtx): void {
-  const { game, phase, playerCapacity, players } = room;
-
-  if (players.length > playerCapacity) {
-    context.addIssue({
-      code: "custom",
-      path: ["players"],
-      message: "Player count cannot exceed player capacity."
-    });
-  }
-
+function addRoomIssues(room: RoomForRefinement, context: z.RefinementCtx): void {
   const playerIds = new Set<string>();
-  const playerSectorIds = new Set<SectorId>();
+  const roles = new Set<CrewRole>();
 
-  players.forEach((player, index) => {
+  room.players.forEach((player, index) => {
     if (playerIds.has(player.playerId)) {
       context.addIssue({
         code: "custom",
@@ -189,114 +223,30 @@ function addRoomViewIssues(room: RoomViewForRefinement, context: z.RefinementCtx
     }
     playerIds.add(player.playerId);
 
-    if (player.sectorId >= playerCapacity) {
+    if (roles.has(player.role)) {
       context.addIssue({
         code: "custom",
-        path: ["players", index, "sectorId"],
-        message: "Player sector must exist in this room."
-      });
-      return;
-    }
-
-    if (playerSectorIds.has(player.sectorId)) {
-      context.addIssue({
-        code: "custom",
-        path: ["players", index, "sectorId"],
-        message: "Player sectors must be unique."
+        path: ["players", index, "role"],
+        message: "Crew roles must be unique."
       });
     }
-    playerSectorIds.add(player.sectorId);
-
-    const expectedTargets = getAirstrikeTargetSectorIds(player.sectorId, playerCapacity);
-    if (
-      player.airstrikeTargetSectorIds.length !== expectedTargets.length ||
-      player.airstrikeTargetSectorIds.some(
-        (target, targetIndex) => target !== expectedTargets[targetIndex]
-      )
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["players", index, "airstrikeTargetSectorIds"],
-        message: "Airstrike target sector IDs must be ordered as self, left, right."
-      });
-    }
+    roles.add(player.role);
   });
 
-  if (phase === "lobby" && game !== null) {
+  if (room.phase === "lobby" && room.game !== null) {
     context.addIssue({
       code: "custom",
       path: ["game"],
       message: "Lobby room views must not contain a game snapshot."
     });
   }
-  if ((phase === "active" || phase === "finished") && game === null) {
+
+  if (room.phase === "active" && room.game === null) {
     context.addIssue({
       code: "custom",
       path: ["game"],
-      message: "Active and finished room views must contain a game snapshot."
+      message: "Active room views must contain a game snapshot."
     });
-  }
-  if (game === null) {
-    return;
-  }
-
-  if (game.sectors.length !== playerCapacity) {
-    context.addIssue({
-      code: "custom",
-      path: ["game", "sectors"],
-      message: "Sector count must equal player capacity."
-    });
-  }
-
-  const playerBySector = new Map(players.map((player) => [player.sectorId, player] as const));
-
-  game.sectors.forEach((sector, index) => {
-    if (sector.sectorId !== index) {
-      context.addIssue({
-        code: "custom",
-        path: ["game", "sectors", index, "sectorId"],
-        message: "Sectors must be ordered and contiguous from zero."
-      });
-    }
-    if (sector.sectorId >= playerCapacity) {
-      context.addIssue({
-        code: "custom",
-        path: ["game", "sectors", index, "sectorId"],
-        message: "Sector must exist in this room."
-      });
-      return;
-    }
-
-    const expectedOwner = playerBySector.get(sector.sectorId)?.playerId ?? null;
-    if (sector.assignedPlayerId !== expectedOwner) {
-      context.addIssue({
-        code: "custom",
-        path: ["game", "sectors", index, "assignedPlayerId"],
-        message: "Assigned player must match the roster owner of this sector."
-      });
-    }
-  });
-
-  if ("enemies" in game) {
-    game.enemies.forEach((enemy, index) => {
-      if (enemy.sectorId >= playerCapacity) {
-        context.addIssue({
-          code: "custom",
-          path: ["game", "enemies", index, "sectorId"],
-          message: "Enemy sector must exist in this room."
-        });
-      }
-    });
-    if (
-      game.lastAirstrikeEffect !== null &&
-      game.lastAirstrikeEffect.targetSectorId >= playerCapacity
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["game", "lastAirstrikeEffect", "targetSectorId"],
-        message: "Airstrike effect target sector must exist in this room."
-      });
-    }
   }
 }
 
@@ -304,50 +254,38 @@ const roomViewBaseShape = {
   roomId: z.string().min(1),
   phase: roomPhaseSchema,
   displayConnected: z.boolean(),
-  playerCapacity: playerCapacitySchema,
-  players: z.array(publicPlayerViewSchema).max(MAX_PLAYER_CAPACITY)
+  players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
 } satisfies z.ZodRawShape;
 
 export const controllerRoomViewSchema = z
   .object({
     ...roomViewBaseShape,
-    game: controllerGameSnapshotSchema.nullable().default(null)
+    game: controllerGameSnapshotSchema.nullable()
   })
   .strict()
-  .superRefine(addRoomViewIssues);
+  .superRefine(addRoomIssues);
 export type ControllerRoomView = z.infer<typeof controllerRoomViewSchema>;
 
 export const displayRoomViewSchema = z
   .object({
     ...roomViewBaseShape,
-    game: displayGameSnapshotSchema.nullable().default(null)
+    game: displayGameSnapshotSchema.nullable()
   })
   .strict()
-  .superRefine(addRoomViewIssues);
+  .superRefine(addRoomIssues);
 export type DisplayRoomView = z.infer<typeof displayRoomViewSchema>;
 
-export const publicGameSnapshotSchema = displayGameSnapshotSchema;
-export type PublicGameSnapshot = DisplayGameSnapshot;
-
-export const publicRoomViewSchema = displayRoomViewSchema;
-export type PublicRoomView = DisplayRoomView;
-
 export const displayCreateOptionsSchema = z
-  .object({
-    role: z.literal("display"),
-    protocolVersion: z.literal(PROTOCOL_VERSION),
-    playerCapacity: playerCapacitySchema
-  })
-  .strict();
-export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
-
-export const displayJoinOptionsSchema = z
   .object({
     role: z.literal("display"),
     protocolVersion: z.literal(PROTOCOL_VERSION)
   })
   .strict();
-export type DisplayJoinOptions = z.infer<typeof displayJoinOptionsSchema>;
+export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
+
+// Create and reconnect use the same strict display handshake in protocol v5.
+export const displayJoinOptionsSchema = displayCreateOptionsSchema;
+export type DisplayJoinOptions = DisplayCreateOptions;
 
 export const controllerJoinOptionsSchema = z
   .object({
@@ -358,43 +296,56 @@ export const controllerJoinOptionsSchema = z
   .strict();
 export type ControllerJoinOptions = z.infer<typeof controllerJoinOptionsSchema>;
 
-export const joinOptionsSchema = z.union([
-  displayCreateOptionsSchema,
-  displayJoinOptionsSchema,
-  controllerJoinOptionsSchema
-]);
+export const joinOptionsSchema = z.union([displayCreateOptionsSchema, controllerJoinOptionsSchema]);
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
 
-export const readyCommandSchema = z
-  .object({
-    protocolVersion: z.literal(PROTOCOL_VERSION),
-    ready: z.boolean()
-  })
-  .strict();
-export type ReadyCommand = z.infer<typeof readyCommandSchema>;
-
-export const resourceActionCommandSchema = z
+export const commandEnvelopeSchema = z
   .object({
     protocolVersion: z.literal(PROTOCOL_VERSION),
     roomId: z.string().min(1),
-    playerId: z.string().min(1),
-    actionId: z.uuid()
+    playerId: z.string().min(1)
   })
   .strict();
-export type ResourceActionCommand = z.infer<typeof resourceActionCommandSchema>;
+export type CommandEnvelope = z.infer<typeof commandEnvelopeSchema>;
 
-export const airstrikeCommandSchema = resourceActionCommandSchema
+export const continuousInputEnvelopeSchema = commandEnvelopeSchema
   .extend({
-    targetSectorId: sectorIdSchema
+    sequence: z.number().int().positive()
   })
   .strict();
-export type AirstrikeCommand = z.infer<typeof airstrikeCommandSchema>;
+export type ContinuousInputEnvelope = z.infer<typeof continuousInputEnvelopeSchema>;
+
+export const readyCommandSchema = commandEnvelopeSchema;
+export type ReadyCommand = CommandEnvelope;
+
+export const pilotInputCommandSchema = continuousInputEnvelopeSchema
+  .extend({
+    vector: vector2Schema
+  })
+  .strict();
+export type PilotInputCommand = z.infer<typeof pilotInputCommandSchema>;
+
+export const gunnerInputCommandSchema = continuousInputEnvelopeSchema
+  .extend({
+    aim: vector2Schema,
+    firing: z.boolean()
+  })
+  .strict();
+export type GunnerInputCommand = z.infer<typeof gunnerInputCommandSchema>;
+
+export const shieldInputCommandSchema = continuousInputEnvelopeSchema
+  .extend({
+    aim: vector2Schema,
+    active: z.boolean()
+  })
+  .strict();
+export type ShieldInputCommand = z.infer<typeof shieldInputCommandSchema>;
 
 export const clientMessage = {
-  ready: "player:ready",
-  repair: "player:repair",
-  upgrade: "player:upgrade",
-  airstrike: "player:airstrike"
+  ready: "controller:ready",
+  pilotInput: "pilot:input",
+  gunnerInput: "gunner:input",
+  shieldInput: "shield:input"
 } as const;
 
 export const serverMessage = {
@@ -410,15 +361,14 @@ export const serverErrorCodeSchema = z.enum([
   "invalid_phase",
   "reconnect_expired",
   "identity_mismatch",
-  "insufficient_funds",
-  "action_not_available"
+  "role_mismatch"
 ]);
 export type ServerErrorCode = z.infer<typeof serverErrorCodeSchema>;
 
 export const serverErrorSchema = z
   .object({
     code: serverErrorCodeSchema,
-    message: z.string()
+    message: z.string().min(1)
   })
   .strict();
 export type ServerError = z.infer<typeof serverErrorSchema>;

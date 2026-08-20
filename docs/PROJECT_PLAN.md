@@ -1,177 +1,89 @@
-# Town Defenders — план проекта
+# Flying Castle — план проекта
 
-Статус: базовый профиль утверждён 27 июля 2026 года; bootstrap, network-first vertical slice,
-пяти-волновый цикл и protocol v4 для 2–6 секторов реализованы. Игровой цикл и программные раскладки
-дорог проходят unit, network smoke и browser E2E на 2, 4 и 6 игроков. Следующий художественный этап
-должен заменить временные программные сцены пятью согласованными backgrounds для 2–6 дорог.
+Статус: 20 августа 2026 года основная концепция изменена с классического Tower Defense на
+кооперативный top-down экшен про один летающий замок. Предыдущая реализация 2–6 дорог и protocol v4
+сохранена в Git (`00c3ab7`) как точка возврата. Активный change: `flying-castle-core`.
 
 ## 1. Цель продукта
 
-Создать кооперативную couch-party Tower Defense игру для 2–6 игроков:
+Один общий экран запускается в desktop browser, на проекторе или позже внутри Android TV shell. Три
+игрока подключаются из браузеров телефонов/планшетов/компьютеров через LAN/Wi-Fi или интернет:
 
-- основное поле боя запускается на Android TV или в браузере компьютера, подключённого к большому
-  экрану/телевизору/проектору;
-- игроки подключаются к комнате с телефонов или других компьютеров через браузер как из одной
-  Wi-Fi/LAN сети, так и удалённо через интернет;
-- подключение выполняется по QR-коду, короткой ссылке или коду комнаты;
-- телефоны работают как персональные панели управления;
-- установка приложения на устройства игроков не требуется;
-- матч должен поддерживать переподключение игроков.
+- pilot двигает замок по большой top-down карте;
+- gunner направляет башню и стреляет;
+- shield operator направляет и удерживает защитный сектор.
 
-## 2. Предлагаемая архитектура
+Сервер является единственным источником истины. Display показывает Phaser-мир и интерполирует server
+snapshots. Controllers отправляют только intents и не рассчитывают trusted transforms.
 
-```text
-Shared display client                 Controller clients
-Desktop browser / Android TV          Phone / tablet / computer
-React shell + Phaser                  React responsive web app
-                 \                    /
-                  \ WebSocket intents/
-                   Node.js game server
-                        Colyseus
-                           |
-                 deterministic game core
-```
-
-Сервер является единственным источником истины: принимает намерения игроков, атомарно изменяет общую
-казну и рассчитывает игровой мир. Клиент общего экрана отображает снимки состояния и интерполирует
-движение. Контроллеры не получают координаты всех врагов — только необходимое состояние панели
-игрока.
-
-Клиент общего экрана является обычным web-приложением. Сборка Android TV использует тот же код через
-Capacitor и добавляет только платформенный shell, manifest и обработку lifecycle/пульта.
-
-## 3. Предлагаемая структура monorepo
+## 2. Архитектура
 
 ```text
-apps/
-  display/        # Browser/Android TV shared screen, Phaser, lobby and QR
-  controller/     # Responsive browser controller for phones and computers
-  server/         # Colyseus rooms and authoritative simulation
-packages/
-  game-core/      # Pure TypeScript simulation without DOM or Phaser
-  protocol/       # Commands, events, schemas and protocol version
-  config/         # Shared TypeScript, lint and test configuration
-docs/
-openspec/
-.agents/skills/
-.codex/agents/
+Shared display                         Three browser controllers
+React HUD + Phaser world               Pilot / Gunner / Shield React UI
+                \                      /
+                 \ Colyseus WebSocket /
+                  Authoritative server
+                          |
+             deterministic TypeScript core
 ```
 
-Предлагается использовать pnpm workspaces без Turborepo на первом этапе.
+Monorepo остаётся на pnpm workspaces:
 
-## 4. Процесс разработки
+- `apps/display` — общий экран, React HUD и lazy-loaded Phaser;
+- `apps/controller` — responsive role controllers;
+- `apps/server` — Colyseus room, reconnect, validation и simulation timer;
+- `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
+- `packages/protocol` — protocol v5 и строгие transport/view schemas.
 
-После инициализации OpenSpec каждое существенное изменение проходит цикл:
+## 3. Этапы
 
-1. `proposal` — проблема, границы и ожидаемый результат;
-2. `specs` — проверяемое поведение и сценарии;
-3. `design` — архитектурные решения и риски;
-4. `tasks` — небольшие реализуемые задачи;
-5. реализация и автоматическая проверка;
-6. архивирование завершённого изменения.
+### Этап 1 — Primitive realtime slice (текущий)
 
-Первое изменение: `bootstrap-network-vertical-slice`.
+- ровно три стабильные role slots: pilot, gunner, shield;
+- мир 2400×1600, камера следует за замком;
+- server-authoritative fixed step 50 ms;
+- WASD/arrows и virtual stick для pilot;
+- aim + fire для gunner, aim + hold для shield;
+- grid, замок, башня, щит, декор и снаряды из Phaser primitives;
+- reconnect, active replacement, strict protocol v5 и network/browser tests.
 
-## 5. Этапы
+Результат: руками проверяется совместное управление одним замком с трёх браузеров без финального
+art.
 
-### Этап 0 — Bootstrap
+### Этап 2 — Combat playground
 
-- согласовать стек и настройки;
-- инициализировать Git и pnpm workspace;
-- установить и инициализировать OpenSpec;
-- создать правила Codex, проектных агентов и skills;
-- настроить TypeScript, lint, format и test scripts.
+- простые враги и server-authoritative collisions;
+- здоровье замка, попадания пушек и блокирование щитом;
+- spawn director без финальной campaign;
+- feedback попаданий, debug HUD и настройка управления.
 
-Результат: воспроизводимая пустая платформа, проходящая все проверки.
+### Этап 3 — Карта и roguelike loop
 
-### Этап 1 — Network-first vertical slice
+- процедурные или секционные карты;
+- encounters, ресурсы, upgrades и выбор маршрута;
+- победа/поражение и короткая replayable session;
+- типы врагов, elite и boss encounters.
 
-- общий экран создаёт комнату и показывает QR-код, ссылку и короткий код;
-- два браузерных контроллера подключаются с телефонов или компьютеров, выбирают имена и отмечают
-  готовность;
-- сервер начинает матч;
-- контроллеры отправляют типизированную тестовую команду;
-- общий экран отображает подтверждённое сервером изменение;
-- клиент восстанавливает сессию после краткого отключения.
+### Этап 4 — Art, sound и Android TV
 
-Результат: доказана работа полного пути display → server → controllers.
+- утверждённое художественное направление вместо primitives;
+- animation, VFX, audio и onboarding каждой роли;
+- performance budget для слабого Android TV;
+- Capacitor shell, launcher, fullscreen, wake lock и lifecycle.
 
-### Этап 2 — Игровое ядро
+## 4. Правила разработки
 
-- два сектора и двое ворот;
-- один тип врага и автоматическая атака;
-- здоровье ворот и условия победы/поражения;
-- общая казна;
-- атомарные команды `upgrade` и `repair`;
-- идентификатор команды и защита от повторного применения.
+- Любое существенное изменение проходит proposal → specs → design → tasks → implementation → review
+  → archive.
+- Protocol/server/game-core меняются через `openspec-workflow` и `realtime-game-contract`.
+- Phaser рисует world; React владеет lobby и HUD.
+- Новая production dependency требует принятого design и согласования.
+- Перед завершением обязательны package tests, `pnpm check`, `pnpm spec:validate`, network smoke и
+  Playwright.
 
-Результат: минимальная игра без финальной графики.
+## 5. Не входит в первый slice
 
-### Этап 3 — Игровой MVP
-
-- пять волн;
-- три типа врагов;
-- персональная ультимативная способность;
-- помощь соседнему сектору;
-- босс;
-- адаптация правил от 2 до 6 игроков.
-
-Результат: первый пригодный для игрового теста матч.
-
-### Этап 3.1 — Каталог рисованных замков
-
-- использовать готовые layout manifests как контракт точных дорог, ворот, башен и эффектов;
-- создать пять hand-painted environment WebP для 2, 3, 4, 5 и 6 игроков;
-- проверить совпадение нарисованных дорог с cubic trajectories во всём пути, особенно у ворот;
-- сохранить code-native fallback для медленной загрузки и слабых Android TV GPU;
-- провести отдельное визуальное согласование и ручной тест каждой вместимости.
-
-Результат: красивое поле для всех составов без изменения protocol v4 и игровой симуляции.
-
-### Этап 4 — Android TV
-
-- убедиться, что display-клиент полноценно работает в desktop Chromium/Firefox;
-- добавить fullscreen-режим и масштабирование для большого экрана/проектора;
-- обёртка Capacitor;
-- Android TV launcher и landscape manifest;
-- D-pad/back handling для lobby;
-- fullscreen, wake lock и lifecycle;
-- проверка производительности на реальном слабом TV-устройстве.
-
-Результат: устанавливаемый APK/AAB.
-
-### Этап 5 — Качество и контент
-
-- Playwright-тест подключения нескольких контроллеров;
-- нагрузочные и reconnect-тесты;
-- object pooling и performance budgets;
-- графика, звук, эффекты и onboarding;
-- аналитика игровых сессий без персональных данных.
-
-## 6. Критерии готовности MVP
-
-- общий экран запускается в desktop-браузере и на Android TV из общей кодовой базы;
-- 2–6 игроков входят по QR-коду, ссылке или коду без установки приложения;
-- контроллер работает на телефоне, планшете и компьютере;
-- повторная команда не тратит золото дважды;
-- краткий разрыв соединения не уничтожает сессию;
-- TV сохраняет плавность на целевом Android TV;
-- typecheck, lint, unit и end-to-end smoke tests проходят одной командой;
-- реализованное поведение соответствует активным OpenSpec-артефактам.
-
-## 7. Утверждённые решения
-
-- pnpm 10 и Node.js 22+;
-- OpenSpec 1.x как основной SDD workflow;
-- Colyseus и server-authoritative модель;
-- отдельные React/Vite приложения display и controller;
-- Phaser внутри display, без React renderer adapter;
-- desktop browser как основная display-платформа и Capacitor shell для Android TV;
-- поддержка двух сетевых режимов: прямое подключение в одной LAN и удалённое подключение через
-  публичный HTTPS/WSS endpoint;
-- русские спецификации/документация и английские идентификаторы в коде;
-- лицензия `UNLICENSED` до решения о публикации;
-- Git repository, project Codex agents и repo-scoped skills.
-
-До публичного deployment остаются отдельные решения о hosting provider, домене, TLS, Redis adapter и
-публикации исходного кода.
+Enemies, damage, collision с декором, shield energy, waves, economy, victory/defeat, procedural map,
+accounts, persistence, matchmaking, bitmap art, sound и Android native output. Эти решения будут
+приниматься после ручной проверки core controls.

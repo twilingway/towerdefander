@@ -1,31 +1,51 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  CREW_ROLES,
   PROTOCOL_VERSION,
   clientMessage,
   serverErrorSchema,
   serverMessage,
   type ControllerRoomView,
-  type SectorId
+  type CrewRole
 } from "@town-defenders/protocol";
-import { useEffect, useRef, useState } from "react";
-
-import { createActionId } from "./actionId.js";
 import {
-  findCurrentPlayer,
-  getRoomFromLocation,
-  toControllerRoomView,
-  type NetworkRoomState
-} from "./roomView.js";
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent
+} from "react";
+
+import {
+  getKeyboardVector,
+  LatestInputScheduler,
+  normalizeControlVector,
+  type ControlVector
+} from "./controlInput.js";
 import {
   clearReconnectionSession,
   readReconnectionSession,
   saveReconnectionSession,
   type SessionStorage
 } from "./reconnectionSession.js";
+import {
+  findCurrentPlayer,
+  getRoomFromLocation,
+  toControllerRoomView,
+  type NetworkRoomState
+} from "./roomView.js";
+import { VirtualStick } from "./VirtualStick.js";
 
 type ControllerRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "join" | "joining" | "connected" | "reconnecting" | "disconnected";
 
+interface ControlState {
+  readonly vector: ControlVector;
+  readonly firing: boolean;
+  readonly active: boolean;
+}
+
+const NEUTRAL_CONTROL: ControlState = { vector: { x: 0, y: 0 }, firing: false, active: false };
 const gameServerUrl = readStringEnvironment(
   import.meta.env.VITE_GAME_SERVER_URL,
   createDefaultGameServerUrl()
@@ -39,66 +59,54 @@ export function ControllerApp() {
   const [status, setStatus] = useState<ConnectionStatus>("join");
   const [view, setView] = useState<ControllerRoomView>();
   const [error, setError] = useState("");
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
   const currentPlayer = findCurrentPlayer(view, playerId);
 
   useEffect(() => {
     let disposed = false;
     const storage = readSessionStorage();
     const session = storage === undefined ? undefined : readReconnectionSession(storage);
-
     if (session?.endpoint === gameServerUrl && storage !== undefined) {
       setRoomCode(session.roomId);
       setPlayerName(session.playerName);
       setStatus("reconnecting");
-
       void new Client(gameServerUrl)
         .reconnect<NetworkRoomState>(session.token)
         .then((room) => {
-          if (disposed) {
-            void room.leave();
-            return;
-          }
-          attachRoom(room, session.playerName);
+          if (disposed) void room.leave();
+          else attachRoom(room, session.playerName);
         })
         .catch(() => {
-          if (disposed) {
-            return;
+          if (!disposed) {
+            clearReconnectionSession(storage);
+            setError("Сессию восстановить не удалось. Войдите снова.");
+            setStatus("join");
           }
-          clearReconnectionSession(storage);
-          setError("Сессию восстановить не удалось. Войдите в комнату снова.");
-          setStatus("join");
         });
     }
-
     return () => {
       disposed = true;
       const room = roomReference.current;
       roomReference.current = undefined;
-      if (room !== undefined) {
-        void room.leave();
-      }
+      if (room !== undefined) void room.leave();
     };
   }, []);
 
-  async function joinRoom() {
+  async function joinRoom(): Promise<void> {
     const normalizedRoomCode = roomCode.trim();
     const normalizedName = playerName.trim();
     if (normalizedRoomCode.length === 0 || normalizedName.length === 0) {
       setError("Введите код комнаты и имя.");
       return;
     }
-
     setStatus("joining");
     setError("");
-
     try {
-      const client = new Client(gameServerUrl);
-      const room = await client.joinById<NetworkRoomState>(normalizedRoomCode, {
+      const room = await new Client(gameServerUrl).joinById<NetworkRoomState>(normalizedRoomCode, {
         role: "controller",
         protocolVersion: PROTOCOL_VERSION,
         playerName: normalizedName
       });
-
       attachRoom(room, normalizedName);
     } catch (reason) {
       setError(toJoinError(reason));
@@ -106,21 +114,16 @@ export function ControllerApp() {
     }
   }
 
-  function attachRoom(room: ControllerRoom, normalizedName: string) {
+  function attachRoom(room: ControllerRoom, normalizedName: string): void {
     roomReference.current = room;
     setPlayerId(room.sessionId);
-
     persistReconnectionSession(room, normalizedName);
-    room.onStateChange((state) => {
-      applyRoomState(state);
-    });
+    room.onStateChange(applyRoomState);
     applyRoomState(room.state);
     room.onMessage(serverMessage.error, (payload: unknown) => {
       const result = serverErrorSchema.safeParse(payload);
       setError(
-        result.success
-          ? toServerError(result.data.code, result.data.message)
-          : "Сервер отклонил команду."
+        result.success ? toServerError(result.data.code, result.data.message) : "Команда отклонена."
       );
     });
     room.onDrop(() => {
@@ -128,79 +131,64 @@ export function ControllerApp() {
     });
     room.onReconnect(() => {
       persistReconnectionSession(room, normalizedName);
+      setConnectionEpoch((value) => value + 1);
       setError("");
       setStatus("connected");
     });
     room.onError((_code, message) => {
-      setError(message ?? "Ошибка соединения с комнатой.");
+      setError(message ?? "Ошибка соединения.");
     });
     room.onLeave(() => {
       const storage = readSessionStorage();
-      if (storage !== undefined) {
-        clearReconnectionSession(storage);
-      }
-      setError("Соединение закрыто. Войдите в комнату снова.");
+      if (storage !== undefined) clearReconnectionSession(storage);
+      setError("Соединение закрыто. Войдите снова.");
       setStatus("disconnected");
     });
   }
 
-  function applyRoomState(state: NetworkRoomState) {
-    const nextView = toControllerRoomView(state);
-    if (nextView === undefined) {
-      return;
+  function applyRoomState(state: NetworkRoomState): void {
+    const next = toControllerRoomView(state);
+    if (next !== undefined) {
+      setView(next);
+      setStatus("connected");
     }
-
-    setView(nextView);
-    setStatus("connected");
   }
 
-  function sendReady() {
+  function sendReady(): void {
     const room = roomReference.current;
-    if (room === undefined || currentPlayer === undefined) {
-      return;
-    }
-
+    if (room === undefined || view === undefined || currentPlayer === undefined) return;
     room.send(clientMessage.ready, {
       protocolVersion: PROTOCOL_VERSION,
-      ready: !currentPlayer.ready
+      roomId: view.roomId,
+      playerId: currentPlayer.playerId
     });
   }
 
-  function sendResourceAction(action: "repair" | "upgrade") {
+  function sendControl(sequence: number, control: ControlState): void {
     const room = roomReference.current;
-    if (room === undefined || view === undefined || currentPlayer === undefined) {
-      return;
-    }
-
-    setError("");
-    room.send(clientMessage[action], {
+    if (room === undefined || view === undefined || currentPlayer === undefined) return;
+    const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: view.roomId,
       playerId: currentPlayer.playerId,
-      actionId: createActionId()
-    });
-  }
-
-  function sendAirstrike(targetSectorId: SectorId) {
-    const room = roomReference.current;
-    if (room === undefined || view === undefined || currentPlayer === undefined) {
-      return;
+      sequence
+    } as const;
+    if (currentPlayer.role === "pilot") {
+      room.send(clientMessage.pilotInput, { ...envelope, vector: control.vector });
+    } else if (currentPlayer.role === "gunner") {
+      room.send(clientMessage.gunnerInput, {
+        ...envelope,
+        aim: control.vector,
+        firing: control.firing
+      });
+    } else {
+      room.send(clientMessage.shieldInput, {
+        ...envelope,
+        aim: control.vector,
+        active: control.active
+      });
     }
-
-    setError("");
-    room.send(clientMessage.airstrike, {
-      protocolVersion: PROTOCOL_VERSION,
-      roomId: view.roomId,
-      playerId: currentPlayer.playerId,
-      actionId: createActionId(),
-      targetSectorId
-    });
   }
-
-  const ownSector = view?.game?.sectors.find(
-    (sector) => sector.sectorId === currentPlayer?.sectorId
-  );
-  const ownEnemies = ownSector?.enemyCount ?? 0;
 
   if (status === "join" || status === "joining" || status === "disconnected") {
     return (
@@ -212,14 +200,12 @@ export function ControllerApp() {
             void joinRoom();
           }}
         >
-          <p className="eyebrow">Контроллер игрока</p>
-          <h1>Войти в комнату</h1>
+          <p className="eyebrow">Контроллер экипажа</p>
+          <h1>Flying Castle</h1>
           <label>
             Код комнаты
             <input
               name="roomCode"
-              inputMode="text"
-              autoComplete="off"
               value={roomCode}
               onChange={(event) => {
                 setRoomCode(event.target.value);
@@ -230,7 +216,6 @@ export function ControllerApp() {
             Имя
             <input
               name="playerName"
-              autoComplete="nickname"
               maxLength={24}
               value={playerName}
               onChange={(event) => {
@@ -257,218 +242,217 @@ export function ControllerApp() {
           </span>
         </div>
         <h1>{currentPlayer?.playerName ?? playerName}</h1>
-        <p className="phase-copy">
-          {view?.phase === "active"
-            ? `Вы защищаете сектор ${String((currentPlayer?.sectorId ?? 0) + 1)}`
-            : view?.phase === "finished"
-              ? resultLabel(view.game?.result)
-              : "Ждём защитников"}
+        <p className="role-badge">
+          {currentPlayer === undefined ? "Назначаем роль…" : roleLabel(currentPlayer.role)}
         </p>
         {error.length > 0 && <p className="error-message">{error}</p>}
 
         {view?.phase === "lobby" ? (
           <>
             <div className="controller-roster">
-              <strong>
-                Защитники {view.players.length}/{view.playerCapacity}
-              </strong>
-              {Array.from({ length: view.playerCapacity }, (_, sectorId) => {
-                const player = view.players.find((candidate) => candidate.sectorId === sectorId);
+              {CREW_ROLES.map((role) => {
+                const player = view.players.find((candidate) => candidate.role === role);
                 return (
-                  <span key={sectorId}>
-                    {sectorId + 1}. {player?.playerName ?? "свободно"}{" "}
+                  <span key={role}>
+                    {roleLabel(role)} · {player?.playerName ?? "свободно"}{" "}
                     {player?.ready === true ? "✓" : ""}
                   </span>
                 );
               })}
             </div>
             <button
-              className={currentPlayer?.ready === true ? "secondary-button" : ""}
               type="button"
               onClick={sendReady}
-              disabled={status === "reconnecting" || currentPlayer === undefined}
+              disabled={currentPlayer?.ready === true || status === "reconnecting"}
             >
-              {currentPlayer?.ready === true ? "Отменить готовность" : "Я готов"}
+              {currentPlayer?.ready === true ? "Готов — ждём экипаж" : "Я готов"}
             </button>
           </>
-        ) : view?.phase === "active" ? (
-          <>
-            <div className="sector-summary">
-              <div>
-                <span>Волна</span>
-                <strong>
-                  {view.game?.waveNumber ?? 1}/{view.game?.totalWaves ?? 5}
-                </strong>
-              </div>
-              <div>
-                <span>{view.game?.stage === "intermission" ? "До волны" : "Этап"}</span>
-                <strong>
-                  {view.game?.stage === "intermission"
-                    ? `${String(view.game.intermissionRemainingSeconds)} с`
-                    : "Бой"}
-                </strong>
-              </div>
-              <div>
-                <span>Общая казна</span>
-                <strong>{view.game?.treasury ?? 0}</strong>
-              </div>
-              <div>
-                <span>Ворота</span>
-                <strong>
-                  {ownSector?.gateHealth ?? 0}/{ownSector?.gateMaxHealth ?? 0}
-                </strong>
-              </div>
-              <div>
-                <span>Защита</span>
-                <strong>ур. {ownSector?.defenseLevel ?? 1}</strong>
-              </div>
-              <div>
-                <span>Враги</span>
-                <strong>{ownEnemies}</strong>
-              </div>
-            </div>
-            <div className="action-grid">
-              <button
-                type="button"
-                onClick={() => {
-                  sendResourceAction("repair");
-                }}
-                disabled={status === "reconnecting" || ownSector === undefined}
-              >
-                Ремонт · {view.game?.repairCost ?? 0}
-              </button>
-              <button
-                className="upgrade-button"
-                type="button"
-                onClick={() => {
-                  sendResourceAction("upgrade");
-                }}
-                disabled={
-                  status === "reconnecting" ||
-                  ownSector?.nextUpgradeCost === undefined ||
-                  ownSector.nextUpgradeCost === null
-                }
-              >
-                {ownSector?.nextUpgradeCost === null
-                  ? "Максимальный уровень"
-                  : `Улучшить · ${String(ownSector?.nextUpgradeCost ?? 0)}`}
-              </button>
-            </div>
-            <section className="airstrike-card" aria-label="Общий авиаудар">
-              <div className="airstrike-heading">
-                <span>Общий авиаудар</span>
-                <strong>
-                  {view.game?.airstrikeCharge ?? 0}/{view.game?.airstrikeChargeRequired ?? 100}
-                </strong>
-              </div>
-              <div className="charge-meter">
-                <span
-                  style={{
-                    width: `${String(
-                      ((view.game?.airstrikeCharge ?? 0) /
-                        (view.game?.airstrikeChargeRequired ?? 100)) *
-                        100
-                    )}%`
-                  }}
-                />
-              </div>
-              <div className="airstrike-actions">
-                {(currentPlayer?.airstrikeTargetSectorIds ?? []).map((sectorId, targetIndex) => (
-                  <button
-                    type="button"
-                    key={sectorId}
-                    onClick={() => {
-                      sendAirstrike(sectorId);
-                    }}
-                    disabled={status === "reconnecting" || !canTargetAirstrike(view.game, sectorId)}
-                  >
-                    {airstrikeTargetLabel(
-                      sectorId,
-                      targetIndex,
-                      currentPlayer?.airstrikeTargetSectorIds.length ?? 0
-                    )}
-                  </button>
-                ))}
-              </div>
-            </section>
-          </>
+        ) : currentPlayer === undefined ? (
+          <p>Ожидаем подтверждение роли…</p>
         ) : (
-          <div className={`result-card result-card--${view?.game?.result ?? "unknown"}`}>
-            <strong>{resultLabel(view?.game?.result)}</strong>
-            <span>Матч завершён на {view?.game?.tick ?? 0} шаге</span>
-          </div>
+          <RoleControlPanel
+            role={currentPlayer.role}
+            disabled={status === "reconnecting"}
+            generation={connectionEpoch}
+            onSend={sendControl}
+          />
         )}
       </section>
     </main>
   );
 }
 
-function resultLabel(result: NonNullable<ControllerRoomView["game"]>["result"] | undefined) {
-  switch (result) {
-    case "victory":
-      return "Победа!";
-    case "defeat":
-      return "Поражение";
-    default:
-      return "Раунд завершён";
-  }
-}
+function RoleControlPanel({
+  role,
+  disabled,
+  generation,
+  onSend
+}: {
+  readonly role: CrewRole;
+  readonly disabled: boolean;
+  readonly generation: number;
+  readonly onSend: (sequence: number, control: ControlState) => void;
+}) {
+  const controlReference = useRef<ControlState>(NEUTRAL_CONTROL);
+  const sendReference = useRef(onSend);
+  sendReference.current = onSend;
+  const schedulerReference = useRef<LatestInputScheduler<ControlState> | undefined>(undefined);
+  schedulerReference.current ??= new LatestInputScheduler(
+    NEUTRAL_CONTROL,
+    ({ sequence, value }) => {
+      sendReference.current(sequence, value);
+    }
+  );
 
-function canTargetAirstrike(
-  game: ControllerRoomView["game"] | undefined,
-  sectorId: SectorId
-): boolean {
-  const sector = game?.sectors.find((candidate) => candidate.sectorId === sectorId);
+  function update(patch: Partial<ControlState>): void {
+    const next = { ...controlReference.current, ...patch };
+    controlReference.current = next;
+    schedulerReference.current?.update(next, performance.now());
+  }
+
+  useEffect(() => {
+    const keys = new Set<string>();
+    const scheduler = schedulerReference.current;
+    const timer = window.setInterval(() => scheduler?.flush(performance.now()), 25);
+    function applyKeys(): void {
+      const vector = getKeyboardVector(keys);
+      update({
+        vector,
+        firing: role === "gunner" && keys.has("Space"),
+        active: role === "shield" && keys.has("Space")
+      });
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (
+        [
+          "KeyW",
+          "KeyA",
+          "KeyS",
+          "KeyD",
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          "Space"
+        ].includes(event.code)
+      ) {
+        event.preventDefault();
+        keys.add(event.code);
+        applyKeys();
+      }
+    }
+    function onKeyUp(event: KeyboardEvent): void {
+      keys.delete(event.code);
+      applyKeys();
+    }
+    function neutralize(): void {
+      keys.clear();
+      update(NEUTRAL_CONTROL);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", neutralize);
+    document.addEventListener("visibilitychange", neutralize);
+    return () => {
+      controlReference.current = NEUTRAL_CONTROL;
+      scheduler?.update(NEUTRAL_CONTROL, performance.now());
+      scheduler?.flush(performance.now() + 50);
+      window.clearInterval(timer);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", neutralize);
+      document.removeEventListener("visibilitychange", neutralize);
+    };
+  }, [role]);
+
+  useLayoutEffect(() => {
+    const scheduler = schedulerReference.current;
+    if (disabled) {
+      scheduler?.setEnabled(false);
+      return;
+    }
+    controlReference.current = NEUTRAL_CONTROL;
+    scheduler?.startGeneration(NEUTRAL_CONTROL, performance.now());
+  }, [disabled, generation]);
+
+  function aimFromMouse(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (
+      role === "pilot" ||
+      event.pointerType !== "mouse" ||
+      (event.target instanceof Element && event.target.closest("button") !== null)
+    )
+      return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const vector = normalizeControlVector({
+      x: event.clientX - (bounds.left + bounds.width / 2),
+      y: event.clientY - (bounds.top + bounds.height / 2)
+    });
+    update({ vector });
+  }
+
+  const action = role === "gunner" ? "firing" : "active";
   return (
-    game?.stage === "combat" &&
-    game.airstrikeCharge >= game.airstrikeChargeRequired &&
-    sector?.airstrikeTargetAvailable === true
+    <div className="role-control" data-role={role} onPointerMove={aimFromMouse}>
+      <p className="phase-copy">{roleHelp(role)}</p>
+      <VirtualStick
+        label={`Направление: ${roleLabel(role)}`}
+        onChange={(vector) => {
+          update({ vector });
+        }}
+      />
+      {role !== "pilot" && (
+        <button
+          type="button"
+          className={`hold-action hold-action--${role}`}
+          data-testid={role === "gunner" ? "fire-button" : "shield-button"}
+          disabled={disabled}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            update({ [action]: true });
+          }}
+          onPointerUp={() => {
+            update({ [action]: false });
+          }}
+          onPointerCancel={() => {
+            update({ [action]: false });
+          }}
+          onLostPointerCapture={() => {
+            update({ [action]: false });
+          }}
+        >
+          {role === "gunner" ? "УДЕРЖИВАТЬ ОГОНЬ" : "УДЕРЖИВАТЬ ЩИТ"}
+        </button>
+      )}
+      <small>Desktop: {role === "pilot" ? "WASD или стрелки" : "мышь/стрелки + Space"}</small>
+    </div>
   );
 }
 
-function airstrikeTargetLabel(
-  sectorId: SectorId,
-  targetIndex: number,
-  targetCount: number
-): string {
-  if (targetIndex === 0) {
-    return `Свой · ${String(sectorId + 1)}`;
-  }
-  if (targetCount === 2) {
-    return `Сосед · ${String(sectorId + 1)}`;
-  }
-  return `${targetIndex === 1 ? "Слева" : "Справа"} · ${String(sectorId + 1)}`;
+function roleLabel(role: CrewRole): string {
+  return role === "pilot" ? "Пилот" : role === "gunner" ? "Наводчик" : "Оператор щита";
+}
+
+function roleHelp(role: CrewRole): string {
+  return role === "pilot"
+    ? "Ведите замок по карте"
+    : role === "gunner"
+      ? "Направляйте пушку и удерживайте огонь"
+      : "Направляйте и удерживайте защитный сектор";
 }
 
 function toServerError(code: string, fallback: string): string {
-  switch (code) {
-    case "insufficient_funds":
-      return "В общей казне недостаточно золота.";
-    case "action_not_available":
-      return "Сейчас это действие недоступно.";
-    case "invalid_phase":
-      return "Действие недоступно на текущем этапе матча.";
-    case "identity_mismatch":
-      return "Сервер не подтвердил вашу игровую сессию.";
-    case "protocol_mismatch":
-      return "Версия игры устарела. Обновите страницу.";
-    default:
-      return fallback;
-  }
+  if (code === "invalid_phase") return "Действие недоступно до начала полёта.";
+  if (code === "role_mismatch") return "Эта команда недоступна вашей роли.";
+  if (code === "identity_mismatch") return "Сервер не подтвердил игровую сессию.";
+  if (code === "protocol_mismatch") return "Версия игры устарела. Обновите страницу.";
+  return fallback;
 }
 
 function toJoinError(reason: unknown): string {
-  if (!(reason instanceof Error)) {
-    return "Не удалось подключиться к комнате.";
-  }
-
-  if (reason.message.includes("room_full")) {
-    return "Все места в комнате уже заняты.";
-  }
-  if (reason.message.includes("not found")) {
-    return "Комната не найдена. Проверьте код.";
-  }
-
+  if (!(reason instanceof Error)) return "Не удалось подключиться к комнате.";
+  if (reason.message.includes("room_full")) return "Все три роли уже заняты.";
+  if (reason.message.includes("not found")) return "Комната не найдена. Проверьте код.";
   return reason.message;
 }
 
@@ -481,12 +465,8 @@ function readBrowserSearch(): string {
 }
 
 function createDefaultGameServerUrl(): string {
-  if (typeof window === "undefined") {
-    return "ws://localhost:2567";
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.hostname}:2567`;
+  if (typeof window === "undefined") return "ws://localhost:2567";
+  return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:2567`;
 }
 
 function readSessionStorage(): SessionStorage | undefined {
@@ -495,14 +475,12 @@ function readSessionStorage(): SessionStorage | undefined {
 
 function persistReconnectionSession(room: ControllerRoom, playerName: string): void {
   const storage = readSessionStorage();
-  if (storage === undefined) {
-    return;
+  if (storage !== undefined) {
+    saveReconnectionSession(storage, {
+      endpoint: gameServerUrl,
+      roomId: room.roomId,
+      playerName,
+      token: room.reconnectionToken
+    });
   }
-
-  saveReconnectionSession(storage, {
-    endpoint: gameServerUrl,
-    roomId: room.roomId,
-    playerName,
-    token: room.reconnectionToken
-  });
 }

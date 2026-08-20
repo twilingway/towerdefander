@@ -312,8 +312,26 @@ p {
   width: 100%;
   overflow: hidden;
   border-radius: 1rem;
-  background: #071714;
+  background: #07171f;
   aspect-ratio: 16 / 9;
+}
+
+.flying-hud {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.flying-hud > div {
+  min-width: 0;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.75rem;
+  background: #102a33;
+}
+
+@media (width <= 900px) {
+  .flying-hud {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .battlefield-canvas,

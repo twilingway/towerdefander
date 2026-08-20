@@ -1,3 +1,8 @@
+> **Status: superseded on 20 August 2026.** Реализация protocol v4 сохранена коммитом `00c3ab7`, но
+> пользователь изменил основную концепцию на flying-castle co-op. Невыполненные checklist items
+> намеренно не отмечаются завершёнными; change не должен архивироваться как готовый продуктовый
+> этап. Его требования заменяет `flying-castle-core` / protocol v5.
+
 ## Why
 
 Продукт заявлен для 2–6 игроков, но текущие protocol, room, game-core и Phaser layout жёстко

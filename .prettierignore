@@ -4,3 +4,5 @@ node_modules/
 **/coverage/
 apps/display/android/
 pnpm-lock.yaml
+.agents/skills/react-best-practices/
+.opencode/

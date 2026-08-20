@@ -8,7 +8,6 @@ describe("readServerConfig", () => {
       host: "0.0.0.0",
       port: 2567,
       reconnectionGraceSeconds: 30,
-      simulationIntervalMs: 1000,
       gracefullyShutdown: true
     });
   });
@@ -18,7 +17,6 @@ describe("readServerConfig", () => {
       host: "127.0.0.1",
       port: 3000,
       reconnectionGraceSeconds: 30,
-      simulationIntervalMs: 1000,
       gracefullyShutdown: true
     });
   });
@@ -30,13 +28,6 @@ describe("readServerConfig", () => {
   it("supports a short reconnection grace period for integration tests", () => {
     expect(readServerConfig({ RECONNECTION_GRACE_SECONDS: "0.25" }).reconnectionGraceSeconds).toBe(
       0.25
-    );
-  });
-
-  it("supports a faster scheduler without changing fixed simulation steps", () => {
-    expect(readServerConfig({ SIMULATION_INTERVAL_MS: "25" }).simulationIntervalMs).toBe(25);
-    expect(() => readServerConfig({ SIMULATION_INTERVAL_MS: "5" })).toThrow(
-      "SIMULATION_INTERVAL_MS"
     );
   });
 

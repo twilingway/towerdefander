@@ -1,9 +1,9 @@
 schema: spec-driven
 
 context: |
-  Product: cooperative couch-party Tower Defense for 2–6 players.
+  Product: cooperative couch-party top-down action about one flying castle controlled by three roles.
   Shared display: desktop browser or Android TV shell from one web codebase.
-  Controllers: responsive browsers on phones, tablets, or computers.
+  Controllers: responsive pilot, gunner, and shield browser panels on phones, tablets, or computers.
   Stack: strict TypeScript, pnpm workspaces, React/Vite, Phaser, Node.js,
   Colyseus, Vitest, ESLint, and Prettier.
   Authority: the server validates intents and owns trusted game state.

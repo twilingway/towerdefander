@@ -13,8 +13,7 @@ try {
       HOST: "127.0.0.1",
       PORT: String(serverPort),
       GRACEFUL_SHUTDOWN: "false",
-      RECONNECTION_GRACE_SECONDS: "2",
-      SIMULATION_INTERVAL_MS: "100"
+      RECONNECTION_GRACE_SECONDS: "2"
     }),
     startProcess(
       "node",
