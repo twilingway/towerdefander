@@ -44,94 +44,99 @@ Server SHALL сверять connection identity/role перед mutation.
 
 ### Requirement: Continuous intents упорядочены
 
-Каждый continuous intent SHALL содержать protocolVersion, roomId, playerId и монотонный safe integer
-`sequence`. Server SHALL применять только sequence больше последнего принятого для actor/input type.
-Duplicate или out-of-order sequence SHALL игнорироваться без mutation. Shield `active` SHALL быть
-absolute desired state: handler только заменяет latest state, а energy расходуется один раз на
-authoritative simulation tick, поэтому duplicate packet SHALL NOT умножать расход. При disconnect
-server SHALL немедленно задать безопасный intent: pilot target zero, gunner firing false, shield
-OFF. После reconnect sequence watermark SHALL сбрасываться, первый packet sequence 1 SHALL
-приниматься, а shield SHALL оставаться OFF до нового ручного включения.
+Каждый continuous intent SHALL содержать protocolVersion 6, roomId, playerId и монотонный safe
+integer `sequence`. Server SHALL применять только sequence больше последнего принятого для
+actor/input type. Duplicate или out-of-order sequence SHALL игнорироваться без mutation и SHALL NOT
+менять angular target. Shield `active` SHALL быть absolute desired state: handler только заменяет
+latest state, а energy расходуется один раз на authoritative simulation tick, поэтому duplicate
+packet SHALL NOT умножать расход. При disconnect server SHALL немедленно задать безопасный intent:
+pilot target zero, gunner firing false, shield OFF, а также отменить gunner/shield angular target
+через trusted core transition. После reconnect sequence watermark SHALL сбрасываться, первый packet
+sequence 1 SHALL приниматься, shield SHALL оставаться OFF до нового ручного включения, а отменённый
+angular target SHALL NOT восстанавливаться.
 
 #### Scenario: Пакеты пришли не по порядку
 
-- **WHEN** server после sequence 12 получает sequence 11
-- **THEN** последний применённый control и sequence остаются от пакета 12
+- **WHEN** server после sequence 12 получает sequence 11 с другим bearing
+- **THEN** последний применённый control, angular target и sequence остаются от packet 12
 
 #### Scenario: Повторён shield ON
 
-- **WHEN** один shield input с `active=true` доставлен дважды с одинаковым sequence
-- **THEN** duplicate игнорируется, а energy уменьшается только обычным fixed-step drain
+- **WHEN** shield input с `active=true` и aim доставлен дважды с одинаковым sequence
+- **THEN** duplicate игнорируется, не меняет target, а energy уменьшается только обычным fixed-step
+  drain
 
 #### Scenario: Identity подменена
 
-- **WHEN** controller указывает playerId другого соединения
-- **THEN** server возвращает `identity_mismatch` и не записывает sequence
+- **WHEN** controller указывает playerId другого connection
+- **THEN** server возвращает `identity_mismatch`, не записывает sequence и не меняет target
 
 #### Scenario: Pilot отключился с зажатым направлением
 
 - **WHEN** pilot connection закрывается во время движения
-- **THEN** server немедленно обнуляет target vector, а core плавно тормозит замок
+- **THEN** server немедленно обнуляет target vector, а core плавно тормозит castle
 
 #### Scenario: Pilot восстановил соединение
 
-- **WHEN** pilot reconnect завершён и новый transport отправляет sequence 1
+- **WHEN** pilot reconnect отправляет sequence 1
 - **THEN** server принимает packet для прежней role после сброса connection watermark
 
 #### Scenario: Shield отключился
 
-- **WHEN** shield controller теряет connection при активной защите
-- **THEN** server немедленно выключает shield, energy начинает восстанавливаться, а reconnect не
-  возвращает прежний ON state
+- **WHEN** shield controller disconnect происходит при active shield и незавершённом traverse
+- **THEN** server немедленно выключает shield, energy начинает восстанавливаться, отменяет angular
+  target, а reconnect не возвращает прежний ON state и не продолжает traverse
 
 ### Requirement: Gunner fire зависит от состояния, а не частоты сообщений
 
 `gunner:input` SHALL содержать aim vector, boolean `firing` и monotonic sequence. Gunner aim SHALL
 меняться только от captured pointer внутри virtual stick или keyboard direction fallback. Server
-SHALL хранить последний принятый input. Первый принятый rising edge `firing false→true` при
-отсутствии pending request SHALL поставить ровно один fire request в pure core; request SHALL
-сохраниться до ближайшего разрешённого authoritative cooldown tick и SHALL быть consumed одним
-projectile даже если release пришёл раньше следующего tick. Дополнительные rising edges пока request
-pending SHALL coalesce и не накапливать очередь. Удерживаемый `firing=true` SHALL продолжать cadence
-по cooldown. Duplicate heartbeat или более частая доставка SHALL NOT ставить дополнительный request.
+SHALL хранить последний принятый input и absolute target bearing, а current angle SHALL вычисляться
+только core. Первый принятый rising edge `firing false→true` при отсутствии pending request SHALL
+поставить ровно один fire request в pure core; request SHALL сохраниться до ближайшего разрешённого
+authoritative cooldown tick и SHALL быть consumed одним projectile даже если release пришёл раньше
+следующего tick. Дополнительные rising edges пока request pending SHALL coalesce и не накапливать
+очередь. Удерживаемый `firing=true` SHALL продолжать cadence по cooldown. Projectile SHALL
+использовать current authoritative core angle на fire tick, а не target bearing. Duplicate heartbeat
+или более частая доставка SHALL NOT ставить дополнительный request и SHALL NOT менять target.
 
 #### Scenario: Обычное движение мыши над controller
 
-- **WHEN** gunner перемещает мышь или нажимает вне virtual stick и Fire button
-- **THEN** controller не отправляет новый aim и turret angle не меняется
+- **WHEN** gunner перемещает mouse либо нажимает вне virtual stick и Fire button
+- **THEN** controller не отправляет новый aim, turret target и current angle не меняются
 
 #### Scenario: Gunner тащит virtual stick
 
-- **WHEN** primary pointer начинается внутри stick и перемещается при сохранённом pointer capture
-- **THEN** controller отправляет нормализованный aim, а release возвращает vector zero без изменения
-  последнего turret angle
+- **WHEN** primary pointer drag внутри stick задаёт bearing
+- **THEN** controller отправляет нормализованный aim, release возвращает vector zero, server меняет
+  target, а current turret angle плавно следует к нему
 
 #### Scenario: Gunner удерживает Fire
 
-- **WHEN** primary pointer удерживается на Fire либо удерживается Space
-- **THEN** firing остаётся true и projectile rate ограничен authoritative cooldown
+- **WHEN** gunner удерживает Fire либо Space во время traverse
+- **THEN** firing остаётся true, projectile rate ограничен authoritative cooldown и projectiles
+  выходят по current angle
 
 #### Scenario: Firing heartbeat доставлен дважды
 
-- **WHEN** одинаковый gunner heartbeat доставлен повторно с тем же sequence
-- **THEN** duplicate игнорируется и не создаёт дополнительный fire request
+- **WHEN** одинаковый gunner heartbeat повторён с тем же sequence
+- **THEN** duplicate игнорируется без дополнительного fire request или retarget
 
 #### Scenario: Gunner делает короткий click
 
-- **WHEN** server принимает rising edge `firing=true` и последующий `firing=false` между двумя
-  simulation ticks
-- **THEN** core создаёт ровно один projectile на ближайшем tick с завершённым cooldown
+- **WHEN** server принимает rising `firing=true` и последующий false между simulation ticks
+- **THEN** core создаёт ровно один projectile на ближайшем tick с завершённым cooldown по current
+  turret angle
 
 #### Scenario: Короткий click попал в занятый send slot
 
-- **WHEN** gunner нажимает и отпускает Fire раньше следующего разрешённого 50 ms send slot
+- **WHEN** gunner нажимает и отпускает Fire раньше следующего разрешённого send slot
 - **THEN** controller сохраняет rising edge, отправляет `firing=true` в ближайший slot и только
   затем отправляет `firing=false`, не превышая 20 messages/s
 
 #### Scenario: Несколько кликов во время cooldown
 
-- **WHEN** первый click уже создал pending request, а до его consume приняты дополнительные rising
-  edges
+- **WHEN** pending request уже существует и до consume приходят новые rising edges
 - **THEN** core сохраняет один pending request и создаёт один projectile на ближайшем eligible tick
 
 #### Scenario: Gunner отпускает fire
@@ -142,9 +147,9 @@ pending SHALL coalesce и не накапливать очередь. Удерж
 
 #### Scenario: Gunner отключился с pending request
 
-- **WHEN** connection gunner закрывается до consume queued fire
-- **THEN** server очищает pending request; reconnect начинается с `firing=false` и не создаёт
-  отложенный projectile
+- **WHEN** gunner disconnect происходит до consume queued fire
+- **THEN** server очищает pending request и angular target; reconnect начинается с `firing=false`,
+  не создаёт delayed projectile и не продолжает traverse
 
 ### Requirement: Pilot поддерживает keyboard и touch stick
 
@@ -153,11 +158,14 @@ ms; более частые changes SHALL coalesce latest value к следую�
 отправляться через 100 ms только если после прошлого send не было нового packet, поэтому continuous
 поток не превышает 20 messages/s. Pilot SHALL преобразовывать WASD/arrow keys и captured virtual
 stick в одинаковый vector. Gunner и shield SHALL менять aim только после pointerdown внутри
-собственного virtual stick и во время drag; touch tap внутри stick SHALL задать направление, обычный
-mousemove над panel SHALL ничего не менять. Keyboard arrows SHALL оставаться desktop fallback.
-Gunner Fire SHALL быть hold-кнопкой. Shield button и Space SHALL переключать absolute active один
-раз на non-repeat click/keydown; pointerup SHALL NOT выключать shield. Blur/visibilitychange SHALL
-нейтрализовать pilot и gunner fire, но SHALL NOT подменять ручное shield ON/OFF состояние.
+собственного virtual stick и во время drag; captured stick или keyboard direction SHALL задавать
+absolute target bearing, а magnitude SHALL NOT масштабировать angular speed. Touch tap внутри stick
+SHALL отправить ненулевой bearing до neutral, после чего core SHALL завершить latched traverse.
+Обычный mousemove над panel SHALL ничего не менять. Keyboard arrows SHALL оставаться desktop
+fallback. Gunner Fire SHALL быть hold-кнопкой. Shield button и Space SHALL переключать absolute
+active один раз на non-repeat click/keydown; pointerup SHALL NOT выключать shield.
+Blur/visibilitychange SHALL нейтрализовать pilot и gunner fire, но SHALL NOT подменять ручное shield
+ON/OFF состояние. Controller SHALL NOT locally ease или predict trusted angle.
 
 #### Scenario: Pilot нажимает W и D
 
@@ -166,42 +174,45 @@ Gunner Fire SHALL быть hold-кнопкой. Shield button и Space SHALL п�
 
 #### Scenario: Pilot двигает touch stick
 
-- **WHEN** pilot удерживает captured pointer внутри virtual stick
+- **WHEN** pilot удерживает captured pointer внутри stick
 - **THEN** controller отправляет нормализованный movement vector и после release отправляет neutral
 
 #### Scenario: Touch tap задаёт aim
 
-- **WHEN** gunner или shield касается точки внутри stick и отпускает pointer
-- **THEN** ненулевой aim отправляется до neutral vector, а core сохраняет заданный angle
+- **WHEN** gunner либо shield касается точки внутри stick и отпускает pointer
+- **THEN** ненулевой absolute bearing отправляется до neutral, а core завершает плавный traverse к
+  target
 
 #### Scenario: Shield button отпущен
 
-- **WHEN** operator один раз нажимает кнопку OFF→ON и затем отпускает pointer
+- **WHEN** operator переключает shield OFF→ON и отпускает pointer
 - **THEN** UI сохраняет ON, публикует `aria-pressed=true` и не отправляет автоматический OFF
 
 #### Scenario: Shield полностью разрядился
 
-- **WHEN** authoritative snapshot меняет shield с active=true на active=false при energy=0
+- **WHEN** authoritative snapshot меняет shield active true→false при energy=0
 - **THEN** controller один раз синхронизирует local desired state в OFF и отправляет accepted
   `active=false`, после чего следующий ручной tap при energy>0 отправляет новый ON
 
 #### Scenario: Shield переключён клавишей
 
-- **WHEN** operator нажимает Space и keyboard генерирует repeat events
+- **WHEN** operator нажимает Space с keyboard repeat events
 - **THEN** active меняется ровно один раз до следующего физического keydown после keyup
 
 #### Scenario: Pointermove приходит чаще server limit
 
-- **WHEN** stick получает много pointermove events в течение 50 ms
+- **WHEN** stick получает много pointermove за 50 ms
 - **THEN** controller отправляет не более одного leading packet и один coalesced latest packet после
   slot
 
 #### Scenario: Управление отпущено
 
 - **WHEN** pilot отпускает keyboard либо pointer, а gunner отпускает Fire
-- **THEN** ближайший разрешённый packet содержит neutral movement либо `firing=false`
+- **THEN** ближайший разрешённый packet содержит neutral movement либо `firing=false` без локального
+  изменения trusted angle
 
 #### Scenario: Release произошёл внутри занятого slot
 
-- **WHEN** release происходит раньше 50 ms после прошлого send
-- **THEN** pending value заменяется neutral и следующий packet не содержит устаревший active input
+- **WHEN** pilot movement release происходит раньше 50 ms после прошлого send
+- **THEN** pending movement value заменяется neutral и следующий packet не содержит устаревший
+  active input; aim tap и короткий Fire сохраняют отдельный pulse-first порядок своих scenarios

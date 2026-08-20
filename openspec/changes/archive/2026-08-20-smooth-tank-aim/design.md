@@ -33,11 +33,12 @@ left/right steering отклонена: она меняет выученный U
 
 ### Config и внутреннее состояние
 
-`FlyingCastleConfig` получает turret max speed `4π/3 rad/s`, acceleration/braking `20π/3 rad/s²` и
-shield max speed `5π/3 rad/s`, acceleration/braking `25π/3 rad/s²`. State хранит для обеих систем
-public current angle, internal nullable target angle и signed angular velocity. Начальное состояние:
-current angle 0, target `null`, velocity 0. Target/velocity не публикуются и не добавляются в
-protocol.
+`FlyingCastleConfig` получает после первого playtest тяжёлый профиль: turret max speed `π/3 rad/s`,
+acceleration `2π/3 rad/s²`, braking `π rad/s²`; shield max speed `5π/12 rad/s`, acceleration
+`5π/6 rad/s²`, braking `5π/4 rad/s²`. Раздельное более сильное braking сохраняет мягкую остановку
+без долгого перелёта инерции. State хранит для обеих систем public current angle, internal nullable
+target angle и signed angular velocity. Начальное состояние: current angle 0, target `null`,
+velocity 0. Target/velocity не публикуются и не добавляются в protocol.
 
 ### Fixed-step алгоритм без overshoot
 
@@ -72,8 +73,9 @@ Hydration снапает к текущему authoritative angle. React controll
 
 ## Risks / Trade-offs
 
-- [Начальные rates ощущаются слишком медленно или быстро] → rates находятся в config и проверяются
-  ручным playtest без изменения wire contract.
+- [Тяжёлые rates ощущаются слишком медленно или быстро] → rates находятся в config и проверяются
+  повторным ручным playtest без изменения wire contract; предыдущий быстрый профиль сохранён в Git
+  commit `9998946`.
 - [Discrete braking даёт микроскачок у target] → stopping-distance cap, no-overshoot clamp и
   deterministic trace tests.
 - [Разные wrap conventions дают длинный визуальный путь] → общий shortest-delta contract и tests для

@@ -48,6 +48,8 @@ Monorepo остаётся на pnpm workspaces:
 - WASD/arrows и virtual stick для pilot;
 - gesture-only absolute aim с server-authoritative разгоном, торможением и ограничением скорости
   поворота для gunner/shield;
+- тяжёлый tuning после первого playtest: turret `60/120/180°/s`, shield `75/150/225°/s` для
+  max-speed/acceleration/braking;
 - hold-fire для gunner, toggle и энергия для shield;
 - grid, замок, башня, щит, декор и снаряды из Phaser primitives;
 - reconnect, active replacement, strict protocol v6 и network/browser tests.

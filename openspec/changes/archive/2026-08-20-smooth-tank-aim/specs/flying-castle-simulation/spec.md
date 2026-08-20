@@ -7,11 +7,11 @@ fixedStepMs=50, world `2400×1600`, castle radius/max speed, acceleration 640 un
 units/s², input timeout 250 ms, projectile speed/lifetime, fire cooldown 250 ms, shield capacity
 100, drain 20 units/s и recharge 10 units/s. State SHALL содержать clock, castle position/velocity,
 turret angle, queued gunner fire edge, shield angle/active/energy/rearm latch, latest role inputs и
-projectiles. Дополнительно config SHALL содержать turret max angular speed `4π/3 rad/s` и
-acceleration/braking `20π/3 rad/s²`, shield max angular speed `5π/3 rad/s` и acceleration/braking
-`25π/3 rad/s²`; state SHALL хранить current angle, nullable target angle и signed angular velocity
-отдельно для turret и shield. Target/velocity SHALL оставаться внутренними trusted полями и SHALL
-NOT публиковаться transport-клиентам.
+projectiles. Дополнительно config SHALL содержать turret max angular speed `π/3 rad/s`, acceleration
+`2π/3 rad/s²` и braking `π rad/s²`, shield max angular speed `5π/12 rad/s`, acceleration
+`5π/6 rad/s²` и braking `5π/4 rad/s²`; state SHALL хранить current angle, nullable target angle и
+signed angular velocity отдельно для turret и shield. Target/velocity SHALL оставаться внутренними
+trusted полями и SHALL NOT публиковаться transport-клиентам.
 
 #### Scenario: Одинаковое начальное состояние
 

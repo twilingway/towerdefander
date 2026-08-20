@@ -244,7 +244,7 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     expect(room.state.game.turretAngle).toBeGreaterThan(-Math.PI / 2);
     const firstProjectile = room.state.game.display.projectiles.at(0);
     expect(Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX)).toBeCloseTo(
-      -Math.PI / 60
+      -Math.PI / 600
     );
     for (let index = 0; index < 2; index += 1) room.advanceGameStep();
     room.handleGunnerInput(gunner.client, {

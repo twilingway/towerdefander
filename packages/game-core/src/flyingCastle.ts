@@ -99,12 +99,12 @@ const defaultFlyingCastleConfig: FlyingCastleConfig = {
   shieldCapacity: 100,
   shieldDrainPerSecond: 20,
   shieldRechargePerSecond: 10,
-  turretMaxAngularSpeedPerSecond: (4 * Math.PI) / 3,
-  turretAngularAccelerationPerSecondSquared: (20 * Math.PI) / 3,
-  turretAngularBrakingPerSecondSquared: (20 * Math.PI) / 3,
-  shieldMaxAngularSpeedPerSecond: (5 * Math.PI) / 3,
-  shieldAngularAccelerationPerSecondSquared: (25 * Math.PI) / 3,
-  shieldAngularBrakingPerSecondSquared: (25 * Math.PI) / 3
+  turretMaxAngularSpeedPerSecond: Math.PI / 3,
+  turretAngularAccelerationPerSecondSquared: (2 * Math.PI) / 3,
+  turretAngularBrakingPerSecondSquared: Math.PI,
+  shieldMaxAngularSpeedPerSecond: (5 * Math.PI) / 12,
+  shieldAngularAccelerationPerSecondSquared: (5 * Math.PI) / 6,
+  shieldAngularBrakingPerSecondSquared: (5 * Math.PI) / 4
 };
 
 export function createFlyingCastleConfig(

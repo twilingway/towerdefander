@@ -169,7 +169,7 @@ ON/OFF состояние. Controller SHALL NOT locally ease или predict trus
 - **THEN** ближайший разрешённый packet содержит neutral movement либо `firing=false` без локального
   изменения trusted angle
 
-#### Scenario: Pilot release произошёл внутри занятого slot
+#### Scenario: Release произошёл внутри занятого slot
 
 - **WHEN** pilot movement release происходит раньше 50 ms после прошлого send
 - **THEN** pending movement value заменяется neutral и следующий packet не содержит устаревший

@@ -44,8 +44,11 @@
 - [x] 5.2 Выполнить `pnpm check`, `pnpm spec:validate` и `git diff --check`; исправить regressions.
 - [x] 5.3 Провести read-only reviewer pass по authority, angular math, stale/reconnect, pointer
       lifecycle, render interpolation и archiveability.
-- [ ] 5.4 Запустить server/display/controller и открыть ручной playtest.
-- [ ] 5.5 При необходимости скорректировать только config rates по результату playtest и повторить
-      relevant tests/checks.
-- [ ] 5.6 После явного подтверждения пользователя архивировать change и выполнить отдельные commit и
-      push.
+- [x] 5.4 Запустить server/display/controller и получить результат первого ручного playtest:
+      исходные turret/shield rates слишком быстрые.
+- [x] 5.5 Настроить тяжёлый профиль turret `60/120/180°/s` и shield `75/150/225°/s`, обновить exact
+      config/trace tests и документацию.
+- [x] 5.6 Повторить targeted checks, `pnpm check`, `pnpm spec:validate`, `git diff --check` и
+      read-only reviewer pass после tuning.
+- [x] 5.7 Перезапустить ручной playtest; после явного подтверждения пользователя архивировать change
+      и выполнить отдельные commit и push.

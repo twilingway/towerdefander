@@ -8,8 +8,9 @@
 
 - Ненулевой aim остаётся абсолютным целевым направлением, но turret и shield sector разгоняются,
   поворачиваются по кратчайшей дуге и тормозят у цели без overshoot.
-- Начальная настройка turret: максимум 240°/s, acceleration/braking 1200°/s²; shield: максимум
-  300°/s, acceleration/braking 1500°/s² при fixed step 50 ms.
+- После первого ручного playtest тяжёлая настройка turret: максимум 60°/s, acceleration 120°/s² и
+  braking 180°/s²; shield: максимум 75°/s, acceleration 150°/s² и braking 225°/s² при fixed step 50
+  ms. Детерминированный разворот на 180° занимает 3,3 s для turret и 2,7 s для shield.
 - Короткий tap сохраняет target bearing до завершения поворота; transport-neutral zero не отменяет
   цель. Stale input и disconnect являются trusted cancellation: цель сбрасывается, angular velocity
   плавно тормозит до нуля, reconnect не восстанавливает старую цель.
