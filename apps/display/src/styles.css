@@ -328,6 +328,23 @@ p {
   background: #102a33;
 }
 
+.hud-energy {
+  width: 100%;
+  height: 0.45rem;
+  overflow: hidden;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  background: #07171f;
+}
+
+.hud-energy i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #377dbb, #75d8ff);
+  transition: width 100ms linear;
+}
+
 @media (width <= 900px) {
   .flying-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));

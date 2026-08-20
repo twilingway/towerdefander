@@ -50,8 +50,12 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
       data-testid="flying-castle-world"
       data-castle-x={game.castle.x}
       data-castle-y={game.castle.y}
+      data-castle-velocity-x={game.castle.velocityX}
+      data-turret-angle={game.turretAngle}
       data-projectile-count={game.projectiles.length}
+      data-latest-projectile-id={game.projectiles.at(-1)?.projectileId ?? ""}
       data-shield-active={game.shield.active}
+      data-shield-energy={game.shield.energy}
     >
       <div ref={hostReference} className="battlefield-canvas" aria-hidden="true" />
       {failed && <p className="battlefield-fallback">Не удалось запустить Phaser-сцену.</p>}

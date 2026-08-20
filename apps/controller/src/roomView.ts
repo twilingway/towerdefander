@@ -31,7 +31,7 @@ interface NetworkGameState {
     radius: number;
   };
   turretAngle: number;
-  shield: { angle: number; active: boolean };
+  shield: { angle: number; active: boolean; energy: number; capacity: number };
 }
 
 export interface NetworkRoomState {

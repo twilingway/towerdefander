@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@colyseus/sdk";
 
 const port = 35_677;
-const protocolVersion = 5;
+const protocolVersion = 6;
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const serverEntry = fileURLToPath(new URL("../../server/dist/index.js", import.meta.url));
@@ -70,11 +70,21 @@ try {
     active: true
   });
   await waitFor(() => display.state.game.shield.active === true);
+  await waitFor(() => display.state.game.shield.energy < display.state.game.shield.capacity);
+  const drainedShieldEnergy = display.state.game.shield.energy;
+  shield.send("shield:input", {
+    ...envelope(display.roomId, shield.sessionId),
+    sequence: 2,
+    aim: { x: -1, y: 0 },
+    active: false
+  });
+  await waitFor(() => display.state.game.shield.active === false);
+  await waitFor(() => display.state.game.shield.energy > drainedShieldEnergy);
 
   const roleError = nextServerError(shield);
   shield.send("pilot:input", {
     ...envelope(display.roomId, shield.sessionId),
-    sequence: 2,
+    sequence: 3,
     vector: { x: -1, y: 0 }
   });
   if ((await roleError).code !== "role_mismatch")
@@ -111,6 +121,7 @@ try {
       castleX: display.state.game.castle.x,
       projectiles: display.state.game.display.projectiles.length,
       shieldActive: display.state.game.shield.active,
+      shieldEnergy: display.state.game.shield.energy,
       replacementRole: display.state.players.get(replacement.sessionId).role
     })
   );

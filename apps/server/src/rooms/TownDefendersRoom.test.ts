@@ -82,8 +82,8 @@ function playerByRole(room: TownDefendersRoom, role: CrewRole): TestClient["clie
     : ({ sessionId: player.playerId, send: vi.fn() } as unknown as Client);
 }
 
-describe("TownDefendersRoom v5 lifecycle", () => {
-  it("accepts only strict protocol v5 display create options", () => {
+describe("TownDefendersRoom v6 lifecycle", () => {
+  it("accepts only strict protocol v6 display create options", () => {
     const room = new TownDefendersRoom();
     room.roomId = "ROOM123";
     expect(() => {
@@ -110,6 +110,7 @@ describe("TownDefendersRoom v5 lifecycle", () => {
     expect(room.state.phase).toBe("active");
     expect(room.state.hasGame).toBe(true);
     expect(room.state.game.castle).toMatchObject({ x: 1200, y: 800, radius: 52 });
+    expect(room.state.game.shield).toMatchObject({ energy: 100, capacity: 100 });
     expect(room.state.game.display.obstacles).toHaveLength(5);
     expect(setInterval).toHaveBeenCalledTimes(1);
   });
@@ -161,7 +162,7 @@ describe("TownDefendersRoom v5 lifecycle", () => {
       vector: { x: -1, y: 0 }
     });
     room.advanceGameStep();
-    expect(room.state.game.castle.velocityX).toBe(-320);
+    expect(room.state.game.castle.velocityX).toBe(-32);
   });
 
   it("releases an expired role for an active replacement", async () => {
@@ -189,7 +190,7 @@ describe("TownDefendersRoom v5 lifecycle", () => {
   });
 });
 
-describe("TownDefendersRoom v5 authoritative inputs", () => {
+describe("TownDefendersRoom v6 authoritative inputs", () => {
   it("moves the castle from fresh pilot input and ignores stale sequence", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -201,7 +202,28 @@ describe("TownDefendersRoom v5 authoritative inputs", () => {
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: 1, y: 0 } });
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: -1, y: 0 } });
     room.advanceGameStep();
-    expect(room.state.game.castle).toMatchObject({ x: 1216, velocityX: 320, velocityY: 0 });
+    expect(room.state.game.castle).toMatchObject({ x: 1201.6, velocityX: 32, velocityY: 0 });
+  });
+
+  it("rejects an unsafe sequence without advancing the connection watermark", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId
+    } as const;
+
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: Number.MAX_SAFE_INTEGER + 1,
+      vector: { x: -1, y: 0 }
+    });
+    room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: 1, y: 0 } });
+    room.advanceGameStep();
+
+    expect(countErrors(pilot, "invalid_message")).toBe(1);
+    expect(room.state.game.castle).toMatchObject({ x: 1201.6, velocityX: 32, velocityY: 0 });
   });
 
   it("limits held gunner fire by simulation cooldown", () => {
@@ -245,7 +267,96 @@ describe("TownDefendersRoom v5 authoritative inputs", () => {
     });
     room.advanceGameStep();
     expect(room.state.game.shield.active).toBe(true);
+    expect(room.state.game.shield.energy).toBe(99);
     expect(Math.abs(room.state.game.shield.angle)).toBeCloseTo(Math.PI);
+  });
+
+  it("drains shield energy only on fixed steps and ignores duplicate sequences", () => {
+    const { room, controllers } = startGame();
+    const shield = controllerAt(controllers, 2);
+    const input = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: shield.client.sessionId,
+      sequence: 1,
+      aim: { x: 1, y: 0 },
+      active: true
+    } as const;
+    room.handleShieldInput(shield.client, input);
+    room.handleShieldInput(shield.client, input);
+    expect(room.state.game.shield.energy).toBe(100);
+    room.advanceGameStep();
+    expect(room.state.game.shield.energy).toBe(99);
+    room.advanceGameStep();
+    expect(room.state.game.shield.energy).toBe(98);
+  });
+
+  it("publishes depletion, recharge and a fresh manual re-arm", () => {
+    const { room, controllers } = startGame();
+    const shield = controllerAt(controllers, 2);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: shield.client.sessionId
+    } as const;
+    room.handleShieldInput(shield.client, {
+      ...envelope,
+      sequence: 1,
+      aim: { x: 1, y: 0 },
+      active: true
+    });
+    for (let index = 0; index < 100; index += 1) room.advanceGameStep();
+    expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
+
+    room.handleShieldInput(shield.client, {
+      ...envelope,
+      sequence: 2,
+      aim: { x: 1, y: 0 },
+      active: true
+    });
+    for (let index = 0; index < 20; index += 1) room.advanceGameStep();
+    expect(room.state.game.shield).toMatchObject({ active: false, energy: 10 });
+
+    room.handleShieldInput(shield.client, {
+      ...envelope,
+      sequence: 3,
+      aim: { x: 1, y: 0 },
+      active: false
+    });
+    room.handleShieldInput(shield.client, {
+      ...envelope,
+      sequence: 4,
+      aim: { x: 1, y: 0 },
+      active: true
+    });
+    room.advanceGameStep();
+    expect(room.state.game.shield).toMatchObject({ active: true, energy: 9 });
+  });
+
+  it("clears a queued gunner click on disconnect and reconnect", async () => {
+    const { room, controllers } = startGame();
+    const gunner = controllerAt(controllers, 1);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: gunner.client.sessionId
+    } as const;
+    room.handleGunnerInput(gunner.client, {
+      ...envelope,
+      sequence: 1,
+      aim: { x: 1, y: 0 },
+      firing: true
+    });
+    room.handleGunnerInput(gunner.client, {
+      ...envelope,
+      sequence: 2,
+      aim: { x: 1, y: 0 },
+      firing: false
+    });
+    vi.spyOn(room, "allowReconnection").mockResolvedValue(gunner.client);
+    await room.onLeave(gunner.client, 1006);
+    room.advanceGameStep();
+    expect(room.state.game.display.projectiles).toHaveLength(0);
   });
 
   it("rejects malformed, wrong-role, spoofed and lobby inputs without mutation", () => {
@@ -305,8 +416,8 @@ describe("TownDefendersRoom v5 authoritative inputs", () => {
     expect(room.state.game.shield.active).toBe(true);
     vi.spyOn(room, "allowReconnection").mockResolvedValue(shield.client);
     await room.onLeave(shield.client, 1006);
-    room.advanceGameStep();
     expect(room.state.game.shield.active).toBe(false);
+    expect(room.state.game.shield.energy).toBe(99);
   });
 
   it("does not expose a role requested by the controller", () => {

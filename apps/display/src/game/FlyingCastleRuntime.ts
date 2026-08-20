@@ -1,11 +1,23 @@
 import type { DisplayGameSnapshot, PublicProjectileView } from "@town-defenders/protocol";
 import Phaser from "phaser";
 
-import { getBoundedCameraScroll, interpolatePoint } from "./flyingCastleViewModel.js";
+import {
+  createAngleTransition,
+  createPointTransition,
+  createSnappedVisualTransitions,
+  getBoundedCameraScroll,
+  getTimelineAlpha,
+  interpolateAngle,
+  interpolatePoint,
+  SnapshotResetLatch,
+  type AngleTransition,
+  type Point,
+  type PointTransition
+} from "./flyingCastleViewModel.js";
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 720;
-const LERP = 0.24;
+const SNAPSHOT_TRANSITION_MS = 50;
 
 class FlyingCastleScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
@@ -13,12 +25,20 @@ class FlyingCastleScene extends Phaser.Scene {
   private turret: Phaser.GameObjects.Rectangle | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
   private visualShieldAngle: number;
+  private castleTransition: PointTransition;
+  private turretTransition: AngleTransition;
+  private shieldTransition: AngleTransition;
+  private readonly snapshotReset = new SnapshotResetLatch();
   private readonly projectiles = new Map<string, Phaser.GameObjects.Arc>();
+  private readonly projectileTransitions = new Map<string, PointTransition>();
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("flying-castle");
     this.snapshot = snapshot;
     this.visualShieldAngle = snapshot.shield.angle;
+    this.castleTransition = createPointTransition(snapshot.castle, snapshot.castle, 0);
+    this.turretTransition = createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, 0);
+    this.shieldTransition = createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, 0);
   }
 
   create(): void {
@@ -49,51 +69,71 @@ class FlyingCastleScene extends Phaser.Scene {
       .setDepth(12)
       .setRotation(this.snapshot.turretAngle);
     this.shield = this.add.graphics().setDepth(14);
+    const now = performance.now();
+    this.snapToSnapshot(this.snapshot, now);
     this.drawShield();
-    this.cameras.main.startFollow(this.castleBody, true, 0.12, 0.12);
-    this.reconcileProjectiles();
+    this.reconcileProjectiles(now, true);
   }
 
   override update(): void {
     if (this.castleBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
-    const castlePosition = interpolatePoint(this.castleBody, this.snapshot.castle, LERP);
+    const now = performance.now();
+    const castlePosition = interpolateTransition(this.castleTransition, now);
     this.castleBody.x = castlePosition.x;
     this.castleBody.y = castlePosition.y;
     this.turret.x = this.castleBody.x;
     this.turret.y = this.castleBody.y;
-    this.turret.rotation = Phaser.Math.Angle.RotateTo(
-      this.turret.rotation,
-      this.snapshot.turretAngle,
-      0.18
-    );
-    this.visualShieldAngle = Phaser.Math.Angle.RotateTo(
-      this.visualShieldAngle,
-      this.snapshot.shield.angle,
-      0.18
-    );
+    this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
+    this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
     this.drawShield();
 
-    const targets = new Map(
-      this.snapshot.projectiles.map((projectile) => [projectile.projectileId, projectile])
+    const scroll = getBoundedCameraScroll(
+      castlePosition,
+      this.snapshot.worldWidth,
+      this.snapshot.worldHeight,
+      VIEWPORT_WIDTH,
+      VIEWPORT_HEIGHT
     );
+    this.cameras.main.setScroll(scroll.x, scroll.y);
+
     for (const [projectileId, visual] of this.projectiles) {
-      const target = targets.get(projectileId);
-      if (target !== undefined) {
-        visual.x = Phaser.Math.Linear(visual.x, target.x, 0.35);
-        visual.y = Phaser.Math.Linear(visual.y, target.y, 0.35);
-      }
+      const transition = this.projectileTransitions.get(projectileId);
+      if (transition === undefined) continue;
+      const position = interpolateTransition(transition, now);
+      visual.x = position.x;
+      visual.y = position.y;
     }
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     this.snapshot = snapshot;
-    if (this.sys.isActive()) this.reconcileProjectiles();
+    const shouldSnap = this.snapshotReset.consumeForSnapshot();
+    if (!this.sys.isActive()) return;
+    const now = performance.now();
+    if (shouldSnap || this.castleBody === undefined || this.turret === undefined) {
+      this.snapToSnapshot(snapshot, now);
+    } else {
+      this.castleTransition = createPointTransition(this.castleBody, snapshot.castle, now);
+      this.turretTransition = createAngleTransition(
+        this.turret.rotation,
+        snapshot.turretAngle,
+        now
+      );
+      this.shieldTransition = createAngleTransition(
+        this.visualShieldAngle,
+        snapshot.shield.angle,
+        now
+      );
+    }
+    this.reconcileProjectiles(now, shouldSnap);
   }
 
   prepareHydration(): void {
     for (const projectile of this.projectiles.values()) projectile.destroy();
     this.projectiles.clear();
+    this.projectileTransitions.clear();
+    this.snapshotReset.request();
   }
 
   private drawGrid(): void {
@@ -155,7 +195,19 @@ class FlyingCastleScene extends Phaser.Scene {
     this.shield.strokePath();
   }
 
-  private reconcileProjectiles(): void {
+  private snapToSnapshot(snapshot: DisplayGameSnapshot, now: number): void {
+    if (this.castleBody === undefined || this.turret === undefined) return;
+    this.castleBody.setPosition(snapshot.castle.x, snapshot.castle.y);
+    this.turret.setPosition(snapshot.castle.x, snapshot.castle.y);
+    this.turret.setRotation(snapshot.turretAngle);
+    this.visualShieldAngle = snapshot.shield.angle;
+    const transitions = createSnappedVisualTransitions(snapshot, now);
+    this.castleTransition = transitions.castle;
+    this.turretTransition = transitions.turret;
+    this.shieldTransition = transitions.shield;
+  }
+
+  private reconcileProjectiles(now: number, snap: boolean): void {
     const incoming = new Set(
       this.snapshot.projectiles.map((projectile) => projectile.projectileId)
     );
@@ -163,11 +215,25 @@ class FlyingCastleScene extends Phaser.Scene {
       if (!incoming.has(projectileId)) {
         visual.destroy();
         this.projectiles.delete(projectileId);
+        this.projectileTransitions.delete(projectileId);
       }
     }
     for (const projectile of this.snapshot.projectiles) {
-      if (!this.projectiles.has(projectile.projectileId)) {
-        this.projectiles.set(projectile.projectileId, this.createProjectile(projectile));
+      const visual = this.projectiles.get(projectile.projectileId);
+      if (visual === undefined) {
+        const created = this.createProjectile(projectile);
+        this.projectiles.set(projectile.projectileId, created);
+        this.projectileTransitions.set(
+          projectile.projectileId,
+          createPointTransition(projectile, projectile, now)
+        );
+      } else {
+        const from = snap ? projectile : visual;
+        if (snap) visual.setPosition(projectile.x, projectile.y);
+        this.projectileTransitions.set(
+          projectile.projectileId,
+          createPointTransition(from, projectile, now)
+        );
       }
     }
   }
@@ -178,6 +244,22 @@ class FlyingCastleScene extends Phaser.Scene {
       .setStrokeStyle(3, 0xfff1b2)
       .setDepth(11);
   }
+}
+
+function interpolateTransition(transition: PointTransition, now: number): Point {
+  return interpolatePoint(
+    transition.from,
+    transition.to,
+    getTimelineAlpha(now - transition.startedAt, SNAPSHOT_TRANSITION_MS)
+  );
+}
+
+function interpolateAngleTransition(transition: AngleTransition, now: number): number {
+  return interpolateAngle(
+    transition.from,
+    transition.to,
+    getTimelineAlpha(now - transition.startedAt, SNAPSHOT_TRANSITION_MS)
+  );
 }
 
 export interface FlyingCastleRuntime {
@@ -198,7 +280,7 @@ export function createFlyingCastleRuntime(
     height: VIEWPORT_HEIGHT,
     backgroundColor: "#07171f",
     scene,
-    render: { antialias: true, roundPixels: true },
+    render: { antialias: true, roundPixels: false },
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }
   });
   return {

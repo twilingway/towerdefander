@@ -1,46 +1,4 @@
-# three-role-controls Specification
-
-## Purpose
-
-TBD - created by archiving change flying-castle-core. Update Purpose after archive.
-
-## Requirements
-
-### Requirement: Комната имеет три стабильные роли
-
-Server SHALL назначать controller roles в порядке `pilot`, `gunner`, `shield` при входе и SHALL
-сохранять role при reconnect. Player view SHALL публиковать role. Active replacement после expiry
-SHALL получить именно освобождённую role.
-
-#### Scenario: Три игрока входят по очереди
-
-- **WHEN** три controller входят в новую room
-- **THEN** они получают соответственно pilot, gunner и shield
-
-#### Scenario: Pilot восстанавливается
-
-- **WHEN** pilot reconnect выполняется в grace period
-- **THEN** identity и role pilot сохраняются, а duplicate player не создаётся
-
-#### Scenario: Истёкший gunner заменён
-
-- **WHEN** gunner не восстановился за 30 секунд и новый controller входит в active room
-- **THEN** replacement получает role gunner и текущий snapshot
-
-### Requirement: Role ограничивает допустимые intents
-
-Pilot SHALL отправлять только `pilot:input`, gunner — `gunner:input`, shield — `shield:input`.
-Server SHALL сверять connection identity/role перед mutation.
-
-#### Scenario: Shield пытается двигать замок
-
-- **WHEN** shield controller отправляет strict pilot input
-- **THEN** server возвращает `role_mismatch` и castle state не меняется
-
-#### Scenario: Display отправляет role intent
-
-- **WHEN** display отправляет известный gameplay message
-- **THEN** server возвращает `not_controller` и не меняет мир
+## MODIFIED Requirements
 
 ### Requirement: Continuous intents упорядочены
 

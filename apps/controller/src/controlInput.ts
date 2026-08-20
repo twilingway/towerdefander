@@ -30,6 +30,20 @@ export function getKeyboardVector(keys: ReadonlySet<string>): ControlVector {
   return x === 0 && y === 0 ? NEUTRAL_VECTOR : normalizeControlVector({ x, y });
 }
 
+export function getFireReleaseDelay(
+  pressedAt: number | undefined,
+  releasedAt: number,
+  minimumPulseMs = 60
+): number {
+  if (pressedAt === undefined) return 0;
+  return Math.max(0, minimumPulseMs - Math.max(0, releasedAt - pressedAt));
+}
+
+export function getNextShieldDesiredActive(currentDesired: boolean, energy: number): boolean {
+  const next = !currentDesired;
+  return next && energy <= 0 ? currentDesired : next;
+}
+
 export class LatestInputScheduler<T> {
   private current: T;
   private lastSentAt = Number.NEGATIVE_INFINITY;

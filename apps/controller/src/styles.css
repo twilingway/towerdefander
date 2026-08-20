@@ -318,6 +318,28 @@ button:disabled {
   background: linear-gradient(135deg, #377dbb, #4da9d8);
 }
 
+.shield-control {
+  display: grid;
+  width: 100%;
+  gap: 0.65rem;
+}
+
+.shield-energy {
+  height: 0.85rem;
+  overflow: hidden;
+  border: 1px solid rgb(101 186 255 / 45%);
+  border-radius: 999px;
+  background: #0a1a27;
+}
+
+.shield-energy span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #377dbb, #75d8ff);
+  transition: width 100ms linear;
+}
+
 .hold-action:active {
   transform: scale(0.98);
   filter: brightness(1.2);

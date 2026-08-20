@@ -1,27 +1,4 @@
-# primitive-top-down-battlefield Specification
-
-## Purpose
-
-TBD - created by archiving change flying-castle-core. Update Purpose after archive.
-
-## Requirements
-
-### Requirement: Display показывает top-down мир примитивами
-
-Phaser SHALL отображать world `2400×1600`, background grid, декоративные не участвующие в collision
-примитивы, castle body, turret, shield arc и projectiles средствами Graphics/Shape без bitmap
-assets. Logical viewport SHALL быть `1280×720` и landscape-safe.
-
-#### Scenario: Матч начинается
-
-- **WHEN** room переходит в active и display получает первый snapshot
-- **THEN** canvas показывает круглый летающий замок и прямоугольные башни/декорации, а React HUD
-  отдельно показывает role labels и connection status
-
-#### Scenario: Снаряд создан
-
-- **WHEN** snapshot впервые содержит projectileId
-- **THEN** display создаёт отдельный круг и двигает его к авторитетной position
+## MODIFIED Requirements
 
 ### Requirement: Камера следует за летающим замком
 

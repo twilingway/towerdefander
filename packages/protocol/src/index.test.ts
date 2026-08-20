@@ -14,6 +14,7 @@ import {
   joinOptionsSchema,
   pilotInputCommandSchema,
   publicObstacleViewSchema,
+  publicShieldViewSchema,
   readyCommandSchema,
   serverErrorSchema,
   shieldInputCommandSchema,
@@ -55,7 +56,7 @@ function makeControllerRoom(): ControllerRoomView {
         radius: 52
       },
       turretAngle: 0,
-      shield: { angle: Math.PI, active: true }
+      shield: { angle: Math.PI, active: true, energy: 75, capacity: 100 }
     }
   };
 }
@@ -123,15 +124,15 @@ function requireItem<T>(items: readonly T[], index: number): T {
   return item;
 }
 
-describe("protocol v5 handshakes and crew", () => {
+describe("protocol v6 handshakes and crew", () => {
   it("publishes a fixed three-role protocol", () => {
-    expect(PROTOCOL_VERSION).toBe(5);
+    expect(PROTOCOL_VERSION).toBe(6);
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
   it("uses the same strict display shape for create and reconnect", () => {
-    const options = { role: "display", protocolVersion: 5 };
+    const options = { role: "display", protocolVersion: 6 };
 
     expect(displayCreateOptionsSchema.safeParse(options).success).toBe(true);
     expect(displayJoinOptionsSchema.safeParse(options).success).toBe(true);
@@ -139,22 +140,22 @@ describe("protocol v5 handshakes and crew", () => {
       false
     );
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 4 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 5 }).success
     ).toBe(false);
   });
 
-  it("trims controller names and rejects requested roles and v4", () => {
+  it("trims controller names and rejects requested roles and v5", () => {
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 5,
+        protocolVersion: 6,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 5,
+        protocolVersion: 6,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -162,44 +163,55 @@ describe("protocol v5 handshakes and crew", () => {
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 4,
+        protocolVersion: 5,
         playerName: "Ada"
       }).success
     ).toBe(false);
   });
 
-  it("accepts only the two v5 join variants", () => {
-    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 5 }).success).toBe(true);
+  it("accepts only the two v6 join variants", () => {
+    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 6 }).success).toBe(true);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 5,
+        protocolVersion: 6,
         playerName: "Ada"
       }).success
     ).toBe(true);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 5,
+        protocolVersion: 6,
         playerName: "Ada",
         playerCapacity: 3
+      }).success
+    ).toBe(false);
+
+    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 5 }).success).toBe(
+      false
+    );
+    expect(
+      joinOptionsSchema.safeParse({
+        role: "controller",
+        protocolVersion: 5,
+        playerName: "Ada"
       }).success
     ).toBe(false);
   });
 });
 
-describe("strict v5 controller intents", () => {
+describe("strict v6 controller intents", () => {
   const envelope = {
-    protocolVersion: 5,
+    protocolVersion: 6,
     roomId: ROOM_ID,
     playerId: PLAYER_ID
   } as const;
 
-  it("requires an authenticated ready envelope without v4 toggle state", () => {
+  it("requires an authenticated ready envelope without legacy toggle state", () => {
     expect(readyCommandSchema.safeParse(envelope).success).toBe(true);
-    expect(readyCommandSchema.safeParse({ protocolVersion: 5 }).success).toBe(false);
+    expect(readyCommandSchema.safeParse({ protocolVersion: 6 }).success).toBe(false);
     expect(readyCommandSchema.safeParse({ ...envelope, ready: true }).success).toBe(false);
-    expect(readyCommandSchema.safeParse({ ...envelope, protocolVersion: 4 }).success).toBe(false);
+    expect(readyCommandSchema.safeParse({ ...envelope, protocolVersion: 5 }).success).toBe(false);
   });
 
   it("accepts strict role-specific input shapes", () => {
@@ -257,6 +269,35 @@ describe("strict v5 controller intents", () => {
     }
   });
 
+  it("rejects every v5 command envelope", () => {
+    const v5Envelope = { ...envelope, protocolVersion: 5 };
+
+    expect(readyCommandSchema.safeParse(v5Envelope).success).toBe(false);
+    expect(
+      pilotInputCommandSchema.safeParse({
+        ...v5Envelope,
+        sequence: 1,
+        vector: { x: 1, y: 0 }
+      }).success
+    ).toBe(false);
+    expect(
+      gunnerInputCommandSchema.safeParse({
+        ...v5Envelope,
+        sequence: 1,
+        aim: { x: 1, y: 0 },
+        firing: true
+      }).success
+    ).toBe(false);
+    expect(
+      shieldInputCommandSchema.safeParse({
+        ...v5Envelope,
+        sequence: 1,
+        aim: { x: 1, y: 0 },
+        active: true
+      }).success
+    ).toBe(false);
+  });
+
   it("rejects non-finite and out-of-range vectors", () => {
     expect(vector2Schema.safeParse({ x: 1, y: -1 }).success).toBe(true);
 
@@ -285,6 +326,56 @@ describe("strict full and compact room projections", () => {
   it("accepts valid active controller and display projections", () => {
     expect(controllerRoomViewSchema.safeParse(makeControllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(true);
+  });
+
+  it("publishes the same strict shield shape to controller and display", () => {
+    expect(
+      publicShieldViewSchema.safeParse({
+        angle: 0,
+        active: false,
+        energy: 50,
+        capacity: 100
+      }).success
+    ).toBe(true);
+
+    const controller = makeControllerRoom();
+    const display = makeDisplayRoom();
+    expect(requireControllerGame(controller).shield).toEqual(requireDisplayGame(display).shield);
+
+    for (const room of [controller, display]) {
+      const game = room.game;
+      if (game === null) {
+        throw new Error("Expected an active game snapshot.");
+      }
+      expect(
+        (room === controller ? controllerRoomViewSchema : displayRoomViewSchema).safeParse({
+          ...room,
+          game: {
+            ...game,
+            shield: { ...game.shield, internalRechargeRate: 10 }
+          }
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it("rejects non-finite and out-of-range shield energy in both projections", () => {
+    for (const shield of [
+      { angle: 0, active: false, energy: -1, capacity: 100 },
+      { angle: 0, active: false, energy: 101, capacity: 100 },
+      { angle: 0, active: false, energy: Number.NaN, capacity: 100 },
+      { angle: 0, active: false, energy: 50, capacity: Number.POSITIVE_INFINITY }
+    ]) {
+      expect(publicShieldViewSchema.safeParse(shield).success).toBe(false);
+
+      const controller = makeControllerRoom();
+      requireControllerGame(controller).shield = shield;
+      expect(controllerRoomViewSchema.safeParse(controller).success).toBe(false);
+
+      const display = makeDisplayRoom();
+      requireDisplayGame(display).shield = shield;
+      expect(displayRoomViewSchema.safeParse(display).success).toBe(false);
+    }
   });
 
   it("accepts a partial crew only in a lobby without a game snapshot", () => {
@@ -410,7 +501,7 @@ describe("strict full and compact room projections", () => {
     ).toBe(false);
   });
 
-  it("rejects legacy defense fields in v5 projections", () => {
+  it("rejects legacy defense fields in v6 projections", () => {
     expect(
       displayRoomViewSchema.safeParse({ ...makeDisplayRoom(), playerCapacity: 3 }).success
     ).toBe(false);

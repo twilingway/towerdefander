@@ -6,20 +6,16 @@ import {
   serverErrorSchema,
   serverMessage,
   type ControllerRoomView,
-  type CrewRole
+  type CrewRole,
+  type PublicShieldView
 } from "@town-defenders/protocol";
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
+  getFireReleaseDelay,
   getKeyboardVector,
+  getNextShieldDesiredActive,
   LatestInputScheduler,
-  normalizeControlVector,
   type ControlVector
 } from "./controlInput.js";
 import {
@@ -46,6 +42,7 @@ interface ControlState {
 }
 
 const NEUTRAL_CONTROL: ControlState = { vector: { x: 0, y: 0 }, firing: false, active: false };
+const AIM_RELEASE_DELAY_MS = 60;
 const gameServerUrl = readStringEnvironment(
   import.meta.env.VITE_GAME_SERVER_URL,
   createDefaultGameServerUrl()
@@ -273,6 +270,7 @@ export function ControllerApp() {
         ) : (
           <RoleControlPanel
             role={currentPlayer.role}
+            shield={view?.game?.shield}
             disabled={status === "reconnecting"}
             generation={connectionEpoch}
             onSend={sendControl}
@@ -285,16 +283,26 @@ export function ControllerApp() {
 
 function RoleControlPanel({
   role,
+  shield,
   disabled,
   generation,
   onSend
 }: {
   readonly role: CrewRole;
+  readonly shield: PublicShieldView | undefined;
   readonly disabled: boolean;
   readonly generation: number;
   readonly onSend: (sequence: number, control: ControlState) => void;
 }) {
   const controlReference = useRef<ControlState>(NEUTRAL_CONTROL);
+  const firePressedAtReference = useRef<number | undefined>(undefined);
+  const fireReleaseTimerReference = useRef<number | undefined>(undefined);
+  const aimReleaseTimerReference = useRef<number | undefined>(undefined);
+  const firePointerReference = useRef<number | undefined>(undefined);
+  const shieldSnapshotReference = useRef(shield);
+  const shieldDesiredActiveReference = useRef(shield?.active ?? false);
+  const previousShieldActiveReference = useRef(shield?.active ?? false);
+  shieldSnapshotReference.current = shield;
   const sendReference = useRef(onSend);
   sendReference.current = onSend;
   const schedulerReference = useRef<LatestInputScheduler<ControlState> | undefined>(undefined);
@@ -311,17 +319,88 @@ function RoleControlPanel({
     schedulerReference.current?.update(next, performance.now());
   }
 
+  function clearFireReleaseTimer(): void {
+    if (fireReleaseTimerReference.current !== undefined) {
+      window.clearTimeout(fireReleaseTimerReference.current);
+      fireReleaseTimerReference.current = undefined;
+    }
+  }
+
+  function clearAimReleaseTimer(): void {
+    if (aimReleaseTimerReference.current !== undefined) {
+      window.clearTimeout(aimReleaseTimerReference.current);
+      aimReleaseTimerReference.current = undefined;
+    }
+  }
+
+  function updateAim(vector: ControlVector): void {
+    clearAimReleaseTimer();
+    update({ vector });
+  }
+
+  function releaseAim(): void {
+    clearAimReleaseTimer();
+    if (role === "pilot") {
+      update({ vector: NEUTRAL_CONTROL.vector });
+      return;
+    }
+    aimReleaseTimerReference.current = window.setTimeout(() => {
+      aimReleaseTimerReference.current = undefined;
+      update({ vector: NEUTRAL_CONTROL.vector });
+    }, AIM_RELEASE_DELAY_MS);
+  }
+
+  function cancelAim(): void {
+    clearAimReleaseTimer();
+    update({ vector: NEUTRAL_CONTROL.vector });
+  }
+
+  function beginFire(): void {
+    clearFireReleaseTimer();
+    firePressedAtReference.current = performance.now();
+    update({ firing: true });
+  }
+
+  function endFire(): void {
+    const pressedAt = firePressedAtReference.current;
+    firePressedAtReference.current = undefined;
+    const remainingMs = getFireReleaseDelay(pressedAt, performance.now());
+    clearFireReleaseTimer();
+    if (remainingMs === 0) {
+      update({ firing: false });
+      return;
+    }
+    fireReleaseTimerReference.current = window.setTimeout(() => {
+      fireReleaseTimerReference.current = undefined;
+      update({ firing: false });
+    }, remainingMs);
+  }
+
+  function cancelFire(): void {
+    firePressedAtReference.current = undefined;
+    firePointerReference.current = undefined;
+    clearFireReleaseTimer();
+    update({ firing: false });
+  }
+
+  function toggleShield(): void {
+    if (role !== "shield") return;
+    const next = getNextShieldDesiredActive(
+      shieldDesiredActiveReference.current,
+      shieldSnapshotReference.current?.energy ?? 0
+    );
+    if (next === shieldDesiredActiveReference.current) return;
+    shieldDesiredActiveReference.current = next;
+    update({ active: next });
+  }
+
   useEffect(() => {
     const keys = new Set<string>();
     const scheduler = schedulerReference.current;
     const timer = window.setInterval(() => scheduler?.flush(performance.now()), 25);
     function applyKeys(): void {
       const vector = getKeyboardVector(keys);
-      update({
-        vector,
-        firing: role === "gunner" && keys.has("Space"),
-        active: role === "shield" && keys.has("Space")
-      });
+      update({ vector });
     }
     function onKeyDown(event: KeyboardEvent): void {
       if (
@@ -338,17 +417,29 @@ function RoleControlPanel({
         ].includes(event.code)
       ) {
         event.preventDefault();
+        if (event.code === "Space" && role === "shield") {
+          if (!event.repeat) toggleShield();
+          return;
+        }
+        if (event.code === "Space" && role === "gunner" && !keys.has("Space")) beginFire();
         keys.add(event.code);
         applyKeys();
       }
     }
     function onKeyUp(event: KeyboardEvent): void {
+      if (event.code === "Space" && role === "shield") return;
       keys.delete(event.code);
+      if (event.code === "Space" && role === "gunner") endFire();
       applyKeys();
     }
     function neutralize(): void {
       keys.clear();
-      update(NEUTRAL_CONTROL);
+      clearAimReleaseTimer();
+      cancelFire();
+      update({
+        vector: NEUTRAL_CONTROL.vector,
+        active: role === "shield" ? controlReference.current.active : false
+      });
     }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -356,6 +447,9 @@ function RoleControlPanel({
     document.addEventListener("visibilitychange", neutralize);
     return () => {
       controlReference.current = NEUTRAL_CONTROL;
+      firePointerReference.current = undefined;
+      clearAimReleaseTimer();
+      clearFireReleaseTimer();
       scheduler?.update(NEUTRAL_CONTROL, performance.now());
       scheduler?.flush(performance.now() + 50);
       window.clearInterval(timer);
@@ -373,56 +467,86 @@ function RoleControlPanel({
       return;
     }
     controlReference.current = NEUTRAL_CONTROL;
+    shieldDesiredActiveReference.current = false;
+    firePointerReference.current = undefined;
+    clearAimReleaseTimer();
+    clearFireReleaseTimer();
     scheduler?.startGeneration(NEUTRAL_CONTROL, performance.now());
   }, [disabled, generation]);
 
-  function aimFromMouse(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (
-      role === "pilot" ||
-      event.pointerType !== "mouse" ||
-      (event.target instanceof Element && event.target.closest("button") !== null)
-    )
-      return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const vector = normalizeControlVector({
-      x: event.clientX - (bounds.left + bounds.width / 2),
-      y: event.clientY - (bounds.top + bounds.height / 2)
-    });
-    update({ vector });
-  }
+  useEffect(() => {
+    const previousActive = previousShieldActiveReference.current;
+    const active = shield?.active ?? false;
+    previousShieldActiveReference.current = active;
+    if (role === "shield" && previousActive && !active && shield?.energy === 0) {
+      shieldDesiredActiveReference.current = false;
+      update({ active: false });
+    }
+  }, [role, shield?.active, shield?.energy]);
 
-  const action = role === "gunner" ? "firing" : "active";
   return (
-    <div className="role-control" data-role={role} onPointerMove={aimFromMouse}>
+    <div className="role-control" data-role={role}>
       <p className="phase-copy">{roleHelp(role)}</p>
       <VirtualStick
         label={`Направление: ${roleLabel(role)}`}
-        onChange={(vector) => {
-          update({ vector });
-        }}
+        onChange={updateAim}
+        onRelease={releaseAim}
+        onCancel={cancelAim}
       />
-      {role !== "pilot" && (
+      {role === "gunner" && (
         <button
           type="button"
-          className={`hold-action hold-action--${role}`}
-          data-testid={role === "gunner" ? "fire-button" : "shield-button"}
+          className="hold-action hold-action--gunner"
+          data-testid="fire-button"
           disabled={disabled}
           onPointerDown={(event) => {
+            if (!event.isPrimary || event.button !== 0) return;
+            firePointerReference.current = event.pointerId;
             event.currentTarget.setPointerCapture(event.pointerId);
-            update({ [action]: true });
+            beginFire();
           }}
-          onPointerUp={() => {
-            update({ [action]: false });
+          onPointerUp={(event) => {
+            if (firePointerReference.current !== event.pointerId) return;
+            firePointerReference.current = undefined;
+            endFire();
           }}
-          onPointerCancel={() => {
-            update({ [action]: false });
+          onPointerCancel={(event) => {
+            if (firePointerReference.current !== event.pointerId) return;
+            firePointerReference.current = undefined;
+            cancelFire();
           }}
-          onLostPointerCapture={() => {
-            update({ [action]: false });
+          onLostPointerCapture={(event) => {
+            if (firePointerReference.current !== event.pointerId) return;
+            firePointerReference.current = undefined;
+            cancelFire();
           }}
         >
-          {role === "gunner" ? "УДЕРЖИВАТЬ ОГОНЬ" : "УДЕРЖИВАТЬ ЩИТ"}
+          УДЕРЖИВАТЬ ОГОНЬ
         </button>
+      )}
+      {role === "shield" && shield !== undefined && (
+        <div className="shield-control">
+          <div className="shield-energy" aria-label="Энергия щита">
+            <span style={{ width: `${String((shield.energy / shield.capacity) * 100)}%` }} />
+          </div>
+          <strong>
+            Энергия {Math.round(shield.energy)} / {Math.round(shield.capacity)}
+          </strong>
+          <button
+            type="button"
+            className="hold-action hold-action--shield"
+            data-testid="shield-button"
+            aria-pressed={shield.active}
+            disabled={disabled || (!shield.active && shield.energy <= 0)}
+            onClick={toggleShield}
+          >
+            {shield.active
+              ? "ВЫКЛЮЧИТЬ ЩИТ"
+              : shield.energy <= 0
+                ? "ЩИТ ВОССТАНАВЛИВАЕТСЯ"
+                : "ВКЛЮЧИТЬ ЩИТ"}
+          </button>
+        </div>
       )}
       <small>Desktop: {role === "pilot" ? "WASD или стрелки" : "мышь/стрелки + Space"}</small>
     </div>

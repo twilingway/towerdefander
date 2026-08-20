@@ -5,11 +5,13 @@ import { normalizeControlVector, type ControlVector } from "./controlInput.js";
 interface VirtualStickProps {
   readonly label: string;
   readonly onChange: (vector: ControlVector) => void;
+  readonly onRelease?: () => void;
+  readonly onCancel?: () => void;
 }
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
 
-export function VirtualStick({ label, onChange }: VirtualStickProps) {
+export function VirtualStick({ label, onChange, onRelease, onCancel }: VirtualStickProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const pointerReference = useRef<number | undefined>(undefined);
   const [vector, setVector] = useState<ControlVector>(NEUTRAL);
@@ -29,13 +31,19 @@ export function VirtualStick({ label, onChange }: VirtualStickProps) {
     onChange(next);
   }
 
-  function release(event?: ReactPointerEvent<HTMLDivElement>): void {
+  function release(event?: ReactPointerEvent<HTMLDivElement>, cancelled = false): void {
     if (event !== undefined && pointerReference.current !== event.pointerId) {
       return;
     }
     pointerReference.current = undefined;
     setVector(NEUTRAL);
-    onChange(NEUTRAL);
+    if (cancelled) {
+      (onCancel ?? onRelease)?.();
+    } else if (onRelease !== undefined) {
+      onRelease();
+    } else {
+      onChange(NEUTRAL);
+    }
   }
 
   return (
@@ -46,6 +54,7 @@ export function VirtualStick({ label, onChange }: VirtualStickProps) {
       aria-label={label}
       data-testid="virtual-stick"
       onPointerDown={(event) => {
+        if (!event.isPrimary || event.button !== 0) return;
         pointerReference.current = event.pointerId;
         event.currentTarget.setPointerCapture(event.pointerId);
         applyPointer(event);
@@ -55,11 +64,15 @@ export function VirtualStick({ label, onChange }: VirtualStickProps) {
           applyPointer(event);
         }
       }}
-      onPointerUp={release}
-      onPointerCancel={release}
+      onPointerUp={(event) => {
+        release(event);
+      }}
+      onPointerCancel={(event) => {
+        release(event, true);
+      }}
       onLostPointerCapture={() => {
         if (pointerReference.current !== undefined) {
-          release();
+          release(undefined, true);
         }
       }}
     >

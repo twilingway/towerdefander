@@ -2,7 +2,8 @@
 
 Статус: 20 августа 2026 года основная концепция изменена с классического Tower Defense на
 кооперативный top-down экшен про один летающий замок. Предыдущая реализация 2–6 дорог и protocol v4
-сохранена в Git (`00c3ab7`) как точка возврата. Активный change: `flying-castle-core`.
+сохранена в Git (`00c3ab7`) как точка возврата. Realtime slice и плавное управление зафиксированы
+архивными changes `flying-castle-core` и `smooth-flight-controls`.
 
 ## 1. Цель продукта
 
@@ -11,7 +12,7 @@
 
 - pilot двигает замок по большой top-down карте;
 - gunner направляет башню и стреляет;
-- shield operator направляет и удерживает защитный сектор.
+- shield operator направляет, вручную переключает защитный сектор и следит за его энергией.
 
 Сервер является единственным источником истины. Display показывает Phaser-мир и интерполирует server
 snapshots. Controllers отправляют только intents и не рассчитывают trusted transforms.
@@ -34,7 +35,7 @@ Monorepo остаётся на pnpm workspaces:
 - `apps/controller` — responsive role controllers;
 - `apps/server` — Colyseus room, reconnect, validation и simulation timer;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — protocol v5 и строгие transport/view schemas.
+- `packages/protocol` — protocol v6 и строгие transport/view schemas.
 
 ## 3. Этапы
 
@@ -44,9 +45,9 @@ Monorepo остаётся на pnpm workspaces:
 - мир 2400×1600, камера следует за замком;
 - server-authoritative fixed step 50 ms;
 - WASD/arrows и virtual stick для pilot;
-- aim + fire для gunner, aim + hold для shield;
+- gesture-only aim + hold-fire для gunner, aim + toggle и энергия для shield;
 - grid, замок, башня, щит, декор и снаряды из Phaser primitives;
-- reconnect, active replacement, strict protocol v5 и network/browser tests.
+- reconnect, active replacement, strict protocol v6 и network/browser tests.
 
 Результат: руками проверяется совместное управление одним замком с трёх браузеров без финального
 art.
@@ -84,6 +85,6 @@ art.
 
 ## 5. Не входит в первый slice
 
-Enemies, damage, collision с декором, shield energy, waves, economy, victory/defeat, procedural map,
-accounts, persistence, matchmaking, bitmap art, sound и Android native output. Эти решения будут
-приниматься после ручной проверки core controls.
+Enemies, damage, collision с декором, shield upgrades, waves, economy, victory/defeat, procedural
+map, accounts, persistence, matchmaking, bitmap art, sound и Android native output. Эти решения
+будут приниматься после ручной проверки core controls.

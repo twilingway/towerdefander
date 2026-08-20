@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getKeyboardVector, LatestInputScheduler, normalizeControlVector } from "./controlInput.js";
+import {
+  getFireReleaseDelay,
+  getKeyboardVector,
+  getNextShieldDesiredActive,
+  LatestInputScheduler,
+  normalizeControlVector
+} from "./controlInput.js";
 
 describe("controller input", () => {
   it("normalizes diagonals and rejects non-finite components", () => {
@@ -17,6 +23,18 @@ describe("controller input", () => {
     expect(getKeyboardVector(new Set(["KeyW", "KeyD"]))).toEqual(
       getKeyboardVector(new Set(["ArrowUp", "ArrowRight"]))
     );
+  });
+
+  it("keeps a short fire click alive through the next send slot", () => {
+    expect(getFireReleaseDelay(100, 110)).toBe(50);
+    expect(getFireReleaseDelay(100, 170)).toBe(0);
+    expect(getFireReleaseDelay(undefined, 170)).toBe(0);
+  });
+
+  it("toggles the latest shield intent and blocks ON at zero energy", () => {
+    expect(getNextShieldDesiredActive(false, 100)).toBe(true);
+    expect(getNextShieldDesiredActive(true, 100)).toBe(false);
+    expect(getNextShieldDesiredActive(false, 0)).toBe(false);
   });
 
   it("coalesces pointer flood and prioritizes latest release", () => {

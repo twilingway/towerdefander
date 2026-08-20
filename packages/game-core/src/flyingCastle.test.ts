@@ -5,12 +5,16 @@ import {
   applyGunnerInput,
   applyPilotInput,
   applyShieldInput,
+  cancelQueuedFire,
   createFlyingCastleConfig,
   createFlyingCastleState,
+  deactivateShield,
+  moveVectorTowards,
   normalizeVector,
   validateFlyingCastleConfig,
   type FlyingCastleConfig,
-  type FlyingCastleState
+  type FlyingCastleState,
+  type Vector2
 } from "./index.js";
 
 function advance(state: FlyingCastleState, config: FlyingCastleConfig, steps: number) {
@@ -21,8 +25,22 @@ function advance(state: FlyingCastleState, config: FlyingCastleConfig, steps: nu
   return current;
 }
 
+function holdPilot(
+  state: FlyingCastleState,
+  config: FlyingCastleConfig,
+  vector: Vector2,
+  steps: number
+) {
+  let current = state;
+  for (let step = 0; step < steps; step += 1) {
+    current = applyPilotInput(current, { vector, receivedTick: current.clock.tick });
+    current = advanceFlyingCastle(current, config);
+  }
+  return current;
+}
+
 describe("flying castle configuration", () => {
-  it("creates the explicit prototype defaults deterministically", () => {
+  it("creates the explicit smooth-flight defaults deterministically", () => {
     const config = createFlyingCastleConfig();
 
     expect(config).toEqual({
@@ -30,14 +48,24 @@ describe("flying castle configuration", () => {
       worldWidth: 2400,
       worldHeight: 1600,
       castleSpeedPerSecond: 320,
+      castleAccelerationPerSecondSquared: 640,
+      castleBrakingPerSecondSquared: 800,
       castleRadius: 52,
       inputTimeoutTicks: 5,
       projectileSpeedPerSecond: 720,
       projectileLifetimeMs: 1500,
       projectileRadius: 8,
-      fireCooldownTicks: 5
+      fireCooldownTicks: 5,
+      shieldCapacity: 100,
+      shieldDrainPerSecond: 20,
+      shieldRechargePerSecond: 10
     });
     expect(createFlyingCastleState(config)).toEqual(createFlyingCastleState(config));
+    expect(createFlyingCastleState(config)).toMatchObject({
+      shieldEnergy: 100,
+      shieldRearmRequired: false,
+      queuedFire: false
+    });
   });
 
   it.each([
@@ -45,12 +73,17 @@ describe("flying castle configuration", () => {
     ["worldWidth", Number.NaN],
     ["worldHeight", 0],
     ["castleSpeedPerSecond", -1],
+    ["castleAccelerationPerSecondSquared", 0],
+    ["castleBrakingPerSecondSquared", Number.POSITIVE_INFINITY],
     ["castleRadius", 0],
     ["inputTimeoutTicks", 1.5],
     ["projectileSpeedPerSecond", Number.POSITIVE_INFINITY],
     ["projectileLifetimeMs", 0],
     ["projectileRadius", -2],
-    ["fireCooldownTicks", 0]
+    ["fireCooldownTicks", 0],
+    ["shieldCapacity", 0],
+    ["shieldDrainPerSecond", -1],
+    ["shieldRechargePerSecond", Number.NaN]
   ] as const)("rejects invalid %s", (field, value) => {
     expect(() => {
       validateFlyingCastleConfig({ ...createFlyingCastleConfig(), [field]: value });
@@ -64,65 +97,104 @@ describe("flying castle configuration", () => {
 });
 
 describe("pilot movement", () => {
-  it("moves right at configured speed for one fixed step", () => {
+  it("accelerates to max speed in ten equal fixed steps", () => {
     const config = createFlyingCastleConfig();
-    const initial = createFlyingCastleState(config);
-    const result = advanceFlyingCastle(
-      applyPilotInput(initial, { vector: { x: 1, y: 0 }, receivedTick: 0 }),
-      config
-    );
+    let state = createFlyingCastleState(config);
+    const velocities: number[] = [];
 
-    expect(result.castle).toEqual({
-      x: initial.castle.x + 16,
-      y: initial.castle.y,
-      velocity: { x: 320, y: 0 }
-    });
-    expect(result.clock).toEqual({ tick: 1, elapsedMs: 50 });
+    for (let step = 0; step < 10; step += 1) {
+      state = holdPilot(state, config, { x: 1, y: 0 }, 1);
+      velocities.push(state.castle.velocity.x);
+    }
+
+    expect(velocities).toEqual([32, 64, 96, 128, 160, 192, 224, 256, 288, 320]);
+    expect(state.castle.x).toBe(createFlyingCastleState(config).castle.x + 88);
   });
 
-  it("caps diagonal vectors at unit length", () => {
+  it("brakes from max speed to rest in eight fixed steps", () => {
     const config = createFlyingCastleConfig();
-    const state = applyPilotInput(createFlyingCastleState(config), {
-      vector: { x: 1, y: 1 },
-      receivedTick: 0
-    });
-    const result = advanceFlyingCastle(state, config);
+    let state = holdPilot(createFlyingCastleState(config), config, { x: 1, y: 0 }, 10);
+    const releaseX = state.castle.x;
+    const velocities: number[] = [];
 
-    expect(Math.hypot(result.castle.velocity.x, result.castle.velocity.y)).toBeCloseTo(320);
+    state = applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: state.clock.tick });
+    for (let step = 0; step < 8; step += 1) {
+      state = advanceFlyingCastle(state, config);
+      velocities.push(state.castle.velocity.x);
+    }
+
+    expect(velocities).toEqual([280, 240, 200, 160, 120, 80, 40, 0]);
+    expect(state.castle.x).toBe(releaseX + 56);
+  });
+
+  it("caps diagonal target and actual velocity at max speed", () => {
+    const config = createFlyingCastleConfig();
+    const state = holdPilot(createFlyingCastleState(config), config, { x: 1, y: 1 }, 10);
+
+    expect(Math.hypot(state.castle.velocity.x, state.castle.velocity.y)).toBeCloseTo(320);
+    expect(state.castle.velocity.x).toBeCloseTo(320 / Math.sqrt(2));
     expect(normalizeVector({ x: 0.25, y: 0.5 })).toEqual({ x: 0.25, y: 0.5 });
+    const moved = moveVectorTowards({ x: 0, y: 0 }, { x: 3, y: 4 }, 2);
+    expect(moved.x).toBeCloseTo(1.2);
+    expect(moved.y).toBeCloseTo(1.6);
   });
 
-  it("clamps the castle radius inside every world edge", () => {
+  it("clamps at bounds and clears only the outward velocity component", () => {
     const config = createFlyingCastleConfig({ worldWidth: 200, worldHeight: 200 });
-    const nearEdge: FlyingCastleState = {
+    const nearRight: FlyingCastleState = {
       ...createFlyingCastleState(config),
-      castle: { x: 53, y: 147, velocity: { x: 0, y: 0 } }
+      castle: { x: 147, y: 100, velocity: { x: 100, y: 100 } }
     };
-    const result = advanceFlyingCastle(
-      applyPilotInput(nearEdge, { vector: { x: -1, y: 1 }, receivedTick: 0 }),
+    const bounded = advanceFlyingCastle(
+      applyPilotInput(nearRight, { vector: { x: 1, y: 1 }, receivedTick: 0 }),
       config
     );
 
-    expect(result.castle.x).toBe(config.castleRadius);
-    expect(result.castle.y).toBe(config.worldHeight - config.castleRadius);
+    expect(bounded.castle.x).toBe(config.worldWidth - config.castleRadius);
+    expect(bounded.castle.velocity.x).toBe(0);
+    expect(bounded.castle.velocity.y).toBeGreaterThan(100);
+
+    const inward: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      castle: {
+        x: config.worldWidth - config.castleRadius,
+        y: 100,
+        velocity: { x: -100, y: 0 }
+      }
+    };
+    const movedInward = advanceFlyingCastle(
+      applyPilotInput(inward, { vector: { x: -1, y: 0 }, receivedTick: 0 }),
+      config
+    );
+    expect(movedInward.castle.x).toBeLessThan(config.worldWidth - config.castleRadius);
+    expect(movedInward.castle.velocity.x).toBeLessThan(0);
   });
 
-  it("neutralizes movement when input age reaches five ticks", () => {
+  it("starts ordinary braking when input becomes stale", () => {
     const config = createFlyingCastleConfig();
     const moving = applyPilotInput(createFlyingCastleState(config), {
       vector: { x: 1, y: 0 },
       receivedTick: 0
     });
     const afterFourSteps = advance(moving, config, 4);
-    const stopped = advanceFlyingCastle(afterFourSteps, config);
+    const stale = advanceFlyingCastle(afterFourSteps, config);
 
-    expect(afterFourSteps.castle.velocity.x).toBe(320);
-    expect(stopped.castle.velocity).toEqual({ x: 0, y: 0 });
-    expect(stopped.castle.x).toBe(afterFourSteps.castle.x);
-    expect(stopped.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
+    expect(afterFourSteps.castle.velocity.x).toBe(128);
+    expect(stale.castle.velocity.x).toBe(88);
+    expect(stale.castle.x).toBeGreaterThan(afterFourSteps.castle.x);
+    expect(stale.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
   });
 
-  it("rejects non-finite vectors and future received ticks", () => {
+  it("brakes instead of teleporting velocity to zero after trusted neutral input", () => {
+    const config = createFlyingCastleConfig();
+    let state = holdPilot(createFlyingCastleState(config), config, { x: 1, y: 0 }, 10);
+    state = applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: state.clock.tick });
+    state = advanceFlyingCastle(state, config);
+
+    expect(state.castle.velocity.x).toBe(280);
+  });
+
+  it("rejects non-finite vectors, invalid deltas, and future received ticks", () => {
     const state = createFlyingCastleState(createFlyingCastleConfig());
     expect(() =>
       applyPilotInput(state, { vector: { x: Number.NaN, y: 0 }, receivedTick: 0 })
@@ -130,6 +202,7 @@ describe("pilot movement", () => {
     expect(() => applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: 1 })).toThrow(
       RangeError
     );
+    expect(() => moveVectorTowards({ x: 0, y: 0 }, { x: 1, y: 0 }, -1)).toThrow(RangeError);
   });
 });
 
@@ -152,7 +225,28 @@ describe("gunner simulation", () => {
     expect(advanceFlyingCastle(state, config).turretAngle).toBeCloseTo(-Math.PI / 2);
   });
 
-  it("fires one server-identified projectile and enforces tick cooldown", () => {
+  it("preserves a short true/false click until the next simulation tick", () => {
+    const config = createFlyingCastleConfig();
+    let state = createFlyingCastleState(config);
+    state = applyGunnerInput(state, {
+      vector: { x: 1, y: 0 },
+      firing: true,
+      receivedTick: 0
+    });
+    state = applyGunnerInput(state, {
+      vector: { x: 1, y: 0 },
+      firing: false,
+      receivedTick: 0
+    });
+
+    expect(state.queuedFire).toBe(true);
+    state = advanceFlyingCastle(state, config);
+    expect(state.projectiles).toHaveLength(1);
+    expect(state.queuedFire).toBe(false);
+    expect(advance(state, config, config.fireCooldownTicks * 2).projectiles).toHaveLength(1);
+  });
+
+  it("coalesces repeated clicks into one pending shot during cooldown", () => {
     const config = createFlyingCastleConfig();
     let state = applyGunnerInput(createFlyingCastleState(config), {
       vector: { x: 1, y: 0 },
@@ -160,41 +254,98 @@ describe("gunner simulation", () => {
       receivedTick: 0
     });
     state = advanceFlyingCastle(state, config);
-
-    expect(state.projectiles).toHaveLength(1);
-    expect(state.projectiles[0]).toMatchObject({
-      projectileId: "projectile-0",
-      x: 1260,
-      y: 800,
-      velocity: { x: 720, y: 0 },
-      spawnedTick: 1
-    });
-    expect(advanceFlyingCastle(state, config).projectiles).toHaveLength(1);
-
-    state = advance(state, config, 4);
     state = applyGunnerInput(state, {
       vector: { x: 1, y: 0 },
-      firing: true,
+      firing: false,
       receivedTick: state.clock.tick
     });
-    state = advanceFlyingCastle(state, config);
+
+    for (let click = 0; click < 3; click += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: 1, y: 0 },
+        firing: true,
+        receivedTick: state.clock.tick
+      });
+      state = applyGunnerInput(state, {
+        vector: { x: 1, y: 0 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+    }
+
+    expect(state.queuedFire).toBe(true);
+    state = advance(state, config, config.fireCooldownTicks);
     expect(state.projectiles.map(({ projectileId }) => projectileId)).toEqual([
       "projectile-0",
       "projectile-1"
     ]);
+    expect(state.queuedFire).toBe(false);
   });
 
-  it("stops firing when held input becomes stale", () => {
+  it("continues cooldown cadence while fire remains held", () => {
     const config = createFlyingCastleConfig();
-    const firing = applyGunnerInput(createFlyingCastleState(config), {
+    let state = createFlyingCastleState(config);
+    for (let step = 0; step < 11; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: 1, y: 0 },
+        firing: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+    }
+
+    expect(state.projectiles.map(({ spawnedTick }) => spawnedTick)).toEqual([1, 6, 11]);
+  });
+
+  it("allows the authoritative disconnect path to clear a pending shot", () => {
+    const config = createFlyingCastleConfig();
+    let state = applyGunnerInput(createFlyingCastleState(config), {
       vector: { x: 1, y: 0 },
       firing: true,
       receivedTick: 0
     });
-    const stale = advance(firing, config, 5);
+    state = applyGunnerInput(state, {
+      vector: { x: 1, y: 0 },
+      firing: false,
+      receivedTick: 0
+    });
+    state = cancelQueuedFire(state);
+
+    expect(state.queuedFire).toBe(false);
+    expect(advanceFlyingCastle(state, config).projectiles).toEqual([]);
+  });
+
+  it("allows the authoritative disconnect path to turn off the shield without draining energy", () => {
+    const config = createFlyingCastleConfig();
+    let state = applyShieldInput(createFlyingCastleState(config), {
+      vector: { x: 1, y: 0 },
+      active: true,
+      receivedTick: 0
+    });
+    state = advanceFlyingCastle(state, config);
+    const energyAtDisconnect = state.shieldEnergy;
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 0 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = deactivateShield(state);
+
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldEnergy).toBe(energyAtDisconnect);
+  });
+
+  it("stops held cadence when input becomes stale but preserves turret angle", () => {
+    const config = createFlyingCastleConfig();
+    const firing = applyGunnerInput(createFlyingCastleState(config), {
+      vector: { x: 0, y: 1 },
+      firing: true,
+      receivedTick: 0
+    });
+    const stale = advance(firing, config, 6);
 
     expect(stale.projectiles).toHaveLength(1);
-    expect(stale.turretAngle).toBe(0);
+    expect(stale.turretAngle).toBeCloseTo(Math.PI / 2);
     expect(stale.inputs.gunner?.firing).toBe(false);
   });
 
@@ -226,50 +377,126 @@ describe("gunner simulation", () => {
 });
 
 describe("shield simulation", () => {
-  it("aims left and holds the active sector", () => {
+  it("keeps manual active state after input becomes stale and preserves angle", () => {
     const config = createFlyingCastleConfig();
-    const state = advanceFlyingCastle(
+    const state = advance(
       applyShieldInput(createFlyingCastleState(config), {
         vector: { x: -1, y: 0 },
         active: true,
         receivedTick: 0
       }),
-      config
+      config,
+      6
     );
 
     expect(Math.abs(state.shieldAngle)).toBeCloseTo(Math.PI);
     expect(state.shieldActive).toBe(true);
+    expect(state.inputs.shield?.active).toBe(true);
+    expect(state.shieldEnergy).toBe(94);
   });
 
-  it("deactivates immediately on release and on stale input while preserving angle", () => {
+  it("drains a full shield in five seconds and requires re-arming", () => {
     const config = createFlyingCastleConfig();
-    let state = advanceFlyingCastle(
-      applyShieldInput(createFlyingCastleState(config), {
-        vector: { x: 0, y: 1 },
-        active: true,
-        receivedTick: 0
-      }),
-      config
-    );
-    const angle = state.shieldAngle;
+    let state = applyShieldInput(createFlyingCastleState(config), {
+      vector: { x: 0, y: 1 },
+      active: true,
+      receivedTick: 0
+    });
+    state = advance(state, config, 100);
+
+    expect(state.shieldEnergy).toBe(0);
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldRearmRequired).toBe(true);
+
+    state = applyShieldInput(state, {
+      vector: { x: 1, y: 0 },
+      active: true,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, 10);
+    expect(state.shieldEnergy).toBe(5);
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldRearmRequired).toBe(true);
+  });
+
+  it("recharges an inactive empty shield in ten seconds and clamps at capacity", () => {
+    const config = createFlyingCastleConfig();
+    let state: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      shieldEnergy: 0,
+      shieldRearmRequired: true
+    };
     state = applyShieldInput(state, {
       vector: { x: 0, y: 0 },
+      active: false,
+      receivedTick: 0
+    });
+    state = advance(state, config, 200);
+
+    expect(state.shieldEnergy).toBe(100);
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldRearmRequired).toBe(false);
+    expect(advance(state, config, 10).shieldEnergy).toBe(100);
+  });
+
+  it("requires an accepted false then a new true after depletion", () => {
+    const config = createFlyingCastleConfig();
+    let state = applyShieldInput(createFlyingCastleState(config), {
+      vector: { x: 0, y: -1 },
+      active: true,
+      receivedTick: 0
+    });
+    state = advance(state, config, 100);
+    state = advance(state, config, 4);
+    expect(state.shieldEnergy).toBe(2);
+    expect(state.shieldActive).toBe(false);
+
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: -1 },
       active: false,
       receivedTick: state.clock.tick
     });
     state = advanceFlyingCastle(state, config);
+    expect(state.shieldRearmRequired).toBe(false);
     expect(state.shieldActive).toBe(false);
-    expect(state.shieldAngle).toBe(angle);
 
     state = applyShieldInput(state, {
-      vector: { x: 0, y: 1 },
+      vector: { x: 0, y: -1 },
       active: true,
       receivedTick: state.clock.tick
     });
-    state = advance(state, config, 5);
+    state = advanceFlyingCastle(state, config);
+    expect(state.shieldActive).toBe(true);
+    expect(state.shieldEnergy).toBe(1.5);
+  });
+
+  it("does not arm a true intent accepted while energy is still empty", () => {
+    const config = createFlyingCastleConfig();
+    let state: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      shieldEnergy: 0,
+      shieldRearmRequired: true,
+      inputs: {
+        ...createFlyingCastleState(config).inputs,
+        shield: { vector: { x: 1, y: 0 }, active: true, receivedTick: 0 }
+      }
+    };
+
+    state = applyShieldInput(state, {
+      vector: { x: 1, y: 0 },
+      active: false,
+      receivedTick: 0
+    });
+    state = applyShieldInput(state, {
+      vector: { x: 1, y: 0 },
+      active: true,
+      receivedTick: 0
+    });
+    state = advance(state, config, 10);
+
+    expect(state.shieldEnergy).toBe(5);
     expect(state.shieldActive).toBe(false);
-    expect(state.shieldAngle).toBe(angle);
-    expect(state.inputs.shield?.active).toBe(false);
+    expect(state.shieldRearmRequired).toBe(true);
   });
 });
 

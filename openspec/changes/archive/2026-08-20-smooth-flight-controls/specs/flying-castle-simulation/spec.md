@@ -1,10 +1,4 @@
-# flying-castle-simulation Specification
-
-## Purpose
-
-TBD - created by archiving change flying-castle-core. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Симуляция создаёт явный мир летающего замка
 
@@ -57,34 +51,6 @@ SHALL оставаться внутри мира; при достижении к
 - **WHEN** движение вывело бы castle radius за правый край мира
 - **THEN** x прижимается к границе, положительная x-velocity становится нулевой, а допустимая
   y-velocity сохраняется
-
-### Requirement: Gunner направляет пушку и создаёт снаряды
-
-Свежий ненулевой gunner aim vector SHALL задавать turret angle; нулевой vector SHALL сохранять
-последнее направление, по умолчанию вправо. Свежий `firing=true` SHALL создавать не более одного
-projectile у края замка в направлении turret angle при каждом завершении cooldown. Fixed step SHALL
-двигать projectiles и удалять их после lifetime или выхода за границы мира.
-
-#### Scenario: Пушка поворачивается
-
-- **WHEN** gunner aim vector направлен вверх
-- **THEN** следующий snapshot публикует turret angle вверх
-
-#### Scenario: Нулевое направление пушки
-
-- **WHEN** gunner после направления вверх отправляет нулевой aim vector
-- **THEN** turret angle остаётся направлен вверх
-
-#### Scenario: Разрешённый выстрел
-
-- **WHEN** cooldown завершён и latest accepted gunner input содержит `firing=true` на authoritative
-  simulation tick
-- **THEN** появляется один projectile с server identity и направленной velocity
-
-#### Scenario: Cooldown ещё активен
-
-- **WHEN** `firing=true` продолжает удерживаться раньше 250 ms после принятого выстрела
-- **THEN** новый projectile не создаётся
 
 ### Requirement: Shield operator направляет сектор щита
 

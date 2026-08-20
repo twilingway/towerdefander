@@ -1,4 +1,11 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page
+} from "@playwright/test";
 
 const testHost = process.env.E2E_HOST?.trim() ?? "127.0.0.1";
 const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
@@ -62,28 +69,54 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
       .toBeGreaterThan(xBeforeStick);
     await pilot.mouse.up();
 
-    await gunner.getByTestId("fire-button").hover();
-    await gunner.mouse.down();
+    const world = display.getByTestId("flying-castle-world");
+    const turretBeforeFire = Number(await world.getAttribute("data-turret-angle"));
+    const fireBounds = await gunner.getByTestId("fire-button").boundingBox();
+    if (fireBounds === null) throw new Error("Fire button has no bounds.");
+    await gunner.mouse.click(fireBounds.x + 8, fireBounds.y + fireBounds.height - 8);
     await expect
-      .poll(async () =>
-        Number(
-          await display.getByTestId("flying-castle-world").getAttribute("data-projectile-count")
-        )
-      )
+      .poll(async () => Number(await world.getAttribute("data-projectile-count")))
       .toBeGreaterThan(0);
-    await gunner.mouse.up();
+    expect(Number(await world.getAttribute("data-turret-angle"))).toBeCloseTo(turretBeforeFire, 5);
 
-    await shield.getByTestId("shield-button").hover();
-    await shield.mouse.down();
-    await expect(display.getByTestId("flying-castle-world")).toHaveAttribute(
-      "data-shield-active",
-      "true"
+    const gunnerStickBounds = await gunner.getByTestId("virtual-stick").boundingBox();
+    if (gunnerStickBounds === null) throw new Error("Gunner virtual stick has no bounds.");
+    await gunner.mouse.click(
+      gunnerStickBounds.x + gunnerStickBounds.width / 2,
+      gunnerStickBounds.y + gunnerStickBounds.height * 0.15
     );
-    await shield.mouse.up();
-    await expect(display.getByTestId("flying-castle-world")).toHaveAttribute(
-      "data-shield-active",
-      "false"
-    );
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-turret-angle")))
+      .toBeLessThan(-0.5);
+
+    await assertFireStopsAfter(gunner, world, fireBounds, "pointercancel");
+    await assertFireStopsAfter(gunner, world, fireBounds, "lostpointercapture");
+    await assertFireStopsAfter(gunner, world, fireBounds, "blur");
+
+    const fullShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
+    await shield.getByTestId("shield-button").click();
+    await expect(world).toHaveAttribute("data-shield-active", "true");
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-shield-energy")))
+      .toBeLessThan(fullShieldEnergy);
+    await expect(world).toHaveAttribute("data-shield-active", "false", { timeout: 7000 });
+    const depletedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
+    expect(depletedShieldEnergy).toBeLessThan(20);
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-shield-energy")), { timeout: 3000 })
+      .toBeGreaterThan(Math.max(10, depletedShieldEnergy));
+    await shield.getByTestId("shield-button").click();
+    await expect(world).toHaveAttribute("data-shield-active", "true");
+    const drainedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
+    await shield.getByTestId("shield-button").click();
+    await expect(world).toHaveAttribute("data-shield-active", "false");
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-shield-energy")))
+      .toBeGreaterThan(drainedShieldEnergy);
+    await shield.keyboard.press("Space");
+    await expect(world).toHaveAttribute("data-shield-active", "true");
+    await shield.keyboard.press("Space");
+    await expect(world).toHaveAttribute("data-shield-active", "false");
 
     await pilot.reload();
     await expect(pilot.locator(".connection")).toHaveText("В сети");
@@ -95,6 +128,40 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await Promise.all(contexts.map((context) => context.close()));
   }
 });
+
+async function assertFireStopsAfter(
+  gunner: Page,
+  world: Locator,
+  fireBounds: { x: number; y: number; width: number; height: number },
+  reason: "pointercancel" | "lostpointercapture" | "blur"
+): Promise<void> {
+  const x = fireBounds.x + fireBounds.width / 2;
+  const y = fireBounds.y + fireBounds.height / 2;
+  await gunner.mouse.move(x, y);
+  await gunner.mouse.down();
+  await gunner.waitForTimeout(300);
+  if (reason === "blur") {
+    await gunner.evaluate(() => {
+      const browserGlobal = globalThis as unknown as {
+        dispatchEvent(event: unknown): boolean;
+        Event: new (type: string) => unknown;
+      };
+      browserGlobal.dispatchEvent(new browserGlobal.Event("blur"));
+    });
+  } else {
+    await gunner.getByTestId("fire-button").dispatchEvent(reason, {
+      pointerId: 1,
+      isPrimary: true,
+      button: 0
+    });
+  }
+  await gunner.waitForTimeout(100);
+  const latestProjectileId = await world.getAttribute("data-latest-projectile-id");
+  expect(latestProjectileId).not.toBe("");
+  await gunner.waitForTimeout(350);
+  expect(await world.getAttribute("data-latest-projectile-id")).toBe(latestProjectileId);
+  await gunner.mouse.up();
+}
 
 async function newController(
   browser: Browser,

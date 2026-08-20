@@ -12,7 +12,7 @@ function collection<T>(values: T[]) {
 }
 
 describe("controller room view", () => {
-  it("decodes compact v5 state and sorts canonical roles", () => {
+  it("decodes compact v6 state with shield energy and sorts canonical roles", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
@@ -29,12 +29,18 @@ describe("controller room view", () => {
         worldHeight: 1600,
         castle: { x: 1200, y: 800, velocityX: 0, velocityY: 0, radius: 52 },
         turretAngle: 0,
-        shield: { angle: Math.PI, active: true }
+        shield: { angle: Math.PI, active: true, energy: 64, capacity: 100 }
       }
     };
     const view = toControllerRoomView(state);
     expect(view?.players.map((player) => player.role)).toEqual(["pilot", "shield"]);
     expect(view?.game).not.toHaveProperty("projectiles");
+    expect(view?.game?.shield).toEqual({
+      angle: Math.PI,
+      active: true,
+      energy: 64,
+      capacity: 100
+    });
     expect(findCurrentPlayer(view, "p2")?.role).toBe("shield");
   });
 

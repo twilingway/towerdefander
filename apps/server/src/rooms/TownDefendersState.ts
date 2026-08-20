@@ -20,6 +20,8 @@ export class CastleState extends Schema {
 export class ShieldState extends Schema {
   @type("float64") angle = 0;
   @type("boolean") active = false;
+  @type("float64") energy = 0;
+  @type("float64") capacity = 0;
 }
 
 export class ObstacleState extends Schema {

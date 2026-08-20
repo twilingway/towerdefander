@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 5 as const;
+export const PROTOCOL_VERSION = 6 as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
@@ -52,9 +52,20 @@ export type PublicCastleView = z.infer<typeof publicCastleViewSchema>;
 export const publicShieldViewSchema = z
   .object({
     angle: finiteNumberSchema,
-    active: z.boolean()
+    active: z.boolean(),
+    energy: finiteNumberSchema.nonnegative(),
+    capacity: finiteNumberSchema.nonnegative()
   })
-  .strict();
+  .strict()
+  .superRefine((shield, context) => {
+    if (shield.energy > shield.capacity) {
+      context.addIssue({
+        code: "custom",
+        path: ["energy"],
+        message: "Shield energy must not exceed its capacity."
+      });
+    }
+  });
 export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
 
 const publicRectangleObstacleViewSchema = z
@@ -283,7 +294,7 @@ export const displayCreateOptionsSchema = z
   .strict();
 export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
 
-// Create and reconnect use the same strict display handshake in protocol v5.
+// Create and reconnect use the same strict display handshake in protocol v6.
 export const displayJoinOptionsSchema = displayCreateOptionsSchema;
 export type DisplayJoinOptions = DisplayCreateOptions;
 
@@ -310,7 +321,7 @@ export type CommandEnvelope = z.infer<typeof commandEnvelopeSchema>;
 
 export const continuousInputEnvelopeSchema = commandEnvelopeSchema
   .extend({
-    sequence: z.number().int().positive()
+    sequence: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
   })
   .strict();
 export type ContinuousInputEnvelope = z.infer<typeof continuousInputEnvelopeSchema>;

@@ -3,6 +3,71 @@ export interface Point {
   readonly y: number;
 }
 
+export interface PointTransition {
+  readonly from: Point;
+  readonly to: Point;
+  readonly startedAt: number;
+}
+
+export interface AngleTransition {
+  readonly from: number;
+  readonly to: number;
+  readonly startedAt: number;
+}
+
+export interface VisualSnapshot {
+  readonly castle: Point;
+  readonly turretAngle: number;
+  readonly shield: { readonly angle: number };
+}
+
+export interface VisualTransitions {
+  readonly castle: PointTransition;
+  readonly turret: AngleTransition;
+  readonly shield: AngleTransition;
+}
+
+export class SnapshotResetLatch {
+  private pending = false;
+
+  request(): void {
+    this.pending = true;
+  }
+
+  consumeForSnapshot(): boolean {
+    const shouldReset = this.pending;
+    this.pending = false;
+    return shouldReset;
+  }
+}
+
+export function createSnappedVisualTransitions(
+  snapshot: VisualSnapshot,
+  startedAt: number
+): VisualTransitions {
+  return {
+    castle: createPointTransition(snapshot.castle, snapshot.castle, startedAt),
+    turret: createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, startedAt),
+    shield: createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, startedAt)
+  };
+}
+
+export function createPointTransition(from: Point, to: Point, startedAt: number): PointTransition {
+  return {
+    from: { x: from.x, y: from.y },
+    to: { x: to.x, y: to.y },
+    startedAt
+  };
+}
+
+export function createAngleTransition(
+  from: number,
+  to: number,
+  startedAt: number
+): AngleTransition {
+  return { from, to, startedAt };
+}
+
 export function getBoundedCameraScroll(
   focus: Point,
   worldWidth: number,
@@ -22,6 +87,18 @@ export function interpolatePoint(current: Point, target: Point, amount: number):
     x: current.x + (target.x - current.x) * safeAmount,
     y: current.y + (target.y - current.y) * safeAmount
   };
+}
+
+export function getTimelineAlpha(elapsedMs: number, durationMs = 50): number {
+  if (!Number.isFinite(elapsedMs) || !Number.isFinite(durationMs) || durationMs <= 0) return 1;
+  return clamp(elapsedMs / durationMs, 0, 1);
+}
+
+export function interpolateAngle(current: number, target: number, amount: number): number {
+  const safeAmount = clamp(amount, 0, 1);
+  const fullTurn = Math.PI * 2;
+  const delta = ((((target - current + Math.PI) % fullTurn) + fullTurn) % fullTurn) - Math.PI;
+  return current + delta * safeAmount;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

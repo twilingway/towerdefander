@@ -173,6 +173,16 @@ export function DisplayApp() {
             <div>
               <span>Щит</span>
               <strong>{view.game.shield.active ? "АКТИВЕН" : "выключен"}</strong>
+              <div className="hud-energy" aria-label="Энергия щита">
+                <i
+                  style={{
+                    width: `${String((view.game.shield.energy / view.game.shield.capacity) * 100)}%`
+                  }}
+                />
+              </div>
+              <small>
+                {Math.round(view.game.shield.energy)} / {Math.round(view.game.shield.capacity)}
+              </small>
             </div>
             <div>
               <span>Tick</span>

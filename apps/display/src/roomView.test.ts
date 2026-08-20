@@ -7,7 +7,7 @@ function collection<T>(values: T[]) {
 }
 
 describe("display room view", () => {
-  it("flattens display-only world collections into a strict v5 view", () => {
+  it("flattens display-only world collections into a strict v6 view", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
@@ -24,7 +24,7 @@ describe("display room view", () => {
         worldHeight: 1600,
         castle: { x: 1200, y: 800, velocityX: 0, velocityY: 0, radius: 52 },
         turretAngle: 0,
-        shield: { angle: 0, active: false },
+        shield: { angle: 0, active: false, energy: 75, capacity: 100 },
         display: {
           obstacles: collection([
             { obstacleId: "cloud", kind: "circle", x: 100, y: 100, radius: 20, width: 0, height: 0 }
@@ -48,6 +48,7 @@ describe("display room view", () => {
       { obstacleId: "cloud", kind: "circle", x: 100, y: 100, radius: 20 }
     ]);
     expect(view?.game?.projectiles).toHaveLength(1);
+    expect(view?.game?.shield.energy).toBe(75);
   });
 
   it("builds a controller URL without losing existing parameters", () => {

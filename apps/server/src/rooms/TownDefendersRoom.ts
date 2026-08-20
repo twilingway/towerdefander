@@ -3,8 +3,10 @@ import {
   applyGunnerInput,
   applyPilotInput,
   applyShieldInput,
+  cancelQueuedFire,
   createFlyingCastleConfig,
   createFlyingCastleState,
+  deactivateShield,
   type FlyingCastleConfig,
   type FlyingCastleState
 } from "@town-defenders/game-core";
@@ -393,6 +395,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     target.turretAngle = game.turretAngle;
     target.shield.angle = game.shieldAngle;
     target.shield.active = game.shieldActive;
+    target.shield.energy = game.shieldEnergy;
+    target.shield.capacity = this.gameConfig.shieldCapacity;
     target.display.projectiles.clear();
     for (const projectile of game.projectiles) {
       const state = new ProjectileState();
@@ -420,12 +424,14 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         firing: false,
         receivedTick
       });
+      this.gameState = cancelQueuedFire(this.gameState);
     } else if (role === "shield") {
       this.gameState = applyShieldInput(this.gameState, {
         vector: { x: 0, y: 0 },
         active: false,
         receivedTick
       });
+      this.gameState = deactivateShield(this.gameState);
     }
     this.syncGameState();
   }
