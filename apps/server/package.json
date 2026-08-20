@@ -11,17 +11,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@colyseus/schema": "latest",
+    "@colyseus/schema": "4.0.30",
     "@town-defenders/game-core": "workspace:*",
     "@town-defenders/protocol": "workspace:*",
-    "colyseus": "latest"
+    "colyseus": "0.17.10"
   },
   "devDependencies": {
-    "@types/express": "latest",
-    "@types/node": "latest",
-    "tsup": "latest",
-    "tsx": "latest",
+    "@types/express": "5.0.6",
+    "@types/node": "26.1.1",
+    "tsup": "8.5.1",
+    "tsx": "4.23.1",
     "typescript": "6.0.2",
-    "vitest": "latest"
+    "vitest": "4.1.10"
   }
 }
