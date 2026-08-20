@@ -93,6 +93,17 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await assertFireStopsAfter(gunner, world, fireBounds, "lostpointercapture");
     await assertFireStopsAfter(gunner, world, fireBounds, "blur");
 
+    const shieldStickBounds = await shield.getByTestId("virtual-stick").boundingBox();
+    if (shieldStickBounds === null) throw new Error("Shield virtual stick has no bounds.");
+    await shield.mouse.click(
+      shieldStickBounds.x + shieldStickBounds.width / 2,
+      shieldStickBounds.y + shieldStickBounds.height * 0.15
+    );
+    await expect(world).toHaveAttribute("data-shield-active", "false");
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-shield-angle")))
+      .toBeLessThan(-0.5);
+
     const fullShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
     await shield.getByTestId("shield-button").click();
     await expect(world).toHaveAttribute("data-shield-active", "true");

@@ -3,10 +3,10 @@ import {
   applyGunnerInput,
   applyPilotInput,
   applyShieldInput,
-  cancelQueuedFire,
+  cancelGunnerControl,
+  cancelShieldControl,
   createFlyingCastleConfig,
   createFlyingCastleState,
-  deactivateShield,
   type FlyingCastleConfig,
   type FlyingCastleState
 } from "@town-defenders/game-core";
@@ -419,19 +419,9 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     if (role === "pilot") {
       this.gameState = applyPilotInput(this.gameState, { vector: { x: 0, y: 0 }, receivedTick });
     } else if (role === "gunner") {
-      this.gameState = applyGunnerInput(this.gameState, {
-        vector: { x: 0, y: 0 },
-        firing: false,
-        receivedTick
-      });
-      this.gameState = cancelQueuedFire(this.gameState);
+      this.gameState = cancelGunnerControl(this.gameState);
     } else if (role === "shield") {
-      this.gameState = applyShieldInput(this.gameState, {
-        vector: { x: 0, y: 0 },
-        active: false,
-        receivedTick
-      });
-      this.gameState = deactivateShield(this.gameState);
+      this.gameState = cancelShieldControl(this.gameState);
     }
     this.syncGameState();
   }

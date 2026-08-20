@@ -240,7 +240,12 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     room.advanceGameStep();
     room.advanceGameStep();
     expect(room.state.game.display.projectiles).toHaveLength(1);
-    expect(room.state.game.turretAngle).toBeCloseTo(-Math.PI / 2);
+    expect(room.state.game.turretAngle).toBeLessThan(0);
+    expect(room.state.game.turretAngle).toBeGreaterThan(-Math.PI / 2);
+    const firstProjectile = room.state.game.display.projectiles.at(0);
+    expect(Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX)).toBeCloseTo(
+      -Math.PI / 60
+    );
     for (let index = 0; index < 2; index += 1) room.advanceGameStep();
     room.handleGunnerInput(gunner.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -268,7 +273,115 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     room.advanceGameStep();
     expect(room.state.game.shield.active).toBe(true);
     expect(room.state.game.shield.energy).toBe(99);
-    expect(Math.abs(room.state.game.shield.angle)).toBeCloseTo(Math.PI);
+    expect(room.state.game.shield.angle).toBeGreaterThan(0);
+    expect(room.state.game.shield.angle).toBeLessThan(Math.PI);
+  });
+
+  it("pre-aims an inactive shield with a gradual authoritative traverse", () => {
+    const { room, controllers } = startGame();
+    const shield = controllerAt(controllers, 2);
+    room.handleShieldInput(shield.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: shield.client.sessionId,
+      sequence: 1,
+      aim: { x: 0, y: -1 },
+      active: false
+    });
+
+    room.advanceGameStep();
+    const firstAngle = room.state.game.shield.angle;
+    expect(room.state.game.shield).toMatchObject({ active: false, energy: 100 });
+    expect(firstAngle).toBeLessThan(0);
+    expect(firstAngle).toBeGreaterThan(-Math.PI / 2);
+
+    room.advanceGameStep();
+    expect(room.state.game.shield.angle).toBeLessThan(firstAngle);
+  });
+
+  it("ignores duplicate and out-of-order gunner inputs without retargeting", () => {
+    const { room, controllers } = startGame();
+    const gunner = controllerAt(controllers, 1);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: gunner.client.sessionId
+    } as const;
+    room.handleGunnerInput(gunner.client, {
+      ...envelope,
+      sequence: 2,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+    room.handleGunnerInput(gunner.client, {
+      ...envelope,
+      sequence: 1,
+      aim: { x: 0, y: -1 },
+      firing: false
+    });
+
+    room.advanceGameStep();
+    const firstAngle = room.state.game.turretAngle;
+    room.advanceGameStep();
+    expect(firstAngle).toBeGreaterThan(0);
+    expect(room.state.game.turretAngle).toBeGreaterThan(firstAngle);
+  });
+
+  it("cancels stale aim and softly brakes the turret", () => {
+    const { room, controllers } = startGame();
+    const gunner = controllerAt(controllers, 1);
+    room.handleGunnerInput(gunner.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: gunner.client.sessionId,
+      sequence: 1,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+
+    const angles: number[] = [];
+    for (let step = 0; step < 5; step += 1) {
+      room.advanceGameStep();
+      angles.push(room.state.game.turretAngle);
+    }
+    const thirdIncrement = (angles[3] ?? 0) - (angles[2] ?? 0);
+    const staleIncrement = (angles[4] ?? 0) - (angles[3] ?? 0);
+    expect(staleIncrement).toBeGreaterThan(0);
+    expect(staleIncrement).toBeLessThan(thirdIncrement);
+  });
+
+  it("does not restore a disconnected angular target after reconnect", async () => {
+    const { room, controllers } = startGame();
+    const gunner = controllerAt(controllers, 1);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: gunner.client.sessionId
+    } as const;
+    room.handleGunnerInput(gunner.client, {
+      ...envelope,
+      sequence: 8,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+    room.advanceGameStep();
+    room.advanceGameStep();
+    vi.spyOn(room, "allowReconnection").mockResolvedValue(gunner.client);
+
+    await room.onLeave(gunner.client, 1006);
+    for (let step = 0; step < 10; step += 1) room.advanceGameStep();
+    const stoppedAngle = room.state.game.turretAngle;
+    room.advanceGameStep();
+    expect(room.state.game.turretAngle).toBeCloseTo(stoppedAngle);
+
+    room.handleGunnerInput(gunner.client, {
+      ...envelope,
+      sequence: 1,
+      aim: { x: 0, y: -1 },
+      firing: false
+    });
+    room.advanceGameStep();
+    expect(room.state.game.turretAngle).toBeLessThan(stoppedAngle);
   });
 
   it("drains shield energy only on fixed steps and ignores duplicate sequences", () => {

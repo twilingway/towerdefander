@@ -70,8 +70,12 @@ export function ControllerApp() {
       void new Client(gameServerUrl)
         .reconnect<NetworkRoomState>(session.token)
         .then((room) => {
-          if (disposed) void room.leave();
-          else attachRoom(room, session.playerName);
+          if (disposed) {
+            room.reconnection.enabled = false;
+            room.connection.close(1000);
+          } else {
+            attachRoom(room, session.playerName);
+          }
         })
         .catch(() => {
           if (!disposed) {
@@ -85,7 +89,10 @@ export function ControllerApp() {
       disposed = true;
       const room = roomReference.current;
       roomReference.current = undefined;
-      if (room !== undefined) void room.leave();
+      // A browser reload/unmount is recoverable: close only the transport so
+      // the server keeps the role for its reconnect grace period. `leave()`
+      // sends a consented departure and would race session restoration.
+      room?.connection.close();
     };
   }, []);
 

@@ -93,4 +93,31 @@ describe("flying castle view model", () => {
   it("takes the shortest path between angles", () => {
     expect(interpolateAngle(Math.PI * 0.9, -Math.PI * 0.9, 0.5)).toBeCloseTo(Math.PI);
   });
+
+  it("chooses the positive direction for an exact antipode", () => {
+    expect(interpolateAngle(0, Math.PI, 0.25)).toBeCloseTo(Math.PI / 4);
+    expect(interpolateAngle(0, -Math.PI, 0.25)).toBeCloseTo(Math.PI / 4);
+  });
+
+  it("produces equivalent angular traces at 60 Hz and 120 Hz", () => {
+    const from = Math.PI * 0.92;
+    const to = -Math.PI * 0.88;
+    const trace = (framesPerSecond: number) =>
+      Array.from({ length: Math.round(framesPerSecond * 0.05) + 1 }, (_, index) => {
+        const elapsedMs = Math.min((index * 1000) / framesPerSecond, 50);
+        return interpolateAngle(from, to, getTimelineAlpha(elapsedMs, 50));
+      });
+    const sixtyHzTrace = trace(60);
+    const oneTwentyHzTrace = trace(120);
+
+    for (let index = 0; index < sixtyHzTrace.length; index += 1) {
+      const sixtyHzAngle = sixtyHzTrace[index];
+      const oneTwentyHzAngle = oneTwentyHzTrace[index * 2];
+      if (sixtyHzAngle === undefined || oneTwentyHzAngle === undefined) {
+        throw new Error("Expected matching 60 Hz and 120 Hz angle samples.");
+      }
+      expect(Math.abs(oneTwentyHzAngle - sixtyHzAngle)).toBeLessThanOrEqual(0.001);
+    }
+    expect(sixtyHzTrace.at(-1)).toBeCloseTo(from + Math.PI * 0.2);
+  });
 });

@@ -5,12 +5,17 @@ import {
   applyGunnerInput,
   applyPilotInput,
   applyShieldInput,
+  cancelGunnerControl,
   cancelQueuedFire,
+  cancelShieldControl,
+  canonicalizeAngle,
   createFlyingCastleConfig,
   createFlyingCastleState,
   deactivateShield,
   moveVectorTowards,
+  moveScalarTowards,
   normalizeVector,
+  shortestAngleDelta,
   validateFlyingCastleConfig,
   type FlyingCastleConfig,
   type FlyingCastleState,
@@ -58,13 +63,23 @@ describe("flying castle configuration", () => {
       fireCooldownTicks: 5,
       shieldCapacity: 100,
       shieldDrainPerSecond: 20,
-      shieldRechargePerSecond: 10
+      shieldRechargePerSecond: 10,
+      turretMaxAngularSpeedPerSecond: (4 * Math.PI) / 3,
+      turretAngularAccelerationPerSecondSquared: (20 * Math.PI) / 3,
+      turretAngularBrakingPerSecondSquared: (20 * Math.PI) / 3,
+      shieldMaxAngularSpeedPerSecond: (5 * Math.PI) / 3,
+      shieldAngularAccelerationPerSecondSquared: (25 * Math.PI) / 3,
+      shieldAngularBrakingPerSecondSquared: (25 * Math.PI) / 3
     });
     expect(createFlyingCastleState(config)).toEqual(createFlyingCastleState(config));
     expect(createFlyingCastleState(config)).toMatchObject({
       shieldEnergy: 100,
       shieldRearmRequired: false,
-      queuedFire: false
+      queuedFire: false,
+      turretTargetAngle: null,
+      turretAngularVelocity: 0,
+      shieldTargetAngle: null,
+      shieldAngularVelocity: 0
     });
   });
 
@@ -83,7 +98,13 @@ describe("flying castle configuration", () => {
     ["fireCooldownTicks", 0],
     ["shieldCapacity", 0],
     ["shieldDrainPerSecond", -1],
-    ["shieldRechargePerSecond", Number.NaN]
+    ["shieldRechargePerSecond", Number.NaN],
+    ["turretMaxAngularSpeedPerSecond", 0],
+    ["turretAngularAccelerationPerSecondSquared", -1],
+    ["turretAngularBrakingPerSecondSquared", Number.NaN],
+    ["shieldMaxAngularSpeedPerSecond", Number.POSITIVE_INFINITY],
+    ["shieldAngularAccelerationPerSecondSquared", 0],
+    ["shieldAngularBrakingPerSecondSquared", -1]
   ] as const)("rejects invalid %s", (field, value) => {
     expect(() => {
       validateFlyingCastleConfig({ ...createFlyingCastleConfig(), [field]: value });
@@ -206,8 +227,36 @@ describe("pilot movement", () => {
   });
 });
 
+describe("angular helpers", () => {
+  it("canonicalizes every finite angle into [-PI, PI)", () => {
+    expect(canonicalizeAngle(0)).toBe(0);
+    expect(canonicalizeAngle(Math.PI)).toBe(-Math.PI);
+    expect(canonicalizeAngle(-Math.PI)).toBe(-Math.PI);
+    expect(canonicalizeAngle(3 * Math.PI)).toBe(-Math.PI);
+    expect(canonicalizeAngle(2 * Math.PI)).toBe(0);
+    expect(canonicalizeAngle(-2 * Math.PI)).toBe(0);
+    expect(() => canonicalizeAngle(Number.NaN)).toThrow(RangeError);
+  });
+
+  it("uses the shortest signed arc and resolves an exact antipode positively", () => {
+    expect(shortestAngleDelta(0, Math.PI)).toBe(Math.PI);
+    expect(shortestAngleDelta(0, -Math.PI)).toBe(Math.PI);
+    expect(shortestAngleDelta(0.3, 0.3 + Math.PI)).toBe(Math.PI);
+    expect(shortestAngleDelta(Math.PI - 0.1, -Math.PI + 0.1)).toBeCloseTo(0.2);
+    expect(shortestAngleDelta(-Math.PI + 0.1, Math.PI - 0.1)).toBeCloseTo(-0.2);
+  });
+
+  it("moves scalar velocity without overshooting its requested value", () => {
+    expect(moveScalarTowards(1, 4, 2)).toBe(3);
+    expect(moveScalarTowards(1, 2, 2)).toBe(2);
+    expect(moveScalarTowards(1, -4, 2)).toBe(-1);
+    expect(() => moveScalarTowards(0, 1, -1)).toThrow(RangeError);
+    expect(() => moveScalarTowards(Number.NaN, 1, 1)).toThrow(RangeError);
+  });
+});
+
 describe("gunner simulation", () => {
-  it("aims upward and preserves the angle after a zero vector", () => {
+  it("starts turning toward an upward target without snapping and zero aim preserves it", () => {
     const config = createFlyingCastleConfig();
     let state = applyGunnerInput(createFlyingCastleState(config), {
       vector: { x: 0, y: -1 },
@@ -215,14 +264,170 @@ describe("gunner simulation", () => {
       receivedTick: 0
     });
     state = advanceFlyingCastle(state, config);
-    expect(state.turretAngle).toBeCloseTo(-Math.PI / 2);
+    expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
+    expect(state.turretAngularVelocity).toBeCloseTo(-Math.PI / 3);
+    expect(state.turretAngle).toBeCloseTo(-Math.PI / 60);
 
     state = applyGunnerInput(state, {
       vector: { x: 0, y: 0 },
       firing: false,
       receivedTick: state.clock.tick
     });
-    expect(advanceFlyingCastle(state, config).turretAngle).toBeCloseTo(-Math.PI / 2);
+    state = advanceFlyingCastle(state, config);
+    expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
+    expect(state.turretAngle).toBeLessThan(-Math.PI / 60);
+  });
+
+  it("accelerates to the configured turret angular speed in four steps", () => {
+    const config = createFlyingCastleConfig();
+    let state = createFlyingCastleState(config);
+    const velocities: number[] = [];
+
+    for (let step = 0; step < 4; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: -1, y: 0 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+      velocities.push(state.turretAngularVelocity);
+    }
+
+    expect(velocities[0]).toBeCloseTo(Math.PI / 3);
+    expect(velocities[1]).toBeCloseTo((2 * Math.PI) / 3);
+    expect(velocities[2]).toBeCloseTo(Math.PI);
+    expect(velocities[3]).toBeCloseTo((4 * Math.PI) / 3);
+  });
+
+  it("traverses an exact antipode positively and reaches it without overshoot", () => {
+    const config = createFlyingCastleConfig();
+    let state = createFlyingCastleState(config);
+    let travelled = 0;
+    let previousAngle = state.turretAngle;
+
+    for (let step = 0; step < 100; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: -1, y: 0 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+      const delta = shortestAngleDelta(previousAngle, state.turretAngle);
+      expect(delta).toBeGreaterThanOrEqual(0);
+      travelled += delta;
+      expect(travelled).toBeLessThanOrEqual(Math.PI + 1e-12);
+      previousAngle = state.turretAngle;
+      if (state.turretAngle === -Math.PI && state.turretAngularVelocity === 0) {
+        break;
+      }
+    }
+
+    expect(state.turretTargetAngle).toBe(-Math.PI);
+    expect(state.turretAngle).toBe(-Math.PI);
+    expect(state.turretAngularVelocity).toBe(0);
+    expect(travelled).toBeCloseTo(Math.PI);
+  });
+
+  it("takes the short arc through the canonical angle boundary", () => {
+    const config = createFlyingCastleConfig();
+    let state: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      turretAngle: Math.PI - 0.08
+    };
+    const target = -Math.PI + 0.08;
+    let previousAngle = state.turretAngle;
+    let crossedBoundary = false;
+
+    for (let step = 0; step < 20 && state.turretAngle !== target; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: Math.cos(target), y: Math.sin(target) },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+      expect(shortestAngleDelta(previousAngle, state.turretAngle)).toBeGreaterThanOrEqual(0);
+      crossedBoundary ||= state.turretAngle < 0;
+      previousAngle = state.turretAngle;
+    }
+
+    expect(crossedBoundary).toBe(true);
+    expect(state.turretAngle).toBeCloseTo(target);
+    expect(state.turretAngularVelocity).toBe(0);
+  });
+
+  it("clamps a close target instead of overshooting it", () => {
+    const config = createFlyingCastleConfig();
+    const target = 0.02;
+    const state = advanceFlyingCastle(
+      applyGunnerInput(createFlyingCastleState(config), {
+        vector: { x: Math.cos(target), y: Math.sin(target) },
+        firing: false,
+        receivedTick: 0
+      }),
+      config
+    );
+
+    expect(state.turretAngle).toBeCloseTo(target);
+    expect(state.turretTargetAngle).toBeCloseTo(target);
+    expect(state.turretAngularVelocity).toBe(0);
+  });
+
+  it("brakes before reversing toward a target on the opposite side", () => {
+    const config = createFlyingCastleConfig();
+    let state = createFlyingCastleState(config);
+    for (let step = 0; step < 3; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: 0, y: 1 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+    }
+    const velocityBeforeReverse = state.turretAngularVelocity;
+
+    state = applyGunnerInput(state, {
+      vector: { x: 0, y: -1 },
+      firing: false,
+      receivedTick: state.clock.tick
+    });
+    state = advanceFlyingCastle(state, config);
+
+    expect(velocityBeforeReverse).toBeCloseTo(Math.PI);
+    expect(state.turretAngularVelocity).toBeCloseTo((2 * Math.PI) / 3);
+    expect(state.turretAngularVelocity).toBeGreaterThan(0);
+
+    for (let step = 0; step < 5 && state.turretAngularVelocity >= 0; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: 0, y: -1 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+    }
+    expect(state.turretAngularVelocity).toBeLessThan(0);
+  });
+
+  it("completes a tap traverse while zero aim heartbeats keep the target fresh", () => {
+    const config = createFlyingCastleConfig();
+    let state = applyGunnerInput(createFlyingCastleState(config), {
+      vector: { x: 0, y: -1 },
+      firing: false,
+      receivedTick: 0
+    });
+    state = advanceFlyingCastle(state, config);
+
+    for (let step = 0; step < 30 && state.turretAngle !== -Math.PI / 2; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: 0, y: 0 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+    }
+
+    expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
+    expect(state.turretAngle).toBeCloseTo(-Math.PI / 2);
+    expect(state.turretAngularVelocity).toBe(0);
   });
 
   it("preserves a short true/false click until the next simulation tick", () => {
@@ -244,6 +449,27 @@ describe("gunner simulation", () => {
     expect(state.projectiles).toHaveLength(1);
     expect(state.queuedFire).toBe(false);
     expect(advance(state, config, config.fireCooldownTicks * 2).projectiles).toHaveLength(1);
+  });
+
+  it("spawns a projectile along the current turret angle instead of its target", () => {
+    const config = createFlyingCastleConfig();
+    let state = applyGunnerInput(createFlyingCastleState(config), {
+      vector: { x: 0, y: -1 },
+      firing: true,
+      receivedTick: 0
+    });
+    state = advanceFlyingCastle(state, config);
+
+    const projectile = state.projectiles[0];
+    if (projectile === undefined || state.turretTargetAngle === null) {
+      throw new Error("expected a projectile and turret target");
+    }
+    expect(state.turretAngle).toBeCloseTo(-Math.PI / 60);
+    expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
+    expect(Math.atan2(projectile.velocity.y, projectile.velocity.x)).toBeCloseTo(state.turretAngle);
+    expect(Math.atan2(projectile.velocity.y, projectile.velocity.x)).not.toBeCloseTo(
+      state.turretTargetAngle
+    );
   });
 
   it("coalesces repeated clicks into one pending shot during cooldown", () => {
@@ -315,6 +541,65 @@ describe("gunner simulation", () => {
     expect(advanceFlyingCastle(state, config).projectiles).toEqual([]);
   });
 
+  it("cancels a stale angular target and brakes without clearing queued fire", () => {
+    const config = createFlyingCastleConfig({ fireCooldownTicks: 100 });
+    let state: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      lastFiredTick: 0
+    };
+    state = applyGunnerInput(state, {
+      vector: { x: 0, y: -1 },
+      firing: true,
+      receivedTick: 0
+    });
+    state = applyGunnerInput(state, {
+      vector: { x: 0, y: 0 },
+      firing: false,
+      receivedTick: 0
+    });
+    state = advance(state, config, 4);
+    const velocityBeforeStale = state.turretAngularVelocity;
+    state = advanceFlyingCastle(state, config);
+
+    expect(velocityBeforeStale).toBeCloseTo((-4 * Math.PI) / 3);
+    expect(state.turretTargetAngle).toBeNull();
+    expect(state.turretAngularVelocity).toBeCloseTo(-Math.PI);
+    expect(state.queuedFire).toBe(true);
+    expect(state.projectiles).toEqual([]);
+  });
+
+  it("trusted gunner disconnect clears target, hold and queue but preserves braking velocity", () => {
+    const config = createFlyingCastleConfig({ fireCooldownTicks: 100 });
+    let state: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      lastFiredTick: 0
+    };
+    state = applyGunnerInput(state, {
+      vector: { x: 0, y: 1 },
+      firing: true,
+      receivedTick: 0
+    });
+    state = advance(state, config, 2);
+    const angleAtDisconnect = state.turretAngle;
+    const velocityAtDisconnect = state.turretAngularVelocity;
+    state = cancelGunnerControl(state);
+
+    expect(state.turretTargetAngle).toBeNull();
+    expect(state.turretAngle).toBe(angleAtDisconnect);
+    expect(state.turretAngularVelocity).toBe(velocityAtDisconnect);
+    expect(state.queuedFire).toBe(false);
+    expect(state.inputs.gunner).toMatchObject({ vector: { x: 0, y: 0 }, firing: false });
+
+    state = advanceFlyingCastle(state, config);
+    expect(Math.abs(state.turretAngularVelocity)).toBeLessThan(Math.abs(velocityAtDisconnect));
+    state = applyGunnerInput(state, {
+      vector: { x: 0, y: 0 },
+      firing: false,
+      receivedTick: state.clock.tick
+    });
+    expect(state.turretTargetAngle).toBeNull();
+  });
+
   it("allows the authoritative disconnect path to turn off the shield without draining energy", () => {
     const config = createFlyingCastleConfig();
     let state = applyShieldInput(createFlyingCastleState(config), {
@@ -345,7 +630,9 @@ describe("gunner simulation", () => {
     const stale = advance(firing, config, 6);
 
     expect(stale.projectiles).toHaveLength(1);
-    expect(stale.turretAngle).toBeCloseTo(Math.PI / 2);
+    expect(stale.turretAngle).toBeCloseTo(Math.PI / 4);
+    expect(stale.turretTargetAngle).toBeNull();
+    expect(stale.turretAngularVelocity).toBeCloseTo((2 * Math.PI) / 3);
     expect(stale.inputs.gunner?.firing).toBe(false);
   });
 
@@ -389,10 +676,62 @@ describe("shield simulation", () => {
       6
     );
 
-    expect(Math.abs(state.shieldAngle)).toBeCloseTo(Math.PI);
+    expect(state.shieldAngle).toBeCloseTo((5 * Math.PI) / 16);
+    expect(state.shieldTargetAngle).toBeNull();
+    expect(state.shieldAngularVelocity).toBeCloseTo((5 * Math.PI) / 6);
     expect(state.shieldActive).toBe(true);
     expect(state.inputs.shield?.active).toBe(true);
     expect(state.shieldEnergy).toBe(94);
+  });
+
+  it("accelerates faster than the turret and traverses while inactive and recharging", () => {
+    const config = createFlyingCastleConfig();
+    let state: FlyingCastleState = {
+      ...createFlyingCastleState(config),
+      shieldEnergy: 50
+    };
+    const velocities: number[] = [];
+
+    for (let step = 0; step < 4; step += 1) {
+      state = applyShieldInput(state, {
+        vector: { x: 0, y: 1 },
+        active: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceFlyingCastle(state, config);
+      velocities.push(state.shieldAngularVelocity);
+    }
+
+    expect(velocities[0]).toBeCloseTo((5 * Math.PI) / 12);
+    expect(velocities[1]).toBeCloseTo((5 * Math.PI) / 6);
+    expect(velocities[2]).toBeCloseTo((5 * Math.PI) / 4);
+    expect(velocities[3]).toBeCloseTo((5 * Math.PI) / 3);
+    expect(state.shieldAngle).toBeGreaterThan(0);
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldEnergy).toBe(52);
+  });
+
+  it("trusted shield disconnect turns it off and cancels target without changing energy", () => {
+    const config = createFlyingCastleConfig();
+    let state = applyShieldInput(createFlyingCastleState(config), {
+      vector: { x: 0, y: -1 },
+      active: true,
+      receivedTick: 0
+    });
+    state = advance(state, config, 2);
+    const energyAtDisconnect = state.shieldEnergy;
+    const velocityAtDisconnect = state.shieldAngularVelocity;
+    state = cancelShieldControl(state);
+
+    expect(state.shieldTargetAngle).toBeNull();
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldEnergy).toBe(energyAtDisconnect);
+    expect(state.shieldAngularVelocity).toBe(velocityAtDisconnect);
+    expect(state.inputs.shield).toMatchObject({ vector: { x: 0, y: 0 }, active: false });
+
+    state = advanceFlyingCastle(state, config);
+    expect(Math.abs(state.shieldAngularVelocity)).toBeLessThan(Math.abs(velocityAtDisconnect));
+    expect(state.shieldEnergy).toBe(energyAtDisconnect + 0.5);
   });
 
   it("drains a full shield in five seconds and requires re-arming", () => {

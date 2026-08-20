@@ -61,11 +61,30 @@ try {
     aim: { x: 0, y: -1 },
     firing: true
   });
+  await waitFor(() => display.state.game.turretAngle < 0);
+  const traversingTurretAngle = display.state.game.turretAngle;
+  if (!(traversingTurretAngle > -Math.PI / 2))
+    throw new Error("Turret snapped to its target instead of traversing gradually.");
   await waitFor(() => display.state.game.display.projectiles.length > 0);
+  const firstProjectile = display.state.game.display.projectiles.at(0);
+  const projectileAngle = Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX);
+  if (!(projectileAngle < 0 && projectileAngle > -Math.PI / 2))
+    throw new Error("Projectile did not use the current traversing turret angle.");
 
   shield.send("shield:input", {
     ...envelope(display.roomId, shield.sessionId),
     sequence: 1,
+    aim: { x: -1, y: 0 },
+    active: false
+  });
+  await waitFor(() => display.state.game.shield.angle > 0);
+  if (display.state.game.shield.active || display.state.game.shield.energy !== 100)
+    throw new Error("Inactive shield pre-aim changed active state or energy.");
+  if (!(display.state.game.shield.angle < Math.PI))
+    throw new Error("Shield snapped to its antipodal target instead of traversing positively.");
+  shield.send("shield:input", {
+    ...envelope(display.roomId, shield.sessionId),
+    sequence: 2,
     aim: { x: -1, y: 0 },
     active: true
   });
@@ -74,7 +93,7 @@ try {
   const drainedShieldEnergy = display.state.game.shield.energy;
   shield.send("shield:input", {
     ...envelope(display.roomId, shield.sessionId),
-    sequence: 2,
+    sequence: 3,
     aim: { x: -1, y: 0 },
     active: false
   });
@@ -89,6 +108,22 @@ try {
   });
   if ((await roleError).code !== "role_mismatch")
     throw new Error("Wrong-role input was not rejected.");
+
+  const gunnerId = gunner.sessionId;
+  const gunnerToken = gunner.reconnectionToken;
+  gunner.reconnection.enabled = false;
+  gunner.connection.close();
+  await waitFor(() => display.state.players.get(gunnerId)?.connected === false);
+  gunner = await new Client(endpoint).reconnect(gunnerToken);
+  await waitFor(() => display.state.players.get(gunnerId)?.connected === true);
+  const angleBeforeReconnectInput = display.state.game.turretAngle;
+  gunner.send("gunner:input", {
+    ...envelope(display.roomId, gunner.sessionId),
+    sequence: 1,
+    aim: { x: 0, y: 1 },
+    firing: false
+  });
+  await waitFor(() => display.state.game.turretAngle > angleBeforeReconnectInput);
 
   const pilotId = pilot.sessionId;
   const pilotToken = pilot.reconnectionToken;
@@ -105,7 +140,6 @@ try {
   });
   await waitFor(() => display.state.game.castle.x < xBeforeReconnectInput);
 
-  const gunnerId = gunner.sessionId;
   gunner.reconnection.enabled = false;
   gunner.connection.close();
   await waitFor(() => !display.state.players.has(gunnerId), 80);
@@ -120,6 +154,8 @@ try {
       players: display.state.players.size,
       castleX: display.state.game.castle.x,
       projectiles: display.state.game.display.projectiles.length,
+      turretAngle: display.state.game.turretAngle,
+      projectileAngle,
       shieldActive: display.state.game.shield.active,
       shieldEnergy: display.state.game.shield.energy,
       replacementRole: display.state.players.get(replacement.sessionId).role

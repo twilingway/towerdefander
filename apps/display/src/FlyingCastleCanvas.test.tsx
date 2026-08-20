@@ -24,6 +24,7 @@ describe("FlyingCastleCanvas", () => {
     expect(markup).toContain('data-castle-x="1216"');
     expect(markup).toContain('data-projectile-count="1"');
     expect(markup).toContain('data-shield-active="true"');
+    expect(markup).toContain(`data-shield-angle="${String(Math.PI)}"`);
     expect(markup).toContain('data-shield-energy="75"');
   });
 });

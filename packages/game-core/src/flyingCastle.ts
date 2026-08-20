@@ -21,6 +21,12 @@ export interface FlyingCastleConfig {
   readonly shieldCapacity: number;
   readonly shieldDrainPerSecond: number;
   readonly shieldRechargePerSecond: number;
+  readonly turretMaxAngularSpeedPerSecond: number;
+  readonly turretAngularAccelerationPerSecondSquared: number;
+  readonly turretAngularBrakingPerSecondSquared: number;
+  readonly shieldMaxAngularSpeedPerSecond: number;
+  readonly shieldAngularAccelerationPerSecondSquared: number;
+  readonly shieldAngularBrakingPerSecondSquared: number;
 }
 
 export interface TrustedPilotInput {
@@ -58,7 +64,11 @@ export interface FlyingCastleState {
   readonly clock: SimulationClock;
   readonly castle: CastleState;
   readonly turretAngle: number;
+  readonly turretTargetAngle: number | null;
+  readonly turretAngularVelocity: number;
   readonly shieldAngle: number;
+  readonly shieldTargetAngle: number | null;
+  readonly shieldAngularVelocity: number;
   readonly shieldActive: boolean;
   readonly shieldEnergy: number;
   readonly shieldRearmRequired: boolean;
@@ -88,7 +98,13 @@ const defaultFlyingCastleConfig: FlyingCastleConfig = {
   fireCooldownTicks: 5,
   shieldCapacity: 100,
   shieldDrainPerSecond: 20,
-  shieldRechargePerSecond: 10
+  shieldRechargePerSecond: 10,
+  turretMaxAngularSpeedPerSecond: (4 * Math.PI) / 3,
+  turretAngularAccelerationPerSecondSquared: (20 * Math.PI) / 3,
+  turretAngularBrakingPerSecondSquared: (20 * Math.PI) / 3,
+  shieldMaxAngularSpeedPerSecond: (5 * Math.PI) / 3,
+  shieldAngularAccelerationPerSecondSquared: (25 * Math.PI) / 3,
+  shieldAngularBrakingPerSecondSquared: (25 * Math.PI) / 3
 };
 
 export function createFlyingCastleConfig(
@@ -124,7 +140,13 @@ export function validateFlyingCastleConfig(config: FlyingCastleConfig): void {
     ["projectileRadius", config.projectileRadius],
     ["shieldCapacity", config.shieldCapacity],
     ["shieldDrainPerSecond", config.shieldDrainPerSecond],
-    ["shieldRechargePerSecond", config.shieldRechargePerSecond]
+    ["shieldRechargePerSecond", config.shieldRechargePerSecond],
+    ["turretMaxAngularSpeedPerSecond", config.turretMaxAngularSpeedPerSecond],
+    ["turretAngularAccelerationPerSecondSquared", config.turretAngularAccelerationPerSecondSquared],
+    ["turretAngularBrakingPerSecondSquared", config.turretAngularBrakingPerSecondSquared],
+    ["shieldMaxAngularSpeedPerSecond", config.shieldMaxAngularSpeedPerSecond],
+    ["shieldAngularAccelerationPerSecondSquared", config.shieldAngularAccelerationPerSecondSquared],
+    ["shieldAngularBrakingPerSecondSquared", config.shieldAngularBrakingPerSecondSquared]
   ];
 
   for (const [name, value] of positiveFiniteNumbers) {
@@ -152,7 +174,11 @@ export function createFlyingCastleState(config: FlyingCastleConfig): FlyingCastl
       velocity: { x: 0, y: 0 }
     },
     turretAngle: 0,
+    turretTargetAngle: null,
+    turretAngularVelocity: 0,
     shieldAngle: 0,
+    shieldTargetAngle: null,
+    shieldAngularVelocity: 0,
     shieldActive: false,
     shieldEnergy: config.shieldCapacity,
     shieldRearmRequired: false,
@@ -202,13 +228,17 @@ export function applyGunnerInput(
   assertReceivedTick(state, input.receivedTick);
   const firing = input.firing;
   const isRisingEdge = firing && state.inputs.gunner?.firing !== true;
+  const vector = normalizeVector(input.vector);
   return {
     ...state,
     queuedFire: state.queuedFire || isRisingEdge,
+    turretTargetAngle: isZeroVector(vector)
+      ? state.turretTargetAngle
+      : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
     inputs: {
       ...state.inputs,
       gunner: {
-        vector: normalizeVector(input.vector),
+        vector,
         firing,
         receivedTick: input.receivedTick
       }
@@ -221,13 +251,17 @@ export function applyShieldInput(
   input: TrustedShieldInput
 ): FlyingCastleState {
   assertReceivedTick(state, input.receivedTick);
+  const vector = normalizeVector(input.vector);
   return {
     ...state,
     shieldRearmRequired: input.active && (state.shieldRearmRequired || state.shieldEnergy <= 0),
+    shieldTargetAngle: isZeroVector(vector)
+      ? state.shieldTargetAngle
+      : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
     inputs: {
       ...state.inputs,
       shield: {
-        vector: normalizeVector(input.vector),
+        vector,
         active: input.active,
         receivedTick: input.receivedTick
       }
@@ -243,6 +277,39 @@ export function cancelQueuedFire(state: FlyingCastleState): FlyingCastleState {
 /** Turns off the authoritative shield immediately at a trusted disconnect boundary. */
 export function deactivateShield(state: FlyingCastleState): FlyingCastleState {
   return state.shieldActive ? { ...state, shieldActive: false } : state;
+}
+
+/** Cancels every gunner intent owned by a disconnected trusted connection. */
+export function cancelGunnerControl(state: FlyingCastleState): FlyingCastleState {
+  return {
+    ...state,
+    turretTargetAngle: null,
+    queuedFire: false,
+    inputs: {
+      ...state.inputs,
+      gunner:
+        state.inputs.gunner === null
+          ? null
+          : { ...state.inputs.gunner, vector: ZERO, firing: false }
+    }
+  };
+}
+
+/** Cancels every shield intent owned by a disconnected trusted connection. */
+export function cancelShieldControl(state: FlyingCastleState): FlyingCastleState {
+  return {
+    ...state,
+    shieldTargetAngle: null,
+    shieldActive: false,
+    shieldRearmRequired: false,
+    inputs: {
+      ...state.inputs,
+      shield:
+        state.inputs.shield === null
+          ? null
+          : { ...state.inputs.shield, vector: ZERO, active: false }
+    }
+  };
 }
 
 export function advanceFlyingCastle(
@@ -278,13 +345,33 @@ export function advanceFlyingCastle(
   const nextVelocity = moveVectorTowards(state.castle.velocity, targetVelocity, velocityDelta);
   const castle = moveCastleWithinWorld(state.castle, nextVelocity, secondsPerStep, config);
 
-  const turretAngle = aimAngleOrPrevious(
-    gunnerFresh ? state.inputs.gunner?.vector : null,
-    state.turretAngle
+  const turretTargetAngle = gunnerFresh ? state.turretTargetAngle : null;
+  const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
+  const turretTraverse = advanceAngularTraverse(
+    {
+      angle: state.turretAngle,
+      targetAngle: turretTargetAngle,
+      angularVelocity: state.turretAngularVelocity
+    },
+    {
+      maxAngularSpeed: config.turretMaxAngularSpeedPerSecond,
+      angularAcceleration: config.turretAngularAccelerationPerSecondSquared,
+      angularBraking: config.turretAngularBrakingPerSecondSquared,
+      secondsPerStep
+    }
   );
-  const shieldAngle = aimAngleOrPrevious(
-    shieldFresh ? state.inputs.shield?.vector : null,
-    state.shieldAngle
+  const shieldTraverse = advanceAngularTraverse(
+    {
+      angle: state.shieldAngle,
+      targetAngle: shieldTargetAngle,
+      angularVelocity: state.shieldAngularVelocity
+    },
+    {
+      maxAngularSpeed: config.shieldMaxAngularSpeedPerSecond,
+      angularAcceleration: config.shieldAngularAccelerationPerSecondSquared,
+      angularBraking: config.shieldAngularBrakingPerSecondSquared,
+      secondsPerStep
+    }
   );
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
@@ -314,8 +401,12 @@ export function advanceFlyingCastle(
       clock,
       castle,
       inputs,
-      turretAngle,
-      shieldAngle,
+      turretAngle: turretTraverse.angle,
+      turretTargetAngle,
+      turretAngularVelocity: turretTraverse.angularVelocity,
+      shieldAngle: shieldTraverse.angle,
+      shieldTargetAngle,
+      shieldAngularVelocity: shieldTraverse.angularVelocity,
       shieldActive,
       shieldEnergy,
       shieldRearmRequired,
@@ -323,7 +414,10 @@ export function advanceFlyingCastle(
     };
   }
 
-  const direction = { x: Math.cos(turretAngle), y: Math.sin(turretAngle) };
+  const direction = {
+    x: Math.cos(turretTraverse.angle),
+    y: Math.sin(turretTraverse.angle)
+  };
   const projectile: ProjectileState = {
     projectileId: `projectile-${String(state.nextProjectileSequence)}`,
     x: castle.x + direction.x * (config.castleRadius + config.projectileRadius),
@@ -340,8 +434,12 @@ export function advanceFlyingCastle(
     clock,
     castle,
     inputs,
-    turretAngle,
-    shieldAngle,
+    turretAngle: turretTraverse.angle,
+    turretTargetAngle,
+    turretAngularVelocity: turretTraverse.angularVelocity,
+    shieldAngle: shieldTraverse.angle,
+    shieldTargetAngle,
+    shieldAngularVelocity: shieldTraverse.angularVelocity,
     shieldActive,
     shieldEnergy,
     shieldRearmRequired,
@@ -376,6 +474,100 @@ export function moveVectorTowards(
   return {
     x: current.x + deltaX * scale,
     y: current.y + deltaY * scale
+  };
+}
+
+export function canonicalizeAngle(angle: number): number {
+  if (!Number.isFinite(angle)) {
+    throw new RangeError("angle must be a finite number");
+  }
+
+  const wrapped = ((((angle + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
+  return Object.is(wrapped, -0) ? 0 : wrapped;
+}
+
+/** Returns the shortest signed delta in (-PI, PI], choosing positive PI at the exact antipode. */
+export function shortestAngleDelta(currentAngle: number, targetAngle: number): number {
+  const delta = canonicalizeAngle(canonicalizeAngle(targetAngle) - canonicalizeAngle(currentAngle));
+  return Math.abs(Math.abs(delta) - Math.PI) <= ANGLE_EPSILON ? Math.PI : delta;
+}
+
+export function moveScalarTowards(current: number, target: number, maximumDelta: number): number {
+  if (!Number.isFinite(current) || !Number.isFinite(target)) {
+    throw new RangeError("scalar values must be finite numbers");
+  }
+  if (!Number.isFinite(maximumDelta) || maximumDelta < 0) {
+    throw new RangeError("maximumDelta must be a non-negative finite number");
+  }
+
+  if (Math.abs(target - current) <= maximumDelta) {
+    return target;
+  }
+  return current + Math.sign(target - current) * maximumDelta;
+}
+
+interface AngularTraverseState {
+  readonly angle: number;
+  readonly targetAngle: number | null;
+  readonly angularVelocity: number;
+}
+
+interface AngularTraverseConfig {
+  readonly maxAngularSpeed: number;
+  readonly angularAcceleration: number;
+  readonly angularBraking: number;
+  readonly secondsPerStep: number;
+}
+
+function advanceAngularTraverse(
+  state: AngularTraverseState,
+  config: AngularTraverseConfig
+): AngularTraverseState {
+  const angle = canonicalizeAngle(state.angle);
+  if (state.targetAngle === null) {
+    const angularVelocity = moveScalarTowards(
+      state.angularVelocity,
+      0,
+      config.angularBraking * config.secondsPerStep
+    );
+    return {
+      angle: canonicalizeAngle(angle + angularVelocity * config.secondsPerStep),
+      targetAngle: null,
+      angularVelocity
+    };
+  }
+
+  const targetAngle = canonicalizeAngle(state.targetAngle);
+  const delta = shortestAngleDelta(angle, targetAngle);
+  if (delta === 0) {
+    return { angle: targetAngle, targetAngle, angularVelocity: 0 };
+  }
+
+  const desiredSpeedMagnitude = Math.min(
+    config.maxAngularSpeed,
+    Math.sqrt(2 * config.angularBraking * Math.abs(delta))
+  );
+  const desiredVelocity = Math.sign(delta) * desiredSpeedMagnitude;
+  const accelerating =
+    state.angularVelocity === 0 ||
+    (Math.sign(state.angularVelocity) === Math.sign(desiredVelocity) &&
+      Math.abs(desiredVelocity) > Math.abs(state.angularVelocity));
+  const velocityRate = accelerating ? config.angularAcceleration : config.angularBraking;
+  const angularVelocity = moveScalarTowards(
+    state.angularVelocity,
+    desiredVelocity,
+    velocityRate * config.secondsPerStep
+  );
+  const angularStep = angularVelocity * config.secondsPerStep;
+
+  if (Math.sign(angularStep) === Math.sign(delta) && Math.abs(angularStep) >= Math.abs(delta)) {
+    return { angle: targetAngle, targetAngle, angularVelocity: 0 };
+  }
+
+  return {
+    angle: canonicalizeAngle(angle + angularStep),
+    targetAngle,
+    angularVelocity
   };
 }
 
@@ -437,10 +629,8 @@ function isFresh(
   return input !== null && currentTick - input.receivedTick < timeoutTicks;
 }
 
-function aimAngleOrPrevious(vector: Vector2 | null | undefined, previous: number): number {
-  return vector === null || vector === undefined || (vector.x === 0 && vector.y === 0)
-    ? previous
-    : Math.atan2(vector.y, vector.x);
+function isZeroVector(vector: Vector2): boolean {
+  return vector.x === 0 && vector.y === 0;
 }
 
 function assertFiniteVector(vector: Vector2): void {
@@ -461,3 +651,6 @@ function assertReceivedTick(state: FlyingCastleState, receivedTick: number): voi
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
+
+const TAU = Math.PI * 2;
+const ANGLE_EPSILON = Number.EPSILON * 8 * Math.PI;

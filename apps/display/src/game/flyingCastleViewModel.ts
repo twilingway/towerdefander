@@ -97,7 +97,11 @@ export function getTimelineAlpha(elapsedMs: number, durationMs = 50): number {
 export function interpolateAngle(current: number, target: number, amount: number): number {
   const safeAmount = clamp(amount, 0, 1);
   const fullTurn = Math.PI * 2;
-  const delta = ((((target - current + Math.PI) % fullTurn) + fullTurn) % fullTurn) - Math.PI;
+  const wrappedDelta =
+    ((((target - current + Math.PI) % fullTurn) + fullTurn) % fullTurn) - Math.PI;
+  // Match the authoritative core convention: an exact antipode turns in the
+  // positive screen-clockwise direction instead of depending on modulo sign.
+  const delta = wrappedDelta === -Math.PI ? Math.PI : wrappedDelta;
   return current + delta * safeAmount;
 }
 

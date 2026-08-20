@@ -55,6 +55,7 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
       data-projectile-count={game.projectiles.length}
       data-latest-projectile-id={game.projectiles.at(-1)?.projectileId ?? ""}
       data-shield-active={game.shield.active}
+      data-shield-angle={game.shield.angle}
       data-shield-energy={game.shield.energy}
     >
       <div ref={hostReference} className="battlefield-canvas" aria-hidden="true" />

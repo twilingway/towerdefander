@@ -2,8 +2,9 @@
 
 Статус: 20 августа 2026 года основная концепция изменена с классического Tower Defense на
 кооперативный top-down экшен про один летающий замок. Предыдущая реализация 2–6 дорог и protocol v4
-сохранена в Git (`00c3ab7`) как точка возврата. Realtime slice и плавное управление зафиксированы
-архивными changes `flying-castle-core` и `smooth-flight-controls`.
+сохранена в Git (`00c3ab7`) как точка возврата. Realtime slice и плавное движение зафиксированы
+архивными changes `flying-castle-core` и `smooth-flight-controls`; плавное tank-like наведение
+развивается в change `smooth-tank-aim`.
 
 ## 1. Цель продукта
 
@@ -45,7 +46,9 @@ Monorepo остаётся на pnpm workspaces:
 - мир 2400×1600, камера следует за замком;
 - server-authoritative fixed step 50 ms;
 - WASD/arrows и virtual stick для pilot;
-- gesture-only aim + hold-fire для gunner, aim + toggle и энергия для shield;
+- gesture-only absolute aim с server-authoritative разгоном, торможением и ограничением скорости
+  поворота для gunner/shield;
+- hold-fire для gunner, toggle и энергия для shield;
 - grid, замок, башня, щит, декор и снаряды из Phaser primitives;
 - reconnect, active replacement, strict protocol v6 и network/browser tests.
 
