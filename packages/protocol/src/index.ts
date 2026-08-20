@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 6 as const;
+export const PROTOCOL_VERSION = 7 as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
@@ -19,6 +19,9 @@ const finiteNumberSchema = z.number();
 const worldSizeSchema = finiteNumberSchema.positive();
 const worldCoordinateSchema = finiteNumberSchema.nonnegative();
 
+export const latencyMsSchema = z.number().int().min(0).max(5000).nullable();
+export type LatencyMs = z.infer<typeof latencyMsSchema>;
+
 export const vector2Schema = z
   .object({
     x: finiteNumberSchema.min(-1).max(1),
@@ -33,7 +36,8 @@ export const publicPlayerViewSchema = z
     playerName: z.string().min(1).max(24),
     role: crewRoleSchema,
     ready: z.boolean(),
-    connected: z.boolean()
+    connected: z.boolean(),
+    latencyMs: latencyMsSchema
   })
   .strict();
 export type PublicPlayerView = z.infer<typeof publicPlayerViewSchema>;
@@ -265,6 +269,7 @@ const roomViewBaseShape = {
   roomId: z.string().min(1),
   phase: roomPhaseSchema,
   displayConnected: z.boolean(),
+  displayLatencyMs: latencyMsSchema,
   players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
 } satisfies z.ZodRawShape;
 
@@ -294,7 +299,7 @@ export const displayCreateOptionsSchema = z
   .strict();
 export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
 
-// Create and reconnect use the same strict display handshake in protocol v6.
+// Create and reconnect use the same strict display handshake in protocol v7.
 export const displayJoinOptionsSchema = displayCreateOptionsSchema;
 export type DisplayJoinOptions = DisplayCreateOptions;
 
@@ -352,15 +357,34 @@ export const shieldInputCommandSchema = continuousInputEnvelopeSchema
   .strict();
 export type ShieldInputCommand = z.infer<typeof shieldInputCommandSchema>;
 
+export const serverLatencyProbeSchema = z
+  .object({
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    probeId: z.string().min(1)
+  })
+  .strict();
+export type ServerLatencyProbe = z.infer<typeof serverLatencyProbeSchema>;
+
+export const clientLatencyPongSchema = z
+  .object({
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    roomId: z.string().min(1),
+    probeId: z.string().min(1)
+  })
+  .strict();
+export type ClientLatencyPong = z.infer<typeof clientLatencyPongSchema>;
+
 export const clientMessage = {
   ready: "controller:ready",
   pilotInput: "pilot:input",
   gunnerInput: "gunner:input",
-  shieldInput: "shield:input"
+  shieldInput: "shield:input",
+  latencyPong: "client:latency-pong"
 } as const;
 
 export const serverMessage = {
-  error: "server:error"
+  error: "server:error",
+  latencyProbe: "server:latency-probe"
 } as const;
 
 export const serverErrorCodeSchema = z.enum([

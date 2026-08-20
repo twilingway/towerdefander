@@ -3,8 +3,8 @@
 Статус: 20 августа 2026 года основная концепция изменена с классического Tower Defense на
 кооперативный top-down экшен про один летающий замок. Предыдущая реализация 2–6 дорог и protocol v4
 сохранена в Git (`00c3ab7`) как точка возврата. Realtime slice и плавное движение зафиксированы
-архивными changes `flying-castle-core` и `smooth-flight-controls`; плавное tank-like наведение
-развивается в change `smooth-tank-aim`.
+архивными changes `flying-castle-core`, `smooth-flight-controls`, `smooth-tank-aim` и
+`latency-fullscreen-world`.
 
 ## 1. Цель продукта
 
@@ -36,23 +36,29 @@ Monorepo остаётся на pnpm workspaces:
 - `apps/controller` — responsive role controllers;
 - `apps/server` — Colyseus room, reconnect, validation и simulation timer;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — protocol v6 и строгие transport/view schemas.
+- `packages/protocol` — protocol v7 и строгие transport/view schemas.
 
 ## 3. Этапы
 
 ### Этап 1 — Primitive realtime slice (текущий)
 
 - ровно три стабильные role slots: pilot, gunner, shield;
-- мир 2400×1600, камера следует за замком;
+- мир 4800×3200, fullscreen camera показывает минимум 1600×900 logical units и адаптируется к aspect
+  ratio экрана;
+- camera использует ограниченный космический overscan за рамкой мира: у любой границы весь замок,
+  пушка и щит остаются минимум в 160 CSS pixels от края экрана;
 - server-authoritative fixed step 50 ms;
 - WASD/arrows и virtual stick для pilot;
 - gesture-only absolute aim с server-authoritative разгоном, торможением и ограничением скорости
   поворота для gunner/shield;
-- тяжёлый tuning после первого playtest: turret `60/120/180°/s`, shield `75/150/225°/s` для
+- повторный tuning после playtest: turret `78/156/234°/s`, shield `97.5/195/292.5°/s` для
   max-speed/acceleration/braking;
 - hold-fire для gunner, toggle и энергия для shield;
-- grid, замок, башня, щит, декор и снаряды из Phaser primitives;
-- reconnect, active replacement, strict protocol v6 и network/browser tests.
+- grid, замок, башня, постоянно видимый directional shield, декор и снаряды из Phaser primitives;
+- server измеряет RTT каждого WebSocket connection; общий экран показывает пинг display и всех трёх
+  ролей, controller — собственный пинг. Это не прямой client-to-client RTT и не измерение полного
+  input-to-render отклика;
+- reconnect, active replacement, strict protocol v7 и network/browser tests.
 
 Результат: руками проверяется совместное управление одним замком с трёх браузеров без финального
 art.
@@ -67,6 +73,7 @@ art.
 ### Этап 3 — Карта и roguelike loop
 
 - процедурные или секционные карты;
+- отдельное решение по Tyrian-inspired vertical scrolling/dead-zone камеры и направлению полёта;
 - encounters, ресурсы, upgrades и выбор маршрута;
 - победа/поражение и короткая replayable session;
 - типы врагов, elite и boss encounters.
@@ -91,5 +98,6 @@ art.
 ## 5. Не входит в первый slice
 
 Enemies, damage, collision с декором, shield upgrades, waves, economy, victory/defeat, procedural
-map, accounts, persistence, matchmaking, bitmap art, sound и Android native output. Эти решения
-будут приниматься после ручной проверки core controls.
+map, accounts, persistence, matchmaking, bitmap art, sound, runtime admin panel и Android native
+output. Для admin panel отдельно потребуются owner authorization, допустимые диапазоны и правила
+синхронизации параметров комнаты; эти решения будут приниматься после ручной проверки core controls.

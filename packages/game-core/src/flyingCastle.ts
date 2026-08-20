@@ -85,8 +85,8 @@ export interface FlyingCastleState {
 
 const defaultFlyingCastleConfig: FlyingCastleConfig = {
   fixedStepMs: 50,
-  worldWidth: 2400,
-  worldHeight: 1600,
+  worldWidth: 4800,
+  worldHeight: 3200,
   castleSpeedPerSecond: 320,
   castleAccelerationPerSecondSquared: 640,
   castleBrakingPerSecondSquared: 800,
@@ -99,12 +99,12 @@ const defaultFlyingCastleConfig: FlyingCastleConfig = {
   shieldCapacity: 100,
   shieldDrainPerSecond: 20,
   shieldRechargePerSecond: 10,
-  turretMaxAngularSpeedPerSecond: Math.PI / 3,
-  turretAngularAccelerationPerSecondSquared: (2 * Math.PI) / 3,
-  turretAngularBrakingPerSecondSquared: Math.PI,
-  shieldMaxAngularSpeedPerSecond: (5 * Math.PI) / 12,
-  shieldAngularAccelerationPerSecondSquared: (5 * Math.PI) / 6,
-  shieldAngularBrakingPerSecondSquared: (5 * Math.PI) / 4
+  turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
+  turretAngularAccelerationPerSecondSquared: (13 * Math.PI) / 15,
+  turretAngularBrakingPerSecondSquared: (13 * Math.PI) / 10,
+  shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
+  shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
+  shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8
 };
 
 export function createFlyingCastleConfig(

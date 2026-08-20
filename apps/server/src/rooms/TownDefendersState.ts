@@ -7,6 +7,7 @@ export class PlayerState extends Schema {
   @type("string") role: CrewRole = "pilot";
   @type("boolean") ready = false;
   @type("boolean") connected = true;
+  @type("int32") latencyMs = -1;
 }
 
 export class CastleState extends Schema {
@@ -52,8 +53,8 @@ export class FlyingCastleDisplayState extends Schema {
 export class FlyingCastleGameState extends Schema {
   @type("uint32") tick = 0;
   @type("uint32") elapsedMs = 0;
-  @type("uint16") worldWidth = 2400;
-  @type("uint16") worldHeight = 1600;
+  @type("uint16") worldWidth = 4800;
+  @type("uint16") worldHeight = 3200;
   @type(CastleState) castle = new CastleState();
   @type("float64") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();
@@ -66,6 +67,7 @@ export class TownDefendersState extends Schema {
   @type("string") roomId = "";
   @type("string") phase: RoomPhase = "lobby";
   @type("boolean") displayConnected = false;
+  @type("int32") displayLatencyMs = -1;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type("boolean") hasGame = false;
   @type(FlyingCastleGameState) game = new FlyingCastleGameState();

@@ -109,6 +109,18 @@ button:disabled {
   color: #e6b85c;
 }
 
+.network-status {
+  display: grid;
+  justify-items: end;
+  gap: 0.15rem;
+}
+
+.latency-indicator {
+  color: #aabbb7;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .phase-copy {
   margin: 0;
   color: #cad7d3;

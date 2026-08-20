@@ -43,8 +43,8 @@ describe("deterministic game core primitives", () => {
   it("exports the flying castle core from the package entrypoint", () => {
     expect(createFlyingCastleConfig()).toMatchObject({
       fixedStepMs: 50,
-      worldWidth: 2400,
-      worldHeight: 1600
+      worldWidth: 4800,
+      worldHeight: 3200
     });
   });
 });

@@ -7,14 +7,29 @@ function collection<T>(values: T[]) {
 }
 
 describe("display room view", () => {
-  it("flattens display-only world collections into a strict v6 view", () => {
+  it("flattens display-only world collections into a strict v7 view", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
       displayConnected: true,
+      displayLatencyMs: 18,
       players: collection([
-        { playerId: "p2", playerName: "Sam", role: "gunner", ready: true, connected: true },
-        { playerId: "p1", playerName: "Alex", role: "pilot", ready: true, connected: true }
+        {
+          playerId: "p2",
+          playerName: "Sam",
+          role: "gunner",
+          ready: true,
+          connected: true,
+          latencyMs: 47
+        },
+        {
+          playerId: "p1",
+          playerName: "Alex",
+          role: "pilot",
+          ready: true,
+          connected: true,
+          latencyMs: -1
+        }
       ]),
       hasGame: true,
       game: {
@@ -49,6 +64,8 @@ describe("display room view", () => {
     ]);
     expect(view?.game?.projectiles).toHaveLength(1);
     expect(view?.game?.shield.energy).toBe(75);
+    expect(view?.displayLatencyMs).toBe(18);
+    expect(view?.players.map((player) => player.latencyMs)).toEqual([null, 47]);
   });
 
   it("builds a controller URL without losing existing parameters", () => {

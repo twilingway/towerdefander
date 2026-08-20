@@ -15,6 +15,7 @@ import {
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
   clientMessage,
+  clientLatencyPongSchema,
   displayCreateOptionsSchema,
   gunnerInputCommandSchema,
   joinOptionsSchema,
@@ -53,49 +54,83 @@ interface RoomTimer {
   clear(): void;
 }
 
+interface OutstandingLatencyProbe {
+  readonly probeId: string;
+  readonly sentAt: number;
+  readonly timeout: RoomTimer;
+}
+
+const LATENCY_PROBE_INTERVAL_MS = 2_000;
+const LATENCY_PROBE_TIMEOUT_MS = 5_000;
+const MAX_LATENCY_SAMPLE_MS = 5_000;
+const MAX_LATENCY_SAMPLES = 5;
+
 const { reconnectionGraceSeconds } = readServerConfig();
 const flyingCastleConfig = createFlyingCastleConfig();
 
 const DECORATIVE_OBSTACLES = [
-  { obstacleId: "island-west", kind: "circle" as const, x: 420, y: 430, radius: 105 },
+  { obstacleId: "island-northwest", kind: "circle" as const, x: 620, y: 540, radius: 105 },
   {
     obstacleId: "ruins-north",
     kind: "rectangle" as const,
-    x: 1120,
-    y: 260,
+    x: 2200,
+    y: 390,
     width: 250,
     height: 120
   },
   {
-    obstacleId: "cloud-bank",
+    obstacleId: "cloud-northeast",
     kind: "rectangle" as const,
-    x: 1780,
-    y: 620,
+    x: 3950,
+    y: 650,
     width: 330,
     height: 150
   },
-  { obstacleId: "island-south", kind: "circle" as const, x: 820, y: 1270, radius: 135 },
+  { obstacleId: "island-west", kind: "circle" as const, x: 850, y: 1740, radius: 135 },
   {
-    obstacleId: "ruins-east",
+    obstacleId: "ruins-center-west",
     kind: "rectangle" as const,
-    x: 1990,
-    y: 1260,
+    x: 1980,
+    y: 1420,
     width: 220,
     height: 180
+  },
+  { obstacleId: "island-center-east", kind: "circle" as const, x: 2820, y: 1800, radius: 90 },
+  { obstacleId: "island-southwest", kind: "circle" as const, x: 900, y: 2700, radius: 120 },
+  {
+    obstacleId: "cloud-southeast",
+    kind: "rectangle" as const,
+    x: 4040,
+    y: 2600,
+    width: 300,
+    height: 140
+  },
+  {
+    obstacleId: "ruins-south",
+    kind: "rectangle" as const,
+    x: 2500,
+    y: 2760,
+    width: 240,
+    height: 170
   }
 ] as const;
 
 export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   override maxClients = PLAYER_CAPACITY + 2;
-  override maxMessagesPerSecond = 20;
+  override maxMessagesPerSecond = 25;
   override state = new TownDefendersState();
 
   private readonly connectionRoles = new Map<string, ConnectionRole>();
   private readonly sequenceWatermarks = new Map<string, Map<InputMessageType, number>>();
+  private readonly connectionClients = new Map<string, Client>();
+  private readonly latencySamples = new Map<string, number[]>();
+  private readonly outstandingLatencyProbes = new Map<string, OutstandingLatencyProbe>();
+  private readonly scheduledLatencyProbes = new Map<string, RoomTimer>();
   private displaySessionId: string | undefined;
   private gameConfig: FlyingCastleConfig = flyingCastleConfig;
   private gameState: FlyingCastleState | undefined;
   private simulationTimer: RoomTimer | undefined;
+  private nextLatencyProbeSequence = 1;
 
   override messages = {
     [clientMessage.ready]: (client: Client, payload: unknown) => {
@@ -109,6 +144,9 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     },
     [clientMessage.shieldInput]: (client: Client, payload: unknown) => {
       this.handleShieldInput(client, payload);
+    },
+    [clientMessage.latencyPong]: (client: Client, payload: unknown) => {
+      this.handleLatencyPong(client, payload);
     }
   };
 
@@ -133,6 +171,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
 
     if (result.data.role === "display") {
       this.joinDisplay(client);
+      this.registerLatencyConnection(client);
       return;
     }
 
@@ -153,10 +192,12 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.connectionRoles.set(client.sessionId, "controller");
     this.sequenceWatermarks.set(client.sessionId, new Map());
     this.state.players.set(client.sessionId, player);
+    this.registerLatencyConnection(client);
   }
 
   override async onLeave(client: Client, code: number): Promise<void> {
     const connectionRole = this.connectionRoles.get(client.sessionId);
+    this.clearLatencyConnection(client.sessionId);
     if (connectionRole === "display") {
       this.state.displayConnected = false;
       if (code === CloseCode.CONSENTED) {
@@ -168,6 +209,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         this.connectionRoles.set(reconnected.sessionId, "display");
         this.displaySessionId = reconnected.sessionId;
         this.state.displayConnected = true;
+        this.registerLatencyConnection(reconnected);
       } catch {
         await this.disposeHeadlessRoom(client.sessionId);
       }
@@ -193,6 +235,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       player.connected = true;
       this.connectionRoles.set(reconnected.sessionId, "controller");
       this.sequenceWatermarks.set(reconnected.sessionId, new Map());
+      this.registerLatencyConnection(reconnected);
     } catch {
       this.removeController(client.sessionId);
     }
@@ -200,6 +243,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
 
   override onDispose(): void {
     this.stopSimulation();
+    this.clearAllLatencyConnections();
   }
 
   handleReady(client: Client, unsafePayload: unknown): void {
@@ -271,6 +315,41 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       active: command.active,
       receivedTick: this.gameState.clock.tick
     });
+  }
+
+  handleLatencyPong(client: Client, unsafePayload: unknown, receivedAt = performance.now()): void {
+    if (this.hasProtocolMismatch(unsafePayload)) {
+      this.sendError(client, "protocol_mismatch", "Protocol version does not match server.");
+      return;
+    }
+    const result = clientLatencyPongSchema.safeParse(unsafePayload);
+    if (!result.success) {
+      this.sendError(client, "invalid_message", "Message does not match the strict schema.");
+      return;
+    }
+    if (!this.connectionClients.has(client.sessionId)) {
+      this.sendError(client, "identity_mismatch", "Connection is not a member of this room.");
+      return;
+    }
+    if (result.data.roomId !== this.roomId) {
+      this.sendError(client, "identity_mismatch", "Room identity does not match connection.");
+      return;
+    }
+
+    const outstanding = this.outstandingLatencyProbes.get(client.sessionId);
+    if (outstanding?.probeId !== result.data.probeId) return;
+
+    outstanding.timeout.clear();
+    this.outstandingLatencyProbes.delete(client.sessionId);
+    const roundTripTimeMs = Math.round(
+      Math.min(MAX_LATENCY_SAMPLE_MS, Math.max(0, receivedAt - outstanding.sentAt))
+    );
+    const samples = [...(this.latencySamples.get(client.sessionId) ?? []), roundTripTimeMs].slice(
+      -MAX_LATENCY_SAMPLES
+    );
+    this.latencySamples.set(client.sessionId, samples);
+    this.publishLatency(client.sessionId, median(samples));
+    this.scheduleLatencyProbe(client, LATENCY_PROBE_INTERVAL_MS);
   }
 
   advanceGameStep(): void {
@@ -437,18 +516,82 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.state.displayConnected = true;
   }
 
+  private registerLatencyConnection(client: Client): void {
+    this.clearLatencyConnection(client.sessionId);
+    this.connectionClients.set(client.sessionId, client);
+    this.publishLatency(client.sessionId, -1);
+    this.sendLatencyProbe(client);
+  }
+
+  private sendLatencyProbe(client: Client): void {
+    if (this.connectionClients.get(client.sessionId) !== client) return;
+    const probeId = `latency-${String(this.nextLatencyProbeSequence)}`;
+    this.nextLatencyProbeSequence += 1;
+    const sentAt = performance.now();
+    client.send(serverMessage.latencyProbe, { protocolVersion: PROTOCOL_VERSION, probeId });
+    const timeout = this.clock.setTimeout(() => {
+      const outstanding = this.outstandingLatencyProbes.get(client.sessionId);
+      if (outstanding?.probeId !== probeId) return;
+      this.outstandingLatencyProbes.delete(client.sessionId);
+      this.publishLatency(client.sessionId, -1);
+      this.sendLatencyProbe(client);
+    }, LATENCY_PROBE_TIMEOUT_MS);
+    this.outstandingLatencyProbes.set(client.sessionId, { probeId, sentAt, timeout });
+  }
+
+  private scheduleLatencyProbe(client: Client, delayMs: number): void {
+    this.scheduledLatencyProbes.get(client.sessionId)?.clear();
+    const timer = this.clock.setTimeout(() => {
+      this.scheduledLatencyProbes.delete(client.sessionId);
+      this.sendLatencyProbe(client);
+    }, delayMs);
+    this.scheduledLatencyProbes.set(client.sessionId, timer);
+  }
+
+  private clearLatencyConnection(sessionId: string): void {
+    this.scheduledLatencyProbes.get(sessionId)?.clear();
+    this.scheduledLatencyProbes.delete(sessionId);
+    this.outstandingLatencyProbes.get(sessionId)?.timeout.clear();
+    this.outstandingLatencyProbes.delete(sessionId);
+    this.latencySamples.delete(sessionId);
+    this.connectionClients.delete(sessionId);
+    this.publishLatency(sessionId, -1);
+  }
+
+  private clearAllLatencyConnections(): void {
+    for (const timer of this.scheduledLatencyProbes.values()) timer.clear();
+    for (const probe of this.outstandingLatencyProbes.values()) probe.timeout.clear();
+    this.scheduledLatencyProbes.clear();
+    this.outstandingLatencyProbes.clear();
+    this.latencySamples.clear();
+    this.connectionClients.clear();
+    this.state.displayLatencyMs = -1;
+    for (const player of this.state.players.values()) player.latencyMs = -1;
+  }
+
+  private publishLatency(sessionId: string, latencyMs: number): void {
+    if (sessionId === this.displaySessionId) {
+      this.state.displayLatencyMs = latencyMs;
+      return;
+    }
+    const player = this.state.players.get(sessionId);
+    if (player !== undefined) player.latencyMs = latencyMs;
+  }
+
   private findAvailableRole(): CrewRole | undefined {
     const occupied = new Set([...this.state.players.values()].map((player) => player.role));
     return CREW_ROLES.find((role) => !occupied.has(role));
   }
 
   private removeController(playerId: string): void {
+    this.clearLatencyConnection(playerId);
     this.state.players.delete(playerId);
     this.connectionRoles.delete(playerId);
     this.sequenceWatermarks.delete(playerId);
   }
 
   private async disposeHeadlessRoom(displayId: string): Promise<void> {
+    this.clearLatencyConnection(displayId);
     this.connectionRoles.delete(displayId);
     this.displaySessionId = undefined;
     this.stopSimulation();
@@ -472,4 +615,14 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   private sendError(client: Client, code: ServerErrorCode, message: string): void {
     client.send(serverMessage.error, { code, message });
   }
+}
+
+function median(values: readonly number[]): number {
+  const ordered = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(ordered.length / 2);
+  const upper = ordered[middle];
+  if (upper === undefined) return -1;
+  if (ordered.length % 2 === 1) return upper;
+  const lower = ordered[middle - 1];
+  return lower === undefined ? upper : Math.round((lower + upper) / 2);
 }

@@ -1,10 +1,4 @@
-# shared-room-session Specification
-
-## Purpose
-
-TBD - created by archiving change bootstrap-network-vertical-slice. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Общий экран создаёт комнату летящего замка
 
@@ -22,74 +16,19 @@ QR-код. Свежий display SHALL быть единственным влад
 - **WHEN** create или join options содержат protocolVersion 6
 - **THEN** сервер отклоняет соединение стабильной ошибкой `protocol_mismatch`
 
-### Requirement: Сервер запускает матч после готовности трёх ролей
+## REMOVED Requirements
 
-Server SHALL запускать simulation только когда pilot, gunner и shield подключены и каждый ready.
-Strict `controller:ready` SHALL содержать protocolVersion, roomId и playerId; server SHALL сверять
-actor и принимать его только в lobby. Ready повторяем и идемпотентен. После старта свежий controller
-может занять только истёкшую свободную role и становится ready автоматически.
+### Requirement: Клиенты получают строгие v6 projections
 
-#### Scenario: Не все роли готовы
+**Reason**: Public room telemetry и protocol v7 заменяют v6 projections. **Migration**: Использовать
+strict v7 views с nullable display/player latency fields.
 
-- **WHEN** подключены три игрока, но ready только два
-- **THEN** phase остаётся `lobby`
+### Requirement: Сервер валидирует v6 messages до mutation
 
-#### Scenario: Все роли готовы
+**Reason**: Strict probe/pong и все gameplay messages переходят на protocol v7. **Migration**:
+Обновить clients до v7; server отклоняет v6 через `protocol_mismatch`.
 
-- **WHEN** третья занятая role становится ready
-- **THEN** phase становится `active`, создаётся flying-castle state и запускается fixed-step timer
-
-#### Scenario: Ready повторён в lobby
-
-- **WHEN** тот же controller повторяет valid `controller:ready`
-- **THEN** ready остаётся true без второго transition
-
-#### Scenario: Ready отправлен после старта
-
-- **WHEN** controller отправляет `controller:ready` в active phase
-- **THEN** server возвращает `invalid_phase` и world не изменяется
-
-### Requirement: Краткий разрыв сохраняет identity и role
-
-Server SHALL разрешать controller и display reconnect в течение 30 секунд. Во время controller grace
-player остаётся в roster с `connected=false`; после expiry запись удаляется, role освобождается, а
-active simulation продолжает работать с безопасным stale-input behavior. Если display не
-восстановился до expiry, server SHALL остановить simulation, закрыть оставшиеся connections и
-dispose room, поскольку в первом slice нет terminal result и никто не может наблюдать session.
-Consented controller leave SHALL немедленно освободить role, потому что клиент явно отказался от
-reconnect; 30-second reservation применяется только к неожиданному разрыву.
-
-#### Scenario: Controller осознанно покинул комнату
-
-- **WHEN** active controller выполняет consented leave
-- **THEN** server немедленно освобождает role для replacement
-
-#### Scenario: Pilot вернулся в grace period
-
-- **WHEN** pilot reconnect завершается до 30 секунд
-- **THEN** playerId, role, ready и текущий world сохраняются
-
-#### Scenario: Gunner не вернулся
-
-- **WHEN** grace period gunner истёк
-- **THEN** gunner role освобождается для replacement, а мир не пересоздаётся
-
-#### Scenario: Display не вернулся
-
-- **WHEN** 30-second grace period display истёк
-- **THEN** server останавливает simulation и dispose room, а controllers возвращаются на join screen
-
-### Requirement: Симуляция живёт независимо от controller transport
-
-После старта server SHALL выполнять fixed step пока room существует, даже если один или все
-controllers временно отключены. В первом slice отсутствует автоматический victory/defeat terminal
-result.
-
-#### Scenario: Все controllers временно отключены
-
-- **WHEN** active room теряет три controller connections
-- **THEN** simulation tick продолжает увеличиваться, а stale inputs переводят системы в безопасное
-  состояние
+## ADDED Requirements
 
 ### Requirement: Клиенты получают строгие v7 projections
 

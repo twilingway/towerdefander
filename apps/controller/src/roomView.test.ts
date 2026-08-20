@@ -12,14 +12,29 @@ function collection<T>(values: T[]) {
 }
 
 describe("controller room view", () => {
-  it("decodes compact v6 state with shield energy and sorts canonical roles", () => {
+  it("decodes compact v7 state with public latency and sorts canonical roles", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
       displayConnected: true,
+      displayLatencyMs: -1,
       players: collection([
-        { playerId: "p2", playerName: "Sam", role: "shield", ready: true, connected: true },
-        { playerId: "p1", playerName: "Alex", role: "pilot", ready: true, connected: true }
+        {
+          playerId: "p2",
+          playerName: "Sam",
+          role: "shield",
+          ready: true,
+          connected: true,
+          latencyMs: 62
+        },
+        {
+          playerId: "p1",
+          playerName: "Alex",
+          role: "pilot",
+          ready: true,
+          connected: true,
+          latencyMs: 28
+        }
       ]),
       hasGame: true,
       game: {
@@ -42,6 +57,8 @@ describe("controller room view", () => {
       capacity: 100
     });
     expect(findCurrentPlayer(view, "p2")?.role).toBe("shield");
+    expect(findCurrentPlayer(view, "p2")?.latencyMs).toBe(62);
+    expect(view?.displayLatencyMs).toBeNull();
   });
 
   it("reads trimmed room code from URL", () => {

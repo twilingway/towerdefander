@@ -12,6 +12,7 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<FlyingCastleRuntime | undefined>(undefined);
   const latestGame = useRef(game);
+  const lastRuntimeTickReference = useRef(game.tick);
   const [failed, setFailed] = useState(false);
   latestGame.current = game;
 
@@ -22,8 +23,10 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
 
     void import("./game/FlyingCastleRuntime.js")
       .then(({ createFlyingCastleRuntime }) => {
-        if (!disposed)
+        if (!disposed) {
           runtimeReference.current = createFlyingCastleRuntime(host, latestGame.current);
+          lastRuntimeTickReference.current = latestGame.current.tick;
+        }
       })
       .catch(() => {
         if (!disposed) setFailed(true);
@@ -37,7 +40,15 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
   }, []);
 
   useEffect(() => {
-    runtimeReference.current?.update(game);
+    const runtime = runtimeReference.current;
+    if (
+      runtime === undefined ||
+      !shouldUpdateRuntime(lastRuntimeTickReference.current, game.tick)
+    ) {
+      return;
+    }
+    lastRuntimeTickReference.current = game.tick;
+    runtime.update(game);
   }, [game]);
 
   useEffect(() => {
@@ -66,4 +77,8 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
       </span>
     </div>
   );
+}
+
+export function shouldUpdateRuntime(previousTick: number, nextTick: number): boolean {
+  return previousTick !== nextTick;
 }

@@ -2,9 +2,15 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { Client } from "@colyseus/sdk";
+import {
+  PROTOCOL_VERSION,
+  clientMessage,
+  serverLatencyProbeSchema,
+  serverMessage
+} from "@town-defenders/protocol";
 
 const port = 35_677;
-const protocolVersion = 6;
+const protocolVersion = PROTOCOL_VERSION;
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const serverEntry = fileURLToPath(new URL("../../server/dist/index.js", import.meta.url));
@@ -31,10 +37,17 @@ try {
     role: "display",
     protocolVersion
   });
+  attachLatencyResponder(display);
   pilot = await joinController(display.roomId, "Pilot");
   gunner = await joinController(display.roomId, "Gunner");
   shield = await joinController(display.roomId, "Shield");
   await waitFor(() => display.state.players.size === 3);
+  await waitFor(
+    () =>
+      display.state.displayLatencyMs >= 0 &&
+      [...display.state.players.values()].every((player) => player.latencyMs >= 0),
+    120
+  );
 
   const roles = [...display.state.players.values()].map((player) => player.role);
   if (roles.join(",") !== "pilot,gunner,shield")
@@ -115,6 +128,7 @@ try {
   gunner.connection.close();
   await waitFor(() => display.state.players.get(gunnerId)?.connected === false);
   gunner = await new Client(endpoint).reconnect(gunnerToken);
+  attachLatencyResponder(gunner);
   await waitFor(() => display.state.players.get(gunnerId)?.connected === true);
   const angleBeforeReconnectInput = display.state.game.turretAngle;
   gunner.send("gunner:input", {
@@ -131,6 +145,7 @@ try {
   pilot.connection.close();
   await waitFor(() => display.state.players.get(pilotId)?.connected === false);
   pilot = await new Client(endpoint).reconnect(pilotToken);
+  attachLatencyResponder(pilot);
   await waitFor(() => display.state.players.get(pilotId)?.connected === true);
   const xBeforeReconnectInput = display.state.game.castle.x;
   pilot.send("pilot:input", {
@@ -158,6 +173,8 @@ try {
       projectileAngle,
       shieldActive: display.state.game.shield.active,
       shieldEnergy: display.state.game.shield.energy,
+      displayLatencyMs: display.state.displayLatencyMs,
+      playerLatencies: [...display.state.players.values()].map((player) => player.latencyMs),
       replacementRole: display.state.players.get(replacement.sessionId).role
     })
   );
@@ -177,7 +194,25 @@ function envelope(roomId, playerId) {
 }
 
 async function joinController(roomId, playerName) {
-  return new Client(endpoint).joinById(roomId, { role: "controller", protocolVersion, playerName });
+  const room = await new Client(endpoint).joinById(roomId, {
+    role: "controller",
+    protocolVersion,
+    playerName
+  });
+  attachLatencyResponder(room);
+  return room;
+}
+
+function attachLatencyResponder(room) {
+  room.onMessage(serverMessage.latencyProbe, (payload) => {
+    const result = serverLatencyProbeSchema.safeParse(payload);
+    if (!result.success) return;
+    room.send(clientMessage.latencyPong, {
+      protocolVersion,
+      roomId: room.roomId,
+      probeId: result.data.probeId
+    });
+  });
 }
 
 async function waitForServer() {

@@ -16,6 +16,7 @@ interface NetworkPlayerState {
   role: CrewRole;
   ready: boolean;
   connected: boolean;
+  latencyMs: number;
 }
 
 interface NetworkGameState {
@@ -38,6 +39,7 @@ export interface NetworkRoomState {
   roomId?: string;
   phase?: ControllerRoomView["phase"];
   displayConnected?: boolean;
+  displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
   hasGame?: boolean;
   game?: NetworkGameState;
@@ -62,7 +64,8 @@ export function toControllerRoomView(
       playerName: player.playerName,
       role: player.role,
       ready: player.ready,
-      connected: player.connected
+      connected: player.connected,
+      latencyMs: toPublicLatency(player.latencyMs)
     }))
     .sort((left, right) => CREW_ROLES.indexOf(left.role) - CREW_ROLES.indexOf(right.role));
   const game = state.game;
@@ -71,6 +74,7 @@ export function toControllerRoomView(
     roomId: state.roomId,
     phase: state.phase,
     displayConnected: state.displayConnected,
+    displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
     game:
       state.hasGame === true && game !== undefined
@@ -85,6 +89,10 @@ export function toControllerRoomView(
           }
         : null
   });
+}
+
+function toPublicLatency(latencyMs: number | undefined): number | null {
+  return latencyMs === undefined || latencyMs < 0 ? null : latencyMs;
 }
 
 export function getRoomFromLocation(search: string): string {

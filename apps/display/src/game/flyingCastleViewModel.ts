@@ -27,6 +27,72 @@ export interface VisualTransitions {
   readonly shield: AngleTransition;
 }
 
+export interface ResponsiveViewport {
+  readonly zoom: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+export interface ShieldVisualStyle {
+  readonly lineWidth: number;
+  readonly color: number;
+  readonly alpha: number;
+}
+
+export interface CameraScrollInput {
+  readonly focus: Point;
+  readonly worldWidth: number;
+  readonly worldHeight: number;
+  readonly rendererWidth: number;
+  readonly rendererHeight: number;
+  readonly viewportWidth: number;
+  readonly viewportHeight: number;
+  readonly overscan: number;
+}
+
+export function getResponsiveViewport(
+  actualWidth: number,
+  actualHeight: number,
+  baseWidth = 1600,
+  baseHeight = 900
+): ResponsiveViewport {
+  const safeWidth = Number.isFinite(actualWidth) && actualWidth > 0 ? actualWidth : baseWidth;
+  const safeHeight = Number.isFinite(actualHeight) && actualHeight > 0 ? actualHeight : baseHeight;
+  const zoom = Math.min(safeWidth / baseWidth, safeHeight / baseHeight);
+  return { zoom, width: safeWidth / zoom, height: safeHeight / zoom };
+}
+
+export function getShieldVisualStyle(active: boolean): ShieldVisualStyle {
+  return active
+    ? { lineWidth: 16, color: 0x65baff, alpha: 0.9 }
+    : { lineWidth: 6, color: 0x6f91a4, alpha: 0.35 };
+}
+
+export function getCameraOverscan(
+  castleRadius: number,
+  zoom: number,
+  safeScreenMargin = 160,
+  visualExtension = 42
+): number {
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return castleRadius + visualExtension + safeScreenMargin / safeZoom;
+}
+
+export function getPhaserCameraScroll(input: CameraScrollInput): Point {
+  const worldView = getBoundedCameraScroll(
+    input.focus,
+    input.worldWidth,
+    input.worldHeight,
+    input.viewportWidth,
+    input.viewportHeight,
+    input.overscan
+  );
+  return {
+    x: worldView.x - (input.rendererWidth - input.viewportWidth) / 2,
+    y: worldView.y - (input.rendererHeight - input.viewportHeight) / 2
+  };
+}
+
 export class SnapshotResetLatch {
   private pending = false;
 
@@ -73,11 +139,12 @@ export function getBoundedCameraScroll(
   worldWidth: number,
   worldHeight: number,
   viewportWidth: number,
-  viewportHeight: number
+  viewportHeight: number,
+  overscan = 0
 ): Point {
   return {
-    x: clamp(focus.x - viewportWidth / 2, 0, Math.max(0, worldWidth - viewportWidth)),
-    y: clamp(focus.y - viewportHeight / 2, 0, Math.max(0, worldHeight - viewportHeight))
+    x: getBoundedAxisScroll(focus.x, worldWidth, viewportWidth, overscan),
+    y: getBoundedAxisScroll(focus.y, worldHeight, viewportHeight, overscan)
   };
 }
 
@@ -107,4 +174,17 @@ export function interpolateAngle(current: number, target: number, amount: number
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+function getBoundedAxisScroll(
+  focus: number,
+  worldSize: number,
+  viewportSize: number,
+  overscan: number
+): number {
+  const safeOverscan = Math.max(0, overscan);
+  const minimum = safeOverscan === 0 ? 0 : -safeOverscan;
+  const maximum = worldSize + safeOverscan - viewportSize;
+  if (maximum < minimum) return (minimum + maximum) / 2;
+  return clamp(focus - viewportSize / 2, minimum, maximum);
 }

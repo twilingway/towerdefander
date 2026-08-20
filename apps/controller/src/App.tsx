@@ -3,6 +3,7 @@ import {
   CREW_ROLES,
   PROTOCOL_VERSION,
   clientMessage,
+  serverLatencyProbeSchema,
   serverErrorSchema,
   serverMessage,
   type ControllerRoomView,
@@ -124,6 +125,15 @@ export function ControllerApp() {
     persistReconnectionSession(room, normalizedName);
     room.onStateChange(applyRoomState);
     applyRoomState(room.state);
+    room.onMessage(serverMessage.latencyProbe, (payload: unknown) => {
+      const result = serverLatencyProbeSchema.safeParse(payload);
+      if (!result.success) return;
+      room.send(clientMessage.latencyPong, {
+        protocolVersion: PROTOCOL_VERSION,
+        roomId: room.roomId,
+        probeId: result.data.probeId
+      });
+    });
     room.onMessage(serverMessage.error, (payload: unknown) => {
       const result = serverErrorSchema.safeParse(payload);
       setError(
@@ -205,6 +215,7 @@ export function ControllerApp() {
           }}
         >
           <p className="eyebrow">Контроллер экипажа</p>
+          <span className="latency-indicator">До сервера —</span>
           <h1>Flying Castle</h1>
           <label>
             Код комнаты
@@ -241,8 +252,14 @@ export function ControllerApp() {
       <section className="card play-card">
         <div className="status-row">
           <span className="eyebrow">Комната {view?.roomId ?? roomCode}</span>
-          <span className={`connection connection--${status}`}>
-            {status === "reconnecting" ? "Переподключение…" : "В сети"}
+          <span className="network-status">
+            <span className={`connection connection--${status}`}>
+              {status === "reconnecting" ? "Переподключение…" : "В сети"}
+            </span>
+            <span className="latency-indicator" aria-live="polite">
+              До сервера{" "}
+              {formatLatency(currentPlayer?.connected === true ? currentPlayer.latencyMs : null)}
+            </span>
           </span>
         </div>
         <h1>{currentPlayer?.playerName ?? playerName}</h1>
@@ -259,7 +276,8 @@ export function ControllerApp() {
                 return (
                   <span key={role}>
                     {roleLabel(role)} · {player?.playerName ?? "свободно"}{" "}
-                    {player?.ready === true ? "✓" : ""}
+                    {player?.ready === true ? "✓" : ""} ·{" "}
+                    {formatLatency(player?.connected === true ? player.latencyMs : null)}
                   </span>
                 );
               })}
@@ -286,6 +304,10 @@ export function ControllerApp() {
       </section>
     </main>
   );
+}
+
+function formatLatency(latencyMs: number | null | undefined): string {
+  return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
 }
 
 function RoleControlPanel({

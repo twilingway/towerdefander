@@ -5,6 +5,7 @@ import {
   PROJECTILE_WORLD_PADDING,
   PROTOCOL_VERSION,
   clientMessage,
+  clientLatencyPongSchema,
   controllerJoinOptionsSchema,
   controllerRoomViewSchema,
   displayCreateOptionsSchema,
@@ -12,11 +13,14 @@ import {
   displayRoomViewSchema,
   gunnerInputCommandSchema,
   joinOptionsSchema,
+  latencyMsSchema,
   pilotInputCommandSchema,
   publicObstacleViewSchema,
   publicShieldViewSchema,
   readyCommandSchema,
   serverErrorSchema,
+  serverLatencyProbeSchema,
+  serverMessage,
   shieldInputCommandSchema,
   vector2Schema,
   type ControllerRoomView,
@@ -33,7 +37,8 @@ function makePlayers(): PublicPlayerView[] {
     playerName: `Player ${String(index + 1)}`,
     role,
     ready: true,
-    connected: true
+    connected: true,
+    latencyMs: 20 + index
   }));
 }
 
@@ -42,6 +47,7 @@ function makeControllerRoom(): ControllerRoomView {
     roomId: ROOM_ID,
     phase: "active",
     displayConnected: true,
+    displayLatencyMs: 18,
     players: makePlayers(),
     game: {
       tick: 10,
@@ -124,15 +130,15 @@ function requireItem<T>(items: readonly T[], index: number): T {
   return item;
 }
 
-describe("protocol v6 handshakes and crew", () => {
+describe("protocol v7 handshakes and crew", () => {
   it("publishes a fixed three-role protocol", () => {
-    expect(PROTOCOL_VERSION).toBe(6);
+    expect(PROTOCOL_VERSION).toBe(7);
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
   it("uses the same strict display shape for create and reconnect", () => {
-    const options = { role: "display", protocolVersion: 6 };
+    const options = { role: "display", protocolVersion: 7 };
 
     expect(displayCreateOptionsSchema.safeParse(options).success).toBe(true);
     expect(displayJoinOptionsSchema.safeParse(options).success).toBe(true);
@@ -140,22 +146,22 @@ describe("protocol v6 handshakes and crew", () => {
       false
     );
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 5 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 6 }).success
     ).toBe(false);
   });
 
-  it("trims controller names and rejects requested roles and v5", () => {
+  it("trims controller names and rejects requested roles and v6", () => {
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 6,
+        protocolVersion: 7,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 6,
+        protocolVersion: 7,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -163,55 +169,55 @@ describe("protocol v6 handshakes and crew", () => {
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 5,
+        protocolVersion: 6,
         playerName: "Ada"
       }).success
     ).toBe(false);
   });
 
-  it("accepts only the two v6 join variants", () => {
-    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 6 }).success).toBe(true);
+  it("accepts only the two v7 join variants", () => {
+    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 7 }).success).toBe(true);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 6,
+        protocolVersion: 7,
         playerName: "Ada"
       }).success
     ).toBe(true);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 6,
+        protocolVersion: 7,
         playerName: "Ada",
         playerCapacity: 3
       }).success
     ).toBe(false);
 
-    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 5 }).success).toBe(
+    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 6 }).success).toBe(
       false
     );
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 5,
+        protocolVersion: 6,
         playerName: "Ada"
       }).success
     ).toBe(false);
   });
 });
 
-describe("strict v6 controller intents", () => {
+describe("strict v7 controller intents", () => {
   const envelope = {
-    protocolVersion: 6,
+    protocolVersion: 7,
     roomId: ROOM_ID,
     playerId: PLAYER_ID
   } as const;
 
   it("requires an authenticated ready envelope without legacy toggle state", () => {
     expect(readyCommandSchema.safeParse(envelope).success).toBe(true);
-    expect(readyCommandSchema.safeParse({ protocolVersion: 6 }).success).toBe(false);
+    expect(readyCommandSchema.safeParse({ protocolVersion: 7 }).success).toBe(false);
     expect(readyCommandSchema.safeParse({ ...envelope, ready: true }).success).toBe(false);
-    expect(readyCommandSchema.safeParse({ ...envelope, protocolVersion: 5 }).success).toBe(false);
+    expect(readyCommandSchema.safeParse({ ...envelope, protocolVersion: 6 }).success).toBe(false);
   });
 
   it("accepts strict role-specific input shapes", () => {
@@ -269,20 +275,20 @@ describe("strict v6 controller intents", () => {
     }
   });
 
-  it("rejects every v5 command envelope", () => {
-    const v5Envelope = { ...envelope, protocolVersion: 5 };
+  it("rejects every v6 command envelope", () => {
+    const v6Envelope = { ...envelope, protocolVersion: 6 };
 
-    expect(readyCommandSchema.safeParse(v5Envelope).success).toBe(false);
+    expect(readyCommandSchema.safeParse(v6Envelope).success).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        ...v5Envelope,
+        ...v6Envelope,
         sequence: 1,
         vector: { x: 1, y: 0 }
       }).success
     ).toBe(false);
     expect(
       gunnerInputCommandSchema.safeParse({
-        ...v5Envelope,
+        ...v6Envelope,
         sequence: 1,
         aim: { x: 1, y: 0 },
         firing: true
@@ -290,7 +296,7 @@ describe("strict v6 controller intents", () => {
     ).toBe(false);
     expect(
       shieldInputCommandSchema.safeParse({
-        ...v5Envelope,
+        ...v6Envelope,
         sequence: 1,
         aim: { x: 1, y: 0 },
         active: true
@@ -317,8 +323,69 @@ describe("strict v6 controller intents", () => {
       ready: "controller:ready",
       pilotInput: "pilot:input",
       gunnerInput: "gunner:input",
-      shieldInput: "shield:input"
+      shieldInput: "shield:input",
+      latencyPong: "client:latency-pong"
     });
+    expect(serverMessage).toEqual({
+      error: "server:error",
+      latencyProbe: "server:latency-probe"
+    });
+  });
+});
+
+describe("strict v7 latency diagnostics", () => {
+  it("accepts strict server probes and client pongs", () => {
+    expect(
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 7, probeId: "probe-display-1" }).success
+    ).toBe(true);
+    expect(
+      clientLatencyPongSchema.safeParse({
+        protocolVersion: 7,
+        roomId: ROOM_ID,
+        probeId: "probe-display-1"
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects v6, empty identifiers, and telemetry supplied by a client", () => {
+    expect(
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 6, probeId: "probe-1" }).success
+    ).toBe(false);
+    expect(
+      clientLatencyPongSchema.safeParse({
+        protocolVersion: 6,
+        roomId: ROOM_ID,
+        probeId: "probe-1"
+      }).success
+    ).toBe(false);
+    expect(serverLatencyProbeSchema.safeParse({ protocolVersion: 7, probeId: "" }).success).toBe(
+      false
+    );
+    expect(
+      clientLatencyPongSchema.safeParse({
+        protocolVersion: 7,
+        roomId: "",
+        probeId: "probe-1"
+      }).success
+    ).toBe(false);
+    expect(
+      clientLatencyPongSchema.safeParse({
+        protocolVersion: 7,
+        roomId: ROOM_ID,
+        probeId: "probe-1",
+        latencyMs: 25
+      }).success
+    ).toBe(false);
+  });
+
+  it("accepts only null or integer RTT values from 0 through 5000", () => {
+    for (const latencyMs of [null, 0, 1, 5000]) {
+      expect(latencyMsSchema.safeParse(latencyMs).success).toBe(true);
+    }
+
+    for (const latencyMs of [-1, 0.5, 5001, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(latencyMsSchema.safeParse(latencyMs).success).toBe(false);
+    }
   });
 });
 
@@ -326,6 +393,23 @@ describe("strict full and compact room projections", () => {
   it("accepts valid active controller and display projections", () => {
     expect(controllerRoomViewSchema.safeParse(makeControllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(true);
+  });
+
+  it("publishes nullable bounded integer latency for the display and every player", () => {
+    const unknown = makeControllerRoom();
+    unknown.displayLatencyMs = null;
+    requireItem(unknown.players, 0).latencyMs = null;
+    expect(controllerRoomViewSchema.safeParse(unknown).success).toBe(true);
+
+    for (const latencyMs of [-1, 1.5, 5001]) {
+      const invalidDisplay = makeDisplayRoom();
+      invalidDisplay.displayLatencyMs = latencyMs;
+      expect(displayRoomViewSchema.safeParse(invalidDisplay).success).toBe(false);
+
+      const invalidPlayer = makeControllerRoom();
+      requireItem(invalidPlayer.players, 0).latencyMs = latencyMs;
+      expect(controllerRoomViewSchema.safeParse(invalidPlayer).success).toBe(false);
+    }
   });
 
   it("publishes the same strict shield shape to controller and display", () => {
@@ -384,6 +468,7 @@ describe("strict full and compact room projections", () => {
         roomId: ROOM_ID,
         phase: "lobby",
         displayConnected: true,
+        displayLatencyMs: null,
         players: [makePlayers()[0]],
         game: null
       }).success
@@ -421,7 +506,8 @@ describe("strict full and compact room projections", () => {
       playerName: "Player 4",
       role: "pilot",
       ready: true,
-      connected: true
+      connected: true,
+      latencyMs: null
     });
 
     expect(controllerRoomViewSchema.safeParse(duplicateId).success).toBe(false);
@@ -501,7 +587,7 @@ describe("strict full and compact room projections", () => {
     ).toBe(false);
   });
 
-  it("rejects legacy defense fields in v6 projections", () => {
+  it("rejects legacy defense fields in v7 projections", () => {
     expect(
       displayRoomViewSchema.safeParse({ ...makeDisplayRoom(), playerCapacity: 3 }).success
     ).toBe(false);

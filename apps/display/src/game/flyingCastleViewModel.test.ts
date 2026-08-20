@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   createSnappedVisualTransitions,
   getBoundedCameraScroll,
+  getCameraOverscan,
+  getPhaserCameraScroll,
+  getResponsiveViewport,
+  getShieldVisualStyle,
   getTimelineAlpha,
   interpolateAngle,
   interpolatePoint,
@@ -11,15 +15,85 @@ import {
 
 describe("flying castle view model", () => {
   it("centers the camera while clamping all world edges", () => {
-    expect(getBoundedCameraScroll({ x: 1200, y: 800 }, 2400, 1600, 1280, 720)).toEqual({
-      x: 560,
-      y: 440
+    expect(getBoundedCameraScroll({ x: 2400, y: 1600 }, 4800, 3200, 1280, 720)).toEqual({
+      x: 1760,
+      y: 1240
     });
-    expect(getBoundedCameraScroll({ x: 0, y: 0 }, 2400, 1600, 1280, 720)).toEqual({ x: 0, y: 0 });
-    expect(getBoundedCameraScroll({ x: 2400, y: 1600 }, 2400, 1600, 1280, 720)).toEqual({
-      x: 1120,
-      y: 880
+    expect(getBoundedCameraScroll({ x: 0, y: 0 }, 4800, 3200, 1280, 720)).toEqual({ x: 0, y: 0 });
+    expect(getBoundedCameraScroll({ x: 4800, y: 3200 }, 4800, 3200, 1280, 720)).toEqual({
+      x: 3520,
+      y: 2480
     });
+  });
+
+  it("preserves at least the distant 1600 by 900 logical view across screen shapes", () => {
+    expect(getResponsiveViewport(1920, 1080)).toEqual({ zoom: 1.2, width: 1600, height: 900 });
+    const wide = getResponsiveViewport(1366, 768);
+    expect(wide.zoom).toBeCloseTo(768 / 900);
+    expect(wide.width).toBeCloseTo(1366 / (768 / 900));
+    expect(wide.height).toBeCloseTo(900);
+    expect(getResponsiveViewport(1024, 768)).toEqual({ zoom: 0.64, width: 1600, height: 1200 });
+  });
+
+  it("converts a centered world view into Phaser renderer-space scroll", () => {
+    expect(
+      getPhaserCameraScroll({
+        focus: { x: 2400, y: 1600 },
+        worldWidth: 4800,
+        worldHeight: 3200,
+        rendererWidth: 1920,
+        rendererHeight: 1080,
+        viewportWidth: 1600,
+        viewportHeight: 900,
+        overscan: 0
+      })
+    ).toEqual({ x: 1440, y: 1060 });
+  });
+
+  it("keeps the full ship envelope inside a 160 CSS pixel safe edge", () => {
+    const zoom = 1.2;
+    const radius = 52;
+    const visualExtension = 42;
+    const overscan = getCameraOverscan(radius, zoom);
+    const viewportWidth = 1600;
+    const viewportHeight = 900;
+    const edgePositions = [
+      { x: radius, y: radius },
+      { x: 4800 - radius, y: radius },
+      { x: radius, y: 3200 - radius },
+      { x: 4800 - radius, y: 3200 - radius }
+    ];
+
+    for (const focus of edgePositions) {
+      const worldView = getBoundedCameraScroll(
+        focus,
+        4800,
+        3200,
+        viewportWidth,
+        viewportHeight,
+        overscan
+      );
+      const visualLeft = (focus.x - radius - visualExtension - worldView.x) * zoom;
+      const visualRight =
+        (worldView.x + viewportWidth - (focus.x + radius + visualExtension)) * zoom;
+      const visualTop = (focus.y - radius - visualExtension - worldView.y) * zoom;
+      const visualBottom =
+        (worldView.y + viewportHeight - (focus.y + radius + visualExtension)) * zoom;
+      expect(Math.min(visualLeft, visualRight)).toBeGreaterThanOrEqual(160);
+      expect(Math.min(visualTop, visualBottom)).toBeGreaterThanOrEqual(160);
+    }
+  });
+
+  it("centers an expanded world that is smaller than the visible viewport", () => {
+    expect(getBoundedCameraScroll({ x: 50, y: 50 }, 100, 100, 500, 300, 25)).toEqual({
+      x: -200,
+      y: -100
+    });
+  });
+
+  it("uses distinct active and inactive shield styles", () => {
+    expect(getShieldVisualStyle(true)).toEqual({ lineWidth: 16, color: 0x65baff, alpha: 0.9 });
+    expect(getShieldVisualStyle(false)).toEqual({ lineWidth: 6, color: 0x6f91a4, alpha: 0.35 });
   });
 
   it("interpolates toward snapshots without overshooting", () => {

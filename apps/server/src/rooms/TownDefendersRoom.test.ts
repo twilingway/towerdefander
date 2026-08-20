@@ -2,7 +2,9 @@ import {
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  serverLatencyProbeSchema,
   serverErrorSchema,
+  serverMessage,
   type CrewRole,
   type ServerErrorCode
 } from "@town-defenders/protocol";
@@ -75,6 +77,14 @@ function countErrors(client: TestClient, code: ServerErrorCode): number {
   }).length;
 }
 
+function latencyProbes(client: TestClient) {
+  return (client.send.mock.calls as unknown[][]).flatMap((call) => {
+    if (call[0] !== serverMessage.latencyProbe) return [];
+    const parsed = serverLatencyProbeSchema.safeParse(call[1]);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 function playerByRole(room: TownDefendersRoom, role: CrewRole): TestClient["client"] | undefined {
   const player = [...room.state.players.values()].find((candidate) => candidate.role === role);
   return player === undefined
@@ -82,15 +92,15 @@ function playerByRole(room: TownDefendersRoom, role: CrewRole): TestClient["clie
     : ({ sessionId: player.playerId, send: vi.fn() } as unknown as Client);
 }
 
-describe("TownDefendersRoom v6 lifecycle", () => {
-  it("accepts only strict protocol v6 display create options", () => {
+describe("TownDefendersRoom v7 lifecycle", () => {
+  it("accepts only strict protocol v7 display create options", () => {
     const room = new TownDefendersRoom();
     room.roomId = "ROOM123";
     expect(() => {
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, capacity: 3 });
     }).toThrow("invalid_message");
     expect(() => {
-      room.onCreate({ role: "display", protocolVersion: 4 });
+      room.onCreate({ role: "display", protocolVersion: 6 });
     }).toThrow("protocol_mismatch");
   });
 
@@ -109,10 +119,27 @@ describe("TownDefendersRoom v6 lifecycle", () => {
 
     expect(room.state.phase).toBe("active");
     expect(room.state.hasGame).toBe(true);
-    expect(room.state.game.castle).toMatchObject({ x: 1200, y: 800, radius: 52 });
+    expect(room.state.game).toMatchObject({ worldWidth: 4800, worldHeight: 3200 });
+    expect(room.state.game.castle).toMatchObject({ x: 2400, y: 1600, radius: 52 });
     expect(room.state.game.shield).toMatchObject({ energy: 100, capacity: 100 });
-    expect(room.state.game.display.obstacles).toHaveLength(5);
+    expect(room.state.game.display.obstacles).toHaveLength(9);
+    expect(room.maxMessagesPerSecond).toBe(25);
     expect(setInterval).toHaveBeenCalledTimes(1);
+  });
+
+  it("distributes decorative landmarks across every quadrant and the initial viewport", () => {
+    const { room } = startGame();
+    const obstacles = [...room.state.game.display.obstacles];
+    const centerX = room.state.game.worldWidth / 2;
+    const centerY = room.state.game.worldHeight / 2;
+
+    expect(obstacles.some(({ x, y }) => x < centerX && y < centerY)).toBe(true);
+    expect(obstacles.some(({ x, y }) => x > centerX && y < centerY)).toBe(true);
+    expect(obstacles.some(({ x, y }) => x < centerX && y > centerY)).toBe(true);
+    expect(obstacles.some(({ x, y }) => x > centerX && y > centerY)).toBe(true);
+    expect(
+      obstacles.some(({ x, y }) => Math.abs(x - centerX) <= 640 && Math.abs(y - centerY) <= 360)
+    ).toBe(true);
   });
 
   it("keeps one spare transport seat and rejects a fourth controller", () => {
@@ -190,7 +217,7 @@ describe("TownDefendersRoom v6 lifecycle", () => {
   });
 });
 
-describe("TownDefendersRoom v6 authoritative inputs", () => {
+describe("TownDefendersRoom v7 authoritative inputs", () => {
   it("moves the castle from fresh pilot input and ignores stale sequence", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -202,7 +229,7 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: 1, y: 0 } });
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: -1, y: 0 } });
     room.advanceGameStep();
-    expect(room.state.game.castle).toMatchObject({ x: 1201.6, velocityX: 32, velocityY: 0 });
+    expect(room.state.game.castle).toMatchObject({ x: 2401.6, velocityX: 32, velocityY: 0 });
   });
 
   it("rejects an unsafe sequence without advancing the connection watermark", () => {
@@ -223,7 +250,7 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     room.advanceGameStep();
 
     expect(countErrors(pilot, "invalid_message")).toBe(1);
-    expect(room.state.game.castle).toMatchObject({ x: 1201.6, velocityX: 32, velocityY: 0 });
+    expect(room.state.game.castle).toMatchObject({ x: 2401.6, velocityX: 32, velocityY: 0 });
   });
 
   it("limits held gunner fire by simulation cooldown", () => {
@@ -244,7 +271,7 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     expect(room.state.game.turretAngle).toBeGreaterThan(-Math.PI / 2);
     const firstProjectile = room.state.game.display.projectiles.at(0);
     expect(Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX)).toBeCloseTo(
-      -Math.PI / 600
+      (-13 * Math.PI) / 6000
     );
     for (let index = 0; index < 2; index += 1) room.advanceGameStep();
     room.handleGunnerInput(gunner.client, {
@@ -552,5 +579,233 @@ describe("TownDefendersRoom v6 authoritative inputs", () => {
     const pilot = controllerAt(controllers, 0);
     await room.onLeave(pilot.client, CloseCode.CONSENTED);
     expect(room.state.players.has(pilot.client.sessionId)).toBe(false);
+  });
+});
+
+describe("TownDefendersRoom v7 latency telemetry", () => {
+  it("publishes server-measured display and controller RTT without changing gameplay", () => {
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
+    try {
+      const room = createRoom();
+      const display = joinDisplay(room);
+      const controller = joinController(room, 0);
+      const displayProbe = latencyProbes(display).at(-1);
+      const controllerProbe = latencyProbes(controller).at(-1);
+      if (displayProbe === undefined || controllerProbe === undefined) {
+        throw new Error("Expected initial latency probes.");
+      }
+
+      room.handleLatencyPong(
+        display.client,
+        {
+          protocolVersion: PROTOCOL_VERSION,
+          roomId: room.roomId,
+          probeId: displayProbe.probeId
+        },
+        1_018
+      );
+      room.handleLatencyPong(
+        controller.client,
+        {
+          protocolVersion: PROTOCOL_VERSION,
+          roomId: room.roomId,
+          probeId: controllerProbe.probeId
+        },
+        1_047
+      );
+
+      expect(room.state.displayLatencyMs).toBe(18);
+      expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(47);
+      expect(room.state.phase).toBe("lobby");
+      expect(room.state.game.tick).toBe(0);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("publishes the median of the latest five bounded samples", () => {
+    const now = vi.spyOn(performance, "now").mockReturnValue(2_000);
+    try {
+      const room = createRoom();
+      const setTimeout = vi.spyOn(room.clock, "setTimeout");
+      const controller = joinController(room, 0);
+      const samples = [100, 400, 200, 5_800, 300, 50];
+
+      for (const [index, sample] of samples.entries()) {
+        const probe = latencyProbes(controller).at(-1);
+        if (probe === undefined) throw new Error("Expected a latency probe.");
+        room.handleLatencyPong(
+          controller.client,
+          {
+            protocolVersion: PROTOCOL_VERSION,
+            roomId: room.roomId,
+            probeId: probe.probeId
+          },
+          2_000 + sample
+        );
+        if (index < samples.length - 1) {
+          const scheduledProbe = setTimeout.mock.calls
+            .filter((call) => call[1] === 2_000)
+            .at(-1)?.[0];
+          if (scheduledProbe === undefined) throw new Error("Expected a scheduled probe.");
+          (scheduledProbe as () => void)();
+        }
+      }
+
+      // The retained samples are [400, 200, 5000, 300, 50].
+      expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(300);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("ignores stale, duplicate and cross-connection pongs", () => {
+    const room = createRoom();
+    const display = joinDisplay(room);
+    const controller = joinController(room, 0);
+    const displayProbe = latencyProbes(display).at(-1);
+    const controllerProbe = latencyProbes(controller).at(-1);
+    if (displayProbe === undefined || controllerProbe === undefined) {
+      throw new Error("Expected initial latency probes.");
+    }
+
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: displayProbe.probeId
+    });
+    room.handleLatencyPong(display.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: "unknown-probe"
+    });
+    expect(room.state.displayLatencyMs).toBe(-1);
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: controllerProbe.probeId
+    });
+    const accepted = room.state.players.get(controller.client.sessionId)?.latencyMs;
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: controllerProbe.probeId
+    });
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(accepted);
+    expect(countErrors(controller, "invalid_message")).toBe(0);
+  });
+
+  it("rejects malformed, v6 and wrong-room pongs with stable actor-only errors", () => {
+    const room = createRoom();
+    const controller = joinController(room, 0);
+
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: "probe",
+      playerId: "spoofed"
+    });
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: 6,
+      roomId: room.roomId,
+      probeId: "probe"
+    });
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: "OTHER",
+      probeId: "probe"
+    });
+
+    expect(countErrors(controller, "invalid_message")).toBe(1);
+    expect(countErrors(controller, "protocol_mismatch")).toBe(1);
+    expect(countErrors(controller, "identity_mismatch")).toBe(1);
+  });
+
+  it("expires a missing sample and prevents the old probe from overwriting a retry", () => {
+    const room = createRoom();
+    const setTimeout = vi.spyOn(room.clock, "setTimeout");
+    const controller = joinController(room, 0);
+    const oldProbe = latencyProbes(controller).at(-1);
+    if (oldProbe === undefined) throw new Error("Expected an initial latency probe.");
+
+    const expiry = setTimeout.mock.calls.find((call) => call[1] === 5_000)?.[0];
+    if (expiry === undefined) throw new Error("Expected a probe expiry timer.");
+    (expiry as () => void)();
+    const nextProbe = latencyProbes(controller).at(-1);
+    if (nextProbe === undefined) throw new Error("Expected a retry latency probe.");
+    expect(nextProbe.probeId).not.toBe(oldProbe.probeId);
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: oldProbe.probeId
+    });
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+  });
+
+  it("clears RTT and uses a new probe after reconnect", async () => {
+    const room = createRoom();
+    const controller = joinController(room, 0);
+    const oldProbe = latencyProbes(controller).at(-1);
+    if (oldProbe === undefined) throw new Error("Expected an initial latency probe.");
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: oldProbe.probeId
+    });
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBeGreaterThanOrEqual(
+      0
+    );
+
+    vi.spyOn(room, "allowReconnection").mockResolvedValue(controller.client);
+    await room.onLeave(controller.client, 1006);
+    const reconnectProbe = latencyProbes(controller).at(-1);
+    if (reconnectProbe === undefined) throw new Error("Expected a reconnect latency probe.");
+    expect(reconnectProbe.probeId).not.toBe(oldProbe.probeId);
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: oldProbe.probeId
+    });
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+  });
+
+  it("clears published RTT and makes every probe timer inert on room disposal", () => {
+    const room = createRoom();
+    const setTimeout = vi.spyOn(room.clock, "setTimeout");
+    const display = joinDisplay(room);
+    const controller = joinController(room, 0);
+    const displayProbe = latencyProbes(display).at(-1);
+    const controllerProbe = latencyProbes(controller).at(-1);
+    if (displayProbe === undefined || controllerProbe === undefined) {
+      throw new Error("Expected initial latency probes.");
+    }
+    room.handleLatencyPong(display.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: displayProbe.probeId
+    });
+    room.handleLatencyPong(controller.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      probeId: controllerProbe.probeId
+    });
+    const displaySendCount = display.send.mock.calls.length;
+    const controllerSendCount = controller.send.mock.calls.length;
+    const callbacks = setTimeout.mock.calls.map((call) => call[0] as () => void);
+
+    room.onDispose();
+    expect(room.state.displayLatencyMs).toBe(-1);
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+    callbacks.forEach((callback) => {
+      callback();
+    });
+    expect(display.send).toHaveBeenCalledTimes(displaySendCount);
+    expect(controller.send).toHaveBeenCalledTimes(controllerSendCount);
   });
 });

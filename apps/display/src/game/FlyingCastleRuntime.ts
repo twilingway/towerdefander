@@ -5,7 +5,10 @@ import {
   createAngleTransition,
   createPointTransition,
   createSnappedVisualTransitions,
-  getBoundedCameraScroll,
+  getCameraOverscan,
+  getPhaserCameraScroll,
+  getResponsiveViewport,
+  getShieldVisualStyle,
   getTimelineAlpha,
   interpolateAngle,
   interpolatePoint,
@@ -15,8 +18,8 @@ import {
   type PointTransition
 } from "./flyingCastleViewModel.js";
 
-const VIEWPORT_WIDTH = 1280;
-const VIEWPORT_HEIGHT = 720;
+const BASE_VIEWPORT_WIDTH = 1600;
+const BASE_VIEWPORT_HEIGHT = 900;
 const SNAPSHOT_TRANSITION_MS = 50;
 
 class FlyingCastleScene extends Phaser.Scene {
@@ -31,6 +34,11 @@ class FlyingCastleScene extends Phaser.Scene {
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly projectiles = new Map<string, Phaser.GameObjects.Arc>();
   private readonly projectileTransitions = new Map<string, PointTransition>();
+  private viewportWidth = BASE_VIEWPORT_WIDTH;
+  private viewportHeight = BASE_VIEWPORT_HEIGHT;
+  private rendererWidth = BASE_VIEWPORT_WIDTH;
+  private rendererHeight = BASE_VIEWPORT_HEIGHT;
+  private cameraOverscan = 0;
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("flying-castle");
@@ -42,15 +50,12 @@ class FlyingCastleScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBounds(0, 0, this.snapshot.worldWidth, this.snapshot.worldHeight);
-    const initialScroll = getBoundedCameraScroll(
-      this.snapshot.castle,
-      this.snapshot.worldWidth,
-      this.snapshot.worldHeight,
-      VIEWPORT_WIDTH,
-      VIEWPORT_HEIGHT
-    );
-    this.cameras.main.setScroll(initialScroll.x, initialScroll.y);
+    this.configureViewport(this.scale.gameSize.width, this.scale.gameSize.height);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    });
+    this.focusCamera(this.snapshot.castle);
     this.drawGrid();
     this.drawDecorations();
 
@@ -88,14 +93,7 @@ class FlyingCastleScene extends Phaser.Scene {
     this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
     this.drawShield();
 
-    const scroll = getBoundedCameraScroll(
-      castlePosition,
-      this.snapshot.worldWidth,
-      this.snapshot.worldHeight,
-      VIEWPORT_WIDTH,
-      VIEWPORT_HEIGHT
-    );
-    this.cameras.main.setScroll(scroll.x, scroll.y);
+    this.focusCamera(castlePosition);
 
     for (const [projectileId, visual] of this.projectiles) {
       const transition = this.projectileTransitions.get(projectileId);
@@ -181,8 +179,8 @@ class FlyingCastleScene extends Phaser.Scene {
     if (this.shield === undefined || this.castleBody === undefined) return;
     this.shield.clear();
     this.shield.setPosition(this.castleBody.x, this.castleBody.y);
-    if (!this.snapshot.shield.active) return;
-    this.shield.lineStyle(16, 0x65baff, 0.9);
+    const style = getShieldVisualStyle(this.snapshot.shield.active);
+    this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
     this.shield.beginPath();
     this.shield.arc(
       0,
@@ -205,6 +203,41 @@ class FlyingCastleScene extends Phaser.Scene {
     this.castleTransition = transitions.castle;
     this.turretTransition = transitions.turret;
     this.shieldTransition = transitions.shield;
+  }
+
+  private readonly handleResize = (gameSize: Phaser.Structs.Size): void => {
+    this.configureViewport(gameSize.width, gameSize.height);
+  };
+
+  private configureViewport(actualWidth: number, actualHeight: number): void {
+    const viewport = getResponsiveViewport(actualWidth, actualHeight);
+    this.rendererWidth = actualWidth;
+    this.rendererHeight = actualHeight;
+    this.viewportWidth = viewport.width;
+    this.viewportHeight = viewport.height;
+    this.cameraOverscan = getCameraOverscan(this.snapshot.castle.radius, viewport.zoom);
+    this.cameras.main.setZoom(viewport.zoom);
+    this.cameras.main.setBounds(
+      -this.cameraOverscan,
+      -this.cameraOverscan,
+      this.snapshot.worldWidth + this.cameraOverscan * 2,
+      this.snapshot.worldHeight + this.cameraOverscan * 2
+    );
+    this.focusCamera(this.castleBody ?? this.snapshot.castle);
+  }
+
+  private focusCamera(focus: Point): void {
+    const scroll = getPhaserCameraScroll({
+      focus,
+      worldWidth: this.snapshot.worldWidth,
+      worldHeight: this.snapshot.worldHeight,
+      rendererWidth: this.rendererWidth,
+      rendererHeight: this.rendererHeight,
+      viewportWidth: this.viewportWidth,
+      viewportHeight: this.viewportHeight,
+      overscan: this.cameraOverscan
+    });
+    this.cameras.main.setScroll(scroll.x, scroll.y);
   }
 
   private reconcileProjectiles(now: number, snap: boolean): void {
@@ -276,12 +309,12 @@ export function createFlyingCastleRuntime(
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: host,
-    width: VIEWPORT_WIDTH,
-    height: VIEWPORT_HEIGHT,
+    width: host.clientWidth > 0 ? host.clientWidth : BASE_VIEWPORT_WIDTH,
+    height: host.clientHeight > 0 ? host.clientHeight : BASE_VIEWPORT_HEIGHT,
     backgroundColor: "#07171f",
     scene,
     render: { antialias: true, roundPixels: false },
-    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }
+    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }
   });
   return {
     update(snapshot) {

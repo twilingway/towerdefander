@@ -36,6 +36,19 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await expect(display.locator(".phase-badge")).toHaveText("Замок в полёте");
     await expect(display.getByTestId("flying-castle-world")).toBeVisible();
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
+    await expect(display.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
+      timeout: 5_000
+    });
+    await expect(pilot.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
+      timeout: 5_000
+    });
+    await expect(display.locator(".crew-latency-overlay span")).toHaveText([
+      /Экран → сервер \d+ мс/,
+      /Пилот \d+ мс/,
+      /Наводчик \d+ мс/,
+      /Щит \d+ мс/
+    ]);
+    await assertResponsiveBattlefield(display);
 
     const startX = Number(
       await display.getByTestId("flying-castle-world").getAttribute("data-castle-x")
@@ -139,6 +152,30 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await Promise.all(contexts.map((context) => context.close()));
   }
 });
+
+async function assertResponsiveBattlefield(display: Page): Promise<void> {
+  const canvas = display.locator(".battlefield-canvas canvas");
+  await expect(canvas).toHaveCount(1);
+
+  for (const viewport of [
+    { width: 1920, height: 1080 },
+    { width: 1366, height: 768 },
+    { width: 1024, height: 768 }
+  ]) {
+    await display.setViewportSize(viewport);
+    await expect
+      .poll(async () => {
+        const bounds = await display.getByTestId("flying-castle-world").boundingBox();
+        return bounds === null
+          ? undefined
+          : { width: Math.round(bounds.width), height: Math.round(bounds.height) };
+      })
+      .toEqual(viewport);
+  }
+
+  await expect(canvas).toHaveCount(1);
+  await display.setViewportSize({ width: 1280, height: 720 });
+}
 
 async function assertFireStopsAfter(
   gunner: Page,

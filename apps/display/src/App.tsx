@@ -2,6 +2,9 @@ import { Client, type Room } from "@colyseus/sdk";
 import {
   CREW_ROLES,
   PROTOCOL_VERSION,
+  clientMessage,
+  serverLatencyProbeSchema,
+  serverMessage,
   type CrewRole,
   type DisplayRoomView
 } from "@town-defenders/protocol";
@@ -54,6 +57,15 @@ export function DisplayApp() {
       roomReference.current = room;
       room.onStateChange(applyRoomState);
       applyRoomState(room.state);
+      room.onMessage(serverMessage.latencyProbe, (payload: unknown) => {
+        const result = serverLatencyProbeSchema.safeParse(payload);
+        if (!result.success) return;
+        room.send(clientMessage.latencyPong, {
+          protocolVersion: PROTOCOL_VERSION,
+          roomId: room.roomId,
+          probeId: result.data.probeId
+        });
+      });
       room.onDrop(() => {
         setStatus("reconnecting");
         setError("Связь прервана. Восстанавливаем общий экран…");
@@ -112,8 +124,13 @@ export function DisplayApp() {
           <p className="eyebrow">Комната</p>
           <strong className="room-code">{view.roomId}</strong>
         </div>
-        <div className={`phase-badge phase-badge--${view.phase}`}>
-          {view.phase === "active" ? "Замок в полёте" : "Собираем экипаж"}
+        <div className="room-network">
+          <div className={`phase-badge phase-badge--${view.phase}`}>
+            {view.phase === "active" ? "Замок в полёте" : "Собираем экипаж"}
+          </div>
+          <span className="latency-indicator" aria-live="polite">
+            Экран → сервер {formatLatency(view.displayLatencyMs)}
+          </span>
         </div>
       </header>
       {error.length > 0 && <p className="error-message">{error}</p>}
@@ -140,6 +157,9 @@ export function DisplayApp() {
                   <span>
                     <strong>{roleLabel(role)}</strong>
                     <small>{player?.playerName ?? "ожидаем игрока…"}</small>
+                    <small>
+                      Пинг {formatLatency(player?.connected === true ? player.latencyMs : null)}
+                    </small>
                   </span>
                   <span className={player?.ready === true ? "ready" : "waiting"}>
                     {player === undefined
@@ -190,14 +210,35 @@ export function DisplayApp() {
             </div>
           </header>
           <FlyingCastleCanvas game={view.game} connectionEpoch={connectionEpoch} />
+          <aside className="crew-latency-overlay" aria-label="Пинг участников до сервера">
+            <strong>Пинг до сервера</strong>
+            <span>Экран → сервер {formatLatency(view.displayLatencyMs)}</span>
+            {CREW_ROLES.map((role) => {
+              const player = view.players.find((candidate) => candidate.role === role);
+              return (
+                <span key={role}>
+                  {latencyRoleLabel(role)}{" "}
+                  {formatLatency(player?.connected === true ? player.latencyMs : null)}
+                </span>
+              );
+            })}
+          </aside>
         </section>
       )}
     </main>
   );
 }
 
+function formatLatency(latencyMs: number | null | undefined): string {
+  return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
+}
+
 function roleLabel(role: CrewRole): string {
   return role === "pilot" ? "Пилот" : role === "gunner" ? "Наводчик" : "Оператор щита";
+}
+
+function latencyRoleLabel(role: CrewRole): string {
+  return role === "shield" ? "Щит" : roleLabel(role);
 }
 
 function readStringEnvironment(value: unknown, fallback: string): string {
