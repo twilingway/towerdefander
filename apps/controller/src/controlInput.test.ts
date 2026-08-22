@@ -81,4 +81,24 @@ describe("controller input", () => {
     scheduler.startGeneration({ x: 0 }, 201);
     expect(send).toHaveBeenLastCalledWith({ sequence: 1, value: { x: 0 } });
   });
+
+  it("pauses between waves and resumes without resetting the continuous sequence", () => {
+    const send = vi.fn();
+    const scheduler = new LatestInputScheduler({ x: 0 }, send);
+    scheduler.update({ x: 1 }, 0);
+    scheduler.setEnabled(false);
+    scheduler.update({ x: -1 }, 50);
+    scheduler.flush(200);
+    scheduler.resumeWith({ x: 0 }, 201);
+    expect(send).toHaveBeenLastCalledWith({ sequence: 2, value: { x: 0 } });
+  });
+
+  it("can hydrate a paused reconnect generation without sending an invalid phase input", () => {
+    const send = vi.fn();
+    const scheduler = new LatestInputScheduler({ x: 0 }, send);
+    scheduler.resetGeneration({ x: 0 }, 100, false);
+    expect(send).not.toHaveBeenCalled();
+    scheduler.resumeWith({ x: 0 }, 200);
+    expect(send).toHaveBeenCalledWith({ sequence: 1, value: { x: 0 } });
+  });
 });

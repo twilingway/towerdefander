@@ -39,6 +39,33 @@ export interface ShieldVisualStyle {
   readonly alpha: number;
 }
 
+export function getShieldArcRange(
+  angle: number,
+  arcHalfAngle: number
+): { readonly start: number; readonly end: number } {
+  return { start: angle - arcHalfAngle, end: angle + arcHalfAngle };
+}
+
+export interface StableIdReconciliation {
+  readonly create: readonly string[];
+  readonly update: readonly string[];
+  readonly remove: readonly string[];
+}
+
+export function reconcileStableIds(
+  existingIds: Iterable<string>,
+  incomingIds: Iterable<string>
+): StableIdReconciliation {
+  const existing = new Set(existingIds);
+  const incoming = new Set(incomingIds);
+  const create: string[] = [];
+  const update: string[] = [];
+  const remove: string[] = [];
+  for (const id of incoming) (existing.has(id) ? update : create).push(id);
+  for (const id of existing) if (!incoming.has(id)) remove.push(id);
+  return { create, update, remove };
+}
+
 export interface CameraScrollInput {
   readonly focus: Point;
   readonly worldWidth: number;

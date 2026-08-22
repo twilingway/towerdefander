@@ -7,7 +7,7 @@ function collection<T>(values: T[]) {
 }
 
 describe("display room view", () => {
-  it("flattens display-only world collections into a strict v7 view", () => {
+  it("flattens stable display-only combat maps into spawn-ordered strict v8 arrays", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
@@ -37,23 +37,82 @@ describe("display room view", () => {
         elapsedMs: 100,
         worldWidth: 2400,
         worldHeight: 1600,
-        castle: { x: 1200, y: 800, velocityX: 0, velocityY: 0, radius: 52 },
+        castle: {
+          x: 1200,
+          y: 800,
+          velocityX: 0,
+          velocityY: 0,
+          radius: 52,
+          hp: 850,
+          maxHp: 1000
+        },
         turretAngle: 0,
-        shield: { angle: 0, active: false, energy: 75, capacity: 100 },
+        shield: {
+          angle: 0,
+          arcHalfAngle: 0.72,
+          active: false,
+          energy: 75,
+          capacity: 100
+        },
+        encounter: {
+          phase: "combat",
+          waveNumber: 3,
+          encounterTick: 12,
+          phaseTicksRemaining: 0,
+          score: 240
+        },
+        roleModifiers: {
+          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
+          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
+          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
+        },
         display: {
           obstacles: collection([
             { obstacleId: "cloud", kind: "circle", x: 100, y: 100, radius: 20, width: 0, height: 0 }
           ]),
-          projectiles: collection([
+          enemyShips: collection([
             {
-              projectileId: "projectile-0",
+              entityId: "enemy-2",
+              spawnSequence: 2,
+              kind: "missileCarrier",
+              x: 1800,
+              y: 800,
+              velocityX: -20,
+              velocityY: 0,
+              radius: 24,
+              heading: Math.PI,
+              hp: 80,
+              maxHp: 100
+            },
+            {
+              entityId: "enemy-1",
+              spawnSequence: 1,
+              kind: "gunship",
+              x: 1600,
+              y: 800,
+              velocityX: -40,
+              velocityY: 0,
+              radius: 18,
+              heading: Math.PI,
+              hp: 40,
+              maxHp: 40
+            }
+          ]),
+          asteroids: collection([]),
+          friendlyProjectiles: collection([
+            {
+              entityId: "projectile-0",
+              spawnSequence: 3,
+              kind: "friendly",
               x: 1300,
               y: 800,
               velocityX: 720,
               velocityY: 0,
               radius: 8
             }
-          ])
+          ]),
+          hostileProjectiles: collection([]),
+          homingMissiles: collection([])
         }
       }
     };
@@ -62,8 +121,12 @@ describe("display room view", () => {
     expect(view?.game?.obstacles).toEqual([
       { obstacleId: "cloud", kind: "circle", x: 100, y: 100, radius: 20 }
     ]);
-    expect(view?.game?.projectiles).toHaveLength(1);
+    expect(view?.game?.friendlyProjectiles).toHaveLength(1);
+    expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
+    expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
+    expect(view?.game?.castle.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);
+    expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
     expect(view?.displayLatencyMs).toBe(18);
     expect(view?.players.map((player) => player.latencyMs)).toEqual([null, 47]);
   });

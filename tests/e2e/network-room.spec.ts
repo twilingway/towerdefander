@@ -42,7 +42,7 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await expect(pilot.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
     });
-    await expect(display.locator(".crew-latency-overlay span")).toHaveText([
+    await expect(display.locator(".crew-latency-overlay .latency-row")).toHaveText([
       /Экран → сервер \d+ мс/,
       /Пилот \d+ мс/,
       /Наводчик \d+ мс/,
@@ -88,7 +88,7 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     if (fireBounds === null) throw new Error("Fire button has no bounds.");
     await gunner.mouse.click(fireBounds.x + 8, fireBounds.y + fireBounds.height - 8);
     await expect
-      .poll(async () => Number(await world.getAttribute("data-projectile-count")))
+      .poll(async () => Number(await world.getAttribute("data-friendly-projectile-count")))
       .toBeGreaterThan(0);
     expect(Number(await world.getAttribute("data-turret-angle"))).toBeCloseTo(turretBeforeFire, 5);
 

@@ -48,7 +48,7 @@ describe("flying castle configuration", () => {
   it("creates the explicit smooth-flight defaults deterministically", () => {
     const config = createFlyingCastleConfig();
 
-    expect(config).toEqual({
+    expect(config).toMatchObject({
       fixedStepMs: 50,
       worldWidth: 4800,
       worldHeight: 3200,
@@ -71,8 +71,8 @@ describe("flying castle configuration", () => {
       shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
       shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8
     });
-    expect(createFlyingCastleState(config)).toEqual(createFlyingCastleState(config));
-    expect(createFlyingCastleState(config)).toMatchObject({
+    expect(createFlyingCastleState(config, 1)).toEqual(createFlyingCastleState(config, 1));
+    expect(createFlyingCastleState(config, 1)).toMatchObject({
       shieldEnergy: 100,
       shieldRearmRequired: false,
       queuedFire: false,
@@ -81,7 +81,7 @@ describe("flying castle configuration", () => {
       shieldTargetAngle: null,
       shieldAngularVelocity: 0
     });
-    expect(createFlyingCastleState(config).castle).toMatchObject({ x: 2400, y: 1600 });
+    expect(createFlyingCastleState(config, 1).castle).toMatchObject({ x: 2400, y: 1600 });
   });
 
   it.each([
@@ -121,7 +121,7 @@ describe("flying castle configuration", () => {
 describe("pilot movement", () => {
   it("accelerates to max speed in ten equal fixed steps", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     const velocities: number[] = [];
 
     for (let step = 0; step < 10; step += 1) {
@@ -130,12 +130,12 @@ describe("pilot movement", () => {
     }
 
     expect(velocities).toEqual([32, 64, 96, 128, 160, 192, 224, 256, 288, 320]);
-    expect(state.castle.x).toBe(createFlyingCastleState(config).castle.x + 88);
+    expect(state.castle.x).toBe(createFlyingCastleState(config, 1).castle.x + 88);
   });
 
   it("brakes from max speed to rest in eight fixed steps", () => {
     const config = createFlyingCastleConfig();
-    let state = holdPilot(createFlyingCastleState(config), config, { x: 1, y: 0 }, 10);
+    let state = holdPilot(createFlyingCastleState(config, 1), config, { x: 1, y: 0 }, 10);
     const releaseX = state.castle.x;
     const velocities: number[] = [];
 
@@ -151,7 +151,7 @@ describe("pilot movement", () => {
 
   it("caps diagonal target and actual velocity at max speed", () => {
     const config = createFlyingCastleConfig();
-    const state = holdPilot(createFlyingCastleState(config), config, { x: 1, y: 1 }, 10);
+    const state = holdPilot(createFlyingCastleState(config, 1), config, { x: 1, y: 1 }, 10);
 
     expect(Math.hypot(state.castle.velocity.x, state.castle.velocity.y)).toBeCloseTo(320);
     expect(state.castle.velocity.x).toBeCloseTo(320 / Math.sqrt(2));
@@ -164,7 +164,7 @@ describe("pilot movement", () => {
   it("clamps at bounds and clears only the outward velocity component", () => {
     const config = createFlyingCastleConfig({ worldWidth: 200, worldHeight: 200 });
     const nearRight: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       castle: { x: 147, y: 100, velocity: { x: 100, y: 100 } }
     };
     const bounded = advanceFlyingCastle(
@@ -177,7 +177,7 @@ describe("pilot movement", () => {
     expect(bounded.castle.velocity.y).toBeGreaterThan(100);
 
     const inward: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       castle: {
         x: config.worldWidth - config.castleRadius,
         y: 100,
@@ -194,7 +194,7 @@ describe("pilot movement", () => {
 
   it("starts ordinary braking when input becomes stale", () => {
     const config = createFlyingCastleConfig();
-    const moving = applyPilotInput(createFlyingCastleState(config), {
+    const moving = applyPilotInput(createFlyingCastleState(config, 1), {
       vector: { x: 1, y: 0 },
       receivedTick: 0
     });
@@ -209,7 +209,7 @@ describe("pilot movement", () => {
 
   it("brakes instead of teleporting velocity to zero after trusted neutral input", () => {
     const config = createFlyingCastleConfig();
-    let state = holdPilot(createFlyingCastleState(config), config, { x: 1, y: 0 }, 10);
+    let state = holdPilot(createFlyingCastleState(config, 1), config, { x: 1, y: 0 }, 10);
     state = applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: state.clock.tick });
     state = advanceFlyingCastle(state, config);
 
@@ -217,7 +217,7 @@ describe("pilot movement", () => {
   });
 
   it("rejects non-finite vectors, invalid deltas, and future received ticks", () => {
-    const state = createFlyingCastleState(createFlyingCastleConfig());
+    const state = createFlyingCastleState(createFlyingCastleConfig(), 1);
     expect(() =>
       applyPilotInput(state, { vector: { x: Number.NaN, y: 0 }, receivedTick: 0 })
     ).toThrow(RangeError);
@@ -259,7 +259,7 @@ describe("angular helpers", () => {
 describe("gunner simulation", () => {
   it("starts turning toward an upward target without snapping and zero aim preserves it", () => {
     const config = createFlyingCastleConfig();
-    let state = applyGunnerInput(createFlyingCastleState(config), {
+    let state = applyGunnerInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: -1 },
       firing: false,
       receivedTick: 0
@@ -281,7 +281,7 @@ describe("gunner simulation", () => {
 
   it("accelerates to the configured turret angular speed in ten steps", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     const velocities: number[] = [];
 
     for (let step = 0; step < 10; step += 1) {
@@ -302,7 +302,7 @@ describe("gunner simulation", () => {
 
   it("traverses an exact antipode positively and reaches it without overshoot", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     let travelled = 0;
     let previousAngle = state.turretAngle;
     let ticks = 0;
@@ -335,7 +335,7 @@ describe("gunner simulation", () => {
   it("takes the short arc through the canonical angle boundary", () => {
     const config = createFlyingCastleConfig();
     let state: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       turretAngle: Math.PI - 0.08
     };
     const target = -Math.PI + 0.08;
@@ -362,7 +362,7 @@ describe("gunner simulation", () => {
   it("clamps a close target instead of overshooting it", () => {
     const config = createFlyingCastleConfig();
     const target = 0.02;
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     const angles: number[] = [];
 
     for (let step = 0; step < 3; step += 1) {
@@ -384,7 +384,7 @@ describe("gunner simulation", () => {
 
   it("brakes before reversing toward a target on the opposite side", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     for (let step = 0; step < 3; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 0, y: 1 },
@@ -419,7 +419,7 @@ describe("gunner simulation", () => {
 
   it("completes a tap traverse while zero aim heartbeats keep the target fresh", () => {
     const config = createFlyingCastleConfig();
-    let state = applyGunnerInput(createFlyingCastleState(config), {
+    let state = applyGunnerInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: -1 },
       firing: false,
       receivedTick: 0
@@ -445,7 +445,7 @@ describe("gunner simulation", () => {
 
   it("preserves a short true/false click until the next simulation tick", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     state = applyGunnerInput(state, {
       vector: { x: 1, y: 0 },
       firing: true,
@@ -466,7 +466,7 @@ describe("gunner simulation", () => {
 
   it("spawns a projectile along the current turret angle instead of its target", () => {
     const config = createFlyingCastleConfig();
-    let state = applyGunnerInput(createFlyingCastleState(config), {
+    let state = applyGunnerInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: -1 },
       firing: true,
       receivedTick: 0
@@ -487,7 +487,7 @@ describe("gunner simulation", () => {
 
   it("coalesces repeated clicks into one pending shot during cooldown", () => {
     const config = createFlyingCastleConfig();
-    let state = applyGunnerInput(createFlyingCastleState(config), {
+    let state = applyGunnerInput(createFlyingCastleState(config, 1), {
       vector: { x: 1, y: 0 },
       firing: true,
       receivedTick: 0
@@ -523,7 +523,7 @@ describe("gunner simulation", () => {
 
   it("continues cooldown cadence while fire remains held", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     for (let step = 0; step < 11; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 1, y: 0 },
@@ -538,7 +538,7 @@ describe("gunner simulation", () => {
 
   it("allows the authoritative disconnect path to clear a pending shot", () => {
     const config = createFlyingCastleConfig();
-    let state = applyGunnerInput(createFlyingCastleState(config), {
+    let state = applyGunnerInput(createFlyingCastleState(config, 1), {
       vector: { x: 1, y: 0 },
       firing: true,
       receivedTick: 0
@@ -557,7 +557,7 @@ describe("gunner simulation", () => {
   it("cancels a stale angular target and brakes without clearing queued fire", () => {
     const config = createFlyingCastleConfig({ fireCooldownTicks: 100 });
     let state: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       lastFiredTick: 0
     };
     state = applyGunnerInput(state, {
@@ -584,7 +584,7 @@ describe("gunner simulation", () => {
   it("trusted gunner disconnect clears target, hold and queue but preserves braking velocity", () => {
     const config = createFlyingCastleConfig({ fireCooldownTicks: 100 });
     let state: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       lastFiredTick: 0
     };
     state = applyGunnerInput(state, {
@@ -615,7 +615,7 @@ describe("gunner simulation", () => {
 
   it("allows the authoritative disconnect path to turn off the shield without draining energy", () => {
     const config = createFlyingCastleConfig();
-    let state = applyShieldInput(createFlyingCastleState(config), {
+    let state = applyShieldInput(createFlyingCastleState(config, 1), {
       vector: { x: 1, y: 0 },
       active: true,
       receivedTick: 0
@@ -635,7 +635,7 @@ describe("gunner simulation", () => {
 
   it("stops held cadence when input becomes stale but preserves turret angle", () => {
     const config = createFlyingCastleConfig();
-    const firing = applyGunnerInput(createFlyingCastleState(config), {
+    const firing = applyGunnerInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: 1 },
       firing: true,
       receivedTick: 0
@@ -651,7 +651,7 @@ describe("gunner simulation", () => {
 
   it("expires projectiles by lifetime and removes projectiles outside padded bounds", () => {
     const lifetimeConfig = createFlyingCastleConfig({ projectileSpeedPerSecond: 1 });
-    let state = applyGunnerInput(createFlyingCastleState(lifetimeConfig), {
+    let state = applyGunnerInput(createFlyingCastleState(lifetimeConfig, 1), {
       vector: { x: 1, y: 0 },
       firing: true,
       receivedTick: 0
@@ -665,7 +665,7 @@ describe("gunner simulation", () => {
       worldHeight: 200,
       projectileSpeedPerSecond: 4000
     });
-    let escaping = applyGunnerInput(createFlyingCastleState(smallWorld), {
+    let escaping = applyGunnerInput(createFlyingCastleState(smallWorld, 1), {
       vector: { x: 1, y: 0 },
       firing: true,
       receivedTick: 0
@@ -680,7 +680,7 @@ describe("shield simulation", () => {
   it("keeps manual active state after input becomes stale and preserves angle", () => {
     const config = createFlyingCastleConfig();
     const state = advance(
-      applyShieldInput(createFlyingCastleState(config), {
+      applyShieldInput(createFlyingCastleState(config, 1), {
         vector: { x: -1, y: 0 },
         active: true,
         receivedTick: 0
@@ -700,7 +700,7 @@ describe("shield simulation", () => {
   it("accelerates faster than the turret and traverses while inactive and recharging", () => {
     const config = createFlyingCastleConfig();
     let state: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       shieldEnergy: 50
     };
     const velocities: number[] = [];
@@ -726,7 +726,7 @@ describe("shield simulation", () => {
 
   it("completes a 180 degree inactive shield traverse in forty-three ticks without overshoot", () => {
     const config = createFlyingCastleConfig();
-    let state = createFlyingCastleState(config);
+    let state = createFlyingCastleState(config, 1);
     let travelled = 0;
     let previousAngle = state.shieldAngle;
     let ticks = 0;
@@ -757,7 +757,7 @@ describe("shield simulation", () => {
 
   it("trusted shield disconnect turns it off and cancels target without changing energy", () => {
     const config = createFlyingCastleConfig();
-    let state = applyShieldInput(createFlyingCastleState(config), {
+    let state = applyShieldInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: -1 },
       active: true,
       receivedTick: 0
@@ -780,7 +780,7 @@ describe("shield simulation", () => {
 
   it("drains a full shield in five seconds and requires re-arming", () => {
     const config = createFlyingCastleConfig();
-    let state = applyShieldInput(createFlyingCastleState(config), {
+    let state = applyShieldInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: 1 },
       active: true,
       receivedTick: 0
@@ -805,7 +805,7 @@ describe("shield simulation", () => {
   it("recharges an inactive empty shield in ten seconds and clamps at capacity", () => {
     const config = createFlyingCastleConfig();
     let state: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       shieldEnergy: 0,
       shieldRearmRequired: true
     };
@@ -824,7 +824,7 @@ describe("shield simulation", () => {
 
   it("requires an accepted false then a new true after depletion", () => {
     const config = createFlyingCastleConfig();
-    let state = applyShieldInput(createFlyingCastleState(config), {
+    let state = applyShieldInput(createFlyingCastleState(config, 1), {
       vector: { x: 0, y: -1 },
       active: true,
       receivedTick: 0
@@ -856,11 +856,11 @@ describe("shield simulation", () => {
   it("does not arm a true intent accepted while energy is still empty", () => {
     const config = createFlyingCastleConfig();
     let state: FlyingCastleState = {
-      ...createFlyingCastleState(config),
+      ...createFlyingCastleState(config, 1),
       shieldEnergy: 0,
       shieldRearmRequired: true,
       inputs: {
-        ...createFlyingCastleState(config).inputs,
+        ...createFlyingCastleState(config, 1).inputs,
         shield: { vector: { x: 1, y: 0 }, active: true, receivedTick: 0 }
       }
     };
@@ -888,7 +888,7 @@ describe("deterministic flying castle trace", () => {
     const config = createFlyingCastleConfig();
 
     const run = () => {
-      let state = createFlyingCastleState(config);
+      let state = createFlyingCastleState(config, 1);
       state = applyPilotInput(state, { vector: { x: 1, y: -1 }, receivedTick: 0 });
       state = applyGunnerInput(state, {
         vector: { x: 0, y: 1 },

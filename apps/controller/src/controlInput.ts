@@ -80,17 +80,28 @@ export class LatestInputScheduler<T> {
   }
 
   startGeneration(value: T, now: number): void {
+    this.resetGeneration(value, now, true);
+  }
+
+  resetGeneration(value: T, now: number, enabled: boolean): void {
     this.current = value;
     this.nextSequence = 1;
     this.lastSentAt = Number.NEGATIVE_INFINITY;
-    this.pending = true;
-    this.enabled = true;
-    this.flush(now);
+    this.pending = enabled;
+    this.enabled = enabled;
+    if (enabled) this.flush(now);
   }
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled) this.pending = false;
+  }
+
+  resumeWith(value: T, now: number): void {
+    this.current = value;
+    this.enabled = true;
+    this.pending = true;
+    this.flush(now);
   }
 
   private emit(now: number): void {

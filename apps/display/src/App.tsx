@@ -181,14 +181,22 @@ export function DisplayApp() {
         <section id="game-canvas" className="game-stage" aria-label="Карта летающего замка">
           <header className="battle-header flying-hud">
             <div>
-              <span>Координаты</span>
-              <strong>
-                {Math.round(view.game.castle.x)} × {Math.round(view.game.castle.y)}
-              </strong>
+              <span>Волна</span>
+              <strong>{view.game.encounter.waveNumber}</strong>
+              <small>{encounterLabel(view.game.encounter.phase)}</small>
             </div>
             <div>
-              <span>Снаряды</span>
-              <strong>{view.game.projectiles.length}</strong>
+              <span>Корпус</span>
+              <strong>
+                {Math.ceil(view.game.castle.hp)} / {Math.ceil(view.game.castle.maxHp)}
+              </strong>
+              <div className="hud-energy hud-energy--hull" aria-label="Прочность корпуса">
+                <i
+                  style={{
+                    width: `${String((view.game.castle.hp / view.game.castle.maxHp) * 100)}%`
+                  }}
+                />
+              </div>
             </div>
             <div>
               <span>Щит</span>
@@ -205,23 +213,51 @@ export function DisplayApp() {
               </small>
             </div>
             <div>
-              <span>Tick</span>
-              <strong>{view.game.tick}</strong>
+              <span>Счёт</span>
+              <strong>{view.game.encounter.score}</strong>
+              <small>
+                Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length}
+              </small>
             </div>
           </header>
           <FlyingCastleCanvas game={view.game} connectionEpoch={connectionEpoch} />
+          {view.game.encounter.phase === "intermission" && (
+            <div className="encounter-overlay encounter-overlay--intermission" role="status">
+              <p className="eyebrow">Волна {view.game.encounter.waveNumber} завершена</p>
+              <h2>Выберите улучшения</h2>
+              <strong>
+                Следующая волна через {formatCountdown(view.game.encounter.phaseTicksRemaining)}
+              </strong>
+              <p>Каждая роль выбирает одну карточку на своём контроллере.</p>
+            </div>
+          )}
+          {view.game.encounter.phase === "defeated" && (
+            <div className="encounter-overlay encounter-overlay--defeated" role="status">
+              <p className="eyebrow">Забег завершён</p>
+              <h2>Летающий замок уничтожен</h2>
+              <strong>Волна {view.game.encounter.waveNumber}</strong>
+              <p>Итоговый счёт: {view.game.encounter.score}</p>
+            </div>
+          )}
           <aside className="crew-latency-overlay" aria-label="Пинг участников до сервера">
             <strong>Пинг до сервера</strong>
-            <span>Экран → сервер {formatLatency(view.displayLatencyMs)}</span>
+            <span className="latency-row">
+              Экран → сервер {formatLatency(view.displayLatencyMs)}
+            </span>
             {CREW_ROLES.map((role) => {
               const player = view.players.find((candidate) => candidate.role === role);
               return (
-                <span key={role}>
+                <span className="latency-row" key={role}>
                   {latencyRoleLabel(role)}{" "}
                   {formatLatency(player?.connected === true ? player.latencyMs : null)}
                 </span>
               );
             })}
+            <span>
+              Модификаторы: P ×{view.game.roleModifiers.pilot.speedMultiplier.toFixed(2)} · G ×
+              {view.game.roleModifiers.gunner.damageMultiplier.toFixed(2)} · S +
+              {Math.round(view.game.roleModifiers.shield.capacityBonus)}
+            </span>
           </aside>
         </section>
       )}
@@ -231,6 +267,14 @@ export function DisplayApp() {
 
 function formatLatency(latencyMs: number | null | undefined): string {
   return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
+}
+
+function formatCountdown(ticks: number): string {
+  return `${(ticks / 20).toFixed(1)} с`;
+}
+
+function encounterLabel(phase: "combat" | "intermission" | "defeated"): string {
+  return phase === "combat" ? "бой" : phase === "intermission" ? "передышка" : "поражение";
 }
 
 function roleLabel(role: CrewRole): string {

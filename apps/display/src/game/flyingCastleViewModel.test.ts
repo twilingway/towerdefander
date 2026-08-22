@@ -6,10 +6,12 @@ import {
   getCameraOverscan,
   getPhaserCameraScroll,
   getResponsiveViewport,
+  getShieldArcRange,
   getShieldVisualStyle,
   getTimelineAlpha,
   interpolateAngle,
   interpolatePoint,
+  reconcileStableIds,
   SnapshotResetLatch
 } from "./flyingCastleViewModel.js";
 
@@ -96,9 +98,23 @@ describe("flying castle view model", () => {
     expect(getShieldVisualStyle(false)).toEqual({ lineWidth: 6, color: 0x6f91a4, alpha: 0.35 });
   });
 
+  it("uses the authoritative upgraded shield half-angle", () => {
+    const arc = getShieldArcRange(1.2, 0.9);
+    expect(arc.start).toBeCloseTo(0.3);
+    expect(arc.end).toBeCloseTo(2.1);
+  });
+
   it("interpolates toward snapshots without overshooting", () => {
     expect(interpolatePoint({ x: 10, y: 20 }, { x: 30, y: 40 }, 0.25)).toEqual({ x: 15, y: 25 });
     expect(interpolatePoint({ x: 10, y: 20 }, { x: 30, y: 40 }, 2)).toEqual({ x: 30, y: 40 });
+  });
+
+  it("plans stable create, update and authoritative removal by entity ID", () => {
+    expect(reconcileStableIds(["enemy-1", "missile-1"], ["enemy-1", "asteroid-1"])).toEqual({
+      create: ["asteroid-1"],
+      update: ["enemy-1"],
+      remove: ["missile-1"]
+    });
   });
 
   it("uses elapsed time rather than frame count", () => {

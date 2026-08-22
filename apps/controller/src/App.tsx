@@ -8,7 +8,11 @@ import {
   serverMessage,
   type ControllerRoomView,
   type CrewRole,
-  type PublicShieldView
+  type EncounterPhase,
+  type PublicControllerUpgradeView,
+  type PublicRoleModifiersView,
+  type PublicShieldView,
+  type UpgradeId
 } from "@town-defenders/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -161,7 +165,7 @@ export function ControllerApp() {
   }
 
   function applyRoomState(state: NetworkRoomState): void {
-    const next = toControllerRoomView(state);
+    const next = toControllerRoomView(state, roomReference.current?.sessionId ?? playerId);
     if (next !== undefined) {
       setView(next);
       setStatus("connected");
@@ -202,6 +206,22 @@ export function ControllerApp() {
         active: control.active
       });
     }
+  }
+
+  function sendUpgrade(upgradeId: UpgradeId, actionId: string): void {
+    const room = roomReference.current;
+    const upgrade = view?.game?.upgrade;
+    if (room === undefined || view === undefined || currentPlayer === undefined || upgrade == null)
+      return;
+    room.send(clientMessage.upgradeChoose, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: currentPlayer.playerId,
+      actionId,
+      waveNumber: upgrade.offer.waveNumber,
+      offerId: upgrade.offer.offerId,
+      upgradeId
+    });
   }
 
   if (status === "join" || status === "joining" || status === "disconnected") {
@@ -290,16 +310,45 @@ export function ControllerApp() {
               {currentPlayer?.ready === true ? "Готов — ждём экипаж" : "Я готов"}
             </button>
           </>
-        ) : currentPlayer === undefined ? (
+        ) : view === undefined || currentPlayer === undefined ? (
           <p>Ожидаем подтверждение роли…</p>
         ) : (
-          <RoleControlPanel
-            role={currentPlayer.role}
-            shield={view?.game?.shield}
-            disabled={status === "reconnecting"}
-            generation={connectionEpoch}
-            onSend={sendControl}
-          />
+          <>
+            {view.game !== null && (
+              <RoleCombatSummary
+                role={currentPlayer.role}
+                modifiers={view.game.roleModifiers}
+                hp={view.game.castle.hp}
+                maxHp={view.game.castle.maxHp}
+                waveNumber={view.game.encounter.waveNumber}
+              />
+            )}
+            {view.game?.encounter.phase === "intermission" && (
+              <UpgradePanel
+                role={currentPlayer.role}
+                upgrade={view.game.upgrade}
+                phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
+                reconnecting={status === "reconnecting"}
+                connectionEpoch={connectionEpoch}
+                onChoose={sendUpgrade}
+              />
+            )}
+            {view.game?.encounter.phase === "defeated" && (
+              <DefeatPanel
+                waveNumber={view.game.encounter.waveNumber}
+                score={view.game.encounter.score}
+              />
+            )}
+            <RoleControlPanel
+              role={currentPlayer.role}
+              shield={view.game?.shield}
+              encounterPhase={view.game?.encounter.phase}
+              connectionDisabled={status === "reconnecting"}
+              generation={connectionEpoch}
+              hidden={view.game?.encounter.phase !== "combat"}
+              onSend={sendControl}
+            />
+          </>
         )}
       </section>
     </main>
@@ -310,17 +359,175 @@ function formatLatency(latencyMs: number | null | undefined): string {
   return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
 }
 
+function RoleCombatSummary({
+  role,
+  modifiers,
+  hp,
+  maxHp,
+  waveNumber
+}: {
+  readonly role: CrewRole;
+  readonly modifiers: PublicRoleModifiersView;
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly waveNumber: number;
+}) {
+  const modifier =
+    role === "pilot"
+      ? `Скорость ×${modifiers.pilot.speedMultiplier.toFixed(2)} · HP +${String(Math.round(modifiers.pilot.maxHpBonus))}`
+      : role === "gunner"
+        ? `Урон ×${modifiers.gunner.damageMultiplier.toFixed(2)} · откат ×${modifiers.gunner.cooldownMultiplier.toFixed(2)}`
+        : `Ёмкость +${String(Math.round(modifiers.shield.capacityBonus))} · заряд ×${modifiers.shield.rechargeMultiplier.toFixed(2)}`;
+  return (
+    <div className="combat-summary" aria-label="Состояние боя">
+      <span>Волна {waveNumber}</span>
+      <span>
+        Корпус {Math.ceil(hp)} / {Math.ceil(maxHp)}
+      </span>
+      <small>{modifier}</small>
+    </div>
+  );
+}
+
+function UpgradePanel({
+  role,
+  upgrade,
+  phaseTicksRemaining,
+  reconnecting,
+  connectionEpoch,
+  onChoose
+}: {
+  readonly role: CrewRole;
+  readonly upgrade: PublicControllerUpgradeView | null;
+  readonly phaseTicksRemaining: number;
+  readonly reconnecting: boolean;
+  readonly connectionEpoch: number;
+  readonly onChoose: (upgradeId: UpgradeId, actionId: string) => void;
+}) {
+  const pendingReference = useRef<
+    | { readonly offerId: string; readonly upgradeId: UpgradeId; readonly actionId: string }
+    | undefined
+  >(undefined);
+  const chooseReference = useRef(onChoose);
+  chooseReference.current = onChoose;
+  const [pendingUpgradeId, setPendingUpgradeId] = useState<UpgradeId>();
+  const selectedUpgradeId = upgrade?.selection?.upgradeId;
+
+  useEffect(() => {
+    const pending = pendingReference.current;
+    if (
+      pending !== undefined &&
+      upgrade?.status === "available" &&
+      upgrade.offer.offerId === pending.offerId &&
+      !reconnecting
+    ) {
+      chooseReference.current(pending.upgradeId, pending.actionId);
+    }
+  }, [connectionEpoch, reconnecting, upgrade?.offer.offerId, upgrade?.status]);
+
+  useEffect(() => {
+    if (
+      selectedUpgradeId !== undefined ||
+      upgrade?.offer.offerId !== pendingReference.current?.offerId
+    ) {
+      pendingReference.current = undefined;
+      setPendingUpgradeId(undefined);
+    }
+  }, [selectedUpgradeId, upgrade?.offer.offerId]);
+
+  if (upgrade?.offer.role !== role) {
+    return (
+      <div className="upgrade-panel" role="status">
+        <h2>Подготавливаем улучшения…</h2>
+        <p>Выбор появится после синхронизации с сервером.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="upgrade-panel">
+      <p className="eyebrow">Передышка · {(phaseTicksRemaining / 20).toFixed(1)} с</p>
+      <h2>Улучшение роли: {roleLabel(role)}</h2>
+      <div className="upgrade-grid" aria-label="Доступные улучшения">
+        {upgrade.offer.cards.map((card) => {
+          const selected = selectedUpgradeId === card.upgradeId;
+          const pending = pendingUpgradeId === card.upgradeId;
+          return (
+            <button
+              type="button"
+              className={`upgrade-card ${selected ? "upgrade-card--selected" : ""}`}
+              key={card.upgradeId}
+              aria-pressed={selected}
+              disabled={
+                reconnecting || upgrade.status === "selected" || pendingUpgradeId !== undefined
+              }
+              onClick={() => {
+                if (pendingReference.current !== undefined || upgrade.status === "selected") return;
+                const actionId = createActionId();
+                pendingReference.current = {
+                  offerId: upgrade.offer.offerId,
+                  upgradeId: card.upgradeId,
+                  actionId
+                };
+                setPendingUpgradeId(card.upgradeId);
+                onChoose(card.upgradeId, actionId);
+              }}
+            >
+              <strong>{card.label}</strong>
+              <small>
+                {selected
+                  ? upgrade.selection?.source === "fallback"
+                    ? "Выбрано автоматически"
+                    : "Выбрано"
+                  : pending
+                    ? "Отправляем выбор…"
+                    : "Выбрать"}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DefeatPanel({
+  waveNumber,
+  score
+}: {
+  readonly waveNumber: number;
+  readonly score: number;
+}) {
+  return (
+    <div className="defeat-panel" role="status">
+      <p className="eyebrow">Забег завершён</p>
+      <h2>Замок уничтожен</h2>
+      <strong>Волна {waveNumber}</strong>
+      <span>Счёт: {score}</span>
+      <small>Ожидайте новую комнату на общем экране.</small>
+    </div>
+  );
+}
+
+export function createActionId(): string {
+  return globalThis.crypto.randomUUID();
+}
+
 function RoleControlPanel({
   role,
   shield,
-  disabled,
+  encounterPhase,
+  connectionDisabled,
   generation,
+  hidden,
   onSend
 }: {
   readonly role: CrewRole;
   readonly shield: PublicShieldView | undefined;
-  readonly disabled: boolean;
+  readonly encounterPhase: EncounterPhase | undefined;
+  readonly connectionDisabled: boolean;
   readonly generation: number;
+  readonly hidden: boolean;
   readonly onSend: (sequence: number, control: ControlState) => void;
 }) {
   const controlReference = useRef<ControlState>(NEUTRAL_CONTROL);
@@ -335,6 +542,7 @@ function RoleControlPanel({
   const sendReference = useRef(onSend);
   sendReference.current = onSend;
   const schedulerReference = useRef<LatestInputScheduler<ControlState> | undefined>(undefined);
+  const schedulerGenerationReference = useRef(generation);
   schedulerReference.current ??= new LatestInputScheduler(
     NEUTRAL_CONTROL,
     ({ sequence, value }) => {
@@ -489,19 +697,24 @@ function RoleControlPanel({
     };
   }, [role]);
 
+  const controlsEnabled = !connectionDisabled && encounterPhase === "combat";
   useLayoutEffect(() => {
     const scheduler = schedulerReference.current;
-    if (disabled) {
-      scheduler?.setEnabled(false);
-      return;
-    }
     controlReference.current = NEUTRAL_CONTROL;
     shieldDesiredActiveReference.current = false;
     firePointerReference.current = undefined;
     clearAimReleaseTimer();
     clearFireReleaseTimer();
-    scheduler?.startGeneration(NEUTRAL_CONTROL, performance.now());
-  }, [disabled, generation]);
+    const now = performance.now();
+    if (schedulerGenerationReference.current !== generation) {
+      schedulerGenerationReference.current = generation;
+      scheduler?.resetGeneration(NEUTRAL_CONTROL, now, controlsEnabled);
+    } else if (controlsEnabled) {
+      scheduler?.resumeWith(NEUTRAL_CONTROL, now);
+    } else {
+      scheduler?.setEnabled(false);
+    }
+  }, [controlsEnabled, generation]);
 
   useEffect(() => {
     const previousActive = previousShieldActiveReference.current;
@@ -514,7 +727,7 @@ function RoleControlPanel({
   }, [role, shield?.active, shield?.energy]);
 
   return (
-    <div className="role-control" data-role={role}>
+    <div className="role-control" data-role={role} hidden={hidden}>
       <p className="phase-copy">{roleHelp(role)}</p>
       <VirtualStick
         label={`Направление: ${roleLabel(role)}`}
@@ -527,7 +740,7 @@ function RoleControlPanel({
           type="button"
           className="hold-action hold-action--gunner"
           data-testid="fire-button"
-          disabled={disabled}
+          disabled={!controlsEnabled}
           onPointerDown={(event) => {
             if (!event.isPrimary || event.button !== 0) return;
             firePointerReference.current = event.pointerId;
@@ -566,7 +779,7 @@ function RoleControlPanel({
             className="hold-action hold-action--shield"
             data-testid="shield-button"
             aria-pressed={shield.active}
-            disabled={disabled || (!shield.active && shield.energy <= 0)}
+            disabled={!controlsEnabled || (!shield.active && shield.energy <= 0)}
             onClick={toggleShield}
           >
             {shield.active
@@ -599,6 +812,9 @@ function toServerError(code: string, fallback: string): string {
   if (code === "role_mismatch") return "Эта команда недоступна вашей роли.";
   if (code === "identity_mismatch") return "Сервер не подтвердил игровую сессию.";
   if (code === "protocol_mismatch") return "Версия игры устарела. Обновите страницу.";
+  if (code === "already_chosen") return "Улучшение этой роли уже выбрано.";
+  if (code === "action_conflict") return "Команда улучшения конфликтует с предыдущей.";
+  if (code === "action_not_available") return "Это предложение улучшения уже недоступно.";
   return fallback;
 }
 

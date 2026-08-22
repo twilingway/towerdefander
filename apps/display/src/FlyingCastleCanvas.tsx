@@ -52,7 +52,10 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
   }, [game]);
 
   useEffect(() => {
-    if (connectionEpoch > 0) runtimeReference.current?.prepareHydration();
+    const runtime = runtimeReference.current;
+    if (connectionEpoch <= 0 || runtime === undefined) return;
+    prepareRuntimeHydration(runtime, latestGame.current);
+    lastRuntimeTickReference.current = latestGame.current.tick;
   }, [connectionEpoch]);
 
   return (
@@ -63,8 +66,12 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
       data-castle-y={game.castle.y}
       data-castle-velocity-x={game.castle.velocityX}
       data-turret-angle={game.turretAngle}
-      data-projectile-count={game.projectiles.length}
-      data-latest-projectile-id={game.projectiles.at(-1)?.projectileId ?? ""}
+      data-enemy-count={game.enemyShips.length}
+      data-asteroid-count={game.asteroids.length}
+      data-friendly-projectile-count={game.friendlyProjectiles.length}
+      data-hostile-projectile-count={game.hostileProjectiles.length}
+      data-missile-count={game.homingMissiles.length}
+      data-latest-projectile-id={game.friendlyProjectiles.at(-1)?.entityId ?? ""}
       data-shield-active={game.shield.active}
       data-shield-angle={game.shield.angle}
       data-shield-energy={game.shield.energy}
@@ -73,7 +80,8 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
       {failed && <p className="battlefield-fallback">Не удалось запустить Phaser-сцену.</p>}
       <span className="sr-only">
         Замок находится в точке {Math.round(game.castle.x)}, {Math.round(game.castle.y)}. Снарядов:{" "}
-        {game.projectiles.length}.
+        {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
+        {game.enemyShips.length}.
       </span>
     </div>
   );
@@ -81,4 +89,12 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
 
 export function shouldUpdateRuntime(previousTick: number, nextTick: number): boolean {
   return previousTick !== nextTick;
+}
+
+export function prepareRuntimeHydration(
+  runtime: FlyingCastleRuntime,
+  snapshot: DisplayGameSnapshot
+): void {
+  runtime.prepareHydration();
+  runtime.update(snapshot);
 }

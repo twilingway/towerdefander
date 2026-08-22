@@ -2,7 +2,10 @@ import {
   CREW_ROLES,
   displayRoomViewSchema,
   type CrewRole,
-  type DisplayRoomView
+  type DisplayRoomView,
+  type EnemyKind,
+  type EncounterPhase,
+  type ProjectileKind
 } from "@town-defenders/protocol";
 
 interface ValueCollection<T> {
@@ -28,13 +31,34 @@ interface NetworkObstacleState {
   radius: number;
 }
 
-interface NetworkProjectileState {
-  projectileId: string;
+interface NetworkCombatEntityState {
+  entityId: string;
+  spawnSequence: number;
   x: number;
   y: number;
   velocityX: number;
   velocityY: number;
   radius: number;
+}
+
+interface NetworkEnemyState extends NetworkCombatEntityState {
+  kind: EnemyKind;
+  heading: number;
+  hp: number;
+  maxHp: number;
+}
+
+interface NetworkAsteroidState extends NetworkCombatEntityState {
+  hp: number;
+  maxHp: number;
+}
+
+interface NetworkProjectileState extends NetworkCombatEntityState {
+  kind: ProjectileKind;
+}
+
+interface NetworkHomingMissileState extends NetworkCombatEntityState {
+  heading: number;
 }
 
 interface NetworkGameState {
@@ -48,12 +72,40 @@ interface NetworkGameState {
     velocityX: number;
     velocityY: number;
     radius: number;
+    hp: number;
+    maxHp: number;
   };
   turretAngle: number;
-  shield: { angle: number; active: boolean; energy: number; capacity: number };
+  shield: {
+    angle: number;
+    arcHalfAngle: number;
+    active: boolean;
+    energy: number;
+    capacity: number;
+  };
+  encounter: {
+    phase: EncounterPhase;
+    waveNumber: number;
+    encounterTick: number;
+    phaseTicksRemaining: number;
+    score: number;
+  };
+  roleModifiers: {
+    pilot: { speedMultiplier: number; accelerationMultiplier: number; maxHpBonus: number };
+    gunner: {
+      damageMultiplier: number;
+      cooldownMultiplier: number;
+      projectileSpeedMultiplier: number;
+    };
+    shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
+  };
   display?: {
     obstacles: ValueCollection<NetworkObstacleState>;
-    projectiles: ValueCollection<NetworkProjectileState>;
+    enemyShips: ValueCollection<NetworkEnemyState>;
+    asteroids: ValueCollection<NetworkAsteroidState>;
+    friendlyProjectiles: ValueCollection<NetworkProjectileState>;
+    hostileProjectiles: ValueCollection<NetworkProjectileState>;
+    homingMissiles: ValueCollection<NetworkHomingMissileState>;
   };
 }
 
@@ -92,6 +144,7 @@ export function toDisplayRoomView(
     .sort((left, right) => CREW_ROLES.indexOf(left.role) - CREW_ROLES.indexOf(right.role));
 
   const game = state.game;
+  const display = game?.display;
   return displayRoomViewSchema.parse({
     roomId: state.roomId,
     phase: state.phase,
@@ -99,7 +152,7 @@ export function toDisplayRoomView(
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
     game:
-      state.hasGame === true && game?.display !== undefined
+      state.hasGame === true && game !== undefined && display !== undefined
         ? {
             tick: game.tick,
             elapsedMs: game.elapsedMs,
@@ -108,7 +161,13 @@ export function toDisplayRoomView(
             castle: { ...game.castle },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
-            obstacles: [...game.display.obstacles.values()].map((obstacle) =>
+            encounter: { ...game.encounter },
+            roleModifiers: {
+              pilot: { ...game.roleModifiers.pilot },
+              gunner: { ...game.roleModifiers.gunner },
+              shield: { ...game.roleModifiers.shield }
+            },
+            obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"
                 ? {
                     obstacleId: obstacle.obstacleId,
@@ -126,17 +185,18 @@ export function toDisplayRoomView(
                     height: obstacle.height
                   }
             ),
-            projectiles: [...game.display.projectiles.values()].map((projectile) => ({
-              projectileId: projectile.projectileId,
-              x: projectile.x,
-              y: projectile.y,
-              velocityX: projectile.velocityX,
-              velocityY: projectile.velocityY,
-              radius: projectile.radius
-            }))
+            enemyShips: toSpawnOrder(display.enemyShips),
+            asteroids: toSpawnOrder(display.asteroids),
+            friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles),
+            hostileProjectiles: toSpawnOrder(display.hostileProjectiles),
+            homingMissiles: toSpawnOrder(display.homingMissiles)
           }
         : null
   });
+}
+
+function toSpawnOrder<T extends { spawnSequence: number }>(collection: ValueCollection<T>): T[] {
+  return [...collection.values()].sort((left, right) => left.spawnSequence - right.spawnSequence);
 }
 
 function toPublicLatency(latencyMs: number | undefined): number | null {

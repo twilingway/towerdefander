@@ -8,6 +8,7 @@ import {
   type CrewRole,
   type ServerErrorCode
 } from "@town-defenders/protocol";
+import type { FlyingCastleConfig, FlyingCastleState } from "@town-defenders/game-core";
 import { CloseCode, type Client } from "colyseus";
 import { describe, expect, it, vi } from "vitest";
 
@@ -92,15 +93,63 @@ function playerByRole(room: TownDefendersRoom, role: CrewRole): TestClient["clie
     : ({ sessionId: player.playerId, send: vi.fn() } as unknown as Client);
 }
 
-describe("TownDefendersRoom v7 lifecycle", () => {
-  it("accepts only strict protocol v7 display create options", () => {
+interface RoomInternals {
+  gameConfig: FlyingCastleConfig;
+  gameState: FlyingCastleState | undefined;
+  upgradeJournals: Map<string, readonly unknown[]>;
+}
+
+function internals(room: TownDefendersRoom): RoomInternals {
+  return room as unknown as RoomInternals;
+}
+
+function forceIntermission(room: TownDefendersRoom): void {
+  const runtime = internals(room);
+  const game = runtime.gameState;
+  if (game === undefined) throw new Error("Expected an active game.");
+  runtime.gameState = {
+    ...game,
+    pendingSpawns: [],
+    enemies: [],
+    asteroids: [],
+    hostileProjectiles: [],
+    homingMissiles: [],
+    projectiles: []
+  };
+  room.advanceGameStep();
+  expect(room.state.game.encounter.phase).toBe("intermission");
+}
+
+function chooseUpgrade(
+  room: TownDefendersRoom,
+  controller: TestClient,
+  role: CrewRole,
+  actionId: string,
+  cardIndex = 0
+): void {
+  const upgrade = room.state.game.upgrade.get(role);
+  const card = upgrade?.offer.cards.at(cardIndex);
+  if (upgrade === undefined || card === undefined) throw new Error("Expected an upgrade offer.");
+  room.handleUpgradeChoose(controller.client, {
+    protocolVersion: PROTOCOL_VERSION,
+    roomId: room.roomId,
+    playerId: controller.client.sessionId,
+    actionId,
+    waveNumber: upgrade.offer.waveNumber,
+    offerId: upgrade.offer.offerId,
+    upgradeId: card.upgradeId
+  });
+}
+
+describe("TownDefendersRoom v8 lifecycle", () => {
+  it("accepts only strict protocol v8 display create options", () => {
     const room = new TownDefendersRoom();
     room.roomId = "ROOM123";
     expect(() => {
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, capacity: 3 });
     }).toThrow("invalid_message");
     expect(() => {
-      room.onCreate({ role: "display", protocolVersion: 6 });
+      room.onCreate({ role: "display", protocolVersion: 7 });
     }).toThrow("protocol_mismatch");
   });
 
@@ -217,7 +266,7 @@ describe("TownDefendersRoom v7 lifecycle", () => {
   });
 });
 
-describe("TownDefendersRoom v7 authoritative inputs", () => {
+describe("TownDefendersRoom v8 authoritative inputs", () => {
   it("moves the castle from fresh pilot input and ignores stale sequence", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -266,10 +315,11 @@ describe("TownDefendersRoom v7 authoritative inputs", () => {
     });
     room.advanceGameStep();
     room.advanceGameStep();
-    expect(room.state.game.display.projectiles).toHaveLength(1);
+    expect(room.state.game.display.friendlyProjectiles).toHaveLength(1);
     expect(room.state.game.turretAngle).toBeLessThan(0);
     expect(room.state.game.turretAngle).toBeGreaterThan(-Math.PI / 2);
-    const firstProjectile = room.state.game.display.projectiles.at(0);
+    const firstProjectile = [...room.state.game.display.friendlyProjectiles.values()][0];
+    if (firstProjectile === undefined) throw new Error("Expected a friendly projectile.");
     expect(Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX)).toBeCloseTo(
       (-13 * Math.PI) / 6000
     );
@@ -283,7 +333,7 @@ describe("TownDefendersRoom v7 authoritative inputs", () => {
       firing: true
     });
     for (let index = 0; index < 2; index += 1) room.advanceGameStep();
-    expect(room.state.game.display.projectiles).toHaveLength(2);
+    expect(room.state.game.display.friendlyProjectiles).toHaveLength(2);
   });
 
   it("aims and activates the shield", () => {
@@ -496,7 +546,7 @@ describe("TownDefendersRoom v7 authoritative inputs", () => {
     vi.spyOn(room, "allowReconnection").mockResolvedValue(gunner.client);
     await room.onLeave(gunner.client, 1006);
     room.advanceGameStep();
-    expect(room.state.game.display.projectiles).toHaveLength(0);
+    expect(room.state.game.display.friendlyProjectiles).toHaveLength(0);
   });
 
   it("rejects malformed, wrong-role, spoofed and lobby inputs without mutation", () => {
@@ -582,7 +632,218 @@ describe("TownDefendersRoom v7 authoritative inputs", () => {
   });
 });
 
-describe("TownDefendersRoom v7 latency telemetry", () => {
+describe("TownDefendersRoom v8 combat projection and upgrades", () => {
+  it("keeps the explicit run seed private and publishes the combat summary", () => {
+    const { room } = startGame();
+
+    expect("runSeed" in room.state.game).toBe(false);
+    expect(room.state.game.castle).toMatchObject({ hp: 500, maxHp: 500 });
+    expect(room.state.game.shield.arcHalfAngle).toBeCloseTo(Math.PI / 4);
+    expect(room.state.game.encounter).toMatchObject({
+      phase: "combat",
+      waveNumber: 1,
+      encounterTick: 0,
+      phaseTicksRemaining: 0,
+      score: 0
+    });
+  });
+
+  it("reconciles mass entities by stable ID without recreating unchanged schema objects", () => {
+    const { room } = startGame();
+    room.advanceGameStep();
+    const first =
+      [...room.state.game.display.enemyShips.values()][0] ??
+      [...room.state.game.display.asteroids.values()][0];
+    if (first === undefined) throw new Error("Expected the first scheduled spawn.");
+    const entityId = first.entityId;
+
+    room.advanceGameStep();
+    const retained =
+      room.state.game.display.enemyShips.get(entityId) ??
+      room.state.game.display.asteroids.get(entityId);
+    expect(retained).toBe(first);
+    expect(
+      room.state.game.display.enemyShips.size + room.state.game.display.asteroids.size
+    ).toBeLessThanOrEqual(56);
+  });
+
+  it("publishes one role upgrade through each controller StateView and none to display", () => {
+    const room = createRoom();
+    const display = joinDisplay(room);
+    const { controllers } = startGame(room);
+    forceIntermission(room);
+
+    for (const [index, role] of CREW_ROLES.entries()) {
+      const upgrade = room.state.game.upgrade.get(role);
+      const controller = controllerAt(controllers, index);
+      if (upgrade === undefined) throw new Error(`Missing ${role} upgrade.`);
+      expect(controller.client.view?.has(upgrade)).toBe(true);
+      expect(upgrade.offer).toMatchObject({ role, waveNumber: 1 });
+      expect(upgrade.offer.cards).toHaveLength(3);
+    }
+    const pilotUpgrade = room.state.game.upgrade.get("pilot");
+    if (pilotUpgrade === undefined) throw new Error("Missing pilot upgrade.");
+    expect(display.client.view?.has(pilotUpgrade)).toBe(false);
+    expect(room.state.game.display.enemyShips).toHaveLength(0);
+    expect(room.state.game.display.asteroids).toHaveLength(0);
+  });
+
+  it("accepts an upgrade exactly once and detects an action ID collision", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    forceIntermission(room);
+    const actionId = "11111111-1111-4111-8111-111111111111";
+
+    chooseUpgrade(room, pilot, "pilot", actionId);
+    const modifiers = {
+      speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
+      accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
+      maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
+    };
+    expect(modifiers).not.toEqual({
+      speedMultiplier: 1,
+      accelerationMultiplier: 1,
+      maxHpBonus: 0
+    });
+    expect(room.state.game.upgrade.get("pilot")).toMatchObject({
+      status: "selected",
+      hasSelection: true
+    });
+
+    chooseUpgrade(room, pilot, "pilot", actionId);
+    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+    expect(countErrors(pilot, "already_chosen")).toBe(0);
+
+    chooseUpgrade(room, pilot, "pilot", actionId, 1);
+    expect(countErrors(pilot, "action_conflict")).toBe(1);
+    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+  });
+
+  it("replays business errors and bounds each identity journal to 32 entries", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    forceIntermission(room);
+    const upgrade = room.state.game.upgrade.get("pilot");
+    const card = upgrade?.offer.cards.at(0);
+    if (upgrade === undefined || card === undefined) throw new Error("Expected pilot offer.");
+
+    for (let index = 0; index < 35; index += 1) {
+      room.handleUpgradeChoose(pilot.client, {
+        protocolVersion: PROTOCOL_VERSION,
+        roomId: room.roomId,
+        playerId: pilot.client.sessionId,
+        actionId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        waveNumber: 999,
+        offerId: upgrade.offer.offerId,
+        upgradeId: card.upgradeId
+      });
+    }
+
+    expect(countErrors(pilot, "action_not_available")).toBe(35);
+    expect(internals(room).upgradeJournals.get(pilot.client.sessionId)).toHaveLength(32);
+    const newest = `00000000-0000-4000-8000-${String(34).padStart(12, "0")}`;
+    room.handleUpgradeChoose(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      actionId: newest,
+      waveNumber: 999,
+      offerId: upgrade.offer.offerId,
+      upgradeId: card.upgradeId
+    });
+    expect(countErrors(pilot, "action_not_available")).toBe(36);
+    expect(internals(room).upgradeJournals.get(pilot.client.sessionId)).toHaveLength(32);
+  });
+
+  it("rejects another role offer before core mutation", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    forceIntermission(room);
+    const gunner = room.state.game.upgrade.get("gunner");
+    const card = gunner?.offer.cards.at(0);
+    if (gunner === undefined || card === undefined) throw new Error("Expected gunner offer.");
+
+    room.handleUpgradeChoose(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      actionId: "22222222-2222-4222-8222-222222222222",
+      waveNumber: gunner.offer.waveNumber,
+      offerId: gunner.offer.offerId,
+      upgradeId: card.upgradeId
+    });
+
+    expect(countErrors(pilot, "role_mismatch")).toBe(1);
+    expect(room.state.game.roleModifiers.gunner.damageMultiplier).toBe(1);
+  });
+
+  it("keeps an accepted journal across reconnect and role modifiers across replacement", async () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    forceIntermission(room);
+    const actionId = "33333333-3333-4333-8333-333333333333";
+    chooseUpgrade(room, pilot, "pilot", actionId);
+    const speed = room.state.game.roleModifiers.pilot.speedMultiplier;
+
+    const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(pilot.client);
+    await room.onLeave(pilot.client, 1006);
+    chooseUpgrade(room, pilot, "pilot", actionId);
+    expect(room.state.game.roleModifiers.pilot.speedMultiplier).toBe(speed);
+
+    const gunner = controllerAt(controllers, 1);
+    chooseUpgrade(room, gunner, "gunner", "44444444-4444-4444-8444-444444444444");
+    allowReconnection.mockRejectedValueOnce(new Error("expired"));
+    await room.onLeave(gunner.client, 1006);
+    const replacement = joinController(room, 9);
+    expect(room.state.players.get(replacement.client.sessionId)?.role).toBe("gunner");
+    expect(room.state.game.upgrade.get("gunner")).toMatchObject({ status: "selected" });
+    chooseUpgrade(room, replacement, "gunner", "55555555-5555-4555-8555-555555555555");
+    expect(countErrors(replacement, "already_chosen")).toBe(1);
+  });
+
+  it("neutralizes intermission without consuming rejected input sequence", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId
+    } as const;
+    room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: 1, y: 0 } });
+    forceIntermission(room);
+    expect(internals(room).gameState?.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
+
+    room.handlePilotInput(pilot.client, { ...envelope, sequence: 99, vector: { x: 1, y: 0 } });
+    expect(countErrors(pilot, "invalid_phase")).toBe(1);
+    for (let index = 0; index < 200; index += 1) room.advanceGameStep();
+    expect(room.state.game.encounter).toMatchObject({ phase: "combat", waveNumber: 2 });
+    room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: -1, y: 0 } });
+    expect(internals(room).gameState?.inputs.pilot?.vector).toEqual({ x: -1, y: 0 });
+  });
+
+  it("keeps defeated identities reconnectable but rejects fresh admission", async () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const runtime = internals(room);
+    if (runtime.gameState === undefined) throw new Error("Expected active game.");
+    runtime.gameState = { ...runtime.gameState, castleHp: 0 };
+    room.advanceGameStep();
+    expect(room.state.game.encounter.phase).toBe("defeated");
+
+    const allowReconnection = vi
+      .spyOn(room, "allowReconnection")
+      .mockResolvedValueOnce(pilot.client);
+    await room.onLeave(pilot.client, 1006);
+    expect(room.state.players.get(pilot.client.sessionId)?.connected).toBe(true);
+
+    const gunner = controllerAt(controllers, 1);
+    allowReconnection.mockRejectedValueOnce(new Error("expired"));
+    await room.onLeave(gunner.client, 1006);
+    expect(() => joinController(room, 9)).toThrow("invalid_phase");
+  });
+});
+
+describe("TownDefendersRoom v8 latency telemetry", () => {
   it("publishes server-measured display and controller RTT without changing gameplay", () => {
     const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
     try {
@@ -697,7 +958,7 @@ describe("TownDefendersRoom v7 latency telemetry", () => {
     expect(countErrors(controller, "invalid_message")).toBe(0);
   });
 
-  it("rejects malformed, v6 and wrong-room pongs with stable actor-only errors", () => {
+  it("rejects malformed, v7 and wrong-room pongs with stable actor-only errors", () => {
     const room = createRoom();
     const controller = joinController(room, 0);
 
@@ -708,7 +969,7 @@ describe("TownDefendersRoom v7 latency telemetry", () => {
       playerId: "spoofed"
     });
     room.handleLatencyPong(controller.client, {
-      protocolVersion: 6,
+      protocolVersion: 7,
       roomId: room.roomId,
       probeId: "probe"
     });

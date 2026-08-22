@@ -5,10 +5,19 @@ import {
   applyShieldInput,
   cancelGunnerControl,
   cancelShieldControl,
+  chooseRoleUpgrade,
   createFlyingCastleConfig,
   createFlyingCastleState,
+  type AsteroidState as CoreAsteroidState,
+  type CombatEnemyState,
   type FlyingCastleConfig,
-  type FlyingCastleState
+  type FlyingCastleState,
+  type HomingMissileState as CoreHomingMissileState,
+  type HostileProjectileState,
+  type ProjectileState as CoreProjectileState,
+  type RoleModifiers,
+  type RoleUpgradeOffer,
+  type RoleUpgradeSelection
 } from "@town-defenders/game-core";
 import {
   CREW_ROLES,
@@ -23,21 +32,29 @@ import {
   readyCommandSchema,
   serverMessage,
   shieldInputCommandSchema,
+  upgradeChooseCommandSchema,
   type CrewRole,
   type GunnerInputCommand,
   type PilotInputCommand,
   type ServerErrorCode,
-  type ShieldInputCommand
+  type ShieldInputCommand,
+  type UpgradeChooseCommand
 } from "@town-defenders/protocol";
 import { StateView } from "@colyseus/schema";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
+import { randomInt } from "node:crypto";
 
 import { readServerConfig } from "../config.js";
 import {
+  AsteroidState,
+  ControllerUpgradeState,
+  EnemyState,
+  HomingMissileState,
   ObstacleState,
   PlayerState,
   ProjectileState,
-  TownDefendersState
+  TownDefendersState,
+  UpgradeCardState
 } from "./TownDefendersState.js";
 
 type ConnectionRole = "display" | "controller";
@@ -60,10 +77,18 @@ interface OutstandingLatencyProbe {
   readonly timeout: RoomTimer;
 }
 
+interface UpgradeJournalEntry {
+  readonly actionId: string;
+  readonly fingerprint: string;
+  readonly outcome: "accepted" | "already_chosen" | "action_not_available";
+}
+
 const LATENCY_PROBE_INTERVAL_MS = 2_000;
 const LATENCY_PROBE_TIMEOUT_MS = 5_000;
 const MAX_LATENCY_SAMPLE_MS = 5_000;
 const MAX_LATENCY_SAMPLES = 5;
+const MAX_UPGRADE_JOURNAL_ENTRIES = 32;
+const UINT32_EXCLUSIVE_MAX = 0x1_0000_0000;
 
 const { reconnectionGraceSeconds } = readServerConfig();
 const flyingCastleConfig = createFlyingCastleConfig();
@@ -126,6 +151,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   private readonly latencySamples = new Map<string, number[]>();
   private readonly outstandingLatencyProbes = new Map<string, OutstandingLatencyProbe>();
   private readonly scheduledLatencyProbes = new Map<string, RoomTimer>();
+  private readonly upgradeJournals = new Map<string, UpgradeJournalEntry[]>();
   private displaySessionId: string | undefined;
   private gameConfig: FlyingCastleConfig = flyingCastleConfig;
   private gameState: FlyingCastleState | undefined;
@@ -144,6 +170,9 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     },
     [clientMessage.shieldInput]: (client: Client, payload: unknown) => {
       this.handleShieldInput(client, payload);
+    },
+    [clientMessage.upgradeChoose]: (client: Client, payload: unknown) => {
+      this.handleUpgradeChoose(client, payload);
     },
     [clientMessage.latencyPong]: (client: Client, payload: unknown) => {
       this.handleLatencyPong(client, payload);
@@ -175,6 +204,10 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
 
+    if (this.gameState?.encounterPhase === "defeated") {
+      throw new ServerError(4001, "invalid_phase");
+    }
+
     if (this.state.players.size >= PLAYER_CAPACITY) {
       throw new ServerError(4001, "room_full");
     }
@@ -192,6 +225,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.connectionRoles.set(client.sessionId, "controller");
     this.sequenceWatermarks.set(client.sessionId, new Map());
     this.state.players.set(client.sessionId, player);
+    this.attachControllerUpgradeView(client, role);
     this.registerLatencyConnection(client);
   }
 
@@ -235,6 +269,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       player.connected = true;
       this.connectionRoles.set(reconnected.sessionId, "controller");
       this.sequenceWatermarks.set(reconnected.sessionId, new Map());
+      this.attachControllerUpgradeView(reconnected, player.role);
       this.registerLatencyConnection(reconnected);
     } catch {
       this.removeController(client.sessionId);
@@ -317,6 +352,66 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     });
   }
 
+  handleUpgradeChoose(client: Client, unsafePayload: unknown): void {
+    const command = this.parseControllerCommand(client, unsafePayload, upgradeChooseCommandSchema);
+    if (command === undefined || this.gameState === undefined) {
+      return;
+    }
+
+    const fingerprint = upgradeFingerprint(command);
+    const journal = this.upgradeJournals.get(client.sessionId) ?? [];
+    const previous = journal.find(({ actionId }) => actionId === command.actionId);
+    if (previous !== undefined) {
+      if (previous.fingerprint !== fingerprint) {
+        this.sendError(
+          client,
+          "action_conflict",
+          "Action ID was already used for another command."
+        );
+      } else if (previous.outcome !== "accepted") {
+        this.sendError(client, previous.outcome, upgradeErrorMessage(previous.outcome));
+      }
+      return;
+    }
+
+    const player = this.state.players.get(client.sessionId);
+    if (player === undefined) {
+      this.sendError(client, "identity_mismatch", "Player identity does not match connection.");
+      return;
+    }
+    if (this.gameState.encounterPhase !== "intermission") {
+      this.sendError(client, "invalid_phase", "Upgrade choice requires an intermission.");
+      return;
+    }
+
+    const offerOwner = CREW_ROLES.find(
+      (role) => this.gameState?.roleOffers[role]?.offerId === command.offerId
+    );
+    if (offerOwner !== undefined && offerOwner !== player.role) {
+      this.sendError(client, "role_mismatch", "Upgrade offer belongs to another role.");
+      return;
+    }
+
+    const result = chooseRoleUpgrade(this.gameState, {
+      role: player.role,
+      waveNumber: command.waveNumber,
+      offerId: command.offerId,
+      upgradeId: command.upgradeId
+    });
+    this.storeUpgradeOutcome(client.sessionId, {
+      actionId: command.actionId,
+      fingerprint,
+      outcome: result.status
+    });
+    if (result.status !== "accepted") {
+      this.sendError(client, result.status, upgradeErrorMessage(result.status));
+      return;
+    }
+
+    this.gameState = result.state;
+    this.syncGameState();
+  }
+
   handleLatencyPong(client: Client, unsafePayload: unknown, receivedAt = performance.now()): void {
     if (this.hasProtocolMismatch(unsafePayload)) {
       this.sendError(client, "protocol_mismatch", "Protocol version does not match server.");
@@ -356,7 +451,11 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     if (this.state.phase !== "active" || this.gameState === undefined) {
       return;
     }
+    const previousEncounterPhase = this.gameState.encounterPhase;
     this.gameState = advanceFlyingCastle(this.gameState, this.gameConfig);
+    if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
+      this.neutralizeAllRoles();
+    }
     this.syncGameState();
   }
 
@@ -376,8 +475,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       this.sendError(client, "role_mismatch", `Only ${role} may send this input.`);
       return undefined;
     }
-    if (this.state.phase !== "active" || this.gameState === undefined) {
-      this.sendError(client, "invalid_phase", "Gameplay input requires an active match.");
+    if (this.state.phase !== "active" || this.gameState?.encounterPhase !== "combat") {
+      this.sendError(client, "invalid_phase", "Gameplay input requires combat.");
       return undefined;
     }
     const watermarks =
@@ -430,7 +529,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
     this.gameConfig = createFlyingCastleConfig();
-    this.gameState = createFlyingCastleState(this.gameConfig);
+    this.gameState = createFlyingCastleState(this.gameConfig, createRunSeed());
     this.state.phase = "active";
     this.state.hasGame = true;
     this.initializeDecorations();
@@ -471,22 +570,93 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     target.castle.velocityX = game.castle.velocity.x;
     target.castle.velocityY = game.castle.velocity.y;
     target.castle.radius = this.gameConfig.castleRadius;
+    target.castle.hp = game.castleHp;
+    target.castle.maxHp = game.castleMaxHp;
     target.turretAngle = game.turretAngle;
     target.shield.angle = game.shieldAngle;
     target.shield.active = game.shieldActive;
     target.shield.energy = game.shieldEnergy;
-    target.shield.capacity = this.gameConfig.shieldCapacity;
-    target.display.projectiles.clear();
-    for (const projectile of game.projectiles) {
-      const state = new ProjectileState();
-      state.projectileId = projectile.projectileId;
-      state.x = projectile.x;
-      state.y = projectile.y;
-      state.velocityX = projectile.velocity.x;
-      state.velocityY = projectile.velocity.y;
-      state.radius = this.gameConfig.projectileRadius;
-      target.display.projectiles.push(state);
+    target.shield.capacity =
+      this.gameConfig.shieldCapacity + game.roleModifiers.shield.capacityBonus;
+    target.shield.arcHalfAngle =
+      Math.min(
+        Math.PI * 2,
+        this.gameConfig.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus
+      ) / 2;
+    target.encounter.phase = game.encounterPhase;
+    target.encounter.waveNumber = game.waveNumber;
+    target.encounter.encounterTick = game.encounterTick;
+    target.encounter.phaseTicksRemaining =
+      game.encounterPhase === "intermission"
+        ? Math.max(0, this.gameConfig.intermissionTicks - game.encounterTick)
+        : 0;
+    target.encounter.score = game.score;
+    syncRoleModifiers(target.roleModifiers, game.roleModifiers);
+
+    reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
+    reconcileKeyed(
+      target.display.asteroids,
+      game.asteroids,
+      () => new AsteroidState(),
+      syncAsteroid
+    );
+    reconcileKeyed(
+      target.display.friendlyProjectiles,
+      game.projectiles,
+      () => new ProjectileState(),
+      (state, projectile) => {
+        syncProjectile(state, projectile, "friendly");
+      }
+    );
+    reconcileKeyed(
+      target.display.hostileProjectiles,
+      game.hostileProjectiles,
+      () => new ProjectileState(),
+      (state, projectile) => {
+        syncProjectile(state, projectile, "hostile");
+      }
+    );
+    reconcileKeyed(
+      target.display.homingMissiles,
+      game.homingMissiles,
+      () => new HomingMissileState(),
+      syncHomingMissile
+    );
+    this.syncUpgradeViews();
+  }
+
+  private syncUpgradeViews(): void {
+    const game = this.gameState;
+    const target = this.state.game.upgrade;
+    if (game?.encounterPhase !== "intermission") {
+      target.clear();
+      return;
     }
+
+    for (const role of CREW_ROLES) {
+      const offer = game.roleOffers[role];
+      if (offer === null) continue;
+      let upgrade = target.get(role);
+      if (upgrade === undefined) {
+        upgrade = new ControllerUpgradeState();
+        target.set(role, upgrade);
+      }
+      syncControllerUpgrade(upgrade, offer, game.roleSelections[role]);
+    }
+    this.refreshControllerUpgradeViews();
+  }
+
+  private refreshControllerUpgradeViews(): void {
+    for (const [sessionId, client] of this.connectionClients) {
+      if (this.connectionRoles.get(sessionId) !== "controller") continue;
+      const role = this.state.players.get(sessionId)?.role;
+      if (role !== undefined) this.attachControllerUpgradeView(client, role);
+    }
+  }
+
+  private attachControllerUpgradeView(client: Client, role: CrewRole): void {
+    const upgrade = this.state.game.upgrade.get(role);
+    if (upgrade !== undefined) client.view?.add(upgrade, 2);
   }
 
   private neutralizeRole(playerId: string): void {
@@ -503,6 +673,26 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       this.gameState = cancelShieldControl(this.gameState);
     }
     this.syncGameState();
+  }
+
+  private neutralizeAllRoles(): void {
+    if (this.gameState === undefined) return;
+    const receivedTick = this.gameState.clock.tick;
+    this.gameState = applyPilotInput(this.gameState, {
+      vector: { x: 0, y: 0 },
+      receivedTick
+    });
+    this.gameState = cancelGunnerControl(this.gameState);
+    this.gameState = cancelShieldControl(this.gameState);
+  }
+
+  private storeUpgradeOutcome(playerId: string, entry: UpgradeJournalEntry): void {
+    const journal = this.upgradeJournals.get(playerId) ?? [];
+    journal.push(entry);
+    if (journal.length > MAX_UPGRADE_JOURNAL_ENTRIES) {
+      journal.splice(0, journal.length - MAX_UPGRADE_JOURNAL_ENTRIES);
+    }
+    this.upgradeJournals.set(playerId, journal);
   }
 
   private joinDisplay(client: Client): void {
@@ -588,6 +778,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.state.players.delete(playerId);
     this.connectionRoles.delete(playerId);
     this.sequenceWatermarks.delete(playerId);
+    this.upgradeJournals.delete(playerId);
   }
 
   private async disposeHeadlessRoom(displayId: string): Promise<void> {
@@ -625,4 +816,145 @@ function median(values: readonly number[]): number {
   if (ordered.length % 2 === 1) return upper;
   const lower = ordered[middle - 1];
   return lower === undefined ? upper : Math.round((lower + upper) / 2);
+}
+
+function createRunSeed(): number {
+  return randomInt(1, UINT32_EXCLUSIVE_MAX);
+}
+
+function upgradeFingerprint(command: UpgradeChooseCommand): string {
+  return [
+    command.protocolVersion,
+    command.roomId,
+    command.playerId,
+    command.waveNumber,
+    command.offerId,
+    command.upgradeId
+  ].join("\u001f");
+}
+
+function upgradeErrorMessage(outcome: Exclude<UpgradeJournalEntry["outcome"], "accepted">): string {
+  return outcome === "already_chosen"
+    ? "This role already selected an upgrade."
+    : "Upgrade offer is no longer available.";
+}
+
+interface KeyedSchemaCollection<T> {
+  get(key: string): T | undefined;
+  set(key: string, value: T): unknown;
+  delete(key: string): boolean;
+  keys(): IterableIterator<string>;
+}
+
+function reconcileKeyed<TCore extends { readonly id: string }, TState>(
+  target: KeyedSchemaCollection<TState>,
+  source: readonly TCore[],
+  create: () => TState,
+  update: (target: TState, source: TCore) => void
+): void {
+  const liveIds = new Set(source.map(({ id }) => id));
+  for (const entityId of [...target.keys()]) {
+    if (!liveIds.has(entityId)) target.delete(entityId);
+  }
+  for (const entity of source) {
+    let state = target.get(entity.id);
+    if (state === undefined) {
+      state = create();
+      target.set(entity.id, state);
+    }
+    update(state, entity);
+  }
+}
+
+function syncRoleModifiers(
+  target: TownDefendersState["game"]["roleModifiers"],
+  source: RoleModifiers
+) {
+  target.pilot.speedMultiplier = source.pilot.speedMultiplier;
+  target.pilot.accelerationMultiplier = source.pilot.accelerationMultiplier;
+  target.pilot.maxHpBonus = source.pilot.maxHpBonus;
+  target.gunner.damageMultiplier = source.gunner.damageMultiplier;
+  target.gunner.cooldownMultiplier = source.gunner.cooldownMultiplier;
+  target.gunner.projectileSpeedMultiplier = source.gunner.projectileSpeedMultiplier;
+  target.shield.capacityBonus = source.shield.capacityBonus;
+  target.shield.rechargeMultiplier = source.shield.rechargeMultiplier;
+  target.shield.arcWidthBonus = source.shield.arcWidthBonus;
+}
+
+function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
+  target.entityId = source.id;
+  target.spawnSequence = source.spawnSequence;
+  target.kind = source.kind;
+  target.x = source.x;
+  target.y = source.y;
+  target.velocityX = source.velocity.x;
+  target.velocityY = source.velocity.y;
+  target.radius = source.radius;
+  target.heading = source.heading;
+  target.hp = source.hp;
+  target.maxHp = source.maxHp;
+}
+
+function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
+  target.entityId = source.id;
+  target.spawnSequence = source.spawnSequence;
+  target.x = source.x;
+  target.y = source.y;
+  target.velocityX = source.velocity.x;
+  target.velocityY = source.velocity.y;
+  target.radius = source.radius;
+  target.hp = source.hp;
+  target.maxHp = source.maxHp;
+}
+
+function syncProjectile(
+  target: ProjectileState,
+  source: CoreProjectileState | HostileProjectileState,
+  kind: "friendly" | "hostile"
+): void {
+  target.entityId = source.id;
+  target.spawnSequence = source.spawnSequence;
+  target.kind = kind;
+  target.x = source.x;
+  target.y = source.y;
+  target.velocityX = source.velocity.x;
+  target.velocityY = source.velocity.y;
+  target.radius = source.radius;
+}
+
+function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissileState): void {
+  target.entityId = source.id;
+  target.spawnSequence = source.spawnSequence;
+  target.x = source.x;
+  target.y = source.y;
+  target.velocityX = source.velocity.x;
+  target.velocityY = source.velocity.y;
+  target.radius = source.radius;
+  target.heading = source.heading;
+}
+
+function syncControllerUpgrade(
+  target: ControllerUpgradeState,
+  offer: RoleUpgradeOffer,
+  selection: RoleUpgradeSelection | null
+): void {
+  target.status = selection === null ? "available" : "selected";
+  target.offer.offerId = offer.offerId;
+  target.offer.role = offer.role;
+  target.offer.waveNumber = offer.waveNumber;
+  for (const [index, source] of offer.cards.entries()) {
+    while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
+    const card = target.offer.cards.at(index);
+    card.upgradeId = source.upgradeId;
+    card.label = source.label;
+    card.value = source.value;
+  }
+  while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();
+  target.hasSelection = selection !== null;
+  if (selection !== null) {
+    target.selection.offerId = selection.offerId;
+    target.selection.upgradeId = selection.upgradeId;
+    target.selection.role = selection.role;
+    target.selection.source = selection.source;
+  }
 }

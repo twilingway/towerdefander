@@ -1,11 +1,20 @@
 import { advanceClock, type SimulationClock } from "./primitives.js";
+import {
+  advanceCombat,
+  createInitialCombatState,
+  dynamicEntityCount,
+  validateCombatConfig,
+  validateRunSeed,
+  type CombatConfig,
+  type CombatStateFields
+} from "./combat.js";
 
 export interface Vector2 {
   readonly x: number;
   readonly y: number;
 }
 
-export interface FlyingCastleConfig {
+export interface FlyingCastleConfig extends CombatConfig {
   readonly fixedStepMs: number;
   readonly worldWidth: number;
   readonly worldHeight: number;
@@ -49,18 +58,26 @@ export interface TrustedShieldInput {
 export interface CastleState {
   readonly x: number;
   readonly y: number;
+  readonly previousX?: number;
+  readonly previousY?: number;
   readonly velocity: Vector2;
 }
 
 export interface ProjectileState {
+  readonly id: string;
   readonly projectileId: string;
+  readonly spawnSequence: number;
+  readonly previousX: number;
+  readonly previousY: number;
   readonly x: number;
   readonly y: number;
   readonly velocity: Vector2;
+  readonly radius: number;
+  readonly damage: number;
   readonly spawnedTick: number;
 }
 
-export interface FlyingCastleState {
+export interface FlyingCastleState extends CombatStateFields {
   readonly clock: SimulationClock;
   readonly castle: CastleState;
   readonly turretAngle: number;
@@ -104,7 +121,57 @@ const defaultFlyingCastleConfig: FlyingCastleConfig = {
   turretAngularBrakingPerSecondSquared: (13 * Math.PI) / 10,
   shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
   shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
-  shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8
+  shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8,
+  castleMaxHp: 500,
+  shieldRadius: 104,
+  shieldArcRadians: Math.PI / 2,
+  hostileBulletShieldHitCost: 4,
+  missileShieldHitCost: 12,
+  asteroidShieldHitCost: 20,
+  hostileBulletDamage: 10,
+  missileDamage: 30,
+  asteroidDamage: 40,
+  friendlyProjectileDamage: 25,
+  enemySpawnIntervalTicks: 12,
+  intermissionTicks: 200,
+  waveBaseBudget: 5,
+  waveBudgetGrowth: 2,
+  waveBudgetCap: 120,
+  waveHpGrowth: 0.12,
+  waveHpMultiplierCap: 8,
+  waveTempoGrowth: 0.05,
+  waveTempoMultiplierCap: 3,
+  gunshipHp: 50,
+  gunshipRadius: 28,
+  gunshipSpeedPerSecond: 150,
+  gunshipPreferredDistance: 650,
+  gunshipFireCooldownTicks: 30,
+  carrierHp: 110,
+  carrierRadius: 38,
+  carrierSpeedPerSecond: 95,
+  carrierPreferredDistance: 900,
+  carrierFireCooldownTicks: 70,
+  asteroidHp: 65,
+  asteroidRadius: 34,
+  asteroidSpeedPerSecond: 190,
+  asteroidLifetimeTicks: 500,
+  hostileBulletRadius: 7,
+  hostileBulletSpeedPerSecond: 440,
+  hostileBulletLifetimeTicks: 180,
+  missileRadius: 12,
+  missileSpeedPerSecond: 260,
+  missileTurnRatePerSecond: Math.PI / 2,
+  missileLifetimeTicks: 240,
+  worldPadding: 240,
+  spatialCellSize: 256,
+  caps: {
+    enemyShips: 40,
+    asteroids: 16,
+    hostileProjectiles: 96,
+    homingMissiles: 12,
+    friendlyProjectiles: 32,
+    dynamicEntities: 196
+  }
 };
 
 export function createFlyingCastleConfig(
@@ -116,6 +183,7 @@ export function createFlyingCastleConfig(
 }
 
 export function validateFlyingCastleConfig(config: FlyingCastleConfig): void {
+  validateCombatConfig(config);
   const positiveSafeIntegers: readonly (readonly [string, number])[] = [
     ["fixedStepMs", config.fixedStepMs],
     ["inputTimeoutTicks", config.inputTimeoutTicks],
@@ -163,14 +231,21 @@ export function validateFlyingCastleConfig(config: FlyingCastleConfig): void {
   }
 }
 
-export function createFlyingCastleState(config: FlyingCastleConfig): FlyingCastleState {
+export function createFlyingCastleState(
+  config: FlyingCastleConfig,
+  runSeed: number
+): FlyingCastleState {
   validateFlyingCastleConfig(config);
+  validateRunSeed(runSeed);
 
   return {
+    ...createInitialCombatState(config, runSeed),
     clock: { tick: 0, elapsedMs: 0 },
     castle: {
       x: config.worldWidth / 2,
       y: config.worldHeight / 2,
+      previousX: config.worldWidth / 2,
+      previousY: config.worldHeight / 2,
       velocity: { x: 0, y: 0 }
     },
     turretAngle: 0,
@@ -317,7 +392,13 @@ export function advanceFlyingCastle(
   config: FlyingCastleConfig
 ): FlyingCastleState {
   validateFlyingCastleConfig(config);
+  if (state.encounterPhase === "defeated") {
+    return state;
+  }
   const clock = advanceClock(state.clock, config.fixedStepMs);
+  if (state.encounterPhase === "intermission") {
+    return advanceCombatInFlyingCastle({ ...neutralizeCombatControls(state), clock }, config);
+  }
   const pilotFresh = isFresh(clock.tick, state.inputs.pilot, config.inputTimeoutTicks);
   const gunnerFresh = isFresh(clock.tick, state.inputs.gunner, config.inputTimeoutTicks);
   const shieldFresh = isFresh(clock.tick, state.inputs.shield, config.inputTimeoutTicks);
@@ -335,13 +416,15 @@ export function advanceFlyingCastle(
   };
   const secondsPerStep = config.fixedStepMs / 1000;
   const targetVelocity = {
-    x: pilotVector.x * config.castleSpeedPerSecond,
-    y: pilotVector.y * config.castleSpeedPerSecond
+    x: pilotVector.x * config.castleSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier,
+    y: pilotVector.y * config.castleSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier
   };
   const velocityDelta =
     pilotVector.x === 0 && pilotVector.y === 0
       ? config.castleBrakingPerSecondSquared * secondsPerStep
-      : config.castleAccelerationPerSecondSquared * secondsPerStep;
+      : config.castleAccelerationPerSecondSquared *
+        state.roleModifiers.pilot.accelerationMultiplier *
+        secondsPerStep;
   const nextVelocity = moveVectorTowards(state.castle.velocity, targetVelocity, velocityDelta);
   const castle = moveCastleWithinWorld(state.castle, nextVelocity, secondsPerStep, config);
 
@@ -376,16 +459,16 @@ export function advanceFlyingCastle(
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
   const shieldWasActive = shieldDesiredActive && shieldCanActivate;
+  const shieldCapacity = config.shieldCapacity + state.roleModifiers.shield.capacityBonus;
   const shieldEnergy = shieldWasActive
-    ? clamp(
-        state.shieldEnergy - config.shieldDrainPerSecond * secondsPerStep,
-        0,
-        config.shieldCapacity
-      )
+    ? clamp(state.shieldEnergy - config.shieldDrainPerSecond * secondsPerStep, 0, shieldCapacity)
     : clamp(
-        state.shieldEnergy + config.shieldRechargePerSecond * secondsPerStep,
+        state.shieldEnergy +
+          config.shieldRechargePerSecond *
+            state.roleModifiers.shield.rechargeMultiplier *
+            secondsPerStep,
         0,
-        config.shieldCapacity
+        shieldCapacity
       );
   const shieldDepleted = shieldWasActive && shieldEnergy === 0;
   const shieldActive = shieldWasActive && !shieldDepleted;
@@ -393,10 +476,15 @@ export function advanceFlyingCastle(
   const movedProjectiles = moveProjectiles(state.projectiles, clock.tick, config);
   const canFire =
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
-    (state.lastFiredTick === null || clock.tick - state.lastFiredTick >= config.fireCooldownTicks);
+    (state.lastFiredTick === null ||
+      clock.tick - state.lastFiredTick >=
+        Math.max(
+          1,
+          Math.ceil(config.fireCooldownTicks * state.roleModifiers.gunner.cooldownMultiplier)
+        ));
 
   if (!canFire) {
-    return {
+    const baseState: FlyingCastleState = {
       ...state,
       clock,
       castle,
@@ -412,6 +500,32 @@ export function advanceFlyingCastle(
       shieldRearmRequired,
       projectiles: movedProjectiles
     };
+    return advanceCombatInFlyingCastle(baseState, config);
+  }
+
+  const canCreateFriendlyProjectile =
+    movedProjectiles.length < config.caps.friendlyProjectiles &&
+    dynamicEntityCount({ ...state, projectiles: movedProjectiles }) < config.caps.dynamicEntities;
+  if (!canCreateFriendlyProjectile) {
+    const baseState: FlyingCastleState = {
+      ...state,
+      clock,
+      castle,
+      inputs,
+      turretAngle: turretTraverse.angle,
+      turretTargetAngle,
+      turretAngularVelocity: turretTraverse.angularVelocity,
+      shieldAngle: shieldTraverse.angle,
+      shieldTargetAngle,
+      shieldAngularVelocity: shieldTraverse.angularVelocity,
+      shieldActive,
+      shieldEnergy,
+      shieldRearmRequired,
+      projectiles: movedProjectiles,
+      lastFiredTick: clock.tick,
+      queuedFire: false
+    };
+    return advanceCombatInFlyingCastle(baseState, config);
   }
 
   const direction = {
@@ -419,17 +533,29 @@ export function advanceFlyingCastle(
     y: Math.sin(turretTraverse.angle)
   };
   const projectile: ProjectileState = {
+    id: `projectile-${String(state.nextProjectileSequence)}`,
     projectileId: `projectile-${String(state.nextProjectileSequence)}`,
+    spawnSequence: state.nextSpawnSequence,
+    previousX: castle.x + direction.x * (config.castleRadius + config.projectileRadius),
+    previousY: castle.y + direction.y * (config.castleRadius + config.projectileRadius),
     x: castle.x + direction.x * (config.castleRadius + config.projectileRadius),
     y: castle.y + direction.y * (config.castleRadius + config.projectileRadius),
     velocity: {
-      x: direction.x * config.projectileSpeedPerSecond,
-      y: direction.y * config.projectileSpeedPerSecond
+      x:
+        direction.x *
+        config.projectileSpeedPerSecond *
+        state.roleModifiers.gunner.projectileSpeedMultiplier,
+      y:
+        direction.y *
+        config.projectileSpeedPerSecond *
+        state.roleModifiers.gunner.projectileSpeedMultiplier
     },
+    radius: config.projectileRadius,
+    damage: config.friendlyProjectileDamage * state.roleModifiers.gunner.damageMultiplier,
     spawnedTick: clock.tick
   };
 
-  return {
+  const baseState: FlyingCastleState = {
     ...state,
     clock,
     castle,
@@ -444,9 +570,77 @@ export function advanceFlyingCastle(
     shieldEnergy,
     shieldRearmRequired,
     projectiles: [...movedProjectiles, projectile],
+    nextSpawnSequence: state.nextSpawnSequence + 1,
     nextProjectileSequence: state.nextProjectileSequence + 1,
     lastFiredTick: clock.tick,
     queuedFire: false
+  };
+  return advanceCombatInFlyingCastle(baseState, config);
+}
+
+function advanceCombatInFlyingCastle(
+  state: FlyingCastleState,
+  config: FlyingCastleConfig
+): FlyingCastleState {
+  if (state.encounterPhase === "intermission") {
+    const neutral = neutralizeCombatControls(state);
+    const recharged = {
+      ...neutral,
+      shieldEnergy: clamp(
+        neutral.shieldEnergy +
+          config.shieldRechargePerSecond *
+            neutral.roleModifiers.shield.rechargeMultiplier *
+            (config.fixedStepMs / 1000),
+        0,
+        config.shieldCapacity + neutral.roleModifiers.shield.capacityBonus
+      )
+    };
+    const result = advanceCombat(rechargedForCombat(recharged, config), config);
+    return {
+      ...recharged,
+      ...result,
+      projectiles: result.projectiles as readonly ProjectileState[]
+    };
+  }
+  const result = advanceCombat(rechargedForCombat(state, config), config);
+  const next: FlyingCastleState = {
+    ...state,
+    ...result,
+    projectiles: result.projectiles as readonly ProjectileState[]
+  };
+  return result.encounterPhase === "intermission" ? neutralizeCombatControls(next) : next;
+}
+
+function rechargedForCombat(state: FlyingCastleState, config: FlyingCastleConfig) {
+  return {
+    ...state,
+    castle: {
+      ...state.castle,
+      previousX: state.castle.previousX ?? state.castle.x,
+      previousY: state.castle.previousY ?? state.castle.y,
+      radius: config.castleRadius
+    }
+  };
+}
+
+function neutralizeCombatControls(state: FlyingCastleState): FlyingCastleState {
+  return {
+    ...state,
+    turretTargetAngle: null,
+    shieldTargetAngle: null,
+    shieldActive: false,
+    queuedFire: false,
+    inputs: {
+      pilot: state.inputs.pilot === null ? null : { ...state.inputs.pilot, vector: { x: 0, y: 0 } },
+      gunner:
+        state.inputs.gunner === null
+          ? null
+          : { ...state.inputs.gunner, vector: { x: 0, y: 0 }, firing: false },
+      shield:
+        state.inputs.shield === null
+          ? null
+          : { ...state.inputs.shield, vector: { x: 0, y: 0 }, active: false }
+    }
   };
 }
 
@@ -588,6 +782,8 @@ function moveCastleWithinWorld(
   return {
     x,
     y,
+    previousX: castle.x,
+    previousY: castle.y,
     velocity: {
       x: (x === minimum && velocity.x < 0) || (x === maximumX && velocity.x > 0) ? 0 : velocity.x,
       y: (y === minimum && velocity.y < 0) || (y === maximumY && velocity.y > 0) ? 0 : velocity.y
@@ -609,6 +805,8 @@ function moveProjectiles(
     )
     .map((projectile) => ({
       ...projectile,
+      previousX: projectile.x,
+      previousY: projectile.y,
       x: projectile.x + projectile.velocity.x * secondsPerStep,
       y: projectile.y + projectile.velocity.y * secondsPerStep
     }))

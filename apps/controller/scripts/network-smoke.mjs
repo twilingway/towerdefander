@@ -78,8 +78,9 @@ try {
   const traversingTurretAngle = display.state.game.turretAngle;
   if (!(traversingTurretAngle > -Math.PI / 2))
     throw new Error("Turret snapped to its target instead of traversing gradually.");
-  await waitFor(() => display.state.game.display.projectiles.length > 0);
-  const firstProjectile = display.state.game.display.projectiles.at(0);
+  await waitFor(() => display.state.game.display.friendlyProjectiles.size > 0);
+  const firstProjectile = display.state.game.display.friendlyProjectiles.values().next().value;
+  if (firstProjectile === undefined) throw new Error("Friendly projectile was not synchronized.");
   const projectileAngle = Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX);
   if (!(projectileAngle < 0 && projectileAngle > -Math.PI / 2))
     throw new Error("Projectile did not use the current traversing turret angle.");
@@ -168,7 +169,7 @@ try {
       phase: display.state.phase,
       players: display.state.players.size,
       castleX: display.state.game.castle.x,
-      projectiles: display.state.game.display.projectiles.length,
+      projectiles: display.state.game.display.friendlyProjectiles.size,
       turretAngle: display.state.game.turretAngle,
       projectileAngle,
       shieldActive: display.state.game.shield.active,

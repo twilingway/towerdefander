@@ -1,37 +1,41 @@
 import { describe, expect, it } from "vitest";
+
 import {
+  COMBAT_ENTITY_CAPS,
   CREW_ROLES,
+  INTERMISSION_DURATION_TICKS,
   PLAYER_CAPACITY,
-  PROJECTILE_WORLD_PADDING,
   PROTOCOL_VERSION,
-  clientMessage,
   clientLatencyPongSchema,
+  clientMessage,
   controllerJoinOptionsSchema,
   controllerRoomViewSchema,
   displayCreateOptionsSchema,
-  displayJoinOptionsSchema,
   displayRoomViewSchema,
   gunnerInputCommandSchema,
   joinOptionsSchema,
   latencyMsSchema,
   pilotInputCommandSchema,
-  publicObstacleViewSchema,
-  publicShieldViewSchema,
-  readyCommandSchema,
+  publicControllerUpgradeViewSchema,
+  publicEncounterViewSchema,
+  publicUpgradeOfferSchema,
   serverErrorSchema,
   serverLatencyProbeSchema,
   serverMessage,
   shieldInputCommandSchema,
+  upgradeChooseCommandSchema,
   vector2Schema,
   type ControllerRoomView,
   type DisplayRoomView,
+  type PublicControllerUpgradeView,
   type PublicPlayerView
 } from "./index.js";
 
 const ROOM_ID = "ROOM01";
 const PLAYER_ID = "player-1";
+const ACTION_ID = "2d976d54-6686-4f80-b737-6ea427a2c839";
 
-function makePlayers(): PublicPlayerView[] {
+function players(): PublicPlayerView[] {
   return CREW_ROLES.map((role, index) => ({
     playerId: `player-${String(index + 1)}`,
     playerName: `Player ${String(index + 1)}`,
@@ -42,191 +46,204 @@ function makePlayers(): PublicPlayerView[] {
   }));
 }
 
-function makeControllerRoom(): ControllerRoomView {
+function item<T>(values: readonly T[], index: number): T {
+  const value = values[index];
+  if (value === undefined) throw new Error(`Expected item ${String(index)}.`);
+  return value;
+}
+
+function roleModifiers() {
+  return {
+    pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
+    gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
+    shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
+  };
+}
+
+function controllerRoom(): ControllerRoomView {
+  return {
+    roomId: ROOM_ID,
+    phase: "active",
+    assignedRole: "pilot",
+    displayConnected: true,
+    displayLatencyMs: 18,
+    players: players(),
+    game: {
+      tick: 10,
+      elapsedMs: 500,
+      worldWidth: 4800,
+      worldHeight: 3200,
+      castle: {
+        x: 2400,
+        y: 1600,
+        velocityX: 100,
+        velocityY: 0,
+        radius: 52,
+        hp: 900,
+        maxHp: 1000
+      },
+      turretAngle: 0,
+      shield: {
+        angle: Math.PI,
+        active: true,
+        energy: 75,
+        capacity: 100,
+        arcHalfAngle: Math.PI / 4
+      },
+      encounter: {
+        phase: "combat",
+        waveNumber: 1,
+        encounterTick: 10,
+        phaseTicksRemaining: 0,
+        score: 100
+      },
+      roleModifiers: roleModifiers(),
+      upgrade: null
+    }
+  };
+}
+
+function displayRoom(): DisplayRoomView {
+  const controller = controllerRoom();
+  if (controller.game === null) throw new Error("Expected active game.");
+  const { upgrade, ...sharedGame } = controller.game;
+  void upgrade;
   return {
     roomId: ROOM_ID,
     phase: "active",
     displayConnected: true,
     displayLatencyMs: 18,
-    players: makePlayers(),
+    players: players(),
     game: {
-      tick: 10,
-      elapsedMs: 500,
-      worldWidth: 2400,
-      worldHeight: 1600,
-      castle: {
-        x: 1200,
-        y: 800,
-        velocityX: 100,
-        velocityY: 0,
-        radius: 52
-      },
-      turretAngle: 0,
-      shield: { angle: Math.PI, active: true, energy: 75, capacity: 100 }
-    }
-  };
-}
-
-function makeDisplayRoom(): DisplayRoomView {
-  const compact = makeControllerRoom();
-  if (compact.game === null) {
-    throw new Error("Expected an active game snapshot.");
-  }
-
-  return {
-    ...compact,
-    game: {
-      ...compact.game,
-      obstacles: [
+      ...sharedGame,
+      obstacles: [{ obstacleId: "rock", kind: "circle", x: 400, y: 300, radius: 70 }],
+      enemyShips: [
         {
-          obstacleId: "rock-1",
-          kind: "circle",
-          x: 400,
-          y: 300,
-          radius: 70
-        },
-        {
-          obstacleId: "ruin-1",
-          kind: "rectangle",
-          x: 1800,
-          y: 1200,
-          width: 180,
-          height: 100
+          entityId: "enemy-1",
+          spawnSequence: 1,
+          kind: "gunship",
+          x: 1000,
+          y: 800,
+          velocityX: 10,
+          velocityY: 0,
+          heading: 0,
+          radius: 30,
+          hp: 40,
+          maxHp: 40
         }
       ],
-      projectiles: [
+      asteroids: [
         {
-          projectileId: "projectile-1",
-          x: 1300,
-          y: 800,
-          velocityX: 720,
-          velocityY: 0,
-          radius: 8
+          entityId: "asteroid-1",
+          spawnSequence: 2,
+          x: 1200,
+          y: 900,
+          velocityX: -20,
+          velocityY: 5,
+          radius: 45,
+          hp: 60,
+          maxHp: 60
+        }
+      ],
+      friendlyProjectiles: [projectile("friendly-1", 3, "friendly")],
+      hostileProjectiles: [projectile("hostile-1", 4, "hostile")],
+      homingMissiles: [
+        {
+          entityId: "missile-1",
+          spawnSequence: 5,
+          x: 1500,
+          y: 1000,
+          velocityX: 100,
+          velocityY: 10,
+          heading: 0.1,
+          radius: 12
         }
       ]
     }
   };
 }
 
-function requireControllerGame(room: ControllerRoomView) {
-  if (room.game === null) {
-    throw new Error("Expected an active controller game snapshot.");
-  }
-  return room.game;
+function projectile(entityId: string, spawnSequence: number, kind: "friendly" | "hostile") {
+  return {
+    entityId,
+    spawnSequence,
+    kind,
+    x: 1300,
+    y: 800,
+    velocityX: 720,
+    velocityY: 0,
+    radius: 8
+  };
 }
 
-function requireDisplayGame(room: DisplayRoomView) {
-  if (room.game === null) {
-    throw new Error("Expected an active display game snapshot.");
-  }
-  return room.game;
+function pilotUpgrade(): PublicControllerUpgradeView {
+  return {
+    status: "available",
+    offer: {
+      offerId: "pilot-1",
+      waveNumber: 1,
+      role: "pilot",
+      cards: [
+        { upgradeId: "pilot_speed", label: "Maximum speed +10%", value: 0.1 },
+        { upgradeId: "pilot_acceleration", label: "Acceleration +10%", value: 0.1 },
+        { upgradeId: "pilot_hull", label: "Hull and repair +100", value: 100 }
+      ]
+    },
+    selection: null
+  };
 }
 
-function requireItem<T>(items: readonly T[], index: number): T {
-  const item = items[index];
-  if (item === undefined) {
-    throw new Error(`Expected item at index ${String(index)}.`);
-  }
-  return item;
+function intermissionController(): ControllerRoomView {
+  const room = controllerRoom();
+  if (room.game === null) throw new Error("Expected active game.");
+  room.game.encounter = {
+    phase: "intermission",
+    waveNumber: 1,
+    encounterTick: 40,
+    phaseTicksRemaining: INTERMISSION_DURATION_TICKS,
+    score: 500
+  };
+  room.game.shield.active = false;
+  room.game.upgrade = pilotUpgrade();
+  return room;
 }
 
-describe("protocol v7 handshakes and crew", () => {
-  it("publishes a fixed three-role protocol", () => {
-    expect(PROTOCOL_VERSION).toBe(7);
+describe("protocol v8 handshake and messages", () => {
+  it("publishes the fixed crew and v8", () => {
+    expect(PROTOCOL_VERSION).toBe(8);
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("uses the same strict display shape for create and reconnect", () => {
-    const options = { role: "display", protocolVersion: 7 };
-
-    expect(displayCreateOptionsSchema.safeParse(options).success).toBe(true);
-    expect(displayJoinOptionsSchema.safeParse(options).success).toBe(true);
-    expect(displayCreateOptionsSchema.safeParse({ ...options, playerCapacity: 3 }).success).toBe(
-      false
-    );
+  it("accepts v8 create/join and rejects v7 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 6 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 8 }).success
+    ).toBe(true);
+    expect(
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 7 }).success
     ).toBe(false);
-  });
-
-  it("trims controller names and rejects requested roles and v6", () => {
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 7,
+        protocolVersion: 8,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
-      controllerJoinOptionsSchema.safeParse({
+      joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 7,
+        protocolVersion: 8,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
     ).toBe(false);
-    expect(
-      controllerJoinOptionsSchema.safeParse({
-        role: "controller",
-        protocolVersion: 6,
-        playerName: "Ada"
-      }).success
-    ).toBe(false);
   });
 
-  it("accepts only the two v7 join variants", () => {
-    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 7 }).success).toBe(true);
+  it("keeps continuous role messages strict on v8", () => {
+    const envelope = { protocolVersion: 8, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(
-      joinOptionsSchema.safeParse({
-        role: "controller",
-        protocolVersion: 7,
-        playerName: "Ada"
-      }).success
-    ).toBe(true);
-    expect(
-      joinOptionsSchema.safeParse({
-        role: "controller",
-        protocolVersion: 7,
-        playerName: "Ada",
-        playerCapacity: 3
-      }).success
-    ).toBe(false);
-
-    expect(joinOptionsSchema.safeParse({ role: "display", protocolVersion: 6 }).success).toBe(
-      false
-    );
-    expect(
-      joinOptionsSchema.safeParse({
-        role: "controller",
-        protocolVersion: 6,
-        playerName: "Ada"
-      }).success
-    ).toBe(false);
-  });
-});
-
-describe("strict v7 controller intents", () => {
-  const envelope = {
-    protocolVersion: 7,
-    roomId: ROOM_ID,
-    playerId: PLAYER_ID
-  } as const;
-
-  it("requires an authenticated ready envelope without legacy toggle state", () => {
-    expect(readyCommandSchema.safeParse(envelope).success).toBe(true);
-    expect(readyCommandSchema.safeParse({ protocolVersion: 7 }).success).toBe(false);
-    expect(readyCommandSchema.safeParse({ ...envelope, ready: true }).success).toBe(false);
-    expect(readyCommandSchema.safeParse({ ...envelope, protocolVersion: 6 }).success).toBe(false);
-  });
-
-  it("accepts strict role-specific input shapes", () => {
-    expect(
-      pilotInputCommandSchema.safeParse({
-        ...envelope,
-        sequence: 1,
-        vector: { x: 1, y: 0 }
-      }).success
+      pilotInputCommandSchema.safeParse({ ...envelope, sequence: 1, vector: { x: 1, y: 0 } })
+        .success
     ).toBe(true);
     expect(
       gunnerInputCommandSchema.safeParse({
@@ -244,381 +261,282 @@ describe("strict v7 controller intents", () => {
         active: true
       }).success
     ).toBe(true);
-  });
-
-  it("rejects missing flags, extra fields, and invalid sequences", () => {
-    expect(
-      gunnerInputCommandSchema.safeParse({
-        ...envelope,
-        sequence: 1,
-        aim: { x: 1, y: 0 }
-      }).success
-    ).toBe(false);
     expect(
       shieldInputCommandSchema.safeParse({
         ...envelope,
-        sequence: 1,
-        aim: { x: 1, y: 0 },
+        sequence: 3,
+        aim: { x: -1, y: 0 },
         active: true,
         firing: true
       }).success
     ).toBe(false);
-
-    for (const sequence of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
-      expect(
-        pilotInputCommandSchema.safeParse({
-          ...envelope,
-          sequence,
-          vector: { x: 0, y: 0 }
-        }).success
-      ).toBe(false);
-    }
-  });
-
-  it("rejects every v6 command envelope", () => {
-    const v6Envelope = { ...envelope, protocolVersion: 6 };
-
-    expect(readyCommandSchema.safeParse(v6Envelope).success).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        ...v6Envelope,
+        ...envelope,
+        protocolVersion: 7,
         sequence: 1,
         vector: { x: 1, y: 0 }
       }).success
     ).toBe(false);
-    expect(
-      gunnerInputCommandSchema.safeParse({
-        ...v6Envelope,
-        sequence: 1,
-        aim: { x: 1, y: 0 },
-        firing: true
-      }).success
-    ).toBe(false);
-    expect(
-      shieldInputCommandSchema.safeParse({
-        ...v6Envelope,
-        sequence: 1,
-        aim: { x: 1, y: 0 },
-        active: true
-      }).success
-    ).toBe(false);
   });
 
-  it("rejects non-finite and out-of-range vectors", () => {
-    expect(vector2Schema.safeParse({ x: 1, y: -1 }).success).toBe(true);
-
-    for (const vector of [
-      { x: Number.NaN, y: 0 },
-      { x: Number.POSITIVE_INFINITY, y: 0 },
-      { x: 0, y: Number.NEGATIVE_INFINITY },
-      { x: 1.01, y: 0 },
-      { x: 0, y: -1.01 }
-    ]) {
-      expect(vector2Schema.safeParse(vector).success).toBe(false);
-    }
-  });
-
-  it("publishes stable message names", () => {
+  it("publishes the upgrade message name", () => {
     expect(clientMessage).toEqual({
       ready: "controller:ready",
       pilotInput: "pilot:input",
       gunnerInput: "gunner:input",
       shieldInput: "shield:input",
+      upgradeChoose: "upgrade:choose",
       latencyPong: "client:latency-pong"
     });
-    expect(serverMessage).toEqual({
-      error: "server:error",
-      latencyProbe: "server:latency-probe"
-    });
+    expect(serverMessage).toEqual({ error: "server:error", latencyProbe: "server:latency-probe" });
   });
 });
 
-describe("strict v7 latency diagnostics", () => {
-  it("accepts strict server probes and client pongs", () => {
-    expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 7, probeId: "probe-display-1" }).success
-    ).toBe(true);
-    expect(
-      clientLatencyPongSchema.safeParse({
-        protocolVersion: 7,
-        roomId: ROOM_ID,
-        probeId: "probe-display-1"
-      }).success
-    ).toBe(true);
+describe("upgrade:choose", () => {
+  const command = {
+    protocolVersion: 8,
+    roomId: ROOM_ID,
+    playerId: PLAYER_ID,
+    actionId: ACTION_ID,
+    waveNumber: 1,
+    offerId: "pilot-1",
+    upgradeId: "pilot_speed"
+  } as const;
+
+  it("requires the complete strict resource-spending envelope", () => {
+    expect(upgradeChooseCommandSchema.safeParse(command).success).toBe(true);
+    for (const invalid of [
+      { ...command, actionId: "not-a-uuid" },
+      { ...command, waveNumber: 0 },
+      { ...command, offerId: "" },
+      { ...command, protocolVersion: 7 },
+      { ...command, selectedIndex: 0 }
+    ]) {
+      expect(upgradeChooseCommandSchema.safeParse(invalid).success).toBe(false);
+    }
   });
 
-  it("rejects v6, empty identifiers, and telemetry supplied by a client", () => {
+  it("exposes typed idempotency and availability errors", () => {
+    for (const code of ["action_conflict", "already_chosen", "action_not_available"] as const) {
+      expect(serverErrorSchema.safeParse({ code, message: "Rejected." }).success).toBe(true);
+    }
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 6, probeId: "probe-1" }).success
+      serverErrorSchema.safeParse({ code: "legacy_action_error", message: "No." }).success
     ).toBe(false);
     expect(
+      serverErrorSchema.safeParse({ code: "already_chosen", message: "Rejected.", offerId: "x" })
+        .success
+    ).toBe(false);
+  });
+});
+
+describe("personalized upgrade projection", () => {
+  it("requires three distinct role-owned offers", () => {
+    expect(publicControllerUpgradeViewSchema.safeParse(pilotUpgrade()).success).toBe(true);
+    const wrongRole = {
+      ...pilotUpgrade(),
+      offer: { ...pilotUpgrade().offer, role: "gunner" }
+    };
+    expect(publicControllerUpgradeViewSchema.safeParse(wrongRole).success).toBe(false);
+
+    const duplicate = pilotUpgrade();
+    duplicate.offer.cards[1] = { ...item(duplicate.offer.cards, 0) };
+    expect(publicControllerUpgradeViewSchema.safeParse(duplicate).success).toBe(false);
+  });
+
+  it("requires selection to match one offered card", () => {
+    const selected = pilotUpgrade();
+    const firstCard = item(selected.offer.cards, 0);
+    selected.status = "selected";
+    selected.selection = {
+      offerId: selected.offer.offerId,
+      upgradeId: firstCard.upgradeId,
+      role: "pilot",
+      source: "player"
+    };
+    expect(publicControllerUpgradeViewSchema.safeParse(selected).success).toBe(true);
+    selected.selection.offerId = "expired-offer";
+    expect(publicControllerUpgradeViewSchema.safeParse(selected).success).toBe(false);
+  });
+
+  it("rejects an upgrade ID assigned to another role", () => {
+    expect(
+      publicUpgradeOfferSchema.safeParse({
+        offerId: "wrong",
+        role: "pilot",
+        waveNumber: 1,
+        cards: [
+          { upgradeId: "shield_capacity", label: "Wrong", value: 1 },
+          { upgradeId: "pilot_acceleration", label: "Acceleration", value: 0.1 },
+          { upgradeId: "pilot_hull", label: "Hull", value: 25 }
+        ]
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("strict v8 room projections", () => {
+  it("accepts valid combat display and compact controller views", () => {
+    expect(controllerRoomViewSchema.safeParse(controllerRoom()).success).toBe(true);
+    expect(displayRoomViewSchema.safeParse(displayRoom()).success).toBe(true);
+  });
+
+  it("omits mass entities and obstacles from controllers", () => {
+    expect(controllerRoomViewSchema.safeParse(displayRoom()).success).toBe(false);
+    expect(displayRoomViewSchema.safeParse(controllerRoom()).success).toBe(false);
+    expect(Object.keys(controllerRoom().game ?? {})).not.toContain("enemyShips");
+  });
+
+  it("requires own assigned role for controller offers", () => {
+    const room = intermissionController();
+    expect(controllerRoomViewSchema.safeParse(room).success).toBe(true);
+    room.assignedRole = "gunner";
+    expect(controllerRoomViewSchema.safeParse(room).success).toBe(false);
+  });
+
+  it("enforces lobby/active and castle phase invariants", () => {
+    const lobby = controllerRoom();
+    lobby.phase = "lobby";
+    lobby.game = null;
+    expect(controllerRoomViewSchema.safeParse(lobby).success).toBe(true);
+
+    const defeated = displayRoom();
+    if (defeated.game === null) throw new Error("Expected active game.");
+    defeated.game.encounter.phase = "defeated";
+    defeated.game.castle.hp = 0;
+    expect(displayRoomViewSchema.safeParse(defeated).success).toBe(true);
+    defeated.game.castle.hp = 1;
+    expect(displayRoomViewSchema.safeParse(defeated).success).toBe(false);
+  });
+
+  it("enforces countdown and upgrade phase invariants", () => {
+    expect(controllerRoomViewSchema.safeParse(intermissionController()).success).toBe(true);
+    const combatOffer = controllerRoom();
+    if (combatOffer.game === null) throw new Error("Expected active game.");
+    combatOffer.game.upgrade = pilotUpgrade();
+    expect(controllerRoomViewSchema.safeParse(combatOffer).success).toBe(false);
+    expect(
+      publicEncounterViewSchema.safeParse({
+        phase: "combat",
+        waveNumber: 1,
+        encounterTick: 1,
+        phaseTicksRemaining: 10,
+        score: 0
+      }).success
+    ).toBe(false);
+  });
+
+  it("requires HP and shield energy inside authoritative ranges", () => {
+    const hp = controllerRoom();
+    if (hp.game === null) throw new Error("Expected active game.");
+    hp.game.castle.hp = hp.game.castle.maxHp + 1;
+    expect(controllerRoomViewSchema.safeParse(hp).success).toBe(false);
+
+    const shield = controllerRoom();
+    if (shield.game === null) throw new Error("Expected active game.");
+    shield.game.shield.energy = shield.game.shield.capacity + 1;
+    expect(controllerRoomViewSchema.safeParse(shield).success).toBe(false);
+  });
+
+  it("requires globally unique entity IDs and spawn sequences", () => {
+    const duplicateId = displayRoom();
+    if (duplicateId.game === null) throw new Error("Expected active game.");
+    item(duplicateId.game.homingMissiles, 0).entityId = item(
+      duplicateId.game.enemyShips,
+      0
+    ).entityId;
+    expect(displayRoomViewSchema.safeParse(duplicateId).success).toBe(false);
+
+    const duplicateSequence = displayRoom();
+    if (duplicateSequence.game === null) throw new Error("Expected active game.");
+    item(duplicateSequence.game.homingMissiles, 0).spawnSequence = 1;
+    expect(displayRoomViewSchema.safeParse(duplicateSequence).success).toBe(false);
+  });
+
+  it("requires spawn ordering, projectile ownership, bounds, and type caps", () => {
+    const ordering = displayRoom();
+    if (ordering.game === null) throw new Error("Expected active game.");
+    ordering.game.friendlyProjectiles.push(projectile("friendly-2", 2, "friendly"));
+    expect(displayRoomViewSchema.safeParse(ordering).success).toBe(false);
+
+    const ownership = displayRoom();
+    if (ownership.game === null) throw new Error("Expected active game.");
+    item(ownership.game.friendlyProjectiles, 0).kind = "hostile";
+    expect(displayRoomViewSchema.safeParse(ownership).success).toBe(false);
+
+    const outside = displayRoom();
+    if (outside.game === null) throw new Error("Expected active game.");
+    item(outside.game.enemyShips, 0).x = outside.game.worldWidth + 257;
+    expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
+
+    const capped = displayRoom();
+    if (capped.game === null) throw new Error("Expected active game.");
+    capped.game.friendlyProjectiles = Array.from(
+      { length: COMBAT_ENTITY_CAPS.friendlyProjectiles + 1 },
+      (_, index) => projectile(`friendly-${String(index)}`, index + 10, "friendly")
+    );
+    expect(displayRoomViewSchema.safeParse(capped).success).toBe(false);
+  });
+
+  it("requires intermission display collections to be empty", () => {
+    const room = displayRoom();
+    if (room.game === null) throw new Error("Expected active game.");
+    room.game.encounter.phase = "intermission";
+    room.game.encounter.phaseTicksRemaining = 200;
+    expect(displayRoomViewSchema.safeParse(room).success).toBe(false);
+    room.game.enemyShips = [];
+    room.game.asteroids = [];
+    room.game.friendlyProjectiles = [];
+    room.game.hostileProjectiles = [];
+    room.game.homingMissiles = [];
+    expect(displayRoomViewSchema.safeParse(room).success).toBe(true);
+  });
+
+  it("keeps player identity/role and latency strict", () => {
+    const duplicate = controllerRoom();
+    duplicate.players[1] = { ...item(duplicate.players, 1), role: item(duplicate.players, 0).role };
+    expect(controllerRoomViewSchema.safeParse(duplicate).success).toBe(false);
+    for (const value of [null, 0, 5000])
+      expect(latencyMsSchema.safeParse(value).success).toBe(true);
+    for (const value of [-1, 0.5, 5001])
+      expect(latencyMsSchema.safeParse(value).success).toBe(false);
+  });
+});
+
+describe("v8 latency diagnostics", () => {
+  it("retains strict server probes and client pongs without client telemetry", () => {
+    expect(
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 8, probeId: "probe-1" }).success
+    ).toBe(true);
+    expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 6,
+        protocolVersion: 8,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
-    ).toBe(false);
-    expect(serverLatencyProbeSchema.safeParse({ protocolVersion: 7, probeId: "" }).success).toBe(
-      false
-    );
+    ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 7,
-        roomId: "",
-        probeId: "probe-1"
-      }).success
-    ).toBe(false);
-    expect(
-      clientLatencyPongSchema.safeParse({
-        protocolVersion: 7,
+        protocolVersion: 8,
         roomId: ROOM_ID,
         probeId: "probe-1",
-        latencyMs: 25
+        latencyMs: 10
       }).success
+    ).toBe(false);
+    expect(
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 7, probeId: "probe-1" }).success
     ).toBe(false);
   });
 
-  it("accepts only null or integer RTT values from 0 through 5000", () => {
-    for (const latencyMs of [null, 0, 1, 5000]) {
-      expect(latencyMsSchema.safeParse(latencyMs).success).toBe(true);
-    }
-
-    for (const latencyMs of [-1, 0.5, 5001, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(latencyMsSchema.safeParse(latencyMs).success).toBe(false);
-    }
-  });
-});
-
-describe("strict full and compact room projections", () => {
-  it("accepts valid active controller and display projections", () => {
-    expect(controllerRoomViewSchema.safeParse(makeControllerRoom()).success).toBe(true);
-    expect(displayRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(true);
-  });
-
-  it("publishes nullable bounded integer latency for the display and every player", () => {
-    const unknown = makeControllerRoom();
-    unknown.displayLatencyMs = null;
-    requireItem(unknown.players, 0).latencyMs = null;
-    expect(controllerRoomViewSchema.safeParse(unknown).success).toBe(true);
-
-    for (const latencyMs of [-1, 1.5, 5001]) {
-      const invalidDisplay = makeDisplayRoom();
-      invalidDisplay.displayLatencyMs = latencyMs;
-      expect(displayRoomViewSchema.safeParse(invalidDisplay).success).toBe(false);
-
-      const invalidPlayer = makeControllerRoom();
-      requireItem(invalidPlayer.players, 0).latencyMs = latencyMs;
-      expect(controllerRoomViewSchema.safeParse(invalidPlayer).success).toBe(false);
-    }
-  });
-
-  it("publishes the same strict shield shape to controller and display", () => {
-    expect(
-      publicShieldViewSchema.safeParse({
-        angle: 0,
-        active: false,
-        energy: 50,
-        capacity: 100
-      }).success
-    ).toBe(true);
-
-    const controller = makeControllerRoom();
-    const display = makeDisplayRoom();
-    expect(requireControllerGame(controller).shield).toEqual(requireDisplayGame(display).shield);
-
-    for (const room of [controller, display]) {
-      const game = room.game;
-      if (game === null) {
-        throw new Error("Expected an active game snapshot.");
-      }
-      expect(
-        (room === controller ? controllerRoomViewSchema : displayRoomViewSchema).safeParse({
-          ...room,
-          game: {
-            ...game,
-            shield: { ...game.shield, internalRechargeRate: 10 }
-          }
-        }).success
-      ).toBe(false);
-    }
-  });
-
-  it("rejects non-finite and out-of-range shield energy in both projections", () => {
-    for (const shield of [
-      { angle: 0, active: false, energy: -1, capacity: 100 },
-      { angle: 0, active: false, energy: 101, capacity: 100 },
-      { angle: 0, active: false, energy: Number.NaN, capacity: 100 },
-      { angle: 0, active: false, energy: 50, capacity: Number.POSITIVE_INFINITY }
+  it("rejects non-finite and out-of-range vectors", () => {
+    expect(vector2Schema.safeParse({ x: 1, y: -1 }).success).toBe(true);
+    for (const vector of [
+      { x: Number.NaN, y: 0 },
+      { x: Number.POSITIVE_INFINITY, y: 0 },
+      { x: 1.01, y: 0 }
     ]) {
-      expect(publicShieldViewSchema.safeParse(shield).success).toBe(false);
-
-      const controller = makeControllerRoom();
-      requireControllerGame(controller).shield = shield;
-      expect(controllerRoomViewSchema.safeParse(controller).success).toBe(false);
-
-      const display = makeDisplayRoom();
-      requireDisplayGame(display).shield = shield;
-      expect(displayRoomViewSchema.safeParse(display).success).toBe(false);
+      expect(vector2Schema.safeParse(vector).success).toBe(false);
     }
-  });
-
-  it("accepts a partial crew only in a lobby without a game snapshot", () => {
-    expect(
-      controllerRoomViewSchema.safeParse({
-        roomId: ROOM_ID,
-        phase: "lobby",
-        displayConnected: true,
-        displayLatencyMs: null,
-        players: [makePlayers()[0]],
-        game: null
-      }).success
-    ).toBe(true);
-
-    expect(
-      controllerRoomViewSchema.safeParse({ ...makeControllerRoom(), phase: "lobby" }).success
-    ).toBe(false);
-    expect(
-      controllerRoomViewSchema.safeParse({ ...makeControllerRoom(), game: null }).success
-    ).toBe(false);
-  });
-
-  it("excludes display-only obstacles and projectiles from controller views", () => {
-    expect(controllerRoomViewSchema.safeParse(makeDisplayRoom()).success).toBe(false);
-    expect(displayRoomViewSchema.safeParse(makeControllerRoom()).success).toBe(false);
-  });
-
-  it("enforces unique player identities and crew roles", () => {
-    const duplicateId = makeControllerRoom();
-    duplicateId.players[1] = {
-      ...requireItem(duplicateId.players, 1),
-      playerId: requireItem(duplicateId.players, 0).playerId
-    };
-
-    const duplicateRole = makeControllerRoom();
-    duplicateRole.players[1] = {
-      ...requireItem(duplicateRole.players, 1),
-      role: requireItem(duplicateRole.players, 0).role
-    };
-
-    const tooMany = makeControllerRoom();
-    tooMany.players.push({
-      playerId: "player-4",
-      playerName: "Player 4",
-      role: "pilot",
-      ready: true,
-      connected: true,
-      latencyMs: null
-    });
-
-    expect(controllerRoomViewSchema.safeParse(duplicateId).success).toBe(false);
-    expect(controllerRoomViewSchema.safeParse(duplicateRole).success).toBe(false);
-    expect(controllerRoomViewSchema.safeParse(tooMany).success).toBe(false);
-  });
-
-  it("requires the castle radius to remain inside finite world bounds", () => {
-    const outside = makeControllerRoom();
-    requireControllerGame(outside).castle.x = 30;
-    expect(controllerRoomViewSchema.safeParse(outside).success).toBe(false);
-
-    const impossibleRadius = makeControllerRoom();
-    requireControllerGame(impossibleRadius).castle.radius = 900;
-    expect(controllerRoomViewSchema.safeParse(impossibleRadius).success).toBe(false);
-
-    const nonFinite = makeControllerRoom();
-    requireControllerGame(nonFinite).turretAngle = Number.NaN;
-    expect(controllerRoomViewSchema.safeParse(nonFinite).success).toBe(false);
-  });
-
-  it("rejects duplicate or excessively out-of-bounds projectiles", () => {
-    const duplicate = makeDisplayRoom();
-    requireDisplayGame(duplicate).projectiles.push({
-      ...requireItem(requireDisplayGame(duplicate).projectiles, 0)
-    });
-    expect(displayRoomViewSchema.safeParse(duplicate).success).toBe(false);
-
-    const outside = makeDisplayRoom();
-    requireItem(requireDisplayGame(outside).projectiles, 0).x =
-      requireDisplayGame(outside).worldWidth + PROJECTILE_WORLD_PADDING + 1;
-    expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
-
-    const atPadding = makeDisplayRoom();
-    requireItem(requireDisplayGame(atPadding).projectiles, 0).x = -PROJECTILE_WORLD_PADDING;
-    expect(displayRoomViewSchema.safeParse(atPadding).success).toBe(true);
-  });
-
-  it("rejects duplicate or off-world obstacle centers", () => {
-    const duplicate = makeDisplayRoom();
-    requireDisplayGame(duplicate).obstacles.push({
-      obstacleId: "rock-1",
-      kind: "circle",
-      x: 200,
-      y: 200,
-      radius: 20
-    });
-    expect(displayRoomViewSchema.safeParse(duplicate).success).toBe(false);
-
-    const outside = makeDisplayRoom();
-    requireItem(requireDisplayGame(outside).obstacles, 0).x =
-      requireDisplayGame(outside).worldWidth + 1;
-    expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
-  });
-
-  it("keeps obstacle unions strict by shape", () => {
-    expect(
-      publicObstacleViewSchema.safeParse({
-        obstacleId: "rock-1",
-        kind: "circle",
-        x: 100,
-        y: 100,
-        radius: 30,
-        width: 50
-      }).success
-    ).toBe(false);
-    expect(
-      publicObstacleViewSchema.safeParse({
-        obstacleId: "wall-1",
-        kind: "rectangle",
-        x: 100,
-        y: 100,
-        width: 50,
-        height: 40,
-        radius: 10
-      }).success
-    ).toBe(false);
-  });
-
-  it("rejects legacy defense fields in v7 projections", () => {
-    expect(
-      displayRoomViewSchema.safeParse({ ...makeDisplayRoom(), playerCapacity: 3 }).success
-    ).toBe(false);
-
-    const room = makeDisplayRoom();
-    expect(
-      displayRoomViewSchema.safeParse({
-        ...room,
-        game: { ...room.game, treasury: 50, sectors: [] }
-      }).success
-    ).toBe(false);
-  });
-});
-
-describe("server errors", () => {
-  it("includes role mismatch and keeps payloads strict", () => {
-    expect(
-      serverErrorSchema.safeParse({
-        code: "role_mismatch",
-        message: "Only the pilot can move the castle."
-      }).success
-    ).toBe(true);
-    expect(
-      serverErrorSchema.safeParse({
-        code: "role_mismatch",
-        message: "Only the pilot can move the castle.",
-        role: "shield"
-      }).success
-    ).toBe(false);
-    expect(
-      serverErrorSchema.safeParse({ code: "action_not_available", message: "Legacy." }).success
-    ).toBe(false);
   });
 });

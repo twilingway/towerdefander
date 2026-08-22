@@ -1,4 +1,11 @@
-import type { DisplayGameSnapshot, PublicProjectileView } from "@town-defenders/protocol";
+import type {
+  DisplayGameSnapshot,
+  EnemyKind,
+  PublicAsteroidView,
+  PublicEnemyView,
+  PublicHomingMissileView,
+  PublicProjectileView
+} from "@town-defenders/protocol";
 import Phaser from "phaser";
 
 import {
@@ -8,10 +15,12 @@ import {
   getCameraOverscan,
   getPhaserCameraScroll,
   getResponsiveViewport,
+  getShieldArcRange,
   getShieldVisualStyle,
   getTimelineAlpha,
   interpolateAngle,
   interpolatePoint,
+  reconcileStableIds,
   SnapshotResetLatch,
   type AngleTransition,
   type Point,
@@ -21,6 +30,18 @@ import {
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
 const SNAPSHOT_TRANSITION_MS = 50;
+
+type CombatEntity =
+  | (PublicEnemyView & { readonly visualKind: "enemy" })
+  | (PublicAsteroidView & { readonly visualKind: "asteroid" })
+  | (PublicProjectileView & { readonly visualKind: "projectile" })
+  | (PublicHomingMissileView & { readonly visualKind: "missile" });
+
+interface CombatVisual {
+  readonly object: Phaser.GameObjects.Container;
+  position: PointTransition;
+  angle: AngleTransition;
+}
 
 class FlyingCastleScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
@@ -32,8 +53,7 @@ class FlyingCastleScene extends Phaser.Scene {
   private turretTransition: AngleTransition;
   private shieldTransition: AngleTransition;
   private readonly snapshotReset = new SnapshotResetLatch();
-  private readonly projectiles = new Map<string, Phaser.GameObjects.Arc>();
-  private readonly projectileTransitions = new Map<string, PointTransition>();
+  private readonly combatVisuals = new Map<string, CombatVisual>();
   private viewportWidth = BASE_VIEWPORT_WIDTH;
   private viewportHeight = BASE_VIEWPORT_HEIGHT;
   private rendererWidth = BASE_VIEWPORT_WIDTH;
@@ -77,7 +97,7 @@ class FlyingCastleScene extends Phaser.Scene {
     const now = performance.now();
     this.snapToSnapshot(this.snapshot, now);
     this.drawShield();
-    this.reconcileProjectiles(now, true);
+    this.reconcileCombatVisuals(now, true);
   }
 
   override update(): void {
@@ -85,22 +105,17 @@ class FlyingCastleScene extends Phaser.Scene {
       return;
     const now = performance.now();
     const castlePosition = interpolateTransition(this.castleTransition, now);
-    this.castleBody.x = castlePosition.x;
-    this.castleBody.y = castlePosition.y;
-    this.turret.x = this.castleBody.x;
-    this.turret.y = this.castleBody.y;
+    this.castleBody.setPosition(castlePosition.x, castlePosition.y);
+    this.turret.setPosition(castlePosition.x, castlePosition.y);
     this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
     this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
     this.drawShield();
-
     this.focusCamera(castlePosition);
 
-    for (const [projectileId, visual] of this.projectiles) {
-      const transition = this.projectileTransitions.get(projectileId);
-      if (transition === undefined) continue;
-      const position = interpolateTransition(transition, now);
-      visual.x = position.x;
-      visual.y = position.y;
+    for (const visual of this.combatVisuals.values()) {
+      const position = interpolateTransition(visual.position, now);
+      visual.object.setPosition(position.x, position.y);
+      visual.object.rotation = interpolateAngleTransition(visual.angle, now);
     }
   }
 
@@ -124,13 +139,12 @@ class FlyingCastleScene extends Phaser.Scene {
         now
       );
     }
-    this.reconcileProjectiles(now, shouldSnap);
+    this.reconcileCombatVisuals(now, shouldSnap);
   }
 
   prepareHydration(): void {
-    for (const projectile of this.projectiles.values()) projectile.destroy();
-    this.projectiles.clear();
-    this.projectileTransitions.clear();
+    for (const visual of this.combatVisuals.values()) visual.object.destroy();
+    this.combatVisuals.clear();
     this.snapshotReset.request();
   }
 
@@ -138,12 +152,10 @@ class FlyingCastleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x07171f);
     const graphics = this.add.graphics().setDepth(0);
     graphics.lineStyle(2, 0x163746, 0.75);
-    for (let x = 0; x <= this.snapshot.worldWidth; x += 100) {
+    for (let x = 0; x <= this.snapshot.worldWidth; x += 100)
       graphics.lineBetween(x, 0, x, this.snapshot.worldHeight);
-    }
-    for (let y = 0; y <= this.snapshot.worldHeight; y += 100) {
+    for (let y = 0; y <= this.snapshot.worldHeight; y += 100)
       graphics.lineBetween(0, y, this.snapshot.worldWidth, y);
-    }
     graphics.lineStyle(8, 0x3d6874, 1);
     graphics.strokeRect(0, 0, this.snapshot.worldWidth, this.snapshot.worldHeight);
   }
@@ -180,16 +192,10 @@ class FlyingCastleScene extends Phaser.Scene {
     this.shield.clear();
     this.shield.setPosition(this.castleBody.x, this.castleBody.y);
     const style = getShieldVisualStyle(this.snapshot.shield.active);
+    const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
     this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
     this.shield.beginPath();
-    this.shield.arc(
-      0,
-      0,
-      this.snapshot.castle.radius + 34,
-      this.visualShieldAngle - 0.72,
-      this.visualShieldAngle + 0.72,
-      false
-    );
+    this.shield.arc(0, 0, this.snapshot.castle.radius + 34, arc.start, arc.end, false);
     this.shield.strokePath();
   }
 
@@ -240,43 +246,115 @@ class FlyingCastleScene extends Phaser.Scene {
     this.cameras.main.setScroll(scroll.x, scroll.y);
   }
 
-  private reconcileProjectiles(now: number, snap: boolean): void {
-    const incoming = new Set(
-      this.snapshot.projectiles.map((projectile) => projectile.projectileId)
-    );
-    for (const [projectileId, visual] of this.projectiles) {
-      if (!incoming.has(projectileId)) {
-        visual.destroy();
-        this.projectiles.delete(projectileId);
-        this.projectileTransitions.delete(projectileId);
-      }
+  private reconcileCombatVisuals(now: number, snap: boolean): void {
+    const incoming = collectCombatEntities(this.snapshot);
+    const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
+    const plan = reconcileStableIds(this.combatVisuals.keys(), incomingById.keys());
+    for (const entityId of plan.remove) {
+      this.combatVisuals.get(entityId)?.object.destroy();
+      this.combatVisuals.delete(entityId);
     }
-    for (const projectile of this.snapshot.projectiles) {
-      const visual = this.projectiles.get(projectile.projectileId);
+    for (const entityId of [...plan.create, ...plan.update]) {
+      const entity = incomingById.get(entityId);
+      if (entity === undefined) continue;
+      const heading = getEntityHeading(entity);
+      const visual = this.combatVisuals.get(entityId);
       if (visual === undefined) {
-        const created = this.createProjectile(projectile);
-        this.projectiles.set(projectile.projectileId, created);
-        this.projectileTransitions.set(
-          projectile.projectileId,
-          createPointTransition(projectile, projectile, now)
-        );
+        const object = this.createCombatVisual(entity).setPosition(entity.x, entity.y);
+        object.rotation = heading;
+        this.combatVisuals.set(entityId, {
+          object,
+          position: createPointTransition(entity, entity, now),
+          angle: createAngleTransition(heading, heading, now)
+        });
       } else {
-        const from = snap ? projectile : visual;
-        if (snap) visual.setPosition(projectile.x, projectile.y);
-        this.projectileTransitions.set(
-          projectile.projectileId,
-          createPointTransition(from, projectile, now)
-        );
+        const fromPoint = snap ? entity : visual.object;
+        const fromHeading = snap ? heading : visual.object.rotation;
+        if (snap) visual.object.setPosition(entity.x, entity.y).setRotation(heading);
+        visual.position = createPointTransition(fromPoint, entity, now);
+        visual.angle = createAngleTransition(fromHeading, heading, now);
       }
     }
   }
 
-  private createProjectile(projectile: PublicProjectileView): Phaser.GameObjects.Arc {
-    return this.add
-      .circle(projectile.x, projectile.y, projectile.radius, 0xffd36f, 1)
-      .setStrokeStyle(3, 0xfff1b2)
-      .setDepth(11);
+  private createCombatVisual(entity: CombatEntity): Phaser.GameObjects.Container {
+    const container = this.add.container(entity.x, entity.y).setDepth(getEntityDepth(entity));
+    if (entity.visualKind === "enemy") {
+      const body = this.add.graphics();
+      const color = getEnemyColor(entity.kind);
+      body.fillStyle(color, 1);
+      body.lineStyle(3, 0xffd1b0, 0.8);
+      if (entity.kind === "gunship") {
+        body.fillTriangle(24, 0, -18, -15, -18, 15);
+        body.strokeTriangle(24, 0, -18, -15, -18, 15);
+      } else {
+        body.fillRoundedRect(-25, -17, 50, 34, 8);
+        body.strokeRoundedRect(-25, -17, 50, 34, 8);
+        body.fillTriangle(31, 0, 14, -11, 14, 11);
+      }
+      container.add(body);
+    } else if (entity.visualKind === "asteroid") {
+      const rock = this.add.circle(0, 0, entity.radius, 0x766f77, 1).setStrokeStyle(4, 0xbba9a2);
+      const crater = this.add.circle(
+        -entity.radius * 0.25,
+        -entity.radius * 0.2,
+        entity.radius * 0.22,
+        0x514d59
+      );
+      container.add([rock, crater]);
+    } else if (entity.visualKind === "missile") {
+      const body = this.add.rectangle(0, 0, entity.radius * 3.2, entity.radius * 1.3, 0xff704d);
+      const trail = this.add.triangle(
+        -entity.radius * 2.2,
+        0,
+        0,
+        0,
+        entity.radius,
+        -entity.radius,
+        entity.radius,
+        entity.radius,
+        0xffd36f,
+        0.8
+      );
+      container.add([trail, body]);
+    } else {
+      const friendly = entity.kind === "friendly";
+      const bullet = this.add
+        .circle(0, 0, entity.radius, friendly ? 0xffd36f : 0xff685f, 1)
+        .setStrokeStyle(2, friendly ? 0xfff1b2 : 0xffc2bd);
+      container.add(bullet);
+    }
+    return container;
   }
+}
+
+function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
+  return [
+    ...snapshot.enemyShips.map((entity) => ({ ...entity, visualKind: "enemy" as const })),
+    ...snapshot.asteroids.map((entity) => ({ ...entity, visualKind: "asteroid" as const })),
+    ...snapshot.friendlyProjectiles.map((entity) => ({
+      ...entity,
+      visualKind: "projectile" as const
+    })),
+    ...snapshot.hostileProjectiles.map((entity) => ({
+      ...entity,
+      visualKind: "projectile" as const
+    })),
+    ...snapshot.homingMissiles.map((entity) => ({ ...entity, visualKind: "missile" as const }))
+  ];
+}
+
+function getEnemyColor(kind: EnemyKind): number {
+  return kind === "gunship" ? 0xe65f4b : 0xaa5bd6;
+}
+
+function getEntityDepth(entity: CombatEntity): number {
+  return entity.visualKind === "asteroid" ? 5 : entity.visualKind === "enemy" ? 7 : 11;
+}
+
+function getEntityHeading(entity: CombatEntity): number {
+  if ("heading" in entity) return entity.heading;
+  return Math.atan2(entity.velocityY, entity.velocityX);
 }
 
 function interpolateTransition(transition: PointTransition, now: number): Point {

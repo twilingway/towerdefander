@@ -3,7 +3,11 @@ import {
   controllerRoomViewSchema,
   type ControllerRoomView,
   type CrewRole,
-  type PublicPlayerView
+  type EncounterPhase,
+  type PublicPlayerView,
+  type UpgradeId,
+  type UpgradeSelectionSource,
+  type UpgradeStatus
 } from "@town-defenders/protocol";
 
 interface ValueCollection<T> {
@@ -19,6 +23,12 @@ interface NetworkPlayerState {
   latencyMs: number;
 }
 
+interface NetworkUpgradeCardState {
+  upgradeId: UpgradeId;
+  label: string;
+  value: number;
+}
+
 interface NetworkGameState {
   tick: number;
   elapsedMs: number;
@@ -30,9 +40,49 @@ interface NetworkGameState {
     velocityX: number;
     velocityY: number;
     radius: number;
+    hp: number;
+    maxHp: number;
   };
   turretAngle: number;
-  shield: { angle: number; active: boolean; energy: number; capacity: number };
+  shield: {
+    angle: number;
+    arcHalfAngle: number;
+    active: boolean;
+    energy: number;
+    capacity: number;
+  };
+  encounter: {
+    phase: EncounterPhase;
+    waveNumber: number;
+    encounterTick: number;
+    phaseTicksRemaining: number;
+    score: number;
+  };
+  roleModifiers: {
+    pilot: { speedMultiplier: number; accelerationMultiplier: number; maxHpBonus: number };
+    gunner: {
+      damageMultiplier: number;
+      cooldownMultiplier: number;
+      projectileSpeedMultiplier: number;
+    };
+    shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
+  };
+  upgrade?: ValueCollection<{
+    status: UpgradeStatus;
+    offer: {
+      offerId: string;
+      role: CrewRole;
+      waveNumber: number;
+      cards: ValueCollection<NetworkUpgradeCardState>;
+    };
+    hasSelection: boolean;
+    selection: {
+      offerId: string;
+      upgradeId: UpgradeId;
+      role: CrewRole;
+      source: UpgradeSelectionSource;
+    };
+  }>;
 }
 
 export interface NetworkRoomState {
@@ -46,7 +96,8 @@ export interface NetworkRoomState {
 }
 
 export function toControllerRoomView(
-  state: NetworkRoomState | undefined
+  state: NetworkRoomState | undefined,
+  playerId: string
 ): ControllerRoomView | undefined {
   if (
     state === undefined ||
@@ -68,7 +119,10 @@ export function toControllerRoomView(
       latencyMs: toPublicLatency(player.latencyMs)
     }))
     .sort((left, right) => CREW_ROLES.indexOf(left.role) - CREW_ROLES.indexOf(right.role));
+  const assignedRole = players.find((player) => player.playerId === playerId)?.role;
+  if (assignedRole === undefined) return undefined;
   const game = state.game;
+  const upgrade = game?.upgrade === undefined ? undefined : [...game.upgrade.values()][0];
 
   return controllerRoomViewSchema.parse({
     roomId: state.roomId,
@@ -76,6 +130,7 @@ export function toControllerRoomView(
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
+    assignedRole,
     game:
       state.hasGame === true && game !== undefined
         ? {
@@ -85,7 +140,26 @@ export function toControllerRoomView(
             worldHeight: game.worldHeight,
             castle: { ...game.castle },
             turretAngle: game.turretAngle,
-            shield: { ...game.shield }
+            shield: { ...game.shield },
+            encounter: { ...game.encounter },
+            roleModifiers: {
+              pilot: { ...game.roleModifiers.pilot },
+              gunner: { ...game.roleModifiers.gunner },
+              shield: { ...game.roleModifiers.shield }
+            },
+            upgrade:
+              upgrade === undefined
+                ? null
+                : {
+                    status: upgrade.status,
+                    offer: {
+                      offerId: upgrade.offer.offerId,
+                      role: upgrade.offer.role,
+                      waveNumber: upgrade.offer.waveNumber,
+                      cards: [...upgrade.offer.cards.values()]
+                    },
+                    selection: upgrade.hasSelection ? { ...upgrade.selection } : null
+                  }
           }
         : null
   });

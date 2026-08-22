@@ -440,6 +440,44 @@ p {
   transition: width 100ms linear;
 }
 
+.hud-energy--hull i {
+  background: linear-gradient(90deg, #e85f50, #78d39c);
+}
+
+.encounter-overlay {
+  position: absolute;
+  z-index: 24;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: min(34rem, calc(100% - 2rem));
+  gap: 0.7rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 1.5rem;
+  text-align: center;
+  background: rgb(7 20 26 / 88%);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 55%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+.encounter-overlay h2,
+.encounter-overlay p {
+  margin: 0;
+}
+
+.encounter-overlay > strong {
+  color: #ffd783;
+  font-size: clamp(1.4rem, 3vw, 2.5rem);
+}
+
+.encounter-overlay--defeated {
+  border-color: rgb(255 104 95 / 50%);
+  background: rgb(31 10 16 / 90%);
+}
+
 @media (width <= 900px) {
   .flying-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
