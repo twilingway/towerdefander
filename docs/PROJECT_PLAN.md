@@ -4,8 +4,9 @@
 кооперативный top-down экшен про один летающий замок. Предыдущая реализация 2–6 дорог и protocol v4
 сохранена в Git (`00c3ab7`) как точка возврата. Realtime slice и плавное движение зафиксированы
 архивными changes `flying-castle-core`, `smooth-flight-controls`, `smooth-tank-aim` и
-`latency-fullscreen-world`. Active change `tyrian-combat-roguelite-slice` переводит прототип на
-protocol v8 и добавляет первый server-authoritative combat/upgrade loop.
+`latency-fullscreen-world`. Combat, повторный забег, lifecycle комнаты и безопасная статистика
+зафиксированы архивными changes `tyrian-combat-roguelite-slice` и `room-rematch-lifecycle-stats`;
+текущий протокол — v9.
 
 ## 1. Цель продукта
 
@@ -37,7 +38,7 @@ Monorepo остаётся на pnpm workspaces:
 - `apps/controller` — responsive role controllers;
 - `apps/server` — Colyseus room, reconnect, validation и simulation timer;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — protocol v8 и строгие transport/view schemas.
+- `packages/protocol` — protocol v9 и строгие transport/view schemas.
 
 ## 3. Этапы
 
@@ -64,7 +65,7 @@ Monorepo остаётся на pnpm workspaces:
 Результат: руками проверяется совместное управление одним замком с трёх браузеров без финального
 art.
 
-### Этап 2 — Combat playground (в разработке)
+### Этап 2 — Combat playground (завершённый foundation)
 
 - утверждённый change name: `tyrian-combat-roguelite-slice`;
 - свободное движение по текущей большой top-down арене без принудительного вертикального
@@ -87,7 +88,7 @@ art.
 
 Текущий реализованный foundation:
 
-- pure deterministic seeded simulation и protocol v8;
+- pure deterministic seeded simulation и protocol v9;
 - gunship, missile carrier, asteroids, friendly/hostile bullets и limited-turn homing missiles;
 - swept collisions, directional shield interception, castle HP/damage/score/defeat;
 - stable keyed Colyseus entities вместо полного пересоздания collection каждый tick;
@@ -96,8 +97,8 @@ art.
 - Phaser primitive rendering, combat HUD и персональные controller cards;
 - package tests, network smoke и базовый display+3 controllers Playwright проходят.
 
-До завершения change остаются worst-case benchmark/patch-size assertions, расширенный combat E2E,
-review findings, ручной playtest и balance tuning.
+Worst-case benchmark/patch-size assertions, расширенный combat E2E, review и ручной playtest
+выполнены. Дальнейший balance tuning будет отдельным change после новых типов врагов и боссов.
 
 ### Этап 3 — Карта и roguelike loop
 
@@ -131,33 +132,23 @@ map, accounts, persistence, matchmaking, bitmap art, sound, runtime admin panel 
 output. Для admin panel отдельно потребуются owner authorization, допустимые диапазоны и правила
 синхронизации параметров комнаты; эти решения будут приниматься после ручной проверки core controls.
 
-## 6. Active change — `tyrian-combat-roguelite-slice`
+## 6. Последний завершённый change — `room-rematch-lifecycle-stats`
 
-OpenSpec proposal/specs/design/tasks завершены и проходят strict validation; production vertical
-slice реализован по отмеченным checkbox. Следующие действия выполняются по оставшимся незакрытым
-задачам change.
+Combat change `tyrian-combat-roguelite-slice` архивирован 23 августа 2026 года. Worst-case room с
+196 entities на Ryzen 9 5900X/Node 22 показала pure-step p95 около 0,12 ms и room-step+sync p95
+около 0,27 ms при целевом бюджете 2 ms.
 
-Порядок работы:
+Архивированный change перевёл room на protocol v9 и добавил:
 
-1. Создать proposal с утверждённым профилем, явными goals/non-goals и переходом protocol v7 → v8.
-2. Описать capabilities `authoritative-space-combat` и `role-roguelite-upgrades`; обновить
-   `wave-campaign`, `flying-castle-simulation`, `shared-room-session`,
-   `primitive-top-down-battlefield` и `three-role-controls`.
-3. В design закрепить deterministic seeded fixed-step 50 ms, стабильный порядок collision по entity
-   ID, swept segment-circle collisions, server authority, reconnect и idempotent `upgrade:choose` с
-   `actionId`.
-4. До добавления массовых сущностей заменить полное пересоздание projectile collection каждый tick
-   на stable keyed Colyseus state с обновлением сущностей на месте.
-5. Зафиксировать лимиты комнаты: 40 enemy ships, 16 asteroids, 96 hostile bullets, 12 homing
-   missiles, 32 friendly projectiles и не более 196 динамических сущностей суммарно. При достижении
-   лимита откладывать spawn, не удаляя существующие сущности.
-6. Разбить реализацию: protocol v8 → deterministic game-core → server room/projections → Phaser
-   rendering/HUD → controller upgrade cards → network/E2E/performance verification.
-7. Обязательные проверки: одинаковый seed и inputs дают одинаковый результат; projectile не
-   туннелирует; shield блокирует только своей дугой; missile соблюдает turn-rate; collision order и
-   caps стабильны; duplicate/stale upgrade не применяется дважды; reconnect работает в combat,
-   upgrade и defeated.
-8. Для worst-case комнаты добавить benchmark с целевым fixed-step p95 не более 2 ms на явно
-   указанной reference-машине и проверить отсутствие полного resend неизменившихся сущностей.
-9. После реализации запустить package tests, `pnpm check`, `pnpm spec:validate`, network smoke и
-   Playwright; затем reviewer, ручной playtest, archive, commit и push.
+- terminal result `defeat|victory`; текущий endless combat создаёт только defeat;
+- `runNumber`, защищающий новый забег от delayed packets предыдущего;
+- unanimous «Играть ещё» 3/3 в той же комнате с новым seed и чистым progress;
+- явный controller exit и display close, отличные от recoverable reconnect;
+- автоматическое закрытие: display grace 30s, lobby 15m, result 10m, empty controllers 5m, absolute
+  lifetime 4h;
+- read-only `/stats/rooms` и `/stats/rooms.json` без room code/PII;
+- stats без password доступны только localhost; удалённо требуется Basic `admin:<password>` за TLS
+  reverse proxy.
+
+Stale-run/rematch/TTL/privacy tests, network smoke, полный display+3 controllers Playwright,
+reviewer и ручная проверка rematch/exit/statistics выполнены перед архивированием.

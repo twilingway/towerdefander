@@ -5,16 +5,23 @@ import type { FlyingCastleRuntime } from "./game/FlyingCastleRuntime.js";
 
 interface FlyingCastleCanvasProps {
   readonly game: DisplayGameSnapshot;
+  readonly runNumber: number;
   readonly connectionEpoch: number;
 }
 
-export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvasProps) {
+export function FlyingCastleCanvas({ game, runNumber, connectionEpoch }: FlyingCastleCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<FlyingCastleRuntime | undefined>(undefined);
   const latestGame = useRef(game);
+  const latestRunNumber = useRef(runNumber);
+  const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
+  const lastRuntimeRunNumberReference = useRef(runNumber);
+  const lastRuntimeConnectionEpochReference = useRef(connectionEpoch);
   const [failed, setFailed] = useState(false);
   latestGame.current = game;
+  latestRunNumber.current = runNumber;
+  latestConnectionEpoch.current = connectionEpoch;
 
   useEffect(() => {
     let disposed = false;
@@ -26,6 +33,8 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
         if (!disposed) {
           runtimeReference.current = createFlyingCastleRuntime(host, latestGame.current);
           lastRuntimeTickReference.current = latestGame.current.tick;
+          lastRuntimeRunNumberReference.current = latestRunNumber.current;
+          lastRuntimeConnectionEpochReference.current = latestConnectionEpoch.current;
         }
       })
       .catch(() => {
@@ -41,30 +50,38 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
 
   useEffect(() => {
     const runtime = runtimeReference.current;
-    if (
-      runtime === undefined ||
-      !shouldUpdateRuntime(lastRuntimeTickReference.current, game.tick)
-    ) {
+    if (runtime === undefined) return;
+
+    const shouldHydrate = shouldPrepareRuntimeHydration(
+      lastRuntimeRunNumberReference.current,
+      runNumber,
+      lastRuntimeConnectionEpochReference.current,
+      connectionEpoch
+    );
+    if (shouldHydrate) {
+      prepareRuntimeHydration(runtime, game);
+    } else if (shouldUpdateRuntime(lastRuntimeTickReference.current, game.tick)) {
+      runtime.update(game);
+    } else {
       return;
     }
-    lastRuntimeTickReference.current = game.tick;
-    runtime.update(game);
-  }, [game]);
 
-  useEffect(() => {
-    const runtime = runtimeReference.current;
-    if (connectionEpoch <= 0 || runtime === undefined) return;
-    prepareRuntimeHydration(runtime, latestGame.current);
-    lastRuntimeTickReference.current = latestGame.current.tick;
-  }, [connectionEpoch]);
+    lastRuntimeTickReference.current = game.tick;
+    lastRuntimeRunNumberReference.current = runNumber;
+    lastRuntimeConnectionEpochReference.current = connectionEpoch;
+  }, [connectionEpoch, game, runNumber]);
 
   return (
     <div
       className="battlefield-shell"
       data-testid="flying-castle-world"
+      data-run-number={runNumber}
       data-castle-x={game.castle.x}
       data-castle-y={game.castle.y}
       data-castle-velocity-x={game.castle.velocityX}
+      data-castle-hp={game.castle.hp}
+      data-castle-max-hp={game.castle.maxHp}
+      data-score={game.encounter.score}
       data-turret-angle={game.turretAngle}
       data-enemy-count={game.enemyShips.length}
       data-asteroid-count={game.asteroids.length}
@@ -89,6 +106,15 @@ export function FlyingCastleCanvas({ game, connectionEpoch }: FlyingCastleCanvas
 
 export function shouldUpdateRuntime(previousTick: number, nextTick: number): boolean {
   return previousTick !== nextTick;
+}
+
+export function shouldPrepareRuntimeHydration(
+  previousRunNumber: number,
+  nextRunNumber: number,
+  previousConnectionEpoch: number,
+  nextConnectionEpoch: number
+): boolean {
+  return previousRunNumber !== nextRunNumber || previousConnectionEpoch !== nextConnectionEpoch;
 }
 
 export function prepareRuntimeHydration(

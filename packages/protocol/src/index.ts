@@ -1,12 +1,21 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 8 as const;
+export const PROTOCOL_VERSION = 9 as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
-export const ENCOUNTER_PHASES = ["combat", "intermission", "defeated"] as const;
+export const ENCOUNTER_PHASES = ["combat", "intermission", "result"] as const;
+export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
 export const ENEMY_KINDS = ["gunship", "missileCarrier"] as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
 export const UPGRADE_STATUSES = ["available", "selected"] as const;
+export const ROOM_CLOSING_REASONS = [
+  "display_left",
+  "display_reconnect_expired",
+  "lobby_expired",
+  "result_expired",
+  "controllers_expired",
+  "room_lifetime_expired"
+] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
 export const INTERMISSION_DURATION_TICKS = 200 as const;
 export const UPGRADE_OFFER_COUNT = 3 as const;
@@ -40,6 +49,8 @@ export const roomPhaseSchema = z.enum(["lobby", "active"]);
 export type RoomPhase = z.infer<typeof roomPhaseSchema>;
 export const encounterPhaseSchema = z.enum(ENCOUNTER_PHASES);
 export type EncounterPhase = z.infer<typeof encounterPhaseSchema>;
+export const terminalOutcomeSchema = z.enum(TERMINAL_OUTCOMES);
+export type TerminalOutcome = z.infer<typeof terminalOutcomeSchema>;
 export const enemyKindSchema = z.enum(ENEMY_KINDS);
 export type EnemyKind = z.infer<typeof enemyKindSchema>;
 export const projectileKindSchema = z.enum(PROJECTILE_KINDS);
@@ -56,6 +67,10 @@ const finite = z.number();
 const safeNonnegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const safePositiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const entityId = z.string().min(1).max(64);
+
+export const runNumberSchema = safeNonnegativeInteger;
+export type RunNumber = z.infer<typeof runNumberSchema>;
+export const activeRunNumberSchema = safePositiveInteger;
 
 export const latencyMsSchema = z.number().int().min(0).max(5000).nullable();
 export type LatencyMs = z.infer<typeof latencyMsSchema>;
@@ -110,6 +125,7 @@ export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
 export const publicEncounterViewSchema = z
   .object({
     phase: encounterPhaseSchema,
+    outcome: terminalOutcomeSchema.nullable(),
     waveNumber: safePositiveInteger,
     encounterTick: safeNonnegativeInteger,
     phaseTicksRemaining: z.number().int().min(0).max(INTERMISSION_DURATION_TICKS),
@@ -121,6 +137,8 @@ export const publicEncounterViewSchema = z
       issue(context, ["phaseTicksRemaining"], "Intermission requires a positive countdown.");
     if (value.phase !== "intermission" && value.phaseTicksRemaining !== 0)
       issue(context, ["phaseTicksRemaining"], "Only intermission may publish a countdown.");
+    if ((value.phase === "result") !== (value.outcome !== null))
+      issue(context, ["outcome"], "Only a terminal result requires an outcome.");
   });
 export type PublicEncounterView = z.infer<typeof publicEncounterViewSchema>;
 
@@ -340,8 +358,10 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
     castle.y > worldHeight - castle.radius
   )
     issue(context, ["castle", "y"], "Castle must remain inside vertical world bounds.");
-  if (encounter.phase === "defeated" ? castle.hp !== 0 : castle.hp === 0)
-    issue(context, ["castle", "hp"], "Castle HP does not match encounter phase.");
+  if (encounter.outcome === "defeat" && castle.hp !== 0)
+    issue(context, ["castle", "hp"], "Defeat requires zero castle HP.");
+  if (encounter.outcome !== "defeat" && castle.hp === 0)
+    issue(context, ["castle", "hp"], "Only defeat may publish zero castle HP.");
 
   const obstacleIds = new Set<string>();
   world.obstacles?.forEach((obstacle, index) => {
@@ -400,8 +420,8 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
       issue(context, ["upgrade", "offer", "waveNumber"], "Offer and encounter waves must match.");
     if (count !== 0) issue(context, [], "Intermission must not publish dynamic entities.");
   }
-  if (encounter.phase === "defeated" && world.upgrade != null)
-    issue(context, ["upgrade"], "Defeat must not publish upgrade offers.");
+  if (encounter.phase === "result" && world.upgrade != null)
+    issue(context, ["upgrade"], "A terminal result must not publish upgrade offers.");
 }
 
 export const controllerGameSnapshotSchema = z
@@ -429,6 +449,7 @@ export type DisplayGameSnapshot = z.infer<typeof displayGameSnapshotSchema>;
 
 interface RoomProjection {
   phase: RoomPhase;
+  runNumber: number;
   players: PublicPlayerView[];
   game: ControllerGameSnapshot | DisplayGameSnapshot | null;
   assignedRole?: CrewRole;
@@ -444,8 +465,14 @@ function refineRoom(room: RoomProjection, context: z.RefinementCtx): void {
     playerIds.add(player.playerId);
     roles.add(player.role);
   });
-  if ((room.phase === "lobby") !== (room.game === null))
-    issue(context, ["game"], "Lobby requires null game and active requires a game.");
+  if (room.phase === "lobby") {
+    if (room.runNumber !== 0) issue(context, ["runNumber"], "Lobby requires run number zero.");
+    if (room.game !== null) issue(context, ["game"], "Lobby requires a null game.");
+  } else {
+    if (room.runNumber === 0)
+      issue(context, ["runNumber"], "An active room requires a positive run number.");
+    if (room.game === null) issue(context, ["game"], "An active room requires a game.");
+  }
   if (
     room.assignedRole !== undefined &&
     room.game !== null &&
@@ -459,6 +486,7 @@ function refineRoom(room: RoomProjection, context: z.RefinementCtx): void {
 const roomShape = {
   roomId: z.string().min(1),
   phase: roomPhaseSchema,
+  runNumber: runNumberSchema,
   displayConnected: z.boolean(),
   displayLatencyMs: latencyMsSchema,
   players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
@@ -499,12 +527,13 @@ export const commandEnvelopeSchema = z
   .object({
     protocolVersion: z.literal(PROTOCOL_VERSION),
     roomId: z.string().min(1),
-    playerId: z.string().min(1)
+    playerId: z.string().min(1),
+    runNumber: runNumberSchema
   })
   .strict();
 export type CommandEnvelope = z.infer<typeof commandEnvelopeSchema>;
 export const continuousInputEnvelopeSchema = commandEnvelopeSchema
-  .extend({ sequence: safePositiveInteger })
+  .extend({ runNumber: activeRunNumberSchema, sequence: safePositiveInteger })
   .strict();
 export type ContinuousInputEnvelope = z.infer<typeof continuousInputEnvelopeSchema>;
 export const readyCommandSchema = commandEnvelopeSchema;
@@ -523,6 +552,7 @@ export const shieldInputCommandSchema = continuousInputEnvelopeSchema
 export type ShieldInputCommand = z.infer<typeof shieldInputCommandSchema>;
 export const upgradeChooseCommandSchema = commandEnvelopeSchema
   .extend({
+    runNumber: activeRunNumberSchema,
     actionId: z.uuid(),
     waveNumber: safePositiveInteger,
     offerId: z.string().min(1).max(64),
@@ -543,6 +573,10 @@ export const clientLatencyPongSchema = z
   })
   .strict();
 export type ClientLatencyPong = z.infer<typeof clientLatencyPongSchema>;
+export const roomClosingReasonSchema = z.enum(ROOM_CLOSING_REASONS);
+export type RoomClosingReason = z.infer<typeof roomClosingReasonSchema>;
+export const roomClosingSchema = z.object({ reason: roomClosingReasonSchema }).strict();
+export type RoomClosing = z.infer<typeof roomClosingSchema>;
 
 export const clientMessage = {
   ready: "controller:ready",
@@ -554,7 +588,8 @@ export const clientMessage = {
 } as const;
 export const serverMessage = {
   error: "server:error",
-  latencyProbe: "server:latency-probe"
+  latencyProbe: "server:latency-probe",
+  roomClosing: "room:closing"
 } as const;
 export const serverErrorCodeSchema = z.enum([
   "invalid_message",
@@ -568,7 +603,8 @@ export const serverErrorCodeSchema = z.enum([
   "role_mismatch",
   "action_conflict",
   "already_chosen",
-  "action_not_available"
+  "action_not_available",
+  "stale_run"
 ]);
 export type ServerErrorCode = z.infer<typeof serverErrorCodeSchema>;
 export const serverErrorSchema = z

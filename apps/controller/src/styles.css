@@ -143,15 +143,15 @@ button:disabled {
 }
 
 .upgrade-panel,
-.defeat-panel {
+.result-panel {
   display: grid;
   gap: 0.9rem;
 }
 
 .upgrade-panel h2,
 .upgrade-panel p,
-.defeat-panel h2,
-.defeat-panel p {
+.result-panel h2,
+.result-panel p {
   margin: 0;
 }
 
@@ -185,7 +185,7 @@ button:disabled {
   color: #214938;
 }
 
-.defeat-panel {
+.result-panel {
   padding: 1.25rem;
   border: 1px solid rgb(255 104 95 / 45%);
   border-radius: 1rem;
@@ -193,9 +193,29 @@ button:disabled {
   background: rgb(55 19 25 / 72%);
 }
 
-.defeat-panel > strong {
+.result-panel > strong {
   color: #ff9d91;
   font-size: 2rem;
+}
+
+.result-panel--victory {
+  border-color: rgb(120 211 156 / 55%);
+  color: #d9f5e5;
+  background: rgb(18 57 43 / 78%);
+}
+
+.result-panel--victory > strong {
+  color: #78d39c;
+}
+
+.rematch-readiness {
+  color: #ffd783;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.leave-room-button {
+  margin-top: 0.25rem;
 }
 
 .secondary-button {

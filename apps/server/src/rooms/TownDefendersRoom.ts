@@ -6,8 +6,8 @@ import {
   cancelGunnerControl,
   cancelShieldControl,
   chooseRoleUpgrade,
+  createCleanFlyingCastleRun,
   createFlyingCastleConfig,
-  createFlyingCastleState,
   type AsteroidState as CoreAsteroidState,
   type CombatEnemyState,
   type FlyingCastleConfig,
@@ -36,15 +36,17 @@ import {
   type CrewRole,
   type GunnerInputCommand,
   type PilotInputCommand,
+  type RoomClosingReason,
   type ServerErrorCode,
   type ShieldInputCommand,
   type UpgradeChooseCommand
 } from "@town-defenders/protocol";
 import { StateView } from "@colyseus/schema";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 import { readServerConfig } from "../config.js";
+import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import {
   AsteroidState,
   ControllerUpgradeState,
@@ -83,6 +85,13 @@ interface UpgradeJournalEntry {
   readonly outcome: "accepted" | "already_chosen" | "action_not_available";
 }
 
+type LifecycleDeadlineReason = Exclude<RoomClosingReason, "display_left">;
+
+interface LifecycleDeadline {
+  readonly reason: LifecycleDeadlineReason;
+  readonly expiresAtMs: number;
+}
+
 const LATENCY_PROBE_INTERVAL_MS = 2_000;
 const LATENCY_PROBE_TIMEOUT_MS = 5_000;
 const MAX_LATENCY_SAMPLE_MS = 5_000;
@@ -90,7 +99,13 @@ const MAX_LATENCY_SAMPLES = 5;
 const MAX_UPGRADE_JOURNAL_ENTRIES = 32;
 const UINT32_EXCLUSIVE_MAX = 0x1_0000_0000;
 
-const { reconnectionGraceSeconds } = readServerConfig();
+const {
+  reconnectionGraceSeconds,
+  lobbyTtlSeconds,
+  resultTtlSeconds,
+  zeroControllerTtlSeconds,
+  absoluteTtlSeconds
+} = readServerConfig();
 const flyingCastleConfig = createFlyingCastleConfig();
 
 const DECORATIVE_OBSTACLES = [
@@ -140,7 +155,10 @@ const DECORATIVE_OBSTACLES = [
   }
 ] as const;
 
-export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
+export class TownDefendersRoom extends Room<{
+  state: TownDefendersState;
+  metadata: RoomStatsMetadata;
+}> {
   override maxClients = PLAYER_CAPACITY + 2;
   override maxMessagesPerSecond = 25;
   override state = new TownDefendersState();
@@ -156,6 +174,17 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   private gameConfig: FlyingCastleConfig = flyingCastleConfig;
   private gameState: FlyingCastleState | undefined;
   private simulationTimer: RoomTimer | undefined;
+  private lifecycleTimer: RoomTimer | undefined;
+  private lifecycleGeneration = 0;
+  private readonly lifecycleDeadlines = new Map<LifecycleDeadlineReason, number>();
+  private createdAtMs = 0;
+  private status: RoomStatsStatus = "lobby";
+  private statusChangedAtMs = 0;
+  private firstControllerJoined = false;
+  private disposing = false;
+  private statsId = "";
+  private pendingMetadata: RoomStatsMetadata | undefined;
+  private metadataWritePromise: Promise<void> | undefined;
   private nextLatencyProbeSequence = 1;
 
   override messages = {
@@ -187,9 +216,20 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       throw new ServerError(4000, "invalid_message");
     }
     this.state.roomId = this.roomId;
+    const now = Date.now();
+    this.createdAtMs = now;
+    this.statusChangedAtMs = now;
+    this.statsId = randomUUID();
+    this.lifecycleDeadlines.set("lobby_expired", now + lobbyTtlSeconds * 1_000);
+    this.lifecycleDeadlines.set("room_lifetime_expired", now + absoluteTtlSeconds * 1_000);
+    this.rescheduleLifecycle();
+    this.queueMetadataUpdate();
   }
 
   override onJoin(client: Client, unsafeOptions: unknown): void {
+    if (this.disposing) {
+      throw new ServerError(4001, "invalid_phase");
+    }
     const result = joinOptionsSchema.safeParse(unsafeOptions);
     if (!result.success) {
       throw new ServerError(
@@ -201,11 +241,10 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     if (result.data.role === "display") {
       this.joinDisplay(client);
       this.registerLatencyConnection(client);
+      this.clearLifecycleDeadline("display_reconnect_expired");
+      this.updateStatusFromRoom();
+      this.queueMetadataUpdate();
       return;
-    }
-
-    if (this.gameState?.encounterPhase === "defeated") {
-      throw new ServerError(4001, "invalid_phase");
     }
 
     if (this.state.players.size >= PLAYER_CAPACITY) {
@@ -221,12 +260,15 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     player.playerId = client.sessionId;
     player.playerName = result.data.playerName;
     player.role = role;
-    player.ready = this.state.phase === "active";
+    player.ready = false;
     this.connectionRoles.set(client.sessionId, "controller");
     this.sequenceWatermarks.set(client.sessionId, new Map());
     this.state.players.set(client.sessionId, player);
+    this.firstControllerJoined = true;
+    this.clearLifecycleDeadline("controllers_expired");
     this.attachControllerUpgradeView(client, role);
     this.registerLatencyConnection(client);
+    this.queueMetadataUpdate();
   }
 
   override async onLeave(client: Client, code: number): Promise<void> {
@@ -234,18 +276,28 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.clearLatencyConnection(client.sessionId);
     if (connectionRole === "display") {
       this.state.displayConnected = false;
+      this.setLifecycleDeadline(
+        "display_reconnect_expired",
+        Date.now() + reconnectionGraceSeconds * 1_000
+      );
+      this.updateStatus("display_grace");
+      this.queueMetadataUpdate();
       if (code === CloseCode.CONSENTED) {
-        await this.disposeHeadlessRoom(client.sessionId);
+        this.disposeOnce("display_left");
         return;
       }
       try {
         const reconnected = await this.allowReconnection(client, reconnectionGraceSeconds);
+        if (this.disposing) return;
         this.connectionRoles.set(reconnected.sessionId, "display");
         this.displaySessionId = reconnected.sessionId;
         this.state.displayConnected = true;
+        this.clearLifecycleDeadline("display_reconnect_expired");
         this.registerLatencyConnection(reconnected);
+        this.updateStatusFromRoom();
+        this.queueMetadataUpdate();
       } catch {
-        await this.disposeHeadlessRoom(client.sessionId);
+        this.disposeOnce("display_reconnect_expired");
       }
       return;
     }
@@ -259,6 +311,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
     player.connected = false;
+    this.queueMetadataUpdate();
     if (code === CloseCode.CONSENTED) {
       this.removeController(client.sessionId);
       return;
@@ -266,19 +319,23 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
 
     try {
       const reconnected = await this.allowReconnection(client, reconnectionGraceSeconds);
+      if (this.disposing) return;
       player.connected = true;
       this.connectionRoles.set(reconnected.sessionId, "controller");
       this.sequenceWatermarks.set(reconnected.sessionId, new Map());
       this.attachControllerUpgradeView(reconnected, player.role);
       this.registerLatencyConnection(reconnected);
+      this.clearLifecycleDeadline("controllers_expired");
+      this.queueMetadataUpdate();
+      this.tryStartRun();
     } catch {
       this.removeController(client.sessionId);
     }
   }
 
   override onDispose(): void {
-    this.stopSimulation();
-    this.clearAllLatencyConnections();
+    this.disposing = true;
+    this.cleanupResources();
   }
 
   handleReady(client: Client, unsafePayload: unknown): void {
@@ -286,8 +343,10 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     if (command === undefined) {
       return;
     }
-    if (this.state.phase !== "lobby") {
-      this.sendError(client, "invalid_phase", "Ready is only available in the lobby.");
+    const acceptsReady =
+      this.state.phase === "lobby" || this.gameState?.encounterPhase === "result";
+    if (!acceptsReady) {
+      this.sendError(client, "invalid_phase", "Ready requires the lobby or a run result.");
       return;
     }
     const player = this.state.players.get(client.sessionId);
@@ -296,7 +355,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
     player.ready = true;
-    this.tryStartGame();
+    this.tryStartRun();
   }
 
   handlePilotInput(client: Client, unsafePayload: unknown): void {
@@ -452,11 +511,24 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       return;
     }
     const previousEncounterPhase = this.gameState.encounterPhase;
+    const projectionWasResult = this.state.game.encounter.phase === "result";
     this.gameState = advanceFlyingCastle(this.gameState, this.gameConfig);
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
       this.neutralizeAllRoles();
     }
     this.syncGameState();
+    if (
+      previousEncounterPhase !== this.gameState.encounterPhase ||
+      (this.gameState.encounterPhase === "result" && !projectionWasResult)
+    ) {
+      if (this.gameState.encounterPhase === "result") {
+        this.stopSimulation();
+        for (const player of this.state.players.values()) player.ready = false;
+        this.setLifecycleDeadline("result_expired", Date.now() + resultTtlSeconds * 1_000);
+      }
+      this.updateStatusFromRoom();
+      this.queueMetadataUpdate();
+    }
   }
 
   private parseRoleInput<T extends PilotInputCommand | GunnerInputCommand | ShieldInputCommand>(
@@ -466,13 +538,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     role: CrewRole,
     messageType: InputMessageType
   ): T | undefined {
-    const command = this.parseControllerCommand(client, unsafePayload, schema);
+    const command = this.parseControllerCommand(client, unsafePayload, schema, role);
     if (command === undefined) {
-      return undefined;
-    }
-    const player = this.state.players.get(client.sessionId);
-    if (player?.role !== role) {
-      this.sendError(client, "role_mismatch", `Only ${role} may send this input.`);
       return undefined;
     }
     if (this.state.phase !== "active" || this.gameState?.encounterPhase !== "combat") {
@@ -493,7 +560,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
   private parseControllerCommand<T>(
     client: Client,
     unsafePayload: unknown,
-    schema: RuntimeSchema<T>
+    schema: RuntimeSchema<T>,
+    expectedRole?: CrewRole
   ): T | undefined {
     if (this.hasProtocolMismatch(unsafePayload)) {
       this.sendError(client, "protocol_mismatch", "Protocol version does not match server.");
@@ -508,7 +576,7 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       this.sendError(client, "not_controller", "Only controllers may send gameplay messages.");
       return undefined;
     }
-    const envelope = result.data as { roomId: string; playerId: string };
+    const envelope = result.data as { roomId: string; playerId: string; runNumber: number };
     if (envelope.roomId !== this.roomId || envelope.playerId !== client.sessionId) {
       this.sendError(
         client,
@@ -517,26 +585,49 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
       );
       return undefined;
     }
+    const player = this.state.players.get(client.sessionId);
+    if (this.connectionClients.get(client.sessionId) !== client || player === undefined) {
+      this.sendError(client, "identity_mismatch", "Controller connection is not active.");
+      return undefined;
+    }
+    if (expectedRole !== undefined && player.role !== expectedRole) {
+      this.sendError(client, "role_mismatch", `Only ${expectedRole} may send this input.`);
+      return undefined;
+    }
+    if (envelope.runNumber !== this.state.runNumber) {
+      this.sendError(client, "stale_run", "Command belongs to another run.");
+      return undefined;
+    }
     return result.data;
   }
 
-  private tryStartGame(): void {
-    if (this.state.phase !== "lobby" || this.state.players.size !== PLAYER_CAPACITY) {
+  private tryStartRun(): void {
+    const canStart = this.state.phase === "lobby" || this.gameState?.encounterPhase === "result";
+    if (!canStart || this.state.players.size !== PLAYER_CAPACITY || this.disposing) {
       return;
     }
     const players = [...this.state.players.values()];
     if (!players.every((player) => player.connected && player.ready)) {
       return;
     }
+    const previousSeed = this.gameState?.runSeed;
     this.gameConfig = createFlyingCastleConfig();
-    this.gameState = createFlyingCastleState(this.gameConfig, createRunSeed());
+    this.gameState = createCleanFlyingCastleRun(this.gameConfig, createRunSeed(previousSeed));
+    this.state.runNumber += 1;
     this.state.phase = "active";
     this.state.hasGame = true;
+    for (const player of players) player.ready = false;
+    this.sequenceWatermarks.clear();
+    for (const player of players) this.sequenceWatermarks.set(player.playerId, new Map());
+    this.upgradeJournals.clear();
+    this.lifecycleDeadlines.delete("lobby_expired");
+    this.lifecycleDeadlines.delete("result_expired");
+    this.rescheduleLifecycle();
     this.initializeDecorations();
     this.syncGameState();
-    this.simulationTimer = this.clock.setInterval(() => {
-      this.advanceGameStep();
-    }, this.gameConfig.fixedStepMs);
+    this.startSimulation();
+    this.updateStatus("combat");
+    this.queueMetadataUpdate();
   }
 
   private initializeDecorations(): void {
@@ -584,6 +675,8 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
         this.gameConfig.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus
       ) / 2;
     target.encounter.phase = game.encounterPhase;
+    target.encounter.hasOutcome = game.outcome !== null;
+    target.encounter.outcome = game.outcome ?? "defeat";
     target.encounter.waveNumber = game.waveNumber;
     target.encounter.encounterTick = game.encounterTick;
     target.encounter.phaseTicksRemaining =
@@ -779,19 +872,160 @@ export class TownDefendersRoom extends Room<{ state: TownDefendersState }> {
     this.connectionRoles.delete(playerId);
     this.sequenceWatermarks.delete(playerId);
     this.upgradeJournals.delete(playerId);
+    if (this.firstControllerJoined && this.state.players.size === 0 && !this.disposing) {
+      this.setLifecycleDeadline(
+        "controllers_expired",
+        Date.now() + zeroControllerTtlSeconds * 1_000
+      );
+    }
+    this.queueMetadataUpdate();
   }
 
-  private async disposeHeadlessRoom(displayId: string): Promise<void> {
-    this.clearLatencyConnection(displayId);
-    this.connectionRoles.delete(displayId);
-    this.displaySessionId = undefined;
+  private startSimulation(): void {
     this.stopSimulation();
-    await this.disconnect();
+    this.simulationTimer = this.clock.setInterval(() => {
+      this.advanceGameStep();
+    }, this.gameConfig.fixedStepMs);
   }
 
   private stopSimulation(): void {
     this.simulationTimer?.clear();
     this.simulationTimer = undefined;
+  }
+
+  private setLifecycleDeadline(reason: LifecycleDeadlineReason, expiresAtMs: number): void {
+    this.lifecycleDeadlines.set(reason, expiresAtMs);
+    this.rescheduleLifecycle();
+  }
+
+  private clearLifecycleDeadline(reason: LifecycleDeadlineReason): void {
+    if (!this.lifecycleDeadlines.delete(reason)) return;
+    this.rescheduleLifecycle();
+  }
+
+  private rescheduleLifecycle(): void {
+    this.lifecycleGeneration += 1;
+    const generation = this.lifecycleGeneration;
+    this.lifecycleTimer?.clear();
+    this.lifecycleTimer = undefined;
+    if (this.disposing) return;
+    const next = this.nextLifecycleDeadline();
+    if (next === undefined) return;
+    this.lifecycleTimer = this.clock.setTimeout(
+      () => {
+        if (this.disposing || generation !== this.lifecycleGeneration) return;
+        this.lifecycleTimer = undefined;
+        const expired = this.nextLifecycleDeadline(Date.now());
+        if (expired === undefined) {
+          this.rescheduleLifecycle();
+          return;
+        }
+        this.disposeOnce(expired.reason);
+      },
+      Math.max(1, next.expiresAtMs - Date.now())
+    );
+  }
+
+  private nextLifecycleDeadline(expiredAtOrBeforeMs?: number): LifecycleDeadline | undefined {
+    const deadlines = [...this.lifecycleDeadlines].map(([reason, expiresAtMs]) => ({
+      reason,
+      expiresAtMs
+    }));
+    const eligible =
+      expiredAtOrBeforeMs === undefined
+        ? deadlines
+        : deadlines.filter(({ expiresAtMs }) => expiresAtMs <= expiredAtOrBeforeMs);
+    return eligible.sort(compareLifecycleDeadlines)[0];
+  }
+
+  private disposeOnce(reason: RoomClosingReason): void {
+    if (this.disposing) return;
+    this.disposing = true;
+    this.updateStatus("closing");
+    this.queueMetadataUpdate();
+    this.broadcast(serverMessage.roomClosing, { reason });
+    this.cleanupResources();
+    // `onLeave()` is part of Colyseus' disconnect lifecycle. Awaiting the
+    // room-wide disconnect from inside that callback deadlocks on the client
+    // that initiated the consented leave, so initiate it and let onLeave return.
+    void this.disconnect();
+  }
+
+  private cleanupResources(): void {
+    this.lifecycleGeneration += 1;
+    this.lifecycleTimer?.clear();
+    this.lifecycleTimer = undefined;
+    this.lifecycleDeadlines.clear();
+    this.stopSimulation();
+    this.clearAllLatencyConnections();
+    this.sequenceWatermarks.clear();
+    this.upgradeJournals.clear();
+    this.connectionClients.clear();
+    this.connectionRoles.clear();
+    this.displaySessionId = undefined;
+  }
+
+  private updateStatusFromRoom(): void {
+    if (this.disposing) {
+      this.updateStatus("closing");
+    } else if (this.lifecycleDeadlines.has("display_reconnect_expired")) {
+      this.updateStatus("display_grace");
+    } else if (this.state.phase === "lobby") {
+      this.updateStatus("lobby");
+    } else {
+      this.updateStatus(this.gameState?.encounterPhase ?? "combat");
+    }
+  }
+
+  private updateStatus(status: RoomStatsStatus): void {
+    if (this.status === status) return;
+    this.status = status;
+    this.statusChangedAtMs = Date.now();
+  }
+
+  private queueMetadataUpdate(): void {
+    if (this.statsId.length === 0) return;
+    this.pendingMetadata = this.createStatsMetadata();
+    if (this.metadataWritePromise !== undefined) return;
+    const write = this.flushMetadataWrites();
+    this.metadataWritePromise = write;
+    void write.then(() => {
+      if (this.metadataWritePromise !== write) return;
+      this.metadataWritePromise = undefined;
+      if (this.pendingMetadata !== undefined) this.queueMetadataUpdate();
+    });
+  }
+
+  private async flushMetadataWrites(): Promise<void> {
+    while (this.pendingMetadata !== undefined) {
+      const metadata = this.pendingMetadata;
+      this.pendingMetadata = undefined;
+      try {
+        await this.setMetadata(metadata);
+      } catch {
+        // Statistics are operational diagnostics and must never affect gameplay.
+      }
+    }
+  }
+
+  private createStatsMetadata(): RoomStatsMetadata {
+    let connectedPlayers = 0;
+    let reservedPlayers = 0;
+    for (const player of this.state.players.values()) {
+      if (player.connected) connectedPlayers += 1;
+      else reservedPlayers += 1;
+    }
+    return {
+      statsId: this.statsId,
+      status: this.status,
+      connectedPlayers,
+      reservedPlayers,
+      capacity: PLAYER_CAPACITY,
+      displayConnected: this.state.displayConnected,
+      createdAtMs: this.createdAtMs,
+      statusChangedAtMs: this.statusChangedAtMs,
+      expiresAtMs: this.nextLifecycleDeadline()?.expiresAtMs ?? null
+    };
   }
 
   private hasProtocolMismatch(payload: unknown): boolean {
@@ -818,8 +1052,22 @@ function median(values: readonly number[]): number {
   return lower === undefined ? upper : Math.round((lower + upper) / 2);
 }
 
-function createRunSeed(): number {
-  return randomInt(1, UINT32_EXCLUSIVE_MAX);
+function compareLifecycleDeadlines(left: LifecycleDeadline, right: LifecycleDeadline): number {
+  if (left.expiresAtMs !== right.expiresAtMs) return left.expiresAtMs - right.expiresAtMs;
+  return lifecycleReasonPriority(left.reason) - lifecycleReasonPriority(right.reason);
+}
+
+function lifecycleReasonPriority(reason: LifecycleDeadlineReason): number {
+  if (reason === "display_reconnect_expired") return 0;
+  if (reason === "room_lifetime_expired") return 1;
+  if (reason === "lobby_expired" || reason === "result_expired") return 2;
+  return 3;
+}
+
+function createRunSeed(excluded?: number): number {
+  let seed = randomInt(1, UINT32_EXCLUSIVE_MAX);
+  while (seed === excluded) seed = randomInt(1, UINT32_EXCLUSIVE_MAX);
+  return seed;
 }
 
 function upgradeFingerprint(command: UpgradeChooseCommand): string {
@@ -827,6 +1075,7 @@ function upgradeFingerprint(command: UpgradeChooseCommand): string {
     command.protocolVersion,
     command.roomId,
     command.playerId,
+    command.runNumber,
     command.waveNumber,
     command.offerId,
     command.upgradeId

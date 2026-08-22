@@ -12,10 +12,11 @@ function collection<T>(values: T[]) {
 }
 
 describe("controller room view", () => {
-  it("decodes compact v8 state without mass entities and derives the assigned role", () => {
+  it("decodes compact v9 state without mass entities and derives the assigned role", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
+      runNumber: 2,
       displayConnected: true,
       displayLatencyMs: -1,
       players: collection([
@@ -61,6 +62,8 @@ describe("controller room view", () => {
         },
         encounter: {
           phase: "combat",
+          hasOutcome: false,
+          outcome: "defeat",
           waveNumber: 2,
           encounterTick: 14,
           phaseTicksRemaining: 0,
@@ -87,6 +90,7 @@ describe("controller room view", () => {
     expect(findCurrentPlayer(view, "p2")?.latencyMs).toBe(62);
     expect(view?.displayLatencyMs).toBeNull();
     expect(view?.assignedRole).toBe("shield");
+    expect(view?.runNumber).toBe(2);
     expect(view?.game?.upgrade).toBeNull();
     expect(view?.game).not.toHaveProperty("enemyShips");
   });
@@ -95,6 +99,7 @@ describe("controller room view", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
+      runNumber: 1,
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([
@@ -132,6 +137,7 @@ describe("controller room view", () => {
         },
         encounter: {
           phase: "intermission",
+          outcome: null,
           waveNumber: 1,
           encounterTick: 40,
           phaseTicksRemaining: 200,
@@ -171,6 +177,83 @@ describe("controller room view", () => {
     expect(view?.game?.upgrade?.offer.role).toBe("pilot");
     expect(view?.game?.upgrade?.offer.cards).toHaveLength(3);
     expect(view?.game).not.toHaveProperty("hostileProjectiles");
+  });
+
+  it("hydrates an authoritative terminal result and readiness", () => {
+    const state: NetworkRoomState = {
+      roomId: "ROOM123",
+      phase: "active",
+      runNumber: 3,
+      displayConnected: true,
+      displayLatencyMs: 20,
+      players: collection([
+        {
+          playerId: "p1",
+          playerName: "Alex",
+          role: "pilot",
+          ready: true,
+          connected: true,
+          latencyMs: 30
+        }
+      ]),
+      hasGame: true,
+      game: {
+        tick: 400,
+        elapsedMs: 20_000,
+        worldWidth: 2400,
+        worldHeight: 1600,
+        castle: {
+          x: 1200,
+          y: 800,
+          velocityX: 0,
+          velocityY: 0,
+          radius: 52,
+          hp: 0,
+          maxHp: 1000
+        },
+        turretAngle: 0,
+        shield: {
+          angle: 0,
+          arcHalfAngle: 0.72,
+          active: false,
+          energy: 0,
+          capacity: 100
+        },
+        encounter: {
+          phase: "result",
+          hasOutcome: true,
+          outcome: "defeat",
+          waveNumber: 4,
+          encounterTick: 400,
+          phaseTicksRemaining: 0,
+          score: 900
+        },
+        roleModifiers: {
+          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
+          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
+          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
+        }
+      }
+    };
+
+    const view = toControllerRoomView(state, "p1");
+    expect(view?.runNumber).toBe(3);
+    expect(view?.game?.encounter).toMatchObject({ phase: "result", outcome: "defeat" });
+    expect(view?.players[0]?.ready).toBe(true);
+  });
+
+  it("does not hydrate a v8 projection without runNumber", () => {
+    expect(
+      toControllerRoomView(
+        {
+          roomId: "ROOM123",
+          phase: "lobby",
+          displayConnected: true,
+          players: collection([])
+        },
+        "p1"
+      )
+    ).toBeUndefined();
   });
 
   it("reads trimmed room code from URL", () => {

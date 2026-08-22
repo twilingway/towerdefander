@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change flying-castle-core. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Комната имеет три стабильные роли
 
 Server SHALL назначать controller roles в порядке `pilot`, `gunner`, `shield` при входе и SHALL
@@ -29,22 +27,28 @@ SHALL получить именно освобождённую role.
 
 ### Requirement: Role ограничивает допустимые intents
 
-Pilot SHALL отправлять только `pilot:input`, gunner — `gunner:input`, shield — `shield:input`.
-Server SHALL сверять connection identity/role перед mutation.
+Pilot SHALL отправлять только `pilot:input` и собственный `upgrade:choose`, gunner — `gunner:input`
+и собственный `upgrade:choose`, shield — `shield:input` и собственный `upgrade:choose`. Server SHALL
+сверять connection identity/role до mutation; ни одна role SHALL NOT выбирать offer другой role.
 
 #### Scenario: Shield пытается двигать замок
 
 - **WHEN** shield controller отправляет strict pilot input
 - **THEN** server возвращает `role_mismatch` и castle state не меняется
 
+#### Scenario: Gunner выбирает shield upgrade
+
+- **WHEN** gunner controller отправляет strict command для current shield offer
+- **THEN** server возвращает `role_mismatch` и selection/modifiers не меняются
+
 #### Scenario: Display отправляет role intent
 
-- **WHEN** display отправляет известный gameplay message
+- **WHEN** display отправляет известный gameplay или upgrade message
 - **THEN** server возвращает `not_controller` и не меняет мир
 
 ### Requirement: Continuous intents упорядочены
 
-Каждый continuous intent SHALL содержать protocolVersion 6, roomId, playerId и монотонный safe
+Каждый continuous intent SHALL содержать protocolVersion 8, roomId, playerId и монотонный safe
 integer `sequence`. Server SHALL применять только sequence больше последнего принятого для
 actor/input type. Duplicate или out-of-order sequence SHALL игнорироваться без mutation и SHALL NOT
 менять angular target. Shield `active` SHALL быть absolute desired state: handler только заменяет
@@ -53,7 +57,8 @@ packet SHALL NOT умножать расход. При disconnect server SHALL �
 pilot target zero, gunner firing false, shield OFF, а также отменить gunner/shield angular target
 через trusted core transition. После reconnect sequence watermark SHALL сбрасываться, первый packet
 sequence 1 SHALL приниматься, shield SHALL оставаться OFF до нового ручного включения, а отменённый
-angular target SHALL NOT восстанавливаться.
+angular target SHALL NOT восстанавливаться. При переходе combat→intermission server SHALL выполнить
+ту же trusted neutralization и SHALL NOT переносить held input в следующую wave.
 
 #### Scenario: Пакеты пришли не по порядку
 
@@ -86,6 +91,12 @@ angular target SHALL NOT восстанавливаться.
 - **WHEN** shield controller disconnect происходит при active shield и незавершённом traverse
 - **THEN** server немедленно выключает shield, energy начинает восстанавливаться, отменяет angular
   target, а reconnect не возвращает прежний ON state и не продолжает traverse
+
+#### Scenario: Wave завершилась с удерживаемым управлением
+
+- **WHEN** combat переходит в intermission при movement/fire/shield intents
+- **THEN** server neutralizes intents/targets, выключает shield и новая wave не возобновляет старое
+  управление без свежих packets
 
 ### Requirement: Gunner fire зависит от состояния, а не частоты сообщений
 
@@ -216,3 +227,72 @@ ON/OFF состояние. Controller SHALL NOT locally ease или predict trus
 - **WHEN** pilot movement release происходит раньше 50 ms после прошлого send
 - **THEN** pending movement value заменяется neutral и следующий packet не содержит устаревший
   active input; aim tap и короткий Fire сохраняют отдельный pulse-first порядок своих scenarios
+
+### Requirement: Controller показывает собственный upgrade choice
+
+Во время intermission controller SHALL скрыть/disable realtime role controls, показать authoritative
+countdown, три cards только assigned role и current selection. Card SHALL показывать понятные effect
+label/value и отправлять один strict `upgrade:choose` с новым UUID actionId. UI SHALL принимать
+authoritative selection/modifiers как source of truth, безопасно повторять pending command после
+reconnect и запрещать второй локальный выбор после accepted result. В combat controls SHALL
+возобновиться с neutral local state; в defeated SHALL показываться final wave/score без input.
+
+#### Scenario: Pilot выбирает скорость
+
+- **WHEN** pilot нажимает доступную speed card во время intermission
+- **THEN** controller отправляет свой current offer/upgrade/actionId, затем показывает accepted
+  authoritative selection и applied modifier
+
+#### Scenario: Controller reconnect во время выбора
+
+- **WHEN** gunner reconnect происходит до результата pending command
+- **THEN** controller hydrate current offer/selection; если selection отсутствует, он MAY повторить
+  тот же exact command/actionId, а accepted modifier появляется не более одного раза
+
+#### Scenario: Replacement входит после выбора
+
+- **WHEN** новая identity занимает role, уже выбравшую upgrade
+- **THEN** cards показывают authoritative selected state/modifiers и не позволяют выбрать повторно
+
+#### Scenario: Началась следующая wave
+
+- **WHEN** encounter меняется intermission→combat
+- **THEN** cards исчезают, role controls начинают neutral и требуют свежего пользовательского input
+
+#### Scenario: Замок уничтожен
+
+- **WHEN** encounter становится defeated
+- **THEN** controller прекращает scheduler/gameplay messages и показывает final wave/score
+
+### Requirement: Controller управляет готовностью к следующему run
+
+В lobby кнопка ready SHALL готовить первый run с runNumber 0; в terminal result та же strict v9
+ready command SHALL означать «Играть ещё» для текущего runNumber. Кнопка SHALL показывать
+authoritative ready state, блокироваться после принятия и снова становиться false при следующем
+terminal result. Combat/intermission SHALL не показывать rematch action.
+
+#### Scenario: Игрок голосует после поражения
+
+- **WHEN** gunner нажимает «Играть ещё» в result run 3
+- **THEN** controller отправляет ready с runNumber 3 и показывает принятое authoritative ready
+
+#### Scenario: Ready старого run задержался
+
+- **WHEN** controller доставляет ready run 3 после старта run 4
+- **THEN** UI получает `stale_run`, а готовность run 4 не меняется
+
+### Requirement: Controller имеет явный выход из комнаты
+
+Connected controller SHALL показывать доступное действие «Выйти из комнаты» отдельно от controls и
+rematch. После подтверждения UI SHALL остановить heartbeat/input, очистить сохранённый reconnect
+token, выполнить consented leave и вернуть join form. Cancel подтверждения SHALL не менять room.
+
+#### Scenario: Игрок подтверждает выход
+
+- **WHEN** pilot выбирает и подтверждает выход
+- **THEN** transport выполняет consented leave, локальная session очищена и отображается join form
+
+#### Scenario: Игрок отменяет выход
+
+- **WHEN** pilot закрывает confirmation без согласия
+- **THEN** connection, reconnect token, role и controls остаются прежними

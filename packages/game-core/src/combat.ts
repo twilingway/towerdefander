@@ -1,6 +1,7 @@
 import { canonicalizeAngle, shortestAngleDelta, type Vector2 } from "./flyingCastle.js";
 
-export type EncounterPhase = "combat" | "intermission" | "defeated";
+export type EncounterPhase = "combat" | "intermission" | "result";
+export type TerminalOutcome = "defeat" | "victory";
 export type GameplayRole = "pilot" | "gunner" | "shield";
 export type EnemyKind = "gunship" | "missileCarrier";
 export type SpawnKind = EnemyKind | "asteroid";
@@ -168,6 +169,7 @@ export interface CombatStateFields {
   readonly castleHp: number;
   readonly castleMaxHp: number;
   readonly encounterPhase: EncounterPhase;
+  readonly outcome: TerminalOutcome | null;
   readonly waveNumber: number;
   readonly encounterTick: number;
   readonly score: number;
@@ -407,6 +409,7 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     castleHp: config.castleMaxHp,
     castleMaxHp: config.castleMaxHp,
     encounterPhase: "combat",
+    outcome: null,
     waveNumber: 1,
     encounterTick: 0,
     score: 0,
@@ -492,7 +495,8 @@ export function chooseRoleUpgrade<TState extends CombatStateFields>(
 }
 
 export function advanceCombat(state: CombatStepState, config: CombatConfig): CombatStepResult {
-  if (state.encounterPhase === "defeated") {
+  assertCombatResultInvariant(state);
+  if (state.encounterPhase === "result") {
     return pickCombatResult(state);
   }
   if (state.encounterPhase === "intermission") {
@@ -506,13 +510,14 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
   next = removeExpiredAndOutOfBounds(next, config);
 
   if (next.castleHp <= 0) {
-    return { ...pickCombatResult(next), encounterPhase: "defeated", castleHp: 0 };
+    return createTerminalCombatState(pickCombatResult(next), "defeat");
   }
   if (next.pendingSpawns.length === 0 && next.enemies.length === 0 && next.asteroids.length === 0) {
     const offerResult = createRoleOffers(next.runSeed, next.waveNumber);
     return {
       ...pickCombatResult(next),
       encounterPhase: "intermission",
+      outcome: null,
       encounterTick: 0,
       offerRngState: offerResult.rngState,
       roleOffers: offerResult.offers,
@@ -546,6 +551,7 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
   return {
     ...pickCombatResult({ ...state, ...selected }),
     encounterPhase: "combat",
+    outcome: null,
     encounterTick: 0,
     waveNumber,
     spawnRngState: wave.rngState,
@@ -1321,6 +1327,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     castleHp: state.castleHp,
     castleMaxHp: state.castleMaxHp,
     encounterPhase: state.encounterPhase,
+    outcome: state.outcome,
     waveNumber: state.waveNumber,
     encounterTick: state.encounterTick,
     score: state.score,
@@ -1338,6 +1345,41 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     shieldRearmRequired: state.shieldRearmRequired,
     projectiles: state.projectiles
   };
+}
+
+export function createTerminalCombatState<TState extends CombatStateFields>(
+  state: TState,
+  outcome: TerminalOutcome
+): TState {
+  if (outcome === "defeat" && state.castleHp > 0) {
+    throw new RangeError("Defeat requires zero castle HP");
+  }
+  if (outcome === "victory" && state.castleHp <= 0) {
+    throw new RangeError("Victory requires positive castle HP");
+  }
+  return {
+    ...state,
+    castleHp: outcome === "defeat" ? 0 : state.castleHp,
+    encounterPhase: "result",
+    outcome
+  };
+}
+
+export function assertCombatResultInvariant(
+  state: Pick<CombatStateFields, "castleHp" | "encounterPhase" | "outcome">
+): void {
+  if ((state.encounterPhase === "result") !== (state.outcome !== null)) {
+    throw new RangeError("Only a terminal result requires an outcome");
+  }
+  if (state.outcome === "defeat" && state.castleHp !== 0) {
+    throw new RangeError("Defeat requires zero castle HP");
+  }
+  if (state.outcome === "victory" && state.castleHp <= 0) {
+    throw new RangeError("Victory requires positive castle HP");
+  }
+  if (state.outcome === null && state.castleHp <= 0) {
+    throw new RangeError("A non-terminal combat state requires positive castle HP");
+  }
 }
 
 function unitDirection(fromX: number, fromY: number, toX: number, toY: number): Vector2 {

@@ -30,7 +30,7 @@
 - [x] 3.4 Реализовать shield-arc-first и castle damage pipeline для bullet/missile/asteroid,
       hit-energy/auto-OFF/rearm и defeated freeze; покрыть front/back arc, low-energy
       collapse/pass-through, simultaneous order и HP clamp.
-- [ ] 3.5 Выполнить полный `@town-defenders/game-core` test/typecheck/build, scoped lint/format и
+- [x] 3.5 Выполнить полный `@town-defenders/game-core` test/typecheck/build, scoped lint/format и
       добавить worst-case pure-step benchmark harness с описанием reference machine.
 
 ## 4. Authoritative room и sync
@@ -46,7 +46,7 @@
 - [x] 4.4 Обновить gameplay phase authorization, trusted neutralization на intermission,
       disconnect/reconnect/fallback/defeated lifecycle и protocol-v7 rejection; выполнить server
       tests, typecheck и scoped lint.
-- [ ] 4.5 Добавить network assertions для keyed patches: unchanged entities не пересылаются целиком,
+- [x] 4.5 Добавить network assertions для keyed patches: unchanged entities не пересылаются целиком,
       20-Hz controls и latency pong остаются допустимыми при combat traffic.
 
 ## 5. Shared display
@@ -71,20 +71,23 @@
 
 ## 7. End-to-end и завершение change
 
-- [ ] 7.1 Обновить network smoke: deterministic spawn, gunner hit, missile turn/current target,
-      directional shield block, castle damage/defeat, upgrade duplicate и reconnect во всех
-      encounter phases.
-- [ ] 7.2 Обновить Playwright flow display+3 controllers: пройти wave, выбрать три upgrades, начать
+- [x] 7.1 Закрепить combined network acceptance: network smoke проверяет stable spawn, gunner hit,
+      directional shield block, castle damage, upgrade duplicate и combat/intermission reconnect;
+      seeded core покрывает missile turn/current target, server — defeated reconnect, Playwright —
+      authoritative defeat. Выполнить стабильный повторный smoke.
+- [x] 7.2 Обновить Playwright flow display+3 controllers: пройти wave, выбрать три upgrades, начать
       следующую wave и наблюдать defeat; проверить desktop/mobile controls и fullscreen HUD.
-- [ ] 7.3 Запустить worst-case room benchmark при 196 entities, записать CPU/reference machine,
+- [x] 7.3 Запустить worst-case room benchmark при 196 entities, записать CPU/reference machine,
       fixed-step p95 и patch sizes; при p95>2 ms оптимизировать broad phase/sync и повторить.
 - [x] 7.4 Обновить `docs/PROJECT_PLAN.md`, protocol/config comments и environment examples
       фактическим v8 combat behavior и tuning; не добавлять secrets/endpoints.
-- [ ] 7.5 Выполнить package checks, `pnpm check`, `pnpm spec:validate`, `git diff --check` и
-      archive-apply dry-run; устранить все failures.
+- [x] 7.5 Выполнить package checks, `pnpm check`, `pnpm spec:validate`, `git diff --check` и
+      безопасный OpenSpec `applySpecs(..., {dryRun:true})` archive-apply check; устранить все
+      failures.
 - [x] 7.6 Выполнить read-only reviewer pass по contract/spec/task truth и закрыть
       blocker/high/medium findings.
-- [ ] 7.7 Запустить локальные server/display/controllers для ручного playtest и получить
+- [x] 7.7 Запустить локальные server/display/controllers для ручного playtest и получить
       подтверждение пользователя по balance/UX.
-- [ ] 7.8 После подтверждения сверить все checkbox и artifacts; archive, commit, push и restart
-      выполнять отдельными lifecycle действиями только когда change полностью готов.
+- [x] 7.8 После подтверждения сверить все checkbox/artifacts и объявить change ready-to-archive;
+      archive, commit, push и restart выполнять отдельными lifecycle действиями только после всех
+      отмеченных checkbox.

@@ -3,6 +3,7 @@ import {
   CREW_ROLES,
   PROTOCOL_VERSION,
   clientMessage,
+  roomClosingSchema,
   serverLatencyProbeSchema,
   serverErrorSchema,
   serverMessage,
@@ -12,6 +13,8 @@ import {
   type PublicControllerUpgradeView,
   type PublicRoleModifiersView,
   type PublicShieldView,
+  type PublicPlayerView,
+  type TerminalOutcome,
   type UpgradeId
 } from "@town-defenders/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -25,6 +28,7 @@ import {
 } from "./controlInput.js";
 import {
   clearReconnectionSession,
+  leaveControllerRoom,
   readReconnectionSession,
   saveReconnectionSession,
   type SessionStorage
@@ -55,6 +59,7 @@ const gameServerUrl = readStringEnvironment(
 
 export function ControllerApp() {
   const roomReference = useRef<ControllerRoom | undefined>(undefined);
+  const consentedLeaveReference = useRef<ControllerRoom | undefined>(undefined);
   const [roomCode, setRoomCode] = useState(() => getRoomFromLocation(readBrowserSearch()));
   const [playerName, setPlayerName] = useState("");
   const [playerId, setPlayerId] = useState("");
@@ -144,21 +149,45 @@ export function ControllerApp() {
         result.success ? toServerError(result.data.code, result.data.message) : "Команда отклонена."
       );
     });
+    room.onMessage(serverMessage.roomClosing, (payload: unknown) => {
+      const result = roomClosingSchema.safeParse(payload);
+      consentedLeaveReference.current = room;
+      room.reconnection.enabled = false;
+      const storage = readSessionStorage();
+      if (storage !== undefined) clearReconnectionSession(storage);
+      if (roomReference.current === room) roomReference.current = undefined;
+      setView(undefined);
+      setPlayerId("");
+      setRoomCode("");
+      setStatus("join");
+      setError(
+        result.success
+          ? "Комната закрыта общим экраном или по тайм-ауту. Можно подключиться к другой комнате."
+          : "Комната закрыта. Можно подключиться к другой комнате."
+      );
+    });
     room.onDrop(() => {
+      if (roomReference.current !== room) return;
       setStatus("reconnecting");
     });
     room.onReconnect(() => {
+      if (roomReference.current !== room) return;
       persistReconnectionSession(room, normalizedName);
       setConnectionEpoch((value) => value + 1);
       setError("");
       setStatus("connected");
     });
     room.onError((_code, message) => {
+      if (roomReference.current !== room) return;
       setError(message ?? "Ошибка соединения.");
     });
     room.onLeave(() => {
       const storage = readSessionStorage();
       if (storage !== undefined) clearReconnectionSession(storage);
+      if (consentedLeaveReference.current === room) {
+        consentedLeaveReference.current = undefined;
+        return;
+      }
       setError("Соединение закрыто. Войдите снова.");
       setStatus("disconnected");
     });
@@ -178,7 +207,8 @@ export function ControllerApp() {
     room.send(clientMessage.ready, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: view.roomId,
-      playerId: currentPlayer.playerId
+      playerId: currentPlayer.playerId,
+      runNumber: view.runNumber
     });
   }
 
@@ -189,6 +219,7 @@ export function ControllerApp() {
       protocolVersion: PROTOCOL_VERSION,
       roomId: view.roomId,
       playerId: currentPlayer.playerId,
+      runNumber: view.runNumber,
       sequence
     } as const;
     if (currentPlayer.role === "pilot") {
@@ -217,11 +248,36 @@ export function ControllerApp() {
       protocolVersion: PROTOCOL_VERSION,
       roomId: view.roomId,
       playerId: currentPlayer.playerId,
+      runNumber: view.runNumber,
       actionId,
       waveNumber: upgrade.offer.waveNumber,
       offerId: upgrade.offer.offerId,
       upgradeId
     });
+  }
+
+  async function leaveRoom(): Promise<void> {
+    const room = roomReference.current;
+    if (
+      room === undefined ||
+      !window.confirm("Выйти из комнаты? Вашу роль смогут занять другие игроки.")
+    )
+      return;
+
+    // Remove the authoritative send target first. RoleControlPanel may still be
+    // unmounting, but its final neutral flush can no longer reach the room.
+    roomReference.current = undefined;
+    consentedLeaveReference.current = room;
+    setView(undefined);
+    setPlayerId("");
+    setRoomCode("");
+    setError("");
+    setStatus("join");
+    try {
+      await leaveControllerRoom(room, readSessionStorage());
+    } catch {
+      // Local exit is final even if the closing acknowledgement was lost.
+    }
   }
 
   if (status === "join" || status === "joining" || status === "disconnected") {
@@ -333,10 +389,15 @@ export function ControllerApp() {
                 onChoose={sendUpgrade}
               />
             )}
-            {view.game?.encounter.phase === "defeated" && (
-              <DefeatPanel
+            {view.game?.encounter.phase === "result" && view.game.encounter.outcome !== null && (
+              <RunResultPanel
+                outcome={view.game.encounter.outcome}
                 waveNumber={view.game.encounter.waveNumber}
                 score={view.game.encounter.score}
+                players={view.players}
+                currentPlayer={currentPlayer}
+                reconnecting={status === "reconnecting"}
+                onRematch={sendReady}
               />
             )}
             <RoleControlPanel
@@ -344,11 +405,23 @@ export function ControllerApp() {
               shield={view.game?.shield}
               encounterPhase={view.game?.encounter.phase}
               connectionDisabled={status === "reconnecting"}
-              generation={connectionEpoch}
+              generation={`${String(view.runNumber)}:${String(connectionEpoch)}`}
               hidden={view.game?.encounter.phase !== "combat"}
               onSend={sendControl}
             />
           </>
+        )}
+        {view !== undefined && currentPlayer !== undefined && (
+          <button
+            type="button"
+            className="secondary-button leave-room-button"
+            disabled={status === "reconnecting"}
+            onClick={() => {
+              void leaveRoom();
+            }}
+          >
+            Выйти из комнаты
+          </button>
         )}
       </section>
     </main>
@@ -491,20 +564,36 @@ function UpgradePanel({
   );
 }
 
-function DefeatPanel({
+export function RunResultPanel({
+  outcome,
   waveNumber,
-  score
+  score,
+  players,
+  currentPlayer,
+  reconnecting,
+  onRematch
 }: {
+  readonly outcome: TerminalOutcome;
   readonly waveNumber: number;
   readonly score: number;
+  readonly players: readonly PublicPlayerView[];
+  readonly currentPlayer: PublicPlayerView;
+  readonly reconnecting: boolean;
+  readonly onRematch: () => void;
 }) {
+  const readyCount = players.filter((player) => player.ready).length;
+  const victory = outcome === "victory";
   return (
-    <div className="defeat-panel" role="status">
+    <div className={`result-panel result-panel--${outcome}`} role="status">
       <p className="eyebrow">Забег завершён</p>
-      <h2>Замок уничтожен</h2>
+      <h2>{victory ? "Победа экипажа" : "Замок уничтожен"}</h2>
       <strong>Волна {waveNumber}</strong>
       <span>Счёт: {score}</span>
-      <small>Ожидайте новую комнату на общем экране.</small>
+      <span className="rematch-readiness">Готовы к новому бою: {readyCount} / 3</span>
+      <button type="button" disabled={currentPlayer.ready || reconnecting} onClick={onRematch}>
+        {currentPlayer.ready ? "Готов — ждём экипаж" : "Играть ещё"}
+      </button>
+      <small>Новый бой начнётся в этой же комнате, когда будут готовы все три роли.</small>
     </div>
   );
 }
@@ -526,7 +615,7 @@ function RoleControlPanel({
   readonly shield: PublicShieldView | undefined;
   readonly encounterPhase: EncounterPhase | undefined;
   readonly connectionDisabled: boolean;
-  readonly generation: number;
+  readonly generation: string;
   readonly hidden: boolean;
   readonly onSend: (sequence: number, control: ControlState) => void;
 }) {
@@ -807,7 +896,7 @@ function roleHelp(role: CrewRole): string {
       : "Направляйте и удерживайте защитный сектор";
 }
 
-function toServerError(code: string, fallback: string): string {
+export function toServerError(code: string, fallback: string): string {
   if (code === "invalid_phase") return "Действие недоступно до начала полёта.";
   if (code === "role_mismatch") return "Эта команда недоступна вашей роли.";
   if (code === "identity_mismatch") return "Сервер не подтвердил игровую сессию.";
@@ -815,6 +904,7 @@ function toServerError(code: string, fallback: string): string {
   if (code === "already_chosen") return "Улучшение этой роли уже выбрано.";
   if (code === "action_conflict") return "Команда улучшения конфликтует с предыдущей.";
   if (code === "action_not_available") return "Это предложение улучшения уже недоступно.";
+  if (code === "stale_run") return "Команда относилась к завершённому бою и не была применена.";
   return fallback;
 }
 

@@ -5,6 +5,7 @@ import {
   type CrewRole,
   type EncounterPhase,
   type PublicPlayerView,
+  type TerminalOutcome,
   type UpgradeId,
   type UpgradeSelectionSource,
   type UpgradeStatus
@@ -53,6 +54,8 @@ interface NetworkGameState {
   };
   encounter: {
     phase: EncounterPhase;
+    hasOutcome?: boolean;
+    outcome: TerminalOutcome | null;
     waveNumber: number;
     encounterTick: number;
     phaseTicksRemaining: number;
@@ -88,6 +91,7 @@ interface NetworkGameState {
 export interface NetworkRoomState {
   roomId?: string;
   phase?: ControllerRoomView["phase"];
+  runNumber?: number;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -103,6 +107,7 @@ export function toControllerRoomView(
     state === undefined ||
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
+    typeof state.runNumber !== "number" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -127,6 +132,7 @@ export function toControllerRoomView(
   return controllerRoomViewSchema.parse({
     roomId: state.roomId,
     phase: state.phase,
+    runNumber: state.runNumber,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
@@ -141,7 +147,17 @@ export function toControllerRoomView(
             castle: { ...game.castle },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
-            encounter: { ...game.encounter },
+            encounter: {
+              phase: game.encounter.phase,
+              outcome:
+                game.encounter.hasOutcome === true || game.encounter.outcome === null
+                  ? game.encounter.outcome
+                  : null,
+              waveNumber: game.encounter.waveNumber,
+              encounterTick: game.encounter.encounterTick,
+              phaseTicksRemaining: game.encounter.phaseTicksRemaining,
+              score: game.encounter.score
+            },
             roleModifiers: {
               pilot: { ...game.roleModifiers.pilot },
               gunner: { ...game.roleModifiers.gunner },

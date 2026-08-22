@@ -473,9 +473,33 @@ p {
   font-size: clamp(1.4rem, 3vw, 2.5rem);
 }
 
-.encounter-overlay--defeated {
+.encounter-overlay--result {
+  pointer-events: auto;
+}
+
+.encounter-overlay--defeat {
   border-color: rgb(255 104 95 / 50%);
   background: rgb(31 10 16 / 90%);
+}
+
+.encounter-overlay--victory {
+  border-color: rgb(120 211 156 / 55%);
+  background: rgb(8 38 31 / 92%);
+}
+
+.rematch-readiness {
+  color: #ffd783;
+  font-weight: 800;
+}
+
+.room-close-button {
+  justify-self: center;
+  color: #fff4f2;
+  background: #9e3f3a;
+}
+
+.display-shell--battle > .room-header .room-close-button {
+  pointer-events: auto;
 }
 
 @media (width <= 900px) {

@@ -3,25 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change bootstrap-network-vertical-slice. Update Purpose after archive.
-
 ## Requirements
-
-### Requirement: Общий экран создаёт комнату летящего замка
-
-Display SHALL создавать комнату protocol v7 с тремя controller slots и публиковать roomId, ссылку и
-QR-код. Свежий display SHALL быть единственным владельцем display slot; повторное display-соединение
-допускается только через reconnect или после освобождения slot.
-
-#### Scenario: Display создаёт комнату
-
-- **WHEN** display создаёт комнату с protocolVersion 7 и role `display`
-- **THEN** сервер создаёт lobby с ролями `pilot`, `gunner`, `shield`
-
-#### Scenario: Устаревший клиент подключается к v5
-
-- **WHEN** create или join options содержат protocolVersion 6
-- **THEN** сервер отклоняет соединение стабильной ошибкой `protocol_mismatch`
-
 ### Requirement: Сервер запускает матч после готовности трёх ролей
 
 Server SHALL запускать simulation только когда pilot, gunner и shield подключены и каждый ready.
@@ -82,81 +64,82 @@ reconnect; 30-second reservation применяется только к неож
 ### Requirement: Симуляция живёт независимо от controller transport
 
 После старта server SHALL выполнять fixed step пока room существует, даже если один или все
-controllers временно отключены. В первом slice отсутствует автоматический victory/defeat terminal
-result.
+controllers временно отключены. Combat/intermission SHALL продолжать authoritative encounter time, а
+stale/disconnected controls SHALL нейтрализоваться. При `defeated` fixed-step timer MAY продолжать
+room clock/latency lifecycle, но combat state SHALL оставаться frozen и новые spawns/damage SHALL
+быть запрещены.
 
 #### Scenario: Все controllers временно отключены
 
-- **WHEN** active room теряет три controller connections
-- **THEN** simulation tick продолжает увеличиваться, а stale inputs переводят системы в безопасное
+- **WHEN** active combat room теряет три controller connections
+- **THEN** simulation tick и encounter продолжаются, а stale inputs переводят системы в безопасное
   состояние
 
-### Requirement: Клиенты получают строгие v7 projections
+#### Scenario: Controllers отключены в intermission
 
-Protocol SHALL определять отдельные strict v7 `DisplayRoomView` и `ControllerRoomView`. Обе game
-projections SHALL публиковать shield `{angle,active,energy,capacity}` с конечными числами и
-invariant `0 <= energy <= capacity`. Обе room projections SHALL публиковать server-owned nullable
-`displayLatencyMs` и player `latencyMs` как integer `0..5000` либо `null`. Display view SHALL
-дополнительно содержать projectiles и obstacles; controller view SHALL их omit. Display и controller
-SHALL получать один authoritative energy и latency state.
+- **WHEN** intermission deadline наступает без подключённых controllers
+- **THEN** deterministic fallbacks применяются к трём ролям и следующая wave начинается
 
-#### Scenario: Щит расходует энергию
+#### Scenario: Run завершён поражением
 
-- **WHEN** active shield проходит один simulation step
-- **THEN** display и все controllers получают одинаковое уменьшенное energy и unchanged capacity
+- **WHEN** encounter имеет phase defeated
+- **THEN** reconnect видит сохранённый final result, а combat entities/HP больше не мутируют
 
-#### Scenario: Display получает snapshot
+### Requirement: Terminal run допускает reconnect, replacement и rematch
 
-- **WHEN** active state публикуется display
-- **THEN** view содержит world, castle, turret, shield energy, obstacles, projectiles,
-  displayLatencyMs и latency каждого crew player
+После terminal result server SHALL сохранять identities в существующий 30-second reconnect grace и
+разрешать reconnect к frozen snapshot. Fresh controller SHALL занимать только фактически свободную
+role после consented leave либо reservation expiry. Existing и replacement controllers SHALL
+участвовать в unanimous rematch; display reconnect SHALL сохранять result/rematch readiness, а
+display expiry SHALL закрывать room. Controller join SHALL быть запрещён после начала disposal.
 
-#### Scenario: Некорректная энергия
+#### Scenario: Зарезервированный pilot возвращается после result
 
-- **WHEN** adapter пытается построить view с energy меньше нуля либо больше capacity
-- **THEN** strict v7 schema отклоняет view
+- **WHEN** прежний pilot reconnect выполняется до expiry
+- **THEN** identity/role/readiness восстанавливаются и controller получает current result/runNumber
 
-#### Scenario: Controller получает snapshot
+#### Scenario: Новый controller входит после освобождения role
 
-- **WHEN** active state публикуется controller
-- **THEN** view содержит shield energy и room latency state, но не содержит projectiles или
-  obstacles
+- **WHEN** прежняя shield identity явно вышла либо её reservation истекла
+- **THEN** fresh controller получает shield role, видит result и может подтвердить rematch
 
-#### Scenario: Некорректный ping
+#### Scenario: Новый controller входит до expiry
 
-- **WHEN** adapter пытается построить view с latency дробной, меньше нуля либо больше 5000
-- **THEN** strict v7 schema отклоняет view
+- **WHEN** fresh controller пытается занять зарезервированную role
+- **THEN** server возвращает `room_full` и не меняет reservation/readiness
 
-### Requirement: Сервер валидирует v7 messages до mutation
+### Requirement: Room projection публикует run epoch и terminal result
 
-Create/join options и сообщения SHALL быть strict и содержать protocolVersion 7. Проверка gameplay
-SHALL идти в порядке protocol, schema, connection role, roomId/playerId, assigned gameplay role,
-active phase, sequence и только затем mutation. Latency pong SHALL проверять protocol, schema,
-connection membership, roomId и ownership outstanding probeId. Ошибка SHALL отправляться только
-actor. Duplicate/out-of-order absolute shield input SHALL быть idempotent и SHALL NOT изменять
-energy вне authoritative tick.
+Strict v9 display/controller projections SHALL публиковать `runNumber`, result outcome и public
+readiness трёх roles. Lobby SHALL иметь runNumber 0 и game null; первый active run SHALL иметь
+runNumber 1; каждый rematch SHALL увеличивать его ровно на один. Result SHALL иметь frozen game,
+outcome и HP/result invariants: defeat имеет HP=0, victory имеет HP>0, оба result frozen. Controller
+projection SHALL по-прежнему исключать mass entities, а display SHALL получать authoritative world.
 
-#### Scenario: Неизвестное поле в input
+#### Scenario: Первый run завершён и перезапущен
 
-- **WHEN** controller отправляет v7 `shield:input` с лишним полем
-- **THEN** server возвращает `invalid_message` и не изменяет aim, active или energy
+- **WHEN** display наблюдает lobby → run 1 result → run 2 combat
+- **THEN** runNumber равен 0 → 1 → 2, roomId неизменен и strict projections валидны
 
-#### Scenario: Shield input повторён
+#### Scenario: Result имеет несовместимый outcome
 
-- **WHEN** server повторно получает уже принятую sequence
-- **THEN** packet игнорируется, а energy изменяется только следующим simulation step
+- **WHEN** adapter публикует victory с HP=0, defeat с HP>0 либо result без outcome
+- **THEN** strict v9 schema отклоняет view
 
-#### Scenario: Display отправляет gameplay intent
+### Requirement: Сервер валидирует runNumber до per-run mutation
 
-- **WHEN** display отправляет v7 `pilot:input`
-- **THEN** server возвращает `not_controller` и не изменяет state
+После protocol/schema/connection/room/player checks server SHALL сверять command runNumber с room
+runNumber до role phase, continuous sequence, resource action journal, ready mutation либо core.
+Mismatch SHALL вернуть actor-only `stale_run`. Valid current-run commands SHALL продолжать
+существующий role/phase/idempotency pipeline.
 
-#### Scenario: Gameplay input отправлен в lobby
+#### Scenario: Старый packet имеет новый sequence
 
-- **WHEN** controller отправляет valid v7 role input до старта
-- **THEN** server возвращает `invalid_phase`, не записывает sequence и не создаёт world
+- **WHEN** authenticated controller отправляет input предыдущего run с sequence выше current
+  watermark
+- **THEN** server возвращает `stale_run`, а watermark и world остаются прежними
 
-#### Scenario: Display отвечает на latency probe
+#### Scenario: Display пытается голосовать за rematch
 
-- **WHEN** display отправляет strict v7 pong для своего outstanding probeId
-- **THEN** server обновляет только display latency telemetry и не требует controller role/playerId
+- **WHEN** display отправляет ready current run
+- **THEN** server возвращает `not_controller` и readiness не меняется

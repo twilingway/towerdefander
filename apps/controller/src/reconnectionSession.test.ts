@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   RECONNECTION_SESSION_KEY,
   clearReconnectionSession,
+  leaveControllerRoom,
   readReconnectionSession,
   saveReconnectionSession,
   type SessionStorage
@@ -42,6 +43,30 @@ describe("controller reconnection session", () => {
     const storage = createStorage();
     storage.setItem(RECONNECTION_SESSION_KEY, '{"token":42}');
 
+    expect(readReconnectionSession(storage)).toBeUndefined();
+  });
+
+  it("disables reconnect, clears storage and performs consented leave", async () => {
+    const storage = createStorage();
+    saveReconnectionSession(storage, {
+      endpoint: "ws://localhost:2567",
+      roomId: "ROOM1",
+      playerName: "Alex",
+      token: "ROOM1:token"
+    });
+    const calls: boolean[] = [];
+    const room = {
+      reconnection: { enabled: true },
+      leave: (consented = false) => {
+        calls.push(consented);
+        return Promise.resolve();
+      }
+    };
+
+    await leaveControllerRoom(room, storage);
+
+    expect(room.reconnection.enabled).toBe(false);
+    expect(calls).toEqual([true]);
     expect(readReconnectionSession(storage)).toBeUndefined();
   });
 });

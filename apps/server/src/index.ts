@@ -1,10 +1,11 @@
-import { defineRoom, defineServer } from "colyseus";
+import { defineRoom, defineServer, matchMaker } from "colyseus";
 import type { Request, Response } from "express";
 
 import { readServerConfig } from "./config.js";
 import { TownDefendersRoom } from "./rooms/TownDefendersRoom.js";
+import { registerRoomStatsRoutes } from "./stats/index.js";
 
-const { host, port, gracefullyShutdown } = readServerConfig();
+const { host, port, gracefullyShutdown, statsPassword } = readServerConfig();
 
 const gameServer = defineServer({
   gracefullyShutdown,
@@ -14,6 +15,10 @@ const gameServer = defineServer({
   express: (app) => {
     app.get("/health", (_request: Request, response: Response) => {
       response.json({ status: "ok" });
+    });
+    registerRoomStatsRoutes(app, {
+      password: statsPassword,
+      queryRooms: () => matchMaker.query({ name: "town_defenders" })
     });
   }
 });

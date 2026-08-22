@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @town-defenders/server --filter @town-defenders/display --filter @town-defenders/controller dev",
     "build": "pnpm -r build",
+    "benchmark:combat": "pnpm --filter @town-defenders/server benchmark:combat",
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",

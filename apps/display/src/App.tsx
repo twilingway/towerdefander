@@ -3,15 +3,23 @@ import {
   CREW_ROLES,
   PROTOCOL_VERSION,
   clientMessage,
+  roomClosingSchema,
   serverLatencyProbeSchema,
   serverMessage,
   type CrewRole,
-  type DisplayRoomView
+  type DisplayRoomView,
+  type EncounterPhase
 } from "@town-defenders/protocol";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FlyingCastleCanvas } from "./FlyingCastleCanvas.js";
+import { RunResultOverlay } from "./RunResultOverlay.js";
+import {
+  closeDisplayRoom,
+  confirmDisplayRoomClose,
+  roomClosingMessage
+} from "./displayRoomLifecycle.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -32,6 +40,7 @@ export function DisplayApp() {
   const [view, setView] = useState<DisplayRoomView>();
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const [closingRoom, setClosingRoom] = useState(false);
   const joinUrl = useMemo(
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
     [view]
@@ -41,7 +50,10 @@ export function DisplayApp() {
     () => () => {
       const room = roomReference.current;
       roomReference.current = undefined;
-      if (room !== undefined) void room.leave();
+      if (room !== undefined) {
+        room.reconnection.enabled = false;
+        void room.leave(false);
+      }
     },
     []
   );
@@ -49,13 +61,16 @@ export function DisplayApp() {
   async function createRoom(): Promise<void> {
     setStatus("connecting");
     setError("");
+    setClosingRoom(false);
     try {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>("town_defenders", {
         role: "display",
         protocolVersion: PROTOCOL_VERSION
       });
       roomReference.current = room;
-      room.onStateChange(applyRoomState);
+      room.onStateChange((state) => {
+        if (roomReference.current === room) applyRoomState(state);
+      });
       applyRoomState(room.state);
       room.onMessage(serverMessage.latencyProbe, (payload: unknown) => {
         const result = serverLatencyProbeSchema.safeParse(payload);
@@ -66,22 +81,33 @@ export function DisplayApp() {
           probeId: result.data.probeId
         });
       });
+      room.onMessage(serverMessage.roomClosing, (payload: unknown) => {
+        const result = roomClosingSchema.safeParse(payload);
+        if (!result.success || roomReference.current !== room) return;
+        room.reconnection.enabled = false;
+        roomReference.current = undefined;
+        resetToCreate(roomClosingMessage(result.data.reason));
+      });
       room.onDrop(() => {
+        if (roomReference.current !== room) return;
         setStatus("reconnecting");
         setError("Связь прервана. Восстанавливаем общий экран…");
         setConnectionEpoch((value) => value + 1);
       });
       room.onReconnect(() => {
+        if (roomReference.current !== room) return;
         setStatus("connected");
         setError("");
       });
       room.onError((_code, message) => {
+        if (roomReference.current !== room) return;
         setStatus("error");
         setError(message ?? "Сервер сообщил об ошибке.");
       });
       room.onLeave(() => {
-        setStatus("error");
-        setError("Комната закрыта. Создайте новую сессию.");
+        if (roomReference.current !== room) return;
+        roomReference.current = undefined;
+        resetToCreate("Комната закрыта. Создайте новую сессию.");
       });
     } catch (reason) {
       setStatus("error");
@@ -94,6 +120,30 @@ export function DisplayApp() {
     if (next !== undefined) {
       setView(next);
       setStatus("connected");
+    }
+  }
+
+  function resetToCreate(message: string): void {
+    setView(undefined);
+    setStatus("idle");
+    setError(message);
+    setConnectionEpoch(0);
+    setClosingRoom(false);
+  }
+
+  async function handleCloseRoom(): Promise<void> {
+    const room = roomReference.current;
+    if (room === undefined || !confirmDisplayRoomClose((message) => window.confirm(message))) {
+      return;
+    }
+
+    setClosingRoom(true);
+    roomReference.current = undefined;
+    try {
+      await closeDisplayRoom(room);
+      resetToCreate("Комната закрыта общим экраном.");
+    } catch {
+      resetToCreate("Не удалось подтвердить закрытие комнаты. Создайте новую сессию.");
     }
   }
 
@@ -131,6 +181,14 @@ export function DisplayApp() {
           <span className="latency-indicator" aria-live="polite">
             Экран → сервер {formatLatency(view.displayLatencyMs)}
           </span>
+          <button
+            type="button"
+            className="room-close-button"
+            onClick={() => void handleCloseRoom()}
+            disabled={closingRoom}
+          >
+            {closingRoom ? "Закрываем комнату…" : "Закрыть комнату"}
+          </button>
         </div>
       </header>
       {error.length > 0 && <p className="error-message">{error}</p>}
@@ -220,7 +278,11 @@ export function DisplayApp() {
               </small>
             </div>
           </header>
-          <FlyingCastleCanvas game={view.game} connectionEpoch={connectionEpoch} />
+          <FlyingCastleCanvas
+            game={view.game}
+            runNumber={view.runNumber}
+            connectionEpoch={connectionEpoch}
+          />
           {view.game.encounter.phase === "intermission" && (
             <div className="encounter-overlay encounter-overlay--intermission" role="status">
               <p className="eyebrow">Волна {view.game.encounter.waveNumber} завершена</p>
@@ -231,13 +293,15 @@ export function DisplayApp() {
               <p>Каждая роль выбирает одну карточку на своём контроллере.</p>
             </div>
           )}
-          {view.game.encounter.phase === "defeated" && (
-            <div className="encounter-overlay encounter-overlay--defeated" role="status">
-              <p className="eyebrow">Забег завершён</p>
-              <h2>Летающий замок уничтожен</h2>
-              <strong>Волна {view.game.encounter.waveNumber}</strong>
-              <p>Итоговый счёт: {view.game.encounter.score}</p>
-            </div>
+          {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
+            <RunResultOverlay
+              outcome={view.game.encounter.outcome}
+              waveNumber={view.game.encounter.waveNumber}
+              score={view.game.encounter.score}
+              readyCount={view.players.filter(({ ready }) => ready).length}
+              closing={closingRoom}
+              onClose={() => void handleCloseRoom()}
+            />
           )}
           <aside className="crew-latency-overlay" aria-label="Пинг участников до сервера">
             <strong>Пинг до сервера</strong>
@@ -273,8 +337,8 @@ function formatCountdown(ticks: number): string {
   return `${(ticks / 20).toFixed(1)} с`;
 }
 
-function encounterLabel(phase: "combat" | "intermission" | "defeated"): string {
-  return phase === "combat" ? "бой" : phase === "intermission" ? "передышка" : "поражение";
+function encounterLabel(phase: EncounterPhase): string {
+  return phase === "combat" ? "бой" : phase === "intermission" ? "передышка" : "результат";
 }
 
 function roleLabel(role: CrewRole): string {

@@ -6,9 +6,11 @@ import {
   applyGunnerInput,
   applyShieldInput,
   chooseRoleUpgrade,
+  createCleanFlyingCastleRun,
   createFlyingCastleConfig,
   createFlyingCastleState,
   createRoleOffers,
+  createTerminalCombatState,
   createWavePlan,
   dynamicEntityCount,
   getWaveDifficulty,
@@ -81,6 +83,51 @@ describe("deterministic combat foundation", () => {
       return state;
     };
     expect(run()).toEqual(run());
+  });
+
+  it("creates a deterministic clean run without carrying prior run state", () => {
+    const config = createFlyingCastleConfig();
+    const dirty: FlyingCastleState = {
+      ...createFlyingCastleState(config, 100),
+      castleHp: 1,
+      score: 999,
+      waveNumber: 8,
+      encounterTick: 77,
+      roleModifiers: {
+        pilot: { speedMultiplier: 2, accelerationMultiplier: 2, maxHpBonus: 100 },
+        gunner: { damageMultiplier: 2, cooldownMultiplier: 0.5, projectileSpeedMultiplier: 2 },
+        shield: { capacityBonus: 100, rechargeMultiplier: 2, arcWidthBonus: 1 }
+      },
+      inputs: {
+        pilot: { vector: { x: 1, y: 0 }, receivedTick: 5 },
+        gunner: { vector: { x: 1, y: 0 }, firing: true, receivedTick: 5 },
+        shield: { vector: { x: 1, y: 0 }, active: true, receivedTick: 5 }
+      }
+    };
+    expect(dirty.score).toBe(999);
+
+    const clean = createCleanFlyingCastleRun(config, 200);
+    expect(clean).toEqual(createCleanFlyingCastleRun(config, 200));
+    expect(clean.runSeed).toBe(200);
+    expect(clean.clock).toEqual({ tick: 0, elapsedMs: 0 });
+    expect(clean.castleHp).toBe(config.castleMaxHp);
+    expect(clean.castleMaxHp).toBe(config.castleMaxHp);
+    expect(clean.encounterPhase).toBe("combat");
+    expect(clean.outcome).toBeNull();
+    expect(clean.waveNumber).toBe(1);
+    expect(clean.encounterTick).toBe(0);
+    expect(clean.score).toBe(0);
+    expect(clean.nextSpawnSequence).toBe(1);
+    expect(clean.nextProjectileSequence).toBe(0);
+    expect(clean.enemies).toEqual([]);
+    expect(clean.asteroids).toEqual([]);
+    expect(clean.hostileProjectiles).toEqual([]);
+    expect(clean.homingMissiles).toEqual([]);
+    expect(clean.projectiles).toEqual([]);
+    expect(clean.roleOffers).toEqual({ pilot: null, gunner: null, shield: null });
+    expect(clean.roleSelections).toEqual({ pilot: null, gunner: null, shield: null });
+    expect(clean.inputs).toEqual({ pilot: null, gunner: null, shield: null });
+    expect(clean.roleModifiers).toEqual(createFlyingCastleState(config, 200).roleModifiers);
   });
 });
 
@@ -185,11 +232,24 @@ describe("combat motion and collision", () => {
     expect(stepped.castleHp).toBe(config.castleMaxHp - config.hostileBulletDamage);
   });
 
-  it("freezes the exact final state after defeat", () => {
+  it("normalizes terminal outcomes and freezes the exact final state", () => {
     const config = createFlyingCastleConfig();
     const initial = createFlyingCastleState(config, 72);
-    const defeated: FlyingCastleState = { ...initial, encounterPhase: "defeated", castleHp: 0 };
-    expect(advanceFlyingCastle(defeated, config)).toBe(defeated);
+    const defeat = createTerminalCombatState({ ...initial, castleHp: 0 }, "defeat");
+    expect(defeat).toMatchObject({ encounterPhase: "result", outcome: "defeat", castleHp: 0 });
+    expect(advanceFlyingCastle(defeat, config)).toBe(defeat);
+
+    const victory = createTerminalCombatState(initial, "victory");
+    expect(victory).toMatchObject({
+      encounterPhase: "result",
+      outcome: "victory",
+      castleHp: config.castleMaxHp
+    });
+    expect(advanceFlyingCastle(victory, config)).toBe(victory);
+    expect(() => createTerminalCombatState(initial, "defeat")).toThrow(RangeError);
+    expect(() => createTerminalCombatState({ ...initial, castleHp: 0 }, "victory")).toThrow(
+      RangeError
+    );
   });
 
   it("suppresses capped friendly fire while consuming the ordinary cooldown", () => {

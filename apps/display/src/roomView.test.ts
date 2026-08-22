@@ -7,10 +7,11 @@ function collection<T>(values: T[]) {
 }
 
 describe("display room view", () => {
-  it("flattens stable display-only combat maps into spawn-ordered strict v8 arrays", () => {
+  it("flattens stable display-only combat maps into spawn-ordered strict v9 arrays", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
+      runNumber: 2,
       displayConnected: true,
       displayLatencyMs: 18,
       players: collection([
@@ -56,6 +57,8 @@ describe("display room view", () => {
         },
         encounter: {
           phase: "combat",
+          hasOutcome: false,
+          outcome: "defeat",
           waveNumber: 3,
           encounterTick: 12,
           phaseTicksRemaining: 0,
@@ -124,11 +127,25 @@ describe("display room view", () => {
     expect(view?.game?.friendlyProjectiles).toHaveLength(1);
     expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
+    expect(view?.game?.encounter.outcome).toBeNull();
+    expect(view?.runNumber).toBe(2);
     expect(view?.game?.castle.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
     expect(view?.displayLatencyMs).toBe(18);
     expect(view?.players.map((player) => player.latencyMs)).toEqual([null, 47]);
+  });
+
+  it("requires a root run number before publishing a hydrated view", () => {
+    expect(
+      toDisplayRoomView({
+        roomId: "ROOM123",
+        phase: "lobby",
+        displayConnected: true,
+        players: collection([]),
+        hasGame: false
+      })
+    ).toBeUndefined();
   });
 
   it("builds a controller URL without losing existing parameters", () => {

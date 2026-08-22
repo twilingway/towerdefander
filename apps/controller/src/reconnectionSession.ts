@@ -13,6 +13,11 @@ export interface SessionStorage {
   setItem(key: string, value: string): void;
 }
 
+export interface ConsentedLeaveRoom {
+  readonly reconnection: { enabled: boolean };
+  leave(consented?: boolean): Promise<unknown>;
+}
+
 export function saveReconnectionSession(
   storage: SessionStorage,
   session: ReconnectionSession
@@ -36,6 +41,15 @@ export function readReconnectionSession(storage: SessionStorage): ReconnectionSe
 
 export function clearReconnectionSession(storage: SessionStorage): void {
   storage.removeItem(RECONNECTION_SESSION_KEY);
+}
+
+export async function leaveControllerRoom(
+  room: ConsentedLeaveRoom,
+  storage: SessionStorage | undefined
+): Promise<void> {
+  room.reconnection.enabled = false;
+  if (storage !== undefined) clearReconnectionSession(storage);
+  await room.leave(true);
 }
 
 function isReconnectionSession(value: unknown): value is ReconnectionSession {

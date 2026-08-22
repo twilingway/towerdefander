@@ -4,6 +4,7 @@ import type {
   EncounterPhase,
   EnemyKind,
   RoomPhase,
+  TerminalOutcome,
   UpgradeId
 } from "@town-defenders/protocol";
 
@@ -36,6 +37,8 @@ export class ShieldState extends Schema {
 
 export class EncounterState extends Schema {
   @type("string") phase: EncounterPhase = "combat";
+  @type("boolean") hasOutcome = false;
+  @type("string") outcome: TerminalOutcome = "defeat";
   @type("uint32") waveNumber = 1;
   @type("uint32") encounterTick = 0;
   @type("uint16") phaseTicksRemaining = 0;
@@ -182,6 +185,7 @@ export class FlyingCastleGameState extends Schema {
 export class TownDefendersState extends Schema {
   @type("string") roomId = "";
   @type("string") phase: RoomPhase = "lobby";
+  @type("uint32") runNumber = 0;
   @type("boolean") displayConnected = false;
   @type("int32") displayLatencyMs = -1;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();

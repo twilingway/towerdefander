@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup --config tsup.config.ts",
+    "benchmark:combat": "pnpm run build && node dist/benchmarks/runCombatRoomBenchmark.js",
     "dev": "node --env-file-if-exists=../../.env.local --import tsx --watch src/index.ts",
     "start": "node --env-file-if-exists=../../.env.local dist/index.js",
     "typecheck": "tsc --noEmit",

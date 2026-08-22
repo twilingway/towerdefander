@@ -1,6 +1,7 @@
 import { advanceClock, type SimulationClock } from "./primitives.js";
 import {
   advanceCombat,
+  assertCombatResultInvariant,
   createInitialCombatState,
   dynamicEntityCount,
   validateCombatConfig,
@@ -235,6 +236,13 @@ export function createFlyingCastleState(
   config: FlyingCastleConfig,
   runSeed: number
 ): FlyingCastleState {
+  return createCleanFlyingCastleRun(config, runSeed);
+}
+
+export function createCleanFlyingCastleRun(
+  config: FlyingCastleConfig,
+  runSeed: number
+): FlyingCastleState {
   validateFlyingCastleConfig(config);
   validateRunSeed(runSeed);
 
@@ -392,7 +400,8 @@ export function advanceFlyingCastle(
   config: FlyingCastleConfig
 ): FlyingCastleState {
   validateFlyingCastleConfig(config);
-  if (state.encounterPhase === "defeated") {
+  assertCombatResultInvariant(state);
+  if (state.encounterPhase === "result") {
     return state;
   }
   const clock = advanceClock(state.clock, config.fixedStepMs);

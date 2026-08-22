@@ -1,20 +1,45 @@
-## MODIFIED Requirements
+## REMOVED Requirements
 
 ### Requirement: Общий экран создаёт комнату летящего замка
+
+**Reason**: Protocol v7 room contract заменён strict protocol v8 combat room contract.
+
+**Migration**: Display и controllers одновременно переходят на protocol v8; v7 handshake получает
+`protocol_mismatch`.
+
+### Requirement: Клиенты получают строгие v7 projections
+
+**Reason**: Combat entities, encounter, HP и personalized upgrades требуют нового strict v8 view.
+
+**Migration**: Display и controller adapters переходят на отдельные v8 projections одновременно с
+server state.
+
+### Requirement: Сервер валидирует v7 messages до mutation
+
+**Reason**: Protocol v8 добавляет combat phases, upgrade command и расширенный validation pipeline.
+
+**Migration**: Все v7 messages отклоняются `protocol_mismatch`; v8 clients используют новые strict
+schemas.
+
+## ADDED Requirements
+
+### Requirement: Общий экран создаёт protocol v8 комнату летящего замка
 
 Display SHALL создавать комнату protocol v8 с тремя controller slots и публиковать roomId, ссылку и
 QR-код. Свежий display SHALL быть единственным владельцем display slot; повторное display-соединение
 допускается только через reconnect или после освобождения slot.
 
-#### Scenario: Display создаёт комнату
+#### Scenario: Display создаёт protocol v8 комнату
 
 - **WHEN** display создаёт комнату с protocolVersion 8 и role `display`
 - **THEN** сервер создаёт lobby с ролями `pilot`, `gunner`, `shield`
 
-#### Scenario: Устаревший клиент подключается к v8
+#### Scenario: Клиент protocol v7 подключается к v8
 
 - **WHEN** create или join options содержат protocolVersion 7
 - **THEN** сервер отклоняет соединение стабильной ошибкой `protocol_mismatch`
+
+## MODIFIED Requirements
 
 ### Requirement: Симуляция живёт независимо от controller transport
 
@@ -39,6 +64,8 @@ room clock/latency lifecycle, но combat state SHALL оставаться froze
 
 - **WHEN** encounter имеет phase defeated
 - **THEN** reconnect видит сохранённый final result, а combat entities/HP больше не мутируют
+
+## ADDED Requirements
 
 ### Requirement: Клиенты получают строгие v8 projections
 

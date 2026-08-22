@@ -5,7 +5,8 @@ import {
   type DisplayRoomView,
   type EnemyKind,
   type EncounterPhase,
-  type ProjectileKind
+  type ProjectileKind,
+  type TerminalOutcome
 } from "@town-defenders/protocol";
 
 interface ValueCollection<T> {
@@ -85,6 +86,8 @@ interface NetworkGameState {
   };
   encounter: {
     phase: EncounterPhase;
+    hasOutcome?: boolean;
+    outcome: TerminalOutcome | null;
     waveNumber: number;
     encounterTick: number;
     phaseTicksRemaining: number;
@@ -112,6 +115,7 @@ interface NetworkGameState {
 export interface NetworkRoomState {
   roomId?: string;
   phase?: DisplayRoomView["phase"];
+  runNumber?: number;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -126,6 +130,7 @@ export function toDisplayRoomView(
     state === undefined ||
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
+    typeof state.runNumber !== "number" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -148,6 +153,7 @@ export function toDisplayRoomView(
   return displayRoomViewSchema.parse({
     roomId: state.roomId,
     phase: state.phase,
+    runNumber: state.runNumber,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
@@ -161,7 +167,17 @@ export function toDisplayRoomView(
             castle: { ...game.castle },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
-            encounter: { ...game.encounter },
+            encounter: {
+              phase: game.encounter.phase,
+              outcome:
+                game.encounter.hasOutcome === true || game.encounter.outcome === null
+                  ? game.encounter.outcome
+                  : null,
+              waveNumber: game.encounter.waveNumber,
+              encounterTick: game.encounter.encounterTick,
+              phaseTicksRemaining: game.encounter.phaseTicksRemaining,
+              score: game.encounter.score
+            },
             roleModifiers: {
               pilot: { ...game.roleModifiers.pilot },
               gunner: { ...game.roleModifiers.gunner },

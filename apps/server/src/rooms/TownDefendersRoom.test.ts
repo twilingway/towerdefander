@@ -2,13 +2,18 @@ import {
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  roomClosingSchema,
   serverLatencyProbeSchema,
   serverErrorSchema,
   serverMessage,
   type CrewRole,
   type ServerErrorCode
 } from "@town-defenders/protocol";
-import type { FlyingCastleConfig, FlyingCastleState } from "@town-defenders/game-core";
+import {
+  createTerminalCombatState,
+  type FlyingCastleConfig,
+  type FlyingCastleState
+} from "@town-defenders/game-core";
 import { CloseCode, type Client } from "colyseus";
 import { describe, expect, it, vi } from "vitest";
 
@@ -51,7 +56,8 @@ function ready(room: TownDefendersRoom, controller: TestClient): void {
   room.handleReady(controller.client, {
     protocolVersion: PROTOCOL_VERSION,
     roomId: room.roomId,
-    playerId: controller.client.sessionId
+    playerId: controller.client.sessionId,
+    runNumber: room.state.runNumber
   });
 }
 
@@ -97,6 +103,12 @@ interface RoomInternals {
   gameConfig: FlyingCastleConfig;
   gameState: FlyingCastleState | undefined;
   upgradeJournals: Map<string, readonly unknown[]>;
+  sequenceWatermarks: Map<string, Map<string, number>>;
+  lifecycleDeadlines: Map<string, number>;
+  lifecycleGeneration: number;
+  metadataWritePromise: Promise<void> | undefined;
+  pendingMetadata: unknown;
+  setLifecycleDeadline(reason: string, expiresAtMs: number): void;
 }
 
 function internals(room: TownDefendersRoom): RoomInternals {
@@ -120,6 +132,15 @@ function forceIntermission(room: TownDefendersRoom): void {
   expect(room.state.game.encounter.phase).toBe("intermission");
 }
 
+function forceResult(room: TownDefendersRoom): void {
+  const runtime = internals(room);
+  const game = runtime.gameState;
+  if (game === undefined) throw new Error("Expected an active game.");
+  runtime.gameState = createTerminalCombatState({ ...game, castleHp: 0 }, "defeat");
+  room.advanceGameStep();
+  expect(room.state.game.encounter).toMatchObject({ phase: "result", outcome: "defeat" });
+}
+
 function chooseUpgrade(
   room: TownDefendersRoom,
   controller: TestClient,
@@ -134,6 +155,7 @@ function chooseUpgrade(
     protocolVersion: PROTOCOL_VERSION,
     roomId: room.roomId,
     playerId: controller.client.sessionId,
+    runNumber: room.state.runNumber,
     actionId,
     waveNumber: upgrade.offer.waveNumber,
     offerId: upgrade.offer.offerId,
@@ -141,8 +163,8 @@ function chooseUpgrade(
   });
 }
 
-describe("TownDefendersRoom v8 lifecycle", () => {
-  it("accepts only strict protocol v8 display create options", () => {
+describe("TownDefendersRoom v9 lifecycle", () => {
+  it("accepts only strict protocol v9 display create options", () => {
     const room = new TownDefendersRoom();
     room.roomId = "ROOM123";
     expect(() => {
@@ -218,6 +240,7 @@ describe("TownDefendersRoom v8 lifecycle", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 99,
       vector: { x: 1, y: 0 }
     });
@@ -234,6 +257,7 @@ describe("TownDefendersRoom v8 lifecycle", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       vector: { x: -1, y: 0 }
     });
@@ -251,7 +275,7 @@ describe("TownDefendersRoom v8 lifecycle", () => {
     const replacement = joinController(room, 9);
     expect(room.state.players.get(replacement.client.sessionId)).toMatchObject({
       role: "gunner",
-      ready: true
+      ready: false
     });
   });
 
@@ -266,14 +290,15 @@ describe("TownDefendersRoom v8 lifecycle", () => {
   });
 });
 
-describe("TownDefendersRoom v8 authoritative inputs", () => {
+describe("TownDefendersRoom v9 authoritative inputs", () => {
   it("moves the castle from fresh pilot input and ignores stale sequence", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: pilot.client.sessionId
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: 1, y: 0 } });
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: -1, y: 0 } });
@@ -287,7 +312,8 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: pilot.client.sessionId
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
 
     room.handlePilotInput(pilot.client, {
@@ -309,6 +335,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: gunner.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: 0, y: -1 },
       firing: true
@@ -328,6 +355,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: gunner.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 2,
       aim: { x: 0, y: -1 },
       firing: true
@@ -343,6 +371,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: shield.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: -1, y: 0 },
       active: true
@@ -361,6 +390,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: shield.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: 0, y: -1 },
       active: false
@@ -382,7 +412,8 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: gunner.client.sessionId
+      playerId: gunner.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
     room.handleGunnerInput(gunner.client, {
       ...envelope,
@@ -411,6 +442,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: gunner.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: 0, y: 1 },
       firing: false
@@ -433,7 +465,8 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: gunner.client.sessionId
+      playerId: gunner.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
     room.handleGunnerInput(gunner.client, {
       ...envelope,
@@ -468,6 +501,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: shield.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: 1, y: 0 },
       active: true
@@ -487,7 +521,8 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: shield.client.sessionId
+      playerId: shield.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
     room.handleShieldInput(shield.client, {
       ...envelope,
@@ -529,7 +564,8 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: gunner.client.sessionId
+      playerId: gunner.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
     room.handleGunnerInput(gunner.client, {
       ...envelope,
@@ -556,10 +592,11 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: lobby.roomId,
       playerId: lobbyPilot.client.sessionId,
+      runNumber: lobby.state.runNumber,
       sequence: 1,
       vector: { x: 1, y: 0 }
     });
-    expect(countErrors(lobbyPilot, "invalid_phase")).toBe(1);
+    expect(countErrors(lobbyPilot, "invalid_message")).toBe(1);
 
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -567,6 +604,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: 1, y: 0 },
       firing: true
@@ -576,6 +614,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: "someone-else",
+      runNumber: room.state.runNumber,
       sequence: 1,
       vector: { x: 1, y: 0 }
     });
@@ -584,6 +623,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       vector: { x: 1, y: 0 },
       extra: true
@@ -598,6 +638,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: shield.client.sessionId,
+      runNumber: room.state.runNumber,
       sequence: 1,
       aim: { x: 1, y: 0 },
       active: true
@@ -632,7 +673,7 @@ describe("TownDefendersRoom v8 authoritative inputs", () => {
   });
 });
 
-describe("TownDefendersRoom v8 combat projection and upgrades", () => {
+describe("TownDefendersRoom v9 combat projection and upgrades", () => {
   it("keeps the explicit run seed private and publishes the combat summary", () => {
     const { room } = startGame();
 
@@ -732,6 +773,7 @@ describe("TownDefendersRoom v8 combat projection and upgrades", () => {
         protocolVersion: PROTOCOL_VERSION,
         roomId: room.roomId,
         playerId: pilot.client.sessionId,
+        runNumber: room.state.runNumber,
         actionId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
         waveNumber: 999,
         offerId: upgrade.offer.offerId,
@@ -746,6 +788,7 @@ describe("TownDefendersRoom v8 combat projection and upgrades", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
       actionId: newest,
       waveNumber: 999,
       offerId: upgrade.offer.offerId,
@@ -767,6 +810,7 @@ describe("TownDefendersRoom v8 combat projection and upgrades", () => {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
       actionId: "22222222-2222-4222-8222-222222222222",
       waveNumber: gunner.offer.waveNumber,
       offerId: gunner.offer.offerId,
@@ -807,7 +851,8 @@ describe("TownDefendersRoom v8 combat projection and upgrades", () => {
     const envelope = {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
-      playerId: pilot.client.sessionId
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber
     } as const;
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: 1, y: 0 } });
     forceIntermission(room);
@@ -821,14 +866,10 @@ describe("TownDefendersRoom v8 combat projection and upgrades", () => {
     expect(internals(room).gameState?.inputs.pilot?.vector).toEqual({ x: -1, y: 0 });
   });
 
-  it("keeps defeated identities reconnectable but rejects fresh admission", async () => {
+  it("keeps result identities reconnectable and admits a replacement after expiry", async () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    const runtime = internals(room);
-    if (runtime.gameState === undefined) throw new Error("Expected active game.");
-    runtime.gameState = { ...runtime.gameState, castleHp: 0 };
-    room.advanceGameStep();
-    expect(room.state.game.encounter.phase).toBe("defeated");
+    forceResult(room);
 
     const allowReconnection = vi
       .spyOn(room, "allowReconnection")
@@ -839,11 +880,354 @@ describe("TownDefendersRoom v8 combat projection and upgrades", () => {
     const gunner = controllerAt(controllers, 1);
     allowReconnection.mockRejectedValueOnce(new Error("expired"));
     await room.onLeave(gunner.client, 1006);
-    expect(() => joinController(room, 9)).toThrow("invalid_phase");
+    const replacement = joinController(room, 9);
+    expect(room.state.players.get(replacement.client.sessionId)).toMatchObject({
+      role: "gunner",
+      ready: false
+    });
   });
 });
 
-describe("TownDefendersRoom v8 latency telemetry", () => {
+describe("TownDefendersRoom v9 rematch isolation", () => {
+  it("rejects stale ready, input and upgrade before per-run mutation", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const oldRunNumber = room.state.runNumber;
+    forceResult(room);
+    controllers.forEach((controller) => {
+      ready(room, controller);
+    });
+    expect(room.state.runNumber).toBe(oldRunNumber + 1);
+
+    const runtime = internals(room);
+    const castleX = room.state.game.castle.x;
+    room.handlePilotInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: oldRunNumber,
+      sequence: 999,
+      vector: { x: 1, y: 0 }
+    });
+    room.handleUpgradeChoose(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: oldRunNumber,
+      actionId: "99999999-9999-4999-8999-999999999999",
+      waveNumber: 1,
+      offerId: "old-offer",
+      upgradeId: "pilot_speed"
+    });
+    room.handleReady(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: oldRunNumber
+    });
+
+    expect(countErrors(pilot, "stale_run")).toBe(3);
+    expect(runtime.sequenceWatermarks.get(pilot.client.sessionId)?.size).toBe(0);
+    expect(runtime.upgradeJournals.get(pilot.client.sessionId)).toBeUndefined();
+    expect(room.state.players.get(pilot.client.sessionId)?.ready).toBe(false);
+    room.advanceGameStep();
+    expect(room.state.game.castle.x).toBe(castleX);
+  });
+
+  it("waits for three connected ready roles and treats duplicate ready idempotently", () => {
+    const { room, controllers } = startGame();
+    forceResult(room);
+    const firstRun = room.state.runNumber;
+    const pilot = controllerAt(controllers, 0);
+    const gunner = controllerAt(controllers, 1);
+    const shield = controllerAt(controllers, 2);
+
+    ready(room, pilot);
+    ready(room, pilot);
+    ready(room, gunner);
+    expect(room.state.runNumber).toBe(firstRun);
+    const shieldState = room.state.players.get(shield.client.sessionId);
+    if (shieldState === undefined) throw new Error("Expected shield roster entry.");
+    shieldState.connected = false;
+    ready(room, shield);
+    expect(room.state.runNumber).toBe(firstRun);
+
+    shieldState.connected = true;
+    ready(room, shield);
+    expect(room.state.runNumber).toBe(firstRun + 1);
+  });
+
+  it("starts one clean run while preserving identities and roles", () => {
+    const { room, controllers } = startGame();
+    const setInterval = vi.spyOn(room.clock, "setInterval");
+    const pilot = controllerAt(controllers, 0);
+    room.handlePilotInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
+      sequence: 7,
+      vector: { x: 1, y: 0 }
+    });
+    forceIntermission(room);
+    chooseUpgrade(room, pilot, "pilot", "77777777-7777-4777-8777-777777777777");
+    const previousSeed = internals(room).gameState?.runSeed;
+    const roster = [...room.state.players.values()].map(({ playerId, playerName, role }) => ({
+      playerId,
+      playerName,
+      role
+    }));
+    forceResult(room);
+
+    controllers.forEach((controller) => {
+      ready(room, controller);
+    });
+
+    const next = internals(room).gameState;
+    expect(room.state.runNumber).toBe(2);
+    expect(next?.runSeed).not.toBe(previousSeed);
+    expect(
+      [...room.state.players.values()].map(({ playerId, playerName, role }) => ({
+        playerId,
+        playerName,
+        role
+      }))
+    ).toEqual(roster);
+    expect([...room.state.players.values()].every(({ ready }) => !ready)).toBe(true);
+    expect(room.state.game).toMatchObject({ tick: 0, elapsedMs: 0 });
+    expect(room.state.game.castle).toMatchObject({ hp: 500, maxHp: 500 });
+    expect(room.state.game.encounter).toMatchObject({
+      phase: "combat",
+      hasOutcome: false,
+      outcome: "defeat",
+      waveNumber: 1,
+      score: 0
+    });
+    expect(room.state.game.display.enemyShips).toHaveLength(0);
+    expect(room.state.game.display.asteroids).toHaveLength(0);
+    expect(room.state.game.upgrade).toHaveLength(0);
+    expect(internals(room).sequenceWatermarks.get(pilot.client.sessionId)?.size).toBe(0);
+    expect(internals(room).upgradeJournals.size).toBe(0);
+    expect(setInterval).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves terminal readiness over reconnect and starts after the crew returns", async () => {
+    const { room, controllers } = startGame();
+    forceResult(room);
+    const pilot = controllerAt(controllers, 0);
+    ready(room, pilot);
+    vi.spyOn(room, "allowReconnection").mockResolvedValueOnce(pilot.client);
+    await room.onLeave(pilot.client, 1006);
+    expect(room.state.players.get(pilot.client.sessionId)).toMatchObject({
+      connected: true,
+      ready: true
+    });
+    ready(room, controllerAt(controllers, 1));
+    ready(room, controllerAt(controllers, 2));
+    expect(room.state.runNumber).toBe(2);
+  });
+});
+
+describe("TownDefendersRoom v9 disposal and operations metadata", () => {
+  it("closes the whole room only when the display leaves explicitly", async () => {
+    const room = createRoom();
+    const display = joinDisplay(room);
+    joinController(room, 0);
+    const broadcast = vi.spyOn(room, "broadcast");
+    const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    await room.onLeave(display.client, CloseCode.CONSENTED);
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(broadcast).toHaveBeenCalledWith(serverMessage.roomClosing, {
+      reason: "display_left"
+    });
+    expect(roomClosingSchema.safeParse(broadcast.mock.calls.at(-1)?.[1]).success).toBe(true);
+  });
+
+  it("keeps a transport-loss display reconnectable without disposing the room", async () => {
+    const room = createRoom();
+    const display = joinDisplay(room);
+    vi.spyOn(room, "allowReconnection").mockResolvedValue(display.client);
+    const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    await room.onLeave(display.client, 1006);
+
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(room.state.displayConnected).toBe(true);
+    expect(internals(room).lifecycleDeadlines.has("display_reconnect_expired")).toBe(false);
+  });
+
+  it("arms fixed lobby, result, zero-controller, display and absolute deadlines", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const room = createRoom();
+      const runtime = internals(room);
+      expect(runtime.lifecycleDeadlines.get("lobby_expired")).toBe(910_000);
+      expect(runtime.lifecycleDeadlines.get("room_lifetime_expired")).toBe(14_410_000);
+      expect(runtime.lifecycleDeadlines.has("controllers_expired")).toBe(false);
+
+      const controller = joinController(room, 0);
+      await room.onLeave(controller.client, CloseCode.CONSENTED);
+      expect(runtime.lifecycleDeadlines.get("controllers_expired")).toBe(310_000);
+
+      const active = startGame().room;
+      forceResult(active);
+      expect(internals(active).lifecycleDeadlines.get("result_expired")).toBe(610_000);
+
+      const withDisplay = createRoom();
+      const display = joinDisplay(withDisplay);
+      let rejectReconnect: ((reason: Error) => void) | undefined;
+      vi.spyOn(withDisplay, "allowReconnection").mockImplementation(
+        () =>
+          new Promise<Client>((_resolve, reject) => {
+            rejectReconnect = reject;
+          }) as never
+      );
+      vi.spyOn(withDisplay, "disconnect").mockResolvedValue(undefined);
+      const leave = withDisplay.onLeave(display.client, 1006);
+      expect(internals(withDisplay).lifecycleDeadlines.get("display_reconnect_expired")).toBe(
+        40_000
+      );
+      rejectReconnect?.(new Error("expired"));
+      await leave;
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it.each([
+    "display_reconnect_expired",
+    "lobby_expired",
+    "result_expired",
+    "controllers_expired",
+    "room_lifetime_expired"
+  ] as const)("disposes once when the %s deadline expires", async (reason) => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(30_000);
+    try {
+      const room = new TownDefendersRoom();
+      room.roomId = "ROOM123";
+      const setTimeout = vi.spyOn(room.clock, "setTimeout");
+      const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+      const broadcast = vi.spyOn(room, "broadcast");
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+      internals(room).setLifecycleDeadline(reason, 30_010);
+      const callback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
+      if (callback === undefined) throw new Error("Expected lifecycle callback.");
+
+      now.mockReturnValue(30_011);
+      callback();
+      await vi.waitFor(() => {
+        expect(disconnect).toHaveBeenCalledTimes(1);
+      });
+
+      expect(broadcast).toHaveBeenCalledWith(serverMessage.roomClosing, { reason });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("ignores stale timer generations and uses stable earliest-deadline priority", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(20_000);
+    try {
+      const room = new TownDefendersRoom();
+      room.roomId = "ROOM123";
+      const setTimeout = vi.spyOn(room.clock, "setTimeout");
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+      const staleCallback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
+      const runtime = internals(room);
+      runtime.setLifecycleDeadline("result_expired", 20_100);
+      runtime.setLifecycleDeadline("room_lifetime_expired", 20_100);
+      const currentCallback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
+      if (staleCallback === undefined || currentCallback === undefined) {
+        throw new Error("Expected lifecycle callbacks.");
+      }
+      const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+      const broadcast = vi.spyOn(room, "broadcast");
+
+      now.mockReturnValue(20_101);
+      staleCallback();
+      expect(disconnect).not.toHaveBeenCalled();
+      currentCallback();
+      await vi.waitFor(() => {
+        expect(disconnect).toHaveBeenCalledTimes(1);
+      });
+      expect(broadcast).toHaveBeenCalledWith(serverMessage.roomClosing, {
+        reason: "room_lifetime_expired"
+      });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("publishes only anonymous compact metadata and coalesces ordered writes", async () => {
+    let releaseFirstWrite: (() => void) | undefined;
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    const room = new TownDefendersRoom();
+    room.roomId = "SECRET-ROOM-CODE";
+    const setMetadata = vi
+      .spyOn(room, "setMetadata")
+      .mockImplementationOnce(() => firstWrite)
+      .mockResolvedValue(undefined);
+    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+    joinDisplay(room);
+    joinController(room, 0);
+    joinController(room, 1);
+    expect(setMetadata).toHaveBeenCalledTimes(1);
+
+    releaseFirstWrite?.();
+    await vi.waitFor(() => {
+      expect(setMetadata).toHaveBeenCalledTimes(2);
+    });
+    const metadata = setMetadata.mock.calls.at(-1)?.[0];
+    expect(metadata).toMatchObject({
+      status: "lobby",
+      connectedPlayers: 2,
+      reservedPlayers: 0,
+      capacity: 3,
+      displayConnected: true
+    });
+    expect(Object.keys(metadata ?? {}).sort()).toEqual([
+      "capacity",
+      "connectedPlayers",
+      "createdAtMs",
+      "displayConnected",
+      "expiresAtMs",
+      "reservedPlayers",
+      "statsId",
+      "status",
+      "statusChangedAtMs"
+    ]);
+    const serialized = JSON.stringify(metadata);
+    expect(serialized).not.toContain("SECRET-ROOM-CODE");
+    expect(serialized).not.toContain("Player 1");
+    expect(serialized).not.toContain("player-1");
+  });
+
+  it("isolates metadata write failures from gameplay", async () => {
+    const room = new TownDefendersRoom();
+    room.roomId = "ROOM123";
+    vi.spyOn(room, "setMetadata").mockImplementation(() => {
+      throw new Error("driver unavailable");
+    });
+    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+    const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+      joinController(room, index)
+    );
+    controllers.forEach((controller) => {
+      ready(room, controller);
+    });
+    await vi.waitFor(() => {
+      expect(internals(room).metadataWritePromise).toBeUndefined();
+    });
+    expect(room.state.phase).toBe("active");
+    expect(room.state.runNumber).toBe(1);
+  });
+});
+
+describe("TownDefendersRoom v9 latency telemetry", () => {
   it("publishes server-measured display and controller RTT without changing gameplay", () => {
     const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
     try {
