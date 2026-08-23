@@ -56,11 +56,11 @@ input state и per-run journals SHALL быть созданы заново бе�
 
 ### Requirement: Run epoch изолирует последовательные забеги
 
-Protocol v10 SHALL публиковать positive safe integer `runNumber` в active/result snapshots и SHALL
-требовать expected runNumber во всех ready, gameplay, upgrade и rematch commands. Lobby до первого
-run SHALL иметь runNumber 0. Server SHALL проверять runNumber после strict schema/connection
-identity и до phase, sequence, action journal либо simulation mutation. Packet другого run SHALL
-получить actor-only `stale_run` и SHALL NOT менять watermark, journal, readiness или world.
+Current strict protocol SHALL публиковать positive safe integer `runNumber` в active/result
+snapshots и SHALL требовать expected runNumber во всех ready, gameplay, upgrade и rematch commands.
+Lobby до первого run SHALL иметь runNumber 0. Server SHALL проверять protocol/schema, connection
+identity и runNumber до phase, sequence, action journal либо simulation mutation. Packet другого run
+SHALL получить actor-only `stale_run` и SHALL NOT менять watermark, journal, readiness или world.
 
 #### Scenario: Запоздавшее движение первого забега
 
@@ -74,7 +74,7 @@ identity и до phase, sequence, action journal либо simulation mutation. P
 
 #### Scenario: Клиент v9 подключается к v10
 
-- **WHEN** create/join либо message использует protocolVersion 9
+- **WHEN** create/join либо message использует protocolVersion 10
 - **THEN** server отклоняет его стабильной ошибкой `protocol_mismatch` без mutation
 
 ### Requirement: Явный выход отличается от recoverable disconnect

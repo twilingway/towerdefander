@@ -50,7 +50,7 @@ Pilot SHALL отправлять только `pilot:input` и собствен�
 
 ### Requirement: Continuous intents упорядочены
 
-Каждый continuous intent SHALL содержать protocolVersion 10, roomId, playerId и монотонный safe
+Каждый continuous intent SHALL содержать current protocolVersion, roomId, playerId и монотонный safe
 integer `sequence`. Server SHALL применять только sequence больше последнего принятого для
 actor/input type. Duplicate или out-of-order sequence SHALL игнорироваться без mutation и SHALL NOT
 менять angular target. Shield `active` SHALL быть absolute desired state: handler только заменяет
@@ -81,7 +81,7 @@ angular target SHALL NOT восстанавливаться. При перехо
 #### Scenario: Pilot отключился с зажатым направлением
 
 - **WHEN** pilot connection закрывается во время движения
-- **THEN** server немедленно обнуляет target vector, а core плавно тормозит spaceship
+- **THEN** server немедленно обнуляет target vector, а core плавно тормозит spaceship внутри circle
 
 #### Scenario: Pilot восстановил соединение
 
@@ -269,7 +269,7 @@ input.
 
 ### Requirement: Controller управляет готовностью к следующему run
 
-В lobby кнопка ready SHALL готовить первый run с runNumber 0; в terminal result та же strict v10
+В lobby кнопка ready SHALL готовить первый run с runNumber 0; в terminal result та же current strict
 ready command SHALL означать «Играть ещё» для текущего runNumber. Кнопка SHALL показывать
 authoritative ready state, блокироваться после принятия и снова становиться false при следующем
 terminal result. Combat/intermission SHALL не показывать rematch action.

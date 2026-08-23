@@ -16,15 +16,10 @@ import {
 } from "./spaceshipViewModel.js";
 
 describe("spaceship view model", () => {
-  it("centers the camera while clamping all world edges", () => {
-    expect(getBoundedCameraScroll({ x: 2400, y: 1600 }, 4800, 3200, 1280, 720)).toEqual({
-      x: 1760,
-      y: 1240
-    });
-    expect(getBoundedCameraScroll({ x: 0, y: 0 }, 4800, 3200, 1280, 720)).toEqual({ x: 0, y: 0 });
-    expect(getBoundedCameraScroll({ x: 4800, y: 3200 }, 4800, 3200, 1280, 720)).toEqual({
-      x: 3520,
-      y: 2480
+  it("centers the camera on the circular arena midpoint", () => {
+    expect(getBoundedCameraScroll({ x: 2200, y: 2200 }, 4400, 4400, 1600, 900)).toEqual({
+      x: 1400,
+      y: 1750
     });
   });
 
@@ -40,51 +35,62 @@ describe("spaceship view model", () => {
   it("converts a centered world view into Phaser renderer-space scroll", () => {
     expect(
       getPhaserCameraScroll({
-        focus: { x: 2400, y: 1600 },
-        worldWidth: 4800,
-        worldHeight: 3200,
+        focus: { x: 2200, y: 2200 },
+        worldWidth: 4400,
+        worldHeight: 4400,
         rendererWidth: 1920,
         rendererHeight: 1080,
         viewportWidth: 1600,
         viewportHeight: 900,
         overscan: 0
       })
-    ).toEqual({ x: 1440, y: 1060 });
+    ).toEqual({ x: 1240, y: 1660 });
   });
 
-  it("keeps the full ship envelope inside a 160 CSS pixel safe edge", () => {
-    const zoom = 1.2;
-    const radius = 52;
-    const visualExtension = 42;
-    const overscan = getCameraOverscan(radius, zoom);
-    const viewportWidth = 1600;
-    const viewportHeight = 900;
-    const edgePositions = [
-      { x: radius, y: radius },
-      { x: 4800 - radius, y: radius },
-      { x: radius, y: 3200 - radius },
-      { x: 4800 - radius, y: 3200 - radius }
-    ];
+  it.each([
+    [1920, 1080],
+    [1366, 768],
+    [1024, 768]
+  ])(
+    "keeps cardinal and diagonal rim positions inside the safe edge at %ix%i",
+    (rendererWidth, rendererHeight) => {
+      const viewport = getResponsiveViewport(rendererWidth, rendererHeight);
+      const zoom = viewport.zoom;
+      const radius = 52;
+      const visualExtension = 42;
+      const overscan = getCameraOverscan(radius, zoom);
+      const center = 2200;
+      const legalRadius = 2200 - radius;
+      const diagonalOffset = legalRadius / Math.sqrt(2);
+      const rimPositions = [
+        { x: center - legalRadius, y: center },
+        { x: center + legalRadius, y: center },
+        { x: center, y: center - legalRadius },
+        { x: center, y: center + legalRadius },
+        { x: center - diagonalOffset, y: center - diagonalOffset },
+        { x: center + diagonalOffset, y: center + diagonalOffset }
+      ];
 
-    for (const focus of edgePositions) {
-      const worldView = getBoundedCameraScroll(
-        focus,
-        4800,
-        3200,
-        viewportWidth,
-        viewportHeight,
-        overscan
-      );
-      const visualLeft = (focus.x - radius - visualExtension - worldView.x) * zoom;
-      const visualRight =
-        (worldView.x + viewportWidth - (focus.x + radius + visualExtension)) * zoom;
-      const visualTop = (focus.y - radius - visualExtension - worldView.y) * zoom;
-      const visualBottom =
-        (worldView.y + viewportHeight - (focus.y + radius + visualExtension)) * zoom;
-      expect(Math.min(visualLeft, visualRight)).toBeGreaterThanOrEqual(160);
-      expect(Math.min(visualTop, visualBottom)).toBeGreaterThanOrEqual(160);
+      for (const focus of rimPositions) {
+        const worldView = getBoundedCameraScroll(
+          focus,
+          4400,
+          4400,
+          viewport.width,
+          viewport.height,
+          overscan
+        );
+        const visualLeft = (focus.x - radius - visualExtension - worldView.x) * zoom;
+        const visualRight =
+          (worldView.x + viewport.width - (focus.x + radius + visualExtension)) * zoom;
+        const visualTop = (focus.y - radius - visualExtension - worldView.y) * zoom;
+        const visualBottom =
+          (worldView.y + viewport.height - (focus.y + radius + visualExtension)) * zoom;
+        expect(Math.min(visualLeft, visualRight)).toBeGreaterThanOrEqual(160);
+        expect(Math.min(visualTop, visualBottom)).toBeGreaterThanOrEqual(160);
+      }
     }
-  });
+  );
 
   it("centers an expanded world that is smaller than the visible viewport", () => {
     expect(getBoundedCameraScroll({ x: 50, y: 50 }, 100, 100, 500, 300, 25)).toEqual({

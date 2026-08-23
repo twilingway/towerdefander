@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   LEGACY_RECONNECTION_SESSION_KEY,
+  LEGACY_V10_RECONNECTION_SESSION_KEY,
   RECONNECTION_SESSION_KEY,
   clearReconnectionSession,
   leaveControllerRoom,
@@ -47,7 +48,7 @@ describe("controller reconnection session", () => {
     expect(readReconnectionSession(storage)).toBeUndefined();
   });
 
-  it("deletes the legacy v9 session before reading reconnect data", () => {
+  it("deletes legacy v9 and v10 sessions before reading v11 reconnect data", () => {
     const storage = createStorage();
     const currentSession = {
       endpoint: "ws://localhost:2567",
@@ -56,27 +57,32 @@ describe("controller reconnection session", () => {
       token: "SPACE1:token"
     };
     storage.setItem(LEGACY_RECONNECTION_SESSION_KEY, '{"token":"stale"}');
+    storage.setItem(LEGACY_V10_RECONNECTION_SESSION_KEY, '{"token":"stale-v10"}');
     storage.setItem(RECONNECTION_SESSION_KEY, JSON.stringify(currentSession));
 
     expect(readReconnectionSession(storage)).toEqual(currentSession);
     expect(storage.getItem(LEGACY_RECONNECTION_SESSION_KEY)).toBeNull();
+    expect(storage.getItem(LEGACY_V10_RECONNECTION_SESSION_KEY)).toBeNull();
   });
 
-  it("does not reuse a legacy v9 session", () => {
-    const storage = createStorage();
-    storage.setItem(
-      LEGACY_RECONNECTION_SESSION_KEY,
-      JSON.stringify({
-        endpoint: "ws://localhost:2567",
-        roomId: "OLD1",
-        playerName: "Alex",
-        token: "OLD1:token"
-      })
-    );
+  it.each([LEGACY_RECONNECTION_SESSION_KEY, LEGACY_V10_RECONNECTION_SESSION_KEY])(
+    "does not reuse legacy session key %s",
+    (legacyKey) => {
+      const storage = createStorage();
+      storage.setItem(
+        legacyKey,
+        JSON.stringify({
+          endpoint: "ws://localhost:2567",
+          roomId: "OLD1",
+          playerName: "Alex",
+          token: "OLD1:token"
+        })
+      );
 
-    expect(readReconnectionSession(storage)).toBeUndefined();
-    expect(storage.getItem(LEGACY_RECONNECTION_SESSION_KEY)).toBeNull();
-  });
+      expect(readReconnectionSession(storage)).toBeUndefined();
+      expect(storage.getItem(legacyKey)).toBeNull();
+    }
+  );
 
   it("disables reconnect, clears storage and performs consented leave", async () => {
     const storage = createStorage();

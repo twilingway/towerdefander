@@ -1,4 +1,5 @@
 import { advanceClock, type SimulationClock } from "./primitives.js";
+import { constrainMovingCircleToArena, isWithinCircularEnvelope } from "./arenaGeometry.js";
 import {
   advanceCombat,
   assertCombatResultInvariant,
@@ -103,8 +104,9 @@ export interface SpaceshipSimulationState extends CombatStateFields {
 
 const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   fixedStepMs: 50,
-  worldWidth: 4800,
-  worldHeight: 3200,
+  worldWidth: 4400,
+  worldHeight: 4400,
+  arenaRadius: 2200,
   spaceshipSpeedPerSecond: 320,
   spaceshipAccelerationPerSecondSquared: 640,
   spaceshipBrakingPerSecondSquared: 800,
@@ -134,6 +136,8 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   asteroidDamage: 40,
   friendlyProjectileDamage: 25,
   enemySpawnIntervalTicks: 12,
+  ambientAsteroidIntervalMinTicks: 40,
+  ambientAsteroidIntervalMaxTicks: 100,
   intermissionTicks: 200,
   waveBaseBudget: 5,
   waveBudgetGrowth: 2,
@@ -163,7 +167,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   missileSpeedPerSecond: 260,
   missileTurnRatePerSecond: Math.PI / 2,
   missileLifetimeTicks: 240,
-  worldPadding: 240,
+  worldPadding: 256,
   spatialCellSize: 256,
   caps: {
     enemyShips: 40,
@@ -224,11 +228,8 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     }
   }
 
-  if (config.worldWidth < config.spaceshipRadius * 2) {
-    throw new RangeError("worldWidth must fit the spaceship diameter");
-  }
-  if (config.worldHeight < config.spaceshipRadius * 2) {
-    throw new RangeError("worldHeight must fit the spaceship diameter");
+  if (config.arenaRadius < config.spaceshipRadius) {
+    throw new RangeError("arenaRadius must fit the spaceship radius");
   }
 }
 
@@ -485,7 +486,7 @@ export function advanceSpaceshipSimulation(
   const shieldDepleted = shieldWasActive && shieldEnergy === 0;
   const shieldActive = shieldWasActive && !shieldDepleted;
   const shieldRearmRequired = state.shieldRearmRequired || shieldDepleted;
-  const movedProjectiles = moveProjectiles(state.projectiles, clock.tick, config);
+  const movedProjectiles = moveProjectiles(state.projectiles, config);
   const canFire =
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
     (state.lastFiredTick === null ||
@@ -611,14 +612,22 @@ function advanceCombatInSpaceshipSimulation(
     return {
       ...recharged,
       ...result,
-      projectiles: result.projectiles as readonly ProjectileState[]
+      projectiles: removeExpiredProjectiles(
+        result.projectiles as readonly ProjectileState[],
+        recharged.clock.tick,
+        config
+      )
     };
   }
   const result = advanceCombat(rechargedForCombat(state, config), config);
   const next: SpaceshipSimulationState = {
     ...state,
     ...result,
-    projectiles: result.projectiles as readonly ProjectileState[]
+    projectiles: removeExpiredProjectiles(
+      result.projectiles as readonly ProjectileState[],
+      state.clock.tick,
+      config
+    )
   };
   return result.encounterPhase === "intermission" ? neutralizeCombatControls(next) : next;
 }
@@ -783,52 +792,66 @@ function moveSpaceshipWithinWorld(
   secondsPerStep: number,
   config: SpaceshipSimulationConfig
 ): SpaceshipKinematics {
-  const minimum = config.spaceshipRadius;
-  const maximumX = config.worldWidth - config.spaceshipRadius;
-  const maximumY = config.worldHeight - config.spaceshipRadius;
   const candidateX = spaceship.x + velocity.x * secondsPerStep;
   const candidateY = spaceship.y + velocity.y * secondsPerStep;
-  const x = clamp(candidateX, minimum, maximumX);
-  const y = clamp(candidateY, minimum, maximumY);
+  const constrained = constrainMovingCircleToArena(
+    {
+      x: candidateX,
+      y: candidateY,
+      radius: config.spaceshipRadius,
+      velocity
+    },
+    {
+      centerX: config.worldWidth / 2,
+      centerY: config.worldHeight / 2,
+      radius: config.arenaRadius
+    }
+  );
 
   return {
-    x,
-    y,
+    x: constrained.x,
+    y: constrained.y,
     previousX: spaceship.x,
     previousY: spaceship.y,
-    velocity: {
-      x: (x === minimum && velocity.x < 0) || (x === maximumX && velocity.x > 0) ? 0 : velocity.x,
-      y: (y === minimum && velocity.y < 0) || (y === maximumY && velocity.y > 0) ? 0 : velocity.y
-    }
+    velocity: constrained.velocity
   };
 }
 
 function moveProjectiles(
   projectiles: readonly ProjectileState[],
-  nextTick: number,
   config: SpaceshipSimulationConfig
 ): readonly ProjectileState[] {
   const secondsPerStep = config.fixedStepMs / 1000;
 
-  return projectiles
-    .filter(
-      (projectile) =>
-        (nextTick - projectile.spawnedTick) * config.fixedStepMs < config.projectileLifetimeMs
-    )
-    .map((projectile) => ({
-      ...projectile,
-      previousX: projectile.x,
-      previousY: projectile.y,
-      x: projectile.x + projectile.velocity.x * secondsPerStep,
-      y: projectile.y + projectile.velocity.y * secondsPerStep
-    }))
-    .filter(
-      (projectile) =>
-        projectile.x >= -config.projectileRadius &&
-        projectile.x <= config.worldWidth + config.projectileRadius &&
-        projectile.y >= -config.projectileRadius &&
-        projectile.y <= config.worldHeight + config.projectileRadius
-    );
+  return projectiles.map((projectile) => ({
+    ...projectile,
+    previousX: projectile.x,
+    previousY: projectile.y,
+    x: projectile.x + projectile.velocity.x * secondsPerStep,
+    y: projectile.y + projectile.velocity.y * secondsPerStep
+  }));
+}
+
+function removeExpiredProjectiles(
+  projectiles: readonly ProjectileState[],
+  currentTick: number,
+  config: SpaceshipSimulationConfig
+): readonly ProjectileState[] {
+  return projectiles.filter(
+    (projectile) =>
+      (currentTick - projectile.spawnedTick) * config.fixedStepMs < config.projectileLifetimeMs &&
+      isWithinCircularEnvelope(
+        projectile.x,
+        projectile.y,
+        projectile.radius,
+        {
+          centerX: config.worldWidth / 2,
+          centerY: config.worldHeight / 2,
+          radius: config.arenaRadius
+        },
+        config.worldPadding
+      )
+  );
 }
 
 function isFresh(

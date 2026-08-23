@@ -54,8 +54,9 @@ describe("spaceship configuration", () => {
 
     expect(config).toMatchObject({
       fixedStepMs: 50,
-      worldWidth: 4800,
-      worldHeight: 3200,
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200,
       spaceshipSpeedPerSecond: 320,
       spaceshipAccelerationPerSecondSquared: 640,
       spaceshipBrakingPerSecondSquared: 800,
@@ -73,7 +74,9 @@ describe("spaceship configuration", () => {
       turretAngularBrakingPerSecondSquared: (13 * Math.PI) / 10,
       shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
       shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
-      shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8
+      shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8,
+      ambientAsteroidIntervalMinTicks: 40,
+      ambientAsteroidIntervalMaxTicks: 100
     });
     expect(createSpaceshipSimulationState(config, 1)).toEqual(
       createSpaceshipSimulationState(config, 1)
@@ -87,13 +90,16 @@ describe("spaceship configuration", () => {
       shieldTargetAngle: null,
       shieldAngularVelocity: 0
     });
-    expect(createSpaceshipSimulationState(config, 1).spaceship).toMatchObject({ x: 2400, y: 1600 });
+    expect(createSpaceshipSimulationState(config, 1).spaceship).toMatchObject({ x: 2200, y: 2200 });
   });
 
   it.each([
     ["fixedStepMs", 0],
     ["worldWidth", Number.NaN],
     ["worldHeight", 0],
+    ["arenaRadius", 0],
+    ["ambientAsteroidIntervalMinTicks", 0],
+    ["ambientAsteroidIntervalMaxTicks", 1.5],
     ["spaceshipSpeedPerSecond", -1],
     ["spaceshipAccelerationPerSecondSquared", 0],
     ["spaceshipBrakingPerSecondSquared", Number.POSITIVE_INFINITY],
@@ -121,6 +127,22 @@ describe("spaceship configuration", () => {
   it("rejects worlds that cannot fit the spaceship", () => {
     expect(() => createSpaceshipSimulationConfig({ worldWidth: 100 })).toThrow(RangeError);
     expect(() => createSpaceshipSimulationConfig({ worldHeight: 100 })).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationConfig({ arenaRadius: 51 })).toThrow(RangeError);
+    expect(() =>
+      createSpaceshipSimulationConfig({ worldWidth: 200, worldHeight: 200, arenaRadius: 99 })
+    ).toThrow(RangeError);
+    expect(() =>
+      createSpaceshipSimulationConfig({
+        ambientAsteroidIntervalMinTicks: 101,
+        ambientAsteroidIntervalMaxTicks: 100
+      })
+    ).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationConfig({ gunshipRadius: 2201 })).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationConfig({ carrierRadius: 2201 })).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationConfig({ worldPadding: 257 })).toThrow(RangeError);
+    expect(() =>
+      createSpaceshipSimulationConfig({ asteroidRadius: 257, worldPadding: 256 })
+    ).toThrow(RangeError);
   });
 });
 
@@ -167,8 +189,12 @@ describe("pilot movement", () => {
     expect(moved.y).toBeCloseTo(1.6);
   });
 
-  it("clamps at bounds and clears only the outward velocity component", () => {
-    const config = createSpaceshipSimulationConfig({ worldWidth: 200, worldHeight: 200 });
+  it("projects at the circular rim and clears only the outward velocity component", () => {
+    const config = createSpaceshipSimulationConfig({
+      worldWidth: 200,
+      worldHeight: 200,
+      arenaRadius: 100
+    });
     const nearRight: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       spaceship: { x: 147, y: 100, velocity: { x: 100, y: 100 } }
@@ -178,9 +204,14 @@ describe("pilot movement", () => {
       config
     );
 
-    expect(bounded.spaceship.x).toBe(config.worldWidth - config.spaceshipRadius);
-    expect(bounded.spaceship.velocity.x).toBe(0);
-    expect(bounded.spaceship.velocity.y).toBeGreaterThan(100);
+    expect(Math.hypot(bounded.spaceship.x - 100, bounded.spaceship.y - 100)).toBeCloseTo(
+      config.arenaRadius - config.spaceshipRadius
+    );
+    const normalX = (bounded.spaceship.x - 100) / (config.arenaRadius - config.spaceshipRadius);
+    const normalY = (bounded.spaceship.y - 100) / (config.arenaRadius - config.spaceshipRadius);
+    expect(
+      bounded.spaceship.velocity.x * normalX + bounded.spaceship.velocity.y * normalY
+    ).toBeCloseTo(0);
 
     const inward: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
@@ -655,7 +686,7 @@ describe("gunner simulation", () => {
     expect(stale.inputs.gunner?.firing).toBe(false);
   });
 
-  it("expires projectiles by lifetime and removes projectiles outside padded bounds", () => {
+  it("expires projectiles by lifetime and removes them outside the circular padded envelope", () => {
     const lifetimeConfig = createSpaceshipSimulationConfig({ projectileSpeedPerSecond: 1 });
     let state = applyGunnerInput(createSpaceshipSimulationState(lifetimeConfig, 1), {
       vector: { x: 1, y: 0 },
@@ -669,6 +700,7 @@ describe("gunner simulation", () => {
     const smallWorld = createSpaceshipSimulationConfig({
       worldWidth: 200,
       worldHeight: 200,
+      arenaRadius: 100,
       projectileSpeedPerSecond: 4000
     });
     let escaping = applyGunnerInput(createSpaceshipSimulationState(smallWorld, 1), {
@@ -676,6 +708,7 @@ describe("gunner simulation", () => {
       firing: true,
       receivedTick: 0
     });
+    escaping = advanceSpaceshipSimulation(escaping, smallWorld);
     escaping = advanceSpaceshipSimulation(escaping, smallWorld);
     escaping = advanceSpaceshipSimulation(escaping, smallWorld);
     expect(escaping.projectiles).toEqual([]);

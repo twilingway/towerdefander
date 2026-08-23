@@ -13,8 +13,9 @@ state; клиенты отправляют только intents.
 
 ## Текущий gameplay
 
-- deterministic fixed-step simulation 20 Hz и protocol v10;
-- волны gunships, missile carriers и астероидов;
+- deterministic fixed-step simulation 20 Hz и protocol v11;
+- круглая server-authoritative арена `4400×4400`, радиус `2200`;
+- волны gunships и missile carriers, а также постоянный поток астероидов с разных сторон арены;
 - friendly/hostile projectiles и limited-turn homing missiles;
 - swept collisions, HP, damage, score и directional shield interception;
 - три role-owned upgrade cards между волнами;
@@ -42,7 +43,7 @@ apps/
   controller/    responsive browser controllers трёх ролей
   server/        authoritative Colyseus room, lifecycle и statistics
 packages/
-  protocol/      protocol v10 schemas и shared contracts
+  protocol/      protocol v11 schemas и shared contracts
   game-core/     pure deterministic simulation без DOM/network/timers
   config/        shared TypeScript configuration
 openspec/        current specs и change lifecycle

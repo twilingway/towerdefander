@@ -14,10 +14,15 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
 } from "@spaceship-defender/game-core";
+import { Decoder, Encoder, type StateView } from "@colyseus/schema";
 import { CloseCode, type Client } from "colyseus";
 import { describe, expect, it, vi } from "vitest";
 
+import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
+import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
+
+const LEGACY_PROTOCOL_VERSION = 10;
 
 interface TestClient {
   readonly client: Client;
@@ -110,6 +115,7 @@ interface RoomInternals {
   gameState: SpaceshipSimulationState | undefined;
   upgradeJournals: Map<string, readonly unknown[]>;
   sequenceWatermarks: Map<string, Map<string, number>>;
+  outstandingLatencyProbes: Map<string, { readonly probeId: string; readonly sentAt: number }>;
   lifecycleDeadlines: Map<string, number>;
   lifecycleGeneration: number;
   metadataWritePromise: Promise<void> | undefined;
@@ -169,30 +175,47 @@ function chooseUpgrade(
   });
 }
 
-describe("SpaceshipDefenderRoom v10 lifecycle", () => {
-  it("accepts only strict protocol v10 display create options and rejects v9", () => {
+describe("SpaceshipDefenderRoom v11 lifecycle", () => {
+  it("accepts only strict protocol v11 display create options and rejects v10 before mutation", () => {
     const room = new SpaceshipDefenderRoom();
     room.roomId = "ROOM123";
     expect(() => {
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, capacity: 3 });
     }).toThrow("invalid_message");
+    const stateBeforeMismatch = {
+      roomId: room.state.roomId,
+      phase: room.state.phase,
+      worldWidth: room.state.game.worldWidth,
+      worldHeight: room.state.game.worldHeight,
+      arenaRadius: room.state.game.arenaRadius
+    };
     expect(() => {
-      room.onCreate({ role: "display", protocolVersion: 9 });
+      room.onCreate({ role: "display", protocolVersion: LEGACY_PROTOCOL_VERSION });
     }).toThrow("protocol_mismatch");
+    expect({
+      roomId: room.state.roomId,
+      phase: room.state.phase,
+      worldWidth: room.state.game.worldWidth,
+      worldHeight: room.state.game.worldHeight,
+      arenaRadius: room.state.game.arenaRadius
+    }).toEqual(stateBeforeMismatch);
+    expect(internals(room).lifecycleDeadlines.size).toBe(0);
+    expect(internals(room).pendingMetadata).toBeUndefined();
   });
 
-  it("rejects a v9 controller join before mutating the roster", () => {
+  it("rejects a v10 controller join before mutating the roster", () => {
     const room = createRoom();
     const controller = createClient("legacy-controller");
 
     expect(() => {
       room.onJoin(controller.client, {
         role: "controller",
-        protocolVersion: 9,
+        protocolVersion: LEGACY_PROTOCOL_VERSION,
         playerName: "Legacy"
       });
     }).toThrow("protocol_mismatch");
     expect(room.state.players.size).toBe(0);
+    expect(internals(room).sequenceWatermarks.size).toBe(0);
   });
 
   it("assigns canonical roles and starts only when all three are ready", () => {
@@ -210,15 +233,19 @@ describe("SpaceshipDefenderRoom v10 lifecycle", () => {
 
     expect(room.state.phase).toBe("active");
     expect(room.state.hasGame).toBe(true);
-    expect(room.state.game).toMatchObject({ worldWidth: 4800, worldHeight: 3200 });
-    expect(room.state.game.spaceship).toMatchObject({ x: 2400, y: 1600, radius: 52 });
+    expect(room.state.game).toMatchObject({
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200
+    });
+    expect(room.state.game.spaceship).toMatchObject({ x: 2200, y: 2200, radius: 52 });
     expect(room.state.game.shield).toMatchObject({ energy: 100, capacity: 100 });
     expect(room.state.game.display.obstacles).toHaveLength(9);
     expect(room.maxMessagesPerSecond).toBe(25);
     expect(setInterval).toHaveBeenCalledTimes(1);
   });
 
-  it("distributes decorative landmarks across every quadrant and the initial viewport", () => {
+  it("keeps every decorative landmark fully inside the circular arena", () => {
     const { room } = startGame();
     const obstacles = [...room.state.game.display.obstacles];
     const centerX = room.state.game.worldWidth / 2;
@@ -231,6 +258,15 @@ describe("SpaceshipDefenderRoom v10 lifecycle", () => {
     expect(
       obstacles.some(({ x, y }) => Math.abs(x - centerX) <= 640 && Math.abs(y - centerY) <= 360)
     ).toBe(true);
+    for (const obstacle of obstacles) {
+      const extent =
+        obstacle.kind === "circle"
+          ? obstacle.radius
+          : Math.hypot(obstacle.width / 2, obstacle.height / 2);
+      expect(Math.hypot(obstacle.x - centerX, obstacle.y - centerY) + extent).toBeLessThanOrEqual(
+        room.state.game.arenaRadius
+      );
+    }
   });
 
   it("keeps one spare transport seat and rejects a fourth controller", () => {
@@ -285,6 +321,43 @@ describe("SpaceshipDefenderRoom v10 lifecycle", () => {
     expect(room.state.game.spaceship.velocityX).toBe(-32);
   });
 
+  it("rehydrates v11 geometry through reconnect without widening StateView visibility", async () => {
+    const room = createRoom();
+    const display = joinDisplay(room);
+    const { controllers } = startGame(room);
+    room.advanceGameStep();
+    const pilot = controllerAt(controllers, 0);
+    const reconnect = vi.spyOn(room, "allowReconnection");
+
+    reconnect.mockResolvedValueOnce(display.client);
+    await room.onLeave(display.client, 1006);
+    reconnect.mockResolvedValueOnce(pilot.client);
+    await room.onLeave(pilot.client, 1006);
+
+    const displayView = display.client.view;
+    const controllerView = pilot.client.view;
+    if (displayView === undefined || controllerView === undefined) {
+      throw new Error("Expected reconnect StateViews.");
+    }
+    const displayProjection = decodeForView(room.state, displayView);
+    const controllerProjection = decodeForView(room.state, controllerView);
+    expect(displayProjection.game).toMatchObject({
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200
+    });
+    expect(controllerProjection.game).toMatchObject({
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200
+    });
+    expect(
+      displayProjection.game.display.enemyShips.size + displayProjection.game.display.asteroids.size
+    ).toBeGreaterThan(0);
+    expect(controllerProjection.game.display.enemyShips.size).toBe(0);
+    expect(controllerProjection.game.display.asteroids.size).toBe(0);
+  });
+
   it("releases an expired role for an active replacement", async () => {
     const { room, controllers } = startGame();
     const gunner = controllerAt(controllers, 1);
@@ -310,14 +383,14 @@ describe("SpaceshipDefenderRoom v10 lifecycle", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v10 authoritative inputs", () => {
-  it("rejects a v9 role command without mutating its watermark or the world", () => {
+describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
+  it("rejects a v10 role command without mutating its watermark or the world", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     const initialX = room.state.game.spaceship.x;
 
     room.handlePilotInput(pilot.client, {
-      protocolVersion: 9,
+      protocolVersion: LEGACY_PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber,
@@ -343,7 +416,7 @@ describe("SpaceshipDefenderRoom v10 authoritative inputs", () => {
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: 1, y: 0 } });
     room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: -1, y: 0 } });
     room.advanceGameStep();
-    expect(room.state.game.spaceship).toMatchObject({ x: 2401.6, velocityX: 32, velocityY: 0 });
+    expect(room.state.game.spaceship).toMatchObject({ x: 2201.6, velocityX: 32, velocityY: 0 });
   });
 
   it("rejects an unsafe sequence without advancing the connection watermark", () => {
@@ -365,7 +438,7 @@ describe("SpaceshipDefenderRoom v10 authoritative inputs", () => {
     room.advanceGameStep();
 
     expect(countErrors(pilot, "invalid_message")).toBe(1);
-    expect(room.state.game.spaceship).toMatchObject({ x: 2401.6, velocityX: 32, velocityY: 0 });
+    expect(room.state.game.spaceship).toMatchObject({ x: 2201.6, velocityX: 32, velocityY: 0 });
   });
 
   it("limits held gunner fire by simulation cooldown", () => {
@@ -713,7 +786,7 @@ describe("SpaceshipDefenderRoom v10 authoritative inputs", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v10 combat projection and upgrades", () => {
+describe("SpaceshipDefenderRoom v11 combat projection and upgrades", () => {
   it("keeps the explicit run seed private and publishes the combat summary", () => {
     const { room } = startGame();
 
@@ -727,6 +800,37 @@ describe("SpaceshipDefenderRoom v10 combat projection and upgrades", () => {
       phaseTicksRemaining: 0,
       score: 0
     });
+  });
+
+  it("publishes circular geometry to both views while keeping mass entities display-only", () => {
+    const room = createRoom();
+    const display = joinDisplay(room);
+    const { controllers } = startGame(room);
+    room.advanceGameStep();
+    const authoritativeEntityCount =
+      room.state.game.display.enemyShips.size + room.state.game.display.asteroids.size;
+    expect(authoritativeEntityCount).toBeGreaterThan(0);
+
+    const displayView = display.client.view;
+    const controllerView = controllerAt(controllers, 0).client.view;
+    if (displayView === undefined || controllerView === undefined) {
+      throw new Error("Expected display and controller StateViews.");
+    }
+    const displayProjection = decodeForView(room.state, displayView);
+    const controllerProjection = decodeForView(room.state, controllerView);
+
+    for (const projection of [displayProjection, controllerProjection]) {
+      expect(projection.game).toMatchObject({
+        worldWidth: 4400,
+        worldHeight: 4400,
+        arenaRadius: 2200
+      });
+    }
+    expect(
+      displayProjection.game.display.enemyShips.size + displayProjection.game.display.asteroids.size
+    ).toBe(authoritativeEntityCount);
+    expect(controllerProjection.game.display.enemyShips.size).toBe(0);
+    expect(controllerProjection.game.display.asteroids.size).toBe(0);
   });
 
   it("reconciles mass entities by stable ID without recreating unchanged schema objects", () => {
@@ -746,6 +850,35 @@ describe("SpaceshipDefenderRoom v10 combat projection and upgrades", () => {
     expect(
       room.state.game.display.enemyShips.size + room.state.game.display.asteroids.size
     ).toBeLessThanOrEqual(56);
+  });
+
+  it("never projects either enemy ship kind outside its legal circular boundary", () => {
+    const { room } = startGame();
+    const runtime = internals(room);
+    const fixture = createWorstCaseCombatFixture(runtime.gameConfig);
+    runtime.gameState = {
+      ...fixture,
+      asteroids: [],
+      hostileProjectiles: [],
+      homingMissiles: [],
+      projectiles: []
+    };
+    const kinds = new Set<string>();
+
+    for (let tick = 0; tick < 80; tick += 1) {
+      room.advanceGameStep();
+      for (const enemy of room.state.game.display.enemyShips.values()) {
+        kinds.add(enemy.kind);
+        expect(
+          Math.hypot(
+            enemy.x - room.state.game.worldWidth / 2,
+            enemy.y - room.state.game.worldHeight / 2
+          ) + enemy.radius
+        ).toBeLessThanOrEqual(room.state.game.arenaRadius + 1e-6);
+      }
+    }
+
+    expect(kinds).toEqual(new Set(["gunship", "missileCarrier"]));
   });
 
   it("publishes one role upgrade through each controller StateView and none to display", () => {
@@ -798,6 +931,38 @@ describe("SpaceshipDefenderRoom v10 combat projection and upgrades", () => {
     chooseUpgrade(room, pilot, "pilot", actionId, 1);
     expect(countErrors(pilot, "action_conflict")).toBe(1);
     expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+  });
+
+  it("rejects a v10 upgrade before journal or world mutation", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    forceIntermission(room);
+    const upgrade = room.state.game.upgrade.get("pilot");
+    const card = upgrade?.offer.cards.at(0);
+    if (upgrade === undefined || card === undefined) throw new Error("Expected pilot offer.");
+    const gameBefore = internals(room).gameState;
+    const modifiersBefore = {
+      speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
+      accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
+      maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
+    };
+
+    room.handleUpgradeChoose(pilot.client, {
+      protocolVersion: LEGACY_PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
+      actionId: "10101010-1010-4010-8010-101010101010",
+      waveNumber: upgrade.offer.waveNumber,
+      offerId: upgrade.offer.offerId,
+      upgradeId: card.upgradeId
+    });
+
+    expect(countErrors(pilot, "protocol_mismatch")).toBe(1);
+    expect(internals(room).upgradeJournals.has(pilot.client.sessionId)).toBe(false);
+    expect(internals(room).gameState).toBe(gameBefore);
+    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiersBefore);
+    expect(room.state.game.upgrade.get("pilot")?.status).toBe("available");
   });
 
   it("replays business errors and bounds each identity journal to 32 entries", () => {
@@ -928,7 +1093,7 @@ describe("SpaceshipDefenderRoom v10 combat projection and upgrades", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v10 rematch isolation", () => {
+describe("SpaceshipDefenderRoom v11 rematch isolation", () => {
   it("rejects stale ready, input and upgrade before per-run mutation", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -1068,7 +1233,7 @@ describe("SpaceshipDefenderRoom v10 rematch isolation", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v10 disposal and operations metadata", () => {
+describe("SpaceshipDefenderRoom v11 disposal and operations metadata", () => {
   it("closes the whole room only when the display leaves explicitly", async () => {
     const room = createRoom();
     const display = joinDisplay(room);
@@ -1267,7 +1432,7 @@ describe("SpaceshipDefenderRoom v10 disposal and operations metadata", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v10 latency telemetry", () => {
+describe("SpaceshipDefenderRoom v11 latency telemetry", () => {
   it("publishes server-measured display and controller RTT without changing gameplay", () => {
     const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
     try {
@@ -1382,9 +1547,12 @@ describe("SpaceshipDefenderRoom v10 latency telemetry", () => {
     expect(countErrors(controller, "invalid_message")).toBe(0);
   });
 
-  it("rejects malformed, v7 and wrong-room pongs with stable actor-only errors", () => {
+  it("rejects malformed, v10 and wrong-room pongs with stable actor-only errors and no mutation", () => {
     const room = createRoom();
     const controller = joinController(room, 0);
+    const outstandingBefore = internals(room).outstandingLatencyProbes.get(
+      controller.client.sessionId
+    );
 
     room.handleLatencyPong(controller.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1393,7 +1561,7 @@ describe("SpaceshipDefenderRoom v10 latency telemetry", () => {
       playerId: "spoofed"
     });
     room.handleLatencyPong(controller.client, {
-      protocolVersion: 7,
+      protocolVersion: LEGACY_PROTOCOL_VERSION,
       roomId: room.roomId,
       probeId: "probe"
     });
@@ -1406,6 +1574,10 @@ describe("SpaceshipDefenderRoom v10 latency telemetry", () => {
     expect(countErrors(controller, "invalid_message")).toBe(1);
     expect(countErrors(controller, "protocol_mismatch")).toBe(1);
     expect(countErrors(controller, "identity_mismatch")).toBe(1);
+    expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
+    expect(internals(room).outstandingLatencyProbes.get(controller.client.sessionId)).toBe(
+      outstandingBefore
+    );
   });
 
   it("expires a missing sample and prevents the old probe from overwriting a retry", () => {
@@ -1494,3 +1666,13 @@ describe("SpaceshipDefenderRoom v10 latency telemetry", () => {
     expect(controller.send).toHaveBeenCalledTimes(controllerSendCount);
   });
 });
+
+function decodeForView(source: SpaceshipDefenderState, view: StateView): SpaceshipDefenderState {
+  const encoder = new Encoder(source);
+  const target = new SpaceshipDefenderState();
+  const decoder = new Decoder(target);
+  const iterator = { offset: 0 };
+  encoder.encodeAll(iterator);
+  decoder.decode(encoder.encodeAllView(view, iterator.offset, iterator));
+  return target;
+}

@@ -68,6 +68,7 @@ interface NetworkGameState {
   elapsedMs: number;
   worldWidth: number;
   worldHeight: number;
+  arenaRadius: number;
   spaceship: PublicSpaceshipView;
   turretAngle: number;
   shield: {
@@ -157,6 +158,7 @@ export function toDisplayRoomView(
             elapsedMs: game.elapsedMs,
             worldWidth: game.worldWidth,
             worldHeight: game.worldHeight,
+            arenaRadius: game.arenaRadius,
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },

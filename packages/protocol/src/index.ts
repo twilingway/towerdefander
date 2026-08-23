@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 10 as const;
+export const PROTOCOL_VERSION = 11 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -65,6 +65,7 @@ export type UpgradeStatus = z.infer<typeof upgradeStatusSchema>;
 
 // Zod numbers reject NaN and infinities by default.
 const finite = z.number();
+const CIRCULAR_GEOMETRY_EPSILON = 1e-6;
 const safeNonnegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const safePositiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const entityId = z.string().min(1).max(64);
@@ -314,6 +315,7 @@ const gameShape = {
   elapsedMs: safeNonnegativeInteger,
   worldWidth: finite.positive(),
   worldHeight: finite.positive(),
+  arenaRadius: finite.positive(),
   spaceship: publicSpaceshipViewSchema,
   turretAngle: finite,
   shield: publicShieldViewSchema,
@@ -326,10 +328,12 @@ interface EntityProjection {
   spawnSequence: number;
   x: number;
   y: number;
+  radius: number;
 }
 interface WorldProjection {
   worldWidth: number;
   worldHeight: number;
+  arenaRadius: number;
   spaceship: PublicSpaceshipView;
   encounter: PublicEncounterView;
   obstacles?: PublicObstacleView[];
@@ -345,20 +349,40 @@ function issue(context: z.RefinementCtx, path: PropertyKey[], message: string): 
   context.addIssue({ code: "custom", path, message });
 }
 
+function circleFitsArena(
+  x: number,
+  y: number,
+  entityRadius: number,
+  worldWidth: number,
+  worldHeight: number,
+  arenaRadius: number,
+  padding = 0
+): boolean {
+  const legalCenterRadius = arenaRadius + padding - entityRadius;
+  if (legalCenterRadius < -CIRCULAR_GEOMETRY_EPSILON) return false;
+  const distance = Math.hypot(x - worldWidth / 2, y - worldHeight / 2);
+  return distance <= Math.max(0, legalCenterRadius) + CIRCULAR_GEOMETRY_EPSILON;
+}
+
 function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
-  const { spaceship, encounter, worldHeight, worldWidth } = world;
+  const { arenaRadius, spaceship, encounter, worldHeight, worldWidth } = world;
+  if (worldWidth !== worldHeight || worldWidth !== arenaRadius * 2)
+    issue(
+      context,
+      ["arenaRadius"],
+      "Arena requires a square world with width and height equal to twice its radius."
+    );
   if (
-    spaceship.radius * 2 > worldWidth ||
-    spaceship.x < spaceship.radius ||
-    spaceship.x > worldWidth - spaceship.radius
+    !circleFitsArena(
+      spaceship.x,
+      spaceship.y,
+      spaceship.radius,
+      worldWidth,
+      worldHeight,
+      arenaRadius
+    )
   )
-    issue(context, ["spaceship", "x"], "Spaceship must remain inside horizontal world bounds.");
-  if (
-    spaceship.radius * 2 > worldHeight ||
-    spaceship.y < spaceship.radius ||
-    spaceship.y > worldHeight - spaceship.radius
-  )
-    issue(context, ["spaceship", "y"], "Spaceship must remain inside vertical world bounds.");
+    issue(context, ["spaceship"], "Spaceship must remain fully inside the circular arena.");
   if (encounter.outcome === "defeat" && spaceship.hp !== 0)
     issue(context, ["spaceship", "hp"], "Defeat requires zero spaceship HP.");
   if (encounter.outcome !== "defeat" && spaceship.hp === 0)
@@ -393,13 +417,25 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
         issue(context, [name, index, "spawnSequence"], "Spawn sequences must be globally unique.");
       if (entity.spawnSequence <= previous)
         issue(context, [name, index, "spawnSequence"], "Collections must use spawn order.");
+      const padding = name === "enemyShips" ? 0 : PROJECTILE_WORLD_PADDING;
       if (
-        entity.x < -PROJECTILE_WORLD_PADDING ||
-        entity.x > worldWidth + PROJECTILE_WORLD_PADDING ||
-        entity.y < -PROJECTILE_WORLD_PADDING ||
-        entity.y > worldHeight + PROJECTILE_WORLD_PADDING
+        !circleFitsArena(
+          entity.x,
+          entity.y,
+          entity.radius,
+          worldWidth,
+          worldHeight,
+          arenaRadius,
+          padding
+        )
       )
-        issue(context, [name, index], "Entity must remain inside padded world bounds.");
+        issue(
+          context,
+          [name, index],
+          name === "enemyShips"
+            ? "Enemy ship must remain fully inside the circular arena."
+            : "Transient entity must remain fully inside the padded circular envelope."
+        );
       ids.add(entity.entityId);
       sequences.add(entity.spawnSequence);
       previous = entity.spawnSequence;

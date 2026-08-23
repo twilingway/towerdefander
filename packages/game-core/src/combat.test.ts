@@ -292,6 +292,7 @@ describe("combat motion and collision", () => {
     const asteroids: AsteroidState[] = Array.from({ length: 16 }, (_, index) => ({
       id: `asteroid-cap-${String(index)}`,
       spawnSequence: 41 + index,
+      origin: "wave",
       previousX: 4300,
       previousY: 2500 + index * 4,
       x: 4300,

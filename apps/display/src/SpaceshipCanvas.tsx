@@ -76,8 +76,12 @@ export function SpaceshipCanvas({ game, runNumber, connectionEpoch }: SpaceshipC
       className="battlefield-shell"
       data-testid="spaceship-world"
       data-run-number={runNumber}
+      data-arena-radius={game.arenaRadius}
+      data-world-width={game.worldWidth}
+      data-world-height={game.worldHeight}
       data-spaceship-x={game.spaceship.x}
       data-spaceship-y={game.spaceship.y}
+      data-spaceship-radius={game.spaceship.radius}
       data-spaceship-velocity-x={game.spaceship.velocityX}
       data-spaceship-hp={game.spaceship.hp}
       data-spaceship-max-hp={game.spaceship.maxHp}

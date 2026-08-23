@@ -42,6 +42,9 @@ let shieldLockedTargetId;
 let shieldOpposite = false;
 let shieldSurvivalMode = false;
 const schedulers = [];
+const observedAsteroidIds = new Set();
+const observedAsteroidEntrySectors = new Set();
+let arenaViolation;
 
 try {
   await waitForServer();
@@ -68,6 +71,7 @@ try {
     controller.send(clientMessage.ready, envelope(controller));
   }
   await waitFor(() => display.state.phase === "active" && display.state.hasGame === true);
+  assertArenaContract();
   if (pilot.state.game.display !== undefined)
     throw new Error("Controller received display-only world collections.");
   const startX = display.state.game.spaceship.x;
@@ -195,6 +199,7 @@ try {
   await chooseFirstUpgrade(shield, "shield");
 
   await waitFor(() => encounter().phase === "combat" && encounter().waveNumber === 2, 13_000);
+  await waitFor(() => observedAsteroidEntrySectors.size >= 2, 12_000);
   pilot.send(clientMessage.upgradeChoose, duplicateCommand);
   await delay(350);
   if (JSON.stringify(pilotModifierSnapshot()) !== JSON.stringify(upgradedModifiers))
@@ -208,6 +213,11 @@ try {
       firstSpawn: { ...firstSpawn, observedTick: firstSpawnTick },
       gunnerHit: { entityId: hitTarget.entityId, hpBefore: hitTarget.hp },
       shieldBlock,
+      circularArena: {
+        radius: display.state.game.arenaRadius,
+        observedAsteroids: observedAsteroidIds.size,
+        entrySectors: [...observedAsteroidEntrySectors].sort((a, b) => a - b)
+      },
       upgradeDuplicate: "idempotent",
       reconnectPhases: ["combat", "intermission"],
       displayLatencyMs: display.state.displayLatencyMs,
@@ -270,6 +280,41 @@ function assertUniqueSequences() {
   const sequences = dynamicEntities().map((entity) => entity.spawnSequence);
   if (new Set(sequences).size !== sequences.length)
     throw new Error("Dynamic entities published duplicate spawn sequences.");
+}
+
+function assertArenaContract() {
+  const game = display.state.game;
+  if (game.worldWidth !== 4_400 || game.worldHeight !== 4_400 || game.arenaRadius !== 2_200) {
+    throw new Error(
+      `Unexpected arena geometry: ${String(game.worldWidth)}x${String(game.worldHeight)}, radius ${String(game.arenaRadius)}.`
+    );
+  }
+  observeArenaState();
+  if (arenaViolation !== undefined) throw new Error(arenaViolation);
+}
+
+function observeArenaState() {
+  if (display?.state?.hasGame !== true || display.state.game?.display === undefined) return;
+  const game = display.state.game;
+  const centerX = game.worldWidth / 2;
+  const centerY = game.worldHeight / 2;
+  const spaceshipDistance = Math.hypot(game.spaceship.x - centerX, game.spaceship.y - centerY);
+  if (spaceshipDistance + game.spaceship.radius > game.arenaRadius + 0.001) {
+    arenaViolation = "Authoritative spaceship left the circular arena.";
+  }
+  for (const enemy of game.display.enemyShips.values()) {
+    const enemyDistance = Math.hypot(enemy.x - centerX, enemy.y - centerY);
+    if (enemyDistance + enemy.radius > game.arenaRadius + 0.001) {
+      arenaViolation = `Enemy ${enemy.entityId} left the circular arena.`;
+    }
+  }
+  for (const asteroid of game.display.asteroids.values()) {
+    if (observedAsteroidIds.has(asteroid.entityId)) continue;
+    observedAsteroidIds.add(asteroid.entityId);
+    const angle = Math.atan2(asteroid.y - centerY, asteroid.x - centerX);
+    const normalized = ((angle + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2);
+    observedAsteroidEntrySectors.add(Math.floor(normalized * 8) % 8);
+  }
 }
 
 async function waitForShieldBlock(timeoutMs) {
@@ -540,6 +585,8 @@ async function waitForServer() {
 async function waitFor(predicate, timeoutMs = 3_000, intervalMs = 25) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    observeArenaState();
+    if (arenaViolation !== undefined) throw new Error(arenaViolation);
     if (await predicate()) return;
     await delay(intervalMs);
   }

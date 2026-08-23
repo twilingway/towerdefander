@@ -8,19 +8,21 @@ TBD - created by archiving change flying-castle-core. Update Purpose after archi
 
 ### Requirement: Display показывает top-down мир примитивами
 
-Phaser SHALL отображать world `4800×3200`, background grid, распределённые по всем квадрантам
-декоративные не участвующие в collision примитивы, spaceship body, turret, shield arc и projectiles
-средствами Graphics/Shape без bitmap assets. Active battlefield SHALL занимать весь CSS viewport без
-card padding, border, фиксированной 16:9 рамки и letterbox. Базовая logical view SHALL быть не
-меньше `1600×900`; при другом aspect ratio camera SHALL расширять видимую область по одной оси без
-растяжения world и без обрезания базовой области. React HUD, room code и connection status SHALL
-быть overlays и SHALL NOT уменьшать Phaser viewport.
+Phaser SHALL отображать square bounding world `4400×4400`, одну arena circumference radius 2200,
+background grid только внутри arena, распределённые внутри circle декоративные не участвующие в
+collision примитивы, spaceship body, turret, shield arc и projectiles средствами Graphics/Shape без
+bitmap assets. Область за circle SHALL оставаться более тёмным deep-space background. Active
+battlefield SHALL занимать весь CSS viewport без card padding, border, фиксированной 16:9 рамки и
+letterbox. Базовая logical view SHALL быть не меньше `1600×900`; при другом aspect ratio camera
+SHALL расширять видимую область по одной оси без растяжения world/circle и без обрезания базовой
+области. React HUD, room code и connection status SHALL быть overlays и SHALL NOT уменьшать Phaser
+viewport.
 
 #### Scenario: Матч начинается
 
 - **WHEN** room переходит в active и display получает первый snapshot
-- **THEN** canvas покрывает viewport и показывает круглый космический корабль и примитивный мир, а
-  компактный React HUD поверх него показывает role labels, connection status и ping
+- **THEN** canvas покрывает viewport и показывает круглую нерастянутую arena, grid внутри неё,
+  spaceship и примитивный мир, а компактный React HUD поверх показывает roles/status/ping
 
 #### Scenario: Снаряд создан
 
@@ -30,8 +32,8 @@ card padding, border, фиксированной 16:9 рамки и letterbox. �
 #### Scenario: Экран меняет размер
 
 - **WHEN** active display меняется между `1920×1080`, `1366×768` и `1024×768`
-- **THEN** renderer и camera viewport обновляются без пересоздания Room/runtime, canvas покрывает
-  viewport, world не растягивается и базовая logical область остаётся видимой
+- **THEN** renderer/camera обновляются без пересоздания Room/runtime, canvas покрывает viewport,
+  arena остаётся кругом и базовая logical область видима
 
 ### Requirement: Display интерполирует, но не владеет состоянием
 
@@ -168,12 +170,12 @@ rematch либо disposal. Display SHALL иметь отдельное подт�
 
 Camera SHALL следовать за визуально интерполированной spaceship position. Phaser scroll SHALL
 учитывать renderer pixels, zoom и фактический responsive logical viewport, чтобы spaceship оставался
-в центре вне edge zone. Presentation-only camera bounds SHALL расширяться за world на overscan
-`spaceship.radius + 42 + 160/zoom` world units. В любой достижимой core position spaceship body,
-turret и shield arc SHALL оставаться полностью видимыми и не ближе 160 CSS pixels к viewport edge; у
-края карта MAY закончиться раньше viewport и показать ограниченный background space. Background grid
-и obstacles SHALL визуально прокручиваться относительно viewport. World transforms SHALL сохранять
-дробные coordinates без принудительного pixel rounding.
+в центре вне edge zone. Presentation-only camera bounds SHALL использовать square bounding envelope
+круга и расширяться на overscan `spaceship.radius + 42 + 160/zoom` world units. В любой достижимой
+core position spaceship body, turret и shield arc SHALL оставаться полностью видимыми и не ближе 160
+CSS pixels к viewport edge; у arena circumference viewport MAY показать ограниченный outside-space.
+Circular grid и obstacles SHALL визуально прокручиваться относительно viewport. World transforms
+SHALL сохранять дробные coordinates без принудительного pixel rounding.
 
 #### Scenario: Spaceship летит вправо
 
@@ -183,13 +185,14 @@ turret и shield arc SHALL оставаться полностью видимы�
 
 #### Scenario: Spaceship у края мира
 
-- **WHEN** spaceship находится у границы world на display с произвольным поддерживаемым aspect ratio
-- **THEN** camera учитывает renderer/zoom, показывает ограниченный background за world border и
-  оставляет весь spaceship/turret/shield минимум в 160 CSS pixels от viewport edge без дрожания
+- **WHEN** spaceship находится на cardinal либо diagonal legal boundary position при произвольном
+  поддерживаемом aspect ratio
+- **THEN** camera учитывает renderer/zoom, показывает ограниченный background за circle и оставляет
+  весь spaceship/turret/shield минимум в 160 CSS pixels от viewport edge без дрожания
 
 #### Scenario: Camera использует zoom
 
 - **WHEN** renderer `1920×1080` показывает logical viewport `1600×900` и spaceship находится в
-  центре мира `(2400,1600)`
-- **THEN** camera midpoint совпадает с spaceship, а world-view top-left равен `(1600,1150)` без
+  центре arena `(2200,2200)`
+- **THEN** camera midpoint совпадает с spaceship, а world-view top-left равен `(1400,1750)` без
   систематического сдвига из-за zoom

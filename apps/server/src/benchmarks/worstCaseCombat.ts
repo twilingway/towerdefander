@@ -29,7 +29,13 @@ export function createWorstCaseCombatFixture(
   const base = createSpaceshipSimulationState(config, RUN_SEED);
   let spawnSequence = 1;
   const enemies = Array.from({ length: config.caps.enemyShips }, (_, index) => {
-    const position = gridPosition(index, config.caps.enemyShips, 260, 260, 4_280, 620);
+    const position = ringPosition(
+      index,
+      config.caps.enemyShips,
+      config,
+      config.arenaRadius * 0.75,
+      0.1
+    );
     const sequence = spawnSequence++;
     return {
       ...movingEntity(`enemy-${String(sequence)}`, sequence, position, { x: 18, y: 4 }),
@@ -41,17 +47,30 @@ export function createWorstCaseCombatFixture(
     } satisfies CombatEnemyState;
   });
   const asteroids = Array.from({ length: config.caps.asteroids }, (_, index) => {
-    const position = gridPosition(index, config.caps.asteroids, 320, 2_520, 4_160, 360);
+    const position = ringPosition(
+      index,
+      config.caps.asteroids,
+      config,
+      config.arenaRadius * 0.86,
+      0.2
+    );
     const sequence = spawnSequence++;
     return {
       ...movingEntity(`asteroid-${String(sequence)}`, sequence, position, { x: -20, y: -8 }),
+      origin: "wave",
       hp: 10_000,
       maxHp: 10_000,
       damage: config.asteroidDamage
     } satisfies AsteroidState;
   });
   const hostileProjectiles = Array.from({ length: config.caps.hostileProjectiles }, (_, index) => {
-    const position = gridPosition(index, config.caps.hostileProjectiles, 180, 1_020, 4_440, 380);
+    const position = multiRingPosition(
+      index,
+      config.caps.hostileProjectiles,
+      config,
+      [0.23, 0.41, 0.59].map((ratio) => config.arenaRadius * ratio),
+      0.3
+    );
     const sequence = spawnSequence++;
     return {
       ...movingEntity(`hostile-${String(sequence)}`, sequence, position, { x: 9, y: 3 }, 7),
@@ -59,7 +78,13 @@ export function createWorstCaseCombatFixture(
     } satisfies HostileProjectileState;
   });
   const homingMissiles = Array.from({ length: config.caps.homingMissiles }, (_, index) => {
-    const position = gridPosition(index, config.caps.homingMissiles, 420, 2_140, 3_960, 180);
+    const position = ringPosition(
+      index,
+      config.caps.homingMissiles,
+      config,
+      config.arenaRadius * 0.7,
+      0.4
+    );
     const sequence = spawnSequence++;
     return {
       ...movingEntity(`missile-${String(sequence)}`, sequence, position, { x: 12, y: -6 }, 12),
@@ -68,7 +93,13 @@ export function createWorstCaseCombatFixture(
     } satisfies HomingMissileState;
   });
   const projectiles = Array.from({ length: config.caps.friendlyProjectiles }, (_, index) => {
-    const position = gridPosition(index, config.caps.friendlyProjectiles, 260, 1_680, 4_280, 220);
+    const position = ringPosition(
+      index,
+      config.caps.friendlyProjectiles,
+      config,
+      config.arenaRadius * 0.5,
+      0.5
+    );
     const sequence = spawnSequence++;
     const id = `friendly-${String(sequence)}`;
     return {
@@ -118,20 +149,31 @@ function movingEntity(
   };
 }
 
-function gridPosition(
+function ringPosition(
   index: number,
   count: number,
-  left: number,
-  top: number,
-  width: number,
-  height: number
+  config: SpaceshipSimulationConfig,
+  radius: number,
+  angleOffset: number
 ): EntityPosition {
-  const columns = Math.ceil(Math.sqrt(count * (width / Math.max(height, 1))));
-  const rows = Math.ceil(count / columns);
-  const column = index % columns;
-  const row = Math.floor(index / columns);
+  const angle = angleOffset + (index / count) * Math.PI * 2;
   return {
-    x: left + ((column + 0.5) / columns) * width,
-    y: top + ((row + 0.5) / rows) * height
+    x: config.worldWidth / 2 + Math.cos(angle) * radius,
+    y: config.worldHeight / 2 + Math.sin(angle) * radius
   };
+}
+
+function multiRingPosition(
+  index: number,
+  count: number,
+  config: SpaceshipSimulationConfig,
+  radii: readonly number[],
+  angleOffset: number
+): EntityPosition {
+  const ringIndex = index % radii.length;
+  const radius = radii[ringIndex];
+  if (radius === undefined) throw new Error("Worst-case fixture requires at least one ring.");
+  const ringCount = Math.ceil((count - ringIndex) / radii.length);
+  const indexInRing = Math.floor(index / radii.length);
+  return ringPosition(indexInRing, ringCount, config, radius, angleOffset + ringIndex * 0.17);
 }

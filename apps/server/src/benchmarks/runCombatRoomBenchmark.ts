@@ -170,6 +170,7 @@ function hydrateSchema(source: SpaceshipSimulationState): SpaceshipDefenderState
   state.game.elapsedMs = source.clock.elapsedMs;
   state.game.worldWidth = config.worldWidth;
   state.game.worldHeight = config.worldHeight;
+  state.game.arenaRadius = config.arenaRadius;
   state.game.spaceship.x = source.spaceship.x;
   state.game.spaceship.y = source.spaceship.y;
   state.game.spaceship.hp = source.spaceshipHp;

@@ -39,6 +39,18 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
 
     await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
     await expect(display.getByTestId("spaceship-world")).toBeVisible();
+    await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
+      "data-arena-radius",
+      "2200"
+    );
+    await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
+      "data-world-width",
+      "4400"
+    );
+    await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
+      "data-world-height",
+      "4400"
+    );
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
     await expect(display.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
@@ -64,6 +76,7 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       )
       .toBeGreaterThan(startX);
     await pilot.keyboard.up("KeyD");
+    await assertSpaceshipInsideCircularArena(display.getByTestId("spaceship-world"));
 
     const xBeforeStick = Number(
       await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x")
@@ -85,6 +98,7 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       )
       .toBeGreaterThan(xBeforeStick);
     await pilot.mouse.up();
+    await assertSpaceshipInsideCircularArena(display.getByTestId("spaceship-world"));
 
     const world = display.getByTestId("spaceship-world");
     const turretBeforeFire = Number(await world.getAttribute("data-turret-angle"));
@@ -298,6 +312,26 @@ async function assertFullscreenHud(display: Page): Promise<void> {
   expect(hudBounds.y).toBeGreaterThanOrEqual(0);
   expect(hudBounds.x + hudBounds.width).toBeLessThanOrEqual(viewport.width);
   expect(hudBounds.y + hudBounds.height).toBeLessThanOrEqual(viewport.height);
+}
+
+async function assertSpaceshipInsideCircularArena(world: Locator): Promise<void> {
+  const [worldWidth, worldHeight, arenaRadius, x, y, spaceshipRadius] = await Promise.all([
+    readNumericAttribute(world, "data-world-width"),
+    readNumericAttribute(world, "data-world-height"),
+    readNumericAttribute(world, "data-arena-radius"),
+    readNumericAttribute(world, "data-spaceship-x"),
+    readNumericAttribute(world, "data-spaceship-y"),
+    readNumericAttribute(world, "data-spaceship-radius")
+  ]);
+  const distanceFromCenter = Math.hypot(x - worldWidth / 2, y - worldHeight / 2);
+  expect(distanceFromCenter + spaceshipRadius).toBeLessThanOrEqual(arenaRadius + 0.001);
+}
+
+async function readNumericAttribute(locator: Locator, attribute: string): Promise<number> {
+  const rawValue = await locator.getAttribute(attribute);
+  const value = rawValue === null ? Number.NaN : Number(rawValue);
+  if (!Number.isFinite(value)) throw new Error(`Missing numeric attribute ${attribute}.`);
+  return value;
 }
 
 async function dragTouchRight(stick: Locator, page: Page): Promise<void> {

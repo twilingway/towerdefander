@@ -109,7 +109,7 @@ const {
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
 
 const DECORATIVE_OBSTACLES = [
-  { obstacleId: "island-northwest", kind: "circle" as const, x: 620, y: 540, radius: 105 },
+  { obstacleId: "island-northwest", kind: "circle" as const, x: 760, y: 760, radius: 105 },
   {
     obstacleId: "ruins-north",
     kind: "rectangle" as const,
@@ -121,8 +121,8 @@ const DECORATIVE_OBSTACLES = [
   {
     obstacleId: "cloud-northeast",
     kind: "rectangle" as const,
-    x: 3950,
-    y: 650,
+    x: 3650,
+    y: 850,
     width: 330,
     height: 150
   },
@@ -135,7 +135,7 @@ const DECORATIVE_OBSTACLES = [
     width: 220,
     height: 180
   },
-  { obstacleId: "island-center-east", kind: "circle" as const, x: 2820, y: 1800, radius: 90 },
+  { obstacleId: "island-center-east", kind: "circle" as const, x: 2820, y: 1840, radius: 90 },
   { obstacleId: "island-southwest", kind: "circle" as const, x: 900, y: 2700, radius: 120 },
   {
     obstacleId: "cloud-southeast",
@@ -656,6 +656,7 @@ export class SpaceshipDefenderRoom extends Room<{
     target.elapsedMs = game.clock.elapsedMs;
     target.worldWidth = this.gameConfig.worldWidth;
     target.worldHeight = this.gameConfig.worldHeight;
+    target.arenaRadius = this.gameConfig.arenaRadius;
     target.spaceship.x = game.spaceship.x;
     target.spaceship.y = game.spaceship.y;
     target.spaceship.velocityX = game.spaceship.velocity.x;

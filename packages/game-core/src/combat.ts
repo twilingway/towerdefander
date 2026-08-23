@@ -1,4 +1,9 @@
 import { canonicalizeAngle, shortestAngleDelta, type Vector2 } from "./spaceshipSimulation.js";
+import {
+  constrainMovingCircleToArena,
+  isWithinCircularEnvelope,
+  type ArenaCircle
+} from "./arenaGeometry.js";
 
 export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
@@ -30,6 +35,7 @@ export interface CombatConfig {
   readonly fixedStepMs: number;
   readonly worldWidth: number;
   readonly worldHeight: number;
+  readonly arenaRadius: number;
   readonly spaceshipMaxHp: number;
   readonly shieldRadius: number;
   readonly shieldArcRadians: number;
@@ -41,6 +47,8 @@ export interface CombatConfig {
   readonly asteroidDamage: number;
   readonly friendlyProjectileDamage: number;
   readonly enemySpawnIntervalTicks: number;
+  readonly ambientAsteroidIntervalMinTicks: number;
+  readonly ambientAsteroidIntervalMaxTicks: number;
   readonly intermissionTicks: number;
   readonly waveBaseBudget: number;
   readonly waveBudgetGrowth: number;
@@ -143,6 +151,7 @@ export interface CombatEnemyState extends MovingEntity {
 }
 
 export interface AsteroidState extends MovingEntity {
+  readonly origin: "wave" | "ambient";
   readonly hp: number;
   readonly maxHp: number;
   readonly damage: number;
@@ -166,6 +175,8 @@ export interface CombatStateFields {
   readonly runSeed: number;
   readonly spawnRngState: number;
   readonly offerRngState: number;
+  readonly ambientAsteroidRngState: number;
+  readonly ambientAsteroidSpawnDueTick: number | null;
   readonly spaceshipHp: number;
   readonly spaceshipMaxHp: number;
   readonly encounterPhase: EncounterPhase;
@@ -233,6 +244,8 @@ const ROLES: readonly GameplayRole[] = ["pilot", "gunner", "shield"];
 const UINT32_MAX = 0xffff_ffff;
 const SPAWN_DOMAIN = 0x5350_4157;
 const OFFER_DOMAIN = 0x4f46_4652;
+const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
+const MAX_PUBLIC_TRANSIENT_PADDING = 256;
 
 export function validateRunSeed(runSeed: number): void {
   if (!Number.isInteger(runSeed) || runSeed <= 0 || runSeed > UINT32_MAX) {
@@ -246,6 +259,8 @@ export function validateCombatConfig(config: CombatConfig): void {
   }
   const positiveIntegers: readonly (readonly [string, number])[] = [
     ["enemySpawnIntervalTicks", config.enemySpawnIntervalTicks],
+    ["ambientAsteroidIntervalMinTicks", config.ambientAsteroidIntervalMinTicks],
+    ["ambientAsteroidIntervalMaxTicks", config.ambientAsteroidIntervalMaxTicks],
     ["intermissionTicks", config.intermissionTicks],
     ["waveBaseBudget", config.waveBaseBudget],
     ["waveBudgetGrowth", config.waveBudgetGrowth],
@@ -271,6 +286,7 @@ export function validateCombatConfig(config: CombatConfig): void {
   const positiveFinite: readonly (readonly [string, number])[] = [
     ["worldWidth", config.worldWidth],
     ["worldHeight", config.worldHeight],
+    ["arenaRadius", config.arenaRadius],
     ["spaceshipMaxHp", config.spaceshipMaxHp],
     ["shieldRadius", config.shieldRadius],
     ["shieldArcRadians", config.shieldArcRadians],
@@ -311,6 +327,23 @@ export function validateCombatConfig(config: CombatConfig): void {
   }
   if (config.shieldArcRadians > Math.PI * 2) {
     throw new RangeError("shieldArcRadians cannot exceed a full circle");
+  }
+  if (config.worldWidth !== config.worldHeight || config.worldWidth !== config.arenaRadius * 2) {
+    throw new RangeError("worldWidth and worldHeight must equal the arena diameter");
+  }
+  if (config.ambientAsteroidIntervalMinTicks > config.ambientAsteroidIntervalMaxTicks) {
+    throw new RangeError(
+      "ambientAsteroidIntervalMinTicks cannot exceed ambientAsteroidIntervalMaxTicks"
+    );
+  }
+  if (config.gunshipRadius > config.arenaRadius || config.carrierRadius > config.arenaRadius) {
+    throw new RangeError("enemy ship radii must fit inside the circular arena");
+  }
+  if (config.worldPadding > MAX_PUBLIC_TRANSIENT_PADDING) {
+    throw new RangeError("worldPadding cannot exceed the public transient envelope");
+  }
+  if (config.asteroidRadius > config.worldPadding) {
+    throw new RangeError("worldPadding must fit an asteroid spawned on the arena perimeter");
   }
   const typedCapTotal =
     config.caps.enemyShips +
@@ -402,10 +435,17 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
   validateCombatConfig(config);
   validateRunSeed(runSeed);
   const { plan, rngState } = createWavePlan(config, runSeed, 1);
+  const ambientSchedule = scheduleAmbientAsteroid(
+    deriveDomainSeed(runSeed, 1, AMBIENT_ASTEROID_DOMAIN),
+    0,
+    config
+  );
   return {
     runSeed,
     spawnRngState: rngState,
     offerRngState: deriveDomainSeed(runSeed, 1, OFFER_DOMAIN),
+    ambientAsteroidRngState: ambientSchedule.rngState,
+    ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     spaceshipHp: config.spaceshipMaxHp,
     spaceshipMaxHp: config.spaceshipMaxHp,
     encounterPhase: "combat",
@@ -426,6 +466,21 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     },
     roleOffers: { pilot: null, gunner: null, shield: null },
     roleSelections: { pilot: null, gunner: null, shield: null }
+  };
+}
+
+function scheduleAmbientAsteroid(
+  rngState: number,
+  currentEncounterTick: number,
+  config: CombatConfig
+): { readonly rngState: number; readonly dueTick: number } {
+  const [nextState, random] = nextUint32(rngState);
+  const intervalRange =
+    config.ambientAsteroidIntervalMaxTicks - config.ambientAsteroidIntervalMinTicks + 1;
+  const delay = config.ambientAsteroidIntervalMinTicks + (random % intervalRange);
+  return {
+    rngState: nextState,
+    dueTick: currentEncounterTick + delay
   };
 }
 
@@ -512,7 +567,11 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
   if (next.spaceshipHp <= 0) {
     return createTerminalCombatState(pickCombatResult(next), "defeat");
   }
-  if (next.pendingSpawns.length === 0 && next.enemies.length === 0 && next.asteroids.length === 0) {
+  if (
+    next.pendingSpawns.length === 0 &&
+    next.enemies.length === 0 &&
+    next.asteroids.every(({ origin }) => origin === "ambient")
+  ) {
     const offerResult = createRoleOffers(next.runSeed, next.waveNumber);
     return {
       ...pickCombatResult(next),
@@ -522,10 +581,12 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
       offerRngState: offerResult.rngState,
       roleOffers: offerResult.offers,
       roleSelections: { pilot: null, gunner: null, shield: null },
+      asteroids: [],
       hostileProjectiles: [],
       homingMissiles: [],
       projectiles: [],
-      shieldActive: false
+      shieldActive: false,
+      ambientAsteroidSpawnDueTick: null
     };
   }
   return { ...pickCombatResult(next), encounterTick: state.encounterTick + 1 };
@@ -548,6 +609,7 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
   }
   const waveNumber = Math.min(Number.MAX_SAFE_INTEGER, selected.waveNumber + 1);
   const wave = createWavePlan(config, selected.runSeed, waveNumber);
+  const ambientSchedule = scheduleAmbientAsteroid(selected.ambientAsteroidRngState, 0, config);
   return {
     ...pickCombatResult({ ...state, ...selected }),
     encounterPhase: "combat",
@@ -555,6 +617,8 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
     encounterTick: 0,
     waveNumber,
     spawnRngState: wave.rngState,
+    ambientAsteroidRngState: ambientSchedule.rngState,
+    ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     pendingSpawns: wave.plan,
     roleOffers: { pilot: null, gunner: null, shield: null },
     shieldActive: false,
@@ -737,6 +801,7 @@ function moveAndSpawnThreats(
     ) {
       const result = spawnEntity(
         pending.kind,
+        "wave",
         spawnRngState,
         nextSpawnSequence,
         state.clock.tick,
@@ -748,7 +813,36 @@ function moveAndSpawnThreats(
       pendingSpawns = pendingSpawns.slice(1);
       if (result.enemy !== null) enemies = [...enemies, result.enemy];
       if (result.asteroid !== null) asteroids = [...asteroids, result.asteroid];
+      workingDynamicCount += 1;
     }
+  }
+
+  let ambientAsteroidRngState = state.ambientAsteroidRngState;
+  let ambientAsteroidSpawnDueTick = state.ambientAsteroidSpawnDueTick;
+  if (
+    ambientAsteroidSpawnDueTick !== null &&
+    state.encounterTick + 1 >= ambientAsteroidSpawnDueTick &&
+    canSpawnKind(config, "asteroid", enemies, asteroids, workingDynamicCount)
+  ) {
+    const result = spawnEntity(
+      "asteroid",
+      "ambient",
+      ambientAsteroidRngState,
+      nextSpawnSequence,
+      state.clock.tick,
+      state.waveNumber,
+      config
+    );
+    ambientAsteroidRngState = result.rngState;
+    nextSpawnSequence += 1;
+    if (result.asteroid !== null) asteroids = [...asteroids, result.asteroid];
+    const schedule = scheduleAmbientAsteroid(
+      ambientAsteroidRngState,
+      state.encounterTick + 1,
+      config
+    );
+    ambientAsteroidRngState = schedule.rngState;
+    ambientAsteroidSpawnDueTick = schedule.dueTick;
   }
 
   return {
@@ -759,6 +853,8 @@ function moveAndSpawnThreats(
     homingMissiles,
     pendingSpawns,
     spawnRngState,
+    ambientAsteroidRngState,
+    ambientAsteroidSpawnDueTick,
     nextSpawnSequence
   };
 }
@@ -782,14 +878,26 @@ function moveEnemy(
     x: ((deltaX / distance) * radial - (deltaY / distance) * orbit) * speed,
     y: ((deltaY / distance) * radial + (deltaX / distance) * orbit) * speed
   };
+  const constrained = constrainMovingCircleToArena(
+    {
+      x: enemy.x + velocity.x * secondsPerStep,
+      y: enemy.y + velocity.y * secondsPerStep,
+      radius: enemy.radius,
+      velocity
+    },
+    arenaFromConfig(config)
+  );
   return {
     ...enemy,
     previousX: enemy.x,
     previousY: enemy.y,
-    x: enemy.x + velocity.x * secondsPerStep,
-    y: enemy.y + velocity.y * secondsPerStep,
-    velocity,
-    heading: Math.atan2(velocity.y, velocity.x),
+    x: constrained.x,
+    y: constrained.y,
+    velocity: constrained.velocity,
+    heading:
+      constrained.velocity.x === 0 && constrained.velocity.y === 0
+        ? enemy.heading
+        : Math.atan2(constrained.velocity.y, constrained.velocity.x),
     attackCooldownTicks: Math.max(0, enemy.attackCooldownTicks - 1)
   };
 }
@@ -885,6 +993,7 @@ function createMissile(
 
 function spawnEntity(
   kind: SpawnKind,
+  origin: "wave" | "ambient",
   initialRngState: number,
   spawnSequence: number,
   tick: number,
@@ -902,22 +1011,13 @@ function spawnEntity(
     rngState = next;
     values.push(random / UINT32_MAX);
   }
-  const edge = Math.floor((values[0] ?? 0) * 4) % 4;
-  const along = values[1] ?? 0.5;
-  const padding = config.worldPadding / 2;
-  const worldWidth = config.worldWidth;
-  const worldHeight = config.worldHeight;
-  const point =
-    edge === 0
-      ? { x: -padding, y: along * worldHeight }
-      : edge === 1
-        ? { x: worldWidth + padding, y: along * worldHeight }
-        : edge === 2
-          ? { x: along * worldWidth, y: -padding }
-          : { x: along * worldWidth, y: worldHeight + padding };
+  const entryAngle = (values[0] ?? 0) * Math.PI * 2;
+  const arena = arenaFromConfig(config);
   const difficulty = getWaveDifficulty(config, waveNumber);
   if (kind === "asteroid") {
-    const target = { x: worldWidth * (0.25 + (values[2] ?? 0.5) * 0.5), y: worldHeight / 2 };
+    const point = pointOnCircle(arena, entryAngle, arena.radius);
+    const exitOffset = ((values[1] ?? 0.5) * 2 - 1) * (Math.PI / 3);
+    const target = pointOnCircle(arena, entryAngle + Math.PI + exitOffset, arena.radius);
     const direction = unitDirection(point.x, point.y, target.x, target.y);
     const hp = config.asteroidHp * difficulty.hpMultiplier;
     return {
@@ -926,6 +1026,7 @@ function spawnEntity(
       asteroid: {
         id: `asteroid-${String(spawnSequence)}`,
         spawnSequence,
+        origin,
         previousX: point.x,
         previousY: point.y,
         x: point.x,
@@ -943,6 +1044,8 @@ function spawnEntity(
     };
   }
   const isGunship = kind === "gunship";
+  const entityRadius = isGunship ? config.gunshipRadius : config.carrierRadius;
+  const point = pointOnCircle(arena, entryAngle, arena.radius - entityRadius);
   const hp = (isGunship ? config.gunshipHp : config.carrierHp) * difficulty.hpMultiplier;
   return {
     rngState,
@@ -957,7 +1060,7 @@ function spawnEntity(
       y: point.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
-      radius: isGunship ? config.gunshipRadius : config.carrierRadius,
+      radius: entityRadius,
       spawnedTick: tick,
       hp,
       maxHp: hp,
@@ -1154,14 +1257,11 @@ function removeExpiredAndOutOfBounds(
   state: CombatStepState,
   config: CombatConfig
 ): CombatStepState {
+  const arena = arenaFromConfig(config);
   const isInBounds = (entity: MovingEntity) =>
-    entity.x >= -config.worldPadding &&
-    entity.x <= config.worldWidth + config.worldPadding &&
-    entity.y >= -config.worldPadding &&
-    entity.y <= config.worldHeight + config.worldPadding;
+    isWithinCircularEnvelope(entity.x, entity.y, entity.radius, arena, config.worldPadding);
   return {
     ...state,
-    enemies: state.enemies.filter(isInBounds),
     asteroids: state.asteroids.filter(
       (entity) =>
         state.clock.tick - entity.spawnedTick < config.asteroidLifetimeTicks && isInBounds(entity)
@@ -1174,6 +1274,9 @@ function removeExpiredAndOutOfBounds(
     homingMissiles: state.homingMissiles.filter(
       (entity) =>
         state.clock.tick - entity.spawnedTick < config.missileLifetimeTicks && isInBounds(entity)
+    ),
+    projectiles: state.projectiles.filter((entity) =>
+      isWithinCircularEnvelope(entity.x, entity.y, entity.radius, arena, config.worldPadding)
     )
   };
 }
@@ -1326,6 +1429,8 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     runSeed: state.runSeed,
     spawnRngState: state.spawnRngState,
     offerRngState: state.offerRngState,
+    ambientAsteroidRngState: state.ambientAsteroidRngState,
+    ambientAsteroidSpawnDueTick: state.ambientAsteroidSpawnDueTick,
     spaceshipHp: state.spaceshipHp,
     spaceshipMaxHp: state.spaceshipMaxHp,
     encounterPhase: state.encounterPhase,
@@ -1393,4 +1498,23 @@ function unitDirection(fromX: number, fromY: number, toX: number, toY: number): 
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function arenaFromConfig(config: CombatConfig): ArenaCircle {
+  return {
+    centerX: config.worldWidth / 2,
+    centerY: config.worldHeight / 2,
+    radius: config.arenaRadius
+  };
+}
+
+function pointOnCircle(
+  arena: ArenaCircle,
+  angle: number,
+  radius: number
+): { readonly x: number; readonly y: number } {
+  return {
+    x: arena.centerX + Math.cos(angle) * radius,
+    y: arena.centerY + Math.sin(angle) * radius
+  };
 }

@@ -1,4 +1,5 @@
-export const RECONNECTION_SESSION_KEY = "spaceship-defender.controller-session.v1";
+export const RECONNECTION_SESSION_KEY = "spaceship-defender.controller-session.v2";
+export const LEGACY_V10_RECONNECTION_SESSION_KEY = "spaceship-defender.controller-session.v1";
 export const LEGACY_RECONNECTION_SESSION_KEY = "town-defenders.controller-session.v1";
 
 export interface ReconnectionSession {
@@ -23,11 +24,13 @@ export function saveReconnectionSession(
   storage: SessionStorage,
   session: ReconnectionSession
 ): void {
+  storage.removeItem(LEGACY_V10_RECONNECTION_SESSION_KEY);
   storage.removeItem(LEGACY_RECONNECTION_SESSION_KEY);
   storage.setItem(RECONNECTION_SESSION_KEY, JSON.stringify(session));
 }
 
 export function readReconnectionSession(storage: SessionStorage): ReconnectionSession | undefined {
+  storage.removeItem(LEGACY_V10_RECONNECTION_SESSION_KEY);
   storage.removeItem(LEGACY_RECONNECTION_SESSION_KEY);
   const serialized = storage.getItem(RECONNECTION_SESSION_KEY);
   if (serialized === null) {
@@ -44,6 +47,7 @@ export function readReconnectionSession(storage: SessionStorage): ReconnectionSe
 
 export function clearReconnectionSession(storage: SessionStorage): void {
   storage.removeItem(RECONNECTION_SESSION_KEY);
+  storage.removeItem(LEGACY_V10_RECONNECTION_SESSION_KEY);
   storage.removeItem(LEGACY_RECONNECTION_SESSION_KEY);
 }
 

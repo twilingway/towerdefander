@@ -10,29 +10,31 @@ archive.
 ### Requirement: Симуляция создаёт явный мир космического корабля
 
 Game-core SHALL создавать детерминированное состояние из явного config и non-zero uint32 run seed.
-Config SHALL содержать fixedStepMs=50, world `4800×3200`, spaceship radius/max speed, acceleration
-640 units/s², braking 800 units/s², input timeout 250 ms, projectile speed/lifetime, fire cooldown
-250 ms, shield capacity 100, drain 20 units/s и recharge 10 units/s. State SHALL содержать clock,
-spaceship position/velocity/current/max HP, encounter phase/wave/score, independent domain RNG
-state, monotonic spawn sequence, turret angle, queued gunner fire edge, shield
-angle/active/energy/rearm latch, latest role inputs, role modifiers и combat entities. Дополнительно
-config SHALL содержать turret max angular speed `13π/30 rad/s`, acceleration `13π/15 rad/s²` и
-braking `13π/10 rad/s²`, shield max angular speed `13π/24 rad/s`, acceleration `13π/12 rad/s²` и
-braking `13π/8 rad/s²`; state SHALL хранить current angle, nullable target angle и signed angular
-velocity отдельно для turret и shield. Angular target/velocity и RNG state SHALL оставаться
-внутренними trusted полями и SHALL NOT публиковаться transport-клиентам.
+Config SHALL содержать fixedStepMs=50, square world `4400×4400`, arenaRadius 2200, spaceship
+radius/max speed, acceleration 640 units/s², braking 800 units/s², input timeout 250 ms, projectile
+speed/lifetime, fire cooldown 250 ms, shield capacity 100, drain 20 units/s и recharge 10 units/s.
+Combat config SHALL содержать positive safe integer ambient asteroid interval min=40/max=100 ticks и
+SHALL требовать `min <= max`. State SHALL содержать clock, spaceship position/velocity/current/max
+HP, encounter phase/wave/score, independent domain RNG state, monotonic spawn sequence, turret
+angle, queued gunner fire edge, shield angle/active/energy/rearm latch, latest role inputs, role
+modifiers и combat entities. Дополнительно config SHALL содержать turret max angular speed
+`13π/30 rad/s`, acceleration `13π/15 rad/s²` и braking `13π/10 rad/s²`, shield max angular speed
+`13π/24 rad/s`, acceleration `13π/12 rad/s²` и braking `13π/8 rad/s²`; state SHALL хранить current
+angle, nullable target angle и signed angular velocity отдельно для turret и shield. Angular
+target/velocity и RNG state SHALL оставаться внутренними trusted полями и SHALL NOT публиковаться
+transport-клиентам.
 
 #### Scenario: Одинаковое начальное состояние
 
 - **WHEN** ядро дважды получает одинаковые config и run seed
-- **THEN** оно создаёт структурно одинаковый мир размером `4800×3200`, с spaceship в центре
-  `(2400,1600)`, full HP, wave 1/combat, current angle 0, target `null` и angular velocity 0 без
-  DOM, сети, wall clock или несеянной случайности
+- **THEN** оно создаёт структурно одинаковый square world `4400×4400` с arenaRadius 2200, spaceship
+  в центре `(2200,2200)`, full HP, wave 1/combat, current angle 0, target `null` и angular velocity
+  0 без DOM, сети, wall clock или несеянной случайности
 
 #### Scenario: Некорректная конфигурация
 
-- **WHEN** seed равен нулю либо размеры, fixed step, linear/angular speed, acceleration, braking,
-  timeout, cooldown, lifetime, HP, combat caps либо shield capacity/rates неположительны/non-finite
+- **WHEN** seed равен нулю, world не square/не равен диаметру arena, ambient interval не positive
+  safe integer либо min>max, или прочие fixed-step/rate/cap значения неположительны/non-finite
 - **THEN** ядро отклоняет config и не возвращает частичное состояние
 
 #### Scenario: Пушка разворачивается на 180 градусов
@@ -50,9 +52,9 @@ velocity отдельно для turret и shield. Angular target/velocity и RN
 Pilot input SHALL быть нормализованным vector `x,y` в диапазоне -1..1. Ядро SHALL ограничивать длину
 диагонального vector единицей и SHALL приближать текущую velocity к `vector * maxSpeed` не быстрее
 acceleration за fixed step. Для нулевого или stale vector ядро SHALL приближать velocity к нулю не
-быстрее braking за fixed step. Position SHALL изменяться по новой velocity. Центр корабля и его
-radius SHALL оставаться внутри мира; при достижении края SHALL обнуляться только направленная наружу
-компонента velocity.
+быстрее braking за fixed step. Position SHALL изменяться по новой velocity. Весь spaceship circle
+SHALL оставаться внутри authoritative arena; при достижении окружности SHALL обнуляться только
+направленная наружу radial component velocity, а tangent/направленная внутрь SHALL сохраняться.
 
 #### Scenario: WASD направлен вправо
 
@@ -73,19 +75,19 @@ radius SHALL оставаться внутри мира; при достижен
 
 #### Scenario: Корабль достигает границы
 
-- **WHEN** движение вывело бы spaceship radius за правый край мира
-- **THEN** x прижимается к границе, положительная x-velocity становится нулевой, а допустимая
-  y-velocity сохраняется
+- **WHEN** движение вывело бы spaceship radius за arena circumference
+- **THEN** center проецируется на legal radius, outward radial velocity становится нулевой, а
+  допустимая tangent velocity сохраняется
 
 ### Requirement: Gunner направляет пушку и создаёт снаряды
 
 Свежий ненулевой gunner aim vector SHALL задавать target turret angle; нулевой vector SHALL
 сохранять последнее target-направление, по умолчанию current angle вправо. Свежий `firing=true`
 SHALL создавать не более одного projectile у края корабля при каждом завершении cooldown. Fixed step
-SHALL двигать projectiles и удалять их после lifetime или выхода за границы мира. Ненулевой aim
-SHALL NOT мгновенно заменять current turret angle: fixed step SHALL приближать его к target по
-кратчайшей дуге с настроенными acceleration, braking и max angular speed; exact antipode SHALL
-выбирать положительную дугу π; angle SHALL канонизироваться в `[-π,π)` и SHALL NOT перелетать
+SHALL двигать projectiles и удалять их после lifetime или выхода за circular arena envelope.
+Ненулевой aim SHALL NOT мгновенно заменять current turret angle: fixed step SHALL приближать его к
+target по кратчайшей дуге с настроенными acceleration, braking и max angular speed; exact antipode
+SHALL выбирать положительную дугу π; angle SHALL канонизироваться в `[-π,π)` и SHALL NOT перелетать
 target. Projectile SHALL использовать current authoritative turret angle на eligible fire tick, а не
 target angle.
 

@@ -43,8 +43,9 @@ describe("deterministic game core primitives", () => {
   it("exports the spaceship core from the package entrypoint", () => {
     expect(createSpaceshipSimulationConfig()).toMatchObject({
       fixedStepMs: 50,
-      worldWidth: 4800,
-      worldHeight: 3200
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200
     });
   });
 });

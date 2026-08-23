@@ -35,7 +35,7 @@ offers с stable `offerId`, `upgradeId` и preview. Combat transforms/collisions
 
 ### Requirement: Upgrade choice строго авторизован и идемпотентен
 
-Strict `upgrade:choose` SHALL содержать protocolVersion 8, roomId, playerId, UUID `actionId`,
+Strict `upgrade:choose` SHALL содержать current protocolVersion, roomId, playerId, UUID `actionId`,
 `waveNumber`, `offerId` и `upgradeId`. Server SHALL вывести actor из connection и проверить strict
 envelope/identity, затем duplicate action fingerprint, затем assigned role, intermission/current
 wave, own offer и existing selection до mutation. Selection SHALL атомарно применить ровно один

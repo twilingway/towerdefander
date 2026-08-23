@@ -30,6 +30,8 @@ import {
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
 const SNAPSHOT_TRANSITION_MS = 50;
+const OUTSIDE_SPACE_COLOR = 0x02070d;
+const ARENA_SPACE_COLOR = 0x07171f;
 
 type CombatEntity =
   | (PublicEnemyView & { readonly visualKind: "enemy" })
@@ -59,6 +61,7 @@ class SpaceshipScene extends Phaser.Scene {
   private rendererWidth = BASE_VIEWPORT_WIDTH;
   private rendererHeight = BASE_VIEWPORT_HEIGHT;
   private cameraOverscan = 0;
+  private arenaMaskSource: Phaser.GameObjects.Graphics | undefined;
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("spaceship");
@@ -74,9 +77,10 @@ class SpaceshipScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+      this.arenaMaskSource?.destroy();
     });
     this.focusCamera(this.snapshot.spaceship);
-    this.drawGrid();
+    this.drawArena();
     this.drawDecorations();
 
     this.spaceshipBody = this.add.graphics().setDepth(10);
@@ -148,16 +152,30 @@ class SpaceshipScene extends Phaser.Scene {
     this.snapshotReset.request();
   }
 
-  private drawGrid(): void {
-    this.cameras.main.setBackgroundColor(0x07171f);
+  private drawArena(): void {
+    const centerX = this.snapshot.worldWidth / 2;
+    const centerY = this.snapshot.worldHeight / 2;
+    this.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
+
     const graphics = this.add.graphics().setDepth(0);
+    graphics.fillStyle(ARENA_SPACE_COLOR, 1);
+    graphics.fillRect(0, 0, this.snapshot.worldWidth, this.snapshot.worldHeight);
     graphics.lineStyle(2, 0x163746, 0.75);
     for (let x = 0; x <= this.snapshot.worldWidth; x += 100)
       graphics.lineBetween(x, 0, x, this.snapshot.worldHeight);
     for (let y = 0; y <= this.snapshot.worldHeight; y += 100)
       graphics.lineBetween(0, y, this.snapshot.worldWidth, y);
-    graphics.lineStyle(8, 0x3d6874, 1);
-    graphics.strokeRect(0, 0, this.snapshot.worldWidth, this.snapshot.worldHeight);
+
+    const maskSource = this.make.graphics({ x: 0, y: 0 }, false);
+    maskSource.fillStyle(0xffffff, 1);
+    maskSource.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
+    graphics.setMask(maskSource.createGeometryMask());
+
+    const border = this.add.graphics().setDepth(3);
+    border.lineStyle(8, 0x3d6874, 1);
+    border.strokeCircle(centerX, centerY, this.snapshot.arenaRadius);
+
+    this.arenaMaskSource = maskSource;
   }
 
   private drawDecorations(): void {

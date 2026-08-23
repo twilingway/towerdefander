@@ -7,7 +7,7 @@ function collection<T>(values: T[]) {
 }
 
 describe("display room view", () => {
-  it("flattens stable display-only combat maps into spawn-ordered strict v9 arrays", () => {
+  it("flattens stable display-only combat maps into spawn-ordered strict v11 arrays", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
@@ -36,11 +36,12 @@ describe("display room view", () => {
       game: {
         tick: 2,
         elapsedMs: 100,
-        worldWidth: 2400,
-        worldHeight: 1600,
+        worldWidth: 4400,
+        worldHeight: 4400,
+        arenaRadius: 2200,
         spaceship: {
-          x: 1200,
-          y: 800,
+          x: 2200,
+          y: 2200,
           velocityX: 0,
           velocityY: 0,
           radius: 52,
@@ -71,15 +72,23 @@ describe("display room view", () => {
         },
         display: {
           obstacles: collection([
-            { obstacleId: "cloud", kind: "circle", x: 100, y: 100, radius: 20, width: 0, height: 0 }
+            {
+              obstacleId: "cloud",
+              kind: "circle",
+              x: 2200,
+              y: 1600,
+              radius: 20,
+              width: 0,
+              height: 0
+            }
           ]),
           enemyShips: collection([
             {
               entityId: "enemy-2",
               spawnSequence: 2,
               kind: "missileCarrier",
-              x: 1800,
-              y: 800,
+              x: 2800,
+              y: 2200,
               velocityX: -20,
               velocityY: 0,
               radius: 24,
@@ -91,8 +100,8 @@ describe("display room view", () => {
               entityId: "enemy-1",
               spawnSequence: 1,
               kind: "gunship",
-              x: 1600,
-              y: 800,
+              x: 2600,
+              y: 2200,
               velocityX: -40,
               velocityY: 0,
               radius: 18,
@@ -107,8 +116,8 @@ describe("display room view", () => {
               entityId: "projectile-0",
               spawnSequence: 3,
               kind: "friendly",
-              x: 1300,
-              y: 800,
+              x: 2300,
+              y: 2200,
               velocityX: 720,
               velocityY: 0,
               radius: 8
@@ -122,13 +131,14 @@ describe("display room view", () => {
     const view = toDisplayRoomView(state);
     expect(view?.players.map((player) => player.role)).toEqual(["pilot", "gunner"]);
     expect(view?.game?.obstacles).toEqual([
-      { obstacleId: "cloud", kind: "circle", x: 100, y: 100, radius: 20 }
+      { obstacleId: "cloud", kind: "circle", x: 2200, y: 1600, radius: 20 }
     ]);
     expect(view?.game?.friendlyProjectiles).toHaveLength(1);
     expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
     expect(view?.game?.encounter.outcome).toBeNull();
     expect(view?.runNumber).toBe(2);
+    expect(view?.game?.arenaRadius).toBe(2200);
     expect(view?.game?.spaceship.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);

@@ -41,13 +41,13 @@ valid samples. До первого sample, после 5000 ms timeout, при di
 
 ### Requirement: Probe authorization не доверяет client telemetry
 
-Server SHALL принимать latency pong от display и controller только после strict protocol-v8/schema и
-room identity checks. ProbeId SHALL принадлежать outstanding probe того же connection. Client SHALL
-NOT отправлять готовое значение RTT или timestamp, а telemetry SHALL NOT менять sequence watermark,
-encounter tick, entities, HP, wave, upgrade journal, fire/shield state, cooldown или energy. Valid
-duplicate, late, unknown либо чужой probeId SHALL молча игнорироваться без изменения текущего
-sample; malformed payload SHALL получать actor-only `invalid_message`, а protocol mismatch —
-actor-only `protocol_mismatch`.
+Server SHALL принимать latency pong от display и controller только после current strict
+protocol/schema и room identity checks. ProbeId SHALL принадлежать outstanding probe того же
+connection. Client SHALL NOT отправлять готовое значение RTT или timestamp, а telemetry SHALL NOT
+менять sequence watermark, encounter tick, arena geometry, entities, HP, wave, upgrade journal,
+fire/shield state, cooldown или energy. Valid duplicate, late, unknown либо чужой probeId SHALL
+молча игнорироваться без изменения current sample; malformed payload SHALL получать actor-only
+`invalid_message`, а protocol mismatch — actor-only `protocol_mismatch`.
 
 #### Scenario: Controller возвращает probe другого игрока
 
@@ -61,7 +61,7 @@ actor-only `protocol_mismatch`.
 
 #### Scenario: Устаревший pong
 
-- **WHEN** client отправляет latency pong с protocolVersion 7
+- **WHEN** v11 room получает latency pong с protocolVersion 10
 - **THEN** server возвращает `protocol_mismatch` только этому connection и telemetry не изменяется
 
 ### Requirement: Room UI показывает качество всех соединений

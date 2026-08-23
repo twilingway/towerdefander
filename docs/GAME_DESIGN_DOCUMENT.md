@@ -66,7 +66,8 @@ combat wave
 
 - `gunship`: держит дистанцию и стреляет линейными bullets;
 - `missileCarrier`: запускает limited-turn homing missiles;
-- `asteroid`: движется по постоянной траектории и наносит contact damage;
+- `asteroid`: постоянно появляется во время combat с одной из случайных сторон круглой арены,
+  пересекает её по seeded-траектории и наносит contact damage;
 - будущие archetypes: swarm, sniper, charger, support, elite и bosses.
 
 Enemy AI, spawn director, movement, collisions, damage, rewards и RNG принадлежат pure server-side
@@ -95,8 +96,10 @@ simulation. Display только интерполирует snapshots и рис�
 ## 7. Multiplayer architecture
 
 - server: authoritative Colyseus room `spaceship_defender`;
-- protocol: strict versioned schemas, current target v10;
+- protocol: strict versioned schemas, current target v11;
 - core: deterministic 50 ms fixed step с explicit seeded randomness;
+- world: server-authoritative circle `4400×4400`, radius `2200`; spaceship и enemy ships не могут
+  покинуть арену, а transient hazards удаляются только за внешней circular envelope;
 - display: React HUD + Phaser 2D/WebGL rendering;
 - controllers: responsive React UI, intents only;
 - reconnect, replacement, unanimous rematch и room TTL защищают session lifecycle.

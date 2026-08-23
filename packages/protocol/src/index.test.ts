@@ -5,6 +5,7 @@ import {
   CREW_ROLES,
   INTERMISSION_DURATION_TICKS,
   PLAYER_CAPACITY,
+  PROJECTILE_WORLD_PADDING,
   PROTOCOL_VERSION,
   ROOM_TYPE,
   clientLatencyPongSchema,
@@ -75,11 +76,12 @@ function controllerRoom(): ControllerRoomView {
     game: {
       tick: 10,
       elapsedMs: 500,
-      worldWidth: 4800,
-      worldHeight: 3200,
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200,
       spaceship: {
-        x: 2400,
-        y: 1600,
+        x: 2200,
+        y: 2200,
         velocityX: 100,
         velocityY: 0,
         radius: 52,
@@ -215,41 +217,48 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v10 handshake and messages", () => {
-  it("publishes the fixed crew and v9", () => {
-    expect(PROTOCOL_VERSION).toBe(10);
+describe("protocol v11 handshake and messages", () => {
+  it("publishes the fixed crew and v11", () => {
+    expect(PROTOCOL_VERSION).toBe(11);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v9 create/join and rejects v8 and unknown fields", () => {
+  it("accepts v11 create/join and rejects v10 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 10 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 11 }).success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 9 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 10 }).success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 10,
+        protocolVersion: 11,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
-      joinOptionsSchema.safeParse({
+      controllerJoinOptionsSchema.safeParse({
         role: "controller",
         protocolVersion: 10,
+        playerName: "Ada"
+      }).success
+    ).toBe(false);
+    expect(
+      joinOptionsSchema.safeParse({
+        role: "controller",
+        protocolVersion: 11,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v9 and the active run", () => {
+  it("keeps continuous role messages strict on v11 and the active run", () => {
     const envelope = {
-      protocolVersion: 10,
+      protocolVersion: 11,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -284,9 +293,27 @@ describe("protocol v10 handshake and messages", () => {
       }).success
     ).toBe(false);
     expect(
+      gunnerInputCommandSchema.safeParse({
+        ...envelope,
+        protocolVersion: 10,
+        sequence: 2,
+        aim: { x: 0, y: -1 },
+        firing: true
+      }).success
+    ).toBe(false);
+    expect(
+      shieldInputCommandSchema.safeParse({
+        ...envelope,
+        protocolVersion: 10,
+        sequence: 3,
+        aim: { x: -1, y: 0 },
+        active: true
+      }).success
+    ).toBe(false);
+    expect(
       pilotInputCommandSchema.safeParse({
         ...envelope,
-        protocolVersion: 9,
+        protocolVersion: 10,
         sequence: 1,
         vector: { x: 1, y: 0 }
       }).success
@@ -301,7 +328,7 @@ describe("protocol v10 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 10,
+        protocolVersion: 11,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -311,9 +338,12 @@ describe("protocol v10 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 10, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 11, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
+    expect(
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 10, runNumber: 0 }).success
+    ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
     }
@@ -355,7 +385,7 @@ describe("protocol v10 handshake and messages", () => {
 
 describe("upgrade:choose", () => {
   const command = {
-    protocolVersion: 10,
+    protocolVersion: 11,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -371,7 +401,7 @@ describe("upgrade:choose", () => {
       { ...command, actionId: "not-a-uuid" },
       { ...command, waveNumber: 0 },
       { ...command, offerId: "" },
-      { ...command, protocolVersion: 9 },
+      { ...command, protocolVersion: 10 },
       { ...command, runNumber: 0 },
       { ...command, selectedIndex: 0 }
     ]) {
@@ -443,7 +473,7 @@ describe("personalized upgrade projection", () => {
   });
 });
 
-describe("strict v9 room projections", () => {
+describe("strict v11 room projections", () => {
   it("accepts valid combat display and compact controller views", () => {
     expect(controllerRoomViewSchema.safeParse(controllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(displayRoom()).success).toBe(true);
@@ -503,6 +533,104 @@ describe("strict v9 room projections", () => {
     if (prematureOutcome.game === null) throw new Error("Expected active game.");
     prematureOutcome.game.encounter.outcome = "victory";
     expect(displayRoomViewSchema.safeParse(prematureOutcome).success).toBe(false);
+  });
+
+  it("requires square arena geometry in controller and display projections", () => {
+    const controller = controllerRoom();
+    if (controller.game === null) throw new Error("Expected active game.");
+    controller.game.arenaRadius = 2199;
+    expect(controllerRoomViewSchema.safeParse(controller).success).toBe(false);
+
+    const display = displayRoom();
+    if (display.game === null) throw new Error("Expected active game.");
+    display.game.worldHeight += 0.5e-6;
+    expect(displayRoomViewSchema.safeParse(display).success).toBe(false);
+
+    const missing = controllerRoom() as unknown as Record<string, unknown>;
+    const game = missing.game as Record<string, unknown>;
+    delete game.arenaRadius;
+    expect(controllerRoomViewSchema.safeParse(missing).success).toBe(false);
+  });
+
+  it("keeps complete spaceship and enemy bodies inside the arena with tiny noise tolerance", () => {
+    const spaceshipEdge = controllerRoom();
+    if (spaceshipEdge.game === null) throw new Error("Expected active game.");
+    spaceshipEdge.game.spaceship.x =
+      spaceshipEdge.game.worldWidth / 2 +
+      spaceshipEdge.game.arenaRadius -
+      spaceshipEdge.game.spaceship.radius +
+      0.5e-6;
+    expect(controllerRoomViewSchema.safeParse(spaceshipEdge).success).toBe(true);
+    spaceshipEdge.game.spaceship.x += 1e-6;
+    expect(controllerRoomViewSchema.safeParse(spaceshipEdge).success).toBe(false);
+
+    const enemyEdge = displayRoom();
+    if (enemyEdge.game === null) throw new Error("Expected active game.");
+    const enemy = item(enemyEdge.game.enemyShips, 0);
+    enemy.x = enemyEdge.game.worldWidth / 2 + enemyEdge.game.arenaRadius - enemy.radius + 0.5e-6;
+    enemy.y = enemyEdge.game.worldHeight / 2;
+    expect(displayRoomViewSchema.safeParse(enemyEdge).success).toBe(true);
+    enemy.x += 1e-6;
+    expect(displayRoomViewSchema.safeParse(enemyEdge).success).toBe(false);
+  });
+
+  it("requires every transient body to remain in the padded circular envelope", () => {
+    const mutations: ((room: DisplayRoomView, outsideOffset: number) => void)[] = [
+      (room, outsideOffset) => {
+        if (room.game === null) throw new Error("Expected active game.");
+        const entity = item(room.game.asteroids, 0);
+        entity.x =
+          room.game.worldWidth / 2 +
+          room.game.arenaRadius +
+          PROJECTILE_WORLD_PADDING -
+          entity.radius +
+          outsideOffset;
+        entity.y = room.game.worldHeight / 2;
+      },
+      (room, outsideOffset) => {
+        if (room.game === null) throw new Error("Expected active game.");
+        const entity = item(room.game.friendlyProjectiles, 0);
+        entity.x =
+          room.game.worldWidth / 2 +
+          room.game.arenaRadius +
+          PROJECTILE_WORLD_PADDING -
+          entity.radius +
+          outsideOffset;
+        entity.y = room.game.worldHeight / 2;
+      },
+      (room, outsideOffset) => {
+        if (room.game === null) throw new Error("Expected active game.");
+        const entity = item(room.game.hostileProjectiles, 0);
+        entity.x =
+          room.game.worldWidth / 2 +
+          room.game.arenaRadius +
+          PROJECTILE_WORLD_PADDING -
+          entity.radius +
+          outsideOffset;
+        entity.y = room.game.worldHeight / 2;
+      },
+      (room, outsideOffset) => {
+        if (room.game === null) throw new Error("Expected active game.");
+        const entity = item(room.game.homingMissiles, 0);
+        entity.x =
+          room.game.worldWidth / 2 +
+          room.game.arenaRadius +
+          PROJECTILE_WORLD_PADDING -
+          entity.radius +
+          outsideOffset;
+        entity.y = room.game.worldHeight / 2;
+      }
+    ];
+
+    for (const mutate of mutations) {
+      const edge = displayRoom();
+      mutate(edge, 0.5e-6);
+      expect(displayRoomViewSchema.safeParse(edge).success).toBe(true);
+
+      const outside = displayRoom();
+      mutate(outside, 1.5e-6);
+      expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
+    }
   });
 
   it("enforces countdown and upgrade phase invariants", () => {
@@ -600,28 +728,35 @@ describe("strict v9 room projections", () => {
   });
 });
 
-describe("v9 latency diagnostics", () => {
+describe("v11 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 10, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 11, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 10,
+        protocolVersion: 11,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 10,
+        protocolVersion: 11,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 9, probeId: "probe-1" }).success
+      clientLatencyPongSchema.safeParse({
+        protocolVersion: 10,
+        roomId: ROOM_ID,
+        probeId: "probe-1"
+      }).success
+    ).toBe(false);
+    expect(
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 10, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

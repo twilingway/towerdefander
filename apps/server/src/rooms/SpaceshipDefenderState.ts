@@ -167,8 +167,9 @@ export class SpaceshipDisplayState extends Schema {
 export class SpaceshipGameState extends Schema {
   @type("uint32") tick = 0;
   @type("uint32") elapsedMs = 0;
-  @type("uint16") worldWidth = 4800;
-  @type("uint16") worldHeight = 3200;
+  @type("uint16") worldWidth = 4400;
+  @type("uint16") worldHeight = 4400;
+  @type("uint16") arenaRadius = 2200;
   @type(SpaceshipState) spaceship = new SpaceshipState();
   @type("float64") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();

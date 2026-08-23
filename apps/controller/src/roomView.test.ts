@@ -12,7 +12,7 @@ function collection<T>(values: T[]) {
 }
 
 describe("controller room view", () => {
-  it("decodes compact v9 state without mass entities and derives the assigned role", () => {
+  it("decodes compact current state without mass entities and derives the assigned role", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
@@ -41,11 +41,12 @@ describe("controller room view", () => {
       game: {
         tick: 1,
         elapsedMs: 50,
-        worldWidth: 2400,
-        worldHeight: 1600,
+        worldWidth: 4400,
+        worldHeight: 4400,
+        arenaRadius: 2200,
         spaceship: {
-          x: 1200,
-          y: 800,
+          x: 2200,
+          y: 2200,
           velocityX: 0,
           velocityY: 0,
           radius: 52,
@@ -116,11 +117,12 @@ describe("controller room view", () => {
       game: {
         tick: 40,
         elapsedMs: 2000,
-        worldWidth: 2400,
-        worldHeight: 1600,
+        worldWidth: 4400,
+        worldHeight: 4400,
+        arenaRadius: 2200,
         spaceship: {
-          x: 1200,
-          y: 800,
+          x: 2200,
+          y: 2200,
           velocityX: 0,
           velocityY: 0,
           radius: 52,
@@ -200,11 +202,12 @@ describe("controller room view", () => {
       game: {
         tick: 400,
         elapsedMs: 20_000,
-        worldWidth: 2400,
-        worldHeight: 1600,
+        worldWidth: 4400,
+        worldHeight: 4400,
+        arenaRadius: 2200,
         spaceship: {
-          x: 1200,
-          y: 800,
+          x: 2200,
+          y: 2200,
           velocityX: 0,
           velocityY: 0,
           radius: 52,
