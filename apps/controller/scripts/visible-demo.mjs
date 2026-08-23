@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join, resolve, sep } from "node:path";
 
 import { Client } from "@colyseus/sdk";
 import {
@@ -29,6 +33,8 @@ const headless = process.env.DEMO_HEADLESS === "1";
 
 let browser;
 let page;
+let externalChromeProcess;
+let externalChromeProfile;
 const roomsByRole = new Map();
 const ownedRooms = new Set();
 let cleaningUp = false;
@@ -46,6 +52,7 @@ let resultObservedAt;
 let readySentForRun;
 let neutralizedPhaseKey;
 let lastStatusAt = 0;
+let lastCadenceLogAt = 0;
 let stopNeutralizationPromise;
 let controlWindowStartedAt = Date.now();
 let controlBatches = 0;
@@ -78,27 +85,18 @@ process.on("message", (message) => {
 });
 
 try {
-  browser = await chromium.launch({
-    headless,
-    channel: "chrome",
-    args: headless
-      ? []
-      : [
-          "--start-maximized",
-          "--disable-background-timer-throttling",
-          "--disable-backgrounding-occluded-windows",
-          "--disable-renderer-backgrounding",
-          "--disable-features=CalculateNativeWinOcclusion"
-        ]
-  });
+  const launchedBrowser = headless
+    ? await launchHeadlessBrowser()
+    : await launchExternalVisibleChrome();
+  browser = launchedBrowser.browser;
+  externalChromeProcess = launchedBrowser.chromeProcess;
+  externalChromeProfile = launchedBrowser.profileDirectory;
   abortIfStopped();
   browser.on("disconnected", () => {
     if (!cleaningUp) requestStop();
   });
-  const context = await browser.newContext({
-    viewport: headless ? { width: 1600, height: 900 } : null
-  });
-  page = await context.newPage();
+  const context = launchedBrowser.context;
+  page = launchedBrowser.page;
   abortIfStopped();
   page.on("close", () => {
     if (!cleaningUp) requestStop();
@@ -110,6 +108,7 @@ try {
   });
 
   await page.goto(displayUrl, { waitUntil: "domcontentloaded" });
+  if (!headless) await keepVisiblePageActive(context, page);
   abortIfStopped();
   await page.getByRole("button", { name: "Создать комнату" }).click();
   abortIfStopped();
@@ -158,6 +157,18 @@ try {
     if (stopRequested) break;
     if (failure !== undefined) throw failure;
     observeVerification(startingPosition);
+    if (!headless && latestTelemetry !== undefined && Date.now() - lastCadenceLogAt >= 5_000) {
+      lastCadenceLogAt = Date.now();
+      console.log(
+        `Visible cadence: ${JSON.stringify({
+          renderFps: latestTelemetry.renderFps,
+          snapshotHz: latestTelemetry.snapshotHz,
+          controlHz: latestTelemetry.controlHz,
+          visibilityState: latestTelemetry.visibilityState,
+          focused: latestTelemetry.focused
+        })}`
+      );
+    }
     const currentEncounter = encounter();
 
     if (currentEncounter.phase === "combat") {
@@ -239,7 +250,7 @@ try {
   }
   if (page !== undefined && !page.isClosed()) {
     try {
-      page.once("dialog", (dialog) => void dialog.accept());
+      page.once("dialog", (dialog) => void dialog.accept().catch(() => undefined));
       const closeButton = page.getByRole("button", { name: "Закрыть комнату" }).first();
       if (await closeButton.isVisible()) await closeButton.click({ timeout: 1_000 });
     } catch {
@@ -256,6 +267,7 @@ try {
             .catch(() => false),
           delay(5_000).then(() => false)
         ]);
+  if (browserClosed) await cleanupExternalChromeProfile().catch(() => undefined);
   const finalExitCode = process.exitCode ?? 0;
   if (!browserClosed && headless) {
     if (process.connected) process.disconnect();
@@ -267,6 +279,114 @@ try {
   }
   if (process.connected) process.disconnect();
   process.exit(finalExitCode);
+}
+
+async function launchHeadlessBrowser() {
+  const launched = await chromium.launch({ headless: true, channel: "chrome" });
+  const context = await launched.newContext({ viewport: { width: 1600, height: 900 } });
+  return { browser: launched, context, page: await context.newPage() };
+}
+
+async function launchExternalVisibleChrome() {
+  const chromeExecutable = await findChromeExecutable();
+  const profileDirectory = await mkdtemp(join(tmpdir(), "spaceship-visible-demo-"));
+  const chromeProcess = spawn(
+    chromeExecutable,
+    [
+      "--remote-debugging-port=0",
+      `--user-data-dir=${profileDirectory}`,
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--disable-session-crashed-bubble",
+      "--start-maximized",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-features=CalculateNativeWinOcclusion,IntensiveWakeUpThrottling",
+      "--ignore-gpu-blocklist",
+      "--enable-gpu-rasterization",
+      "--app=about:blank"
+    ],
+    { stdio: "ignore", windowsHide: false }
+  );
+  externalChromeProcess = chromeProcess;
+  externalChromeProfile = profileDirectory;
+  if (process.send !== undefined) process.send({ type: "owned-profile", profileDirectory });
+  const devToolsPort = await waitForDevToolsPort(profileDirectory, chromeProcess);
+  const launched = await chromium.connectOverCDP(`http://127.0.0.1:${String(devToolsPort)}`);
+  const context = launched.contexts().at(0);
+  if (context === undefined) throw new Error("External Chrome did not expose a default context.");
+  const page = context.pages().at(0) ?? (await context.newPage());
+  await keepVisiblePageActive(context, page);
+  return { browser: launched, context, page, chromeProcess, profileDirectory };
+}
+
+async function findChromeExecutable() {
+  const candidates = [
+    join(process.env.PROGRAMFILES ?? "", "Google", "Chrome", "Application", "chrome.exe"),
+    join(process.env["PROGRAMFILES(X86)"] ?? "", "Google", "Chrome", "Application", "chrome.exe"),
+    join(process.env.LOCALAPPDATA ?? "", "Google", "Chrome", "Application", "chrome.exe")
+  ];
+  for (const candidate of candidates) {
+    if (candidate.length === 0) continue;
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Try the next standard Google Chrome installation path.
+    }
+  }
+  throw new Error("Google Chrome was not found in a standard Windows installation path.");
+}
+
+async function waitForDevToolsPort(profileDirectory, chromeProcess) {
+  const activePortPath = join(profileDirectory, "DevToolsActivePort");
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (chromeProcess.exitCode !== null) {
+      throw new Error("External Google Chrome exited before CDP became available.");
+    }
+    try {
+      const [portLine] = (await readFile(activePortPath, "utf8")).split(/\r?\n/u);
+      const port = Number(portLine);
+      if (Number.isInteger(port) && port > 0 && port <= 65_535) return port;
+    } catch {
+      // Chrome has not written DevToolsActivePort yet.
+    }
+    await delay(50);
+  }
+  throw new Error("Timed out waiting for external Google Chrome CDP endpoint.");
+}
+
+async function keepVisiblePageActive(context, activePage) {
+  await activePage.bringToFront();
+  const session = await context.newCDPSession(activePage);
+  try {
+    await session.send("Page.bringToFront");
+    await session.send("Emulation.setFocusEmulationEnabled", { enabled: true });
+    await session.send("Page.setWebLifecycleState", { state: "active" });
+  } finally {
+    await session.detach();
+  }
+}
+
+async function cleanupExternalChromeProfile() {
+  if (externalChromeProfile === undefined) return;
+  if (externalChromeProcess?.exitCode === null) {
+    externalChromeProcess.kill();
+    await Promise.race([
+      new Promise((resolveExit) => externalChromeProcess.once("exit", resolveExit)),
+      delay(2_000)
+    ]);
+  }
+  const resolvedProfile = resolve(externalChromeProfile);
+  const resolvedTempRoot = `${resolve(tmpdir())}${sep}`;
+  if (
+    !resolvedProfile.startsWith(resolvedTempRoot) ||
+    !basename(resolvedProfile).startsWith("spaceship-visible-demo-")
+  ) {
+    throw new Error("Refusing to remove an unexpected Chrome profile path.");
+  }
+  await rm(resolvedProfile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
 function sendCombatInputs(elapsedMs, expectedGeneration) {
@@ -418,6 +538,8 @@ async function refreshTelemetry() {
         friendlyProjectiles: parse("data-friendly-projectile-count"),
         shieldActive: element.getAttribute("data-shield-active") === "true",
         shieldEnergy: parse("data-shield-energy"),
+        visibilityState: element.ownerDocument.visibilityState,
+        focused: element.ownerDocument.hasFocus(),
         renderFps: parseOverlay("data-render-fps"),
         snapshotHz: parseOverlay("data-snapshot-hz"),
         controlHz: parseOverlay("data-control-hz")

@@ -3,8 +3,10 @@
 ### Requirement: Демонстрация запускается в видимом изолированном браузере
 
 Команда `pnpm demo:visible` SHALL запускать local server/display на отдельных фиксированных ports,
-открывать headed Chrome с общим экраном на переднем плане и создавать новую комнату. Harness SHALL
-завершать только принадлежащие ему процессы и SHALL NOT подключаться к существующей production room.
+открывать отдельный обычный процесс Google Chrome с временным owned profile, подключать Playwright
+через CDP только для telemetry/bridge, показывать общий экран на переднем плане и создавать новую
+комнату. Harness SHALL завершать только принадлежащие ему процессы и SHALL NOT подключаться к
+существующей production room.
 
 #### Scenario: Разработчик запускает демонстрацию
 
@@ -85,8 +87,9 @@ protocol, server simulation либо authoritative state. Круглая arena S
 #### Scenario: Пользователь наблюдает плавный бой
 
 - **WHEN** headed demo находится на переднем плане и auto-crew ведёт combat
-- **THEN** Phaser интерполирует snapshots на каждом animation frame, overlay показывает ненулевые
-  render/snapshot/control rates, а server snapshots и role intents продолжают cadence около 20 Hz
+- **THEN** Phaser интерполирует snapshots на каждом animation frame, foreground render сохраняет не
+  менее 30 FPS в обычных локальных условиях, overlay показывает snapshot/control cadence не менее 15
+  Hz, а target cadence остаётся около 60/20/20
 
 #### Scenario: Окно временно перекрыто
 

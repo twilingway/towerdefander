@@ -25,13 +25,15 @@ display или debug mutation нарушил бы authoritative boundary.
 
 ## Decisions
 
-### Headed Playwright управляет только display browser
+### Видимый display работает в отдельном обычном Google Chrome
 
 Root runner поднимает compiled server и Vite display на isolated strict ports. Controller-side demo
-script запускает Chrome с `headless:false`, создаёт комнату через реальный Display UI и держит
-display на переднем плане. Controller roles подключаются через установленный Colyseus SDK как
-отдельные обычные clients. Это исключает browser visibility/blur neutralization фоновых controller
-tabs и всё равно проверяет server boundary.
+script запускает отдельный Google Chrome с временным owned profile и remote debugging port. После
+старта Playwright подключается к нему через CDP только для read-only telemetry, local overlay bridge
+и UI room creation; Playwright не владеет browser lifecycle/render scheduling. CDP принудительно
+оставляет Page lifecycle active и focus-emulated. Controller roles подключаются через установленный
+Colyseus SDK как отдельные обычные clients. Headless `demo:verify` по-прежнему использует
+Playwright-owned Chrome.
 
 Отклонено: запускать обычный E2E с `--headed` — он слишком быстро переключает страницы, закрывает
 browser после assertions и не является управляемой демонстрацией.
@@ -71,11 +73,12 @@ Harness читает один cached telemetry record не чаще 10 раз в
 
 ### Headed demo сохраняет реальную частоту рендера
 
-Runner передаёт headed Chrome только presentation flags, отключающие native occlusion,
-background-timer и renderer throttling. Эти flags не используются production display и не меняют
-server simulation. Overlay считает `requestAnimationFrame` frames и изменения authoritative snapshot
-tick по реальному elapsed time, а runner считает отправленные batches обычных role intents.
-Показатели обновляются не чаще одного раза в секунду и не вызывают React render на каждом frame.
+Runner передаёт внешнему headed Chrome только presentation flags, отключающие native occlusion,
+background-timer и renderer throttling, и активирует Page lifecycle через CDP. Эти flags не
+используются production display и не меняют server simulation. Overlay считает
+`requestAnimationFrame` frames и изменения authoritative snapshot tick по реальному elapsed time, а
+runner считает отправленные batches обычных role intents. Показатели обновляются не чаще одного раза
+в секунду и не вызывают React render на каждом frame.
 
 Круглая arena рисуется Phaser Graphics напрямую: fill circle и аналитически ограниченные circle grid
 segments. GeometryMask не используется, поскольку Phaser 4 WebGL предупреждает, что этот mask path

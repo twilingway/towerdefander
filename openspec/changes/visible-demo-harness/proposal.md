@@ -17,6 +17,8 @@
   чтобы видимая демонстрация отличала проблемы рендера от server/network cadence.
 - Запускать headed Chrome без background/occlusion throttling и рисовать круглую grid arena без
   неподдерживаемой WebGL geometry mask.
+- Запускать видимый режим отдельным обычным процессом Google Chrome и подключать Playwright только
+  через CDP для telemetry/bridge; headless verify сохраняет Playwright-owned browser.
 - Добавить dev-only public-display telemetry для deterministic target selection без trusted state
   mutation.
 - Не включать видимую бесконечную демонстрацию в `pnpm check` или обычный headless Playwright flow.

@@ -21,11 +21,14 @@
       intermission, трёх upgrades и wave 2.
 - [x] 2.6 Отключить headed Chrome occlusion/background throttling и заменить unsupported WebGL
       GeometryMask аналитически ограниченной circular grid; добавить geometry regression test.
+- [ ] 2.7 Перевести headed mode на отдельный Google Chrome с temporary owned profile и CDP active
+      lifecycle; сохранить Playwright-owned headless verify и покрыть launcher/cleanup checks.
 
 ## 3. Verification и показ
 
-- [x] 3.1 Выполнить display/controller tests, lint/typecheck/build, `pnpm check`,
+- [ ] 3.1 Выполнить display/controller tests, lint/typecheck/build, `pnpm check`,
       `pnpm spec:validate` и `git diff --check`.
-- [x] 3.2 Провести read-only reviewer pass и исправить blocker/high/medium findings.
-- [ ] 3.3 Запустить headed demo, показать пользователю движение/fire/shield и наблюдать переход как
-      минимум wave 1→2; оставить change активным до пользовательского подтверждения.
+- [ ] 3.2 Провести read-only reviewer pass и исправить blocker/high/medium findings.
+- [ ] 3.3 Запустить external-Chrome demo, подтвердить foreground render >=30 FPS, показать
+      пользователю движение/fire/shield и наблюдать переход как минимум wave 1→2; оставить change
+      активным до пользовательского подтверждения.

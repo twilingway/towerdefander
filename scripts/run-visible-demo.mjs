@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, rm } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { basename, resolve, sep } from "node:path";
 
 const isWindows = process.platform === "win32";
 const packageRunner = isWindows ? "pnpm.cmd" : "pnpm";
@@ -12,6 +14,7 @@ let interrupted = false;
 let demoProcess;
 let forcedDemoExitCode;
 let forcedDemoTermination;
+let ownedChromeProfile;
 
 const handleInterrupt = () => {
   interrupted = true;
@@ -75,6 +78,10 @@ try {
     DEMO_VERIFY: process.env.DEMO_VERIFY ?? "0"
   });
   demoProcess.on("message", (message) => {
+    if (message?.type === "owned-profile") {
+      ownedChromeProfile = validateOwnedChromeProfile(message.profileDirectory);
+      return;
+    }
     if (message?.type !== "force-tree" || demoProcess?.pid === undefined) return;
     forcedDemoExitCode = Number.isInteger(message.exitCode) ? message.exitCode : 1;
     forcedDemoTermination ??= terminateOwnedProcessTree(demoProcess);
@@ -93,6 +100,7 @@ try {
   process.removeListener("SIGINT", handleInterrupt);
   process.removeListener("SIGTERM", handleInterrupt);
   await Promise.allSettled(managedProcesses.reverse().map(stopProcessTree));
+  await cleanupOwnedChromeProfile().catch(() => undefined);
 }
 
 function startProcess(command, arguments_, environment) {
@@ -230,6 +238,26 @@ async function terminateOwnedProcessTree(child) {
   if (child.pid === undefined || child.exitCode !== null) return;
   if (isWindows) await terminateWindowsProcessTree(child.pid);
   else process.kill(-child.pid, "SIGKILL");
+}
+
+function validateOwnedChromeProfile(profileDirectory) {
+  if (typeof profileDirectory !== "string") {
+    throw new Error("Demo reported an invalid Chrome profile path.");
+  }
+  const resolvedProfile = resolve(profileDirectory);
+  const resolvedTempRoot = `${resolve(tmpdir())}${sep}`;
+  if (
+    !resolvedProfile.startsWith(resolvedTempRoot) ||
+    !basename(resolvedProfile).startsWith("spaceship-visible-demo-")
+  ) {
+    throw new Error("Demo reported a Chrome profile outside the owned temp namespace.");
+  }
+  return resolvedProfile;
+}
+
+async function cleanupOwnedChromeProfile() {
+  if (ownedChromeProfile === undefined) return;
+  await rm(ownedChromeProfile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 
 function delay(milliseconds) {
