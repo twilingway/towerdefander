@@ -256,6 +256,7 @@ describe("statistics routes", () => {
     expect(output.state.headers["cache-control"]).toBe("no-store");
     expect(output.state.headers["content-security-policy"]).toContain("connect-src 'self'");
     expect(output.state.body).toBe(ROOM_STATS_HTML);
+    expect(ROOM_STATS_HTML).toContain("SpaceShip Defender");
     expect(ROOM_STATS_HTML).toContain("setInterval(refresh, 5000)");
     expect(ROOM_STATS_HTML).toContain("textContent");
     expect(ROOM_STATS_HTML).not.toContain("WebSocket");

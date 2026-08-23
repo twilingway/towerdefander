@@ -350,9 +350,7 @@ p {
   border-style: dashed;
 }
 
-.battle-header,
-.sector-card header,
-.defense-stats {
+.battle-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -395,12 +393,12 @@ p {
   aspect-ratio: 16 / 9;
 }
 
-.flying-hud {
+.spaceship-hud {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.display-shell--battle .flying-hud {
+.display-shell--battle .spaceship-hud {
   position: absolute;
   z-index: 25;
   right: max(0.75rem, env(safe-area-inset-right));
@@ -410,13 +408,13 @@ p {
   pointer-events: none;
 }
 
-.display-shell--battle .flying-hud > div {
+.display-shell--battle .spaceship-hud > div {
   background: rgb(8 28 34 / 82%);
   box-shadow: 0 0.35rem 1.2rem rgb(0 0 0 / 20%);
   backdrop-filter: blur(6px);
 }
 
-.flying-hud > div {
+.spaceship-hud > div {
   min-width: 0;
   padding: 0.65rem 0.9rem;
   border-radius: 0.75rem;
@@ -503,7 +501,7 @@ p {
 }
 
 @media (width <= 900px) {
-  .flying-hud {
+  .spaceship-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -527,25 +525,6 @@ p {
   text-align: center;
 }
 
-.sector-status-strip {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.sector-status-strip > div {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.75rem;
-  color: #a9bdb7;
-  background: #102624;
-}
-
-.sector-status-strip strong {
-  color: #f1d58e;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -555,74 +534,6 @@ p {
   white-space: nowrap;
 }
 
-.sector-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.sector-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
-  border-radius: 1rem;
-  background: #102624;
-}
-
-.sector-card h2 {
-  margin-top: 0.25rem;
-}
-
-.gate-health {
-  color: #78d39c;
-}
-
-.gate-meter {
-  height: 0.7rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #311a19;
-}
-
-.gate-meter span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #e6b85c, #78d39c);
-  transition: width 180ms linear;
-}
-
-.defense-stats {
-  color: #c4d2ce;
-}
-
-.enemy-lane {
-  display: flex;
-  min-height: 5rem;
-  gap: 0.5rem;
-  align-items: center;
-  overflow: hidden;
-}
-
-.enemy-chip {
-  display: grid;
-  min-width: 5.5rem;
-  gap: 0.15rem;
-  padding: 0.65rem;
-  border: 1px solid #8c4f45;
-  border-radius: 0.7rem;
-  color: #ffd0c8;
-  background: #351d1b;
-}
-
-.enemy-chip span {
-  font-size: 0.8rem;
-}
-
-.lane-empty {
-  color: #6f8983;
-}
-
 @media (width <= 900px) {
   .lobby-layout {
     grid-template-columns: 1fr;
@@ -630,13 +541,5 @@ p {
 
   .join-card {
     align-items: flex-start;
-  }
-
-  .sector-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .sector-status-strip {
-    grid-template-columns: 1fr;
   }
 }

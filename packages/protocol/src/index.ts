@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 9 as const;
+export const PROTOCOL_VERSION = 10 as const;
+export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
 export const ENCOUNTER_PHASES = ["combat", "intermission", "result"] as const;
@@ -91,7 +92,7 @@ export const publicPlayerViewSchema = z
   .strict();
 export type PublicPlayerView = z.infer<typeof publicPlayerViewSchema>;
 
-export const publicCastleViewSchema = z
+export const publicSpaceshipViewSchema = z
   .object({
     x: finite.nonnegative(),
     y: finite.nonnegative(),
@@ -103,9 +104,9 @@ export const publicCastleViewSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.hp > value.maxHp) issue(context, ["hp"], "Castle HP must not exceed max HP.");
+    if (value.hp > value.maxHp) issue(context, ["hp"], "Spaceship HP must not exceed max HP.");
   });
-export type PublicCastleView = z.infer<typeof publicCastleViewSchema>;
+export type PublicSpaceshipView = z.infer<typeof publicSpaceshipViewSchema>;
 
 export const publicShieldViewSchema = z
   .object({
@@ -313,7 +314,7 @@ const gameShape = {
   elapsedMs: safeNonnegativeInteger,
   worldWidth: finite.positive(),
   worldHeight: finite.positive(),
-  castle: publicCastleViewSchema,
+  spaceship: publicSpaceshipViewSchema,
   turretAngle: finite,
   shield: publicShieldViewSchema,
   encounter: publicEncounterViewSchema,
@@ -329,7 +330,7 @@ interface EntityProjection {
 interface WorldProjection {
   worldWidth: number;
   worldHeight: number;
-  castle: PublicCastleView;
+  spaceship: PublicSpaceshipView;
   encounter: PublicEncounterView;
   obstacles?: PublicObstacleView[];
   enemyShips?: PublicEnemyView[];
@@ -345,23 +346,23 @@ function issue(context: z.RefinementCtx, path: PropertyKey[], message: string): 
 }
 
 function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
-  const { castle, encounter, worldHeight, worldWidth } = world;
+  const { spaceship, encounter, worldHeight, worldWidth } = world;
   if (
-    castle.radius * 2 > worldWidth ||
-    castle.x < castle.radius ||
-    castle.x > worldWidth - castle.radius
+    spaceship.radius * 2 > worldWidth ||
+    spaceship.x < spaceship.radius ||
+    spaceship.x > worldWidth - spaceship.radius
   )
-    issue(context, ["castle", "x"], "Castle must remain inside horizontal world bounds.");
+    issue(context, ["spaceship", "x"], "Spaceship must remain inside horizontal world bounds.");
   if (
-    castle.radius * 2 > worldHeight ||
-    castle.y < castle.radius ||
-    castle.y > worldHeight - castle.radius
+    spaceship.radius * 2 > worldHeight ||
+    spaceship.y < spaceship.radius ||
+    spaceship.y > worldHeight - spaceship.radius
   )
-    issue(context, ["castle", "y"], "Castle must remain inside vertical world bounds.");
-  if (encounter.outcome === "defeat" && castle.hp !== 0)
-    issue(context, ["castle", "hp"], "Defeat requires zero castle HP.");
-  if (encounter.outcome !== "defeat" && castle.hp === 0)
-    issue(context, ["castle", "hp"], "Only defeat may publish zero castle HP.");
+    issue(context, ["spaceship", "y"], "Spaceship must remain inside vertical world bounds.");
+  if (encounter.outcome === "defeat" && spaceship.hp !== 0)
+    issue(context, ["spaceship", "hp"], "Defeat requires zero spaceship HP.");
+  if (encounter.outcome !== "defeat" && spaceship.hp === 0)
+    issue(context, ["spaceship", "hp"], "Only defeat may publish zero spaceship HP.");
 
   const obstacleIds = new Set<string>();
   world.obstacles?.forEach((obstacle, index) => {

@@ -1,9 +1,9 @@
 ---
 name: openspec-workflow
 description:
-  Drive Town Defenders changes through the OpenSpec lifecycle. Use for new features, architecture or
-  protocol changes, non-trivial refactors, and any task that needs proposal, behavioral specs,
-  design, implementation tasks, verification, or archival.
+  Drive SpaceShip Defender changes through the OpenSpec lifecycle. Use for new features,
+  architecture or protocol changes, non-trivial refactors, and any task that needs proposal,
+  behavioral specs, design, implementation tasks, verification, or archival.
 ---
 
 # OpenSpec Workflow

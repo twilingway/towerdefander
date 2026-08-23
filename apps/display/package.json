@@ -1,5 +1,5 @@
 {
-  "name": "@town-defenders/display",
+  "name": "@spaceship-defender/display",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "0.17.43",
-    "@town-defenders/protocol": "workspace:*",
+    "@spaceship-defender/protocol": "workspace:*",
     "phaser": "4.2.1",
     "qrcode.react": "4.2.0",
     "react": "19.2.8",

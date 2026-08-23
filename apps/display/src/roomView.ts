@@ -6,8 +6,9 @@ import {
   type EnemyKind,
   type EncounterPhase,
   type ProjectileKind,
+  type PublicSpaceshipView,
   type TerminalOutcome
-} from "@town-defenders/protocol";
+} from "@spaceship-defender/protocol";
 
 interface ValueCollection<T> {
   values(): IterableIterator<T>;
@@ -67,15 +68,7 @@ interface NetworkGameState {
   elapsedMs: number;
   worldWidth: number;
   worldHeight: number;
-  castle: {
-    x: number;
-    y: number;
-    velocityX: number;
-    velocityY: number;
-    radius: number;
-    hp: number;
-    maxHp: number;
-  };
+  spaceship: PublicSpaceshipView;
   turretAngle: number;
   shield: {
     angle: number;
@@ -164,7 +157,7 @@ export function toDisplayRoomView(
             elapsedMs: game.elapsedMs,
             worldWidth: game.worldWidth,
             worldHeight: game.worldHeight,
-            castle: { ...game.castle },
+            spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
             encounter: {

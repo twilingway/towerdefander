@@ -1,30 +1,26 @@
-# Flying Castle — план проекта
+# SpaceShip Defender — план проекта
 
-Статус: 20 августа 2026 года основная концепция изменена с классического Tower Defense на
-кооперативный top-down экшен про один летающий замок. Предыдущая реализация 2–6 дорог и protocol v4
-сохранена в Git (`00c3ab7`) как точка возврата. Realtime slice и плавное движение зафиксированы
-архивными changes `flying-castle-core`, `smooth-flight-controls`, `smooth-tank-aim` и
-`latency-fullscreen-world`. Combat, повторный забег, lifecycle комнаты и безопасная статистика
-зафиксированы архивными changes `tyrian-combat-roguelite-slice` и `room-rematch-lifecycle-stats`;
-текущий протокол — v9.
+## 1. Product north star
 
-## 1. Цель продукта
+SpaceShip Defender — кооперативный top-down space wave-defense для общего большого экрана и трёх
+browser controllers. Команда управляет одним развиваемым космическим кораблём, уничтожает
+нарастающие волны, зарабатывает credits и в целевой версии модернизирует корпус, щиты и оружие прямо
+во время боя.
 
-Один общий экран запускается в desktop browser, на проекторе или позже внутри Android TV shell. Три
-игрока подключаются из браузеров телефонов/планшетов/компьютеров через LAN/Wi-Fi или интернет:
+Роли:
 
-- pilot двигает замок по большой top-down карте;
-- gunner направляет башню и стреляет;
-- shield operator направляет, вручную переключает защитный сектор и следит за его энергией.
+- pilot перемещает корабль и уклоняется;
+- gunner направляет и использует weapons;
+- shield operator направляет и переключает энергетический сектор.
 
-Сервер является единственным источником истины. Display показывает Phaser-мир и интерполирует server
-snapshots. Controllers отправляют только intents и не рассчитывают trusted transforms.
+Server является единственным источником trusted state. Controllers отправляют intents, а display
+интерполирует authoritative snapshots.
 
 ## 2. Архитектура
 
 ```text
 Shared display                         Three browser controllers
-React HUD + Phaser world               Pilot / Gunner / Shield React UI
+React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
                 \                      /
                  \ Colyseus WebSocket /
                   Authoritative server
@@ -32,123 +28,87 @@ React HUD + Phaser world               Pilot / Gunner / Shield React UI
              deterministic TypeScript core
 ```
 
-Monorepo остаётся на pnpm workspaces:
-
-- `apps/display` — общий экран, React HUD и lazy-loaded Phaser;
+- `apps/display` — большой экран, React HUD и Phaser world;
 - `apps/controller` — responsive role controllers;
-- `apps/server` — Colyseus room, reconnect, validation и simulation timer;
+- `apps/server` — Colyseus room, validation, simulation, lifecycle и statistics;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — protocol v9 и строгие transport/view schemas.
+- `packages/protocol` — strict protocol v10 и shared schemas.
 
-## 3. Этапы
+## 3. Реализованный foundation
 
-### Этап 1 — Primitive realtime slice (текущий)
+- один spaceship, три стабильные role slots;
+- мир 4800×3200 и fullscreen camera с безопасным cosmic overscan;
+- 20 Hz fixed-step, мягкое движение и плавный traverse turret/shield;
+- hold-fire, shield toggle, drain/recharge и authoritative RTT;
+- gunships, missile carriers, asteroids, bullets и homing missiles;
+- seeded spawn/RNG, swept collisions, HP, damage, score и defeat;
+- 200-tick interval и role-specific upgrade cards;
+- result, unanimous rematch, explicit exit/close, reconnect/replacement;
+- room TTL и защищённая read-only statistics page;
+- network smoke и display + 3 controllers Playwright.
 
-- ровно три стабильные role slots: pilot, gunner, shield;
-- мир 4800×3200, fullscreen camera показывает минимум 1600×900 logical units и адаптируется к aspect
-  ratio экрана;
-- camera использует ограниченный космический overscan за рамкой мира: у любой границы весь замок,
-  пушка и щит остаются минимум в 160 CSS pixels от края экрана;
-- server-authoritative fixed step 50 ms;
-- WASD/arrows и virtual stick для pilot;
-- gesture-only absolute aim с server-authoritative разгоном, торможением и ограничением скорости
-  поворота для gunner/shield;
-- повторный tuning после playtest: turret `78/156/234°/s`, shield `97.5/195/292.5°/s` для
-  max-speed/acceleration/braking;
-- hold-fire для gunner, toggle и энергия для shield;
-- grid, замок, башня, постоянно видимый directional shield, декор и снаряды из Phaser primitives;
-- server измеряет RTT каждого WebSocket connection; общий экран показывает пинг display и всех трёх
-  ролей, controller — собственный пинг. Это не прямой client-to-client RTT и не измерение полного
-  input-to-render отклика;
-- reconnect, active replacement, strict protocol v7 и network/browser tests.
+Worst-case 196-entity benchmark на Ryzen 9 5900X/Node 22: pure-step p95 около 0,12 ms,
+room-step+sync p95 около 0,27 ms при целевом бюджете 2 ms.
 
-Результат: руками проверяется совместное управление одним замком с трёх браузеров без финального
-art.
+## 4. Завершённый identity foundation
 
-### Этап 2 — Combat playground (завершённый foundation)
+Source tree очищен от двух прежних product names и использует единый contract:
 
-- утверждённый change name: `tyrian-combat-roguelite-slice`;
-- свободное движение по текущей большой top-down арене без принудительного вертикального
-  автоскролла;
-- бесконечный забег до уничтожения замка: волна → уничтожение всех врагов → 10 секунд выбора
-  улучшений → следующая усиленная волна;
-- `gunship` держит дистанцию и стреляет одиночными линейными снарядами;
-- `missileCarrier` запускает наводящиеся ракеты с ограниченной скоростью поворота и lifetime;
-- разрушаемый `asteroid` движется по постоянной траектории и наносит контактный урон;
-- server-authoritative HP, damage, swept collisions, spawn director, enemy AI, homing missiles,
-  rewards, wave difficulty, upgrade offers и defeat;
-- gunner повреждает врагов и сбивает ракеты, directional shield перехватывает пули, ракеты и
-  астероиды и расходует дополнительную энергию от попаданий;
-- каждый из трёх игроков выбирает одно собственное role-specific улучшение после каждой волны;
-- первая версия остаётся на Phaser primitives; bosses, elites, bitmap art и звук отложены.
+- brand `SpaceShip Defender`;
+- code vocabulary `Spaceship`/`spaceship`;
+- npm scope `@spaceship-defender/*`;
+- Colyseus room type `spaceship_defender`;
+- protocol v10 и public `game.spaceship`;
+- `SpaceshipDefenderRoom/State` и `SpaceshipSimulation*` API;
+- удаление unused classic defense core/assets/spec catalog entries;
+- обновление UI, tests, scripts, README, GDD, AGENTS и OpenSpec context.
 
-Решения выше подтверждены пользователем 20 августа 2026 года. Vertical autoscroll, общий голос за
-одно улучшение и обязательный boss в первом combat slice отклонены. Боссы будут отдельным следующим
-этапом после проверки базового боя и баланса.
+Gameplay, balance, authority, reconnect и rematch при рефакторинге численно не изменились. Existing
+rooms v9 не мигрируют: server/display/controllers обновляются одновременно. Полная история change
+сохранена в `openspec/changes/archive/2026-08-23-spaceship-defender-identity-refactor/`.
 
-Текущий реализованный foundation:
+## 5. Следующий gameplay change — credits и combat modernization
 
-- pure deterministic seeded simulation и protocol v9;
-- gunship, missile carrier, asteroids, friendly/hostile bullets и limited-turn homing missiles;
-- swept collisions, directional shield interception, castle HP/damage/score/defeat;
-- stable keyed Colyseus entities вместо полного пересоздания collection каждый tick;
-- 200-tick intermission, три role-owned cards, manual/fallback selection и bounded idempotency
-  journal;
-- Phaser primitive rendering, combat HUD и персональные controller cards;
-- package tests, network smoke и базовый display+3 controllers Playwright проходят.
+Нужно отдельно определить:
 
-Worst-case benchmark/patch-size assertions, расширенный combat E2E, review и ручной playtest
-выполнены. Дальнейший balance tuning будет отдельным change после новых типов врагов и боссов.
+- authoritative credits source/rewards и caps;
+- цены и upgrade catalog для hull/shield/weapons;
+- idempotent purchase command с `actionId`;
+- purchases во время combat без остановки simulation;
+- персональная или командная ownership model;
+- controller UI, feedback, duplicate/reconnect behavior;
+- взаимодействие с текущими interval upgrade cards.
 
-### Этап 3 — Карта и roguelike loop
+До принятия этих решений текущая версия честно остаётся на score + бесплатных interval upgrades.
 
-- процедурные или секционные карты;
-- отдельное решение по Tyrian-inspired vertical scrolling/dead-zone камеры и направлению полёта;
-- encounters, ресурсы, upgrades и выбор маршрута;
-- победа/поражение и короткая replayable session;
-- типы врагов, elite и boss encounters.
+## 6. Следующий visual change — deep-space art pass
 
-### Этап 4 — Art, sound и Android TV
+Цель:
 
-- утверждённое художественное направление вместо primitives;
-- animation, VFX, audio и onboarding каждой роли;
-- performance budget для слабого Android TV;
-- Capacitor shell, launcher, fullscreen, wake lock и lifecycle.
+- original 2D pseudo-3D spaceship;
+- layered stars/nebulae/dust и parallax;
+- engine trails, projectile impacts, shield refraction и explosions;
+- modern particles/shaders с fallback для Android TV;
+- читаемость gameplay поверх красивого глубокого космоса.
 
-## 4. Правила разработки
+Не входит: настоящий 3D, campaign/trading map, торговля, RPG и копирование assets/интерфейса
+«Космических Рейнджеров». Референс означает только ощущение глубокого космоса.
 
-- Любое существенное изменение проходит proposal → specs → design → tasks → implementation → review
-  → archive.
-- Protocol/server/game-core меняются через `openspec-workflow` и `realtime-game-contract`.
-- Phaser рисует world; React владеет lobby и HUD.
-- Новая production dependency требует принятого design и согласования.
-- Перед завершением обязательны package tests, `pnpm check`, `pnpm spec:validate`, network smoke и
-  Playwright.
+## 7. Дальнейшие этапы
 
-## 5. Не входит в первый slice
+1. Завершить identity refactor, full checks, reviewer и ручной playtest.
+2. Спроектировать credits + in-combat modernization.
+3. Добавить новые enemy archetypes, elites и bosses вместе с balance pass.
+4. Реализовать accepted 2D art/VFX/audio pipeline с Android TV budget.
+5. Добавить thin Capacitor Android TV shell, launcher, fullscreen, wake lock и lifecycle.
 
-Enemies, damage, collision с декором, shield upgrades, waves, economy, victory/defeat, procedural
-map, accounts, persistence, matchmaking, bitmap art, sound, runtime admin panel и Android native
-output. Для admin panel отдельно потребуются owner authorization, допустимые диапазоны и правила
-синхронизации параметров комнаты; эти решения будут приниматься после ручной проверки core controls.
+## 8. Definition of done для каждого change
 
-## 6. Последний завершённый change — `room-rematch-lifecycle-stats`
-
-Combat change `tyrian-combat-roguelite-slice` архивирован 23 августа 2026 года. Worst-case room с
-196 entities на Ryzen 9 5900X/Node 22 показала pure-step p95 около 0,12 ms и room-step+sync p95
-около 0,27 ms при целевом бюджете 2 ms.
-
-Архивированный change перевёл room на protocol v9 и добавил:
-
-- terminal result `defeat|victory`; текущий endless combat создаёт только defeat;
-- `runNumber`, защищающий новый забег от delayed packets предыдущего;
-- unanimous «Играть ещё» 3/3 в той же комнате с новым seed и чистым progress;
-- явный controller exit и display close, отличные от recoverable reconnect;
-- автоматическое закрытие: display grace 30s, lobby 15m, result 10m, empty controllers 5m, absolute
-  lifetime 4h;
-- read-only `/stats/rooms` и `/stats/rooms.json` без room code/PII;
-- stats без password доступны только localhost; удалённо требуется Basic `admin:<password>` за TLS
-  reverse proxy.
-
-Stale-run/rematch/TTL/privacy tests, network smoke, полный display+3 controllers Playwright,
-reviewer и ручная проверка rematch/exit/statistics выполнены перед архивированием.
+- proposal/specs/design/tasks согласованы;
+- protocol versioned и boundary validation покрыта;
+- resource-spending commands idempotent;
+- deterministic core и reconnect scenarios протестированы;
+- narrow checks, `pnpm check`, `pnpm spec:validate`, network smoke и Playwright зелёные;
+- docs/environment examples обновлены;
+- read-only reviewer не имеет blocker/high/medium findings;
+- после ручного подтверждения change архивирован, а commit/push выполняются по команде пользователя.

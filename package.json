@@ -1,5 +1,5 @@
 {
-  "name": "town-defenders",
+  "name": "spaceship-defender",
   "version": "0.0.0",
   "private": true,
   "license": "UNLICENSED",
@@ -9,16 +9,16 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @town-defenders/server --filter @town-defenders/display --filter @town-defenders/controller dev",
+    "dev": "pnpm --parallel --filter @spaceship-defender/server --filter @spaceship-defender/display --filter @spaceship-defender/controller dev",
     "build": "pnpm -r build",
-    "benchmark:combat": "pnpm --filter @town-defenders/server benchmark:combat",
+    "benchmark:combat": "pnpm --filter @spaceship-defender/server benchmark:combat",
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm -r test",
-    "test:e2e": "pnpm --filter @town-defenders/server build && node scripts/run-e2e.mjs",
-    "smoke:network": "pnpm --filter @town-defenders/server build && pnpm --filter @town-defenders/controller smoke:network",
+    "test:e2e": "pnpm --filter @spaceship-defender/server build && node scripts/run-e2e.mjs",
+    "smoke:network": "pnpm --filter @spaceship-defender/server build && pnpm --filter @spaceship-defender/controller smoke:network",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm smoke:network && pnpm test:e2e",
     "spec": "cross-env OPENSPEC_TELEMETRY=0 openspec",
     "spec:status": "cross-env OPENSPEC_TELEMETRY=0 openspec status",

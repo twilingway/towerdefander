@@ -1,8 +1,11 @@
 # room-operations-dashboard Specification
 
 ## Purpose
+
 TBD - created by archiving change room-rematch-lifecycle-stats. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Страница показывает безопасную статистику активных комнат
 
 Server SHALL предоставлять read-only HTML `/stats/rooms` и JSON `/stats/rooms.json`, построенные из

@@ -1,8 +1,8 @@
 ---
 name: realtime-game-contract
 description:
-  Design and review Town Defenders realtime multiplayer contracts. Use when changing Colyseus rooms,
-  shared messages, game-core simulation, room lifecycle, shared economy, reconnect, command
+  Design and review SpaceShip Defender realtime multiplayer contracts. Use when changing Colyseus
+  rooms, shared messages, game-core simulation, room lifecycle, shared economy, reconnect, command
   idempotency, state visibility, protocol versions, or display/controller synchronization.
 ---
 
@@ -26,7 +26,7 @@ state safely.
 
 - Every resource-spending command includes `actionId`, `playerId`, `roomId`, and a protocol version.
   The server deduplicates `actionId`.
-- Shared treasury updates are atomic.
+- Shared resource updates are atomic and resource-spending commands are idempotent.
 - The server owns simulation time, random seed, health, damage, rewards, cooldowns, and win/lose
   decisions.
 - The display interpolates authoritative state but does not invent trusted outcomes.

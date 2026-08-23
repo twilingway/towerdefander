@@ -1,4 +1,4 @@
-import { canonicalizeAngle, shortestAngleDelta, type Vector2 } from "./flyingCastle.js";
+import { canonicalizeAngle, shortestAngleDelta, type Vector2 } from "./spaceshipSimulation.js";
 
 export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
@@ -30,7 +30,7 @@ export interface CombatConfig {
   readonly fixedStepMs: number;
   readonly worldWidth: number;
   readonly worldHeight: number;
-  readonly castleMaxHp: number;
+  readonly spaceshipMaxHp: number;
   readonly shieldRadius: number;
   readonly shieldArcRadians: number;
   readonly hostileBulletShieldHitCost: number;
@@ -166,8 +166,8 @@ export interface CombatStateFields {
   readonly runSeed: number;
   readonly spawnRngState: number;
   readonly offerRngState: number;
-  readonly castleHp: number;
-  readonly castleMaxHp: number;
+  readonly spaceshipHp: number;
+  readonly spaceshipMaxHp: number;
   readonly encounterPhase: EncounterPhase;
   readonly outcome: TerminalOutcome | null;
   readonly waveNumber: number;
@@ -190,7 +190,7 @@ export interface FriendlyProjectileLike extends MovingEntity {
 
 export interface CombatStepState extends CombatStateFields {
   readonly clock: { readonly tick: number };
-  readonly castle: {
+  readonly spaceship: {
     readonly x: number;
     readonly y: number;
     readonly previousX: number;
@@ -271,7 +271,7 @@ export function validateCombatConfig(config: CombatConfig): void {
   const positiveFinite: readonly (readonly [string, number])[] = [
     ["worldWidth", config.worldWidth],
     ["worldHeight", config.worldHeight],
-    ["castleMaxHp", config.castleMaxHp],
+    ["spaceshipMaxHp", config.spaceshipMaxHp],
     ["shieldRadius", config.shieldRadius],
     ["shieldArcRadians", config.shieldArcRadians],
     ["hostileBulletShieldHitCost", config.hostileBulletShieldHitCost],
@@ -406,8 +406,8 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     runSeed,
     spawnRngState: rngState,
     offerRngState: deriveDomainSeed(runSeed, 1, OFFER_DOMAIN),
-    castleHp: config.castleMaxHp,
-    castleMaxHp: config.castleMaxHp,
+    spaceshipHp: config.spaceshipMaxHp,
+    spaceshipMaxHp: config.spaceshipMaxHp,
     encounterPhase: "combat",
     outcome: null,
     waveNumber: 1,
@@ -506,10 +506,10 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
   const secondsPerStep = config.fixedStepMs / 1000;
   let next = moveAndSpawnThreats(state, config, secondsPerStep);
   next = resolveFriendlyHits(next, config);
-  next = resolveCastleThreats(next, config);
+  next = resolveSpaceshipThreats(next, config);
   next = removeExpiredAndOutOfBounds(next, config);
 
-  if (next.castleHp <= 0) {
+  if (next.spaceshipHp <= 0) {
     return createTerminalCombatState(pickCombatResult(next), "defeat");
   }
   if (next.pendingSpawns.length === 0 && next.enemies.length === 0 && next.asteroids.length === 0) {
@@ -571,8 +571,8 @@ function applyUpgrade<TState extends CombatStateFields>(
   upgradeId: UpgradeId,
   source: RoleUpgradeSelection["source"]
 ): TState {
-  let castleHp = state.castleHp;
-  let castleMaxHp = state.castleMaxHp;
+  let spaceshipHp = state.spaceshipHp;
+  let spaceshipMaxHp = state.spaceshipMaxHp;
   let roleModifiers = state.roleModifiers;
   switch (upgradeId) {
     case "pilot_speed":
@@ -594,8 +594,8 @@ function applyUpgrade<TState extends CombatStateFields>(
       };
       break;
     case "pilot_hull":
-      castleMaxHp += 25;
-      castleHp = Math.min(castleMaxHp, castleHp + 25);
+      spaceshipMaxHp += 25;
+      spaceshipHp = Math.min(spaceshipMaxHp, spaceshipHp + 25);
       roleModifiers = {
         ...roleModifiers,
         pilot: { ...roleModifiers.pilot, maxHpBonus: roleModifiers.pilot.maxHpBonus + 25 }
@@ -655,8 +655,8 @@ function applyUpgrade<TState extends CombatStateFields>(
   }
   return {
     ...state,
-    castleHp,
-    castleMaxHp,
+    spaceshipHp,
+    spaceshipMaxHp,
     roleModifiers,
     roleSelections: {
       ...state.roleSelections,
@@ -672,14 +672,14 @@ function moveAndSpawnThreats(
 ): CombatStepState {
   const difficulty = getWaveDifficulty(config, state.waveNumber);
   let enemies = state.enemies.map((enemy) =>
-    moveEnemy(enemy, state.castle, config, secondsPerStep)
+    moveEnemy(enemy, state.spaceship, config, secondsPerStep)
   );
   let asteroids = state.asteroids.map((asteroid) => moveLinear(asteroid, secondsPerStep));
   let hostileProjectiles = state.hostileProjectiles.map((projectile) =>
     moveLinear(projectile, secondsPerStep)
   );
   let homingMissiles = state.homingMissiles.map((missile) =>
-    moveMissile(missile, state.castle, config, secondsPerStep)
+    moveMissile(missile, state.spaceship, config, secondsPerStep)
   );
   let nextSpawnSequence = state.nextSpawnSequence;
   let workingDynamicCount =
@@ -697,7 +697,7 @@ function moveAndSpawnThreats(
       ) {
         hostileProjectiles = [
           ...hostileProjectiles,
-          createHostileBullet(enemy, state.castle, config, nextSpawnSequence, state.clock.tick)
+          createHostileBullet(enemy, state.spaceship, config, nextSpawnSequence, state.clock.tick)
         ];
         nextSpawnSequence += 1;
         workingDynamicCount += 1;
@@ -705,7 +705,7 @@ function moveAndSpawnThreats(
     } else if (canAddEntity(config, "homingMissile", homingMissiles.length, workingDynamicCount)) {
       homingMissiles = [
         ...homingMissiles,
-        createMissile(enemy, state.castle, config, nextSpawnSequence, state.clock.tick)
+        createMissile(enemy, state.spaceship, config, nextSpawnSequence, state.clock.tick)
       ];
       nextSpawnSequence += 1;
       workingDynamicCount += 1;
@@ -765,12 +765,12 @@ function moveAndSpawnThreats(
 
 function moveEnemy(
   enemy: CombatEnemyState,
-  castle: { readonly x: number; readonly y: number },
+  spaceship: { readonly x: number; readonly y: number },
   config: CombatConfig,
   secondsPerStep: number
 ): CombatEnemyState {
-  const deltaX = castle.x - enemy.x;
-  const deltaY = castle.y - enemy.y;
+  const deltaX = spaceship.x - enemy.x;
+  const deltaY = spaceship.y - enemy.y;
   const distance = Math.hypot(deltaX, deltaY) || 1;
   const preferred =
     enemy.kind === "gunship" ? config.gunshipPreferredDistance : config.carrierPreferredDistance;
@@ -806,11 +806,11 @@ function moveLinear<T extends MovingEntity>(entity: T, secondsPerStep: number): 
 
 function moveMissile(
   missile: HomingMissileState,
-  castle: { readonly x: number; readonly y: number },
+  spaceship: { readonly x: number; readonly y: number },
   config: CombatConfig,
   secondsPerStep: number
 ): HomingMissileState {
-  const targetHeading = Math.atan2(castle.y - missile.y, castle.x - missile.x);
+  const targetHeading = Math.atan2(spaceship.y - missile.y, spaceship.x - missile.x);
   const turn = clamp(
     shortestAngleDelta(missile.heading, targetHeading),
     -config.missileTurnRatePerSecond * secondsPerStep,
@@ -834,12 +834,12 @@ function moveMissile(
 
 function createHostileBullet(
   enemy: CombatEnemyState,
-  castle: { readonly x: number; readonly y: number },
+  spaceship: { readonly x: number; readonly y: number },
   config: CombatConfig,
   spawnSequence: number,
   tick: number
 ): HostileProjectileState {
-  const direction = unitDirection(enemy.x, enemy.y, castle.x, castle.y);
+  const direction = unitDirection(enemy.x, enemy.y, spaceship.x, spaceship.y);
   return {
     id: `hostile-${String(spawnSequence)}`,
     spawnSequence,
@@ -859,12 +859,12 @@ function createHostileBullet(
 
 function createMissile(
   enemy: CombatEnemyState,
-  castle: { readonly x: number; readonly y: number },
+  spaceship: { readonly x: number; readonly y: number },
   config: CombatConfig,
   spawnSequence: number,
   tick: number
 ): HomingMissileState {
-  const heading = Math.atan2(castle.y - enemy.y, castle.x - enemy.x);
+  const heading = Math.atan2(spaceship.y - enemy.y, spaceship.x - enemy.x);
   return {
     id: `missile-${String(spawnSequence)}`,
     spawnSequence,
@@ -1047,7 +1047,7 @@ function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): Comb
   };
 }
 
-interface CastleThreatCandidate {
+interface SpaceshipThreatCandidate {
   readonly timeOfImpact: number;
   readonly sourceSequence: number;
   readonly sourceId: string;
@@ -1055,28 +1055,28 @@ interface CastleThreatCandidate {
   readonly shieldHit: boolean;
 }
 
-function resolveCastleThreats(state: CombatStepState, config: CombatConfig): CombatStepState {
+function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): CombatStepState {
   const threats: readonly (MovingEntity & {
-    readonly threatKind: CastleThreatCandidate["kind"];
+    readonly threatKind: SpaceshipThreatCandidate["kind"];
     readonly damage: number;
   })[] = [
     ...state.hostileProjectiles.map((entity) => ({ ...entity, threatKind: "bullet" as const })),
     ...state.homingMissiles.map((entity) => ({ ...entity, threatKind: "missile" as const })),
     ...state.asteroids.map((entity) => ({ ...entity, threatKind: "asteroid" as const }))
   ];
-  const castleTarget: MovingEntity = {
-    id: "castle",
+  const spaceshipTarget: MovingEntity = {
+    id: "spaceship",
     spawnSequence: 0,
-    previousX: state.castle.previousX,
-    previousY: state.castle.previousY,
-    x: state.castle.x,
-    y: state.castle.y,
+    previousX: state.spaceship.previousX,
+    previousY: state.spaceship.previousY,
+    x: state.spaceship.x,
+    y: state.spaceship.y,
     velocity: { x: 0, y: 0 },
-    radius: state.castle.radius,
+    radius: state.spaceship.radius,
     spawnedTick: 0
   };
-  const shieldTarget = { ...castleTarget, radius: config.shieldRadius };
-  const candidates: CastleThreatCandidate[] = [];
+  const shieldTarget = { ...spaceshipTarget, radius: config.shieldRadius };
+  const candidates: SpaceshipThreatCandidate[] = [];
   for (const threat of threats) {
     if (state.shieldActive) {
       const shieldToi = relativeSweptCircleTime(threat, shieldTarget);
@@ -1090,10 +1090,10 @@ function resolveCastleThreats(state: CombatStepState, config: CombatConfig): Com
         });
       }
     }
-    const castleToi = relativeSweptCircleTime(threat, castleTarget);
-    if (castleToi !== null) {
+    const spaceshipToi = relativeSweptCircleTime(threat, spaceshipTarget);
+    if (spaceshipToi !== null) {
       candidates.push({
-        timeOfImpact: castleToi,
+        timeOfImpact: spaceshipToi,
         sourceSequence: threat.spawnSequence,
         sourceId: threat.id,
         kind: threat.threatKind,
@@ -1111,7 +1111,7 @@ function resolveCastleThreats(state: CombatStepState, config: CombatConfig): Com
   let shieldEnergy = state.shieldEnergy;
   let shieldActive = state.shieldActive;
   let shieldRearmRequired = state.shieldRearmRequired;
-  let castleHp = state.castleHp;
+  let spaceshipHp = state.spaceshipHp;
   for (const candidate of candidates) {
     if (removed.has(candidate.sourceId)) continue;
     if (candidate.shieldHit && shieldActive) {
@@ -1133,14 +1133,14 @@ function resolveCastleThreats(state: CombatStepState, config: CombatConfig): Com
     if (!candidate.shieldHit) {
       const threat = threats.find(({ id }) => id === candidate.sourceId);
       if (threat !== undefined) {
-        castleHp = Math.max(0, castleHp - threat.damage);
+        spaceshipHp = Math.max(0, spaceshipHp - threat.damage);
         removed.add(candidate.sourceId);
       }
     }
   }
   return {
     ...state,
-    castleHp,
+    spaceshipHp,
     shieldEnergy,
     shieldActive,
     shieldRearmRequired,
@@ -1261,9 +1261,11 @@ function isInsideShieldArc(
 ): boolean {
   const threatX = threat.previousX + (threat.x - threat.previousX) * timeOfImpact;
   const threatY = threat.previousY + (threat.y - threat.previousY) * timeOfImpact;
-  const castleX = state.castle.previousX + (state.castle.x - state.castle.previousX) * timeOfImpact;
-  const castleY = state.castle.previousY + (state.castle.y - state.castle.previousY) * timeOfImpact;
-  const bearing = Math.atan2(threatY - castleY, threatX - castleX);
+  const spaceshipX =
+    state.spaceship.previousX + (state.spaceship.x - state.spaceship.previousX) * timeOfImpact;
+  const spaceshipY =
+    state.spaceship.previousY + (state.spaceship.y - state.spaceship.previousY) * timeOfImpact;
+  const bearing = Math.atan2(threatY - spaceshipY, threatX - spaceshipX);
   const arc = Math.min(
     Math.PI * 2,
     config.shieldArcRadians + state.roleModifiers.shield.arcWidthBonus
@@ -1271,7 +1273,7 @@ function isInsideShieldArc(
   return Math.abs(shortestAngleDelta(state.shieldAngle, bearing)) <= arc / 2;
 }
 
-function shieldHitCost(kind: CastleThreatCandidate["kind"], config: CombatConfig): number {
+function shieldHitCost(kind: SpaceshipThreatCandidate["kind"], config: CombatConfig): number {
   if (kind === "missile") return config.missileShieldHitCost;
   if (kind === "asteroid") return config.asteroidShieldHitCost;
   return config.hostileBulletShieldHitCost;
@@ -1324,8 +1326,8 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     runSeed: state.runSeed,
     spawnRngState: state.spawnRngState,
     offerRngState: state.offerRngState,
-    castleHp: state.castleHp,
-    castleMaxHp: state.castleMaxHp,
+    spaceshipHp: state.spaceshipHp,
+    spaceshipMaxHp: state.spaceshipMaxHp,
     encounterPhase: state.encounterPhase,
     outcome: state.outcome,
     waveNumber: state.waveNumber,
@@ -1351,34 +1353,34 @@ export function createTerminalCombatState<TState extends CombatStateFields>(
   state: TState,
   outcome: TerminalOutcome
 ): TState {
-  if (outcome === "defeat" && state.castleHp > 0) {
-    throw new RangeError("Defeat requires zero castle HP");
+  if (outcome === "defeat" && state.spaceshipHp > 0) {
+    throw new RangeError("Defeat requires zero spaceship HP");
   }
-  if (outcome === "victory" && state.castleHp <= 0) {
-    throw new RangeError("Victory requires positive castle HP");
+  if (outcome === "victory" && state.spaceshipHp <= 0) {
+    throw new RangeError("Victory requires positive spaceship HP");
   }
   return {
     ...state,
-    castleHp: outcome === "defeat" ? 0 : state.castleHp,
+    spaceshipHp: outcome === "defeat" ? 0 : state.spaceshipHp,
     encounterPhase: "result",
     outcome
   };
 }
 
 export function assertCombatResultInvariant(
-  state: Pick<CombatStateFields, "castleHp" | "encounterPhase" | "outcome">
+  state: Pick<CombatStateFields, "spaceshipHp" | "encounterPhase" | "outcome">
 ): void {
   if ((state.encounterPhase === "result") !== (state.outcome !== null)) {
     throw new RangeError("Only a terminal result requires an outcome");
   }
-  if (state.outcome === "defeat" && state.castleHp !== 0) {
-    throw new RangeError("Defeat requires zero castle HP");
+  if (state.outcome === "defeat" && state.spaceshipHp !== 0) {
+    throw new RangeError("Defeat requires zero spaceship HP");
   }
-  if (state.outcome === "victory" && state.castleHp <= 0) {
-    throw new RangeError("Victory requires positive castle HP");
+  if (state.outcome === "victory" && state.spaceshipHp <= 0) {
+    throw new RangeError("Victory requires positive spaceship HP");
   }
-  if (state.outcome === null && state.castleHp <= 0) {
-    throw new RangeError("A non-terminal combat state requires positive castle HP");
+  if (state.outcome === null && state.spaceshipHp <= 0) {
+    throw new RangeError("A non-terminal combat state requires positive spaceship HP");
   }
 }
 

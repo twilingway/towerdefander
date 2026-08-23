@@ -3,11 +3,13 @@
 ## Purpose
 
 TBD - created by archiving change flying-castle-core. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Display показывает top-down мир примитивами
 
 Phaser SHALL отображать world `4800×3200`, background grid, распределённые по всем квадрантам
-декоративные не участвующие в collision примитивы, castle body, turret, shield arc и projectiles
+декоративные не участвующие в collision примитивы, spaceship body, turret, shield arc и projectiles
 средствами Graphics/Shape без bitmap assets. Active battlefield SHALL занимать весь CSS viewport без
 card padding, border, фиксированной 16:9 рамки и letterbox. Базовая logical view SHALL быть не
 меньше `1600×900`; при другом aspect ratio camera SHALL расширять видимую область по одной оси без
@@ -17,12 +19,12 @@ card padding, border, фиксированной 16:9 рамки и letterbox. �
 #### Scenario: Матч начинается
 
 - **WHEN** room переходит в active и display получает первый snapshot
-- **THEN** canvas покрывает viewport и показывает круглый летающий замок и примитивный мир, а
+- **THEN** canvas покрывает viewport и показывает круглый космический корабль и примитивный мир, а
   компактный React HUD поверх него показывает role labels, connection status и ping
 
 #### Scenario: Снаряд создан
 
-- **WHEN** snapshot впервые содержит projectileId
+- **WHEN** snapshot впервые содержит projectile `entityId`
 - **THEN** display создаёт отдельный круг и двигает его к авторитетной position
 
 #### Scenario: Экран меняет размер
@@ -31,40 +33,10 @@ card padding, border, фиксированной 16:9 рамки и letterbox. �
 - **THEN** renderer и camera viewport обновляются без пересоздания Room/runtime, canvas покрывает
   viewport, world не растягивается и базовая logical область остаётся видимой
 
-### Requirement: Камера следует за летающим замком
-
-Camera SHALL следовать за визуально интерполированной castle position. Phaser scroll SHALL учитывать
-renderer pixels, zoom и фактический responsive logical viewport, чтобы castle оставался в центре вне
-edge zone. Presentation-only camera bounds SHALL расширяться за world на overscan
-`castle.radius + 42 + 160/zoom` world units. В любой достижимой core position castle body, turret и
-shield arc SHALL оставаться полностью видимыми и не ближе 160 CSS pixels к viewport edge; у края
-карта MAY закончиться раньше viewport и показать ограниченный background space. Background grid и
-obstacles SHALL визуально прокручиваться относительно viewport. World transforms SHALL сохранять
-дробные coordinates без принудительного pixel rounding.
-
-#### Scenario: Замок летит вправо
-
-- **WHEN** authoritative snapshots публикуют возрастающие x и x-velocity
-- **THEN** camera scroll изменяется промежуточными дробными positions без скачка на каждый server
-  tick
-
-#### Scenario: Замок у края мира
-
-- **WHEN** castle находится у границы world на display с произвольным поддерживаемым aspect ratio
-- **THEN** camera учитывает renderer/zoom, показывает ограниченный background за world border и
-  оставляет весь castle/turret/shield минимум в 160 CSS pixels от viewport edge без дрожания
-
-#### Scenario: Camera использует zoom
-
-- **WHEN** renderer `1920×1080` показывает logical viewport `1600×900` и castle находится в центре
-  мира `(2400,1600)`
-- **THEN** camera midpoint совпадает с castle, а world-view top-left равен `(1600,1150)` без
-  систематического сдвига из-за zoom
-
 ### Requirement: Display интерполирует, но не владеет состоянием
 
 Display SHALL хранить previous/latest authoritative snapshots и SHALL вычислять визуальные
-castle/turret/shield/projectile transforms как функцию snapshot ticks и render delta, а не
+spaceship/turret/shield/projectile transforms как функцию snapshot ticks и render delta, а не
 фиксированного процента на frame. При 60 Hz и 120 Hz одинаковая пара snapshots SHALL давать
 эквивалентную position trajectory по elapsed time с tolerance 0.01 world unit и angular trajectory с
 tolerance 0.001 rad. Display SHALL корректироваться к server position и angle за 50 ms. Turret и
@@ -108,7 +80,7 @@ active-state и energy. Активный щит SHALL быть яркой син
 #### Scenario: Щит выключен
 
 - **WHEN** authoritative snapshot содержит shield `active=false` с ненулевым angle
-- **THEN** display показывает тонкую полупрозрачную дугу с этой стороны замка
+- **THEN** display показывает тонкую полупрозрачную дугу с этой стороны корабля
 
 #### Scenario: Щит включён
 
@@ -119,7 +91,7 @@ active-state и energy. Активный щит SHALL быть яркой син
 
 Phaser SHALL создавать primitive visual по stable entity ID для enemy ships, asteroids, friendly и
 hostile bullets и homing missiles. Existing object SHALL обновляться/interpolate in place, а
-authoritative removal SHALL удалить visual. React HUD SHALL показывать castle HP, wave, score,
+authoritative removal SHALL удалить visual. React HUD SHALL показывать spaceship HP, wave, score,
 encounter phase и intermission countdown. Display SHALL NOT рассчитывать homing, collision, damage,
 death, reward либо upgrade result.
 
@@ -131,7 +103,8 @@ death, reward либо upgrade result.
 #### Scenario: Ракета поворачивает
 
 - **WHEN** authoritative missile snapshots меняют position/heading
-- **THEN** display интерполирует transform по tick time и не корректирует heading к castle локально
+- **THEN** display интерполирует transform по tick time и не корректирует heading к spaceship
+  локально
 
 #### Scenario: Entity уничтожена
 
@@ -144,9 +117,9 @@ death, reward либо upgrade result.
 - **THEN** battlefield остаётся видимым и замороженным, а React overlay показывает wave result и
   authoritative countdown
 
-#### Scenario: Замок уничтожен
+#### Scenario: Spaceship уничтожен
 
-- **WHEN** encounter phase становится defeated и HP равен нулю
+- **WHEN** encounter phase становится `result`, outcome равен `defeat` и HP равен нулю
 - **THEN** display показывает frozen final battlefield, wave/score и поражение без локального
   restart
 
@@ -165,7 +138,7 @@ gameplay tick SHALL NOT перезапускать entity transition. Первы
 #### Scenario: Display reconnect в бою
 
 - **WHEN** display восстанавливается после пропущенных combat ticks
-- **THEN** первый snapshot snaps к current castle/entities/HP, а следующий tick снова
+- **THEN** первый snapshot snaps к current spaceship/entities/HP, а следующий tick снова
   интерполируется без проигрывания пропущенных collisions
 
 ### Requirement: Display показывает terminal rematch и закрытие комнаты
@@ -190,3 +163,33 @@ rematch либо disposal. Display SHALL иметь отдельное подт�
 
 - **WHEN** пользователь подтверждает «Закрыть комнату»
 - **THEN** display performs consented leave, показывает create screen, а controllers отключаются
+
+### Requirement: Камера следует за spaceship
+
+Camera SHALL следовать за визуально интерполированной spaceship position. Phaser scroll SHALL
+учитывать renderer pixels, zoom и фактический responsive logical viewport, чтобы spaceship оставался
+в центре вне edge zone. Presentation-only camera bounds SHALL расширяться за world на overscan
+`spaceship.radius + 42 + 160/zoom` world units. В любой достижимой core position spaceship body,
+turret и shield arc SHALL оставаться полностью видимыми и не ближе 160 CSS pixels к viewport edge; у
+края карта MAY закончиться раньше viewport и показать ограниченный background space. Background grid
+и obstacles SHALL визуально прокручиваться относительно viewport. World transforms SHALL сохранять
+дробные coordinates без принудительного pixel rounding.
+
+#### Scenario: Spaceship летит вправо
+
+- **WHEN** authoritative snapshots публикуют возрастающие x и x-velocity
+- **THEN** camera scroll изменяется промежуточными дробными positions без скачка на каждый server
+  tick
+
+#### Scenario: Spaceship у края мира
+
+- **WHEN** spaceship находится у границы world на display с произвольным поддерживаемым aspect ratio
+- **THEN** camera учитывает renderer/zoom, показывает ограниченный background за world border и
+  оставляет весь spaceship/turret/shield минимум в 160 CSS pixels от viewport edge без дрожания
+
+#### Scenario: Camera использует zoom
+
+- **WHEN** renderer `1920×1080` показывает logical viewport `1600×900` и spaceship находится в
+  центре мира `(2400,1600)`
+- **THEN** camera midpoint совпадает с spaceship, а world-view top-left равен `(1600,1150)` без
+  систематического сдвига из-за zoom

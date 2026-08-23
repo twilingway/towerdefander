@@ -17,7 +17,7 @@ const mobileControllerContext = {
   isMobile: true
 } as const;
 
-test("three browser controllers fly, fire and shield one castle", async ({ browser }) => {
+test("three browser controllers fly, fire and shield one spaceship", async ({ browser }) => {
   test.setTimeout(45_000);
   const contexts: BrowserContext[] = [];
   try {
@@ -37,8 +37,8 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await expect(shield.locator(".role-badge")).toHaveText("Оператор щита");
     await markCrewReady([pilot, gunner, shield]);
 
-    await expect(display.locator(".phase-badge")).toHaveText("Замок в полёте");
-    await expect(display.getByTestId("flying-castle-world")).toBeVisible();
+    await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
+    await expect(display.getByTestId("spaceship-world")).toBeVisible();
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
     await expect(display.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
@@ -55,18 +55,18 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     await assertResponsiveBattlefield(display);
 
     const startX = Number(
-      await display.getByTestId("flying-castle-world").getAttribute("data-castle-x")
+      await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x")
     );
     await pilot.keyboard.down("KeyD");
     await expect
       .poll(async () =>
-        Number(await display.getByTestId("flying-castle-world").getAttribute("data-castle-x"))
+        Number(await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x"))
       )
       .toBeGreaterThan(startX);
     await pilot.keyboard.up("KeyD");
 
     const xBeforeStick = Number(
-      await display.getByTestId("flying-castle-world").getAttribute("data-castle-x")
+      await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x")
     );
     const stickBounds = await pilot.getByTestId("virtual-stick").boundingBox();
     if (stickBounds === null) throw new Error("Pilot virtual stick has no bounds.");
@@ -81,12 +81,12 @@ test("three browser controllers fly, fire and shield one castle", async ({ brows
     );
     await expect
       .poll(async () =>
-        Number(await display.getByTestId("flying-castle-world").getAttribute("data-castle-x"))
+        Number(await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x"))
       )
       .toBeGreaterThan(xBeforeStick);
     await pilot.mouse.up();
 
-    const world = display.getByTestId("flying-castle-world");
+    const world = display.getByTestId("spaceship-world");
     const turretBeforeFire = Number(await world.getAttribute("data-turret-angle"));
     const fireBounds = await gunner.getByTestId("fire-button").boundingBox();
     if (fireBounds === null) throw new Error("Fire button has no bounds.");
@@ -188,14 +188,14 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     );
     await markCrewReady([pilot, gunner, shield]);
 
-    const world = display.getByTestId("flying-castle-world");
-    await expect(display.locator(".phase-badge")).toHaveText("Замок в полёте");
+    const world = display.getByTestId("spaceship-world");
+    await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
     await assertFullscreenHud(display);
 
-    const xBeforeTouch = Number(await world.getAttribute("data-castle-x"));
+    const xBeforeTouch = Number(await world.getAttribute("data-spaceship-x"));
     await dragTouchRight(pilot.getByTestId("virtual-stick"), pilot);
     await expect
-      .poll(async () => Number(await world.getAttribute("data-castle-x")))
+      .poll(async () => Number(await world.getAttribute("data-spaceship-x")))
       .toBeGreaterThan(xBeforeTouch);
 
     await shield.getByTestId("shield-button").tap();
@@ -203,13 +203,12 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     await shield.getByTestId("shield-button").tap();
     await expect(world).toHaveAttribute("data-shield-active", "false");
 
-    await expect(display.locator(".encounter-overlay--defeat")).toContainText(
-      "Летающий замок уничтожен",
-      { timeout: 120_000 }
-    );
+    await expect(display.locator(".encounter-overlay--defeat")).toContainText("Корабль уничтожен", {
+      timeout: 120_000
+    });
     await Promise.all(
       [pilot, gunner, shield].map((page) =>
-        expect(page.locator(".result-panel")).toContainText("Замок уничтожен")
+        expect(page.locator(".result-panel")).toContainText("Корабль уничтожен")
       )
     );
     await assertFullscreenHud(display);
@@ -227,8 +226,8 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     await expect(gunner.locator(".combat-summary")).toContainText("Волна 1");
     await expect
       .poll(async () => ({
-        hp: Number(await world.getAttribute("data-castle-hp")),
-        maxHp: Number(await world.getAttribute("data-castle-max-hp")),
+        hp: Number(await world.getAttribute("data-spaceship-hp")),
+        maxHp: Number(await world.getAttribute("data-spaceship-max-hp")),
         score: Number(await world.getAttribute("data-score")),
         friendlyProjectiles: Number(await world.getAttribute("data-friendly-projectile-count")),
         hostileProjectiles: Number(await world.getAttribute("data-hostile-projectile-count")),
@@ -275,7 +274,7 @@ async function assertResponsiveBattlefield(display: Page): Promise<void> {
     await display.setViewportSize(viewport);
     await expect
       .poll(async () => {
-        const bounds = await display.getByTestId("flying-castle-world").boundingBox();
+        const bounds = await display.getByTestId("spaceship-world").boundingBox();
         return bounds === null
           ? undefined
           : { width: Math.round(bounds.width), height: Math.round(bounds.height) };
@@ -290,8 +289,8 @@ async function assertResponsiveBattlefield(display: Page): Promise<void> {
 async function assertFullscreenHud(display: Page): Promise<void> {
   const viewport = display.viewportSize();
   if (viewport === null) throw new Error("Display viewport is unavailable.");
-  const worldBounds = await display.getByTestId("flying-castle-world").boundingBox();
-  const hudBounds = await display.locator(".flying-hud").boundingBox();
+  const worldBounds = await display.getByTestId("spaceship-world").boundingBox();
+  const hudBounds = await display.locator(".spaceship-hud").boundingBox();
   if (worldBounds === null || hudBounds === null) throw new Error("Battlefield HUD has no bounds.");
   expect(Math.round(worldBounds.width)).toBe(viewport.width);
   expect(Math.round(worldBounds.height)).toBe(viewport.height);

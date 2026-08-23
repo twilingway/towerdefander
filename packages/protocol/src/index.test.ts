@@ -6,6 +6,7 @@ import {
   INTERMISSION_DURATION_TICKS,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  ROOM_TYPE,
   clientLatencyPongSchema,
   clientMessage,
   controllerJoinOptionsSchema,
@@ -76,7 +77,7 @@ function controllerRoom(): ControllerRoomView {
       elapsedMs: 500,
       worldWidth: 4800,
       worldHeight: 3200,
-      castle: {
+      spaceship: {
         x: 2400,
         y: 1600,
         velocityX: 100,
@@ -214,31 +215,32 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v9 handshake and messages", () => {
+describe("protocol v10 handshake and messages", () => {
   it("publishes the fixed crew and v9", () => {
-    expect(PROTOCOL_VERSION).toBe(9);
+    expect(PROTOCOL_VERSION).toBe(10);
+    expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
   it("accepts v9 create/join and rejects v8 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 9 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 10 }).success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 8 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 9 }).success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 9,
+        protocolVersion: 10,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 9,
+        protocolVersion: 10,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -247,7 +249,7 @@ describe("protocol v9 handshake and messages", () => {
 
   it("keeps continuous role messages strict on v9 and the active run", () => {
     const envelope = {
-      protocolVersion: 9,
+      protocolVersion: 10,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -284,7 +286,7 @@ describe("protocol v9 handshake and messages", () => {
     expect(
       pilotInputCommandSchema.safeParse({
         ...envelope,
-        protocolVersion: 8,
+        protocolVersion: 9,
         sequence: 1,
         vector: { x: 1, y: 0 }
       }).success
@@ -299,7 +301,7 @@ describe("protocol v9 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 9,
+        protocolVersion: 10,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -309,7 +311,7 @@ describe("protocol v9 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 9, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 10, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
@@ -353,7 +355,7 @@ describe("protocol v9 handshake and messages", () => {
 
 describe("upgrade:choose", () => {
   const command = {
-    protocolVersion: 9,
+    protocolVersion: 10,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -369,7 +371,7 @@ describe("upgrade:choose", () => {
       { ...command, actionId: "not-a-uuid" },
       { ...command, waveNumber: 0 },
       { ...command, offerId: "" },
-      { ...command, protocolVersion: 8 },
+      { ...command, protocolVersion: 9 },
       { ...command, runNumber: 0 },
       { ...command, selectedIndex: 0 }
     ]) {
@@ -474,14 +476,14 @@ describe("strict v9 room projections", () => {
     expect(displayRoomViewSchema.safeParse(active).success).toBe(false);
   });
 
-  it("enforces terminal outcome and castle HP invariants", () => {
+  it("enforces terminal outcome and spaceship HP invariants", () => {
     const defeat = displayRoom();
     if (defeat.game === null) throw new Error("Expected active game.");
     defeat.game.encounter.phase = "result";
     defeat.game.encounter.outcome = "defeat";
-    defeat.game.castle.hp = 0;
+    defeat.game.spaceship.hp = 0;
     expect(displayRoomViewSchema.safeParse(defeat).success).toBe(true);
-    defeat.game.castle.hp = 1;
+    defeat.game.spaceship.hp = 1;
     expect(displayRoomViewSchema.safeParse(defeat).success).toBe(false);
 
     const victory = displayRoom();
@@ -489,7 +491,7 @@ describe("strict v9 room projections", () => {
     victory.game.encounter.phase = "result";
     victory.game.encounter.outcome = "victory";
     expect(displayRoomViewSchema.safeParse(victory).success).toBe(true);
-    victory.game.castle.hp = 0;
+    victory.game.spaceship.hp = 0;
     expect(displayRoomViewSchema.safeParse(victory).success).toBe(false);
 
     const missingOutcome = displayRoom();
@@ -524,7 +526,7 @@ describe("strict v9 room projections", () => {
   it("requires HP and shield energy inside authoritative ranges", () => {
     const hp = controllerRoom();
     if (hp.game === null) throw new Error("Expected active game.");
-    hp.game.castle.hp = hp.game.castle.maxHp + 1;
+    hp.game.spaceship.hp = hp.game.spaceship.maxHp + 1;
     expect(controllerRoomViewSchema.safeParse(hp).success).toBe(false);
 
     const shield = controllerRoom();
@@ -601,25 +603,25 @@ describe("strict v9 room projections", () => {
 describe("v9 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 9, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 10, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 9,
+        protocolVersion: 10,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 9,
+        protocolVersion: 10,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 8, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 9, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

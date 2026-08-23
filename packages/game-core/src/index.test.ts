@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceClock, createFlyingCastleConfig, createSeededRandom } from "./index.js";
+import { advanceClock, createSpaceshipSimulationConfig, createSeededRandom } from "./index.js";
 
 describe("deterministic game core primitives", () => {
   it("generates the same sequence for the same seed", () => {
@@ -40,8 +40,8 @@ describe("deterministic game core primitives", () => {
     );
   });
 
-  it("exports the flying castle core from the package entrypoint", () => {
-    expect(createFlyingCastleConfig()).toMatchObject({
+  it("exports the spaceship core from the package entrypoint", () => {
+    expect(createSpaceshipSimulationConfig()).toMatchObject({
       fixedStepMs: 50,
       worldWidth: 4800,
       worldHeight: 3200

@@ -38,7 +38,7 @@ describe("display room view", () => {
         elapsedMs: 100,
         worldWidth: 2400,
         worldHeight: 1600,
-        castle: {
+        spaceship: {
           x: 1200,
           y: 800,
           velocityX: 0,
@@ -129,7 +129,7 @@ describe("display room view", () => {
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
     expect(view?.game?.encounter.outcome).toBeNull();
     expect(view?.runNumber).toBe(2);
-    expect(view?.game?.castle.hp).toBe(850);
+    expect(view?.game?.spaceship.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
     expect(view?.displayLatencyMs).toBe(18);

@@ -23,7 +23,7 @@ function applyNoStoreHeaders(response: Response): void {
 
 function rejectUnauthorized(response: Response): void {
   applyNoStoreHeaders(response);
-  response.setHeader("WWW-Authenticate", 'Basic realm="Town Defenders room statistics"');
+  response.setHeader("WWW-Authenticate", 'Basic realm="SpaceShip Defender room statistics"');
   response.status(401).type("text/plain").send("Unauthorized");
 }
 

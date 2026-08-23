@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   advanceCombat,
-  advanceFlyingCastle,
+  advanceSpaceshipSimulation,
   applyGunnerInput,
   applyShieldInput,
   chooseRoleUpgrade,
-  createCleanFlyingCastleRun,
-  createFlyingCastleConfig,
-  createFlyingCastleState,
+  createCleanSpaceshipRun,
+  createSpaceshipSimulationConfig,
+  createSpaceshipSimulationState,
   createRoleOffers,
   createTerminalCombatState,
   createWavePlan,
@@ -16,7 +16,7 @@ import {
   getWaveDifficulty,
   relativeSweptCircleTime,
   shortestAngleDelta,
-  type FlyingCastleState,
+  type SpaceshipSimulationState,
   type AsteroidState,
   type CombatEnemyState,
   type HostileProjectileState,
@@ -26,20 +26,20 @@ import {
 
 describe("deterministic combat foundation", () => {
   it("requires a non-zero uint32 seed", () => {
-    const config = createFlyingCastleConfig();
-    expect(() => createFlyingCastleState(config, 0)).toThrow(RangeError);
-    expect(() => createFlyingCastleState(config, 0x1_0000_0000)).toThrow(RangeError);
-    expect(createFlyingCastleState(config, 123).runSeed).toBe(123);
-    expect(() => createFlyingCastleConfig({ fixedStepMs: 40 })).toThrow(RangeError);
+    const config = createSpaceshipSimulationConfig();
+    expect(() => createSpaceshipSimulationState(config, 0)).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationState(config, 0x1_0000_0000)).toThrow(RangeError);
+    expect(createSpaceshipSimulationState(config, 123).runSeed).toBe(123);
+    expect(() => createSpaceshipSimulationConfig({ fixedStepMs: 40 })).toThrow(RangeError);
     expect(() =>
-      createFlyingCastleConfig({
+      createSpaceshipSimulationConfig({
         caps: { ...config.caps, dynamicEntities: config.caps.dynamicEntities + 1 }
       })
     ).toThrow(RangeError);
   });
 
   it("keeps spawn and offer streams deterministic and independent", () => {
-    const config = createFlyingCastleConfig();
+    const config = createSpaceshipSimulationConfig();
     expect(createWavePlan(config, 123, 8)).toEqual(createWavePlan(config, 123, 8));
     expect(createRoleOffers(123, 8)).toEqual(createRoleOffers(123, 8));
     const offers = createRoleOffers(123, 8);
@@ -49,7 +49,7 @@ describe("deterministic combat foundation", () => {
   });
 
   it("unlocks carriers at wave three and scales difficulty monotonically", () => {
-    const config = createFlyingCastleConfig();
+    const config = createSpaceshipSimulationConfig();
     expect(createWavePlan(config, 91, 1).plan.some(({ kind }) => kind === "missileCarrier")).toBe(
       false
     );
@@ -69,16 +69,16 @@ describe("deterministic combat foundation", () => {
   });
 
   it("produces the same combat snapshot from the same seed and input trace", () => {
-    const config = createFlyingCastleConfig();
+    const config = createSpaceshipSimulationConfig();
     const run = () => {
-      let state = createFlyingCastleState(config, 999);
+      let state = createSpaceshipSimulationState(config, 999);
       for (let step = 0; step < 80; step += 1) {
         state = applyGunnerInput(state, {
           vector: { x: 1, y: 0 },
           firing: step % 3 === 0,
           receivedTick: state.clock.tick
         });
-        state = advanceFlyingCastle(state, config);
+        state = advanceSpaceshipSimulation(state, config);
       }
       return state;
     };
@@ -86,10 +86,10 @@ describe("deterministic combat foundation", () => {
   });
 
   it("creates a deterministic clean run without carrying prior run state", () => {
-    const config = createFlyingCastleConfig();
-    const dirty: FlyingCastleState = {
-      ...createFlyingCastleState(config, 100),
-      castleHp: 1,
+    const config = createSpaceshipSimulationConfig();
+    const dirty: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 100),
+      spaceshipHp: 1,
       score: 999,
       waveNumber: 8,
       encounterTick: 77,
@@ -106,12 +106,12 @@ describe("deterministic combat foundation", () => {
     };
     expect(dirty.score).toBe(999);
 
-    const clean = createCleanFlyingCastleRun(config, 200);
-    expect(clean).toEqual(createCleanFlyingCastleRun(config, 200));
+    const clean = createCleanSpaceshipRun(config, 200);
+    expect(clean).toEqual(createCleanSpaceshipRun(config, 200));
     expect(clean.runSeed).toBe(200);
     expect(clean.clock).toEqual({ tick: 0, elapsedMs: 0 });
-    expect(clean.castleHp).toBe(config.castleMaxHp);
-    expect(clean.castleMaxHp).toBe(config.castleMaxHp);
+    expect(clean.spaceshipHp).toBe(config.spaceshipMaxHp);
+    expect(clean.spaceshipMaxHp).toBe(config.spaceshipMaxHp);
     expect(clean.encounterPhase).toBe("combat");
     expect(clean.outcome).toBeNull();
     expect(clean.waveNumber).toBe(1);
@@ -127,7 +127,7 @@ describe("deterministic combat foundation", () => {
     expect(clean.roleOffers).toEqual({ pilot: null, gunner: null, shield: null });
     expect(clean.roleSelections).toEqual({ pilot: null, gunner: null, shield: null });
     expect(clean.inputs).toEqual({ pilot: null, gunner: null, shield: null });
-    expect(clean.roleModifiers).toEqual(createFlyingCastleState(config, 200).roleModifiers);
+    expect(clean.roleModifiers).toEqual(createSpaceshipSimulationState(config, 200).roleModifiers);
   });
 });
 
@@ -159,16 +159,16 @@ describe("combat motion and collision", () => {
   });
 
   it("limits homing turn across the canonical angle boundary", () => {
-    const config = createFlyingCastleConfig({ enemySpawnIntervalTicks: 1000 });
-    const initial = createFlyingCastleState(config, 8);
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1000 });
+    const initial = createSpaceshipSimulationState(config, 8);
     const heading = Math.PI - 0.02;
     const missile: HomingMissileState = {
       id: "missile-test",
       spawnSequence: 1,
-      previousX: initial.castle.x + 500,
-      previousY: initial.castle.y + 10,
-      x: initial.castle.x + 500,
-      y: initial.castle.y + 10,
+      previousX: initial.spaceship.x + 500,
+      previousY: initial.spaceship.y + 10,
+      x: initial.spaceship.x + 500,
+      y: initial.spaceship.y + 10,
       velocity: {
         x: Math.cos(heading) * config.missileSpeedPerSecond,
         y: Math.sin(heading) * config.missileSpeedPerSecond
@@ -178,12 +178,12 @@ describe("combat motion and collision", () => {
       heading,
       damage: config.missileDamage
     };
-    const state: FlyingCastleState = {
+    const state: SpaceshipSimulationState = {
       ...initial,
       encounterTick: 1,
       homingMissiles: [missile]
     };
-    const advanced = advanceFlyingCastle(state, config);
+    const advanced = advanceSpaceshipSimulation(state, config);
     const moved = advanced.homingMissiles[0];
     expect(moved).toBeDefined();
     expect(Math.abs(shortestAngleDelta(heading, moved?.heading ?? 0))).toBeLessThanOrEqual(
@@ -191,9 +191,9 @@ describe("combat motion and collision", () => {
     );
   });
 
-  it("collapses an underpowered shield and lets the same bullet damage the castle", () => {
-    const config = createFlyingCastleConfig({ enemySpawnIntervalTicks: 1000 });
-    let state = createFlyingCastleState(config, 7);
+  it("collapses an underpowered shield and lets the same bullet damage the spaceship", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1000 });
+    let state = createSpaceshipSimulationState(config, 7);
     state = applyShieldInput(state, { vector: { x: -1, y: 0 }, active: true, receivedTick: 0 });
     state = {
       ...state,
@@ -205,10 +205,10 @@ describe("combat motion and collision", () => {
     const bullet: HostileProjectileState = {
       id: "hostile-test",
       spawnSequence: 1,
-      previousX: state.castle.x - 140,
-      previousY: state.castle.y,
-      x: state.castle.x - 140,
-      y: state.castle.y,
+      previousX: state.spaceship.x - 140,
+      previousY: state.spaceship.y,
+      x: state.spaceship.x - 140,
+      y: state.spaceship.y,
       velocity: { x: 2000, y: 0 },
       radius: config.hostileBulletRadius,
       spawnedTick: 0,
@@ -217,11 +217,11 @@ describe("combat motion and collision", () => {
     const stepped = advanceCombat(
       {
         ...state,
-        castle: {
-          ...state.castle,
-          previousX: state.castle.previousX ?? state.castle.x,
-          previousY: state.castle.previousY ?? state.castle.y,
-          radius: config.castleRadius
+        spaceship: {
+          ...state.spaceship,
+          previousX: state.spaceship.previousX ?? state.spaceship.x,
+          previousY: state.spaceship.previousY ?? state.spaceship.y,
+          radius: config.spaceshipRadius
         },
         hostileProjectiles: [bullet]
       },
@@ -229,50 +229,50 @@ describe("combat motion and collision", () => {
     );
     expect(stepped.shieldEnergy).toBe(0);
     expect(stepped.shieldActive).toBe(false);
-    expect(stepped.castleHp).toBe(config.castleMaxHp - config.hostileBulletDamage);
+    expect(stepped.spaceshipHp).toBe(config.spaceshipMaxHp - config.hostileBulletDamage);
   });
 
   it("normalizes terminal outcomes and freezes the exact final state", () => {
-    const config = createFlyingCastleConfig();
-    const initial = createFlyingCastleState(config, 72);
-    const defeat = createTerminalCombatState({ ...initial, castleHp: 0 }, "defeat");
-    expect(defeat).toMatchObject({ encounterPhase: "result", outcome: "defeat", castleHp: 0 });
-    expect(advanceFlyingCastle(defeat, config)).toBe(defeat);
+    const config = createSpaceshipSimulationConfig();
+    const initial = createSpaceshipSimulationState(config, 72);
+    const defeat = createTerminalCombatState({ ...initial, spaceshipHp: 0 }, "defeat");
+    expect(defeat).toMatchObject({ encounterPhase: "result", outcome: "defeat", spaceshipHp: 0 });
+    expect(advanceSpaceshipSimulation(defeat, config)).toBe(defeat);
 
     const victory = createTerminalCombatState(initial, "victory");
     expect(victory).toMatchObject({
       encounterPhase: "result",
       outcome: "victory",
-      castleHp: config.castleMaxHp
+      spaceshipHp: config.spaceshipMaxHp
     });
-    expect(advanceFlyingCastle(victory, config)).toBe(victory);
+    expect(advanceSpaceshipSimulation(victory, config)).toBe(victory);
     expect(() => createTerminalCombatState(initial, "defeat")).toThrow(RangeError);
-    expect(() => createTerminalCombatState({ ...initial, castleHp: 0 }, "victory")).toThrow(
+    expect(() => createTerminalCombatState({ ...initial, spaceshipHp: 0 }, "victory")).toThrow(
       RangeError
     );
   });
 
   it("suppresses capped friendly fire while consuming the ordinary cooldown", () => {
-    const baseConfig = createFlyingCastleConfig();
-    const config = createFlyingCastleConfig({
+    const baseConfig = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({
       caps: { ...baseConfig.caps, friendlyProjectiles: 1, dynamicEntities: 165 }
     });
-    let state = createFlyingCastleState(config, 53);
+    let state = createSpaceshipSimulationState(config, 53);
     for (let step = 0; step < 7; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 1, y: 0 },
         firing: true,
         receivedTick: state.clock.tick
       });
-      state = advanceFlyingCastle(state, config);
+      state = advanceSpaceshipSimulation(state, config);
     }
     expect(state.projectiles).toHaveLength(1);
     expect(state.lastFiredTick).toBe(6);
   });
 
   it("shares one total-cap slot across multiple ready attacks and a pending spawn", () => {
-    const config = createFlyingCastleConfig();
-    const initial = createFlyingCastleState(config, 601);
+    const config = createSpaceshipSimulationConfig();
+    const initial = createSpaceshipSimulationState(config, 601);
     const enemies: CombatEnemyState[] = Array.from({ length: 40 }, (_, index) => ({
       id: `gunship-cap-${String(index)}`,
       spawnSequence: index + 1,
@@ -341,7 +341,7 @@ describe("combat motion and collision", () => {
       damage: config.friendlyProjectileDamage,
       spawnedTick: 0
     }));
-    const state: FlyingCastleState = {
+    const state: SpaceshipSimulationState = {
       ...initial,
       enemies,
       asteroids,
@@ -355,11 +355,11 @@ describe("combat motion and collision", () => {
     const advanced = advanceCombat(
       {
         ...state,
-        castle: {
-          ...state.castle,
-          previousX: state.castle.previousX ?? state.castle.x,
-          previousY: state.castle.previousY ?? state.castle.y,
-          radius: config.castleRadius
+        spaceship: {
+          ...state.spaceship,
+          previousX: state.spaceship.previousX ?? state.spaceship.x,
+          previousY: state.spaceship.previousY ?? state.spaceship.y,
+          radius: config.spaceshipRadius
         }
       },
       config
@@ -377,10 +377,10 @@ describe("combat motion and collision", () => {
 
 describe("role upgrades", () => {
   it("applies one role choice atomically and rejects a second choice", () => {
-    const config = createFlyingCastleConfig();
-    const initial = createFlyingCastleState(config, 42);
+    const config = createSpaceshipSimulationConfig();
+    const initial = createSpaceshipSimulationState(config, 42);
     const generated = createRoleOffers(initial.runSeed, 1);
-    const intermission: FlyingCastleState = {
+    const intermission: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
       roleOffers: generated.offers
@@ -412,17 +412,17 @@ describe("role upgrades", () => {
   });
 
   it("uses deterministic fallback exactly at the 200-tick deadline", () => {
-    const config = createFlyingCastleConfig();
-    const initial = createFlyingCastleState(config, 24);
+    const config = createSpaceshipSimulationConfig();
+    const initial = createSpaceshipSimulationState(config, 24);
     const generated = createRoleOffers(initial.runSeed, 1);
-    const beforeDeadline: FlyingCastleState = {
+    const beforeDeadline: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
       encounterTick: 199,
       roleOffers: generated.offers,
       roleSelections: { pilot: null, gunner: null, shield: null }
     };
-    const nextWave = advanceFlyingCastle(beforeDeadline, config);
+    const nextWave = advanceSpaceshipSimulation(beforeDeadline, config);
     const fallbackSelections = nextWave.roleSelections;
     expect(nextWave.encounterPhase).toBe("combat");
     expect(nextWave.waveNumber).toBe(2);

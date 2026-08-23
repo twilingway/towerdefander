@@ -7,7 +7,7 @@ describe("ControllerApp", () => {
   it("renders the browser join form", () => {
     const markup = renderToStaticMarkup(<ControllerApp />);
 
-    expect(markup).toContain("Flying Castle");
+    expect(markup).toContain("SpaceShip Defender");
     expect(markup).toContain("Контроллер экипажа");
     expect(markup).toContain('name="roomCode"');
     expect(markup).toContain('name="playerName"');
@@ -59,7 +59,7 @@ describe("ControllerApp", () => {
       />
     );
 
-    expect(markup).toContain("Замок уничтожен");
+    expect(markup).toContain("Корабль уничтожен");
     expect(markup).toContain("Готовы к новому бою: 1 / 3");
     expect(markup).toContain("Готов — ждём экипаж");
     expect(markup).toContain("disabled");

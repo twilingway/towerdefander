@@ -2,6 +2,7 @@ import { Client, type Room } from "@colyseus/sdk";
 import {
   CREW_ROLES,
   PROTOCOL_VERSION,
+  ROOM_TYPE,
   clientMessage,
   roomClosingSchema,
   serverLatencyProbeSchema,
@@ -9,11 +10,11 @@ import {
   type CrewRole,
   type DisplayRoomView,
   type EncounterPhase
-} from "@town-defenders/protocol";
+} from "@spaceship-defender/protocol";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { FlyingCastleCanvas } from "./FlyingCastleCanvas.js";
+import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import {
   closeDisplayRoom,
@@ -63,7 +64,7 @@ export function DisplayApp() {
     setError("");
     setClosingRoom(false);
     try {
-      const room = await new Client(gameServerUrl).create<NetworkRoomState>("town_defenders", {
+      const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
         role: "display",
         protocolVersion: PROTOCOL_VERSION
       });
@@ -152,8 +153,8 @@ export function DisplayApp() {
       <main className="display-shell display-shell--centered">
         <section className="hero-card">
           <p className="eyebrow">Общий экран</p>
-          <h1>Flying Castle</h1>
-          <p>Три игрока управляют одним летающим замком: движение, пушки и щит.</p>
+          <h1>SpaceShip Defender</h1>
+          <p>Три игрока управляют одним космическим кораблём: движение, орудия и щит.</p>
           {error.length > 0 && <p className="error-message">{error}</p>}
           <button
             type="button"
@@ -176,7 +177,7 @@ export function DisplayApp() {
         </div>
         <div className="room-network">
           <div className={`phase-badge phase-badge--${view.phase}`}>
-            {view.phase === "active" ? "Замок в полёте" : "Собираем экипаж"}
+            {view.phase === "active" ? "Корабль в бою" : "Собираем экипаж"}
           </div>
           <span className="latency-indicator" aria-live="polite">
             Экран → сервер {formatLatency(view.displayLatencyMs)}
@@ -236,8 +237,8 @@ export function DisplayApp() {
           <span>Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»</span>
         </section>
       ) : (
-        <section id="game-canvas" className="game-stage" aria-label="Карта летающего замка">
-          <header className="battle-header flying-hud">
+        <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
+          <header className="battle-header spaceship-hud">
             <div>
               <span>Волна</span>
               <strong>{view.game.encounter.waveNumber}</strong>
@@ -246,12 +247,12 @@ export function DisplayApp() {
             <div>
               <span>Корпус</span>
               <strong>
-                {Math.ceil(view.game.castle.hp)} / {Math.ceil(view.game.castle.maxHp)}
+                {Math.ceil(view.game.spaceship.hp)} / {Math.ceil(view.game.spaceship.maxHp)}
               </strong>
               <div className="hud-energy hud-energy--hull" aria-label="Прочность корпуса">
                 <i
                   style={{
-                    width: `${String((view.game.castle.hp / view.game.castle.maxHp) * 100)}%`
+                    width: `${String((view.game.spaceship.hp / view.game.spaceship.maxHp) * 100)}%`
                   }}
                 />
               </div>
@@ -278,7 +279,7 @@ export function DisplayApp() {
               </small>
             </div>
           </header>
-          <FlyingCastleCanvas
+          <SpaceshipCanvas
             game={view.game}
             runNumber={view.runNumber}
             connectionEpoch={connectionEpoch}

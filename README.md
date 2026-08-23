@@ -1,37 +1,57 @@
-# Town Defenders
+# SpaceShip Defender
 
-Кооперативная Tower Defense игра для 2–6 игроков. Общее поле запускается в браузере компьютера на
-большом экране или в Android TV shell. Игроки используют браузеры телефонов, планшетов или других
-компьютеров как контроллеры.
+Кооперативный top-down space wave-defense для общего большого экрана и трёх игроков. Один
+развиваемый космический корабль управляется из браузеров телефонов, планшетов или компьютеров:
 
-## Текущий статус
+- pilot перемещает корабль;
+- gunner направляет орудие и стреляет;
+- shield operator направляет и переключает энергетический щит.
 
-Готовы:
+Общий display запускается в desktop browser, на проекторе или Android TV. Игроки подключаются через
+LAN/Wi-Fi или интернет. Node.js/Colyseus server является единственным источником trusted gameplay
+state; клиенты отправляют только intents.
 
-- pnpm monorepo;
-- OpenSpec workflow и спецификации игрового цикла;
-- Codex project rules, read-only agents и repo-scoped skills;
-- display/controller/server приложения;
-- общий типизированный protocol package;
-- чистая детерминированная симуляция двух секторов, пяти волн, трёх обычных типов врагов и босса;
-- авторитетная Colyseus-комната protocol v3 с общей казной, `repair`/`upgrade`, авиаударом,
-  дедупликацией и reconnect;
-- display создаёт комнату, показывает QR и визуализирует бой в responsive Phaser-сцене с рисованным
-  центральным замком, двумя дорогами и боковыми пушечными башнями;
-- controller входит по ссылке/коду, управляет ready, ремонтом, улучшением и направляет общий
-  авиаудар в свой или соседний сектор;
-- format, lint, typecheck, unit tests и production builds;
-- server health endpoint, сетевой smoke и Playwright-тест полного пяти-волнового матча.
+## Текущий gameplay
 
-Следующий художественный этап — отдельные sprite-анимации врагов, визуальные уровни башен и звук.
-Расширение с 2 до 3–6 игроков будет отдельным изменением.
+- deterministic fixed-step simulation 20 Hz и protocol v10;
+- волны gunships, missile carriers и астероидов;
+- friendly/hostile projectiles и limited-turn homing missiles;
+- swept collisions, HP, damage, score и directional shield interception;
+- три role-owned upgrade cards между волнами;
+- defeat, unanimous rematch в той же комнате, reconnect и replacement;
+- автоматические TTL комнат и read-only `/stats/rooms`;
+- Phaser primitives на display и responsive React controllers.
 
-## Требования
+Product north star — уничтожать нарастающие волны, зарабатывать credits и прямо во время боя
+модернизировать корпус, щиты и оружие. Credits economy и combat upgrade flow будут отдельным
+OpenSpec change: текущая версия пока использует score и бесплатный выбор между волнами.
+
+## Визуальное направление
+
+Цель — оригинальный 2D pseudo-3D корабль, глубокие многослойные космические backgrounds, parallax,
+современные particles и shaders. Нужна атмосфера красивого глубокого космоса, а не копирование чужих
+assets или интерфейсов.
+
+В проект не входят настоящий 3D renderer, торговая/навигационная карта, торговля и RPG systems.
+
+## Структура
+
+```text
+apps/
+  display/       React HUD + Phaser world для большого экрана
+  controller/    responsive browser controllers трёх ролей
+  server/        authoritative Colyseus room, lifecycle и statistics
+packages/
+  protocol/      protocol v10 schemas и shared contracts
+  game-core/     pure deterministic simulation без DOM/network/timers
+  config/        shared TypeScript configuration
+openspec/        current specs и change lifecycle
+```
+
+## Требования и запуск
 
 - Node.js 22 или новее;
 - pnpm 10.34.5 через Corepack.
-
-## Запуск
 
 ```powershell
 corepack enable pnpm
@@ -40,34 +60,16 @@ Copy-Item .env.example .env.local
 pnpm dev
 ```
 
-Локальные адреса по умолчанию:
+Локальные адреса:
 
 - display: `http://localhost:5173`;
 - controller: `http://localhost:5174`;
-- server: `http://localhost:2567`;
-- health: `http://localhost:2567/health`.
+- server/health: `http://localhost:2567` и `http://localhost:2567/health`;
+- room statistics: `http://localhost:2567/stats/rooms`.
 
-Vite слушает `0.0.0.0`, поэтому страницы можно открыть с другого устройства в той же сети, заменив
-`localhost` на LAN-адрес компьютера. Windows Firewall может запросить разрешение для Node.js.
-
-Для телефона замените `localhost` в `.env.local` на LAN-адрес компьютера, например:
-
-```dotenv
-VITE_GAME_SERVER_URL=ws://192.168.1.20:2567
-VITE_CONTROLLER_URL=http://192.168.1.20:5174
-HOST=0.0.0.0
-PORT=2567
-```
-
-Display можно открыть на большом экране компьютера по `http://localhost:5173` или на Android TV в
-браузере по `http://192.168.1.20:5173`. Контроллеры открывают адрес из QR-кода.
-
-## Подключение через интернет
-
-Архитектура поддерживает удалённых игроков: display и controllers подключаются к одному публичному
-Colyseus endpoint. Для интернет-режима потребуется развернуть web-клиенты и server на публичном
-хостинге, включить HTTPS/WSS и указать публичные `VITE_GAME_SERVER_URL` и `VITE_CONTROLLER_URL`.
-Выбор hosting provider, домена, TLS и Redis adapter будет оформлен отдельным OpenSpec-изменением.
+Для телефона замените `localhost` в `.env.local` на LAN-адрес компьютера. Для internet deployment
+нужны HTTPS/WSS, публичные client/server endpoints и TLS reverse proxy. Без `ROOM_STATS_PASSWORD`
+statistics доступны только с loopback; удалённый доступ использует Basic `admin:<password>` за TLS.
 
 ## Проверки
 
@@ -76,33 +78,15 @@ pnpm check
 pnpm spec:validate
 pnpm smoke:network
 pnpm test:e2e
+pnpm benchmark:combat
 ```
 
-## OpenSpec
-
-Визуальный wave-MVP и художественный проход центрального замка завершены и сохранены в архивах
-`2026-07-27-build-visual-wave-mvp` и `2026-07-27-castle-art-pass`. Основные актуальные спецификации:
+Состояние OpenSpec и архив завершённого identity refactor:
 
 ```powershell
 pnpm spec list
-pnpm spec show shared-room-session --type spec
-pnpm spec show deterministic-defense-loop --type spec
-pnpm spec show shared-defense-economy --type spec
-pnpm spec show visual-battlefield-rendering --type spec
+pnpm spec:validate
 ```
 
-Завершённые изменения находятся в `openspec/changes/archive/`.
-
-## Структура
-
-```text
-apps/
-  display/       общий экран: desktop browser и будущий Android TV shell
-  controller/    браузерный контроллер игрока
-  server/        authoritative Colyseus server
-packages/
-  protocol/      runtime schemas и общие TypeScript-контракты
-  game-core/     чистая детерминированная симуляция
-  config/        общие настройки
-openspec/        спецификации и активные изменения
-```
+Завершённый identity refactor хранится в
+`openspec/changes/archive/2026-08-23-spaceship-defender-identity-refactor/` как immutable history.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  LEGACY_RECONNECTION_SESSION_KEY,
   RECONNECTION_SESSION_KEY,
   clearReconnectionSession,
   leaveControllerRoom,
@@ -44,6 +45,37 @@ describe("controller reconnection session", () => {
     storage.setItem(RECONNECTION_SESSION_KEY, '{"token":42}');
 
     expect(readReconnectionSession(storage)).toBeUndefined();
+  });
+
+  it("deletes the legacy v9 session before reading reconnect data", () => {
+    const storage = createStorage();
+    const currentSession = {
+      endpoint: "ws://localhost:2567",
+      roomId: "SPACE1",
+      playerName: "Alex",
+      token: "SPACE1:token"
+    };
+    storage.setItem(LEGACY_RECONNECTION_SESSION_KEY, '{"token":"stale"}');
+    storage.setItem(RECONNECTION_SESSION_KEY, JSON.stringify(currentSession));
+
+    expect(readReconnectionSession(storage)).toEqual(currentSession);
+    expect(storage.getItem(LEGACY_RECONNECTION_SESSION_KEY)).toBeNull();
+  });
+
+  it("does not reuse a legacy v9 session", () => {
+    const storage = createStorage();
+    storage.setItem(
+      LEGACY_RECONNECTION_SESSION_KEY,
+      JSON.stringify({
+        endpoint: "ws://localhost:2567",
+        roomId: "OLD1",
+        playerName: "Alex",
+        token: "OLD1:token"
+      })
+    );
+
+    expect(readReconnectionSession(storage)).toBeUndefined();
+    expect(storage.getItem(LEGACY_RECONNECTION_SESSION_KEY)).toBeNull();
   });
 
   it("disables reconnect, clears storage and performs consented leave", async () => {

@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change bootstrap-network-vertical-slice. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Сервер запускает матч после готовности трёх ролей
 
 Server SHALL запускать simulation только когда pilot, gunner и shield подключены и каждый ready.
@@ -19,7 +21,7 @@ actor и принимать его только в lobby. Ready повторяе
 #### Scenario: Все роли готовы
 
 - **WHEN** третья занятая role становится ready
-- **THEN** phase становится `active`, создаётся flying-castle state и запускается fixed-step timer
+- **THEN** phase становится `active`, создаётся spaceship state и запускается fixed-step timer
 
 #### Scenario: Ready повторён в lobby
 
@@ -65,9 +67,9 @@ reconnect; 30-second reservation применяется только к неож
 
 После старта server SHALL выполнять fixed step пока room существует, даже если один или все
 controllers временно отключены. Combat/intermission SHALL продолжать authoritative encounter time, а
-stale/disconnected controls SHALL нейтрализоваться. При `defeated` fixed-step timer MAY продолжать
-room clock/latency lifecycle, но combat state SHALL оставаться frozen и новые spawns/damage SHALL
-быть запрещены.
+stale/disconnected controls SHALL нейтрализоваться. При `result` с terminal outcome fixed-step timer
+MAY продолжать room clock/latency lifecycle, но combat state SHALL оставаться frozen и новые
+spawns/damage SHALL быть запрещены.
 
 #### Scenario: Все controllers временно отключены
 
@@ -82,7 +84,7 @@ room clock/latency lifecycle, но combat state SHALL оставаться froze
 
 #### Scenario: Run завершён поражением
 
-- **WHEN** encounter имеет phase defeated
+- **WHEN** encounter имеет phase `result` и outcome=`defeat`
 - **THEN** reconnect видит сохранённый final result, а combat entities/HP больше не мутируют
 
 ### Requirement: Terminal run допускает reconnect, replacement и rematch
@@ -110,7 +112,7 @@ display expiry SHALL закрывать room. Controller join SHALL быть з�
 
 ### Requirement: Room projection публикует run epoch и terminal result
 
-Strict v9 display/controller projections SHALL публиковать `runNumber`, result outcome и public
+Strict v10 display/controller projections SHALL публиковать `runNumber`, result outcome и public
 readiness трёх roles. Lobby SHALL иметь runNumber 0 и game null; первый active run SHALL иметь
 runNumber 1; каждый rematch SHALL увеличивать его ровно на один. Result SHALL иметь frozen game,
 outcome и HP/result invariants: defeat имеет HP=0, victory имеет HP>0, оба result frozen. Controller
@@ -124,7 +126,7 @@ projection SHALL по-прежнему исключать mass entities, а disp
 #### Scenario: Result имеет несовместимый outcome
 
 - **WHEN** adapter публикует victory с HP=0, defeat с HP>0 либо result без outcome
-- **THEN** strict v9 schema отклоняет view
+- **THEN** strict v10 schema отклоняет view
 
 ### Requirement: Сервер валидирует runNumber до per-run mutation
 

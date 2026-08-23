@@ -1,10 +1,10 @@
 import { Decoder, Encoder, StateView } from "@colyseus/schema";
 import {
-  advanceFlyingCastle,
-  createFlyingCastleConfig,
+  advanceSpaceshipSimulation,
+  createSpaceshipSimulationConfig,
   dynamicEntityCount,
-  type FlyingCastleState
-} from "@town-defenders/game-core";
+  type SpaceshipSimulationState
+} from "@spaceship-defender/game-core";
 import { cpus, freemem, platform, release, totalmem } from "node:os";
 
 import {
@@ -12,22 +12,22 @@ import {
   EnemyState,
   HomingMissileState,
   ProjectileState,
-  TownDefendersState
-} from "../rooms/TownDefendersState.js";
+  SpaceshipDefenderState
+} from "../rooms/SpaceshipDefenderState.js";
 import { createWorstCaseCombatFixture } from "./worstCaseCombat.js";
 
 const WARMUP_SAMPLES = 250;
 const MEASURED_SAMPLES = 2_000;
 Encoder.BUFFER_SIZE = 32 * 1024;
 
-const config = createFlyingCastleConfig();
+const config = createSpaceshipSimulationConfig();
 const fixture = createWorstCaseCombatFixture(config);
-const stepped = advanceFlyingCastle(fixture, config);
+const stepped = advanceSpaceshipSimulation(fixture, config);
 const schema = hydrateSchema(fixture);
 const encoder = new Encoder(schema);
 const displayView = new StateView();
 displayView.add(schema.game, 1);
-const decoderState = new TownDefendersState();
+const decoderState = new SpaceshipDefenderState();
 const decoder = new Decoder(decoderState);
 const fullPatch = encodeAllForView(encoder, displayView);
 decoder.decode(fullPatch);
@@ -45,10 +45,10 @@ decoder.decode(movingPatch);
 encoder.discardChanges();
 
 for (let index = 0; index < WARMUP_SAMPLES; index += 1) {
-  advanceFlyingCastle(fixture, config);
+  advanceSpaceshipSimulation(fixture, config);
 }
 const stepDurationsMs = measureSamples(() => {
-  advanceFlyingCastle(fixture, config);
+  advanceSpaceshipSimulation(fixture, config);
 });
 const syncDurationsMs = measureSamples(() => {
   hydrateDynamicEntities(schema, indexParityState(fixture, stepped, schema.game.tick));
@@ -58,7 +58,7 @@ const roomStepDurationsMs = measureRoomStepSamples();
 
 const cpu = cpus()[0];
 const result = {
-  benchmark: "tyrian-combat-196-entities",
+  benchmark: "spaceship-defender-combat-196-entities",
   measuredAt: new Date().toISOString(),
   runtime: {
     node: process.version,
@@ -112,7 +112,7 @@ function measureRoomStepSamples(): number[] {
   for (let index = 0; index < MEASURED_SAMPLES; index += 1) {
     hydrateDynamicEntities(schema, fixture);
     const startedAt = performance.now();
-    const advanced = advanceFlyingCastle(fixture, config);
+    const advanced = advanceSpaceshipSimulation(fixture, config);
     hydrateDynamicEntities(schema, advanced);
     schema.game.tick = advanced.clock.tick;
     samples[index] = performance.now() - startedAt;
@@ -137,28 +137,31 @@ function round(value: number, fractionDigits: number): number {
   return Number(value.toFixed(fractionDigits));
 }
 
-function encodeAllForView(encoder: Encoder<TownDefendersState>, view: StateView): Uint8Array {
+function encodeAllForView(encoder: Encoder<SpaceshipDefenderState>, view: StateView): Uint8Array {
   const iterator = { offset: 0 };
   encoder.encodeAll(iterator);
   return encoder.encodeAllView(view, iterator.offset, iterator);
 }
 
-function encodeChangesForView(encoder: Encoder<TownDefendersState>, view: StateView): Uint8Array {
+function encodeChangesForView(
+  encoder: Encoder<SpaceshipDefenderState>,
+  view: StateView
+): Uint8Array {
   const iterator = { offset: 0 };
   encoder.encode(iterator);
   return encoder.encodeView(view, iterator.offset, iterator);
 }
 
 function indexParityState(
-  original: FlyingCastleState,
-  advanced: FlyingCastleState,
+  original: SpaceshipSimulationState,
+  advanced: SpaceshipSimulationState,
   currentTick: number
-): FlyingCastleState {
+): SpaceshipSimulationState {
   return currentTick % 2 === 0 ? advanced : original;
 }
 
-function hydrateSchema(source: FlyingCastleState): TownDefendersState {
-  const state = new TownDefendersState();
+function hydrateSchema(source: SpaceshipSimulationState): SpaceshipDefenderState {
+  const state = new SpaceshipDefenderState();
   state.roomId = "BENCH196";
   state.phase = "active";
   state.displayConnected = true;
@@ -167,15 +170,18 @@ function hydrateSchema(source: FlyingCastleState): TownDefendersState {
   state.game.elapsedMs = source.clock.elapsedMs;
   state.game.worldWidth = config.worldWidth;
   state.game.worldHeight = config.worldHeight;
-  state.game.castle.x = source.castle.x;
-  state.game.castle.y = source.castle.y;
-  state.game.castle.hp = source.castleHp;
-  state.game.castle.maxHp = source.castleMaxHp;
+  state.game.spaceship.x = source.spaceship.x;
+  state.game.spaceship.y = source.spaceship.y;
+  state.game.spaceship.hp = source.spaceshipHp;
+  state.game.spaceship.maxHp = source.spaceshipMaxHp;
   hydrateDynamicEntities(state, source);
   return state;
 }
 
-function hydrateDynamicEntities(target: TownDefendersState, source: FlyingCastleState): void {
+function hydrateDynamicEntities(
+  target: SpaceshipDefenderState,
+  source: SpaceshipSimulationState
+): void {
   reconcile(target.game.display.enemyShips, source.enemies, () => new EnemyState(), syncEnemy);
   reconcile(
     target.game.display.asteroids,
@@ -253,7 +259,7 @@ function syncMoving(
   target.radius = source.radius;
 }
 
-function syncEnemy(target: EnemyState, source: FlyingCastleState["enemies"][number]): void {
+function syncEnemy(target: EnemyState, source: SpaceshipSimulationState["enemies"][number]): void {
   syncMoving(target, source);
   target.kind = source.kind;
   target.heading = source.heading;
@@ -261,7 +267,10 @@ function syncEnemy(target: EnemyState, source: FlyingCastleState["enemies"][numb
   target.maxHp = source.maxHp;
 }
 
-function syncAsteroid(target: AsteroidState, source: FlyingCastleState["asteroids"][number]): void {
+function syncAsteroid(
+  target: AsteroidState,
+  source: SpaceshipSimulationState["asteroids"][number]
+): void {
   syncMoving(target, source);
   target.hp = source.hp;
   target.maxHp = source.maxHp;
@@ -270,7 +279,8 @@ function syncAsteroid(target: AsteroidState, source: FlyingCastleState["asteroid
 function syncProjectile(
   target: ProjectileState,
   source:
-    FlyingCastleState["projectiles"][number] | FlyingCastleState["hostileProjectiles"][number],
+    | SpaceshipSimulationState["projectiles"][number]
+    | SpaceshipSimulationState["hostileProjectiles"][number],
   kind: "friendly" | "hostile"
 ): void {
   syncMoving(target, source);
@@ -279,7 +289,7 @@ function syncProjectile(
 
 function syncMissile(
   target: HomingMissileState,
-  source: FlyingCastleState["homingMissiles"][number]
+  source: SpaceshipSimulationState["homingMissiles"][number]
 ): void {
   syncMoving(target, source);
   target.heading = source.heading;

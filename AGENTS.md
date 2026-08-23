@@ -1,10 +1,10 @@
-# Town Defenders — repository instructions
+# SpaceShip Defender — repository instructions
 
 ## Product
 
-Build a cooperative Tower Defense game for 2–6 players. One shared display runs in a desktop browser
-or Android TV shell. Players join from phone, tablet, or computer browsers and use responsive
-controller screens.
+Build a cooperative top-down space wave-defense game about one upgradeable spaceship. One shared
+display runs in a desktop browser or Android TV shell. Three players join from phone, tablet, or
+computer browsers as pilot, gunner, and shield operator.
 
 ## Working agreements
 
@@ -22,6 +22,9 @@ controller screens.
 - Keep the controller responsive and usable by touch, mouse, and keyboard.
 - The browser display is the primary implementation. Android TV reuses its web build through a thin
   Capacitor shell.
+- Keep the visual implementation 2D. The target direction is pseudo-3D spaceship art, layered deep
+  space, particles, and shader effects; do not introduce a true 3D renderer without an accepted
+  OpenSpec change.
 
 ## Spec-driven workflow
 

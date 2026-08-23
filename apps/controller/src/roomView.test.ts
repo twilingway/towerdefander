@@ -43,7 +43,7 @@ describe("controller room view", () => {
         elapsedMs: 50,
         worldWidth: 2400,
         worldHeight: 1600,
-        castle: {
+        spaceship: {
           x: 1200,
           y: 800,
           velocityX: 0,
@@ -118,7 +118,7 @@ describe("controller room view", () => {
         elapsedMs: 2000,
         worldWidth: 2400,
         worldHeight: 1600,
-        castle: {
+        spaceship: {
           x: 1200,
           y: 800,
           velocityX: 0,
@@ -202,7 +202,7 @@ describe("controller room view", () => {
         elapsedMs: 20_000,
         worldWidth: 2400,
         worldHeight: 1600,
-        castle: {
+        spaceship: {
           x: 1200,
           y: 800,
           velocityX: 0,

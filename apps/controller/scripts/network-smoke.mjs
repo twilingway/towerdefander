@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@colyseus/sdk";
 import {
   PROTOCOL_VERSION,
+  ROOM_TYPE,
   clientMessage,
   serverLatencyProbeSchema,
   serverMessage
-} from "@town-defenders/protocol";
+} from "@spaceship-defender/protocol";
 
 const STEP_MS = 50;
 const port = 35_677;
@@ -44,7 +45,7 @@ const schedulers = [];
 
 try {
   await waitForServer();
-  display = await new Client(endpoint).create("town_defenders", {
+  display = await new Client(endpoint).create(ROOM_TYPE, {
     role: "display",
     protocolVersion
   });
@@ -69,14 +70,14 @@ try {
   await waitFor(() => display.state.phase === "active" && display.state.hasGame === true);
   if (pilot.state.game.display !== undefined)
     throw new Error("Controller received display-only world collections.");
-  const startX = display.state.game.castle.x;
+  const startX = display.state.game.spaceship.x;
   pilotSequence += 1;
   pilot.send(clientMessage.pilotInput, {
     ...envelope(pilot),
     sequence: pilotSequence,
     vector: { x: 1, y: 0 }
   });
-  await waitFor(() => display.state.game.castle.x > startX);
+  await waitFor(() => display.state.game.spaceship.x > startX);
 
   gunnerSequence += 1;
   gunner.send(clientMessage.gunnerInput, {
@@ -154,13 +155,13 @@ try {
       0.18
     );
   }, 15_000);
-  const hpBeforeDirectionalMiss = display.state.game.castle.hp;
+  const hpBeforeDirectionalMiss = display.state.game.spaceship.hp;
   shieldEnabled = true;
   await waitFor(
     () =>
       display.state.game.shield.active &&
       display.state.game.shield.energy > 4 &&
-      display.state.game.castle.hp < hpBeforeDirectionalMiss,
+      display.state.game.spaceship.hp < hpBeforeDirectionalMiss,
     12_000
   );
   shieldEnabled = false;
@@ -245,7 +246,7 @@ function startRoleSchedulers() {
         if (display.state.game.shield.energy <= 8) shieldEnabled = false;
         else if (display.state.game.shield.energy >= 70) shieldEnabled = true;
       }
-      let aim = threat === undefined ? { x: 1, y: 0 } : unitFromCastle(threat);
+      let aim = threat === undefined ? { x: 1, y: 0 } : unitFromSpaceship(threat);
       if (shieldOpposite) aim = { x: -aim.x, y: -aim.y };
       shieldSequence += 1;
       shield.send(clientMessage.shieldInput, {
@@ -300,7 +301,7 @@ async function waitForShieldBlock(timeoutMs) {
 function shieldObservation() {
   return {
     tick: display.state.game.tick,
-    hp: display.state.game.castle.hp,
+    hp: display.state.game.spaceship.hp,
     energy: display.state.game.shield.energy,
     active: display.state.game.shield.active,
     projectiles: new Map(
@@ -441,19 +442,22 @@ function snapshot(entity) {
 }
 
 function distance(entity) {
-  return Math.hypot(entity.x - display.state.game.castle.x, entity.y - display.state.game.castle.y);
+  return Math.hypot(
+    entity.x - display.state.game.spaceship.x,
+    entity.y - display.state.game.spaceship.y
+  );
 }
 
-function unitFromCastle(entity) {
-  const x = entity.x - display.state.game.castle.x;
-  const y = entity.y - display.state.game.castle.y;
+function unitFromSpaceship(entity) {
+  const x = entity.x - display.state.game.spaceship.x;
+  const y = entity.y - display.state.game.spaceship.y;
   const length = Math.hypot(x, y) || 1;
   return { x: x / length, y: y / length };
 }
 
 function interceptAim(entity, projectileSpeed) {
-  const x = entity.x - display.state.game.castle.x;
-  const y = entity.y - display.state.game.castle.y;
+  const x = entity.x - display.state.game.spaceship.x;
+  const y = entity.y - display.state.game.spaceship.y;
   const velocityX = entity.velocityX ?? 0;
   const velocityY = entity.velocityY ?? 0;
   const quadratic = velocityX ** 2 + velocityY ** 2 - projectileSpeed ** 2;
@@ -477,7 +481,10 @@ function interceptAim(entity, projectileSpeed) {
 }
 
 function bearing(entity) {
-  return Math.atan2(entity.y - display.state.game.castle.y, entity.x - display.state.game.castle.x);
+  return Math.atan2(
+    entity.y - display.state.game.spaceship.y,
+    entity.x - display.state.game.spaceship.x
+  );
 }
 
 function angleDelta(from, to) {

@@ -7,7 +7,7 @@ permission:
   bash: ask
   webfetch: deny
 ---
-You implement React frontend features for Town Defenders.
+You implement React frontend features for SpaceShip Defender.
 
 Rules:
 - React code lives only in apps/controller (controller screens) and the application shell/HUD of apps/display. Never add Phaser to React components; never use react-phaser-fiber.

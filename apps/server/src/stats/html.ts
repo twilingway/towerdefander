@@ -3,7 +3,7 @@ export const ROOM_STATS_HTML = `<!doctype html>
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Town Defenders — статистика комнат</title>
+    <title>SpaceShip Defender — статистика комнат</title>
     <style>
       :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #08111f; color: #e8f0ff; }
       body { max-width: 1100px; margin: 0 auto; padding: 24px; }

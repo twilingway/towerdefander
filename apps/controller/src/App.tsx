@@ -16,7 +16,7 @@ import {
   type PublicPlayerView,
   type TerminalOutcome,
   type UpgradeId
-} from "@town-defenders/protocol";
+} from "@spaceship-defender/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
@@ -292,7 +292,7 @@ export function ControllerApp() {
         >
           <p className="eyebrow">Контроллер экипажа</p>
           <span className="latency-indicator">До сервера —</span>
-          <h1>Flying Castle</h1>
+          <h1>SpaceShip Defender</h1>
           <label>
             Код комнаты
             <input
@@ -374,8 +374,8 @@ export function ControllerApp() {
               <RoleCombatSummary
                 role={currentPlayer.role}
                 modifiers={view.game.roleModifiers}
-                hp={view.game.castle.hp}
-                maxHp={view.game.castle.maxHp}
+                hp={view.game.spaceship.hp}
+                maxHp={view.game.spaceship.maxHp}
                 waveNumber={view.game.encounter.waveNumber}
               />
             )}
@@ -586,7 +586,7 @@ export function RunResultPanel({
   return (
     <div className={`result-panel result-panel--${outcome}`} role="status">
       <p className="eyebrow">Забег завершён</p>
-      <h2>{victory ? "Победа экипажа" : "Замок уничтожен"}</h2>
+      <h2>{victory ? "Победа экипажа" : "Корабль уничтожен"}</h2>
       <strong>Волна {waveNumber}</strong>
       <span>Счёт: {score}</span>
       <span className="rematch-readiness">Готовы к новому бою: {readyCount} / 3</span>
@@ -890,7 +890,7 @@ function roleLabel(role: CrewRole): string {
 
 function roleHelp(role: CrewRole): string {
   return role === "pilot"
-    ? "Ведите замок по карте"
+    ? "Ведите корабль через космическое поле"
     : role === "gunner"
       ? "Направляйте пушку и удерживайте огонь"
       : "Направляйте и удерживайте защитный сектор";

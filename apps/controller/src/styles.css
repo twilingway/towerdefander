@@ -224,26 +224,6 @@ button:disabled {
   background: #183330;
 }
 
-.sector-summary {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
-}
-
-.sector-summary div {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.9rem;
-  border-radius: 0.9rem;
-  color: #cad7d3;
-  background: #132827;
-}
-
-.sector-summary strong {
-  color: #e6b85c;
-  font-size: 1.4rem;
-}
-
 .action-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -257,54 +237,6 @@ button:disabled {
 .upgrade-button {
   color: #f6f4e8;
   background: #28665b;
-}
-
-.airstrike-card {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
-  border: 1px solid rgb(230 184 92 / 35%);
-  border-radius: 1rem;
-  background: linear-gradient(145deg, rgb(77 45 22 / 78%), rgb(19 40 39 / 95%));
-}
-
-.airstrike-heading,
-.airstrike-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.airstrike-actions {
-  flex-wrap: wrap;
-}
-
-.airstrike-heading strong {
-  color: #ffd783;
-}
-
-.charge-meter {
-  height: 0.65rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #201714;
-}
-
-.charge-meter span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #e86f42, #ffd783);
-  transition: width 180ms linear;
-}
-
-.airstrike-actions button {
-  flex: 1;
-  flex-basis: 7rem;
-  min-height: 3.5rem;
-  color: #fff4da;
-  background: #914b2d;
 }
 
 .controller-roster {

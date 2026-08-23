@@ -1,4 +1,3 @@
 export * from "./primitives.js";
-export * from "./defense.js";
-export * from "./flyingCastle.js";
+export * from "./spaceshipSimulation.js";
 export * from "./combat.js";

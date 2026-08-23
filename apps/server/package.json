@@ -1,5 +1,5 @@
 {
-  "name": "@town-defenders/server",
+  "name": "@spaceship-defender/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@colyseus/schema": "4.0.30",
-    "@town-defenders/game-core": "workspace:*",
-    "@town-defenders/protocol": "workspace:*",
+    "@spaceship-defender/game-core": "workspace:*",
+    "@spaceship-defender/protocol": "workspace:*",
     "colyseus": "0.17.10"
   },
   "devDependencies": {

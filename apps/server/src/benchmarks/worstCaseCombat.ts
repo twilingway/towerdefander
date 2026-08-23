@@ -1,15 +1,15 @@
 import {
-  createFlyingCastleConfig,
-  createFlyingCastleState,
+  createSpaceshipSimulationConfig,
+  createSpaceshipSimulationState,
   dynamicEntityCount,
   type AsteroidState,
   type CombatEnemyState,
-  type FlyingCastleConfig,
-  type FlyingCastleState,
+  type SpaceshipSimulationConfig,
+  type SpaceshipSimulationState,
   type HomingMissileState,
   type HostileProjectileState,
   type ProjectileState
-} from "@town-defenders/game-core";
+} from "@spaceship-defender/game-core";
 
 const RUN_SEED = 0x5eed_196;
 
@@ -24,9 +24,9 @@ interface EntityPosition {
  * broad phase without immediately deleting most of the fixture through collisions.
  */
 export function createWorstCaseCombatFixture(
-  config: FlyingCastleConfig = createFlyingCastleConfig()
-): FlyingCastleState {
-  const base = createFlyingCastleState(config, RUN_SEED);
+  config: SpaceshipSimulationConfig = createSpaceshipSimulationConfig()
+): SpaceshipSimulationState {
+  const base = createSpaceshipSimulationState(config, RUN_SEED);
   let spawnSequence = 1;
   const enemies = Array.from({ length: config.caps.enemyShips }, (_, index) => {
     const position = gridPosition(index, config.caps.enemyShips, 260, 260, 4_280, 620);
@@ -78,7 +78,7 @@ export function createWorstCaseCombatFixture(
     } satisfies ProjectileState;
   });
 
-  const fixture: FlyingCastleState = {
+  const fixture: SpaceshipSimulationState = {
     ...base,
     clock: { tick: 100, elapsedMs: 5_000 },
     encounterTick: 100,

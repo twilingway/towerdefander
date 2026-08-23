@@ -1,4 +1,4 @@
-import type { TerminalOutcome } from "@town-defenders/protocol";
+import type { TerminalOutcome } from "@spaceship-defender/protocol";
 
 interface RunResultOverlayProps {
   readonly outcome: TerminalOutcome;
@@ -24,7 +24,7 @@ export function RunResultOverlay({
       role="status"
     >
       <p className="eyebrow">Забег завершён</p>
-      <h2>{isVictory ? "Победа!" : "Летающий замок уничтожен"}</h2>
+      <h2>{isVictory ? "Победа!" : "Корабль уничтожен"}</h2>
       <strong>Волна {waveNumber}</strong>
       <p>Итоговый счёт: {score}</p>
       <p className="rematch-readiness" aria-live="polite">

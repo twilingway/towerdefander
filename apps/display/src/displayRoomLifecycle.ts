@@ -1,4 +1,4 @@
-import type { RoomClosingReason } from "@town-defenders/protocol";
+import type { RoomClosingReason } from "@spaceship-defender/protocol";
 
 export interface ClosableDisplayRoom {
   reconnection: { enabled: boolean };

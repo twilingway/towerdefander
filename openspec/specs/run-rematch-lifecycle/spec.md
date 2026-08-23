@@ -1,8 +1,11 @@
 # run-rematch-lifecycle Specification
 
 ## Purpose
+
 TBD - created by archiving change room-rematch-lifecycle-stats. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Terminal result сохраняет комнату для повторного забега
 
 При завершении run server SHALL остановить боевую симуляцию, нейтрализовать continuous intents,
@@ -11,7 +14,7 @@ HP=0, `victory` SHALL иметь HP>0, и оба результата SHALL ос
 SHALL создавать только `defeat`; источник `victory` не вводится этим change. Server SHALL сбросить
 readiness всех трёх roles и SHALL NOT начинать новый run без нового unanimous readiness.
 
-#### Scenario: Замок уничтожен
+#### Scenario: Spaceship уничтожен
 
 - **WHEN** authoritative HP достигает нуля в run 1
 - **THEN** result равен `defeat`, final wave/score/entities заморожены и readiness всех players
@@ -53,7 +56,7 @@ input state и per-run journals SHALL быть созданы заново бе�
 
 ### Requirement: Run epoch изолирует последовательные забеги
 
-Protocol v9 SHALL публиковать positive safe integer `runNumber` в active/result snapshots и SHALL
+Protocol v10 SHALL публиковать positive safe integer `runNumber` в active/result snapshots и SHALL
 требовать expected runNumber во всех ready, gameplay, upgrade и rematch commands. Lobby до первого
 run SHALL иметь runNumber 0. Server SHALL проверять runNumber после strict schema/connection
 identity и до phase, sequence, action journal либо simulation mutation. Packet другого run SHALL
@@ -62,16 +65,16 @@ identity и до phase, sequence, action journal либо simulation mutation. P
 #### Scenario: Запоздавшее движение первого забега
 
 - **WHEN** после старта run 2 pilot отправляет valid-shape input с runNumber 1 и большим sequence
-- **THEN** server возвращает `stale_run`, не записывает sequence и не двигает castle
+- **THEN** server возвращает `stale_run`, не записывает sequence и не двигает spaceship
 
 #### Scenario: Старый upgrade action повторён после rematch
 
 - **WHEN** после старта run 2 controller повторяет accepted upgrade command run 1
 - **THEN** server возвращает `stale_run`, не применяет modifier и не изменяет journal run 2
 
-#### Scenario: Клиент v8 подключается к v9
+#### Scenario: Клиент v9 подключается к v10
 
-- **WHEN** create/join либо message использует protocolVersion 8
+- **WHEN** create/join либо message использует protocolVersion 9
 - **THEN** server отклоняет его стабильной ошибкой `protocol_mismatch` без mutation
 
 ### Requirement: Явный выход отличается от recoverable disconnect

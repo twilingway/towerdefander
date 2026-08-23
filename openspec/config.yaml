@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  Product: cooperative couch-party top-down action about one flying castle controlled by three roles.
+  Product: cooperative top-down space wave-defense about one upgradeable spaceship controlled by three roles.
   Shared display: desktop browser or Android TV shell from one web codebase.
   Controllers: responsive pilot, gunner, and shield browser panels on phones, tablets, or computers.
   Stack: strict TypeScript, pnpm workspaces, React/Vite, Phaser, Node.js,
@@ -11,6 +11,8 @@ context: |
   networking, wall-clock timers, and unseeded randomness.
   Language: specifications and product docs may be Russian; code identifiers
   are English.
+  Visual direction: original 2D pseudo-3D spaceship art, layered deep-space backgrounds,
+  particles, and shaders; no true 3D, trading map, or RPG systems.
 
 rules:
   proposal:

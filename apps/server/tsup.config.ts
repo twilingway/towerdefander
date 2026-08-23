@@ -6,5 +6,5 @@ export default defineConfig({
   platform: "node",
   dts: true,
   clean: true,
-  noExternal: ["@town-defenders/game-core"]
+  noExternal: ["@spaceship-defender/game-core"]
 });

@@ -5,7 +5,7 @@ import { RunResultOverlay } from "./RunResultOverlay.js";
 
 describe("RunResultOverlay", () => {
   it.each([
-    ["defeat" as const, "Летающий замок уничтожен"],
+    ["defeat" as const, "Корабль уничтожен"],
     ["victory" as const, "Победа!"]
   ])("renders the %s result with final statistics", (outcome, title) => {
     const markup = renderToStaticMarkup(

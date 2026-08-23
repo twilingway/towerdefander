@@ -25,13 +25,13 @@ export default defineConfig({
             timeout: 30_000
           },
           {
-            command: "pnpm.cmd --filter @town-defenders/display dev -- --strictPort",
+            command: "pnpm.cmd --filter @spaceship-defender/display dev -- --strictPort",
             url: "http://127.0.0.1:5173",
             reuseExistingServer: true,
             timeout: 30_000
           },
           {
-            command: "pnpm.cmd --filter @town-defenders/controller dev -- --strictPort",
+            command: "pnpm.cmd --filter @spaceship-defender/controller dev -- --strictPort",
             url: "http://127.0.0.1:5174",
             reuseExistingServer: true,
             timeout: 30_000

@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change flying-castle-core. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Комната имеет три стабильные роли
 
 Server SHALL назначать controller roles в порядке `pilot`, `gunner`, `shield` при входе и SHALL
@@ -31,10 +33,10 @@ Pilot SHALL отправлять только `pilot:input` и собствен�
 и собственный `upgrade:choose`, shield — `shield:input` и собственный `upgrade:choose`. Server SHALL
 сверять connection identity/role до mutation; ни одна role SHALL NOT выбирать offer другой role.
 
-#### Scenario: Shield пытается двигать замок
+#### Scenario: Shield пытается двигать spaceship
 
 - **WHEN** shield controller отправляет strict pilot input
-- **THEN** server возвращает `role_mismatch` и castle state не меняется
+- **THEN** server возвращает `role_mismatch` и spaceship state не меняется
 
 #### Scenario: Gunner выбирает shield upgrade
 
@@ -48,7 +50,7 @@ Pilot SHALL отправлять только `pilot:input` и собствен�
 
 ### Requirement: Continuous intents упорядочены
 
-Каждый continuous intent SHALL содержать protocolVersion 8, roomId, playerId и монотонный safe
+Каждый continuous intent SHALL содержать protocolVersion 10, roomId, playerId и монотонный safe
 integer `sequence`. Server SHALL применять только sequence больше последнего принятого для
 actor/input type. Duplicate или out-of-order sequence SHALL игнорироваться без mutation и SHALL NOT
 менять angular target. Shield `active` SHALL быть absolute desired state: handler только заменяет
@@ -79,7 +81,7 @@ angular target SHALL NOT восстанавливаться. При перехо
 #### Scenario: Pilot отключился с зажатым направлением
 
 - **WHEN** pilot connection закрывается во время движения
-- **THEN** server немедленно обнуляет target vector, а core плавно тормозит castle
+- **THEN** server немедленно обнуляет target vector, а core плавно тормозит spaceship
 
 #### Scenario: Pilot восстановил соединение
 
@@ -235,7 +237,8 @@ countdown, три cards только assigned role и current selection. Card SH
 label/value и отправлять один strict `upgrade:choose` с новым UUID actionId. UI SHALL принимать
 authoritative selection/modifiers как source of truth, безопасно повторять pending command после
 reconnect и запрещать второй локальный выбор после accepted result. В combat controls SHALL
-возобновиться с neutral local state; в defeated SHALL показываться final wave/score без input.
+возобновиться с neutral local state; в `result`/`defeat` SHALL показываться final wave/score без
+input.
 
 #### Scenario: Pilot выбирает скорость
 
@@ -259,14 +262,14 @@ reconnect и запрещать второй локальный выбор по�
 - **WHEN** encounter меняется intermission→combat
 - **THEN** cards исчезают, role controls начинают neutral и требуют свежего пользовательского input
 
-#### Scenario: Замок уничтожен
+#### Scenario: Spaceship уничтожен
 
-- **WHEN** encounter становится defeated
+- **WHEN** encounter становится `result` с outcome=`defeat`
 - **THEN** controller прекращает scheduler/gameplay messages и показывает final wave/score
 
 ### Requirement: Controller управляет готовностью к следующему run
 
-В lobby кнопка ready SHALL готовить первый run с runNumber 0; в terminal result та же strict v9
+В lobby кнопка ready SHALL готовить первый run с runNumber 0; в terminal result та же strict v10
 ready command SHALL означать «Играть ещё» для текущего runNumber. Кнопка SHALL показывать
 authoritative ready state, блокироваться после принятия и снова становиться false при следующем
 terminal result. Combat/intermission SHALL не показывать rematch action.
