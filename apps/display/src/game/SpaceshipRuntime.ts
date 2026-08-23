@@ -13,6 +13,7 @@ import {
   createPointTransition,
   createSnappedVisualTransitions,
   getCameraOverscan,
+  getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
@@ -61,7 +62,6 @@ class SpaceshipScene extends Phaser.Scene {
   private rendererWidth = BASE_VIEWPORT_WIDTH;
   private rendererHeight = BASE_VIEWPORT_HEIGHT;
   private cameraOverscan = 0;
-  private arenaMaskSource: Phaser.GameObjects.Graphics | undefined;
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("spaceship");
@@ -77,7 +77,6 @@ class SpaceshipScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-      this.arenaMaskSource?.destroy();
     });
     this.focusCamera(this.snapshot.spaceship);
     this.drawArena();
@@ -159,23 +158,20 @@ class SpaceshipScene extends Phaser.Scene {
 
     const graphics = this.add.graphics().setDepth(0);
     graphics.fillStyle(ARENA_SPACE_COLOR, 1);
-    graphics.fillRect(0, 0, this.snapshot.worldWidth, this.snapshot.worldHeight);
+    graphics.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
     graphics.lineStyle(2, 0x163746, 0.75);
-    for (let x = 0; x <= this.snapshot.worldWidth; x += 100)
-      graphics.lineBetween(x, 0, x, this.snapshot.worldHeight);
-    for (let y = 0; y <= this.snapshot.worldHeight; y += 100)
-      graphics.lineBetween(0, y, this.snapshot.worldWidth, y);
-
-    const maskSource = this.make.graphics({ x: 0, y: 0 }, false);
-    maskSource.fillStyle(0xffffff, 1);
-    maskSource.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
-    graphics.setMask(maskSource.createGeometryMask());
+    for (const segment of getCircularGridSegments(
+      centerX,
+      centerY,
+      this.snapshot.arenaRadius,
+      100
+    )) {
+      graphics.lineBetween(segment.from.x, segment.from.y, segment.to.x, segment.to.y);
+    }
 
     const border = this.add.graphics().setDepth(3);
     border.lineStyle(8, 0x3d6874, 1);
     border.strokeCircle(centerX, centerY, this.snapshot.arenaRadius);
-
-    this.arenaMaskSource = maskSource;
   }
 
   private drawDecorations(): void {

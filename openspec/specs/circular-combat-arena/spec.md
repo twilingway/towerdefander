@@ -1,8 +1,11 @@
 # circular-combat-arena Specification
 
 ## Purpose
+
 TBD - created by archiving change circular-combat-arena. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Authoritative arena имеет круглую геометрию
 
 Current strict game snapshot SHALL публиковать square bounding world `4400×4400` и
@@ -159,4 +162,3 @@ cap 196. Worst-case benchmark SHALL сохранять reference pure/room step 
 
 - **WHEN** benchmark выполняет circular movement/cleanup и StateView sync
 - **THEN** caps не превышены, state детерминирован и documented p95 остаётся в budget 2 ms
-

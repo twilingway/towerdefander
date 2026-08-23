@@ -2,14 +2,21 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
+import { findNearestVisibleDemoTarget, findNearestVisibleDemoThreat } from "./visibleDemo.js";
 
 interface SpaceshipCanvasProps {
   readonly game: DisplayGameSnapshot;
   readonly runNumber: number;
   readonly connectionEpoch: number;
+  readonly visibleDemo?: boolean;
 }
 
-export function SpaceshipCanvas({ game, runNumber, connectionEpoch }: SpaceshipCanvasProps) {
+export function SpaceshipCanvas({
+  game,
+  runNumber,
+  connectionEpoch,
+  visibleDemo = false
+}: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<SpaceshipRuntime | undefined>(undefined);
   const latestGame = useRef(game);
@@ -22,6 +29,8 @@ export function SpaceshipCanvas({ game, runNumber, connectionEpoch }: SpaceshipC
   latestGame.current = game;
   latestRunNumber.current = runNumber;
   latestConnectionEpoch.current = connectionEpoch;
+  const demoTarget = visibleDemo ? findNearestVisibleDemoTarget(game) : undefined;
+  const demoThreat = visibleDemo ? findNearestVisibleDemoThreat(game) : undefined;
 
   useEffect(() => {
     let disposed = false;
@@ -96,6 +105,20 @@ export function SpaceshipCanvas({ game, runNumber, connectionEpoch }: SpaceshipC
       data-shield-active={game.shield.active}
       data-shield-angle={game.shield.angle}
       data-shield-energy={game.shield.energy}
+      {...(visibleDemo
+        ? {
+            "data-demo-target-id": demoTarget?.entityId ?? "",
+            "data-demo-target-x": demoTarget?.x ?? "",
+            "data-demo-target-y": demoTarget?.y ?? "",
+            "data-demo-target-velocity-x": demoTarget?.velocityX ?? "",
+            "data-demo-target-velocity-y": demoTarget?.velocityY ?? "",
+            "data-demo-threat-id": demoThreat?.entityId ?? "",
+            "data-demo-threat-x": demoThreat?.x ?? "",
+            "data-demo-threat-y": demoThreat?.y ?? "",
+            "data-demo-threat-velocity-x": demoThreat?.velocityX ?? "",
+            "data-demo-threat-velocity-y": demoThreat?.velocityY ?? ""
+          }
+        : {})}
     >
       <div ref={hostReference} className="battlefield-canvas" aria-hidden="true" />
       {failed && <p className="battlefield-fallback">Не удалось запустить Phaser-сцену.</p>}

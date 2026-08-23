@@ -10,5 +10,6 @@ describe("DisplayApp", () => {
     expect(markup).toContain("SpaceShip Defender");
     expect(markup).toContain("Создать комнату");
     expect(markup).toContain("движение, орудия и щит");
+    expect(markup).not.toContain('data-testid="visible-demo-overlay"');
   });
 });

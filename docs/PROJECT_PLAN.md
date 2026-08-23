@@ -111,7 +111,14 @@ rooms v9 не мигрируют: server/display/controllers обновляют�
 3. Реализовать accepted 2D art/VFX/audio pipeline с Android TV budget.
 4. Добавить thin Capacitor Android TV shell, launcher, fullscreen, wake lock и lifecycle.
 
-## 9. Definition of done для каждого change
+## 9. Видимый demo/test harness
+
+Отдельная команда `pnpm demo:visible` показывает общий экран в headed Chrome и управляет тремя
+обычными controller connections. Harness не меняет protocol, balance или trusted state и служит для
+совместного визуального тестирования movement/fire/shield, смены волн и будущего проектирования NPC.
+`pnpm demo:verify` конечным сценарием проверяет бой, upgrade interval и переход к wave 2.
+
+## 10. Definition of done для каждого change
 
 - proposal/specs/design/tasks согласованы;
 - protocol versioned и boundary validation покрыта;

@@ -1,8 +1,10 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
 import {
+  SpaceshipCanvas,
   prepareRuntimeHydration,
   shouldPrepareRuntimeHydration,
   shouldUpdateRuntime
@@ -41,4 +43,70 @@ describe("SpaceshipCanvas", () => {
   it("coalesces simultaneous reconnect and run changes into one hydration decision", () => {
     expect(shouldPrepareRuntimeHydration(1, 2, 4, 5)).toBe(true);
   });
+
+  it("publishes nearest-target telemetry only when visible demo mode is active", () => {
+    const ordinaryMarkup = renderToStaticMarkup(
+      <SpaceshipCanvas game={testGame} runNumber={1} connectionEpoch={0} />
+    );
+    const demoMarkup = renderToStaticMarkup(
+      <SpaceshipCanvas game={testGame} runNumber={1} connectionEpoch={0} visibleDemo />
+    );
+
+    expect(ordinaryMarkup).not.toContain("data-demo-target");
+    expect(demoMarkup).toContain('data-demo-target-id="asteroid-near"');
+    expect(demoMarkup).toContain('data-demo-target-x="110"');
+    expect(demoMarkup).toContain('data-demo-target-y="100"');
+    expect(demoMarkup).toContain('data-demo-target-velocity-x="-2"');
+    expect(demoMarkup).toContain('data-demo-target-velocity-y="3"');
+  });
 });
+
+const testGame = {
+  tick: 1,
+  elapsedMs: 50,
+  worldWidth: 4400,
+  worldHeight: 4400,
+  arenaRadius: 2200,
+  spaceship: {
+    x: 100,
+    y: 100,
+    velocityX: 0,
+    velocityY: 0,
+    radius: 52,
+    hp: 1000,
+    maxHp: 1000
+  },
+  turretAngle: 0,
+  shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: 0.72 },
+  encounter: {
+    phase: "combat",
+    outcome: null,
+    waveNumber: 1,
+    encounterTick: 1,
+    phaseTicksRemaining: 0,
+    score: 0
+  },
+  roleModifiers: {
+    pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
+    gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
+    shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
+  },
+  obstacles: [],
+  enemyShips: [],
+  asteroids: [
+    {
+      entityId: "asteroid-near",
+      spawnSequence: 1,
+      x: 110,
+      y: 100,
+      velocityX: -2,
+      velocityY: 3,
+      radius: 10,
+      hp: 10,
+      maxHp: 10
+    }
+  ],
+  friendlyProjectiles: [],
+  hostileProjectiles: [],
+  homingMissiles: []
+} satisfies DisplayGameSnapshot;

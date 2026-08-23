@@ -39,6 +39,48 @@ export interface ShieldVisualStyle {
   readonly alpha: number;
 }
 
+export interface GridSegment {
+  readonly from: Point;
+  readonly to: Point;
+}
+
+export function getCircularGridSegments(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  spacing: number
+): readonly GridSegment[] {
+  if (
+    !Number.isFinite(centerX) ||
+    !Number.isFinite(centerY) ||
+    !Number.isFinite(radius) ||
+    radius <= 0 ||
+    !Number.isFinite(spacing) ||
+    spacing <= 0
+  ) {
+    return [];
+  }
+
+  const segments: GridSegment[] = [];
+  const firstX = Math.ceil((centerX - radius) / spacing) * spacing;
+  const firstY = Math.ceil((centerY - radius) / spacing) * spacing;
+  for (let x = firstX; x <= centerX + radius; x += spacing) {
+    const halfHeight = Math.sqrt(Math.max(0, radius * radius - (x - centerX) ** 2));
+    segments.push({
+      from: { x, y: centerY - halfHeight },
+      to: { x, y: centerY + halfHeight }
+    });
+  }
+  for (let y = firstY; y <= centerY + radius; y += spacing) {
+    const halfWidth = Math.sqrt(Math.max(0, radius * radius - (y - centerY) ** 2));
+    segments.push({
+      from: { x: centerX - halfWidth, y },
+      to: { x: centerX + halfWidth, y }
+    });
+  }
+  return segments;
+}
+
 export function getShieldArcRange(
   angle: number,
   arcHalfAngle: number

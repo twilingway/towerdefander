@@ -4,6 +4,7 @@ import {
   createSnappedVisualTransitions,
   getBoundedCameraScroll,
   getCameraOverscan,
+  getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
@@ -16,6 +17,18 @@ import {
 } from "./spaceshipViewModel.js";
 
 describe("spaceship view model", () => {
+  it("clips grid segments analytically to the circular arena", () => {
+    const segments = getCircularGridSegments(200, 200, 100, 50);
+
+    expect(segments.length).toBeGreaterThan(0);
+    for (const segment of segments) {
+      for (const point of [segment.from, segment.to]) {
+        expect(Math.hypot(point.x - 200, point.y - 200)).toBeCloseTo(100);
+      }
+    }
+    expect(segments).toContainEqual({ from: { x: 200, y: 100 }, to: { x: 200, y: 300 } });
+  });
+
   it("centers the camera on the circular arena midpoint", () => {
     expect(getBoundedCameraScroll({ x: 2200, y: 2200 }, 4400, 4400, 1600, 900)).toEqual({
       x: 1400,

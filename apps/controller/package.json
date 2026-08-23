@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0 --port 4174",
     "smoke:network": "node scripts/network-smoke.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests && node --test scripts/visible-demo-policy.node-test.mjs"
   },
   "dependencies": {
     "@colyseus/sdk": "0.17.43",

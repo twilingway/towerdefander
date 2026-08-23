@@ -15,6 +15,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
+import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import {
   closeDisplayRoom,
@@ -22,6 +23,7 @@ import {
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
+import { isVisibleDemoMode } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -36,6 +38,11 @@ const controllerUrl = readStringEnvironment(
 );
 
 export function DisplayApp() {
+  const visibleDemo = isVisibleDemoMode(
+    typeof window === "undefined" ? "" : window.location.search,
+    import.meta.env.DEV,
+    import.meta.env.VITE_VISIBLE_DEMO
+  );
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [view, setView] = useState<DisplayRoomView>();
@@ -164,6 +171,14 @@ export function DisplayApp() {
             {status === "connecting" ? "Создаём комнату…" : "Создать комнату"}
           </button>
         </section>
+        {visibleDemo ? (
+          <VisibleDemoOverlay
+            connectionStatus={status}
+            phase="lobby"
+            waveNumber={undefined}
+            snapshotTick={undefined}
+          />
+        ) : null}
       </main>
     );
   }
@@ -283,6 +298,7 @@ export function DisplayApp() {
             game={view.game}
             runNumber={view.runNumber}
             connectionEpoch={connectionEpoch}
+            visibleDemo={visibleDemo}
           />
           {view.game.encounter.phase === "intermission" && (
             <div className="encounter-overlay encounter-overlay--intermission" role="status">
@@ -326,6 +342,14 @@ export function DisplayApp() {
           </aside>
         </section>
       )}
+      {visibleDemo ? (
+        <VisibleDemoOverlay
+          connectionStatus={status}
+          phase={view.game?.encounter.phase ?? view.phase}
+          waveNumber={view.game?.encounter.waveNumber}
+          snapshotTick={view.game?.tick}
+        />
+      ) : null}
     </main>
   );
 }

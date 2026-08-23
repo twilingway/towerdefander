@@ -68,6 +68,28 @@ pnpm dev
 - server/health: `http://localhost:2567` и `http://localhost:2567/health`;
 - room statistics: `http://localhost:2567/stats/rooms`.
 
+## Видимая автоматическая демонстрация
+
+```powershell
+pnpm demo:visible
+```
+
+Команда сначала собирает authoritative server, затем поднимает изолированные local services и
+открывает обычный Chrome. Три SDK-контроллера подключаются как pilot/gunner/shield, проходят бой,
+выбирают upgrades между волнами и продолжают следующие волны. В overlay доступны «Пауза автопилота»,
+«Продолжить» и Stop. Пауза останавливает только автоматические команды: серверная симуляция и враги
+продолжают работать. Stop или закрытие Chrome нейтрализует роли и завершает только процессы этой
+демонстрации.
+
+Конечная headless-проверка того же сценария запускается отдельно и не входит в `pnpm check`:
+
+```powershell
+pnpm demo:verify
+```
+
+Auto-crew является только developer harness. Будущие NPC будут server-owned actors и не будут
+использовать браузерные SDK connections как production authority.
+
 Для телефона замените `localhost` в `.env.local` на LAN-адрес компьютера. Для internet deployment
 нужны HTTPS/WSS, публичные client/server endpoints и TLS reverse proxy. Без `ROOM_STATS_PASSWORD`
 statistics доступны только с loopback; удалённый доступ использует Basic `admin:<password>` за TLS.
