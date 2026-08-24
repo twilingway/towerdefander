@@ -8,7 +8,9 @@ import {
   type EncounterPhase,
   type ProjectileKind,
   type PublicSpaceshipView,
-  type TerminalOutcome
+  type PublicUpgradeVote,
+  type TerminalOutcome,
+  type UpgradeId
 } from "@spaceship-defender/protocol";
 
 interface ValueCollection<T> {
@@ -65,6 +67,38 @@ interface NetworkHomingMissileState extends NetworkCombatEntityState {
   heading: number;
 }
 
+interface NetworkUpgradeCardState {
+  upgradeId: UpgradeId;
+  role: CrewRole;
+  label: string;
+  value: number;
+  price: number;
+}
+
+interface NetworkUpgradeVoteState {
+  role: CrewRole;
+  upgradeId: UpgradeId;
+  revision: number;
+}
+
+export interface NetworkTeamUpgradeState {
+  hasOffer?: boolean;
+  offer: {
+    offerId: string;
+    waveNumber: number;
+    cards: ValueCollection<NetworkUpgradeCardState>;
+  };
+  votes: ValueCollection<NetworkUpgradeVoteState>;
+  hasSelection?: boolean;
+  selection: {
+    offerId: string;
+    waveNumber: number;
+    upgradeId: UpgradeId;
+    role: CrewRole;
+    price: number;
+  };
+}
+
 interface NetworkGameState {
   tick: number;
   elapsedMs: number;
@@ -106,6 +140,8 @@ interface NetworkGameState {
     };
     shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
   };
+  credits: number;
+  teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
@@ -194,6 +230,8 @@ export function toDisplayRoomView(
               gunner: { ...game.roleModifiers.gunner },
               shield: { ...game.roleModifiers.shield }
             },
+            credits: game.credits,
+            teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"
                 ? {
@@ -220,6 +258,35 @@ export function toDisplayRoomView(
           }
         : null
   });
+}
+
+function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
+  const votes: Record<CrewRole, PublicUpgradeVote | null> = {
+    pilot: null,
+    gunner: null,
+    shield: null
+  };
+  if (teamUpgrade !== undefined) {
+    for (const vote of teamUpgrade.votes.values()) {
+      votes[vote.role] = {
+        role: vote.role,
+        upgradeId: vote.upgradeId,
+        revision: vote.revision
+      };
+    }
+  }
+  return {
+    offer:
+      teamUpgrade?.hasOffer === true
+        ? {
+            offerId: teamUpgrade.offer.offerId,
+            waveNumber: teamUpgrade.offer.waveNumber,
+            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
+          }
+        : null,
+    votes,
+    selection: teamUpgrade?.hasSelection === true ? { ...teamUpgrade.selection } : null
+  };
 }
 
 function toSpawnOrder<T extends { spawnSequence: number }>(collection: ValueCollection<T>): T[] {

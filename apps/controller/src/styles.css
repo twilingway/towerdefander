@@ -225,6 +225,23 @@ button:disabled {
   color: #214938;
 }
 
+.upgrade-balance {
+  color: #d7e7ea;
+}
+
+.upgrade-balance strong {
+  color: #f6f4e8;
+}
+
+.upgrade-warning {
+  color: #ffb45f;
+}
+
+.upgrade-hint {
+  color: #9fb6bb;
+  font-size: 0.85rem;
+}
+
 .result-panel {
   padding: 1.25rem;
   border: 1px solid rgb(255 104 95 / 45%);
@@ -559,5 +576,59 @@ button:disabled {
     padding: 0.3rem 0.5rem;
     font-size: 0.68rem;
     transform: translateX(-50%);
+  }
+
+  .play-card > .upgrade-panel {
+    grid-column: 1 / -1;
+    gap: 0.5rem;
+  }
+
+  .play-card > .upgrade-panel .upgrade-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .play-card > .upgrade-panel .upgrade-card {
+    min-height: 4rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .play-card > .upgrade-panel .upgrade-hint {
+    display: none;
+  }
+
+  .play-card--intermission {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .play-card--intermission > h1,
+  .play-card--intermission > .role-badge {
+    display: none;
+  }
+
+  .play-card--intermission > .status-row,
+  .play-card--intermission > .combat-summary,
+  .play-card--intermission > .upgrade-panel,
+  .play-card--intermission > .error-message {
+    grid-column: 1 / -1;
+  }
+
+  .play-card--intermission > .combat-summary {
+    padding: 0.3rem 0.7rem;
+  }
+
+  .play-card--intermission > .upgrade-panel h2 {
+    font-size: 1rem;
+  }
+
+  .play-card--intermission .upgrade-card {
+    min-height: 3.25rem;
+  }
+
+  .play-card--intermission > .leave-room-button {
+    min-height: 2rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.68rem;
   }
 }

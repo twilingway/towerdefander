@@ -11,7 +11,7 @@ import {
   type CrewRole,
   type DefeatReason,
   type EncounterPhase,
-  type PublicControllerUpgradeView,
+  type PublicTeamUpgradeView,
   type PublicMachineGunView,
   type PublicRoleModifiersView,
   type PublicShieldView,
@@ -42,6 +42,7 @@ import {
   type NetworkRoomState
 } from "./roomView.js";
 import { VirtualStick } from "./VirtualStick.js";
+import { keepVoteIntent, nextVoteRevision, type VoteIntent } from "./voteIntent.js";
 import { WaveCountdown } from "./WaveCountdown.js";
 import { ActionZone } from "./ActionZone.js";
 
@@ -77,6 +78,7 @@ export function ControllerApp() {
   const [view, setView] = useState<ControllerRoomView>();
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const [errorEpoch, setErrorEpoch] = useState(0);
   const currentPlayer = findCurrentPlayer(view, playerId);
 
   useEffect(() => {
@@ -155,6 +157,7 @@ export function ControllerApp() {
     });
     room.onMessage(serverMessage.error, (payload: unknown) => {
       const result = serverErrorSchema.safeParse(payload);
+      setErrorEpoch((value) => value + 1);
       setError(
         result.success ? toServerError(result.data.code, result.data.message) : "Команда отклонена."
       );
@@ -253,20 +256,21 @@ export function ControllerApp() {
     }
   }
 
-  function sendUpgrade(upgradeId: UpgradeId, actionId: string): void {
+  function sendUpgradeVote(upgradeId: UpgradeId, revision: number, actionId: string): void {
     const room = roomReference.current;
-    const upgrade = view?.game?.upgrade;
-    if (room === undefined || view === undefined || currentPlayer === undefined || upgrade == null)
+    const offer = view?.game?.teamUpgrade.offer;
+    if (room === undefined || view === undefined || currentPlayer === undefined || offer == null)
       return;
-    room.send(clientMessage.upgradeChoose, {
+    room.send(clientMessage.upgradeVote, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: view.roomId,
       playerId: currentPlayer.playerId,
       runNumber: view.runNumber,
       actionId,
-      waveNumber: upgrade.offer.waveNumber,
-      offerId: upgrade.offer.offerId,
-      upgradeId
+      waveNumber: offer.waveNumber,
+      offerId: offer.offerId,
+      upgradeId,
+      revision
     });
   }
 
@@ -341,9 +345,7 @@ export function ControllerApp() {
     <main
       className={`controller-shell${view?.game?.encounter.phase === "combat" ? " controller-shell--combat" : ""}`}
     >
-      <section
-        className={`card play-card${view?.game?.encounter.phase === "combat" ? " play-card--combat" : ""}`}
-      >
+      <section className={`card play-card${playCardPhaseModifier(view?.game?.encounter.phase)}`}>
         <div className="status-row">
           <span className="eyebrow">Комната {view?.roomId ?? roomCode}</span>
           <span className="network-status">
@@ -400,13 +402,15 @@ export function ControllerApp() {
               />
             )}
             {view.game?.encounter.phase === "intermission" && (
-              <UpgradePanel
+              <TeamUpgradePanel
                 role={currentPlayer.role}
-                upgrade={view.game.upgrade}
+                teamUpgrade={view.game.teamUpgrade}
+                credits={view.game.credits}
                 phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
                 reconnecting={status === "reconnecting"}
                 connectionEpoch={connectionEpoch}
-                onChoose={sendUpgrade}
+                errorEpoch={errorEpoch}
+                onVote={sendUpgradeVote}
               />
             )}
             {view.game?.encounter.phase === "result" && view.game.encounter.outcome !== null && (
@@ -450,6 +454,15 @@ export function ControllerApp() {
   );
 }
 
+/**
+ * Landscape phones have roughly 390 usable pixels, so combat and the voting
+ * intermission each get their own compact layout instead of one tall page.
+ */
+function playCardPhaseModifier(phase: EncounterPhase | undefined): string {
+  if (phase === "combat") return " play-card--combat";
+  return phase === "intermission" ? " play-card--intermission" : "";
+}
+
 function formatLatency(latencyMs: number | null | undefined): string {
   return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
 }
@@ -489,53 +502,60 @@ function RoleCombatSummary({
   );
 }
 
-function UpgradePanel({
+export function TeamUpgradePanel({
   role,
-  upgrade,
+  teamUpgrade,
+  credits,
   phaseTicksRemaining,
   reconnecting,
   connectionEpoch,
-  onChoose
+  errorEpoch,
+  onVote
 }: {
   readonly role: CrewRole;
-  readonly upgrade: PublicControllerUpgradeView | null;
+  readonly teamUpgrade: PublicTeamUpgradeView;
+  readonly credits: number;
   readonly phaseTicksRemaining: number;
   readonly reconnecting: boolean;
   readonly connectionEpoch: number;
-  readonly onChoose: (upgradeId: UpgradeId, actionId: string) => void;
+  readonly errorEpoch: number;
+  readonly onVote: (upgradeId: UpgradeId, revision: number, actionId: string) => void;
 }) {
-  const pendingReference = useRef<
-    | { readonly offerId: string; readonly upgradeId: UpgradeId; readonly actionId: string }
-    | undefined
-  >(undefined);
-  const chooseReference = useRef(onChoose);
-  chooseReference.current = onChoose;
+  const pendingReference = useRef<VoteIntent | undefined>(undefined);
+  const voteReference = useRef(onVote);
+  voteReference.current = onVote;
   const [pendingUpgradeId, setPendingUpgradeId] = useState<UpgradeId>();
-  const selectedUpgradeId = upgrade?.selection?.upgradeId;
+  const offer = teamUpgrade.offer;
+  const offerId = offer?.offerId;
+  const ownVote = teamUpgrade.votes[role];
+  const ownRevision = ownVote?.revision ?? 0;
+  const ownUpgradeId = ownVote?.upgradeId;
 
   useEffect(() => {
     const pending = pendingReference.current;
-    if (
-      pending !== undefined &&
-      upgrade?.status === "available" &&
-      upgrade.offer.offerId === pending.offerId &&
-      !reconnecting
-    ) {
-      chooseReference.current(pending.upgradeId, pending.actionId);
+    if (pending !== undefined && pending.offerId === offerId && !reconnecting) {
+      voteReference.current(pending.upgradeId, pending.revision, pending.actionId);
     }
-  }, [connectionEpoch, reconnecting, upgrade?.offer.offerId, upgrade?.status]);
+  }, [connectionEpoch, offerId, reconnecting]);
 
   useEffect(() => {
-    if (
-      selectedUpgradeId !== undefined ||
-      upgrade?.offer.offerId !== pendingReference.current?.offerId
-    ) {
-      pendingReference.current = undefined;
-      setPendingUpgradeId(undefined);
-    }
-  }, [selectedUpgradeId, upgrade?.offer.offerId]);
+    const kept = keepVoteIntent(pendingReference.current, {
+      offerId,
+      acceptedRevision: ownRevision
+    });
+    pendingReference.current = kept;
+    if (kept === undefined) setPendingUpgradeId(undefined);
+  }, [offerId, ownRevision]);
 
-  if (upgrade?.offer.role !== role) {
+  useEffect(() => {
+    // A rejected vote never reaches the projection, so the server error is the
+    // only signal that unlocks the cards again.
+    if (errorEpoch === 0) return;
+    pendingReference.current = undefined;
+    setPendingUpgradeId(undefined);
+  }, [errorEpoch]);
+
+  if (offer === null) {
     return (
       <div className="upgrade-panel" role="status">
         <h2>Подготавливаем улучшения…</h2>
@@ -544,49 +564,63 @@ function UpgradePanel({
     );
   }
 
+  const price = offer.cards[0]?.price ?? 0;
   return (
     <div className="upgrade-panel">
       <p className="eyebrow">Передышка · {(phaseTicksRemaining / 20).toFixed(1)} с</p>
-      <h2>Улучшение роли: {roleLabel(role)}</h2>
-      <div className="upgrade-grid" aria-label="Доступные улучшения">
-        {upgrade.offer.cards.map((card) => {
-          const selected = selectedUpgradeId === card.upgradeId;
+      <h2>Общее улучшение экипажа</h2>
+      <p className="upgrade-balance">
+        Кредиты экипажа: <strong>{credits}</strong> · цена {price}
+      </p>
+      {credits < price && (
+        <p className="upgrade-warning">Кредитов не хватает — улучшение не купится.</p>
+      )}
+      <div className="upgrade-grid" aria-label="Карточки командного голосования">
+        {offer.cards.map((card) => {
+          const voters = CREW_ROLES.filter(
+            (crewRole) => teamUpgrade.votes[crewRole]?.upgradeId === card.upgradeId
+          );
+          const chosen = ownUpgradeId === card.upgradeId;
           const pending = pendingUpgradeId === card.upgradeId;
           return (
             <button
               type="button"
-              className={`upgrade-card ${selected ? "upgrade-card--selected" : ""}`}
+              className={`upgrade-card ${chosen ? "upgrade-card--selected" : ""}`}
               key={card.upgradeId}
-              aria-pressed={selected}
-              disabled={
-                reconnecting || upgrade.status === "selected" || pendingUpgradeId !== undefined
-              }
+              data-upgrade-id={card.upgradeId}
+              aria-pressed={chosen}
+              disabled={reconnecting || pendingUpgradeId !== undefined}
               onClick={() => {
-                if (pendingReference.current !== undefined || upgrade.status === "selected") return;
+                if (pendingReference.current !== undefined) return;
                 const actionId = createActionId();
+                const revision = nextVoteRevision(ownRevision);
                 pendingReference.current = {
-                  offerId: upgrade.offer.offerId,
+                  offerId: offer.offerId,
                   upgradeId: card.upgradeId,
+                  revision,
                   actionId
                 };
                 setPendingUpgradeId(card.upgradeId);
-                onChoose(card.upgradeId, actionId);
+                onVote(card.upgradeId, revision, actionId);
               }}
             >
               <strong>{card.label}</strong>
+              <small>{roleLabel(card.role)}</small>
               <small>
-                {selected
-                  ? upgrade.selection?.source === "fallback"
-                    ? "Выбрано автоматически"
-                    : "Выбрано"
-                  : pending
-                    ? "Отправляем выбор…"
-                    : "Выбрать"}
+                {pending
+                  ? "Отправляем голос…"
+                  : voters.length === 0
+                    ? "Голосов нет"
+                    : `Голоса: ${voters.map((crewRole) => roleLabel(crewRole)).join(", ")}`}
               </small>
             </button>
           );
         })}
       </div>
+      <p className="upgrade-hint">
+        Побеждает карточка с большинством голосов, при равенстве — первая по порядку ролей. Голос
+        можно менять до конца передышки.
+      </p>
     </div>
   );
 }
@@ -964,9 +998,9 @@ export function toServerError(code: string, fallback: string): string {
   if (code === "role_mismatch") return "Эта команда недоступна вашей роли.";
   if (code === "identity_mismatch") return "Сервер не подтвердил игровую сессию.";
   if (code === "protocol_mismatch") return "Версия игры устарела. Обновите страницу.";
-  if (code === "already_chosen") return "Улучшение этой роли уже выбрано.";
   if (code === "action_conflict") return "Команда улучшения конфликтует с предыдущей.";
   if (code === "action_not_available") return "Это предложение улучшения уже недоступно.";
+  if (code === "stale_action") return "Ваш голос уже обновлён более новой командой.";
   if (code === "stale_run") return "Команда относилась к завершённому бою и не была применена.";
   return fallback;
 }

@@ -395,7 +395,7 @@ p {
 
 .spaceship-hud {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .display-shell--battle .spaceship-hud {
@@ -588,9 +588,11 @@ p {
   filter: drop-shadow(0 0 4px rgb(47 208 218 / 55%));
 }
 
+/* Above the HUD, radar, countdown and room header: an encounter window is the
+   one thing the crew must read, and combat telemetry must not cover it. */
 .encounter-overlay {
   position: absolute;
-  z-index: 24;
+  z-index: 40;
   top: 50%;
   left: 50%;
   display: grid;
@@ -629,6 +631,37 @@ p {
 .encounter-overlay--victory {
   border-color: rgb(120 211 156 / 55%);
   background: rgb(8 38 31 / 92%);
+}
+
+.intermission-economy {
+  color: #ffd783;
+}
+
+.intermission-cards {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 0.6rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+}
+
+.intermission-card {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.7rem;
+  border: 1px solid rgb(117 216 255 / 30%);
+  border-radius: 0.75rem;
+  background: rgb(23 70 68 / 55%);
+}
+
+.intermission-card small {
+  color: #b9d3ce;
+}
+
+.intermission-card--voted {
+  border-color: #a8f1c7;
+  background: rgb(120 211 156 / 25%);
 }
 
 .rematch-readiness {

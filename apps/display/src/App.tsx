@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CombatRadar } from "./CombatRadar.js";
 import { MachineGunHeat } from "./MachineGunHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
+import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
 import { WaveCountdown } from "./WaveCountdown.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
@@ -296,6 +297,15 @@ export function DisplayApp() {
                 Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length}
               </small>
             </div>
+            <div>
+              <span>Кредиты</span>
+              <strong>{view.game.credits}</strong>
+              <small>
+                {view.game.teamUpgrade.selection === null
+                  ? "улучшений ещё нет"
+                  : `улучшение: ${roleLabel(view.game.teamUpgrade.selection.role)}`}
+              </small>
+            </div>
             <MachineGunHeat machineGun={view.game.machineGun} />
           </header>
           <SpaceshipCanvas
@@ -312,14 +322,13 @@ export function DisplayApp() {
           )}
           <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
-            <div className="encounter-overlay encounter-overlay--intermission" role="status">
-              <p className="eyebrow">Волна {view.game.encounter.waveNumber} завершена</p>
-              <h2>Выберите улучшения</h2>
-              <strong>
-                Следующая волна через {formatCountdown(view.game.encounter.phaseTicksRemaining)}
-              </strong>
-              <p>Каждая роль выбирает одну карточку на своём контроллере.</p>
-            </div>
+            <TeamUpgradeOverlay
+              teamUpgrade={view.game.teamUpgrade}
+              credits={view.game.credits}
+              score={view.game.encounter.score}
+              waveNumber={view.game.encounter.waveNumber}
+              phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
+            />
           )}
           {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
             <RunResultOverlay
@@ -368,10 +377,6 @@ export function DisplayApp() {
 
 function formatLatency(latencyMs: number | null | undefined): string {
   return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
-}
-
-function formatCountdown(ticks: number): string {
-  return `${(ticks / 20).toFixed(1)} с`;
 }
 
 function encounterLabel(phase: EncounterPhase): string {

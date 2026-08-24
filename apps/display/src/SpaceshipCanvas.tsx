@@ -95,6 +95,10 @@ export function SpaceshipCanvas({
       data-spaceship-hp={game.spaceship.hp}
       data-spaceship-max-hp={game.spaceship.maxHp}
       data-score={game.encounter.score}
+      data-credits={game.credits}
+      data-wave-number={game.encounter.waveNumber}
+      data-encounter-phase={game.encounter.phase}
+      data-team-upgrade-id={game.teamUpgrade.selection?.upgradeId ?? ""}
       data-turret-angle={game.turretAngle}
       data-enemy-count={game.enemyShips.length}
       data-asteroid-count={game.asteroids.length}

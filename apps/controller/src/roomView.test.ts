@@ -79,7 +79,8 @@ describe("controller room view", () => {
           pilot: { speedMultiplier: 1.1, accelerationMultiplier: 1, maxHpBonus: 0 },
           gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
           shield: { capacityBonus: 25, rechargeMultiplier: 1, arcWidthBonus: 0 }
-        }
+        },
+        credits: 4
       }
     };
     const view = toControllerRoomView(state, "p2");
@@ -99,13 +100,15 @@ describe("controller room view", () => {
     expect(view?.displayLatencyMs).toBeNull();
     expect(view?.assignedRole).toBe("shield");
     expect(view?.runNumber).toBe(2);
-    expect(view?.game?.upgrade).toBeNull();
+    expect(view?.game?.credits).toBe(4);
+    expect(view?.game?.teamUpgrade.offer).toBeNull();
+    expect(view?.game?.teamUpgrade.votes).toEqual({ pilot: null, gunner: null, shield: null });
     expect(view?.game?.encounter.defeatReason).toBeNull();
     expect(view?.game?.encounter.waveSecondsRemaining).toBe(1186);
     expect(view?.game).not.toHaveProperty("enemyShips");
   });
 
-  it("unwraps only the personalized upgrade entry visible to this controller", () => {
+  it("projects the shared offer with public votes for every role", () => {
     const state: NetworkRoomState = {
       roomId: "ROOM123",
       phase: "active",
@@ -163,34 +166,68 @@ describe("controller room view", () => {
           gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
           shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
-        upgrade: collection([
-          {
-            status: "available",
-            offer: {
-              offerId: "offer-pilot-1",
-              role: "pilot",
-              waveNumber: 1,
-              cards: collection([
-                { upgradeId: "pilot_speed", label: "Скорость +10%", value: 0.1 },
-                { upgradeId: "pilot_acceleration", label: "Разгон +10%", value: 0.1 },
-                { upgradeId: "pilot_hull", label: "Корпус +100", value: 100 }
-              ])
-            },
-            hasSelection: false,
-            selection: {
-              offerId: "",
-              upgradeId: "pilot_speed",
-              role: "pilot",
-              source: "player"
-            }
+        credits: 7,
+        teamUpgrade: {
+          hasOffer: true,
+          offer: {
+            offerId: "offer-w1",
+            waveNumber: 1,
+            cards: collection([
+              {
+                upgradeId: "pilot_speed",
+                role: "pilot",
+                label: "Скорость +10%",
+                value: 0.1,
+                price: 5
+              },
+              {
+                upgradeId: "gunner_damage",
+                role: "gunner",
+                label: "Урон +15%",
+                value: 0.15,
+                price: 5
+              },
+              {
+                upgradeId: "shield_capacity",
+                role: "shield",
+                label: "Ёмкость +20",
+                value: 20,
+                price: 5
+              }
+            ])
+          },
+          votes: collection([
+            { role: "shield", upgradeId: "pilot_speed", revision: 1 },
+            { role: "pilot", upgradeId: "pilot_speed", revision: 2 }
+          ]),
+          hasSelection: false,
+          selection: {
+            offerId: "",
+            waveNumber: 1,
+            upgradeId: "pilot_speed",
+            role: "pilot",
+            price: 5
           }
-        ])
+        }
       }
     };
 
     const view = toControllerRoomView(state, "p1");
-    expect(view?.game?.upgrade?.offer.role).toBe("pilot");
-    expect(view?.game?.upgrade?.offer.cards).toHaveLength(3);
+    expect(view?.game?.credits).toBe(7);
+    expect(view?.game?.teamUpgrade.offer?.offerId).toBe("offer-w1");
+    expect(view?.game?.teamUpgrade.offer?.cards.map((card) => card.role)).toEqual([
+      "pilot",
+      "gunner",
+      "shield"
+    ]);
+    expect(view?.game?.teamUpgrade.votes.pilot).toEqual({
+      role: "pilot",
+      upgradeId: "pilot_speed",
+      revision: 2
+    });
+    expect(view?.game?.teamUpgrade.votes.shield?.revision).toBe(1);
+    expect(view?.game?.teamUpgrade.votes.gunner).toBeNull();
+    expect(view?.game?.teamUpgrade.selection).toBeNull();
     expect(view?.game).not.toHaveProperty("hostileProjectiles");
   });
 
@@ -253,12 +290,14 @@ describe("controller room view", () => {
           pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
           gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
           shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
-        }
+        },
+        credits: 12
       }
     };
 
     const view = toControllerRoomView(state, "p1");
     expect(view?.runNumber).toBe(3);
+    expect(view?.game?.credits).toBe(12);
     expect(view?.game?.encounter).toMatchObject({ phase: "result", outcome: "defeat" });
     expect(view?.game?.encounter.defeatReason).toBe("spaceship_destroyed");
     expect(view?.players[0]?.ready).toBe(true);

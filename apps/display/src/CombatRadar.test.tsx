@@ -38,6 +38,12 @@ const baseGame: DisplayGameSnapshot = {
     gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
     shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
   },
+  credits: 0,
+  teamUpgrade: {
+    offer: null,
+    votes: { pilot: null, gunner: null, shield: null },
+    selection: null
+  },
   obstacles: [],
   enemyShips: [
     {

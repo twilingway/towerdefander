@@ -59,6 +59,34 @@ describe("SpaceshipCanvas", () => {
     expect(demoMarkup).toContain('data-demo-target-velocity-x="-2"');
     expect(demoMarkup).toContain('data-demo-target-velocity-y="3"');
   });
+
+  it("publishes the shared economy telemetry with every snapshot", () => {
+    const markup = renderToStaticMarkup(
+      <SpaceshipCanvas
+        game={{
+          ...testGame,
+          credits: 7,
+          teamUpgrade: {
+            ...testGame.teamUpgrade,
+            selection: {
+              offerId: "offer-w1",
+              waveNumber: 1,
+              upgradeId: "gunner_damage",
+              role: "gunner",
+              price: 5
+            }
+          }
+        }}
+        runNumber={1}
+        connectionEpoch={0}
+      />
+    );
+
+    expect(markup).toContain('data-credits="7"');
+    expect(markup).toContain('data-wave-number="1"');
+    expect(markup).toContain('data-encounter-phase="combat"');
+    expect(markup).toContain('data-team-upgrade-id="gunner_damage"');
+  });
 });
 
 const testGame = {
@@ -94,6 +122,12 @@ const testGame = {
     pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
     gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
     shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
+  },
+  credits: 0,
+  teamUpgrade: {
+    offer: null,
+    votes: { pilot: null, gunner: null, shield: null },
+    selection: null
   },
   obstacles: [],
   enemyShips: [],

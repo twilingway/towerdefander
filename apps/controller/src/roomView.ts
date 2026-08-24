@@ -7,10 +7,9 @@ import {
   type EncounterPhase,
   type PublicPlayerView,
   type PublicSpaceshipView,
+  type PublicUpgradeVote,
   type TerminalOutcome,
-  type UpgradeId,
-  type UpgradeSelectionSource,
-  type UpgradeStatus
+  type UpgradeId
 } from "@spaceship-defender/protocol";
 
 interface ValueCollection<T> {
@@ -28,8 +27,34 @@ interface NetworkPlayerState {
 
 interface NetworkUpgradeCardState {
   upgradeId: UpgradeId;
+  role: CrewRole;
   label: string;
   value: number;
+  price: number;
+}
+
+interface NetworkUpgradeVoteState {
+  role: CrewRole;
+  upgradeId: UpgradeId;
+  revision: number;
+}
+
+export interface NetworkTeamUpgradeState {
+  hasOffer?: boolean;
+  offer: {
+    offerId: string;
+    waveNumber: number;
+    cards: ValueCollection<NetworkUpgradeCardState>;
+  };
+  votes: ValueCollection<NetworkUpgradeVoteState>;
+  hasSelection?: boolean;
+  selection: {
+    offerId: string;
+    waveNumber: number;
+    upgradeId: UpgradeId;
+    role: CrewRole;
+    price: number;
+  };
 }
 
 interface NetworkGameState {
@@ -73,22 +98,8 @@ interface NetworkGameState {
     };
     shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
   };
-  upgrade?: ValueCollection<{
-    status: UpgradeStatus;
-    offer: {
-      offerId: string;
-      role: CrewRole;
-      waveNumber: number;
-      cards: ValueCollection<NetworkUpgradeCardState>;
-    };
-    hasSelection: boolean;
-    selection: {
-      offerId: string;
-      upgradeId: UpgradeId;
-      role: CrewRole;
-      source: UpgradeSelectionSource;
-    };
-  }>;
+  credits: number;
+  teamUpgrade?: NetworkTeamUpgradeState;
 }
 
 export interface NetworkRoomState {
@@ -130,7 +141,6 @@ export function toControllerRoomView(
   const assignedRole = players.find((player) => player.playerId === playerId)?.role;
   if (assignedRole === undefined) return undefined;
   const game = state.game;
-  const upgrade = game?.upgrade === undefined ? undefined : [...game.upgrade.values()][0];
 
   return controllerRoomViewSchema.parse({
     roomId: state.roomId,
@@ -173,22 +183,40 @@ export function toControllerRoomView(
               gunner: { ...game.roleModifiers.gunner },
               shield: { ...game.roleModifiers.shield }
             },
-            upgrade:
-              upgrade === undefined
-                ? null
-                : {
-                    status: upgrade.status,
-                    offer: {
-                      offerId: upgrade.offer.offerId,
-                      role: upgrade.offer.role,
-                      waveNumber: upgrade.offer.waveNumber,
-                      cards: [...upgrade.offer.cards.values()]
-                    },
-                    selection: upgrade.hasSelection ? { ...upgrade.selection } : null
-                  }
+            credits: game.credits,
+            teamUpgrade: toTeamUpgradeView(game.teamUpgrade)
           }
         : null
   });
+}
+
+export function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
+  const votes: Record<CrewRole, PublicUpgradeVote | null> = {
+    pilot: null,
+    gunner: null,
+    shield: null
+  };
+  if (teamUpgrade !== undefined) {
+    for (const vote of teamUpgrade.votes.values()) {
+      votes[vote.role] = {
+        role: vote.role,
+        upgradeId: vote.upgradeId,
+        revision: vote.revision
+      };
+    }
+  }
+  return {
+    offer:
+      teamUpgrade?.hasOffer === true
+        ? {
+            offerId: teamUpgrade.offer.offerId,
+            waveNumber: teamUpgrade.offer.waveNumber,
+            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
+          }
+        : null,
+    votes,
+    selection: teamUpgrade?.hasSelection === true ? { ...teamUpgrade.selection } : null
+  };
 }
 
 function toPublicLatency(latencyMs: number | undefined): number | null {

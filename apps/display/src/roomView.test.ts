@@ -75,6 +75,7 @@ describe("display room view", () => {
           gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
           shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
+        credits: 6,
         display: {
           obstacles: collection([
             {
@@ -180,6 +181,12 @@ describe("display room view", () => {
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
     expect(view?.displayLatencyMs).toBe(18);
+    expect(view?.game?.credits).toBe(6);
+    expect(view?.game?.teamUpgrade).toEqual({
+      offer: null,
+      votes: { pilot: null, gunner: null, shield: null },
+      selection: null
+    });
     expect(view?.players.map((player) => player.latencyMs)).toEqual([null, 47]);
   });
 
