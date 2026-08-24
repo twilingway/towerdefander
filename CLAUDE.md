@@ -117,6 +117,31 @@ Two repo skills in `.agents/skills/` carry the detailed procedures: `openspec-wo
 artifact quality) and `realtime-game-contract` (the invariants above, plus review format for
 protocol/room/economy changes). Read the relevant one before changing shared contracts.
 
+## Agent tooling
+
+`.claude/skills/` holds the skills Claude Code loads automatically: `browser-playwright` (Playwright
+MCP session, harness ports, `tests/e2e` conventions), `react-frontend` (display/controller React
+rules plus the vendored Vercel rule set in `.agents/skills/react-best-practices/`), and
+`phaser-display` (boundaries; the full text stays in `.agents/skills/phaser-display/SKILL.md`, which
+the other agent runners share). `.mcp.json` declares the `playwright` MCP server so a browser
+session is available without extra setup; it drives a browser only and does not start app servers.
+
+### How the global rules apply here
+
+`~/.claude/CLAUDE.md` carries personal working rules that hold in every repository. Where this
+project differs:
+
+- **Browser work is in scope, unlike the global default.** The global rule leaves visual UI checks
+  to the user; here `pnpm test:e2e` is part of `pnpm check`, and the Playwright MCP session plus
+  `tests/e2e` are normal tools — see `.claude/skills/browser-playwright/SKILL.md`. What stays out is
+  unrequested screenshot loops and hand-started dev servers used as proof.
+- **Package manager is pnpm, never npm.** Full gate `pnpm check`; single checks
+  `pnpm exec prettier --check <file>`, `pnpm --filter <pkg> exec vitest run <file>`.
+- **Linter and formatter are ESLint + Prettier, not Biome** — relevant to any review agent that
+  assumes otherwise.
+- **Planning goes through OpenSpec.** For features, protocol changes and non-trivial refactors the
+  `openspec-workflow` procedure outranks the generic decomposition rule.
+
 ## Conventions
 
 - Strict TypeScript everywhere; ESLint runs `strictTypeChecked` + `stylisticTypeChecked` with
