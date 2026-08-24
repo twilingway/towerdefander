@@ -47,4 +47,14 @@ describe("layout preview", () => {
     expect(markup).toContain("Итог");
     expect(markup.match(/aria-pressed="true"/gu)).toHaveLength(1);
   });
+
+  it("opens expanded and offers a collapse control", () => {
+    const markup = renderToStaticMarkup(
+      <PreviewControls phase="combat" onPhaseChange={() => undefined} />
+    );
+
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toContain("Свернуть панель превью");
+    expect(markup).not.toContain("preview-controls--collapsed");
+  });
 });

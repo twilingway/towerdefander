@@ -59,10 +59,8 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     );
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
     await expect(display.getByTestId("machine-gun-heat")).toBeVisible();
+    // The countdown is display-only now: controllers keep just their controls.
     await expect(display.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
-    await expect(pilot.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
-    await expect(gunner.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
-    await expect(shield.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
     await expect(display.getByTestId("combat-radar")).toBeVisible();
     await expect(display.getByTestId("combat-radar-spaceship")).toBeVisible();
     const battlefieldSnapshot = display.getByTestId("spaceship-world");
@@ -284,7 +282,9 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     await expect
       .poll(async () => Number(await world.getAttribute("data-run-number")))
       .toBe(previousRunNumber + 1);
-    await expect(gunner.locator(".combat-summary")).toContainText("Волна 1");
+    // Wave state lives on the shared display now; controllers keep only their
+    // controls.
+    await expect(world).toHaveAttribute("data-wave-number", "1");
     await expect
       .poll(async () => ({
         hp: Number(await world.getAttribute("data-spaceship-hp")),

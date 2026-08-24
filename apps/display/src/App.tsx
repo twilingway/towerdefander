@@ -411,21 +411,40 @@ export function PreviewControls({
   readonly phase: PreviewPhase;
   readonly onPhaseChange: (phase: PreviewPhase) => void;
 }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div className="preview-controls" data-testid="preview-controls">
-      <span className="eyebrow">Превью верстки</span>
-      {PREVIEW_PHASES.map((candidate) => (
-        <button
-          key={candidate}
-          type="button"
-          aria-pressed={candidate === phase}
-          onClick={() => {
-            onPhaseChange(candidate);
-          }}
-        >
-          {previewPhaseLabel(candidate)}
-        </button>
-      ))}
+    <div
+      className={`preview-controls${open ? "" : " preview-controls--collapsed"}`}
+      data-testid="preview-controls"
+    >
+      <button
+        type="button"
+        className="preview-controls__toggle"
+        aria-expanded={open}
+        aria-label={open ? "Свернуть панель превью" : "Развернуть панель превью"}
+        onClick={() => {
+          setOpen((value) => !value);
+        }}
+      >
+        {open ? "×" : "⚙"}
+      </button>
+      {open && (
+        <>
+          <span className="eyebrow">Превью верстки</span>
+          {PREVIEW_PHASES.map((candidate) => (
+            <button
+              key={candidate}
+              type="button"
+              aria-pressed={candidate === phase}
+              onClick={() => {
+                onPhaseChange(candidate);
+              }}
+            >
+              {previewPhaseLabel(candidate)}
+            </button>
+          ))}
+        </>
+      )}
     </div>
   );
 }

@@ -130,62 +130,6 @@ button:disabled {
   color: #cad7d3;
 }
 
-.combat-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) 4.5rem;
-  gap: 0.4rem 0.75rem;
-  padding: 0.8rem 1rem;
-  border-radius: 0.9rem;
-  color: #d9e7e2;
-  background: #132827;
-  font-variant-numeric: tabular-nums;
-}
-
-.combat-summary small {
-  grid-column: 1 / 3;
-  color: #aabbb7;
-}
-
-.wave-countdown {
-  display: grid;
-  grid-row: 1 / span 2;
-  grid-column: 3;
-  justify-self: center;
-  width: 4.25rem;
-  padding: 0.3rem;
-  border: 2px solid rgb(117 216 255 / 58%);
-  border-radius: 50%;
-  color: #c9f5ff;
-  text-align: center;
-  background: rgb(6 28 34 / 82%);
-  box-shadow: inset 0 0 1.4rem rgb(71 224 233 / 12%);
-  aspect-ratio: 1;
-  place-content: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.wave-countdown span {
-  font-size: 0.48rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.wave-countdown strong {
-  color: #ffd783;
-  font-size: 1.1rem;
-}
-
-.wave-countdown--warning {
-  border-color: rgb(255 93 79 / 75%);
-  color: #ffd2cd;
-  box-shadow: inset 0 0 1.4rem rgb(255 73 60 / 18%);
-}
-
-.wave-countdown--warning strong {
-  color: #ff796e;
-}
-
 .upgrade-panel,
 .result-panel {
   display: grid;
@@ -352,12 +296,11 @@ button:disabled {
   font-weight: 800;
 }
 
-/* The run is over: player name, role, live combat telemetry and the
-   connection row no longer tell the player anything. */
+/* The run is over: player name, role and the connection row no longer
+   tell the player anything. */
 .play-card--result > h1,
 .play-card--result > .role-badge,
-.play-card--result > .status-row,
-.play-card--result > .combat-summary {
+.play-card--result > .status-row {
   display: none;
 }
 
@@ -547,12 +490,6 @@ button:disabled {
     grid-column: 1;
   }
 
-  .play-card--combat > .combat-summary {
-    grid-row: 1;
-    grid-column: 2;
-    padding: 0.4rem 0.7rem;
-  }
-
   .play-card--combat > h1,
   .play-card--combat > .role-badge,
   .play-card--combat > .error-message,
@@ -628,14 +565,9 @@ button:disabled {
   }
 
   .play-card--intermission > .status-row,
-  .play-card--intermission > .combat-summary,
   .play-card--intermission > .upgrade-panel,
   .play-card--intermission > .error-message {
     grid-column: 1 / -1;
-  }
-
-  .play-card--intermission > .combat-summary {
-    padding: 0.3rem 0.7rem;
   }
 
   .play-card--intermission > .upgrade-panel h2 {
@@ -722,4 +654,14 @@ button:disabled {
 .preview-controls button[aria-pressed="true"] {
   border-color: #e6b85c;
   color: #e6b85c;
+}
+
+.preview-controls--collapsed {
+  padding: 0.2rem;
+  background: rgb(8 18 20 / 55%);
+}
+
+.preview-controls__toggle {
+  font-size: 0.85rem;
+  line-height: 1;
 }

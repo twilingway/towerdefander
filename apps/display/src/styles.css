@@ -843,3 +843,13 @@ p {
   border-color: #e6b85c;
   color: #e6b85c;
 }
+
+.preview-controls--collapsed {
+  padding: 0.2rem;
+  background: rgb(8 18 20 / 55%);
+}
+
+.preview-controls__toggle {
+  font-size: 0.85rem;
+  line-height: 1;
+}

@@ -14,7 +14,6 @@ import {
   type EncounterPhase,
   type PublicTeamUpgradeView,
   type PublicMachineGunView,
-  type PublicRoleModifiersView,
   type PublicShieldView,
   type PublicPlayerView,
   type TerminalOutcome,
@@ -57,7 +56,6 @@ import {
 } from "./roomView.js";
 import { VirtualStick } from "./VirtualStick.js";
 import { keepVoteIntent, nextVoteRevision, type VoteIntent } from "./voteIntent.js";
-import { WaveCountdown } from "./WaveCountdown.js";
 import { ActionZone } from "./ActionZone.js";
 
 type ControllerRoom = Room<unknown, NetworkRoomState>;
@@ -453,17 +451,6 @@ export function ControllerApp() {
           <p>Ожидаем подтверждение роли…</p>
         ) : (
           <>
-            {activeView.game !== null && (
-              <RoleCombatSummary
-                role={currentPlayer.role}
-                modifiers={activeView.game.roleModifiers}
-                hp={activeView.game.spaceship.hp}
-                maxHp={activeView.game.spaceship.maxHp}
-                waveNumber={activeView.game.encounter.waveNumber}
-                encounterPhase={activeView.game.encounter.phase}
-                waveSecondsRemaining={activeView.game.encounter.waveSecondsRemaining}
-              />
-            )}
             {activeView.game?.encounter.phase === "intermission" && (
               <TeamUpgradePanel
                 role={currentPlayer.role}
@@ -539,41 +526,6 @@ function playCardPhaseModifier(phase: EncounterPhase | undefined): string {
 
 function formatLatency(latencyMs: number | null | undefined): string {
   return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
-}
-
-function RoleCombatSummary({
-  role,
-  modifiers,
-  hp,
-  maxHp,
-  waveNumber,
-  encounterPhase,
-  waveSecondsRemaining
-}: {
-  readonly role: CrewRole;
-  readonly modifiers: PublicRoleModifiersView;
-  readonly hp: number;
-  readonly maxHp: number;
-  readonly waveNumber: number;
-  readonly encounterPhase: EncounterPhase;
-  readonly waveSecondsRemaining: number;
-}) {
-  const modifier =
-    role === "pilot"
-      ? `Скорость ×${modifiers.pilot.speedMultiplier.toFixed(2)} · HP +${String(Math.round(modifiers.pilot.maxHpBonus))}`
-      : role === "gunner"
-        ? `Урон ×${modifiers.gunner.damageMultiplier.toFixed(2)} · откат ×${modifiers.gunner.cooldownMultiplier.toFixed(2)}`
-        : `Ёмкость +${String(Math.round(modifiers.shield.capacityBonus))} · заряд ×${modifiers.shield.rechargeMultiplier.toFixed(2)}`;
-  return (
-    <div className="combat-summary" aria-label="Состояние боя">
-      <span>Волна {waveNumber}</span>
-      <span>
-        Корпус {Math.ceil(hp)} / {Math.ceil(maxHp)}
-      </span>
-      <small>{modifier}</small>
-      {encounterPhase === "combat" && <WaveCountdown secondsRemaining={waveSecondsRemaining} />}
-    </div>
-  );
 }
 
 export function TeamUpgradePanel({
@@ -792,37 +744,56 @@ export function PreviewControls({
   readonly onRoleChange: (role: CrewRole) => void;
   readonly onPhaseChange: (phase: PreviewPhase) => void;
 }) {
+  const [open, setOpen] = useState(true);
   return (
-    <div className="preview-controls" data-testid="preview-controls">
-      <span className="eyebrow">Превью верстки</span>
-      <div className="preview-controls__group">
-        {CREW_ROLES.map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            aria-pressed={candidate === role}
-            onClick={() => {
-              onRoleChange(candidate);
-            }}
-          >
-            {roleLabel(candidate)}
-          </button>
-        ))}
-      </div>
-      <div className="preview-controls__group">
-        {PREVIEW_PHASES.map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            aria-pressed={candidate === phase}
-            onClick={() => {
-              onPhaseChange(candidate);
-            }}
-          >
-            {previewPhaseLabel(candidate)}
-          </button>
-        ))}
-      </div>
+    <div
+      className={`preview-controls${open ? "" : " preview-controls--collapsed"}`}
+      data-testid="preview-controls"
+    >
+      <button
+        type="button"
+        className="preview-controls__toggle"
+        aria-expanded={open}
+        aria-label={open ? "Свернуть панель превью" : "Развернуть панель превью"}
+        onClick={() => {
+          setOpen((value) => !value);
+        }}
+      >
+        {open ? "×" : "⚙"}
+      </button>
+      {open && (
+        <>
+          <span className="eyebrow">Превью верстки</span>
+          <div className="preview-controls__group">
+            {CREW_ROLES.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                aria-pressed={candidate === role}
+                onClick={() => {
+                  onRoleChange(candidate);
+                }}
+              >
+                {roleLabel(candidate)}
+              </button>
+            ))}
+          </div>
+          <div className="preview-controls__group">
+            {PREVIEW_PHASES.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                aria-pressed={candidate === phase}
+                onClick={() => {
+                  onPhaseChange(candidate);
+                }}
+              >
+                {previewPhaseLabel(candidate)}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
