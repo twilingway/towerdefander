@@ -99,6 +99,9 @@ export function SpaceshipCanvas({
       data-enemy-count={game.enemyShips.length}
       data-asteroid-count={game.asteroids.length}
       data-friendly-projectile-count={game.friendlyProjectiles.length}
+      data-mg-projectile-count={
+        game.friendlyProjectiles.filter((projectile) => projectile.source === "machineGun").length
+      }
       data-hostile-projectile-count={game.hostileProjectiles.length}
       data-missile-count={game.homingMissiles.length}
       data-latest-projectile-id={game.friendlyProjectiles.at(-1)?.entityId ?? ""}

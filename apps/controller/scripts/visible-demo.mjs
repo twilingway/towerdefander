@@ -62,6 +62,7 @@ const verification = {
   combat: false,
   movement: false,
   projectile: false,
+  mgFire: false,
   shield: false,
   intermission: false,
   upgrades: false,
@@ -401,7 +402,7 @@ function sendCombatInputs(elapsedMs, expectedGeneration) {
     ...envelope(pilotRoom()),
     sequence: pilotSequence,
     vector: pilotVector(elapsedMs),
-    mgFiring: false
+    mgFiring: target !== undefined
   });
   gunnerSequence += 1;
   gunnerRoom().send(clientMessage.gunnerInput, {
@@ -538,6 +539,7 @@ async function refreshTelemetry() {
                 velocityY: parse("data-demo-threat-velocity-y")
               },
         friendlyProjectiles: parse("data-friendly-projectile-count"),
+        mgProjectiles: parse("data-mg-projectile-count"),
         shieldActive: element.getAttribute("data-shield-active") === "true",
         shieldEnergy: parse("data-shield-energy"),
         visibilityState: element.ownerDocument.visibilityState,
@@ -556,6 +558,7 @@ async function refreshTelemetry() {
 function observeVerification(startingPosition) {
   if (latestTelemetry === undefined) return;
   verification.projectile ||= latestTelemetry.friendlyProjectiles > 0;
+  verification.mgFire ||= latestTelemetry.mgProjectiles > 0;
   verification.shield ||= latestTelemetry.shieldActive;
   verification.movement ||=
     startingPosition !== undefined &&
