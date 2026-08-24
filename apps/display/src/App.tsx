@@ -14,6 +14,8 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { CombatRadar } from "./CombatRadar.js";
+import { MachineGunHeat } from "./MachineGunHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
@@ -293,6 +295,7 @@ export function DisplayApp() {
                 Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length}
               </small>
             </div>
+            <MachineGunHeat machineGun={view.game.machineGun} />
           </header>
           <SpaceshipCanvas
             game={view.game}
@@ -300,6 +303,7 @@ export function DisplayApp() {
             connectionEpoch={connectionEpoch}
             visibleDemo={visibleDemo}
           />
+          <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
             <div className="encounter-overlay encounter-overlay--intermission" role="status">
               <p className="eyebrow">Волна {view.game.encounter.waveNumber} завершена</p>

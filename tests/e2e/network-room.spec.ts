@@ -52,6 +52,14 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       "4400"
     );
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
+    await expect(display.getByTestId("machine-gun-heat")).toBeVisible();
+    await expect(display.getByTestId("combat-radar")).toBeVisible();
+    await expect(display.getByTestId("combat-radar-spaceship")).toBeVisible();
+    await expect
+      .poll(async () =>
+        Number(await display.getByTestId("combat-radar").getAttribute("data-enemy-count"))
+      )
+      .toBeGreaterThan(0);
     await expect(display.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
     });
@@ -77,6 +85,23 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       .toBeGreaterThan(startX);
     await pilot.keyboard.up("KeyD");
     await assertSpaceshipInsideCircularArena(display.getByTestId("spaceship-world"));
+
+    const heatBeforeFire = Number(
+      await display.getByTestId("machine-gun-heat").getAttribute("data-heat")
+    );
+    const mgFireBounds = await pilot.getByTestId("mg-fire-button").boundingBox();
+    if (mgFireBounds === null) throw new Error("Pilot machine gun button has no bounds.");
+    await pilot.mouse.move(
+      mgFireBounds.x + mgFireBounds.width / 2,
+      mgFireBounds.y + mgFireBounds.height / 2
+    );
+    await pilot.mouse.down();
+    await expect
+      .poll(async () =>
+        Number(await display.getByTestId("machine-gun-heat").getAttribute("data-heat"))
+      )
+      .toBeGreaterThan(heatBeforeFire);
+    await pilot.mouse.up();
 
     const xBeforeStick = Number(
       await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x")
@@ -294,6 +319,15 @@ async function assertResponsiveBattlefield(display: Page): Promise<void> {
           : { width: Math.round(bounds.width), height: Math.round(bounds.height) };
       })
       .toEqual(viewport);
+    const hudBounds = await display.locator(".spaceship-hud").boundingBox();
+    if (hudBounds === null) throw new Error("Combat HUD has no bounds.");
+    const radarBounds = await display.getByTestId("combat-radar").boundingBox();
+    if (radarBounds === null) throw new Error("Combat radar has no bounds.");
+    expect(Math.abs(radarBounds.width - radarBounds.height)).toBeLessThanOrEqual(1);
+    expect(radarBounds.x).toBeGreaterThanOrEqual(0);
+    expect(radarBounds.y).toBeGreaterThanOrEqual(0);
+    expect(radarBounds.x + radarBounds.width).toBeLessThanOrEqual(viewport.width);
+    expect(radarBounds.y + radarBounds.height).toBeLessThanOrEqual(hudBounds.y);
   }
 
   await expect(canvas).toHaveCount(1);

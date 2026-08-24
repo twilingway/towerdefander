@@ -395,7 +395,7 @@ p {
 
 .spaceship-hud {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .display-shell--battle .spaceship-hud {
@@ -440,6 +440,101 @@ p {
 
 .hud-energy--hull i {
   background: linear-gradient(90deg, #e85f50, #78d39c);
+}
+
+.hud-energy--machine-gun i {
+  background: linear-gradient(90deg, #69d6f5 0%, #ffd45d 62%, #ff5d4f 100%);
+}
+
+.machine-gun-hud--overheated {
+  color: #ffb0a8;
+  border: 1px solid rgb(255 93 79 / 58%);
+  box-shadow: 0 0 1.2rem rgb(255 58 45 / 24%) !important;
+}
+
+.machine-gun-hud--overheated strong {
+  color: #ff6f61;
+}
+
+.machine-gun-hud--overheated .hud-energy--machine-gun i {
+  background: #ff493c;
+  box-shadow: 0 0 0.8rem rgb(255 73 60 / 85%);
+}
+
+.combat-radar {
+  position: absolute;
+  z-index: 25;
+  bottom: max(8rem, calc(env(safe-area-inset-bottom) + 7.2rem));
+  left: 50%;
+  display: grid;
+  width: clamp(10rem, 15vw, 14rem);
+  padding: 0.45rem;
+  border: 1px solid rgb(71 224 233 / 35%);
+  border-radius: 50%;
+  color: #bdfaff;
+  background: rgb(3 20 29 / 64%);
+  box-shadow:
+    inset 0 0 2rem rgb(31 211 224 / 8%),
+    0 0.5rem 1.8rem rgb(0 0 0 / 28%);
+  pointer-events: none;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  backdrop-filter: blur(3px);
+}
+
+.combat-radar__title {
+  position: absolute;
+  z-index: 1;
+  top: 8%;
+  left: 50%;
+  color: rgb(156 245 250 / 72%);
+  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  transform: translateX(-50%);
+}
+
+.combat-radar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.combat-radar__surface {
+  fill: rgb(3 25 34 / 70%);
+}
+
+.combat-radar__grid circle,
+.combat-radar__grid line {
+  fill: none;
+  stroke: rgb(72 212 221 / 18%);
+  stroke-width: 1;
+}
+
+.combat-radar__enemy {
+  fill: #ff625e;
+  stroke: #ffd0ca;
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 3px #ff4139);
+}
+
+.combat-radar__spaceship circle {
+  fill: rgb(4 34 40 / 92%);
+  stroke: #69f3e7;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px #33e2db);
+}
+
+.combat-radar__spaceship path {
+  fill: #b9fff8;
+}
+
+.combat-radar__frame {
+  fill: none;
+  stroke: rgb(86 235 240 / 72%);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px rgb(47 208 218 / 55%));
 }
 
 .encounter-overlay {
@@ -586,6 +681,11 @@ p {
 @media (width <= 900px) {
   .spaceship-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .combat-radar {
+    bottom: max(12.5rem, calc(env(safe-area-inset-bottom) + 11.7rem));
+    width: clamp(8.5rem, 22vw, 10rem);
   }
 }
 
