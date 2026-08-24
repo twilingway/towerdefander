@@ -27,6 +27,12 @@ import {
   confirmDisplayRoomClose,
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
+import {
+  createPreviewRoomView,
+  isPreviewMode,
+  PREVIEW_PHASES,
+  type PreviewPhase
+} from "./previewMode.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { roleLabel } from "./roleLabel.js";
 import { isVisibleDemoMode } from "./visibleDemo.js";
@@ -49,12 +55,25 @@ export function DisplayApp() {
     import.meta.env.DEV,
     import.meta.env.VITE_VISIBLE_DEMO
   );
+  const preview = isPreviewMode(
+    typeof window === "undefined" ? "" : window.location.search,
+    import.meta.env.DEV
+  );
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
-  const [view, setView] = useState<DisplayRoomView>();
+  const [networkView, setNetworkView] = useState<DisplayRoomView>();
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [closingRoom, setClosingRoom] = useState(false);
+  const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  // Layout preview feeds the same view the network fills, so the HUD, overlays
+  // and the Phaser frame all render through the production path.
+  const previewView = useMemo(
+    () => (preview ? createPreviewRoomView(previewPhase) : undefined),
+    [preview, previewPhase]
+  );
+  const view = previewView ?? networkView;
+  const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
   const joinUrl = useMemo(
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
     [view]
@@ -132,13 +151,13 @@ export function DisplayApp() {
   function applyRoomState(state: NetworkRoomState): void {
     const next = toDisplayRoomView(state);
     if (next !== undefined) {
-      setView(next);
+      setNetworkView(next);
       setStatus("connected");
     }
   }
 
   function resetToCreate(message: string): void {
-    setView(undefined);
+    setNetworkView(undefined);
     setStatus("idle");
     setError(message);
     setConnectionEpoch(0);
@@ -161,7 +180,7 @@ export function DisplayApp() {
     }
   }
 
-  if ((status !== "connected" && status !== "reconnecting") || view === undefined) {
+  if ((activeStatus !== "connected" && activeStatus !== "reconnecting") || view === undefined) {
     return (
       <main className="display-shell display-shell--centered">
         <section className="hero-card">
@@ -196,6 +215,9 @@ export function DisplayApp() {
 
   return (
     <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
+      {previewView !== undefined && (
+        <PreviewControls phase={previewPhase} onPhaseChange={setPreviewPhase} />
+      )}
       <header className="room-header">
         <div>
           <p className="eyebrow">Комната</p>
@@ -380,6 +402,38 @@ export function DisplayApp() {
       ) : null}
     </main>
   );
+}
+
+export function PreviewControls({
+  phase,
+  onPhaseChange
+}: {
+  readonly phase: PreviewPhase;
+  readonly onPhaseChange: (phase: PreviewPhase) => void;
+}) {
+  return (
+    <div className="preview-controls" data-testid="preview-controls">
+      <span className="eyebrow">Превью верстки</span>
+      {PREVIEW_PHASES.map((candidate) => (
+        <button
+          key={candidate}
+          type="button"
+          aria-pressed={candidate === phase}
+          onClick={() => {
+            onPhaseChange(candidate);
+          }}
+        >
+          {previewPhaseLabel(candidate)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function previewPhaseLabel(phase: PreviewPhase): string {
+  if (phase === "lobby") return "Лобби";
+  if (phase === "combat") return "Бой";
+  return phase === "intermission" ? "Передышка" : "Итог";
 }
 
 function formatLatency(latencyMs: number | null | undefined): string {

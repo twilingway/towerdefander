@@ -20,7 +20,7 @@ import {
   type TerminalOutcome,
   type UpgradeId
 } from "@spaceship-defender/protocol";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   getFireReleaseDelay,
@@ -29,6 +29,19 @@ import {
   LatestInputScheduler,
   type ControlVector
 } from "./controlInput.js";
+import {
+  createScreenWakeLock,
+  enterImmersiveMode,
+  readImmersiveHost,
+  type ScreenWakeLock
+} from "./immersiveMode.js";
+import {
+  createPreviewRoomView,
+  isPreviewMode,
+  previewPlayerId,
+  PREVIEW_PHASES,
+  type PreviewPhase
+} from "./previewMode.js";
 import {
   clearReconnectionSession,
   leaveControllerRoom,
@@ -72,6 +85,8 @@ const gameServerUrl = readStringEnvironment(
 export function ControllerApp() {
   const roomReference = useRef<ControllerRoom | undefined>(undefined);
   const consentedLeaveReference = useRef<ControllerRoom | undefined>(undefined);
+  const wakeLockReference = useRef<ScreenWakeLock | undefined>(undefined);
+  wakeLockReference.current ??= createScreenWakeLock();
   const [roomCode, setRoomCode] = useState(() => getRoomFromLocation(readBrowserSearch()));
   const [playerName, setPlayerName] = useState("");
   const [playerId, setPlayerId] = useState("");
@@ -80,9 +95,25 @@ export function ControllerApp() {
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [errorEpoch, setErrorEpoch] = useState(0);
-  const currentPlayer = findCurrentPlayer(view, playerId);
+  const [previewRole, setPreviewRole] = useState<CrewRole>("pilot");
+  const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  const preview = isPreviewMode(readBrowserSearch(), import.meta.env.DEV);
+  // Layout preview feeds the same view state the network fills, so every screen
+  // renders through the production components instead of a second copy.
+  const previewView = useMemo(
+    () => (preview ? createPreviewRoomView(previewRole, previewPhase) : undefined),
+    [preview, previewPhase, previewRole]
+  );
+  const activeView = previewView ?? view;
+  const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
+  const currentPlayer = findCurrentPlayer(
+    activeView,
+    previewView === undefined ? playerId : previewPlayerId(previewRole)
+  );
+  const connectedToRoom = status === "connected" || status === "reconnecting";
 
   useEffect(() => {
+    if (preview) return;
     let disposed = false;
     const storage = readSessionStorage();
     const session = storage === undefined ? undefined : readReconnectionSession(storage);
@@ -119,6 +150,22 @@ export function ControllerApp() {
     };
   }, []);
 
+  useEffect(() => {
+    const wakeLock = wakeLockReference.current;
+    if (wakeLock === undefined || !connectedToRoom) return;
+    void wakeLock.acquire();
+    // The browser drops a screen wake lock whenever the page is hidden and never
+    // restores it, so a backgrounded controller has to take it again.
+    function reacquire(): void {
+      if (document.visibilityState === "visible") void wakeLock?.acquire();
+    }
+    document.addEventListener("visibilitychange", reacquire);
+    return () => {
+      document.removeEventListener("visibilitychange", reacquire);
+      void wakeLock.release();
+    };
+  }, [connectedToRoom]);
+
   async function joinRoom(): Promise<void> {
     const normalizedRoomCode = roomCode.trim();
     const normalizedName = playerName.trim();
@@ -126,6 +173,7 @@ export function ControllerApp() {
       setError("Введите код комнаты и имя.");
       return;
     }
+    requestImmersiveMode();
     setStatus("joining");
     setError("");
     try {
@@ -224,6 +272,9 @@ export function ControllerApp() {
       playerId: currentPlayer.playerId,
       runNumber: view.runNumber
     });
+    // A restored session never passes the join form, so this tap is the only
+    // gesture left to ask for fullscreen with.
+    requestImmersiveMode();
   }
 
   function sendControl(sequence: number, control: ControlState): void {
@@ -299,7 +350,10 @@ export function ControllerApp() {
     }
   }
 
-  if (status === "join" || status === "joining" || status === "disconnected") {
+  if (
+    previewView === undefined &&
+    (status === "join" || status === "joining" || status === "disconnected")
+  ) {
     return (
       <main className="controller-shell">
         <form
@@ -344,14 +398,24 @@ export function ControllerApp() {
 
   return (
     <main
-      className={`controller-shell${view?.game?.encounter.phase === "combat" ? " controller-shell--combat" : ""}`}
+      className={`controller-shell${activeView?.game?.encounter.phase === "combat" ? " controller-shell--combat" : ""}`}
     >
-      <section className={`card play-card${playCardPhaseModifier(view?.game?.encounter.phase)}`}>
+      {previewView !== undefined && (
+        <PreviewControls
+          role={previewRole}
+          phase={previewPhase}
+          onRoleChange={setPreviewRole}
+          onPhaseChange={setPreviewPhase}
+        />
+      )}
+      <section
+        className={`card play-card${playCardPhaseModifier(activeView?.game?.encounter.phase)}`}
+      >
         <div className="status-row">
-          <span className="eyebrow">Комната {view?.roomId ?? roomCode}</span>
+          <span className="eyebrow">Комната {activeView?.roomId ?? roomCode}</span>
           <span className="network-status">
-            <span className={`connection connection--${status}`}>
-              {status === "reconnecting" ? "Переподключение…" : "В сети"}
+            <span className={`connection connection--${activeStatus}`}>
+              {activeStatus === "reconnecting" ? "Переподключение…" : "В сети"}
             </span>
             <span className="latency-indicator" aria-live="polite">
               До сервера{" "}
@@ -365,11 +429,11 @@ export function ControllerApp() {
         </p>
         {error.length > 0 && <p className="error-message">{error}</p>}
 
-        {view?.phase === "lobby" ? (
+        {activeView?.phase === "lobby" ? (
           <>
             <div className="controller-roster">
               {CREW_ROLES.map((role) => {
-                const player = view.players.find((candidate) => candidate.role === role);
+                const player = activeView.players.find((candidate) => candidate.role === role);
                 return (
                   <span key={role}>
                     {roleLabel(role)} · {player?.playerName ?? "свободно"}{" "}
@@ -382,67 +446,68 @@ export function ControllerApp() {
             <button
               type="button"
               onClick={sendReady}
-              disabled={currentPlayer?.ready === true || status === "reconnecting"}
+              disabled={currentPlayer?.ready === true || activeStatus === "reconnecting"}
             >
               {currentPlayer?.ready === true ? "Готов — ждём экипаж" : "Я готов"}
             </button>
           </>
-        ) : view === undefined || currentPlayer === undefined ? (
+        ) : activeView === undefined || currentPlayer === undefined ? (
           <p>Ожидаем подтверждение роли…</p>
         ) : (
           <>
-            {view.game !== null && (
+            {activeView.game !== null && (
               <RoleCombatSummary
                 role={currentPlayer.role}
-                modifiers={view.game.roleModifiers}
-                hp={view.game.spaceship.hp}
-                maxHp={view.game.spaceship.maxHp}
-                waveNumber={view.game.encounter.waveNumber}
-                encounterPhase={view.game.encounter.phase}
-                waveSecondsRemaining={view.game.encounter.waveSecondsRemaining}
+                modifiers={activeView.game.roleModifiers}
+                hp={activeView.game.spaceship.hp}
+                maxHp={activeView.game.spaceship.maxHp}
+                waveNumber={activeView.game.encounter.waveNumber}
+                encounterPhase={activeView.game.encounter.phase}
+                waveSecondsRemaining={activeView.game.encounter.waveSecondsRemaining}
               />
             )}
-            {view.game?.encounter.phase === "intermission" && (
+            {activeView.game?.encounter.phase === "intermission" && (
               <TeamUpgradePanel
                 role={currentPlayer.role}
-                teamUpgrade={view.game.teamUpgrade}
-                credits={view.game.credits}
-                phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
-                reconnecting={status === "reconnecting"}
+                teamUpgrade={activeView.game.teamUpgrade}
+                credits={activeView.game.credits}
+                phaseTicksRemaining={activeView.game.encounter.phaseTicksRemaining}
+                reconnecting={activeStatus === "reconnecting"}
                 connectionEpoch={connectionEpoch}
                 errorEpoch={errorEpoch}
                 onVote={sendUpgradeVote}
               />
             )}
-            {view.game?.encounter.phase === "result" && view.game.encounter.outcome !== null && (
-              <RunResultPanel
-                outcome={view.game.encounter.outcome}
-                defeatReason={view.game.encounter.defeatReason}
-                waveNumber={view.game.encounter.waveNumber}
-                score={view.game.encounter.score}
-                players={view.players}
-                currentPlayer={currentPlayer}
-                reconnecting={status === "reconnecting"}
-                onRematch={sendReady}
-              />
-            )}
+            {activeView.game?.encounter.phase === "result" &&
+              activeView.game.encounter.outcome !== null && (
+                <RunResultPanel
+                  outcome={activeView.game.encounter.outcome}
+                  defeatReason={activeView.game.encounter.defeatReason}
+                  waveNumber={activeView.game.encounter.waveNumber}
+                  score={activeView.game.encounter.score}
+                  players={activeView.players}
+                  currentPlayer={currentPlayer}
+                  reconnecting={activeStatus === "reconnecting"}
+                  onRematch={sendReady}
+                />
+              )}
             <RoleControlPanel
               role={currentPlayer.role}
-              shield={view.game?.shield}
-              machineGun={view.game?.machineGun}
-              encounterPhase={view.game?.encounter.phase}
-              connectionDisabled={status === "reconnecting"}
-              generation={`${String(view.runNumber)}:${String(connectionEpoch)}`}
-              hidden={view.game?.encounter.phase !== "combat"}
+              shield={activeView.game?.shield}
+              machineGun={activeView.game?.machineGun}
+              encounterPhase={activeView.game?.encounter.phase}
+              connectionDisabled={activeStatus === "reconnecting"}
+              generation={`${String(activeView.runNumber)}:${String(connectionEpoch)}`}
+              hidden={activeView.game?.encounter.phase !== "combat"}
               onSend={sendControl}
             />
           </>
         )}
-        {view !== undefined && currentPlayer !== undefined && (
+        {activeView !== undefined && currentPlayer !== undefined && (
           <button
             type="button"
             className="secondary-button leave-room-button"
-            disabled={status === "reconnecting"}
+            disabled={activeStatus === "reconnecting"}
             onClick={() => {
               void leaveRoom();
             }}
@@ -682,6 +747,67 @@ export function RunResultPanel({
 
 export function createActionId(): string {
   return globalThis.crypto.randomUUID();
+}
+
+/**
+ * Fire-and-forget by design: a fullscreen prompt must never delay the command
+ * the player actually tapped for, and a refusal is not a connection error.
+ */
+function requestImmersiveMode(): void {
+  const host = readImmersiveHost();
+  if (host !== undefined) void enterImmersiveMode(host);
+}
+
+export function PreviewControls({
+  role,
+  phase,
+  onRoleChange,
+  onPhaseChange
+}: {
+  readonly role: CrewRole;
+  readonly phase: PreviewPhase;
+  readonly onRoleChange: (role: CrewRole) => void;
+  readonly onPhaseChange: (phase: PreviewPhase) => void;
+}) {
+  return (
+    <div className="preview-controls" data-testid="preview-controls">
+      <span className="eyebrow">Превью верстки</span>
+      <div className="preview-controls__group">
+        {CREW_ROLES.map((candidate) => (
+          <button
+            key={candidate}
+            type="button"
+            aria-pressed={candidate === role}
+            onClick={() => {
+              onRoleChange(candidate);
+            }}
+          >
+            {roleLabel(candidate)}
+          </button>
+        ))}
+      </div>
+      <div className="preview-controls__group">
+        {PREVIEW_PHASES.map((candidate) => (
+          <button
+            key={candidate}
+            type="button"
+            aria-pressed={candidate === phase}
+            onClick={() => {
+              onPhaseChange(candidate);
+            }}
+          >
+            {previewPhaseLabel(candidate)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function previewPhaseLabel(phase: PreviewPhase): string {
+  if (phase === "lobby") return "Лобби";
+  if (phase === "combat") return "Бой";
+  return phase === "intermission" ? "Передышка" : "Итог";
 }
 
 function RoleControlPanel({

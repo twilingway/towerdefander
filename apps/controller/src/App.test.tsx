@@ -1,9 +1,10 @@
 import type { PublicTeamUpgradeView, PublicUpgradeVotes } from "@spaceship-defender/protocol";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ControllerApp,
+  PreviewControls,
   RunResultPanel,
   TeamUpgradePanel,
   createActionId,
@@ -205,5 +206,45 @@ describe("ControllerApp", () => {
 
   it("explains rejection of a delayed command from an earlier run", () => {
     expect(toServerError("stale_run", "fallback")).toContain("завершённому бою");
+  });
+});
+
+describe("layout preview", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the play screen from a fixture instead of the join form", () => {
+    vi.stubGlobal("window", { location: { search: "?preview=1" } });
+
+    const markup = renderToStaticMarkup(<ControllerApp />);
+
+    expect(markup).toContain("Превью верстки");
+    expect(markup).toContain("Комната PREVIEW");
+    expect(markup).not.toContain('name="roomCode"');
+  });
+
+  it("keeps the join form without the preview parameter", () => {
+    vi.stubGlobal("window", { location: { search: "" } });
+
+    const markup = renderToStaticMarkup(<ControllerApp />);
+
+    expect(markup).toContain('name="roomCode"');
+    expect(markup).not.toContain("Превью верстки");
+  });
+
+  it("marks the selected role and phase in the preview switcher", () => {
+    const markup = renderToStaticMarkup(
+      <PreviewControls
+        role="shield"
+        phase="intermission"
+        onRoleChange={() => undefined}
+        onPhaseChange={() => undefined}
+      />
+    );
+
+    expect(markup).toContain("Оператор щита");
+    expect(markup).toContain("Передышка");
+    expect(markup.match(/aria-pressed="true"/gu)).toHaveLength(2);
   });
 });

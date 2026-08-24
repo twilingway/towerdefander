@@ -12,7 +12,10 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
+
+  /* Keeps a swipe on the joystick from triggering pull-to-refresh. */
+  overscroll-behavior: none;
 }
 
 button,
@@ -22,8 +25,9 @@ input {
 
 .controller-shell {
   display: grid;
-  min-height: 100vh;
-  padding: 1rem;
+  min-height: 100dvh;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   place-items: center;
   background: radial-gradient(circle at top, #21453f, #101b1d 58%);
 }
@@ -516,7 +520,8 @@ button:disabled {
     min-height: 100dvh;
     max-height: 100dvh;
     gap: 0.35rem 0.75rem;
-    padding: 0.45rem 0.75rem;
+    padding: max(0.45rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+      max(0.45rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
     overflow: hidden;
     border: 0;
     border-radius: 0;
@@ -630,4 +635,42 @@ button:disabled {
     padding: 0.3rem 0.5rem;
     font-size: 0.68rem;
   }
+}
+
+/* Dev-only layout preview. Fixed so it never joins the combat grid. */
+.preview-controls {
+  position: fixed;
+  z-index: 10;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-top: 0;
+  border-left: 0;
+  border-bottom-right-radius: 0.75rem;
+  background: rgb(8 18 20 / 92%);
+}
+
+.preview-controls__group {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.preview-controls button {
+  min-height: auto;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.72rem;
+}
+
+.preview-controls button[aria-pressed="true"] {
+  border-color: #e6b85c;
+  color: #e6b85c;
 }
