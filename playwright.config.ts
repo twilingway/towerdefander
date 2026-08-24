@@ -27,6 +27,7 @@ export default defineConfig({
           {
             command: "pnpm.cmd --filter @spaceship-defender/display dev -- --strictPort",
             url: "http://127.0.0.1:5173",
+            env: { VITE_VISIBLE_DEMO: "1" },
             reuseExistingServer: true,
             timeout: 30_000
           },

@@ -179,7 +179,7 @@ try {
     } else if (currentEncounter.phase === "intermission") {
       verification.intermission = true;
       await neutralizeForPhase(currentEncounter);
-      await chooseAllUpgrades(currentEncounter.waveNumber);
+      await voteAllUpgrades(currentEncounter.waveNumber);
     } else if (currentEncounter.phase === "result") {
       await neutralizeForPhase(currentEncounter);
       resultObservedAt ??= Date.now();
@@ -479,28 +479,36 @@ async function neutralizeForPhase(currentEncounter) {
   await neutralize();
 }
 
-async function chooseAllUpgrades(waveNumber) {
+async function voteAllUpgrades(waveNumber) {
   const upgradeKey = runWaveKey(pilotRoom().state.runNumber, waveNumber);
   if (stopRequested || upgradedRunWaves.has(upgradeKey)) return;
+  await waitFor(
+    () => teamUpgrade()?.hasOffer === true && teamUpgrade().offer.cards.length === 3,
+    3_000
+  );
+  if (stopRequested) return;
+  const offer = teamUpgrade().offer;
+  const card = offer.cards.at(0);
+  if (card === undefined) throw new Error("Team upgrade offer has no cards.");
+  // The crew votes unanimously so the demo always shows one paid upgrade.
   for (const [role, room] of roomsByRole) {
-    await waitFor(() => room.state.game?.upgrade?.get(role)?.offer?.cards?.length === 3, 3_000);
     if (stopRequested) return;
-    const upgrade = room.state.game.upgrade.get(role);
-    const card = upgrade.offer.cards.at(0);
-    if (card === undefined) throw new Error(`No upgrade card for ${role}.`);
-    if (stopRequested) return;
-    room.send(clientMessage.upgradeChoose, {
+    room.send(clientMessage.upgradeVote, {
       ...envelope(room),
       actionId: randomUUID(),
-      waveNumber: upgrade.offer.waveNumber,
-      offerId: upgrade.offer.offerId,
-      upgradeId: card.upgradeId
+      waveNumber: offer.waveNumber,
+      offerId: offer.offerId,
+      upgradeId: card.upgradeId,
+      revision: 1
     });
-    await waitFor(() => room.state.game.upgrade.get(role)?.hasSelection === true, 3_000);
-    if (stopRequested) return;
+    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === card.upgradeId, 3_000);
   }
   upgradedRunWaves.add(upgradeKey);
   verification.upgrades = true;
+}
+
+function teamUpgrade() {
+  return pilotRoom().state.game?.teamUpgrade;
 }
 
 async function refreshTelemetry() {

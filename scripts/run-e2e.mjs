@@ -28,7 +28,8 @@ try {
       ],
       {
         VITE_GAME_SERVER_URL: `ws://127.0.0.1:${String(serverPort)}`,
-        VITE_CONTROLLER_URL: `http://127.0.0.1:${String(controllerPort)}`
+        VITE_CONTROLLER_URL: `http://127.0.0.1:${String(controllerPort)}`,
+        VITE_VISIBLE_DEMO: "1"
       }
     ),
     startProcess(

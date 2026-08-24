@@ -6,6 +6,7 @@ import { Client } from "@colyseus/sdk";
 import {
   PROTOCOL_VERSION,
   ROOM_TYPE,
+  TEAM_UPGRADE_PRICE,
   clientMessage,
   serverLatencyProbeSchema,
   serverMessage
@@ -187,25 +188,27 @@ try {
   await waitFor(() => encounter().phase === "intermission", 90_000);
   gunnerEnabled = false;
   pilot = await reconnectController(pilot, "intermission");
-  const offer = await waitForUpgrade(pilot, "pilot");
-  const duplicateCommand = makeUpgradeCommand(pilot, offer);
-  pilot.send(clientMessage.upgradeChoose, duplicateCommand);
-  await waitFor(() => pilot.state.game.upgrade.get("pilot")?.hasSelection === true);
-  const upgradedModifiers = pilotModifierSnapshot();
+  const offer = await waitForTeamOffer();
+  const pilotCard = offer.cards.find((card) => card.role === "pilot");
+  if (pilotCard === undefined) throw new Error("Team offer has no pilot card.");
+  const duplicateCommand = makeVoteCommand(pilot, offer, pilotCard.upgradeId, 1);
+  pilot.send(clientMessage.upgradeVote, duplicateCommand);
+  await waitFor(() => teamUpgrade().votes.get("pilot")?.upgradeId === pilotCard.upgradeId);
   pilot = await reconnectController(pilot, "intermission");
-  pilot.send(clientMessage.upgradeChoose, duplicateCommand);
+  pilot.send(clientMessage.upgradeVote, duplicateCommand);
   await delay(350);
-  if (JSON.stringify(pilotModifierSnapshot()) !== JSON.stringify(upgradedModifiers))
-    throw new Error("Duplicate upgrade applied twice after reconnect.");
-  await chooseFirstUpgrade(gunner, "gunner");
-  await chooseFirstUpgrade(shield, "shield");
+  if (teamUpgrade().votes.get("pilot")?.revision !== 1)
+    throw new Error("Duplicate vote replay after reconnect changed the authoritative revision.");
+  await voteForUpgrade(gunner, "gunner", offer, pilotCard.upgradeId);
+  await voteForUpgrade(shield, "shield", offer, pilotCard.upgradeId);
 
-  await waitFor(() => encounter().phase === "combat" && encounter().waveNumber === 2, 13_000);
+  const purchase = await resolveTeamPurchase(offer, pilotCard);
+  const modifiersAfterPurchase = pilotModifierSnapshot();
   await waitFor(() => observedAsteroidEntrySectors.size >= 2, 12_000);
-  pilot.send(clientMessage.upgradeChoose, duplicateCommand);
+  pilot.send(clientMessage.upgradeVote, duplicateCommand);
   await delay(350);
-  if (JSON.stringify(pilotModifierSnapshot()) !== JSON.stringify(upgradedModifiers))
-    throw new Error("Duplicate upgrade replay after intermission applied twice.");
+  if (JSON.stringify(pilotModifierSnapshot()) !== JSON.stringify(modifiersAfterPurchase))
+    throw new Error("Vote replay after the intermission applied a second upgrade.");
 
   console.log(
     JSON.stringify({
@@ -220,7 +223,14 @@ try {
         observedAsteroids: observedAsteroidIds.size,
         entrySectors: [...observedAsteroidEntrySectors].sort((a, b) => a - b)
       },
-      upgradeDuplicate: "idempotent",
+      teamUpgrade: {
+        offerId: purchase.offerId,
+        selected: purchase.upgradeId,
+        paidAfterWave: purchase.waveNumber,
+        creditsBeforeVote: purchase.creditsBefore,
+        creditsAfterPurchase: purchase.creditsAfter,
+        voteReplay: "idempotent"
+      },
       reconnectPhases: ["combat", "intermission"],
       displayLatencyMs: display.state.displayLatencyMs,
       playerLatencies: [...display.state.players.values()].map((player) => player.latencyMs)
@@ -397,26 +407,89 @@ async function reconnectController(room, expectedPhase) {
   return reconnected;
 }
 
-async function waitForUpgrade(room, role) {
-  await waitFor(() => room.state.game.upgrade.get(role)?.offer.cards.length === 3, 2_000);
-  const upgrade = room.state.game.upgrade.get(role);
-  const card = upgrade?.offer.cards.at(0);
-  if (upgrade === undefined || card === undefined) throw new Error(`No ${role} upgrade offer.`);
+/**
+ * A cleared wave banks only its own budget, and threats that drift out of the
+ * arena pay nothing, so the first intermission can end short of the price. Keep
+ * fighting and voting until exactly one purchase resolves.
+ */
+async function resolveTeamPurchase(firstOffer, firstCard) {
+  let offer = firstOffer;
+  let card = firstCard;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const waveNumber = encounter().waveNumber;
+    const creditsBefore = display.state.game.credits;
+    const modifiersBefore = pilotModifierSnapshot();
+    await waitFor(
+      () => encounter().phase === "combat" && encounter().waveNumber === waveNumber + 1,
+      40_000
+    );
+    const creditsAfter = display.state.game.credits;
+    if (creditsBefore >= TEAM_UPGRADE_PRICE) {
+      if (creditsAfter > creditsBefore - TEAM_UPGRADE_PRICE)
+        throw new Error(
+          `Majority vote did not debit the shared balance once: ${String(creditsBefore)} → ${String(creditsAfter)}.`
+        );
+      if (JSON.stringify(pilotModifierSnapshot()) === JSON.stringify(modifiersBefore))
+        throw new Error("Winning upgrade did not reach the authoritative pilot modifiers.");
+      if (!teamUpgrade().hasSelection || teamUpgrade().selection.upgradeId !== card.upgradeId)
+        throw new Error(`Wave ${String(waveNumber + 1)} started without the voted selection.`);
+      return {
+        waveNumber,
+        offerId: offer.offerId,
+        upgradeId: card.upgradeId,
+        creditsBefore,
+        creditsAfter
+      };
+    }
+
+    if (creditsAfter !== creditsBefore)
+      throw new Error("An unaffordable offer still debited the shared balance.");
+    if (JSON.stringify(pilotModifierSnapshot()) !== JSON.stringify(modifiersBefore))
+      throw new Error("An unaffordable offer still applied a role modifier.");
+    if (teamUpgrade().hasSelection)
+      throw new Error("An unaffordable offer still published a selection.");
+
+    gunnerEnabled = true;
+    await waitFor(() => encounter().phase === "intermission", 150_000);
+    gunnerEnabled = false;
+    offer = await waitForTeamOffer();
+    card = offer.cards.find((entry) => entry.role === "pilot");
+    if (card === undefined) throw new Error("Team offer has no pilot card.");
+    await voteForUpgrade(pilot, "pilot", offer, card.upgradeId);
+    await voteForUpgrade(gunner, "gunner", offer, card.upgradeId);
+    await voteForUpgrade(shield, "shield", offer, card.upgradeId);
+  }
+  throw new Error("Crew never banked enough credits for a team upgrade.");
+}
+
+function teamUpgrade() {
+  return display.state.game.teamUpgrade;
+}
+
+async function waitForTeamOffer() {
+  await waitFor(() => teamUpgrade().hasOffer && teamUpgrade().offer.cards.length === 3);
+  const offer = teamUpgrade().offer;
   return {
-    offerId: upgrade.offer.offerId,
-    waveNumber: upgrade.offer.waveNumber,
-    upgradeId: card.upgradeId
+    offerId: offer.offerId,
+    waveNumber: offer.waveNumber,
+    cards: [...offer.cards].map((card) => ({ upgradeId: card.upgradeId, role: card.role }))
   };
 }
 
-async function chooseFirstUpgrade(room, role) {
-  const offer = await waitForUpgrade(room, role);
-  room.send(clientMessage.upgradeChoose, makeUpgradeCommand(room, offer));
-  await waitFor(() => room.state.game.upgrade.get(role)?.hasSelection === true, 2_000);
+async function voteForUpgrade(room, role, offer, upgradeId) {
+  room.send(clientMessage.upgradeVote, makeVoteCommand(room, offer, upgradeId, 1));
+  await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === upgradeId);
 }
 
-function makeUpgradeCommand(room, offer) {
-  return { ...envelope(room), actionId: randomUUID(), ...offer };
+function makeVoteCommand(room, offer, upgradeId, revision) {
+  return {
+    ...envelope(room),
+    actionId: randomUUID(),
+    waveNumber: offer.waveNumber,
+    offerId: offer.offerId,
+    upgradeId,
+    revision
+  };
 }
 
 function pilotModifierSnapshot() {

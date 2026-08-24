@@ -164,8 +164,9 @@ function voteUpgrade(
   cardIndex = 0
 ): void {
   const upgrade = room.state.game.teamUpgrade;
+  if (!upgrade.hasOffer || upgrade.offer.cards.length <= cardIndex)
+    throw new Error("Expected an upgrade offer.");
   const card = upgrade.offer.cards.at(cardIndex);
-  if (!upgrade.hasOffer || card === undefined) throw new Error("Expected an upgrade offer.");
   room.handleUpgradeVote(controller.client, {
     protocolVersion: PROTOCOL_VERSION,
     roomId: room.roomId,
@@ -1126,8 +1127,9 @@ describe("SpaceshipDefenderRoom v14 combat projection and upgrades", () => {
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
     const upgrade = room.state.game.teamUpgrade;
+    if (!upgrade.hasOffer || upgrade.offer.cards.length === 0)
+      throw new Error("Expected pilot offer.");
     const card = upgrade.offer.cards.at(0);
-    if (!upgrade.hasOffer || card === undefined) throw new Error("Expected pilot offer.");
     const gameBefore = internals(room).gameState;
     const modifiersBefore = {
       speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
@@ -1159,8 +1161,9 @@ describe("SpaceshipDefenderRoom v14 combat projection and upgrades", () => {
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
     const upgrade = room.state.game.teamUpgrade;
+    if (!upgrade.hasOffer || upgrade.offer.cards.length === 0)
+      throw new Error("Expected pilot offer.");
     const card = upgrade.offer.cards.at(0);
-    if (!upgrade.hasOffer || card === undefined) throw new Error("Expected pilot offer.");
 
     for (let index = 0; index < 35; index += 1) {
       room.handleUpgradeVote(pilot.client, {
@@ -1199,8 +1202,9 @@ describe("SpaceshipDefenderRoom v14 combat projection and upgrades", () => {
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
     const upgrade = room.state.game.teamUpgrade;
+    if (!upgrade.hasOffer || upgrade.offer.cards.length < 2)
+      throw new Error("Expected gunner card.");
     const card = upgrade.offer.cards.at(1);
-    if (!upgrade.hasOffer || card === undefined) throw new Error("Expected gunner card.");
 
     room.handleUpgradeVote(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,

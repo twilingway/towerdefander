@@ -17,6 +17,12 @@ const mobileControllerContext = {
   isMobile: true
 } as const;
 
+const landscapeControllerContext = {
+  viewport: { width: 844, height: 390 },
+  hasTouch: true,
+  isMobile: true
+} as const;
+
 test("three browser controllers fly, fire and shield one spaceship", async ({ browser }) => {
   test.setTimeout(45_000);
   const contexts: BrowserContext[] = [];
@@ -251,6 +257,8 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
       .poll(async () => Number(await world.getAttribute("data-spaceship-x")))
       .toBeGreaterThan(xBeforeTouch);
 
+    await assertSimultaneousMoveAndFire(pilot, world);
+
     await shield.getByTestId("shield-button").tap();
     await expect(world).toHaveAttribute("data-shield-active", "true");
     await shield.getByTestId("shield-button").tap();
@@ -310,6 +318,75 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
         await expect(page.locator(".error-message")).toContainText("Комната закрыта");
       })
     );
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+test("crew votes one shared upgrade and pays for it once", async ({ browser }) => {
+  test.setTimeout(300_000);
+  const contexts: BrowserContext[] = [];
+  try {
+    const displayContext = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    contexts.push(displayContext);
+    const display = await displayContext.newPage();
+    await display.goto(`${displayUrl}/?demo=1`);
+    await display.getByRole("button", { name: "Создать комнату" }).click();
+    const roomCode = (await display.locator(".room-code").textContent())?.trim();
+    if (!roomCode) throw new Error("Display did not publish a room code.");
+
+    const pilot = await newController(
+      browser,
+      contexts,
+      roomCode,
+      "Пилот Голос",
+      true,
+      landscapeControllerContext
+    );
+    const gunner = await newController(browser, contexts, roomCode, "Наводчик Голос");
+    const shield = await newController(browser, contexts, roomCode, "Щит Голос");
+    await markCrewReady([pilot, gunner, shield]);
+
+    const world = display.getByTestId("spaceship-world");
+    await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
+    await expect(world).toHaveAttribute("data-demo-target-id", /.+/, { timeout: 30_000 });
+    await clearWaveWithGunner(gunner, world);
+
+    const intermission = display.locator(".encounter-overlay--intermission");
+    await expect(intermission).toContainText("Голосование за общее улучшение");
+    await expect(intermission.locator(".intermission-card")).toHaveCount(3);
+    // An encounter window must sit above the combat telemetry, and the whole
+    // ballot must fit a landscape phone: a card below the fold reads as a
+    // controller that simply ignores the vote.
+    await expect(intermission).toHaveCSS("z-index", "40");
+    await expect(display.getByTestId("combat-radar")).toHaveCSS("z-index", "25");
+    const pilotViewport = pilot.viewportSize();
+    const pilotCardBounds = await pilot.locator(".upgrade-card").first().boundingBox();
+    if (pilotViewport === null || pilotCardBounds === null)
+      throw new Error("Landscape voting card has no bounds.");
+    expect(pilotCardBounds.y).toBeGreaterThanOrEqual(0);
+    expect(pilotCardBounds.y + pilotCardBounds.height).toBeLessThanOrEqual(pilotViewport.height);
+
+    const creditsBeforeVote = Number(await world.getAttribute("data-credits"));
+    const pilotCard = pilot.locator(".upgrade-card").first();
+    const votedUpgradeId = await pilotCard.getAttribute("data-upgrade-id");
+    if (votedUpgradeId === null) throw new Error("Controller card has no upgrade identity.");
+
+    for (const page of [pilot, gunner, shield]) {
+      await page.locator(".upgrade-card").first().click();
+      await expect(page.locator(".upgrade-card--selected")).toHaveCount(1);
+    }
+    await expect(intermission.locator(".intermission-card--voted")).toHaveCount(1);
+    await expect(intermission).toContainText("Голоса: Пилот, Наводчик, Оператор щита");
+
+    // The debit and the modifier are applied once, at the authoritative deadline.
+    await expect(world).toHaveAttribute("data-wave-number", "2", { timeout: 60_000 });
+    const affordable = creditsBeforeVote >= 5;
+    await expect(world).toHaveAttribute("data-team-upgrade-id", affordable ? votedUpgradeId : "");
+    expect(Number(await world.getAttribute("data-credits"))).toBe(
+      affordable ? creditsBeforeVote - 5 : creditsBeforeVote
+    );
+    await expect(display.locator(".encounter-overlay--intermission")).toBeHidden();
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }
@@ -461,5 +538,147 @@ async function markCrewReady(pages: readonly Page[]): Promise<void> {
     } else {
       await expect(page.getByRole("button", { name: "Я готов" })).toHaveCount(0);
     }
+  }
+}
+
+interface CombatTelemetry {
+  readonly phase: string;
+  readonly shipX: number;
+  readonly shipY: number;
+  readonly targetId: string;
+  readonly targetX: number;
+  readonly targetY: number;
+  readonly targetVelocityX: number;
+  readonly targetVelocityY: number;
+}
+
+/**
+ * Drives the gunner from the browser until the authoritative wave is cleared:
+ * the crew has to bank the credits itself before it can vote for a paid upgrade.
+ */
+async function clearWaveWithGunner(gunner: Page, world: Locator): Promise<void> {
+  const bounds = await gunner.getByTestId("virtual-stick").boundingBox();
+  if (bounds === null) throw new Error("Gunner virtual stick has no bounds.");
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const reach = Math.min(bounds.width, bounds.height) * 0.45;
+  await gunner.mouse.move(centerX, centerY);
+  await gunner.mouse.down();
+  await gunner.keyboard.down("Space");
+  try {
+    const deadline = Date.now() + 180_000;
+    while (Date.now() < deadline) {
+      const telemetry = await readCombatTelemetry(world);
+      if (telemetry.phase === "intermission") return;
+      if (telemetry.phase === "result")
+        throw new Error("The run ended before the crew reached an intermission.");
+      const aim = interceptAim(telemetry);
+      if (aim !== undefined) {
+        await gunner.mouse.move(centerX + aim.x * reach, centerY + aim.y * reach);
+      }
+      await gunner.waitForTimeout(100);
+    }
+  } finally {
+    await gunner.keyboard.up("Space");
+    await gunner.mouse.up();
+  }
+  throw new Error("Crew did not clear the first wave before the deadline.");
+}
+
+async function readCombatTelemetry(world: Locator): Promise<CombatTelemetry> {
+  const [phase, shipX, shipY, targetId, targetX, targetY, targetVelocityX, targetVelocityY] =
+    await Promise.all([
+      world.getAttribute("data-encounter-phase"),
+      world.getAttribute("data-spaceship-x"),
+      world.getAttribute("data-spaceship-y"),
+      world.getAttribute("data-demo-target-id"),
+      world.getAttribute("data-demo-target-x"),
+      world.getAttribute("data-demo-target-y"),
+      world.getAttribute("data-demo-target-velocity-x"),
+      world.getAttribute("data-demo-target-velocity-y")
+    ]);
+  return {
+    phase: phase ?? "",
+    shipX: Number(shipX),
+    shipY: Number(shipY),
+    targetId: targetId ?? "",
+    targetX: Number(targetX),
+    targetY: Number(targetY),
+    targetVelocityX: Number(targetVelocityX),
+    targetVelocityY: Number(targetVelocityY)
+  };
+}
+
+/** Leads the nearest published target the same way the demo autopilot does. */
+function interceptAim(telemetry: CombatTelemetry): { x: number; y: number } | undefined {
+  if (telemetry.targetId.length === 0) return undefined;
+  const projectileSpeed = 720;
+  const relativeX = telemetry.targetX - telemetry.shipX;
+  const relativeY = telemetry.targetY - telemetry.shipY;
+  const quadratic =
+    telemetry.targetVelocityX ** 2 + telemetry.targetVelocityY ** 2 - projectileSpeed ** 2;
+  const linear =
+    2 * (relativeX * telemetry.targetVelocityX + relativeY * telemetry.targetVelocityY);
+  const constant = relativeX ** 2 + relativeY ** 2;
+  const discriminant = linear ** 2 - 4 * quadratic * constant;
+  let seconds = 0;
+  if (discriminant >= 0 && Math.abs(quadratic) > 1e-9) {
+    const root = Math.sqrt(discriminant);
+    const candidates = [
+      (-linear - root) / (2 * quadratic),
+      (-linear + root) / (2 * quadratic)
+    ].filter((candidate) => candidate > 0);
+    if (candidates.length > 0) seconds = Math.min(...candidates);
+  }
+  const aimX = relativeX + telemetry.targetVelocityX * seconds;
+  const aimY = relativeY + telemetry.targetVelocityY * seconds;
+  const length = Math.hypot(aimX, aimY);
+  return length === 0 ? undefined : { x: aimX / length, y: aimY / length };
+}
+
+/**
+ * Landscape controls own one pointer each, so the left stick and the right
+ * action zone have to answer two live touches at the same time.
+ */
+async function assertSimultaneousMoveAndFire(page: Page, world: Locator): Promise<void> {
+  const stickBounds = await page.getByTestId("virtual-stick").boundingBox();
+  const fireBounds = await page.getByTestId("mg-fire-button").boundingBox();
+  if (stickBounds === null || fireBounds === null)
+    throw new Error("Landscape controller zones have no bounds.");
+  const stickStart = {
+    x: stickBounds.x + stickBounds.width / 2,
+    y: stickBounds.y + stickBounds.height / 2
+  };
+  const stickEnd = { x: stickBounds.x + stickBounds.width * 0.88, y: stickStart.y };
+  const fire = {
+    x: fireBounds.x + fireBounds.width / 2,
+    y: fireBounds.y + fireBounds.height / 2
+  };
+  const session = await page.context().newCDPSession(page);
+  const xBeforeTouch = Number(await world.getAttribute("data-spaceship-x"));
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [
+        { ...stickStart, id: 1 },
+        { ...fire, id: 2 }
+      ]
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [
+        { ...stickEnd, id: 1 },
+        { ...fire, id: 2 }
+      ]
+    });
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-spaceship-x")))
+      .toBeGreaterThan(xBeforeTouch);
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-mg-projectile-count")))
+      .toBeGreaterThan(0);
+  } finally {
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await session.detach();
   }
 }
