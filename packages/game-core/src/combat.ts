@@ -7,6 +7,7 @@ import {
 
 export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
+export type DefeatReason = "spaceship_destroyed" | "wave_timeout";
 export type GameplayRole = "pilot" | "gunner" | "shield";
 export type EnemyKind = "gunship" | "missileCarrier";
 export type SpawnKind = EnemyKind | "asteroid";
@@ -181,6 +182,7 @@ export interface CombatStateFields {
   readonly spaceshipMaxHp: number;
   readonly encounterPhase: EncounterPhase;
   readonly outcome: TerminalOutcome | null;
+  readonly defeatReason: DefeatReason | null;
   readonly waveNumber: number;
   readonly encounterTick: number;
   readonly score: number;
@@ -450,6 +452,7 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     spaceshipMaxHp: config.spaceshipMaxHp,
     encounterPhase: "combat",
     outcome: null,
+    defeatReason: null,
     waveNumber: 1,
     encounterTick: 0,
     score: 0,
@@ -577,6 +580,7 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
       ...pickCombatResult(next),
       encounterPhase: "intermission",
       outcome: null,
+      defeatReason: null,
       encounterTick: 0,
       offerRngState: offerResult.rngState,
       roleOffers: offerResult.offers,
@@ -614,6 +618,7 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
     ...pickCombatResult({ ...state, ...selected }),
     encounterPhase: "combat",
     outcome: null,
+    defeatReason: null,
     encounterTick: 0,
     waveNumber,
     spawnRngState: wave.rngState,
@@ -1435,6 +1440,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     spaceshipMaxHp: state.spaceshipMaxHp,
     encounterPhase: state.encounterPhase,
     outcome: state.outcome,
+    defeatReason: state.defeatReason,
     waveNumber: state.waveNumber,
     encounterTick: state.encounterTick,
     score: state.score,
@@ -1456,30 +1462,47 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
 
 export function createTerminalCombatState<TState extends CombatStateFields>(
   state: TState,
-  outcome: TerminalOutcome
+  outcome: TerminalOutcome,
+  defeatReason: DefeatReason = "spaceship_destroyed"
 ): TState {
-  if (outcome === "defeat" && state.spaceshipHp > 0) {
-    throw new RangeError("Defeat requires zero spaceship HP");
+  if (outcome === "defeat" && defeatReason === "spaceship_destroyed" && state.spaceshipHp > 0) {
+    throw new RangeError("Destroyed spaceship defeat requires zero spaceship HP");
+  }
+  if (outcome === "defeat" && defeatReason === "wave_timeout" && state.spaceshipHp <= 0) {
+    throw new RangeError("Wave timeout defeat requires positive spaceship HP");
   }
   if (outcome === "victory" && state.spaceshipHp <= 0) {
     throw new RangeError("Victory requires positive spaceship HP");
   }
   return {
     ...state,
-    spaceshipHp: outcome === "defeat" ? 0 : state.spaceshipHp,
     encounterPhase: "result",
-    outcome
+    outcome,
+    defeatReason: outcome === "defeat" ? defeatReason : null
   };
 }
 
+export function failWaveByTimeout<TState extends CombatStateFields>(state: TState): TState {
+  if (state.encounterPhase !== "combat" || state.outcome !== null || state.spaceshipHp <= 0) {
+    throw new RangeError("Wave timeout requires active combat with a living spaceship");
+  }
+  return createTerminalCombatState(state, "defeat", "wave_timeout");
+}
+
 export function assertCombatResultInvariant(
-  state: Pick<CombatStateFields, "spaceshipHp" | "encounterPhase" | "outcome">
+  state: Pick<CombatStateFields, "spaceshipHp" | "encounterPhase" | "outcome" | "defeatReason">
 ): void {
   if ((state.encounterPhase === "result") !== (state.outcome !== null)) {
     throw new RangeError("Only a terminal result requires an outcome");
   }
-  if (state.outcome === "defeat" && state.spaceshipHp !== 0) {
-    throw new RangeError("Defeat requires zero spaceship HP");
+  if ((state.outcome === "defeat") !== (state.defeatReason !== null)) {
+    throw new RangeError("Only defeat requires a defeat reason");
+  }
+  if (state.defeatReason === "spaceship_destroyed" && state.spaceshipHp !== 0) {
+    throw new RangeError("Destroyed spaceship defeat requires zero spaceship HP");
+  }
+  if (state.defeatReason === "wave_timeout" && state.spaceshipHp <= 0) {
+    throw new RangeError("Wave timeout defeat requires positive spaceship HP");
   }
   if (state.outcome === "victory" && state.spaceshipHp <= 0) {
     throw new RangeError("Victory requires positive spaceship HP");

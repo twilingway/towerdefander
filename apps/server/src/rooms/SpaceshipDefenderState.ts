@@ -1,6 +1,7 @@
 import { ArraySchema, MapSchema, Schema, type, view } from "@colyseus/schema";
 import type {
   CrewRole,
+  DefeatReason,
   EncounterPhase,
   EnemyKind,
   RoomPhase,
@@ -46,9 +47,12 @@ export class EncounterState extends Schema {
   @type("string") phase: EncounterPhase = "combat";
   @type("boolean") hasOutcome = false;
   @type("string") outcome: TerminalOutcome = "defeat";
+  @type("boolean") hasDefeatReason = false;
+  @type("string") defeatReason: DefeatReason = "spaceship_destroyed";
   @type("uint32") waveNumber = 1;
   @type("uint32") encounterTick = 0;
   @type("uint16") phaseTicksRemaining = 0;
+  @type("uint32") waveSecondsRemaining = 0;
   @type("uint32") score = 0;
 }
 

@@ -11,6 +11,7 @@ describe("RunResultOverlay", () => {
     const markup = renderToStaticMarkup(
       <RunResultOverlay
         outcome={outcome}
+        defeatReason={outcome === "defeat" ? "spaceship_destroyed" : null}
         waveNumber={7}
         score={12_340}
         readyCount={2}
@@ -30,6 +31,7 @@ describe("RunResultOverlay", () => {
     const markup = renderToStaticMarkup(
       <RunResultOverlay
         outcome="defeat"
+        defeatReason="spaceship_destroyed"
         waveNumber={1}
         score={0}
         readyCount={0}
@@ -40,5 +42,22 @@ describe("RunResultOverlay", () => {
 
     expect(markup).toContain("disabled");
     expect(markup).toContain("Закрываем комнату…");
+  });
+
+  it("explains defeat caused by an expired wave countdown", () => {
+    const markup = renderToStaticMarkup(
+      <RunResultOverlay
+        outcome="defeat"
+        defeatReason="wave_timeout"
+        waveNumber={5}
+        score={1500}
+        readyCount={0}
+        closing={false}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Время волны истекло");
+    expect(markup).not.toContain("Корабль уничтожен");
   });
 });

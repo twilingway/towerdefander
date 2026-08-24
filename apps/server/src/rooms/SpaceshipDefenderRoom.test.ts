@@ -22,7 +22,7 @@ import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
-const LEGACY_PROTOCOL_VERSION = 10;
+const LEGACY_PROTOCOL_VERSION = 12;
 
 interface TestClient {
   readonly client: Client;
@@ -118,9 +118,12 @@ interface RoomInternals {
   outstandingLatencyProbes: Map<string, { readonly probeId: string; readonly sentAt: number }>;
   lifecycleDeadlines: Map<string, number>;
   lifecycleGeneration: number;
+  waveDeadlineAtMs: number | undefined;
+  waveDeadlineGeneration: number;
   metadataWritePromise: Promise<void> | undefined;
   pendingMetadata: unknown;
   setLifecycleDeadline(reason: string, expiresAtMs: number): void;
+  expireWaveDeadlineIfDue(now: number): boolean;
 }
 
 function internals(room: SpaceshipDefenderRoom): RoomInternals {
@@ -175,8 +178,8 @@ function chooseUpgrade(
   });
 }
 
-describe("SpaceshipDefenderRoom v11 lifecycle", () => {
-  it("accepts only strict protocol v11 display create options and rejects v10 before mutation", () => {
+describe("SpaceshipDefenderRoom v13 lifecycle", () => {
+  it("accepts only strict protocol v13 display create options and rejects v12 before mutation", () => {
     const room = new SpaceshipDefenderRoom();
     room.roomId = "ROOM123";
     expect(() => {
@@ -203,7 +206,7 @@ describe("SpaceshipDefenderRoom v11 lifecycle", () => {
     expect(internals(room).pendingMetadata).toBeUndefined();
   });
 
-  it("rejects a v10 controller join before mutating the roster", () => {
+  it("rejects a v12 controller join before mutating the roster", () => {
     const room = createRoom();
     const controller = createClient("legacy-controller");
 
@@ -323,11 +326,12 @@ describe("SpaceshipDefenderRoom v11 lifecycle", () => {
     expect(room.state.game.spaceship.velocityX).toBe(-32);
   });
 
-  it("rehydrates v11 geometry through reconnect without widening StateView visibility", async () => {
+  it("rehydrates v13 geometry through reconnect without widening StateView visibility", async () => {
     const room = createRoom();
     const display = joinDisplay(room);
     const { controllers } = startGame(room);
     room.advanceGameStep();
+    const waveDeadline = internals(room).waveDeadlineAtMs;
     const pilot = controllerAt(controllers, 0);
     const reconnect = vi.spyOn(room, "allowReconnection");
 
@@ -353,6 +357,8 @@ describe("SpaceshipDefenderRoom v11 lifecycle", () => {
       worldHeight: 4400,
       arenaRadius: 2200
     });
+    expect(internals(room).waveDeadlineAtMs).toBe(waveDeadline);
+    expect(room.state.game.encounter.waveSecondsRemaining).toBeGreaterThan(0);
     expect(
       displayProjection.game.display.enemyShips.size + displayProjection.game.display.asteroids.size
     ).toBeGreaterThan(0);
@@ -385,7 +391,7 @@ describe("SpaceshipDefenderRoom v11 lifecycle", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
+describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
   it("rejects a v10 role command without mutating its watermark or the world", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -806,7 +812,7 @@ describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v11 combat projection and upgrades", () => {
+describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
   it("keeps the explicit run seed private and publishes the combat summary", () => {
     const { room } = startGame();
 
@@ -818,8 +824,175 @@ describe("SpaceshipDefenderRoom v11 combat projection and upgrades", () => {
       waveNumber: 1,
       encounterTick: 0,
       phaseTicksRemaining: 0,
+      waveSecondsRemaining: 1200,
       score: 0
     });
+  });
+
+  it("resets the 20-minute deadline only when the next combat wave starts", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const { room } = startGame();
+      const runtime = internals(room);
+      expect(runtime.waveDeadlineAtMs).toBe(1_210_000);
+
+      now.mockReturnValue(20_000);
+      room.advanceGameStep();
+      expect(runtime.waveDeadlineAtMs).toBe(1_210_000);
+      expect(room.state.game.encounter.waveSecondsRemaining).toBe(1190);
+
+      forceIntermission(room);
+      expect(runtime.waveDeadlineAtMs).toBeUndefined();
+      expect(room.state.game.encounter.waveSecondsRemaining).toBe(0);
+      for (let step = 0; step < runtime.gameConfig.intermissionTicks; step += 1) {
+        room.advanceGameStep();
+      }
+      expect(room.state.game.encounter).toMatchObject({
+        phase: "combat",
+        waveNumber: 2,
+        waveSecondsRemaining: 1200
+      });
+      expect(runtime.waveDeadlineAtMs).toBe(1_220_000);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("turns an uncleared expired wave into a frozen timeout result with living hull", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const { room } = startGame();
+      const runtime = internals(room);
+      const deadline = runtime.waveDeadlineAtMs;
+      if (deadline === undefined) throw new Error("Expected a wave deadline.");
+      now.mockReturnValue(deadline);
+
+      const frozenTick = room.state.game.tick;
+      room.advanceGameStep();
+      expect(room.state.game.spaceship.hp).toBe(500);
+      expect(room.state.game.encounter).toMatchObject({
+        phase: "result",
+        outcome: "defeat",
+        hasDefeatReason: true,
+        defeatReason: "wave_timeout",
+        waveSecondsRemaining: 0
+      });
+      expect(runtime.lifecycleDeadlines.get("result_expired")).toBe(deadline + 600_000);
+      expect(room.state.game.tick).toBe(frozenTick);
+      room.advanceGameStep();
+      expect(room.state.game.tick).toBe(frozenTick);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("rehydrates a frozen timeout result and keeps an existing rematch vote", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const { room, controllers } = startGame();
+      const runtime = internals(room);
+      const game = runtime.gameState;
+      const deadline = runtime.waveDeadlineAtMs;
+      if (game === undefined || deadline === undefined) {
+        throw new Error("Expected an active wave deadline.");
+      }
+      runtime.gameState = { ...game, score: 777 };
+      now.mockReturnValue(deadline);
+      room.advanceGameStep();
+
+      const pilot = controllerAt(controllers, 0);
+      ready(room, pilot);
+      vi.spyOn(room, "allowReconnection").mockResolvedValueOnce(pilot.client);
+      await room.onLeave(pilot.client, 1006);
+
+      if (pilot.client.view === undefined) throw new Error("Expected a reconnect StateView.");
+      expect(room.state.game.encounter).toMatchObject({
+        phase: "result",
+        outcome: "defeat",
+        hasDefeatReason: true,
+        defeatReason: "wave_timeout",
+        score: 777,
+        waveSecondsRemaining: 0
+      });
+      expect(room.state.players.get(pilot.client.sessionId)?.ready).toBe(true);
+      expect(runtime.lifecycleDeadlines.get("result_expired")).toBe(deadline + 600_000);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("accepts a wave-clearing step that starts immediately before the deadline", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const { room } = startGame();
+      const runtime = internals(room);
+      const deadline = runtime.waveDeadlineAtMs;
+      const game = runtime.gameState;
+      if (deadline === undefined || game === undefined) {
+        throw new Error("Expected an active wave deadline.");
+      }
+      runtime.gameState = {
+        ...game,
+        pendingSpawns: [],
+        enemies: [],
+        asteroids: [],
+        hostileProjectiles: [],
+        homingMissiles: [],
+        projectiles: []
+      };
+      now.mockReturnValue(deadline - 1);
+
+      room.advanceGameStep();
+
+      expect(room.state.game.encounter.phase).toBe("intermission");
+      expect(runtime.waveDeadlineAtMs).toBeUndefined();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("gives rematch wave one a fresh deadline without extending the room hard cap", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const { room, controllers } = startGame();
+      const runtime = internals(room);
+      const hardCap = runtime.lifecycleDeadlines.get("room_lifetime_expired");
+      const firstDeadline = runtime.waveDeadlineAtMs;
+      if (firstDeadline === undefined) throw new Error("Expected a wave deadline.");
+      now.mockReturnValue(firstDeadline);
+      runtime.expireWaveDeadlineIfDue(firstDeadline);
+
+      now.mockReturnValue(firstDeadline + 1_000);
+      controllers.forEach((controller) => {
+        ready(room, controller);
+      });
+      expect(room.state.runNumber).toBe(2);
+      expect(runtime.waveDeadlineAtMs).toBe(firstDeadline + 1_000 + 1_200_000);
+      expect(runtime.lifecycleDeadlines.get("room_lifetime_expired")).toBe(hardCap);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it("ignores a stale wave timer after combat has entered intermission", () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
+    try {
+      const room = createRoom();
+      const setTimeout = vi.spyOn(room.clock, "setTimeout");
+      startGame(room);
+      const staleCallback = setTimeout.mock.calls.find((call) => call[1] === 1_200_000)?.[0] as
+        (() => void) | undefined;
+      if (staleCallback === undefined) throw new Error("Expected a wave deadline callback.");
+
+      forceIntermission(room);
+      const generation = internals(room).waveDeadlineGeneration;
+      now.mockReturnValue(1_210_000);
+      staleCallback();
+      expect(internals(room).waveDeadlineGeneration).toBe(generation);
+      expect(room.state.game.encounter.phase).toBe("intermission");
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("publishes circular geometry to both views while keeping mass entities display-only", () => {
@@ -1128,7 +1301,7 @@ describe("SpaceshipDefenderRoom v11 combat projection and upgrades", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v11 rematch isolation", () => {
+describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
   it("rejects stale ready, input and upgrade before per-run mutation", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -1270,7 +1443,7 @@ describe("SpaceshipDefenderRoom v11 rematch isolation", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v11 disposal and operations metadata", () => {
+describe("SpaceshipDefenderRoom v13 disposal and operations metadata", () => {
   it("closes the whole room only when the display leaves explicitly", async () => {
     const room = createRoom();
     const display = joinDisplay(room);
@@ -1306,7 +1479,7 @@ describe("SpaceshipDefenderRoom v11 disposal and operations metadata", () => {
       const room = createRoom();
       const runtime = internals(room);
       expect(runtime.lifecycleDeadlines.get("lobby_expired")).toBe(910_000);
-      expect(runtime.lifecycleDeadlines.get("room_lifetime_expired")).toBe(14_410_000);
+      expect(runtime.lifecycleDeadlines.get("room_lifetime_expired")).toBe(43_210_000);
       expect(runtime.lifecycleDeadlines.has("controllers_expired")).toBe(false);
 
       const controller = joinController(room, 0);
@@ -1469,7 +1642,7 @@ describe("SpaceshipDefenderRoom v11 disposal and operations metadata", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v11 latency telemetry", () => {
+describe("SpaceshipDefenderRoom v13 latency telemetry", () => {
   it("publishes server-measured display and controller RTT without changing gameplay", () => {
     const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
     try {

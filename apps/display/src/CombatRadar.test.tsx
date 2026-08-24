@@ -26,9 +26,11 @@ const baseGame: DisplayGameSnapshot = {
   encounter: {
     phase: "combat",
     outcome: null,
+    defeatReason: null,
     waveNumber: 1,
     encounterTick: 1,
     phaseTicksRemaining: 0,
+    waveSecondsRemaining: 1200,
     score: 0
   },
   roleModifiers: {

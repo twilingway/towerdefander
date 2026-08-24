@@ -1,11 +1,14 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 12 as const;
+export const PROTOCOL_VERSION = 13 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
 export const ENCOUNTER_PHASES = ["combat", "intermission", "result"] as const;
 export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
+export const DEFEAT_REASONS = ["spaceship_destroyed", "wave_timeout"] as const;
+export const WAVE_TTL_SECONDS = 20 * 60;
+export const MAX_WAVE_TTL_SECONDS = 24 * 60 * 60;
 export const ENEMY_KINDS = ["gunship", "missileCarrier"] as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
 export const UPGRADE_STATUSES = ["available", "selected"] as const;
@@ -52,6 +55,8 @@ export const encounterPhaseSchema = z.enum(ENCOUNTER_PHASES);
 export type EncounterPhase = z.infer<typeof encounterPhaseSchema>;
 export const terminalOutcomeSchema = z.enum(TERMINAL_OUTCOMES);
 export type TerminalOutcome = z.infer<typeof terminalOutcomeSchema>;
+export const defeatReasonSchema = z.enum(DEFEAT_REASONS);
+export type DefeatReason = z.infer<typeof defeatReasonSchema>;
 export const enemyKindSchema = z.enum(ENEMY_KINDS);
 export type EnemyKind = z.infer<typeof enemyKindSchema>;
 export const projectileKindSchema = z.enum(PROJECTILE_KINDS);
@@ -145,9 +150,11 @@ export const publicEncounterViewSchema = z
   .object({
     phase: encounterPhaseSchema,
     outcome: terminalOutcomeSchema.nullable(),
+    defeatReason: defeatReasonSchema.nullable(),
     waveNumber: safePositiveInteger,
     encounterTick: safeNonnegativeInteger,
     phaseTicksRemaining: z.number().int().min(0).max(INTERMISSION_DURATION_TICKS),
+    waveSecondsRemaining: z.number().int().min(0).max(MAX_WAVE_TTL_SECONDS),
     score: safeNonnegativeInteger
   })
   .strict()
@@ -156,8 +163,14 @@ export const publicEncounterViewSchema = z
       issue(context, ["phaseTicksRemaining"], "Intermission requires a positive countdown.");
     if (value.phase !== "intermission" && value.phaseTicksRemaining !== 0)
       issue(context, ["phaseTicksRemaining"], "Only intermission may publish a countdown.");
+    if (value.phase === "combat" && value.waveSecondsRemaining === 0)
+      issue(context, ["waveSecondsRemaining"], "Combat requires a positive wave countdown.");
+    if (value.phase !== "combat" && value.waveSecondsRemaining !== 0)
+      issue(context, ["waveSecondsRemaining"], "Only combat may publish a wave countdown.");
     if ((value.phase === "result") !== (value.outcome !== null))
       issue(context, ["outcome"], "Only a terminal result requires an outcome.");
+    if ((value.outcome === "defeat") !== (value.defeatReason !== null))
+      issue(context, ["defeatReason"], "Only defeat requires a defeat reason.");
   });
 export type PublicEncounterView = z.infer<typeof publicEncounterViewSchema>;
 
@@ -401,10 +414,12 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
     )
   )
     issue(context, ["spaceship"], "Spaceship must remain fully inside the circular arena.");
-  if (encounter.outcome === "defeat" && spaceship.hp !== 0)
-    issue(context, ["spaceship", "hp"], "Defeat requires zero spaceship HP.");
+  if (encounter.defeatReason === "spaceship_destroyed" && spaceship.hp !== 0)
+    issue(context, ["spaceship", "hp"], "Destroyed spaceship defeat requires zero HP.");
+  if (encounter.defeatReason === "wave_timeout" && spaceship.hp === 0)
+    issue(context, ["spaceship", "hp"], "Wave timeout defeat requires positive spaceship HP.");
   if (encounter.outcome !== "defeat" && spaceship.hp === 0)
-    issue(context, ["spaceship", "hp"], "Only defeat may publish zero spaceship HP.");
+    issue(context, ["spaceship", "hp"], "Only destroyed-spaceship defeat may publish zero HP.");
 
   const obstacleIds = new Set<string>();
   world.obstacles?.forEach((obstacle, index) => {

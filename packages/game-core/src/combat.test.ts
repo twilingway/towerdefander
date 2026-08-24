@@ -13,6 +13,7 @@ import {
   createTerminalCombatState,
   createWavePlan,
   dynamicEntityCount,
+  failWaveByTimeout,
   getWaveDifficulty,
   relativeSweptCircleTime,
   shortestAngleDelta,
@@ -236,7 +237,12 @@ describe("combat motion and collision", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 72);
     const defeat = createTerminalCombatState({ ...initial, spaceshipHp: 0 }, "defeat");
-    expect(defeat).toMatchObject({ encounterPhase: "result", outcome: "defeat", spaceshipHp: 0 });
+    expect(defeat).toMatchObject({
+      encounterPhase: "result",
+      outcome: "defeat",
+      defeatReason: "spaceship_destroyed",
+      spaceshipHp: 0
+    });
     expect(advanceSpaceshipSimulation(defeat, config)).toBe(defeat);
 
     const victory = createTerminalCombatState(initial, "victory");
@@ -250,6 +256,25 @@ describe("combat motion and collision", () => {
     expect(() => createTerminalCombatState({ ...initial, spaceshipHp: 0 }, "victory")).toThrow(
       RangeError
     );
+
+    const populated = {
+      ...advanceSpaceshipSimulation(initial, config),
+      score: 321
+    };
+    const timeout = failWaveByTimeout(populated);
+    expect(timeout).toMatchObject({
+      encounterPhase: "result",
+      outcome: "defeat",
+      defeatReason: "wave_timeout",
+      spaceshipHp: config.spaceshipMaxHp,
+      score: 321
+    });
+    expect(timeout.enemies).toBe(populated.enemies);
+    expect(timeout.asteroids).toBe(populated.asteroids);
+    expect(timeout.hostileProjectiles).toBe(populated.hostileProjectiles);
+    expect(timeout.pendingSpawns).toBe(populated.pendingSpawns);
+    expect(advanceSpaceshipSimulation(timeout, config)).toBe(timeout);
+    expect(() => failWaveByTimeout(timeout)).toThrow(RangeError);
   });
 
   it("suppresses capped friendly fire while consuming the ordinary cooldown", () => {

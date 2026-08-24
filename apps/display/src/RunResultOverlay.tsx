@@ -1,7 +1,8 @@
-import type { TerminalOutcome } from "@spaceship-defender/protocol";
+import type { DefeatReason, TerminalOutcome } from "@spaceship-defender/protocol";
 
 interface RunResultOverlayProps {
   readonly outcome: TerminalOutcome;
+  readonly defeatReason: DefeatReason | null;
   readonly waveNumber: number;
   readonly score: number;
   readonly readyCount: number;
@@ -11,20 +12,20 @@ interface RunResultOverlayProps {
 
 export function RunResultOverlay({
   outcome,
+  defeatReason,
   waveNumber,
   score,
   readyCount,
   closing,
   onClose
 }: RunResultOverlayProps) {
-  const isVictory = outcome === "victory";
   return (
     <div
       className={`encounter-overlay encounter-overlay--result encounter-overlay--${outcome}`}
       role="status"
     >
       <p className="eyebrow">Забег завершён</p>
-      <h2>{isVictory ? "Победа!" : "Корабль уничтожен"}</h2>
+      <h2>{resultTitle(outcome, defeatReason)}</h2>
       <strong>Волна {waveNumber}</strong>
       <p>Итоговый счёт: {score}</p>
       <p className="rematch-readiness" aria-live="polite">
@@ -36,4 +37,9 @@ export function RunResultOverlay({
       </button>
     </div>
   );
+}
+
+function resultTitle(outcome: TerminalOutcome, defeatReason: DefeatReason | null): string {
+  if (outcome === "victory") return "Победа!";
+  return defeatReason === "wave_timeout" ? "Время волны истекло" : "Корабль уничтожен";
 }

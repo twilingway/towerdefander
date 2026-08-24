@@ -67,9 +67,12 @@ describe("controller room view", () => {
           phase: "combat",
           hasOutcome: false,
           outcome: "defeat",
+          hasDefeatReason: false,
+          defeatReason: "spaceship_destroyed",
           waveNumber: 2,
           encounterTick: 14,
           phaseTicksRemaining: 0,
+          waveSecondsRemaining: 1186,
           score: 120
         },
         roleModifiers: {
@@ -97,6 +100,8 @@ describe("controller room view", () => {
     expect(view?.assignedRole).toBe("shield");
     expect(view?.runNumber).toBe(2);
     expect(view?.game?.upgrade).toBeNull();
+    expect(view?.game?.encounter.defeatReason).toBeNull();
+    expect(view?.game?.encounter.waveSecondsRemaining).toBe(1186);
     expect(view?.game).not.toHaveProperty("enemyShips");
   });
 
@@ -146,9 +151,11 @@ describe("controller room view", () => {
         encounter: {
           phase: "intermission",
           outcome: null,
+          defeatReason: null,
           waveNumber: 1,
           encounterTick: 40,
           phaseTicksRemaining: 200,
+          waveSecondsRemaining: 0,
           score: 100
         },
         roleModifiers: {
@@ -234,9 +241,12 @@ describe("controller room view", () => {
           phase: "result",
           hasOutcome: true,
           outcome: "defeat",
+          hasDefeatReason: true,
+          defeatReason: "spaceship_destroyed",
           waveNumber: 4,
           encounterTick: 400,
           phaseTicksRemaining: 0,
+          waveSecondsRemaining: 0,
           score: 900
         },
         roleModifiers: {
@@ -250,6 +260,7 @@ describe("controller room view", () => {
     const view = toControllerRoomView(state, "p1");
     expect(view?.runNumber).toBe(3);
     expect(view?.game?.encounter).toMatchObject({ phase: "result", outcome: "defeat" });
+    expect(view?.game?.encounter.defeatReason).toBe("spaceship_destroyed");
     expect(view?.players[0]?.ready).toBe(true);
   });
 

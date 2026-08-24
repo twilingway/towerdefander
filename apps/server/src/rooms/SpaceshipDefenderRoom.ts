@@ -9,6 +9,7 @@ import {
   chooseRoleUpgrade,
   createCleanSpaceshipRun,
   createSpaceshipSimulationConfig,
+  failWaveByTimeout,
   type AsteroidState as CoreAsteroidState,
   type CombatEnemyState,
   type SpaceshipSimulationConfig,
@@ -105,6 +106,7 @@ const {
   lobbyTtlSeconds,
   resultTtlSeconds,
   zeroControllerTtlSeconds,
+  waveTtlSeconds,
   absoluteTtlSeconds
 } = readServerConfig();
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
@@ -178,6 +180,9 @@ export class SpaceshipDefenderRoom extends Room<{
   private lifecycleTimer: RoomTimer | undefined;
   private lifecycleGeneration = 0;
   private readonly lifecycleDeadlines = new Map<LifecycleDeadlineReason, number>();
+  private waveDeadlineTimer: RoomTimer | undefined;
+  private waveDeadlineAtMs: number | undefined;
+  private waveDeadlineGeneration = 0;
   private createdAtMs = 0;
   private status: RoomStatsStatus = "lobby";
   private statusChangedAtMs = 0;
@@ -512,11 +517,17 @@ export class SpaceshipDefenderRoom extends Room<{
     if (this.state.phase !== "active" || this.gameState === undefined) {
       return;
     }
+    if (this.expireWaveDeadlineIfDue(Date.now())) {
+      return;
+    }
     const previousEncounterPhase = this.gameState.encounterPhase;
     const projectionWasResult = this.state.game.encounter.phase === "result";
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
+      this.clearWaveDeadline();
       this.neutralizeAllRoles();
+    } else if (previousEncounterPhase !== "combat" && this.gameState.encounterPhase === "combat") {
+      this.armWaveDeadline();
     }
     this.syncGameState();
     if (
@@ -524,9 +535,7 @@ export class SpaceshipDefenderRoom extends Room<{
       (this.gameState.encounterPhase === "result" && !projectionWasResult)
     ) {
       if (this.gameState.encounterPhase === "result") {
-        this.stopSimulation();
-        for (const player of this.state.players.values()) player.ready = false;
-        this.setLifecycleDeadline("result_expired", Date.now() + resultTtlSeconds * 1_000);
+        this.enterTerminalResultLifecycle();
       }
       this.updateStatusFromRoom();
       this.queueMetadataUpdate();
@@ -626,6 +635,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.lifecycleDeadlines.delete("result_expired");
     this.rescheduleLifecycle();
     this.initializeDecorations();
+    this.armWaveDeadline();
     this.syncGameState();
     this.startSimulation();
     this.updateStatus("combat");
@@ -684,11 +694,17 @@ export class SpaceshipDefenderRoom extends Room<{
     target.encounter.phase = game.encounterPhase;
     target.encounter.hasOutcome = game.outcome !== null;
     target.encounter.outcome = game.outcome ?? "defeat";
+    target.encounter.hasDefeatReason = game.defeatReason !== null;
+    target.encounter.defeatReason = game.defeatReason ?? "spaceship_destroyed";
     target.encounter.waveNumber = game.waveNumber;
     target.encounter.encounterTick = game.encounterTick;
     target.encounter.phaseTicksRemaining =
       game.encounterPhase === "intermission"
         ? Math.max(0, this.gameConfig.intermissionTicks - game.encounterTick)
+        : 0;
+    target.encounter.waveSecondsRemaining =
+      game.encounterPhase === "combat" && this.waveDeadlineAtMs !== undefined
+        ? Math.max(1, Math.ceil((this.waveDeadlineAtMs - Date.now()) / 1_000))
         : 0;
     target.encounter.score = game.score;
     syncRoleModifiers(target.roleModifiers, game.roleModifiers);
@@ -895,6 +911,60 @@ export class SpaceshipDefenderRoom extends Room<{
     this.simulationTimer = undefined;
   }
 
+  private armWaveDeadline(now = Date.now()): void {
+    this.clearWaveDeadline();
+    if (this.state.phase !== "active" || this.gameState?.encounterPhase !== "combat") return;
+    this.waveDeadlineAtMs = now + waveTtlSeconds * 1_000;
+    this.scheduleWaveDeadline(this.waveDeadlineGeneration);
+  }
+
+  private scheduleWaveDeadline(generation: number): void {
+    const deadline = this.waveDeadlineAtMs;
+    if (deadline === undefined || generation !== this.waveDeadlineGeneration || this.disposing) {
+      return;
+    }
+    this.waveDeadlineTimer = this.clock.setTimeout(
+      () => {
+        if (generation !== this.waveDeadlineGeneration || this.disposing) return;
+        this.waveDeadlineTimer = undefined;
+        if (!this.expireWaveDeadlineIfDue(Date.now())) {
+          this.scheduleWaveDeadline(generation);
+        }
+      },
+      Math.max(1, deadline - Date.now())
+    );
+  }
+
+  private expireWaveDeadlineIfDue(now: number): boolean {
+    const deadline = this.waveDeadlineAtMs;
+    if (deadline === undefined || now < deadline) return false;
+    if (this.state.phase !== "active" || this.gameState?.encounterPhase !== "combat") {
+      this.clearWaveDeadline();
+      return false;
+    }
+    this.gameState = failWaveByTimeout(this.gameState);
+    this.clearWaveDeadline();
+    this.neutralizeAllRoles();
+    this.syncGameState();
+    this.enterTerminalResultLifecycle();
+    this.updateStatusFromRoom();
+    this.queueMetadataUpdate();
+    return true;
+  }
+
+  private clearWaveDeadline(): void {
+    this.waveDeadlineGeneration += 1;
+    this.waveDeadlineTimer?.clear();
+    this.waveDeadlineTimer = undefined;
+    this.waveDeadlineAtMs = undefined;
+  }
+
+  private enterTerminalResultLifecycle(): void {
+    this.stopSimulation();
+    for (const player of this.state.players.values()) player.ready = false;
+    this.setLifecycleDeadline("result_expired", Date.now() + resultTtlSeconds * 1_000);
+  }
+
   private setLifecycleDeadline(reason: LifecycleDeadlineReason, expiresAtMs: number): void {
     this.lifecycleDeadlines.set(reason, expiresAtMs);
     this.rescheduleLifecycle();
@@ -958,6 +1028,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.lifecycleTimer?.clear();
     this.lifecycleTimer = undefined;
     this.lifecycleDeadlines.clear();
+    this.clearWaveDeadline();
     this.stopSimulation();
     this.clearAllLatencyConnections();
     this.sequenceWatermarks.clear();

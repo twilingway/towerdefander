@@ -53,13 +53,27 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     );
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
     await expect(display.getByTestId("machine-gun-heat")).toBeVisible();
+    await expect(display.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
+    await expect(pilot.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
+    await expect(gunner.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
+    await expect(shield.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
     await expect(display.getByTestId("combat-radar")).toBeVisible();
     await expect(display.getByTestId("combat-radar-spaceship")).toBeVisible();
+    const battlefieldSnapshot = display.getByTestId("spaceship-world");
     await expect
-      .poll(async () =>
-        Number(await display.getByTestId("combat-radar").getAttribute("data-enemy-count"))
-      )
+      .poll(async () => {
+        const enemyCount = Number(await battlefieldSnapshot.getAttribute("data-enemy-count"));
+        const asteroidCount = Number(await battlefieldSnapshot.getAttribute("data-asteroid-count"));
+        return enemyCount + asteroidCount;
+      })
       .toBeGreaterThan(0);
+    await expect
+      .poll(
+        async () =>
+          (await display.getByTestId("combat-radar").getAttribute("data-enemy-count")) ===
+          (await battlefieldSnapshot.getAttribute("data-enemy-count"))
+      )
+      .toBe(true);
     await expect(display.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
     });

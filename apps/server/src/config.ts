@@ -5,6 +5,7 @@ export interface ServerConfig {
   lobbyTtlSeconds: number;
   resultTtlSeconds: number;
   zeroControllerTtlSeconds: number;
+  waveTtlSeconds: number;
   absoluteTtlSeconds: number;
   statsPassword: string | undefined;
   gracefullyShutdown: boolean;
@@ -64,10 +65,16 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     5 * 60,
     MAX_PHASE_TTL_SECONDS
   );
+  const waveTtlSeconds = readIntegerSeconds(
+    environment,
+    "ROOM_WAVE_TTL_SECONDS",
+    20 * 60,
+    MAX_PHASE_TTL_SECONDS
+  );
   const absoluteTtlSeconds = readIntegerSeconds(
     environment,
     "ROOM_ABSOLUTE_TTL_SECONDS",
-    4 * 60 * 60,
+    12 * 60 * 60,
     MAX_ABSOLUTE_TTL_SECONDS
   );
   const statsPassword =
@@ -101,6 +108,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     lobbyTtlSeconds,
     resultTtlSeconds,
     zeroControllerTtlSeconds,
+    waveTtlSeconds,
     absoluteTtlSeconds,
     statsPassword,
     gracefullyShutdown

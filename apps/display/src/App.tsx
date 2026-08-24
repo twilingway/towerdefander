@@ -18,6 +18,7 @@ import { CombatRadar } from "./CombatRadar.js";
 import { MachineGunHeat } from "./MachineGunHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
+import { WaveCountdown } from "./WaveCountdown.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import {
   closeDisplayRoom,
@@ -303,6 +304,12 @@ export function DisplayApp() {
             connectionEpoch={connectionEpoch}
             visibleDemo={visibleDemo}
           />
+          {view.game.encounter.phase === "combat" && (
+            <WaveCountdown
+              className="display-wave-countdown"
+              secondsRemaining={view.game.encounter.waveSecondsRemaining}
+            />
+          )}
           <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
             <div className="encounter-overlay encounter-overlay--intermission" role="status">
@@ -317,6 +324,7 @@ export function DisplayApp() {
           {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
             <RunResultOverlay
               outcome={view.game.encounter.outcome}
+              defeatReason={view.game.encounter.defeatReason}
               waveNumber={view.game.encounter.waveNumber}
               score={view.game.encounter.score}
               readyCount={view.players.filter(({ ready }) => ready).length}

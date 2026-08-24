@@ -4,10 +4,12 @@ import {
   COMBAT_ENTITY_CAPS,
   CREW_ROLES,
   INTERMISSION_DURATION_TICKS,
+  MAX_WAVE_TTL_SECONDS,
   PLAYER_CAPACITY,
   PROJECTILE_WORLD_PADDING,
   PROTOCOL_VERSION,
   ROOM_TYPE,
+  WAVE_TTL_SECONDS,
   clientLatencyPongSchema,
   clientMessage,
   controllerJoinOptionsSchema,
@@ -101,9 +103,11 @@ function controllerRoom(): ControllerRoomView {
       encounter: {
         phase: "combat",
         outcome: null,
+        defeatReason: null,
         waveNumber: 1,
         encounterTick: 10,
         phaseTicksRemaining: 0,
+        waveSecondsRemaining: WAVE_TTL_SECONDS,
         score: 100
       },
       roleModifiers: roleModifiers(),
@@ -209,9 +213,11 @@ function intermissionController(): ControllerRoomView {
   room.game.encounter = {
     phase: "intermission",
     outcome: null,
+    defeatReason: null,
     waveNumber: 1,
     encounterTick: 40,
     phaseTicksRemaining: INTERMISSION_DURATION_TICKS,
+    waveSecondsRemaining: 0,
     score: 500
   };
   room.game.shield.active = false;
@@ -219,48 +225,48 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v12 handshake and messages", () => {
-  it("publishes the fixed crew and v12", () => {
-    expect(PROTOCOL_VERSION).toBe(12);
+describe("protocol v13 handshake and messages", () => {
+  it("publishes the fixed crew and v13", () => {
+    expect(PROTOCOL_VERSION).toBe(13);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v12 create/join and rejects v11 and unknown fields", () => {
+  it("accepts v13 create/join and rejects v12 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 12 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 13 }).success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 11 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 12 }).success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 12,
+        protocolVersion: 13,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 11,
+        protocolVersion: 12,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 12,
+        protocolVersion: 13,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v12 and the active run", () => {
+  it("keeps continuous role messages strict on v13 and the active run", () => {
     const envelope = {
-      protocolVersion: 12,
+      protocolVersion: 13,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -301,7 +307,7 @@ describe("protocol v12 handshake and messages", () => {
     expect(
       gunnerInputCommandSchema.safeParse({
         ...envelope,
-        protocolVersion: 11,
+        protocolVersion: 12,
         sequence: 2,
         aim: { x: 0, y: -1 },
         firing: true
@@ -310,7 +316,7 @@ describe("protocol v12 handshake and messages", () => {
     expect(
       shieldInputCommandSchema.safeParse({
         ...envelope,
-        protocolVersion: 11,
+        protocolVersion: 12,
         sequence: 3,
         aim: { x: -1, y: 0 },
         active: true
@@ -319,7 +325,7 @@ describe("protocol v12 handshake and messages", () => {
     expect(
       pilotInputCommandSchema.safeParse({
         ...envelope,
-        protocolVersion: 11,
+        protocolVersion: 12,
         sequence: 1,
         vector: { x: 1, y: 0 },
         mgFiring: false
@@ -336,7 +342,7 @@ describe("protocol v12 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 12,
+        protocolVersion: 13,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -346,9 +352,9 @@ describe("protocol v12 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v12 pilot input", () => {
+  it("requires the machine gun trigger on v13 pilot input", () => {
     const envelope = {
-      protocolVersion: 12,
+      protocolVersion: 13,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -364,11 +370,11 @@ describe("protocol v12 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 12, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 13, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 11, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 12, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -411,7 +417,7 @@ describe("protocol v12 handshake and messages", () => {
 
 describe("upgrade:choose", () => {
   const command = {
-    protocolVersion: 12,
+    protocolVersion: 13,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -427,7 +433,7 @@ describe("upgrade:choose", () => {
       { ...command, actionId: "not-a-uuid" },
       { ...command, waveNumber: 0 },
       { ...command, offerId: "" },
-      { ...command, protocolVersion: 11 },
+      { ...command, protocolVersion: 12 },
       { ...command, runNumber: 0 },
       { ...command, selectedIndex: 0 }
     ]) {
@@ -499,7 +505,7 @@ describe("personalized upgrade projection", () => {
   });
 });
 
-describe("strict v12 room projections", () => {
+describe("strict v13 room projections", () => {
   it("accepts valid combat display and compact controller views", () => {
     expect(controllerRoomViewSchema.safeParse(controllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(displayRoom()).success).toBe(true);
@@ -593,15 +599,28 @@ describe("strict v12 room projections", () => {
     if (defeat.game === null) throw new Error("Expected active game.");
     defeat.game.encounter.phase = "result";
     defeat.game.encounter.outcome = "defeat";
+    defeat.game.encounter.defeatReason = "spaceship_destroyed";
+    defeat.game.encounter.waveSecondsRemaining = 0;
     defeat.game.spaceship.hp = 0;
     expect(displayRoomViewSchema.safeParse(defeat).success).toBe(true);
     defeat.game.spaceship.hp = 1;
     expect(displayRoomViewSchema.safeParse(defeat).success).toBe(false);
 
+    const timeout = displayRoom();
+    if (timeout.game === null) throw new Error("Expected active game.");
+    timeout.game.encounter.phase = "result";
+    timeout.game.encounter.outcome = "defeat";
+    timeout.game.encounter.defeatReason = "wave_timeout";
+    timeout.game.encounter.waveSecondsRemaining = 0;
+    expect(displayRoomViewSchema.safeParse(timeout).success).toBe(true);
+    timeout.game.spaceship.hp = 0;
+    expect(displayRoomViewSchema.safeParse(timeout).success).toBe(false);
+
     const victory = displayRoom();
     if (victory.game === null) throw new Error("Expected active game.");
     victory.game.encounter.phase = "result";
     victory.game.encounter.outcome = "victory";
+    victory.game.encounter.waveSecondsRemaining = 0;
     expect(displayRoomViewSchema.safeParse(victory).success).toBe(true);
     victory.game.spaceship.hp = 0;
     expect(displayRoomViewSchema.safeParse(victory).success).toBe(false);
@@ -609,12 +628,26 @@ describe("strict v12 room projections", () => {
     const missingOutcome = displayRoom();
     if (missingOutcome.game === null) throw new Error("Expected active game.");
     missingOutcome.game.encounter.phase = "result";
+    missingOutcome.game.encounter.waveSecondsRemaining = 0;
     expect(displayRoomViewSchema.safeParse(missingOutcome).success).toBe(false);
 
     const prematureOutcome = displayRoom();
     if (prematureOutcome.game === null) throw new Error("Expected active game.");
     prematureOutcome.game.encounter.outcome = "victory";
     expect(displayRoomViewSchema.safeParse(prematureOutcome).success).toBe(false);
+  });
+
+  it("enforces the configured combat countdown range", () => {
+    const room = controllerRoom();
+    if (room.game === null) throw new Error("Expected active game.");
+    room.game.encounter.waveSecondsRemaining = 1;
+    expect(controllerRoomViewSchema.safeParse(room).success).toBe(true);
+    room.game.encounter.waveSecondsRemaining = MAX_WAVE_TTL_SECONDS;
+    expect(controllerRoomViewSchema.safeParse(room).success).toBe(true);
+    room.game.encounter.waveSecondsRemaining = 0;
+    expect(controllerRoomViewSchema.safeParse(room).success).toBe(false);
+    room.game.encounter.waveSecondsRemaining = MAX_WAVE_TTL_SECONDS + 1;
+    expect(controllerRoomViewSchema.safeParse(room).success).toBe(false);
   });
 
   it("requires square arena geometry in controller and display projections", () => {
@@ -725,9 +758,11 @@ describe("strict v12 room projections", () => {
       publicEncounterViewSchema.safeParse({
         phase: "combat",
         outcome: null,
+        defeatReason: null,
         waveNumber: 1,
         encounterTick: 1,
         phaseTicksRemaining: 10,
+        waveSecondsRemaining: WAVE_TTL_SECONDS,
         score: 0
       }).success
     ).toBe(false);
@@ -790,6 +825,7 @@ describe("strict v12 room projections", () => {
     if (room.game === null) throw new Error("Expected active game.");
     room.game.encounter.phase = "intermission";
     room.game.encounter.phaseTicksRemaining = 200;
+    room.game.encounter.waveSecondsRemaining = 0;
     expect(displayRoomViewSchema.safeParse(room).success).toBe(false);
     room.game.enemyShips = [];
     room.game.asteroids = [];
@@ -810,21 +846,21 @@ describe("strict v12 room projections", () => {
   });
 });
 
-describe("v12 latency diagnostics", () => {
+describe("v13 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 12, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 13, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 12,
+        protocolVersion: 13,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 12,
+        protocolVersion: 13,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -832,13 +868,13 @@ describe("v12 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 11,
+        protocolVersion: 12,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 11, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 12, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

@@ -1,114 +1,550 @@
 # SpaceShip Defender — Game Design Document
 
-## 1. Концепция
+- Версия документа: 2026-08-24
+- Текущий сетевой контракт: protocol v13
 
-**SpaceShip Defender** — кооперативный top-down space wave-defense про один развиваемый корабль. Три
-игрока смотрят на общий большой экран и управляют разными системами корабля из браузеров своих
-устройств:
+## 1. Статусы и назначение документа
 
-- pilot отвечает за позиционирование, уклонение и носовой огонь;
-- gunner направляет оружие и уничтожает угрозы;
-- shield operator разворачивает и расходует directional energy shield.
+Этот GDD описывает одновременно существующую игру и её целевое направление. Чтобы планы не выглядели
+как уже работающие механики, используются три статуса:
+
+- **Реализовано** — поведение существует в коде; способ его проверки может быть автоматическим или
+  ручным и уточняется в соответствующем разделе;
+- **Целевая концепция** — утверждённое направление продукта, требующее отдельной реализации;
+- **Идея** — возможное расширение, которое ещё требует продуктового решения и OpenSpec change.
+
+Числовые значения в разделе текущего баланса описывают baseline прототипа, а не окончательный
+production balance.
+
+## 2. High concept
+
+**SpaceShip Defender** — кооперативный top-down space wave-defense для одного большого экрана и трёх
+browser-контроллеров. Три игрока управляют разными системами одного космического корабля:
+
+- pilot перемещает и разворачивает корабль, уклоняется и стреляет из носового пулемёта;
+- gunner независимо направляет основное орудие и ведёт тяжёлый огонь;
+- shield operator разворачивает и вручную включает энергетический сектор.
 
 Короткая формулировка продукта:
 
-> Top-down space wave-defense с одним развиваемым кораблём, где игрок уничтожает волны противников,
-> зарабатывает кредиты и непосредственно во время боя модернизирует корпус, щиты и систему
-> вооружения.
+> Три игрока совместно управляют одним кораблём, переживают всё более опасные волны, защищают друг
+> друга и развивают системы корабля, не покидая бой.
 
-## 2. Core experience
+Целевая расширенная формулировка:
 
-Команда постоянно выбирает между атакой, безопасной позицией и расходом энергии щита. Волны
-нарастают, добавляют быстрые корабли, тяжёлые носители, астероиды, линейные снаряды и наводящиеся
-ракеты. После поражения три игрока могут начать чистый новый run в той же комнате.
+> Top-down space roguelite wave-defense с одним развиваемым кораблём, где команда уничтожает волны,
+> зарабатывает credits и непосредственно во время боя модернизирует корпус, щиты и вооружение.
 
-Текущая реализованная версия использует score и role-specific upgrades между волнами. Целевая
-credits economy и покупки прямо во время боя требуют отдельного design: цены, источник credits,
-идемпотентные purchase commands, pacing и controller UI пока не определены.
+## 3. Фантазия игрока и дизайн-опоры
 
-## 3. Роли
+### 3.1. Один корабль — одна команда
 
-### Pilot
+Игроки не управляют тремя независимыми юнитами. Корабль является общей «машиной», а успех зависит от
+согласованности трёх ролей. Ошибка одного участника должна быть понятна всей команде, но не должна
+мгновенно обесценивать работу остальных.
 
-- WASD/arrows или virtual stick;
-- мягкий разгон и торможение;
-- уклонение от снарядов, ракет и астероидов;
-- носовой пулемёт: стреляет вдоль текущего heading корабля (heading плавно доворачивается за
-  направлением движения), hold-to-fire с накоплением тепла на каждый выстрел; перегрев блокирует
-  огонь до остывания и rearm, поэтому пилот балансирует между манёвром и непрерывным огнём;
-- будущие upgrades: speed, acceleration, hull и repair.
+### 3.2. Разные задачи, одинаковая значимость
 
-### Gunner
+Каждая роль должна постоянно принимать решения:
 
-- absolute direction stick и плавный server-authoritative traverse;
-- hold-fire с authoritative cooldown;
-- повреждение enemy ships/asteroids и перехват ракет;
-- будущие upgrades: damage, cooldown, projectile speed и новые weapon patterns.
+- pilot выбирает позицию, направление корпуса и момент носового огня;
+- gunner выбирает приоритетную цель и направление главного урона;
+- shield operator выбирает сторону угрозы и момент расходования энергии.
 
-### Shield operator
+Ни одна роль не должна превращаться в пассивное наблюдение на значительной части боя.
 
-- направление shield arc независимо от его активности;
-- ручной ON/OFF, drain/recharge и дополнительная стоимость перехвата;
-- будущие upgrades: capacity, recharge, arc width и specialized shield effects.
+### 3.3. Читаемый хаос
 
-## 4. Run loop
+Количество угроз и визуальных эффектов растёт, но игроки должны понимать:
+
+- откуда приходит опасность;
+- почему корабль получил урон;
+- какая система сейчас ограничивает команду;
+- какая цель наиболее опасна.
+
+### 3.4. Быстрый совместный запуск
+
+Сессия должна запускаться без установки приложения на телефоны: общий экран создаёт комнату, а
+участники подключаются по QR-коду или коду комнаты из браузера через LAN/Wi-Fi либо интернет.
+
+### 3.5. Глубокий космос без настоящего 3D
+
+Визуальная цель — масштаб, глубина и эффектность средствами 2D pseudo-3D art, parallax, particles и
+shaders. Настоящий 3D renderer не нужен.
+
+## 4. Формат сессии и платформы
+
+### Реализовано
+
+- один общий display в desktop browser, на большом мониторе, телевизоре или проекторе;
+- три controller connections с телефона, планшета либо компьютера;
+- подключение через интернет поддерживается при отдельном публичном HTTPS/WSS deployment и
+  настроенном TLS reverse proxy; из коробки публичный сервер не развёртывается;
+- ровно три игровые роли: `pilot`, `gunner`, `shield`;
+- новый run начинается после готовности всех трёх ролей;
+- один run продолжается через нарастающие волны до уничтожения корабля либо истечения времени
+  незавершённой волны;
+- после поражения команда может единогласно начать новый чистый run в той же комнате или выйти.
+
+### Целевая концепция
+
+- тонкая Capacitor-оболочка для Android TV, повторно использующая display web build;
+- fullscreen, launcher, wake lock и корректный lifecycle Android TV;
+- сохранение полного browser display как основной реализации для компьютеров.
+
+Ориентир длительности одной сессии будет определён после balance pass. Текущая версия не имеет
+естественного финала победой: protocol/UI поддерживают `victory`, но simulation пока создаёт только
+`defeat`.
+
+## 5. Полный игровой цикл
 
 ```text
-combat wave
-  → все угрозы уничтожены
-  → короткий upgrade interval
+lobby
+  → подключение pilot, gunner и shield
+  → готовность 3/3
+  → combat wave
+  → уничтожены все wave-угрозы
+  → 10-секундная intermission и выбор role upgrade
   → следующая усиленная wave
-  → spaceship HP достигает нуля
-  → result / unanimous rematch или выход
+  → HP корабля достигает 0 ИЛИ истекает server-authoritative deadline волны
+  → result / defeat
+  → unanimous rematch или выход
 ```
 
-Будущий economy change заменит или дополнит бесплатный interval выбором модернизаций за credits
-непосредственно во время combat. До принятия этого change существующий loop остаётся authoritative.
+Ambient-астероиды не входят в оставшуюся численность волны и не блокируют переход к intermission.
+При переходе в intermission сервер очищает временные боевые объекты и нейтрализует управляющие
+intents. При переходе в result финальное состояние поля сохраняется и замораживается для итогового
+экрана.
 
-## 5. Враги и угрозы
+## 6. Роли и управление
 
-- `gunship`: держит дистанцию и стреляет линейными bullets;
-- `missileCarrier`: запускает limited-turn homing missiles;
-- `asteroid`: постоянно появляется во время combat с одной из случайных сторон круглой арены,
-  пересекает её по seeded-траектории и наносит contact damage;
-- будущие archetypes: swarm, sniper, charger, support, elite и bosses.
+### 6.1. Pilot
 
-Enemy AI, spawn director, movement, collisions, damage, rewards и RNG принадлежат pure server-side
-simulation. Display только интерполирует snapshots и рисует эффекты.
+**Назначение:** позиционирование корабля, уклонение, ориентация корпуса и дополнительный урон.
 
-## 6. Визуальное направление
+**Реализовано:**
 
-Цель — **2D pseudo-3D art + глубокие космические backgrounds + modern particles/shaders**.
+- WASD, стрелки либо touch/mouse virtual stick;
+- мягкое ускорение и торможение без мгновенной смены скорости;
+- корпус плавно поворачивается вслед за последним ненулевым направлением движения;
+- носовой пулемёт стреляет вдоль текущего heading корабля;
+- hold-to-fire экранной кнопкой либо Space;
+- нагрев `+4` за выстрел и capacity `100`; при стандартном непрерывном огне с одновременным
+  охлаждением перегрев наступает примерно после 40 выстрелов;
+- охлаждение `30/с`, повторное разрешение огня при heat `≤30`;
+- authoritative heat/overheat видны на controller и на общем display.
+
+**Игровое решение:** продолжать огонь и рисковать перегревом либо заранее отпустить спуск, сохранив
+оружие доступным к следующей угрозе.
+
+### 6.2. Gunner
+
+**Назначение:** основной направленный урон и выбор приоритетных целей.
+
+**Реализовано:**
+
+- independent absolute-direction stick;
+- тяжёлый плавный traverse с acceleration/braking и выбором короткой дуги;
+- нажатие вне stick не разворачивает пушку;
+- hold-to-fire экранной кнопкой либо Space;
+- выстрел использует текущий authoritative угол пушки, а не ещё не достигнутую цель;
+- снаряды поражают enemy ships и asteroids, а также перехватывают homing missiles;
+- вражеские bullets основным орудием пока не перехватываются.
+
+**Игровое решение:** добивать ближайшую цель, сбивать ракету или заранее разворачивать тяжёлое
+орудие к следующему сектору.
+
+### 6.3. Shield operator
+
+**Назначение:** направленная защита корабля и управление ограниченной энергией.
+
+**Реализовано:**
+
+- independent direction stick и плавный traverse;
+- ручной toggle ON/OFF без необходимости удерживать кнопку;
+- направление щита видно даже в выключенном состоянии тонкой полупрозрачной дугой;
+- активный щит расходует `20 energy/с`, выключенный восстанавливает `10 energy/с`;
+- базовая capacity `100`: около 5 секунд непрерывной работы и 10 секунд полного восстановления;
+- отдельная стоимость перехвата: bullet `4`, missile `12`, asteroid `20`;
+- после полного истощения щит выключается и требует повторного ручного включения после rearm.
+
+**Игровое решение:** держать сектор активным заранее либо экономить энергию и включать защиту под
+конкретное попадание.
+
+## 7. Корабль и текущий baseline систем
+
+| Система                      | Реализованное базовое значение |
+| ---------------------------- | -----------------------------: |
+| Hull                         |                         500 HP |
+| Радиус корабля               |                 52 world units |
+| Максимальная скорость        |                    320 units/s |
+| Ускорение                    |                   640 units/s² |
+| Торможение                   |                   800 units/s² |
+| Main cannon damage           |                             25 |
+| Main cannon cooldown         |                         0,25 с |
+| Main projectile speed        |                    720 units/s |
+| Machine gun damage           |                              8 |
+| Machine gun cooldown         |                          0,1 с |
+| Machine gun projectile speed |                    900 units/s |
+| Shield capacity              |                            100 |
+| Shield sector                |                            90° |
+| Shield radius                |                104 world units |
+
+Система ввода считается устаревшей после 250 мс без свежего controller intent. Сервер переводит
+опасные удерживаемые действия в безопасное состояние, а display не моделирует trusted механику.
+
+## 8. Арена, камера и тактическая информация
+
+### Реализовано
+
+- server-authoritative круглая арена в квадратном мире `4400×4400`, radius `2200`;
+- корабль и enemy ships полностью остаются внутри окружности;
+- bullets, missiles и asteroids удаляются за внешней circular envelope с padding `256`;
+- fullscreen Phaser canvas без карточной рамки и letterbox;
+- камера следует за кораблём и сохраняет его видимость у края арены;
+- игровая сетка обрезана круглой границей, за ареной остаётся тёмный космос;
+- центральный круглый north-up radar показывает положение общего корабля и enemy ships на всей
+  арене;
+- radar намеренно не показывает asteroids, missiles и projectiles, чтобы не создавать шум.
+
+Отдельных маркеров трёх игроков на radar нет: все три участника находятся в одном общем корабле.
+
+## 9. Враги и угрозы
+
+### 9.1. Gunship — реализовано
+
+- быстрый лёгкий корабль: `50 HP`, speed `150`;
+- держит дистанцию примерно `650 ±30`;
+- приближается, отходит или орбитально движется вокруг корабля;
+- стреляет линейной bullet каждые 1,5 секунды;
+- bullet: damage `10`, speed `440`.
+
+**Роль в бою:** базовое давление, перекрёстный огонь и проверка позиционирования/щита.
+
+### 9.2. Missile Carrier — реализовано
+
+- появляется начиная с wave 3;
+- медленный прочный корабль: `110 HP`, speed `95`;
+- предпочитает дистанцию примерно `900 ±30`;
+- запускает homing missile каждые 3,5 секунды;
+- missile: damage `30`, speed `260`, turn rate `90°/с`, lifetime `12 с`.
+
+**Роль в бою:** дальняя приоритетная цель, заставляющая gunner выбирать между уроном и перехватом.
+
+### 9.3. Asteroid — реализованная опасность окружения
+
+- не является enemy ship и не отображается на radar;
+- `65 HP`, speed `190`, contact damage `40`;
+- wave-астероиды входят в бюджет конкретной волны;
+- независимые ambient-астероиды появляются каждые 2–5 секунд с разных сторон;
+- траектории воспроизводимы из seeded RNG и пересекают арену;
+- ambient-астероиды не блокируют завершение волны.
+
+### Целевые архетипы
+
+- `swarm` — множество дешёвых манёвренных целей;
+- `sniper` — дальняя телеграфируемая атака высокой опасности;
+- `charger` — разгон и контактная атака с понятным предупреждением;
+- `support` — усиление, ремонт или защита соседних врагов;
+- elites — модифицированные версии существующих архетипов;
+- bosses — многофазные встречи с отдельным lifecycle и наградой.
+
+Каждый новый архетип требует отдельного design: телеграф атаки, контр-игра трёх ролей, стоимость в
+wave budget, caps, deterministic AI и performance budget.
+
+## 10. Волны и сложность
+
+### Реализованный director
+
+- начальный wave budget: `5`;
+- прирост: `+2` за волну, cap `120`;
+- стоимость spawn: asteroid `1`, gunship `2`, missile carrier `4`;
+- interval между wave spawns: `0,6 с`;
+- enemy HP: `+12%` за волну, cap `×8`;
+- темп атак: `+5%` за волну, cap `×3`;
+- missile carrier гарантированно входит в план начиная с wave 3;
+- spawn и поведение используют раздельные seeded RNG domains.
+
+Каждая combat wave имеет отдельный server-authoritative deadline: default 20 минут, на сервере он
+настраивается через `ROOM_WAVE_TTL_SECONDS` в диапазоне от 1 секунды до 24 часов. Таймер начинается
+заново только при фактическом старте следующей волны и не продлевается от inputs, reconnect или
+intermission. Если wave-угрозы не уничтожены вовремя, run переходит в frozen `defeat` с причиной
+`wave_timeout`, сохраняя текущие hull, score и battlefield. После этого действует обычный
+result/rematch flow.
+
+Текущая кривая бесконечно наращивает волны до defeat. Для конечного run потребуется определить
+источник victory: фиксированная последняя волна, boss, эвакуация либо другой явный objective.
+
+## 11. Урон, столкновения и очки
+
+### Реализовано
+
+- authoritative swept collision для быстрых снарядов и движущихся угроз;
+- shield interception проверяется до попадания в hull;
+- hostile bullets, missiles и asteroids наносят урон кораблю;
+- enemy ships пока не наносят contact damage;
+- оба friendly weapons могут повреждать enemy ships/asteroids и сбивать missiles;
+- score: enemy ship `25`, asteroid `10`, intercepted missile `5`;
+- при `HP=0` simulation замораживает финальное состояние и публикует `result/defeat`.
+
+Score сейчас является показателем результата run, а не валютой.
+
+## 12. Прогрессия между волнами
+
+### Реализовано
+
+Intermission длится 10 секунд. Каждая роль получает три собственные карточки в случайном порядке и
+выбирает одну. Если участник не успел, сервер применяет первую карточку как fallback.
+
+| Роль   | Улучшение        |                 Эффект |
+| ------ | ---------------- | ---------------------: |
+| Pilot  | Maximum speed    |                   +10% |
+| Pilot  | Acceleration     |                   +12% |
+| Pilot  | Hull             | +25 max HP и repair 25 |
+| Gunner | Damage           |                   +15% |
+| Gunner | Cooldown         |    ×0,9, минимум ×0,25 |
+| Gunner | Projectile speed |                   +12% |
+| Shield | Capacity         |                    +20 |
+| Shield | Recharge         |                   +15% |
+| Shield | Arc width        |                   +10° |
+
+Выбор является server-authoritative и идемпотентным по `actionId`; повторная доставка команды не
+тратит ресурс и не применяет эффект дважды.
+
+### Целевая credits economy
+
+В будущем score и бесплатные interval upgrades могут быть дополнены либо частично заменены credits,
+зарабатываемыми за уничтожение целей. Покупки предполагаются прямо во время combat без остановки
+simulation.
+
+До реализации нужно определить:
+
+- источник credits, награды, caps и правила общего/личного владения;
+- цены и tiers для hull, shield, main cannon и machine gun;
+- idempotent purchase contract и поведение при duplicate/reconnect;
+- интерфейс покупки, не мешающий управлению ролью;
+- взаимодействие credits с бесплатными карточками между волнами;
+- ограничения, предотвращающие snowball и обязательный grind.
+
+Persistent meta-progression, аккаунты и долгосрочный inventory в текущую концепцию не входят.
+
+## 13. Lobby, reconnect и завершение комнаты
+
+### Реализовано
+
+- display создаёт комнату и показывает QR/link/code;
+- роли занимают стабильные слоты `pilot → gunner → shield`;
+- бой начинается только после ready 3/3;
+- RTT display и каждого controller виден на общем экране;
+- при потере controller connection роль удерживается 30 секунд для reconnect;
+- после истечения grace роль может занять replacement player;
+- явный выход controller освобождает роль сразу;
+- аварийный disconnect display допускает reconnect в течение 30 секунд;
+- явное закрытие display закрывает всю комнату;
+- после defeat кнопка «Играть ещё» у всех трёх игроков запускает чистый run с новым seed и
+  `runNumber`, не заставляя заново подключаться.
+
+### TTL по умолчанию
+
+| Состояние                                 | Время до автоматического закрытия |
+| ----------------------------------------- | --------------------------------: |
+| Lobby                                     |                          15 минут |
+| Result                                    |                          10 минут |
+| Нет controllers после первого подключения |                           5 минут |
+| Абсолютный lifetime комнаты               |                          12 часов |
+
+20-минутный deadline волны не закрывает комнату напрямую: его истечение создаёт result/defeat, после
+чего у экипажа есть 10 минут на единогласный rematch. Каждая новая combat wave и wave 1 нового run
+получают полный срок. Абсолютный 12-часовой hard cap создаётся один раз вместе с комнатой и никогда
+не сбрасывается волной либо rematch.
+
+Read-only `/stats/rooms` показывает активные комнаты, phase, игроков, возраст и остаток TTL. Без
+пароля страница доступна только с loopback; удалённый доступ требует Basic auth поверх TLS.
+
+## 14. UX общего display
+
+### Реализовано
+
+- React shell управляет lobby, HUD, overlays и room lifecycle;
+- Phaser рисует 2D-мир и интерполирует authoritative transforms между snapshot ticks;
+- fullscreen игровое поле занимает весь viewport;
+- HUD показывает wave, hull, shield, score, количество enemies/missiles и накопленные modifiers;
+- HUD показывает authoritative countdown до провала текущей волны;
+- heat/overheat носового пулемёта отображается в нижнем HUD;
+- круглый radar расположен снизу по центру над HUD;
+- ping display и controller roles отображается отдельно;
+- intermission overlay показывает countdown;
+- result overlay различает уничтожение корабля и истечение времени, показывает wave, score и
+  готовность команды к rematch.
+
+HUD и radar читают последний server snapshot и не предсказывают trusted heat, HP, energy, collision
+или outcome.
+
+## 15. UX controller
+
+### Реализовано
+
+- один responsive React client выбирает интерфейс по назначенной role;
+- touch, mouse и keyboard поддерживаются без отдельных приложений;
+- действия вне stick/button не меняют aim;
+- pointer cancel, blur и потеря вкладкой видимости нейтрализуют опасные удерживаемые команды;
+- controller показывает connection state, role, ready, ping, combat summary и личный upgrade offer;
+- все три controller показывают тот же authoritative countdown текущей волны, что и общий display;
+- только pilot видит MG heat/fire, только shield — energy/toggle, только gunner — main fire;
+- reconnect восстанавливает identity и актуальный snapshot, но не восстанавливает старое нажатие или
+  незавершённую angular target.
+
+## 16. Визуальное направление
+
+### Текущее состояние
+
+Игра использует читаемые Phaser-примитивы: геометрический корабль, пушка, щит, enemy ships,
+asteroids, missiles, projectiles, сетка и простой космический фон. Это функциональный прототип, а не
+целевой art pass.
+
+### Целевая концепция
+
+**2D pseudo-3D art + глубокий космос + modern particles/shaders.**
 
 Нужны:
 
-- layered nebulae, distant stars, dust и parallax для ощущения масштаба;
-- хорошо читаемый silhouette корабля и его систем сверху;
-- светящиеся projectiles, engine trails, shield refraction, impacts и explosions;
-- original art direction с performance fallback для слабых Android TV устройств.
+- оригинальный silhouette общего корабля с визуально различимыми nose gun, main cannon и shield;
+- layered stars, nebulae, dust и parallax для ощущения масштаба;
+- engine trails, muzzle flashes, projectile trails и impacts;
+- shield refraction/energy flow и понятное различие active/inactive;
+- explosions, debris и wave/boss presentation;
+- цветовые правила, сохраняющие читаемость врагов и угроз поверх эффектов;
+- performance fallback без тяжёлых shaders для слабых Android TV устройств.
 
-Не нужны:
+От «Космических Рейнджеров» берётся только ощущение красивого глубокого космоса. Круглый radar и
+остальной интерфейс должны оставаться оригинальными и функциональными, а не копировать конкретный
+экран другой игры.
+
+## 17. Audio direction — целевая концепция
+
+Audio пока не реализован. В будущем нужны:
+
+- разные звуки main cannon и machine gun;
+- предупреждение перегрева и отдельный сигнал rearm;
+- включение, истощение и попадания в shield;
+- различимые сигналы bullets, homing missiles и опасного сближения;
+- короткие cues начала/завершения wave, upgrade interval и defeat;
+- динамический ambient/music слой без заглушения голосового общения игроков.
+
+На controller звук и вибрация должны быть опциональными и не дублировать весь микс общего display.
+
+## 18. Техническая модель игры
+
+### Реализовано
+
+- Node.js/Colyseus room `spaceship_defender` — единственный источник trusted state;
+- protocol v13 использует строгие versioned schemas и публикует wave countdown/defeat reason;
+- deterministic game-core работает fixed step `50 ms / 20 Hz`;
+- controllers отправляют intents с sequence, duplicate/out-of-order input игнорируется;
+- display получает полную combat projection, controllers — компактное состояние и личный offer;
+- simulation не зависит от Phaser, React, DOM, network, wall clock и unseeded randomness;
+- Phaser существует только в `apps/display`;
+- render smoothing не влияет на collision, damage или AI.
+
+### Entity caps одной комнаты
+
+| Тип                  | Cap |
+| -------------------- | --: |
+| Enemy ships          |  40 |
+| Asteroids            |  16 |
+| Hostile bullets      |  96 |
+| Homing missiles      |  12 |
+| Friendly projectiles |  32 |
+| Все dynamic entities | 196 |
+
+Это защищает server tick, network patches и display render от неконтролируемого роста нагрузки.
+
+## 19. Demo и инструменты разработки
+
+### Реализовано
+
+- `pnpm demo:visible` запускает отдельный внешний Chrome, display и три SDK auto-controller;
+- auto-crew управляет всеми ролями, выбирает upgrades и проходит смену волн;
+- overlay показывает Render FPS, Snapshot Hz и Control Hz;
+- «Пауза автопилота» останавливает только автоматические controller intents; server simulation,
+  враги и волны продолжают работать;
+- `pnpm demo:verify` проверяет movement, main cannon, MG, shield, intermission, upgrades и wave 2;
+- `/stats/rooms` служит операционной диагностикой комнат.
+
+Gameplay-путь demo покрыт автоматической проверкой. Lifecycle внешнего Chrome, включая аварийное
+завершение и очистку временного профиля, пока проверяется вручную и остаётся открытой задачей
+активного OpenSpec change.
+
+### Идеи
+
+- отдельная server-side «Заморозить бой» для debug, которая ставит на паузу fixed-step всей комнаты;
+- защищённая balance/admin panel для настройки скоростей, урона, cooldown и wave director;
+- replay/input trace для воспроизводимого разбора сложных боёв.
+
+Эти инструменты не должны становиться доступными обычным игрокам без отдельной модели авторизации.
+
+## 20. Будущие игровые режимы
+
+### Основной режим — утверждённое направление
+
+Кооперативный wave-defense остаётся главным режимом и источником базовых систем корабля, врагов,
+прогрессии и визуального языка.
+
+### NPC rival ships — идея
+
+Возможны server-owned корабли с теми же классами систем: движение, пушка, щит и upgrades. Они не
+должны эмулироваться browser connections; для них нужен отдельный authoritative actor/AI contract.
+
+### «Голодные игры» / PvP arena — идея
+
+Несколько кораблей живых игроков и/или NPC сражаются в одной арене. Этот режим потребует отдельного
+дизайна и не является простой настройкой текущего wave-defense:
+
+- несколько player ships и новая ownership model;
+- команды/solo, spawn, respawn либо elimination rules;
+- PvP damage, friendly fire и shield interaction;
+- matchmaking, reconnect и replacement в соревновательной фазе;
+- radar allegiance и visibility rules;
+- отдельный result/reward/balance contract.
+
+До отдельного OpenSpec change этот режим не входит в текущий production scope.
+
+## 21. Ближайшие продуктовые этапы
+
+1. Спроектировать credits и in-combat modernization.
+2. Добавлять enemy archetypes по одному вместе с телеграфами, counterplay и balance tests.
+3. Определить elites, boss lifecycle и условие victory/конечного run.
+4. Выполнить deep-space background/art pass.
+5. Добавить VFX, затем audio, сохраняя Android TV performance tiers.
+6. Реализовать thin Capacitor Android TV shell.
+7. Только после стабилизации основного режима отдельно исследовать NPC/PvP arena.
+
+## 22. Явные границы продукта
+
+В текущий основной scope не входят:
 
 - настоящий 3D renderer;
-- карта, навигация или интерфейс по образцу «Космических Рейнджеров»;
-- торговля, диалоги, RPG и большая campaign map;
-- копирование чужих assets или конкретного интерфейса.
+- campaign/trading map по образцу «Космических Рейнджеров»;
+- торговля, диалоги и RPG-квесты;
+- MMO world и persistent accounts;
+- копирование чужих assets, интерфейсов или конкретного художественного оформления;
+- client-authoritative collision, damage, economy или AI;
+- production NPC через поддельные browser-controller connections.
 
-От «Космических Рейнджеров» берётся только ощущение красивого глубокого космоса.
+Каждое существенное gameplay, protocol, economy, lifecycle или deployment изменение проходит
+отдельный OpenSpec lifecycle с наблюдаемыми acceptance scenarios.
 
-## 7. Multiplayer architecture
+## 23. Открытые продуктовые вопросы
 
-- server: authoritative Colyseus room `spaceship_defender`;
-- protocol: strict versioned schemas, current target v12;
-- core: deterministic 50 ms fixed step с explicit seeded randomness;
-- world: server-authoritative circle `4400×4400`, radius `2200`; spaceship и enemy ships не могут
-  покинуть арену, а transient hazards удаляются только за внешней circular envelope;
-- display: React HUD + Phaser 2D/WebGL rendering;
-- controllers: responsive React UI, intents only;
-- reconnect, replacement, unanimous rematch и room TTL защищают session lifecycle.
+- Какой target duration и явное условие victory должен иметь основной run?
+- Credits общие для экипажа или принадлежат ролям?
+- Сохраняются ли бесплатные межволновые карточки после появления in-combat shop?
+- Какие MG upgrades дают развитие пилоту без конкуренции с main gunner?
+- Как телеграфировать новые типы атак на общем display и controller?
+- Какой первый boss проверяет координацию всех трёх ролей, а не только DPS?
+- Какие Android TV performance tiers и shader fallbacks обязательны?
+- Нужна ли production pause или только защищённая debug freeze?
+- Должен ли будущий PvP использовать текущий корабль/баланс либо отдельный ruleset?
 
-## 8. Product boundaries
-
-В ближайший art/economy этап не входят true 3D, trading/RPG, persistent accounts, MMO world,
-процедурная campaign map и копирование существующей игры. Каждое существенное gameplay или protocol
-изменение проходит отдельный OpenSpec lifecycle.
+Ответы на эти вопросы должны фиксироваться в отдельных OpenSpec changes, а после принятия —
+переноситься из раздела идей в реализованный либо целевой контракт этого GDD.

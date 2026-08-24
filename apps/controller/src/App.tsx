@@ -9,6 +9,7 @@ import {
   serverMessage,
   type ControllerRoomView,
   type CrewRole,
+  type DefeatReason,
   type EncounterPhase,
   type PublicControllerUpgradeView,
   type PublicMachineGunView,
@@ -41,6 +42,7 @@ import {
   type NetworkRoomState
 } from "./roomView.js";
 import { VirtualStick } from "./VirtualStick.js";
+import { WaveCountdown } from "./WaveCountdown.js";
 
 type ControllerRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "join" | "joining" | "connected" | "reconnecting" | "disconnected";
@@ -388,6 +390,8 @@ export function ControllerApp() {
                 hp={view.game.spaceship.hp}
                 maxHp={view.game.spaceship.maxHp}
                 waveNumber={view.game.encounter.waveNumber}
+                encounterPhase={view.game.encounter.phase}
+                waveSecondsRemaining={view.game.encounter.waveSecondsRemaining}
               />
             )}
             {view.game?.encounter.phase === "intermission" && (
@@ -403,6 +407,7 @@ export function ControllerApp() {
             {view.game?.encounter.phase === "result" && view.game.encounter.outcome !== null && (
               <RunResultPanel
                 outcome={view.game.encounter.outcome}
+                defeatReason={view.game.encounter.defeatReason}
                 waveNumber={view.game.encounter.waveNumber}
                 score={view.game.encounter.score}
                 players={view.players}
@@ -449,13 +454,17 @@ function RoleCombatSummary({
   modifiers,
   hp,
   maxHp,
-  waveNumber
+  waveNumber,
+  encounterPhase,
+  waveSecondsRemaining
 }: {
   readonly role: CrewRole;
   readonly modifiers: PublicRoleModifiersView;
   readonly hp: number;
   readonly maxHp: number;
   readonly waveNumber: number;
+  readonly encounterPhase: EncounterPhase;
+  readonly waveSecondsRemaining: number;
 }) {
   const modifier =
     role === "pilot"
@@ -470,6 +479,7 @@ function RoleCombatSummary({
         Корпус {Math.ceil(hp)} / {Math.ceil(maxHp)}
       </span>
       <small>{modifier}</small>
+      {encounterPhase === "combat" && <WaveCountdown secondsRemaining={waveSecondsRemaining} />}
     </div>
   );
 }
@@ -578,6 +588,7 @@ function UpgradePanel({
 
 export function RunResultPanel({
   outcome,
+  defeatReason,
   waveNumber,
   score,
   players,
@@ -586,6 +597,7 @@ export function RunResultPanel({
   onRematch
 }: {
   readonly outcome: TerminalOutcome;
+  readonly defeatReason: DefeatReason | null;
   readonly waveNumber: number;
   readonly score: number;
   readonly players: readonly PublicPlayerView[];
@@ -598,7 +610,13 @@ export function RunResultPanel({
   return (
     <div className={`result-panel result-panel--${outcome}`} role="status">
       <p className="eyebrow">Забег завершён</p>
-      <h2>{victory ? "Победа экипажа" : "Корабль уничтожен"}</h2>
+      <h2>
+        {victory
+          ? "Победа экипажа"
+          : defeatReason === "wave_timeout"
+            ? "Время волны истекло"
+            : "Корабль уничтожен"}
+      </h2>
       <strong>Волна {waveNumber}</strong>
       <span>Счёт: {score}</span>
       <span className="rematch-readiness">Готовы к новому бою: {readyCount} / 3</span>

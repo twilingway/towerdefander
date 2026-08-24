@@ -3,6 +3,7 @@ import {
   controllerRoomViewSchema,
   type ControllerRoomView,
   type CrewRole,
+  type DefeatReason,
   type EncounterPhase,
   type PublicPlayerView,
   type PublicSpaceshipView,
@@ -55,9 +56,12 @@ interface NetworkGameState {
     phase: EncounterPhase;
     hasOutcome?: boolean;
     outcome: TerminalOutcome | null;
+    hasDefeatReason?: boolean;
+    defeatReason: DefeatReason | null;
     waveNumber: number;
     encounterTick: number;
     phaseTicksRemaining: number;
+    waveSecondsRemaining: number;
     score: number;
   };
   roleModifiers: {
@@ -154,9 +158,14 @@ export function toControllerRoomView(
                 game.encounter.hasOutcome === true || game.encounter.outcome === null
                   ? game.encounter.outcome
                   : null,
+              defeatReason:
+                game.encounter.hasDefeatReason === true || game.encounter.defeatReason === null
+                  ? game.encounter.defeatReason
+                  : null,
               waveNumber: game.encounter.waveNumber,
               encounterTick: game.encounter.encounterTick,
               phaseTicksRemaining: game.encounter.phaseTicksRemaining,
+              waveSecondsRemaining: game.encounter.waveSecondsRemaining,
               score: game.encounter.score
             },
             roleModifiers: {

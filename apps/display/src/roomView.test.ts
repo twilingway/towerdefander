@@ -62,9 +62,12 @@ describe("display room view", () => {
           phase: "combat",
           hasOutcome: false,
           outcome: "defeat",
+          hasDefeatReason: false,
+          defeatReason: "spaceship_destroyed",
           waveNumber: 3,
           encounterTick: 12,
           phaseTicksRemaining: 0,
+          waveSecondsRemaining: 1188,
           score: 240
         },
         roleModifiers: {
@@ -169,6 +172,8 @@ describe("display room view", () => {
     expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
     expect(view?.game?.encounter.outcome).toBeNull();
+    expect(view?.game?.encounter.defeatReason).toBeNull();
+    expect(view?.game?.encounter.waveSecondsRemaining).toBe(1188);
     expect(view?.runNumber).toBe(2);
     expect(view?.game?.arenaRadius).toBe(2200);
     expect(view?.game?.spaceship.hp).toBe(850);

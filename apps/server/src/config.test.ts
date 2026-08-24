@@ -11,7 +11,8 @@ describe("readServerConfig", () => {
       lobbyTtlSeconds: 900,
       resultTtlSeconds: 600,
       zeroControllerTtlSeconds: 300,
-      absoluteTtlSeconds: 14_400,
+      waveTtlSeconds: 1200,
+      absoluteTtlSeconds: 43_200,
       statsPassword: undefined,
       gracefullyShutdown: true
     });
@@ -25,7 +26,8 @@ describe("readServerConfig", () => {
       lobbyTtlSeconds: 900,
       resultTtlSeconds: 600,
       zeroControllerTtlSeconds: 300,
-      absoluteTtlSeconds: 14_400,
+      waveTtlSeconds: 1200,
+      absoluteTtlSeconds: 43_200,
       statsPassword: undefined,
       gracefullyShutdown: true
     });
@@ -51,20 +53,30 @@ describe("readServerConfig", () => {
         ROOM_LOBBY_TTL_SECONDS: "60",
         ROOM_RESULT_TTL_SECONDS: "45",
         ROOM_ZERO_CONTROLLER_TTL_SECONDS: "30",
+        ROOM_WAVE_TTL_SECONDS: "90",
         ROOM_ABSOLUTE_TTL_SECONDS: "3600"
       })
     ).toMatchObject({
       lobbyTtlSeconds: 60,
       resultTtlSeconds: 45,
       zeroControllerTtlSeconds: 30,
+      waveTtlSeconds: 90,
       absoluteTtlSeconds: 3600
     });
+  });
+
+  it("accepts the maximum wave TTL and rejects the first value above it", () => {
+    expect(readServerConfig({ ROOM_WAVE_TTL_SECONDS: "86400" }).waveTtlSeconds).toBe(86_400);
+    expect(() => readServerConfig({ ROOM_WAVE_TTL_SECONDS: "86401" })).toThrow(
+      "ROOM_WAVE_TTL_SECONDS must be an integer"
+    );
   });
 
   it.each([
     ["ROOM_LOBBY_TTL_SECONDS", "0"],
     ["ROOM_RESULT_TTL_SECONDS", "1.5"],
     ["ROOM_ZERO_CONTROLLER_TTL_SECONDS", "abc"],
+    ["ROOM_WAVE_TTL_SECONDS", "0"],
     ["ROOM_ABSOLUTE_TTL_SECONDS", "604801"]
   ])("rejects invalid %s=%s", (name, value) => {
     expect(() => readServerConfig({ [name]: value })).toThrow(`${name} must be an integer`);

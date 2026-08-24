@@ -32,7 +32,7 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 - `apps/controller` — responsive role controllers;
 - `apps/server` — Colyseus room, validation, simulation, lifecycle и statistics;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — strict protocol v12 и shared schemas.
+- `packages/protocol` — strict protocol v13 и shared schemas.
 
 ## 3. Реализованный foundation
 
@@ -45,7 +45,8 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 - seeded spawn/RNG, swept collisions, HP, damage, score и defeat;
 - 200-tick interval и role-specific upgrade cards;
 - result, unanimous rematch, explicit exit/close, reconnect/replacement;
-- room TTL и защищённая read-only statistics page;
+- 20-минутный deadline каждой combat wave, timeout defeat, room TTL и защищённая read-only
+  statistics page;
 - network smoke и display + 3 controllers Playwright.
 
 Worst-case 196-entity benchmark на Ryzen 9 5900X/Node 22: pure-step p95 около 0,12 ms,
@@ -59,7 +60,7 @@ Source tree очищен от двух прежних product names и испо�
 - code vocabulary `Spaceship`/`spaceship`;
 - npm scope `@spaceship-defender/*`;
 - Colyseus room type `spaceship_defender`;
-- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v12;
+- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v13;
 - `SpaceshipDefenderRoom/State` и `SpaceshipSimulation*` API;
 - удаление unused classic defense core/assets/spec catalog entries;
 - обновление UI, tests, scripts, README, GDD, AGENTS и OpenSpec context.

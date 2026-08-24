@@ -13,12 +13,13 @@ state; клиенты отправляют только intents.
 
 ## Текущий gameplay
 
-- deterministic fixed-step simulation 20 Hz и protocol v11;
+- deterministic fixed-step simulation 20 Hz и protocol v13;
 - круглая server-authoritative арена `4400×4400`, радиус `2200`;
 - волны gunships и missile carriers, а также постоянный поток астероидов с разных сторон арены;
 - friendly/hostile projectiles и limited-turn homing missiles;
 - swept collisions, HP, damage, score и directional shield interception;
 - три role-owned upgrade cards между волнами;
+- 20-минутный server-authoritative deadline каждой combat wave с отдельной причиной timeout defeat;
 - defeat, unanimous rematch в той же комнате, reconnect и replacement;
 - автоматические TTL комнат и read-only `/stats/rooms`;
 - Phaser primitives на display и responsive React controllers.
@@ -43,7 +44,7 @@ apps/
   controller/    responsive browser controllers трёх ролей
   server/        authoritative Colyseus room, lifecycle и statistics
 packages/
-  protocol/      protocol v11 schemas и shared contracts
+  protocol/      protocol v13 schemas и shared contracts
   game-core/     pure deterministic simulation без DOM/network/timers
   config/        shared TypeScript configuration
 openspec/        current specs и change lifecycle
@@ -67,6 +68,11 @@ pnpm dev
 - controller: `http://localhost:5174`;
 - server/health: `http://localhost:2567` и `http://localhost:2567/health`;
 - room statistics: `http://localhost:2567/stats/rooms`.
+
+Lifecycle defaults задаются в `.env.example`: lobby 15 минут, одна combat wave 20 минут, result 10
+минут, отсутствие controller identities 5 минут и несбрасываемый hard lifetime комнаты 12 часов.
+Wave timeout завершает run результатом и оставляет экипажу обычный unanimous rematch; новый run не
+продлевает hard lifetime исходной комнаты.
 
 ## Видимая автоматическая демонстрация
 

@@ -50,6 +50,7 @@ describe("ControllerApp", () => {
     const markup = renderToStaticMarkup(
       <RunResultPanel
         outcome="defeat"
+        defeatReason="spaceship_destroyed"
         waveNumber={4}
         score={900}
         players={players}
@@ -77,6 +78,7 @@ describe("ControllerApp", () => {
     const markup = renderToStaticMarkup(
       <RunResultPanel
         outcome="victory"
+        defeatReason={null}
         waveNumber={8}
         score={3200}
         players={[player]}
@@ -89,6 +91,32 @@ describe("ControllerApp", () => {
     expect(markup).toContain("Победа экипажа");
     expect(markup).toContain("Играть ещё");
     expect(markup).not.toContain("disabled");
+  });
+
+  it("renders an authoritative wave-timeout defeat", () => {
+    const player = {
+      playerId: "pilot-1",
+      playerName: "Alex",
+      role: "pilot" as const,
+      ready: false,
+      connected: true,
+      latencyMs: 20
+    };
+    const markup = renderToStaticMarkup(
+      <RunResultPanel
+        outcome="defeat"
+        defeatReason="wave_timeout"
+        waveNumber={9}
+        score={6400}
+        players={[player]}
+        currentPlayer={player}
+        reconnecting={false}
+        onRematch={() => undefined}
+      />
+    );
+
+    expect(markup).toContain("Время волны истекло");
+    expect(markup).toContain("Играть ещё");
   });
 
   it("explains rejection of a delayed command from an earlier run", () => {
