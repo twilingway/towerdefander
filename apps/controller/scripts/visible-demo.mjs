@@ -487,9 +487,16 @@ async function voteAllUpgrades(waveNumber) {
     3_000
   );
   if (stopRequested) return;
-  const offer = teamUpgrade().offer;
-  const card = offer.cards.at(0);
-  if (card === undefined) throw new Error("Team upgrade offer has no cards.");
+  // Copy the offer out of the schema: the server reuses those instances for the
+  // next offer, so live references would mutate between the three votes.
+  const state = teamUpgrade();
+  const firstCard = state.offer.cards.at(0);
+  if (firstCard === undefined) throw new Error("Team upgrade offer has no cards.");
+  const offer = {
+    offerId: state.offer.offerId,
+    waveNumber: state.offer.waveNumber,
+    upgradeId: firstCard.upgradeId
+  };
   // The crew votes unanimously so the demo always shows one paid upgrade.
   for (const [role, room] of roomsByRole) {
     if (stopRequested) return;
@@ -498,10 +505,10 @@ async function voteAllUpgrades(waveNumber) {
       actionId: randomUUID(),
       waveNumber: offer.waveNumber,
       offerId: offer.offerId,
-      upgradeId: card.upgradeId,
+      upgradeId: offer.upgradeId,
       revision: 1
     });
-    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === card.upgradeId, 3_000);
+    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === offer.upgradeId, 3_000);
   }
   upgradedRunWaves.add(upgradeKey);
   verification.upgrades = true;

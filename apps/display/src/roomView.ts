@@ -81,7 +81,7 @@ interface NetworkUpgradeVoteState {
   revision: number;
 }
 
-export interface NetworkTeamUpgradeState {
+interface NetworkTeamUpgradeState {
   hasOffer?: boolean;
   offer: {
     offerId: string;

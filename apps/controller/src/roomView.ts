@@ -39,7 +39,7 @@ interface NetworkUpgradeVoteState {
   revision: number;
 }
 
-export interface NetworkTeamUpgradeState {
+interface NetworkTeamUpgradeState {
   hasOffer?: boolean;
   offer: {
     offerId: string;
@@ -190,7 +190,7 @@ export function toControllerRoomView(
   });
 }
 
-export function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
+function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
   const votes: Record<CrewRole, PublicUpgradeVote | null> = {
     pilot: null,
     gunner: null,

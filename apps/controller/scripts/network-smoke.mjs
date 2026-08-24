@@ -425,9 +425,9 @@ async function resolveTeamPurchase(firstOffer, firstCard) {
     );
     const creditsAfter = display.state.game.credits;
     if (creditsBefore >= TEAM_UPGRADE_PRICE) {
-      if (creditsAfter > creditsBefore - TEAM_UPGRADE_PRICE)
+      if (creditsAfter !== creditsBefore - TEAM_UPGRADE_PRICE)
         throw new Error(
-          `Majority vote did not debit the shared balance once: ${String(creditsBefore)} → ${String(creditsAfter)}.`
+          `Majority vote did not debit the shared balance exactly once: ${String(creditsBefore)} → ${String(creditsAfter)}.`
         );
       if (JSON.stringify(pilotModifierSnapshot()) === JSON.stringify(modifiersBefore))
         throw new Error("Winning upgrade did not reach the authoritative pilot modifiers.");

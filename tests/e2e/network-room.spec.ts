@@ -350,6 +350,9 @@ test("crew votes one shared upgrade and pays for it once", async ({ browser }) =
     const world = display.getByTestId("spaceship-world");
     await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
     await expect(world).toHaveAttribute("data-demo-target-id", /.+/, { timeout: 30_000 });
+    // The pilot holds a landscape phone here, so this is the run that exercises
+    // the dual-zone layout with two live pointers.
+    await assertSimultaneousMoveAndFire(pilot, world);
     await clearWaveWithGunner(gunner, world);
 
     const intermission = display.locator(".encounter-overlay--intermission");
@@ -370,7 +373,9 @@ test("crew votes one shared upgrade and pays for it once", async ({ browser }) =
     const creditsBeforeVote = Number(await world.getAttribute("data-credits"));
     const pilotCard = pilot.locator(".upgrade-card").first();
     const votedUpgradeId = await pilotCard.getAttribute("data-upgrade-id");
-    if (votedUpgradeId === null) throw new Error("Controller card has no upgrade identity.");
+    const price = Number(await pilotCard.getAttribute("data-price"));
+    if (votedUpgradeId === null || !Number.isFinite(price) || price <= 0)
+      throw new Error("Controller card has no upgrade identity or price.");
 
     for (const page of [pilot, gunner, shield]) {
       await page.locator(".upgrade-card").first().click();
@@ -381,10 +386,10 @@ test("crew votes one shared upgrade and pays for it once", async ({ browser }) =
 
     // The debit and the modifier are applied once, at the authoritative deadline.
     await expect(world).toHaveAttribute("data-wave-number", "2", { timeout: 60_000 });
-    const affordable = creditsBeforeVote >= 5;
+    const affordable = creditsBeforeVote >= price;
     await expect(world).toHaveAttribute("data-team-upgrade-id", affordable ? votedUpgradeId : "");
     expect(Number(await world.getAttribute("data-credits"))).toBe(
-      affordable ? creditsBeforeVote - 5 : creditsBeforeVote
+      affordable ? creditsBeforeVote - price : creditsBeforeVote
     );
     await expect(display.locator(".encounter-overlay--intermission")).toBeHidden();
   } finally {
@@ -655,6 +660,13 @@ async function assertSimultaneousMoveAndFire(page: Page, world: Locator): Promis
     y: fireBounds.y + fireBounds.height / 2
   };
   const session = await page.context().newCDPSession(page);
+  // Take the baseline once the ship has coasted to a stop, or leftover velocity
+  // from an earlier drag would satisfy the assertion on its own.
+  await expect
+    .poll(async () => Math.abs(Number(await world.getAttribute("data-spaceship-velocity-x"))), {
+      timeout: 10_000
+    })
+    .toBeLessThan(2);
   const xBeforeTouch = Number(await world.getAttribute("data-spaceship-x"));
   try {
     await session.send("Input.dispatchTouchEvent", {

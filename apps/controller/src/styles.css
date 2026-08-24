@@ -588,7 +588,6 @@ button:disabled {
   }
 
   .play-card > .upgrade-panel .upgrade-card {
-    min-height: 4rem;
     padding: 0.5rem 0.6rem;
   }
 
@@ -596,14 +595,14 @@ button:disabled {
     display: none;
   }
 
-  .play-card--intermission {
+  .card.play-card--intermission {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.35rem;
     padding: 0.5rem 0.75rem;
   }
 
-  .play-card--intermission > h1,
-  .play-card--intermission > .role-badge {
+  .card.play-card--intermission > h1,
+  .card.play-card--intermission > .role-badge {
     display: none;
   }
 
@@ -622,7 +621,7 @@ button:disabled {
     font-size: 1rem;
   }
 
-  .play-card--intermission .upgrade-card {
+  .card.play-card--intermission .upgrade-card {
     min-height: 3.25rem;
   }
 
