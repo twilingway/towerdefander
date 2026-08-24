@@ -318,7 +318,7 @@ describe("ambient asteroid scheduler", () => {
         encounterPhase: "intermission",
         encounterTick: config.intermissionTicks - 1,
         ambientAsteroidSpawnDueTick: 0,
-        roleOffers: { pilot: null, gunner: null, shield: null }
+        teamUpgradeOffer: null
       },
       config
     );
@@ -369,6 +369,7 @@ describe("circular transient cleanup", () => {
     );
 
     expect(result.score).toBe(25);
+    expect(result.credits).toBe(2);
     expect(result.enemies).toEqual([]);
     expect(result.projectiles).toEqual([]);
   });

@@ -22,7 +22,7 @@ import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
-const LEGACY_PROTOCOL_VERSION = 12;
+const LEGACY_PROTOCOL_VERSION = 13;
 
 interface TestClient {
   readonly client: Client;
@@ -156,17 +156,17 @@ function forceResult(room: SpaceshipDefenderRoom): void {
   expect(room.state.game.encounter).toMatchObject({ phase: "result", outcome: "defeat" });
 }
 
-function chooseUpgrade(
+function voteUpgrade(
   room: SpaceshipDefenderRoom,
   controller: TestClient,
   role: CrewRole,
   actionId: string,
   cardIndex = 0
 ): void {
-  const upgrade = room.state.game.upgrade.get(role);
-  const card = upgrade?.offer.cards.at(cardIndex);
-  if (upgrade === undefined || card === undefined) throw new Error("Expected an upgrade offer.");
-  room.handleUpgradeChoose(controller.client, {
+  const upgrade = room.state.game.teamUpgrade;
+  const card = upgrade.offer.cards.at(cardIndex);
+  if (!upgrade.hasOffer || card === undefined) throw new Error("Expected an upgrade offer.");
+  room.handleUpgradeVote(controller.client, {
     protocolVersion: PROTOCOL_VERSION,
     roomId: room.roomId,
     playerId: controller.client.sessionId,
@@ -174,12 +174,14 @@ function chooseUpgrade(
     actionId,
     waveNumber: upgrade.offer.waveNumber,
     offerId: upgrade.offer.offerId,
-    upgradeId: card.upgradeId
+    upgradeId: card.upgradeId,
+    revision: cardIndex + 1
   });
+  void role;
 }
 
-describe("SpaceshipDefenderRoom v13 lifecycle", () => {
-  it("accepts only strict protocol v13 display create options and rejects v12 before mutation", () => {
+describe("SpaceshipDefenderRoom v14 lifecycle", () => {
+  it("accepts only strict protocol v14 display create options and rejects v13 before mutation", () => {
     const room = new SpaceshipDefenderRoom();
     room.roomId = "ROOM123";
     expect(() => {
@@ -812,7 +814,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
+describe("SpaceshipDefenderRoom v14 combat projection and upgrades", () => {
   it("keeps the explicit run seed private and publishes the combat summary", () => {
     const { room } = startGame();
 
@@ -1074,65 +1076,58 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
     expect(kinds).toEqual(new Set(["gunship", "missileCarrier"]));
   });
 
-  it("publishes one role upgrade through each controller StateView and none to display", () => {
+  it("publishes one shared team upgrade to display and every controller", () => {
     const room = createRoom();
     const display = joinDisplay(room);
     const { controllers } = startGame(room);
     forceIntermission(room);
 
-    for (const [index, role] of CREW_ROLES.entries()) {
-      const upgrade = room.state.game.upgrade.get(role);
-      const controller = controllerAt(controllers, index);
-      if (upgrade === undefined) throw new Error(`Missing ${role} upgrade.`);
-      expect(controller.client.view?.has(upgrade)).toBe(true);
-      expect(upgrade.offer).toMatchObject({ role, waveNumber: 1 });
-      expect(upgrade.offer.cards).toHaveLength(3);
-    }
-    const pilotUpgrade = room.state.game.upgrade.get("pilot");
-    if (pilotUpgrade === undefined) throw new Error("Missing pilot upgrade.");
-    expect(display.client.view?.has(pilotUpgrade)).toBe(false);
+    const upgrade = room.state.game.teamUpgrade;
+    expect(upgrade.hasOffer).toBe(true);
+    expect(upgrade.offer).toMatchObject({ waveNumber: 1 });
+    expect([...upgrade.offer.cards].map(({ role }) => role)).toEqual(CREW_ROLES);
+    expect(upgrade.offer.cards).toHaveLength(3);
+    expect(display.client.view?.has(room.state.game)).toBe(true);
+    for (const controller of controllers) expect(controller.client.view).toBeDefined();
     expect(room.state.game.display.enemyShips).toHaveLength(0);
     expect(room.state.game.display.asteroids).toHaveLength(0);
   });
 
-  it("accepts an upgrade exactly once and detects an action ID collision", () => {
+  it("accepts a vote exactly once and detects an action ID collision", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
     const actionId = "11111111-1111-4111-8111-111111111111";
 
-    chooseUpgrade(room, pilot, "pilot", actionId);
+    voteUpgrade(room, pilot, "pilot", actionId);
     const modifiers = {
       speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
       accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
       maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
     };
-    expect(modifiers).not.toEqual({
+    expect(modifiers).toEqual({
       speedMultiplier: 1,
       accelerationMultiplier: 1,
       maxHpBonus: 0
     });
-    expect(room.state.game.upgrade.get("pilot")).toMatchObject({
-      status: "selected",
-      hasSelection: true
-    });
+    expect(room.state.game.teamUpgrade.votes.get("pilot")).toMatchObject({ revision: 1 });
 
-    chooseUpgrade(room, pilot, "pilot", actionId);
+    voteUpgrade(room, pilot, "pilot", actionId);
     expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
-    expect(countErrors(pilot, "already_chosen")).toBe(0);
+    expect(countErrors(pilot, "stale_action")).toBe(0);
 
-    chooseUpgrade(room, pilot, "pilot", actionId, 1);
+    voteUpgrade(room, pilot, "pilot", actionId, 1);
     expect(countErrors(pilot, "action_conflict")).toBe(1);
     expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
   });
 
-  it("rejects a v10 upgrade before journal or world mutation", () => {
+  it("rejects a legacy upgrade vote before journal or world mutation", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
-    const upgrade = room.state.game.upgrade.get("pilot");
-    const card = upgrade?.offer.cards.at(0);
-    if (upgrade === undefined || card === undefined) throw new Error("Expected pilot offer.");
+    const upgrade = room.state.game.teamUpgrade;
+    const card = upgrade.offer.cards.at(0);
+    if (!upgrade.hasOffer || card === undefined) throw new Error("Expected pilot offer.");
     const gameBefore = internals(room).gameState;
     const modifiersBefore = {
       speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
@@ -1140,7 +1135,7 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
       maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
     };
 
-    room.handleUpgradeChoose(pilot.client, {
+    room.handleUpgradeVote(pilot.client, {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
@@ -1148,26 +1143,27 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
       actionId: "10101010-1010-4010-8010-101010101010",
       waveNumber: upgrade.offer.waveNumber,
       offerId: upgrade.offer.offerId,
-      upgradeId: card.upgradeId
+      upgradeId: card.upgradeId,
+      revision: 1
     });
 
     expect(countErrors(pilot, "protocol_mismatch")).toBe(1);
     expect(internals(room).upgradeJournals.has(pilot.client.sessionId)).toBe(false);
     expect(internals(room).gameState).toBe(gameBefore);
     expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiersBefore);
-    expect(room.state.game.upgrade.get("pilot")?.status).toBe("available");
+    expect(room.state.game.teamUpgrade.votes.get("pilot")).toBeUndefined();
   });
 
   it("replays business errors and bounds each identity journal to 32 entries", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
-    const upgrade = room.state.game.upgrade.get("pilot");
-    const card = upgrade?.offer.cards.at(0);
-    if (upgrade === undefined || card === undefined) throw new Error("Expected pilot offer.");
+    const upgrade = room.state.game.teamUpgrade;
+    const card = upgrade.offer.cards.at(0);
+    if (!upgrade.hasOffer || card === undefined) throw new Error("Expected pilot offer.");
 
     for (let index = 0; index < 35; index += 1) {
-      room.handleUpgradeChoose(pilot.client, {
+      room.handleUpgradeVote(pilot.client, {
         protocolVersion: PROTOCOL_VERSION,
         roomId: room.roomId,
         playerId: pilot.client.sessionId,
@@ -1175,14 +1171,15 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
         actionId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
         waveNumber: 999,
         offerId: upgrade.offer.offerId,
-        upgradeId: card.upgradeId
+        upgradeId: card.upgradeId,
+        revision: index + 1
       });
     }
 
     expect(countErrors(pilot, "action_not_available")).toBe(35);
     expect(internals(room).upgradeJournals.get(pilot.client.sessionId)).toHaveLength(32);
     const newest = `00000000-0000-4000-8000-${String(34).padStart(12, "0")}`;
-    room.handleUpgradeChoose(pilot.client, {
+    room.handleUpgradeVote(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
@@ -1190,32 +1187,35 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
       actionId: newest,
       waveNumber: 999,
       offerId: upgrade.offer.offerId,
-      upgradeId: card.upgradeId
+      upgradeId: card.upgradeId,
+      revision: 35
     });
     expect(countErrors(pilot, "action_not_available")).toBe(36);
     expect(internals(room).upgradeJournals.get(pilot.client.sessionId)).toHaveLength(32);
   });
 
-  it("rejects another role offer before core mutation", () => {
+  it("allows a role to vote for another role card without applying it early", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
-    const gunner = room.state.game.upgrade.get("gunner");
-    const card = gunner?.offer.cards.at(0);
-    if (gunner === undefined || card === undefined) throw new Error("Expected gunner offer.");
+    const upgrade = room.state.game.teamUpgrade;
+    const card = upgrade.offer.cards.at(1);
+    if (!upgrade.hasOffer || card === undefined) throw new Error("Expected gunner card.");
 
-    room.handleUpgradeChoose(pilot.client, {
+    room.handleUpgradeVote(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber,
       actionId: "22222222-2222-4222-8222-222222222222",
-      waveNumber: gunner.offer.waveNumber,
-      offerId: gunner.offer.offerId,
-      upgradeId: card.upgradeId
+      waveNumber: upgrade.offer.waveNumber,
+      offerId: upgrade.offer.offerId,
+      upgradeId: card.upgradeId,
+      revision: 1
     });
 
-    expect(countErrors(pilot, "role_mismatch")).toBe(1);
+    expect(countErrors(pilot, "role_mismatch")).toBe(0);
+    expect(room.state.game.teamUpgrade.votes.get("pilot")?.upgradeId).toBe(card.upgradeId);
     expect(room.state.game.roleModifiers.gunner.damageMultiplier).toBe(1);
   });
 
@@ -1224,23 +1224,23 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
     const actionId = "33333333-3333-4333-8333-333333333333";
-    chooseUpgrade(room, pilot, "pilot", actionId);
+    voteUpgrade(room, pilot, "pilot", actionId);
     const speed = room.state.game.roleModifiers.pilot.speedMultiplier;
 
     const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(pilot.client);
     await room.onLeave(pilot.client, 1006);
-    chooseUpgrade(room, pilot, "pilot", actionId);
+    voteUpgrade(room, pilot, "pilot", actionId);
     expect(room.state.game.roleModifiers.pilot.speedMultiplier).toBe(speed);
 
     const gunner = controllerAt(controllers, 1);
-    chooseUpgrade(room, gunner, "gunner", "44444444-4444-4444-8444-444444444444");
+    voteUpgrade(room, gunner, "gunner", "44444444-4444-4444-8444-444444444444", 1);
     allowReconnection.mockRejectedValueOnce(new Error("expired"));
     await room.onLeave(gunner.client, 1006);
     const replacement = joinController(room, 9);
     expect(room.state.players.get(replacement.client.sessionId)?.role).toBe("gunner");
-    expect(room.state.game.upgrade.get("gunner")).toMatchObject({ status: "selected" });
-    chooseUpgrade(room, replacement, "gunner", "55555555-5555-4555-8555-555555555555");
-    expect(countErrors(replacement, "already_chosen")).toBe(1);
+    expect(room.state.game.teamUpgrade.votes.get("gunner")).toBeDefined();
+    voteUpgrade(room, replacement, "gunner", "55555555-5555-4555-8555-555555555555", 2);
+    expect(countErrors(replacement, "stale_action")).toBe(0);
   });
 
   it("neutralizes intermission without consuming rejected input sequence", () => {
@@ -1268,7 +1268,8 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
       mgFiring: false
     });
     expect(countErrors(pilot, "invalid_phase")).toBe(1);
-    for (let index = 0; index < 200; index += 1) room.advanceGameStep();
+    for (let index = 0; index < internals(room).gameConfig.intermissionTicks; index += 1)
+      room.advanceGameStep();
     expect(room.state.game.encounter).toMatchObject({ phase: "combat", waveNumber: 2 });
     room.handlePilotInput(pilot.client, {
       ...envelope,
@@ -1301,7 +1302,7 @@ describe("SpaceshipDefenderRoom v13 combat projection and upgrades", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
+describe("SpaceshipDefenderRoom v14 rematch isolation", () => {
   it("rejects stale ready, input and upgrade before per-run mutation", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -1323,7 +1324,7 @@ describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
       vector: { x: 1, y: 0 },
       mgFiring: false
     });
-    room.handleUpgradeChoose(pilot.client, {
+    room.handleUpgradeVote(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
       playerId: pilot.client.sessionId,
@@ -1331,7 +1332,8 @@ describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
       actionId: "99999999-9999-4999-8999-999999999999",
       waveNumber: 1,
       offerId: "old-offer",
-      upgradeId: "pilot_speed"
+      upgradeId: "pilot_speed",
+      revision: 1
     });
     room.handleReady(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1385,7 +1387,7 @@ describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
       mgFiring: false
     });
     forceIntermission(room);
-    chooseUpgrade(room, pilot, "pilot", "77777777-7777-4777-8777-777777777777");
+    voteUpgrade(room, pilot, "pilot", "77777777-7777-4777-8777-777777777777");
     const previousSeed = internals(room).gameState?.runSeed;
     const roster = [...room.state.players.values()].map(({ playerId, playerName, role }) => ({
       playerId,
@@ -1420,7 +1422,8 @@ describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
     });
     expect(room.state.game.display.enemyShips).toHaveLength(0);
     expect(room.state.game.display.asteroids).toHaveLength(0);
-    expect(room.state.game.upgrade).toHaveLength(0);
+    expect(room.state.game.teamUpgrade.hasOffer).toBe(false);
+    expect(room.state.game.teamUpgrade.votes).toHaveLength(0);
     expect(internals(room).sequenceWatermarks.get(pilot.client.sessionId)?.size).toBe(0);
     expect(internals(room).upgradeJournals.size).toBe(0);
     expect(setInterval).toHaveBeenCalledTimes(1);
@@ -1443,7 +1446,7 @@ describe("SpaceshipDefenderRoom v13 rematch isolation", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v13 disposal and operations metadata", () => {
+describe("SpaceshipDefenderRoom v14 disposal and operations metadata", () => {
   it("closes the whole room only when the display leaves explicitly", async () => {
     const room = createRoom();
     const display = joinDisplay(room);

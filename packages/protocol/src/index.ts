@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 13 as const;
+export const PROTOCOL_VERSION = 14 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -11,7 +11,6 @@ export const WAVE_TTL_SECONDS = 20 * 60;
 export const MAX_WAVE_TTL_SECONDS = 24 * 60 * 60;
 export const ENEMY_KINDS = ["gunship", "missileCarrier"] as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
-export const UPGRADE_STATUSES = ["available", "selected"] as const;
 export const ROOM_CLOSING_REASONS = [
   "display_left",
   "display_reconnect_expired",
@@ -21,8 +20,9 @@ export const ROOM_CLOSING_REASONS = [
   "room_lifetime_expired"
 ] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
-export const INTERMISSION_DURATION_TICKS = 200 as const;
+export const INTERMISSION_DURATION_TICKS = 600 as const;
 export const UPGRADE_OFFER_COUNT = 3 as const;
+export const TEAM_UPGRADE_PRICE = 5 as const;
 export const COMBAT_ENTITY_CAPS = {
   enemyShips: 40,
   asteroids: 16,
@@ -66,10 +66,6 @@ export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
 export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
 export const upgradeIdSchema = z.enum(UPGRADE_IDS);
 export type UpgradeId = z.infer<typeof upgradeIdSchema>;
-export const upgradeSelectionSourceSchema = z.enum(["player", "fallback"]);
-export type UpgradeSelectionSource = z.infer<typeof upgradeSelectionSourceSchema>;
-export const upgradeStatusSchema = z.enum(UPGRADE_STATUSES);
-export type UpgradeStatus = z.infer<typeof upgradeStatusSchema>;
 
 // Zod numbers reject NaN and infinities by default.
 const finite = z.number();
@@ -221,15 +217,16 @@ function upgradeBelongsToRole(upgradeId: UpgradeId, role: CrewRole): boolean {
 export const publicUpgradeCardSchema = z
   .object({
     upgradeId: upgradeIdSchema,
+    role: crewRoleSchema,
     label: z.string().min(1).max(96),
-    value: finite
+    value: finite,
+    price: z.literal(TEAM_UPGRADE_PRICE)
   })
   .strict();
 export type PublicUpgradeCard = z.infer<typeof publicUpgradeCardSchema>;
-export const publicUpgradeOfferSchema = z
+export const publicTeamUpgradeOfferSchema = z
   .object({
     offerId: z.string().min(1).max(64),
-    role: crewRoleSchema,
     waveNumber: safePositiveInteger,
     cards: z.array(publicUpgradeCardSchema).length(UPGRADE_OFFER_COUNT)
   })
@@ -237,47 +234,54 @@ export const publicUpgradeOfferSchema = z
   .superRefine((value, context) => {
     const upgradeIds = new Set<UpgradeId>();
     value.cards.forEach((card, index) => {
-      if (!upgradeBelongsToRole(card.upgradeId, value.role))
+      if (card.role !== CREW_ROLES[index])
+        issue(context, ["cards", index, "role"], "Cards must use pilot, gunner, shield order.");
+      if (!upgradeBelongsToRole(card.upgradeId, card.role))
         issue(context, ["cards", index, "upgradeId"], "Upgrade must belong to its offer role.");
       if (upgradeIds.has(card.upgradeId))
         issue(context, ["cards", index, "upgradeId"], "Offer cards must be distinct.");
       upgradeIds.add(card.upgradeId);
     });
   });
-export type PublicUpgradeOffer = z.infer<typeof publicUpgradeOfferSchema>;
-export const publicUpgradeSelectionSchema = z
+export type PublicTeamUpgradeOffer = z.infer<typeof publicTeamUpgradeOfferSchema>;
+export const publicUpgradeVoteSchema = z
   .object({
-    offerId: z.string().min(1).max(64),
     upgradeId: upgradeIdSchema,
     role: crewRoleSchema,
-    source: upgradeSelectionSourceSchema
+    revision: safePositiveInteger
+  })
+  .strict();
+export type PublicUpgradeVote = z.infer<typeof publicUpgradeVoteSchema>;
+export const publicUpgradeVotesSchema = z
+  .object({
+    pilot: publicUpgradeVoteSchema.nullable(),
+    gunner: publicUpgradeVoteSchema.nullable(),
+    shield: publicUpgradeVoteSchema.nullable()
+  })
+  .strict();
+export type PublicUpgradeVotes = z.infer<typeof publicUpgradeVotesSchema>;
+export const publicTeamUpgradeSelectionSchema = z
+  .object({
+    offerId: z.string().min(1).max(64),
+    waveNumber: safePositiveInteger,
+    upgradeId: upgradeIdSchema,
+    role: crewRoleSchema,
+    price: z.literal(TEAM_UPGRADE_PRICE)
   })
   .strict()
   .superRefine((value, context) => {
     if (!upgradeBelongsToRole(value.upgradeId, value.role))
       issue(context, ["upgradeId"], "Upgrade must belong to its selection role.");
   });
-export type PublicUpgradeSelection = z.infer<typeof publicUpgradeSelectionSchema>;
-export const publicControllerUpgradeViewSchema = z
+export type PublicTeamUpgradeSelection = z.infer<typeof publicTeamUpgradeSelectionSchema>;
+export const publicTeamUpgradeViewSchema = z
   .object({
-    status: upgradeStatusSchema,
-    offer: publicUpgradeOfferSchema,
-    selection: publicUpgradeSelectionSchema.nullable()
+    offer: publicTeamUpgradeOfferSchema.nullable(),
+    votes: publicUpgradeVotesSchema,
+    selection: publicTeamUpgradeSelectionSchema.nullable()
   })
-  .strict()
-  .superRefine((value, context) => {
-    if ((value.status === "selected") !== (value.selection !== null))
-      issue(context, ["status"], "Upgrade status must match selection presence.");
-    if (value.selection !== null) {
-      if (value.selection.role !== value.offer.role)
-        issue(context, ["selection", "role"], "Selection belongs to another role.");
-      const matches =
-        value.selection.offerId === value.offer.offerId &&
-        value.offer.cards.some((card) => card.upgradeId === value.selection?.upgradeId);
-      if (!matches) issue(context, ["selection"], "Selection must reference a published offer.");
-    }
-  });
-export type PublicControllerUpgradeView = z.infer<typeof publicControllerUpgradeViewSchema>;
+  .strict();
+export type PublicTeamUpgradeView = z.infer<typeof publicTeamUpgradeViewSchema>;
 
 const rectangleObstacle = z
   .object({
@@ -351,7 +355,9 @@ const gameShape = {
   shield: publicShieldViewSchema,
   machineGun: publicMachineGunViewSchema,
   encounter: publicEncounterViewSchema,
-  roleModifiers: publicRoleModifiersViewSchema
+  roleModifiers: publicRoleModifiersViewSchema,
+  credits: safeNonnegativeInteger,
+  teamUpgrade: publicTeamUpgradeViewSchema
 } satisfies z.ZodRawShape;
 
 interface EntityProjection {
@@ -373,7 +379,7 @@ interface WorldProjection {
   friendlyProjectiles?: PublicProjectileView[];
   hostileProjectiles?: PublicProjectileView[];
   homingMissiles?: PublicHomingMissileView[];
-  upgrade?: PublicControllerUpgradeView | null;
+  teamUpgrade: PublicTeamUpgradeView;
 }
 
 function issue(context: z.RefinementCtx, path: PropertyKey[], message: string): void {
@@ -481,23 +487,44 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
   if (world.hostileProjectiles?.some(({ kind }) => kind !== "hostile"))
     issue(context, ["hostileProjectiles"], "Hostile collection contains a friendly projectile.");
 
-  if (encounter.phase === "combat" && world.upgrade != null)
-    issue(context, ["upgrade"], "Combat must not publish upgrade offers.");
+  const { offer, votes, selection } = world.teamUpgrade;
+  const hasVotes = CREW_ROLES.some((role) => votes[role] !== null);
+  if (encounter.phase !== "intermission" && (offer !== null || hasVotes))
+    issue(context, ["teamUpgrade"], "Only intermission may publish an offer and votes.");
   if (encounter.phase === "intermission") {
-    if (world.upgrade === null)
-      issue(context, ["upgrade"], "Controller intermission requires a personalized offer.");
-    if (world.upgrade !== undefined && world.upgrade?.offer.waveNumber !== encounter.waveNumber)
-      issue(context, ["upgrade", "offer", "waveNumber"], "Offer and encounter waves must match.");
+    if (offer === null) issue(context, ["teamUpgrade", "offer"], "Intermission requires an offer.");
+    if (offer !== null && offer.waveNumber !== encounter.waveNumber)
+      issue(
+        context,
+        ["teamUpgrade", "offer", "waveNumber"],
+        "Offer and encounter waves must match."
+      );
+    if (selection !== null)
+      issue(
+        context,
+        ["teamUpgrade", "selection"],
+        "An unresolved intermission cannot publish a purchase."
+      );
+    for (const role of CREW_ROLES) {
+      const vote = votes[role];
+      if (vote !== null && vote.role !== role)
+        issue(context, ["teamUpgrade", "votes", role, "role"], "Vote must match its role slot.");
+      if (
+        vote !== null &&
+        offer !== null &&
+        !offer.cards.some((card) => card.upgradeId === vote.upgradeId)
+      )
+        issue(
+          context,
+          ["teamUpgrade", "votes", role, "upgradeId"],
+          "Vote must reference the current offer."
+        );
+    }
     if (count !== 0) issue(context, [], "Intermission must not publish dynamic entities.");
   }
-  if (encounter.phase === "result" && world.upgrade != null)
-    issue(context, ["upgrade"], "A terminal result must not publish upgrade offers.");
 }
 
-export const controllerGameSnapshotSchema = z
-  .object({ ...gameShape, upgrade: publicControllerUpgradeViewSchema.nullable() })
-  .strict()
-  .superRefine(refineWorld);
+export const controllerGameSnapshotSchema = z.object(gameShape).strict().superRefine(refineWorld);
 export type ControllerGameSnapshot = z.infer<typeof controllerGameSnapshotSchema>;
 export const displayGameSnapshotSchema = z
   .object({
@@ -543,14 +570,6 @@ function refineRoom(room: RoomProjection, context: z.RefinementCtx): void {
       issue(context, ["runNumber"], "An active room requires a positive run number.");
     if (room.game === null) issue(context, ["game"], "An active room requires a game.");
   }
-  if (
-    room.assignedRole !== undefined &&
-    room.game !== null &&
-    "upgrade" in room.game &&
-    room.game.upgrade !== null &&
-    room.game.upgrade.offer.role !== room.assignedRole
-  )
-    issue(context, ["game", "upgrade", "offer", "role"], "Upgrade must match assigned role.");
 }
 
 const roomShape = {
@@ -620,16 +639,17 @@ export const shieldInputCommandSchema = continuousInputEnvelopeSchema
   .extend({ aim: vector2Schema, active: z.boolean() })
   .strict();
 export type ShieldInputCommand = z.infer<typeof shieldInputCommandSchema>;
-export const upgradeChooseCommandSchema = commandEnvelopeSchema
+export const upgradeVoteCommandSchema = commandEnvelopeSchema
   .extend({
     runNumber: activeRunNumberSchema,
     actionId: z.uuid(),
     waveNumber: safePositiveInteger,
     offerId: z.string().min(1).max(64),
-    upgradeId: upgradeIdSchema
+    upgradeId: upgradeIdSchema,
+    revision: safePositiveInteger
   })
   .strict();
-export type UpgradeChooseCommand = z.infer<typeof upgradeChooseCommandSchema>;
+export type UpgradeVoteCommand = z.infer<typeof upgradeVoteCommandSchema>;
 
 export const serverLatencyProbeSchema = z
   .object({ protocolVersion: z.literal(PROTOCOL_VERSION), probeId: z.string().min(1) })
@@ -653,7 +673,7 @@ export const clientMessage = {
   pilotInput: "pilot:input",
   gunnerInput: "gunner:input",
   shieldInput: "shield:input",
-  upgradeChoose: "upgrade:choose",
+  upgradeVote: "upgrade:vote",
   latencyPong: "client:latency-pong"
 } as const;
 export const serverMessage = {
@@ -672,8 +692,8 @@ export const serverErrorCodeSchema = z.enum([
   "identity_mismatch",
   "role_mismatch",
   "action_conflict",
-  "already_chosen",
   "action_not_available",
+  "stale_action",
   "stale_run"
 ]);
 export type ServerErrorCode = z.infer<typeof serverErrorCodeSchema>;

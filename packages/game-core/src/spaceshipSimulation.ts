@@ -171,7 +171,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   enemySpawnIntervalTicks: 12,
   ambientAsteroidIntervalMinTicks: 40,
   ambientAsteroidIntervalMaxTicks: 100,
-  intermissionTicks: 200,
+  intermissionTicks: 600,
   waveBaseBudget: 5,
   waveBudgetGrowth: 2,
   waveBudgetCap: 120,

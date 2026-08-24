@@ -110,26 +110,32 @@ export interface RoleModifiers {
 
 export interface UpgradeCard {
   readonly upgradeId: UpgradeId;
+  readonly role: GameplayRole;
   readonly label: string;
   readonly value: number;
+  readonly price: 5;
 }
 
-export interface RoleUpgradeOffer {
+export interface TeamUpgradeOffer {
   readonly offerId: string;
   readonly waveNumber: number;
-  readonly role: GameplayRole;
   readonly cards: readonly UpgradeCard[];
 }
 
-export type RoleOffers = Readonly<Record<GameplayRole, RoleUpgradeOffer | null>>;
-export interface RoleUpgradeSelection {
+export interface TeamUpgradeVote {
+  readonly role: GameplayRole;
+  readonly upgradeId: UpgradeId;
+  readonly revision: number;
+}
+
+export type TeamUpgradeVotes = Readonly<Record<GameplayRole, TeamUpgradeVote | null>>;
+export interface TeamUpgradeSelection {
+  readonly waveNumber: number;
   readonly offerId: string;
   readonly upgradeId: UpgradeId;
   readonly role: GameplayRole;
-  readonly source: "player" | "fallback";
+  readonly price: 5;
 }
-
-export type RoleSelections = Readonly<Record<GameplayRole, RoleUpgradeSelection | null>>;
 
 interface MovingEntity {
   readonly id: string;
@@ -186,6 +192,7 @@ export interface CombatStateFields {
   readonly waveNumber: number;
   readonly encounterTick: number;
   readonly score: number;
+  readonly credits: number;
   readonly nextSpawnSequence: number;
   readonly pendingSpawns: readonly PendingSpawn[];
   readonly enemies: readonly CombatEnemyState[];
@@ -193,8 +200,9 @@ export interface CombatStateFields {
   readonly hostileProjectiles: readonly HostileProjectileState[];
   readonly homingMissiles: readonly HomingMissileState[];
   readonly roleModifiers: RoleModifiers;
-  readonly roleOffers: RoleOffers;
-  readonly roleSelections: RoleSelections;
+  readonly teamUpgradeOffer: TeamUpgradeOffer | null;
+  readonly teamUpgradeVotes: TeamUpgradeVotes;
+  readonly teamUpgradeSelection: TeamUpgradeSelection | null;
 }
 
 export interface FriendlyProjectileLike extends MovingEntity {
@@ -230,15 +238,16 @@ export interface WaveDifficulty {
   readonly tempoMultiplier: number;
 }
 
-export interface UpgradeSelectionCommand {
+export interface UpgradeVoteCommand {
   readonly role: GameplayRole;
   readonly waveNumber: number;
   readonly offerId: string;
   readonly upgradeId: UpgradeId;
+  readonly revision: number;
 }
 
-export interface UpgradeSelectionResult<TState extends CombatStateFields> {
-  readonly status: "accepted" | "already_chosen" | "action_not_available";
+export interface UpgradeVoteResult<TState extends CombatStateFields> {
+  readonly status: "accepted" | "stale_action" | "action_not_available";
   readonly state: TState;
 }
 
@@ -248,6 +257,7 @@ const SPAWN_DOMAIN = 0x5350_4157;
 const OFFER_DOMAIN = 0x4f46_4652;
 const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
 const MAX_PUBLIC_TRANSIENT_PADDING = 256;
+export const TEAM_UPGRADE_PRICE = 5 as const;
 
 export function validateRunSeed(runSeed: number): void {
   if (!Number.isInteger(runSeed) || runSeed <= 0 || runSeed > UINT32_MAX) {
@@ -456,6 +466,7 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     waveNumber: 1,
     encounterTick: 0,
     score: 0,
+    credits: 0,
     nextSpawnSequence: 1,
     pendingSpawns: plan,
     enemies: [],
@@ -467,8 +478,9 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
       gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
       shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
     },
-    roleOffers: { pilot: null, gunner: null, shield: null },
-    roleSelections: { pilot: null, gunner: null, shield: null }
+    teamUpgradeOffer: null,
+    teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
+    teamUpgradeSelection: null
   };
 }
 
@@ -487,15 +499,15 @@ function scheduleAmbientAsteroid(
   };
 }
 
-export function createRoleOffers(
+export function createTeamUpgradeOffer(
   runSeed: number,
   waveNumber: number
 ): {
-  readonly offers: RoleOffers;
+  readonly offer: TeamUpgradeOffer;
   readonly rngState: number;
 } {
   let rngState = deriveDomainSeed(runSeed, waveNumber, OFFER_DOMAIN);
-  const pools: Readonly<Record<GameplayRole, readonly UpgradeCard[]>> = {
+  const pools: Readonly<Record<GameplayRole, readonly Omit<UpgradeCard, "role" | "price">[]>> = {
     pilot: [
       { upgradeId: "pilot_speed", label: "Maximum speed +10%", value: 0.1 },
       { upgradeId: "pilot_acceleration", label: "Acceleration +12%", value: 0.12 },
@@ -512,43 +524,56 @@ export function createRoleOffers(
       { upgradeId: "shield_arc", label: "Arc width +10 degrees", value: Math.PI / 18 }
     ]
   };
-  const offers = {} as Record<GameplayRole, RoleUpgradeOffer>;
+  const cards: UpgradeCard[] = [];
   for (const role of ROLES) {
-    const cards = [...pools[role]];
-    for (let index = cards.length - 1; index > 0; index -= 1) {
+    const roleCards = [...pools[role]];
+    for (let index = roleCards.length - 1; index > 0; index -= 1) {
       const [next, random] = nextUint32(rngState);
       rngState = next;
       const swapIndex = random % (index + 1);
-      const card = cards[index];
-      const swap = cards[swapIndex];
+      const card = roleCards[index];
+      const swap = roleCards[swapIndex];
       if (card !== undefined && swap !== undefined) {
-        cards[index] = swap;
-        cards[swapIndex] = card;
+        roleCards[index] = swap;
+        roleCards[swapIndex] = card;
       }
     }
-    offers[role] = { offerId: `offer-w${String(waveNumber)}-${role}`, waveNumber, role, cards };
+    const card = roleCards[0];
+    if (card === undefined) throw new RangeError(`Upgrade pool for ${role} cannot be empty`);
+    cards.push({ ...card, role, price: TEAM_UPGRADE_PRICE });
   }
-  return { offers, rngState };
+  return { offer: { offerId: `offer-w${String(waveNumber)}`, waveNumber, cards }, rngState };
 }
 
-export function chooseRoleUpgrade<TState extends CombatStateFields>(
+export function voteForTeamUpgrade<TState extends CombatStateFields>(
   state: TState,
-  command: UpgradeSelectionCommand
-): UpgradeSelectionResult<TState> {
+  command: UpgradeVoteCommand
+): UpgradeVoteResult<TState> {
   if (state.encounterPhase !== "intermission" || command.waveNumber !== state.waveNumber) {
     return { status: "action_not_available", state };
   }
-  if (state.roleSelections[command.role] !== null) {
-    return { status: "already_chosen", state };
-  }
-  const offer = state.roleOffers[command.role];
+  const offer = state.teamUpgradeOffer;
   const card = offer?.cards.find(({ upgradeId }) => upgradeId === command.upgradeId);
   if (offer?.offerId !== command.offerId || card === undefined) {
     return { status: "action_not_available", state };
   }
+  const previous = state.teamUpgradeVotes[command.role];
+  if (previous !== null && command.revision <= previous.revision) {
+    return { status: "stale_action", state };
+  }
   return {
     status: "accepted",
-    state: applyUpgrade(state, command.role, offer.offerId, card.upgradeId, "player")
+    state: {
+      ...state,
+      teamUpgradeVotes: {
+        ...state.teamUpgradeVotes,
+        [command.role]: {
+          role: command.role,
+          upgradeId: command.upgradeId,
+          revision: command.revision
+        }
+      }
+    }
   };
 }
 
@@ -575,7 +600,7 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
     next.enemies.length === 0 &&
     next.asteroids.every(({ origin }) => origin === "ambient")
   ) {
-    const offerResult = createRoleOffers(next.runSeed, next.waveNumber);
+    const offerResult = createTeamUpgradeOffer(next.runSeed, next.waveNumber);
     return {
       ...pickCombatResult(next),
       encounterPhase: "intermission",
@@ -583,8 +608,9 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
       defeatReason: null,
       encounterTick: 0,
       offerRngState: offerResult.rngState,
-      roleOffers: offerResult.offers,
-      roleSelections: { pilot: null, gunner: null, shield: null },
+      teamUpgradeOffer: offerResult.offer,
+      teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
+      teamUpgradeSelection: null,
       asteroids: [],
       hostileProjectiles: [],
       homingMissiles: [],
@@ -601,16 +627,7 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
   if (encounterTick < config.intermissionTicks) {
     return { ...pickCombatResult(state), encounterTick, shieldActive: false };
   }
-  let selected: CombatStateFields = state;
-  for (const role of ROLES) {
-    if (selected.roleSelections[role] === null) {
-      const card = selected.roleOffers[role]?.cards[0];
-      const offer = selected.roleOffers[role];
-      if (offer !== null && card !== undefined) {
-        selected = applyUpgrade(selected, role, offer.offerId, card.upgradeId, "fallback");
-      }
-    }
-  }
+  const selected = resolveTeamUpgrade(state);
   const waveNumber = Math.min(Number.MAX_SAFE_INTEGER, selected.waveNumber + 1);
   const wave = createWavePlan(config, selected.runSeed, waveNumber);
   const ambientSchedule = scheduleAmbientAsteroid(selected.ambientAsteroidRngState, 0, config);
@@ -625,7 +642,8 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
     ambientAsteroidRngState: ambientSchedule.rngState,
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     pendingSpawns: wave.plan,
-    roleOffers: { pilot: null, gunner: null, shield: null },
+    teamUpgradeOffer: null,
+    teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
     shieldActive: false,
     projectiles: [],
     hostileProjectiles: [],
@@ -633,12 +651,33 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
   };
 }
 
+function resolveTeamUpgrade<TState extends CombatStateFields>(state: TState): TState {
+  const offer = state.teamUpgradeOffer;
+  if (offer === null) return state;
+  const counts = new Map<UpgradeId, number>();
+  for (const role of ROLES) {
+    const vote = state.teamUpgradeVotes[role];
+    if (vote !== null) counts.set(vote.upgradeId, (counts.get(vote.upgradeId) ?? 0) + 1);
+  }
+  let winner: UpgradeCard | undefined;
+  let winningVotes = 0;
+  for (const card of offer.cards) {
+    const count = counts.get(card.upgradeId) ?? 0;
+    if (count > winningVotes) {
+      winner = card;
+      winningVotes = count;
+    }
+  }
+  if (winner === undefined || state.credits < winner.price) return state;
+  return applyUpgrade(state, winner.role, offer.offerId, offer.waveNumber, winner.upgradeId);
+}
+
 function applyUpgrade<TState extends CombatStateFields>(
   state: TState,
   role: GameplayRole,
   offerId: string,
-  upgradeId: UpgradeId,
-  source: RoleUpgradeSelection["source"]
+  waveNumber: number,
+  upgradeId: UpgradeId
 ): TState {
   let spaceshipHp = state.spaceshipHp;
   let spaceshipMaxHp = state.spaceshipMaxHp;
@@ -727,9 +766,13 @@ function applyUpgrade<TState extends CombatStateFields>(
     spaceshipHp,
     spaceshipMaxHp,
     roleModifiers,
-    roleSelections: {
-      ...state.roleSelections,
-      [role]: { offerId, upgradeId, role, source }
+    credits: state.credits - TEAM_UPGRADE_PRICE,
+    teamUpgradeSelection: {
+      offerId,
+      waveNumber,
+      upgradeId,
+      role,
+      price: TEAM_UPGRADE_PRICE
     }
   };
 }
@@ -1119,6 +1162,7 @@ function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): Comb
   const removedTargets = new Set<string>();
   const damage = new Map<string, number>();
   let score = state.score;
+  let credits = state.credits;
   for (const candidate of candidates) {
     if (removedProjectiles.has(candidate.sourceId) || removedTargets.has(candidate.targetId))
       continue;
@@ -1138,12 +1182,21 @@ function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): Comb
         : state.asteroids.find(({ id }) => id === candidate.targetId);
     if (target !== undefined && existingDamage + projectile.damage >= target.hp) {
       removedTargets.add(candidate.targetId);
-      score += candidate.targetKind === "enemy" ? 25 : 10;
+      if (candidate.targetKind === "enemy") {
+        score += 25;
+        const enemy = target as CombatEnemyState;
+        credits += enemy.kind === "gunship" ? 2 : 4;
+      } else {
+        score += 10;
+        const asteroid = target as AsteroidState;
+        if (asteroid.origin === "wave") credits += 1;
+      }
     }
   }
   return {
     ...state,
     score,
+    credits,
     projectiles: state.projectiles.filter(({ id }) => !removedProjectiles.has(id)),
     enemies: state.enemies
       .filter(({ id }) => !removedTargets.has(id))
@@ -1220,6 +1273,8 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
   let shieldActive = state.shieldActive;
   let shieldRearmRequired = state.shieldRearmRequired;
   let spaceshipHp = state.spaceshipHp;
+  let score = state.score;
+  let credits = state.credits;
   for (const candidate of candidates) {
     if (removed.has(candidate.sourceId)) continue;
     if (candidate.shieldHit && shieldActive) {
@@ -1227,6 +1282,12 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
       if (shieldEnergy >= cost) {
         shieldEnergy -= cost;
         removed.add(candidate.sourceId);
+        if (candidate.kind === "missile") score += 5;
+        if (candidate.kind === "asteroid") {
+          score += 10;
+          const asteroid = state.asteroids.find(({ id }) => id === candidate.sourceId);
+          if (asteroid?.origin === "wave") credits += 1;
+        }
         if (shieldEnergy === 0) {
           shieldActive = false;
           shieldRearmRequired = true;
@@ -1249,6 +1310,8 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
   return {
     ...state,
     spaceshipHp,
+    score,
+    credits,
     shieldEnergy,
     shieldActive,
     shieldRearmRequired,
@@ -1444,6 +1507,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     waveNumber: state.waveNumber,
     encounterTick: state.encounterTick,
     score: state.score,
+    credits: state.credits,
     nextSpawnSequence: state.nextSpawnSequence,
     pendingSpawns: state.pendingSpawns,
     enemies: state.enemies,
@@ -1451,8 +1515,9 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     hostileProjectiles: state.hostileProjectiles,
     homingMissiles: state.homingMissiles,
     roleModifiers: state.roleModifiers,
-    roleOffers: state.roleOffers,
-    roleSelections: state.roleSelections,
+    teamUpgradeOffer: state.teamUpgradeOffer,
+    teamUpgradeVotes: state.teamUpgradeVotes,
+    teamUpgradeSelection: state.teamUpgradeSelection,
     shieldActive: state.shieldActive,
     shieldEnergy: state.shieldEnergy,
     shieldRearmRequired: state.shieldRearmRequired,

@@ -5,11 +5,10 @@ import {
   advanceSpaceshipSimulation,
   applyGunnerInput,
   applyShieldInput,
-  chooseRoleUpgrade,
   createCleanSpaceshipRun,
   createSpaceshipSimulationConfig,
   createSpaceshipSimulationState,
-  createRoleOffers,
+  createTeamUpgradeOffer,
   createTerminalCombatState,
   createWavePlan,
   dynamicEntityCount,
@@ -17,6 +16,7 @@ import {
   getWaveDifficulty,
   relativeSweptCircleTime,
   shortestAngleDelta,
+  voteForTeamUpgrade,
   type SpaceshipSimulationState,
   type AsteroidState,
   type CombatEnemyState,
@@ -42,11 +42,11 @@ describe("deterministic combat foundation", () => {
   it("keeps spawn and offer streams deterministic and independent", () => {
     const config = createSpaceshipSimulationConfig();
     expect(createWavePlan(config, 123, 8)).toEqual(createWavePlan(config, 123, 8));
-    expect(createRoleOffers(123, 8)).toEqual(createRoleOffers(123, 8));
-    const offers = createRoleOffers(123, 8);
+    expect(createTeamUpgradeOffer(123, 8)).toEqual(createTeamUpgradeOffer(123, 8));
+    const offers = createTeamUpgradeOffer(123, 8);
     createWavePlan(config, 123, 8);
     createWavePlan(config, 123, 9);
-    expect(createRoleOffers(123, 8)).toEqual(offers);
+    expect(createTeamUpgradeOffer(123, 8)).toEqual(offers);
   });
 
   it("unlocks carriers at wave three and scales difficulty monotonically", () => {
@@ -118,6 +118,7 @@ describe("deterministic combat foundation", () => {
     expect(clean.waveNumber).toBe(1);
     expect(clean.encounterTick).toBe(0);
     expect(clean.score).toBe(0);
+    expect(clean.credits).toBe(0);
     expect(clean.nextSpawnSequence).toBe(1);
     expect(clean.nextProjectileSequence).toBe(0);
     expect(clean.enemies).toEqual([]);
@@ -125,8 +126,9 @@ describe("deterministic combat foundation", () => {
     expect(clean.hostileProjectiles).toEqual([]);
     expect(clean.homingMissiles).toEqual([]);
     expect(clean.projectiles).toEqual([]);
-    expect(clean.roleOffers).toEqual({ pilot: null, gunner: null, shield: null });
-    expect(clean.roleSelections).toEqual({ pilot: null, gunner: null, shield: null });
+    expect(clean.teamUpgradeOffer).toBeNull();
+    expect(clean.teamUpgradeVotes).toEqual({ pilot: null, gunner: null, shield: null });
+    expect(clean.teamUpgradeSelection).toBeNull();
     expect(clean.inputs).toEqual({ pilot: null, gunner: null, shield: null });
     expect(clean.roleModifiers).toEqual(createSpaceshipSimulationState(config, 200).roleModifiers);
   });
@@ -231,6 +233,119 @@ describe("combat motion and collision", () => {
     expect(stepped.shieldEnergy).toBe(0);
     expect(stepped.shieldActive).toBe(false);
     expect(stepped.spaceshipHp).toBe(config.spaceshipMaxHp - config.hostileBulletDamage);
+  });
+
+  it("rewards missile and wave asteroid shield interceptions exactly once", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1000 });
+    const initial = createSpaceshipSimulationState(config, 70);
+    const x = initial.spaceship.x + config.shieldRadius;
+    const y = initial.spaceship.y;
+    const missile: HomingMissileState = {
+      id: "shield-missile",
+      spawnSequence: 1,
+      previousX: x,
+      previousY: y,
+      x,
+      y,
+      velocity: { x: 0, y: 0 },
+      radius: config.missileRadius,
+      spawnedTick: 0,
+      heading: Math.PI,
+      damage: config.missileDamage
+    };
+    const asteroid: AsteroidState = {
+      id: "shield-asteroid",
+      spawnSequence: 2,
+      origin: "wave",
+      previousX: x,
+      previousY: y,
+      x,
+      y,
+      velocity: { x: 0, y: 0 },
+      radius: config.asteroidRadius,
+      spawnedTick: 0,
+      hp: config.asteroidHp,
+      maxHp: config.asteroidHp,
+      damage: config.asteroidDamage
+    };
+    const result = advanceCombat(
+      {
+        ...initial,
+        pendingSpawns: [],
+        shieldAngle: 0,
+        shieldActive: true,
+        shieldEnergy: 100,
+        homingMissiles: [missile],
+        asteroids: [asteroid],
+        spaceship: {
+          ...initial.spaceship,
+          previousX: initial.spaceship.previousX ?? initial.spaceship.x,
+          previousY: initial.spaceship.previousY ?? initial.spaceship.y,
+          radius: config.spaceshipRadius
+        }
+      },
+      config
+    );
+    expect(result.score).toBe(15);
+    expect(result.credits).toBe(1);
+    expect(result.homingMissiles).toEqual([]);
+    expect(result.asteroids).toEqual([]);
+  });
+
+  it("does not double reward an asteroid hit by projectile and shield in one step", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1000 });
+    const initial = createSpaceshipSimulationState(config, 71);
+    const x = initial.spaceship.x + config.shieldRadius;
+    const y = initial.spaceship.y;
+    const asteroid: AsteroidState = {
+      id: "contested-asteroid",
+      spawnSequence: 2,
+      origin: "wave",
+      previousX: x,
+      previousY: y,
+      x,
+      y,
+      velocity: { x: 0, y: 0 },
+      radius: config.asteroidRadius,
+      spawnedTick: 0,
+      hp: config.friendlyProjectileDamage,
+      maxHp: config.friendlyProjectileDamage,
+      damage: config.asteroidDamage
+    };
+    const projectile: ProjectileState = {
+      id: "contested-projectile",
+      projectileId: "contested-projectile",
+      spawnSequence: 1,
+      previousX: x,
+      previousY: y,
+      x,
+      y,
+      velocity: { x: 0, y: 0 },
+      radius: config.projectileRadius,
+      spawnedTick: 0,
+      damage: config.friendlyProjectileDamage,
+      source: "cannon"
+    };
+    const result = advanceCombat(
+      {
+        ...initial,
+        pendingSpawns: [],
+        shieldAngle: 0,
+        shieldActive: true,
+        shieldEnergy: 100,
+        asteroids: [asteroid],
+        projectiles: [projectile],
+        spaceship: {
+          ...initial.spaceship,
+          previousX: initial.spaceship.previousX ?? initial.spaceship.x,
+          previousY: initial.spaceship.previousY ?? initial.spaceship.y,
+          radius: config.spaceshipRadius
+        }
+      },
+      config
+    );
+    expect(result.score).toBe(10);
+    expect(result.credits).toBe(1);
   });
 
   it("normalizes terminal outcomes and freezes the exact final state", () => {
@@ -402,63 +517,124 @@ describe("combat motion and collision", () => {
   });
 });
 
-describe("role upgrades", () => {
-  it("applies one role choice atomically and rejects a second choice", () => {
+describe("team upgrades", () => {
+  it("accepts a newer role vote and rejects a stale revision", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 42);
-    const generated = createRoleOffers(initial.runSeed, 1);
+    const generated = createTeamUpgradeOffer(initial.runSeed, 1);
     const intermission: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
-      roleOffers: generated.offers
+      teamUpgradeOffer: generated.offer
     };
-    const offer = generated.offers.gunner;
-    const firstCard = offer?.cards[0];
-    if (offer === null || firstCard === undefined) throw new Error("expected gunner offer");
-    const first = chooseRoleUpgrade(intermission, {
+    const offer = generated.offer;
+    const firstCard = offer.cards[0];
+    if (firstCard === undefined) throw new Error("expected offer card");
+    const first = voteForTeamUpgrade(intermission, {
       role: "gunner",
       waveNumber: 1,
-      offerId: offer.offerId,
-      upgradeId: firstCard.upgradeId
-    });
-    expect(first.status).toBe("accepted");
-    expect(first.state.roleSelections.gunner).toEqual({
       offerId: offer.offerId,
       upgradeId: firstCard.upgradeId,
-      role: "gunner",
-      source: "player"
+      revision: 1
     });
-    const second = chooseRoleUpgrade(first.state, {
+    expect(first.status).toBe("accepted");
+    expect(first.state.teamUpgradeVotes.gunner).toEqual({
+      upgradeId: firstCard.upgradeId,
+      role: "gunner",
+      revision: 1
+    });
+    const second = voteForTeamUpgrade(first.state, {
       role: "gunner",
       waveNumber: 1,
       offerId: offer.offerId,
-      upgradeId: offer.cards[1]?.upgradeId ?? firstCard.upgradeId
+      upgradeId: offer.cards[1]?.upgradeId ?? firstCard.upgradeId,
+      revision: 1
     });
-    expect(second.status).toBe("already_chosen");
+    expect(second.status).toBe("stale_action");
     expect(second.state).toBe(first.state);
   });
 
-  it("uses deterministic fallback exactly at the 200-tick deadline", () => {
+  it("resolves majority atomically at the 600-tick deadline", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 24);
-    const generated = createRoleOffers(initial.runSeed, 1);
+    const generated = createTeamUpgradeOffer(initial.runSeed, 1);
+    const gunnerCard = generated.offer.cards[1];
+    if (gunnerCard === undefined) throw new Error("expected gunner card");
     const beforeDeadline: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
-      encounterTick: 199,
-      roleOffers: generated.offers,
-      roleSelections: { pilot: null, gunner: null, shield: null }
+      encounterTick: 599,
+      credits: 7,
+      teamUpgradeOffer: generated.offer,
+      teamUpgradeVotes: {
+        pilot: { role: "pilot", upgradeId: gunnerCard.upgradeId, revision: 1 },
+        gunner: { role: "gunner", upgradeId: gunnerCard.upgradeId, revision: 1 },
+        shield: null
+      }
     };
     const nextWave = advanceSpaceshipSimulation(beforeDeadline, config);
-    const fallbackSelections = nextWave.roleSelections;
     expect(nextWave.encounterPhase).toBe("combat");
     expect(nextWave.waveNumber).toBe(2);
     expect(nextWave.encounterTick).toBe(0);
-    expect(nextWave.roleOffers).toEqual({ pilot: null, gunner: null, shield: null });
-    expect(fallbackSelections.pilot).toMatchObject({ role: "pilot", source: "fallback" });
-    expect(fallbackSelections.gunner).toMatchObject({ role: "gunner", source: "fallback" });
-    expect(fallbackSelections.shield).toMatchObject({ role: "shield", source: "fallback" });
+    expect(nextWave.teamUpgradeOffer).toBeNull();
+    expect(nextWave.teamUpgradeSelection).toMatchObject({
+      role: "gunner",
+      upgradeId: gunnerCard.upgradeId,
+      price: 5
+    });
+    expect(nextWave.credits).toBe(2);
     expect(nextWave.roleModifiers).not.toEqual(initial.roleModifiers);
     expect(nextWave.inputs).toEqual(initial.inputs);
+  });
+
+  it("uses stable card order for ties and skips no-vote or unaffordable purchases", () => {
+    const config = createSpaceshipSimulationConfig();
+    const initial = createSpaceshipSimulationState(config, 31);
+    const offer = createTeamUpgradeOffer(initial.runSeed, 1).offer;
+    const [pilot, gunner, shield] = offer.cards;
+    if (pilot === undefined || gunner === undefined || shield === undefined)
+      throw new Error("cards");
+    const tied = advanceSpaceshipSimulation(
+      {
+        ...initial,
+        encounterPhase: "intermission",
+        encounterTick: 599,
+        credits: 5,
+        teamUpgradeOffer: offer,
+        teamUpgradeVotes: {
+          pilot: { role: "pilot", upgradeId: pilot.upgradeId, revision: 1 },
+          gunner: { role: "gunner", upgradeId: gunner.upgradeId, revision: 1 },
+          shield: { role: "shield", upgradeId: shield.upgradeId, revision: 1 }
+        }
+      },
+      config
+    );
+    expect(tied.teamUpgradeSelection?.upgradeId).toBe(pilot.upgradeId);
+    expect(tied.credits).toBe(0);
+
+    for (const credits of [4, 5]) {
+      const votes =
+        credits === 4
+          ? {
+              pilot: { role: "pilot" as const, upgradeId: pilot.upgradeId, revision: 1 },
+              gunner: null,
+              shield: null
+            }
+          : { pilot: null, gunner: null, shield: null };
+      const skipped = advanceSpaceshipSimulation(
+        {
+          ...initial,
+          encounterPhase: "intermission",
+          encounterTick: 599,
+          credits,
+          teamUpgradeOffer: offer,
+          teamUpgradeVotes: votes
+        },
+        config
+      );
+      expect(skipped.credits).toBe(credits);
+      expect(skipped.teamUpgradeSelection).toBeNull();
+      expect(skipped.roleModifiers).toEqual(initial.roleModifiers);
+    }
   });
 });

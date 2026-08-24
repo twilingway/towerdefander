@@ -6,7 +6,6 @@ import {
   cancelGunnerControl,
   cancelPilotControl,
   cancelShieldControl,
-  chooseRoleUpgrade,
   createCleanSpaceshipRun,
   createSpaceshipSimulationConfig,
   failWaveByTimeout,
@@ -18,8 +17,10 @@ import {
   type HostileProjectileState,
   type ProjectileState as CoreProjectileState,
   type RoleModifiers,
-  type RoleUpgradeOffer,
-  type RoleUpgradeSelection
+  voteForTeamUpgrade,
+  type TeamUpgradeOffer,
+  type TeamUpgradeSelection,
+  type TeamUpgradeVote
 } from "@spaceship-defender/game-core";
 import {
   CREW_ROLES,
@@ -34,14 +35,14 @@ import {
   readyCommandSchema,
   serverMessage,
   shieldInputCommandSchema,
-  upgradeChooseCommandSchema,
+  upgradeVoteCommandSchema,
   type CrewRole,
   type GunnerInputCommand,
   type PilotInputCommand,
   type RoomClosingReason,
   type ServerErrorCode,
   type ShieldInputCommand,
-  type UpgradeChooseCommand
+  type UpgradeVoteCommand
 } from "@spaceship-defender/protocol";
 import { StateView } from "@colyseus/schema";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
@@ -51,14 +52,14 @@ import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import {
   AsteroidState,
-  ControllerUpgradeState,
   EnemyState,
   HomingMissileState,
   ObstacleState,
   PlayerState,
   ProjectileState,
   SpaceshipDefenderState,
-  UpgradeCardState
+  UpgradeCardState,
+  UpgradeVoteState
 } from "./SpaceshipDefenderState.js";
 
 type ConnectionRole = "display" | "controller";
@@ -84,7 +85,7 @@ interface OutstandingLatencyProbe {
 interface UpgradeJournalEntry {
   readonly actionId: string;
   readonly fingerprint: string;
-  readonly outcome: "accepted" | "already_chosen" | "action_not_available";
+  readonly outcome: "accepted" | "invalid_phase" | "action_not_available" | "stale_action";
 }
 
 type LifecycleDeadlineReason = Exclude<RoomClosingReason, "display_left">;
@@ -206,8 +207,8 @@ export class SpaceshipDefenderRoom extends Room<{
     [clientMessage.shieldInput]: (client: Client, payload: unknown) => {
       this.handleShieldInput(client, payload);
     },
-    [clientMessage.upgradeChoose]: (client: Client, payload: unknown) => {
-      this.handleUpgradeChoose(client, payload);
+    [clientMessage.upgradeVote]: (client: Client, payload: unknown) => {
+      this.handleUpgradeVote(client, payload);
     },
     [clientMessage.latencyPong]: (client: Client, payload: unknown) => {
       this.handleLatencyPong(client, payload);
@@ -272,7 +273,6 @@ export class SpaceshipDefenderRoom extends Room<{
     this.state.players.set(client.sessionId, player);
     this.firstControllerJoined = true;
     this.clearLifecycleDeadline("controllers_expired");
-    this.attachControllerUpgradeView(client, role);
     this.registerLatencyConnection(client);
     this.queueMetadataUpdate();
   }
@@ -329,7 +329,6 @@ export class SpaceshipDefenderRoom extends Room<{
       player.connected = true;
       this.connectionRoles.set(reconnected.sessionId, "controller");
       this.sequenceWatermarks.set(reconnected.sessionId, new Map());
-      this.attachControllerUpgradeView(reconnected, player.role);
       this.registerLatencyConnection(reconnected);
       this.clearLifecycleDeadline("controllers_expired");
       this.queueMetadataUpdate();
@@ -418,12 +417,17 @@ export class SpaceshipDefenderRoom extends Room<{
     });
   }
 
-  handleUpgradeChoose(client: Client, unsafePayload: unknown): void {
-    const command = this.parseControllerCommand(client, unsafePayload, upgradeChooseCommandSchema);
+  handleUpgradeVote(client: Client, unsafePayload: unknown): void {
+    const command = this.parseControllerCommand(client, unsafePayload, upgradeVoteCommandSchema);
     if (command === undefined || this.gameState === undefined) {
       return;
     }
 
+    const player = this.state.players.get(client.sessionId);
+    if (player === undefined) {
+      this.sendError(client, "identity_mismatch", "Player identity does not match connection.");
+      return;
+    }
     const fingerprint = upgradeFingerprint(command);
     const journal = this.upgradeJournals.get(client.sessionId) ?? [];
     const previous = journal.find(({ actionId }) => actionId === command.actionId);
@@ -440,29 +444,22 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
 
-    const player = this.state.players.get(client.sessionId);
-    if (player === undefined) {
-      this.sendError(client, "identity_mismatch", "Player identity does not match connection.");
-      return;
-    }
     if (this.gameState.encounterPhase !== "intermission") {
+      this.storeUpgradeOutcome(client.sessionId, {
+        actionId: command.actionId,
+        fingerprint,
+        outcome: "invalid_phase"
+      });
       this.sendError(client, "invalid_phase", "Upgrade choice requires an intermission.");
       return;
     }
 
-    const offerOwner = CREW_ROLES.find(
-      (role) => this.gameState?.roleOffers[role]?.offerId === command.offerId
-    );
-    if (offerOwner !== undefined && offerOwner !== player.role) {
-      this.sendError(client, "role_mismatch", "Upgrade offer belongs to another role.");
-      return;
-    }
-
-    const result = chooseRoleUpgrade(this.gameState, {
+    const result = voteForTeamUpgrade(this.gameState, {
       role: player.role,
       waveNumber: command.waveNumber,
       offerId: command.offerId,
-      upgradeId: command.upgradeId
+      upgradeId: command.upgradeId,
+      revision: command.revision
     });
     this.storeUpgradeOutcome(client.sessionId, {
       actionId: command.actionId,
@@ -707,6 +704,7 @@ export class SpaceshipDefenderRoom extends Room<{
         ? Math.max(1, Math.ceil((this.waveDeadlineAtMs - Date.now()) / 1_000))
         : 0;
     target.encounter.score = game.score;
+    target.credits = game.credits;
     syncRoleModifiers(target.roleModifiers, game.roleModifiers);
 
     reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
@@ -738,41 +736,12 @@ export class SpaceshipDefenderRoom extends Room<{
       () => new HomingMissileState(),
       syncHomingMissile
     );
-    this.syncUpgradeViews();
-  }
-
-  private syncUpgradeViews(): void {
-    const game = this.gameState;
-    const target = this.state.game.upgrade;
-    if (game?.encounterPhase !== "intermission") {
-      target.clear();
-      return;
-    }
-
-    for (const role of CREW_ROLES) {
-      const offer = game.roleOffers[role];
-      if (offer === null) continue;
-      let upgrade = target.get(role);
-      if (upgrade === undefined) {
-        upgrade = new ControllerUpgradeState();
-        target.set(role, upgrade);
-      }
-      syncControllerUpgrade(upgrade, offer, game.roleSelections[role]);
-    }
-    this.refreshControllerUpgradeViews();
-  }
-
-  private refreshControllerUpgradeViews(): void {
-    for (const [sessionId, client] of this.connectionClients) {
-      if (this.connectionRoles.get(sessionId) !== "controller") continue;
-      const role = this.state.players.get(sessionId)?.role;
-      if (role !== undefined) this.attachControllerUpgradeView(client, role);
-    }
-  }
-
-  private attachControllerUpgradeView(client: Client, role: CrewRole): void {
-    const upgrade = this.state.game.upgrade.get(role);
-    if (upgrade !== undefined) client.view?.add(upgrade, 2);
+    syncTeamUpgrade(
+      target.teamUpgrade,
+      game.teamUpgradeOffer,
+      game.teamUpgradeVotes,
+      game.teamUpgradeSelection
+    );
   }
 
   private neutralizeRole(playerId: string): void {
@@ -1143,7 +1112,7 @@ function createRunSeed(excluded?: number): number {
   return seed;
 }
 
-function upgradeFingerprint(command: UpgradeChooseCommand): string {
+function upgradeFingerprint(command: UpgradeVoteCommand): string {
   return [
     command.protocolVersion,
     command.roomId,
@@ -1151,14 +1120,15 @@ function upgradeFingerprint(command: UpgradeChooseCommand): string {
     command.runNumber,
     command.waveNumber,
     command.offerId,
-    command.upgradeId
+    command.upgradeId,
+    command.revision
   ].join("\u001f");
 }
 
 function upgradeErrorMessage(outcome: Exclude<UpgradeJournalEntry["outcome"], "accepted">): string {
-  return outcome === "already_chosen"
-    ? "This role already selected an upgrade."
-    : "Upgrade offer is no longer available.";
+  if (outcome === "invalid_phase") return "Upgrade vote requires an intermission.";
+  if (outcome === "stale_action") return "A newer vote revision already exists for this role.";
+  return "Upgrade offer is no longer available.";
 }
 
 interface KeyedSchemaCollection<T> {
@@ -1256,28 +1226,45 @@ function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissile
   target.heading = source.heading;
 }
 
-function syncControllerUpgrade(
-  target: ControllerUpgradeState,
-  offer: RoleUpgradeOffer,
-  selection: RoleUpgradeSelection | null
+function syncTeamUpgrade(
+  target: SpaceshipDefenderState["game"]["teamUpgrade"],
+  offer: TeamUpgradeOffer | null,
+  votes: Readonly<Record<CrewRole, TeamUpgradeVote | null>>,
+  selection: TeamUpgradeSelection | null
 ): void {
-  target.status = selection === null ? "available" : "selected";
-  target.offer.offerId = offer.offerId;
-  target.offer.role = offer.role;
-  target.offer.waveNumber = offer.waveNumber;
-  for (const [index, source] of offer.cards.entries()) {
-    while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
-    const card = target.offer.cards.at(index);
-    card.upgradeId = source.upgradeId;
-    card.label = source.label;
-    card.value = source.value;
+  target.hasOffer = offer !== null;
+  if (offer !== null) {
+    target.offer.offerId = offer.offerId;
+    target.offer.waveNumber = offer.waveNumber;
+    for (const [index, source] of offer.cards.entries()) {
+      while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
+      const card = target.offer.cards.at(index);
+      card.upgradeId = source.upgradeId;
+      card.role = source.role;
+      card.label = source.label;
+      card.value = source.value;
+      card.price = source.price;
+    }
+    while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();
+  } else {
+    target.offer.cards.clear();
   }
-  while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();
+  target.votes.clear();
+  for (const role of CREW_ROLES) {
+    const source = votes[role];
+    if (source === null) continue;
+    const vote = new UpgradeVoteState();
+    vote.role = source.role;
+    vote.upgradeId = source.upgradeId;
+    vote.revision = source.revision;
+    target.votes.set(role, vote);
+  }
   target.hasSelection = selection !== null;
   if (selection !== null) {
     target.selection.offerId = selection.offerId;
     target.selection.upgradeId = selection.upgradeId;
     target.selection.role = selection.role;
-    target.selection.source = selection.source;
+    target.selection.waveNumber = selection.waveNumber;
+    target.selection.price = selection.price;
   }
 }

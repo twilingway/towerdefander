@@ -82,13 +82,14 @@ export class RoleModifiersState extends Schema {
 
 export class UpgradeCardState extends Schema {
   @type("string") upgradeId: UpgradeId = "pilot_speed";
+  @type("string") role: CrewRole = "pilot";
   @type("string") label = "";
   @type("float64") value = 0;
+  @type("uint8") price = 5;
 }
 
 export class UpgradeOfferState extends Schema {
   @type("string") offerId = "";
-  @type("string") role: CrewRole = "pilot";
   @type("uint32") waveNumber = 1;
   @type([UpgradeCardState]) cards = new ArraySchema<UpgradeCardState>();
 }
@@ -97,12 +98,20 @@ export class UpgradeSelectionState extends Schema {
   @type("string") offerId = "";
   @type("string") upgradeId: UpgradeId = "pilot_speed";
   @type("string") role: CrewRole = "pilot";
-  @type("string") source: "player" | "fallback" = "player";
+  @type("uint32") waveNumber = 1;
+  @type("uint8") price = 5;
 }
 
-export class ControllerUpgradeState extends Schema {
-  @type("string") status: "available" | "selected" = "available";
+export class UpgradeVoteState extends Schema {
+  @type("string") role: CrewRole = "pilot";
+  @type("string") upgradeId: UpgradeId = "pilot_speed";
+  @type("uint32") revision = 1;
+}
+
+export class TeamUpgradeState extends Schema {
+  @type("boolean") hasOffer = false;
   @type(UpgradeOfferState) offer = new UpgradeOfferState();
+  @type({ map: UpgradeVoteState }) votes = new MapSchema<UpgradeVoteState>();
   @type(UpgradeSelectionState) selection = new UpgradeSelectionState();
   @type("boolean") hasSelection = false;
 }
@@ -188,9 +197,8 @@ export class SpaceshipGameState extends Schema {
   @type(MachineGunState) machineGun = new MachineGunState();
   @type(EncounterState) encounter = new EncounterState();
   @type(RoleModifiersState) roleModifiers = new RoleModifiersState();
-  @view(2)
-  @type({ map: ControllerUpgradeState })
-  upgrade = new MapSchema<ControllerUpgradeState>();
+  @type("uint32") credits = 0;
+  @type(TeamUpgradeState) teamUpgrade = new TeamUpgradeState();
   @view(1)
   @type(SpaceshipDisplayState)
   display = new SpaceshipDisplayState();
