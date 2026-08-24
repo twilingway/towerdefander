@@ -247,11 +247,18 @@ button:disabled {
 }
 
 .result-panel {
+  gap: 0.4rem;
   padding: 1.25rem;
   border: 1px solid rgb(255 104 95 / 45%);
   border-radius: 1rem;
   color: #f5d7d4;
   background: rgb(55 19 25 / 72%);
+}
+
+.result-panel > button {
+  justify-self: center;
+  width: 240px;
+  max-width: 100%;
 }
 
 .result-panel > strong {
@@ -343,6 +350,15 @@ button:disabled {
   color: #ffd783;
   background: rgb(77 45 22 / 50%);
   font-weight: 800;
+}
+
+/* The run is over: player name, role, live combat telemetry and the
+   connection row no longer tell the player anything. */
+.play-card--result > h1,
+.play-card--result > .role-badge,
+.play-card--result > .status-row,
+.play-card--result > .combat-summary {
+  display: none;
 }
 
 .role-control {
@@ -631,6 +647,39 @@ button:disabled {
   }
 
   .play-card--intermission > .leave-room-button {
+    min-height: 2rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.68rem;
+  }
+
+  .controller-shell--result {
+    min-height: 100dvh;
+    padding: 0;
+    place-items: stretch;
+  }
+
+  /* One column, full height, and evenly spread rows: the exit button ends up
+     the same distance from the result panel as from the bottom edge. */
+  .card.play-card--result {
+    grid-template-columns: minmax(0, 1fr);
+    /* The shell stretches its items, and a stretched item with an explicit
+       width lands at the start of the row — on a wide phone that reads as the
+       card hugging the left edge. */
+    justify-self: center;
+    align-content: space-evenly;
+    min-height: 100dvh;
+    padding: max(0.5rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+      max(0.5rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .play-card--result > .result-panel,
+  .play-card--result > .leave-room-button {
+    grid-column: 1 / -1;
+  }
+
+  .play-card--result > .leave-room-button {
+    justify-self: center;
+    width: min(14rem, 40vw);
     min-height: 2rem;
     padding: 0.3rem 0.5rem;
     font-size: 0.68rem;

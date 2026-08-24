@@ -397,9 +397,7 @@ export function ControllerApp() {
   }
 
   return (
-    <main
-      className={`controller-shell${activeView?.game?.encounter.phase === "combat" ? " controller-shell--combat" : ""}`}
-    >
+    <main className={`controller-shell${shellPhaseModifier(activeView?.game?.encounter.phase)}`}>
       {previewView !== undefined && (
         <PreviewControls
           role={previewRole}
@@ -524,9 +522,19 @@ export function ControllerApp() {
  * Landscape phones have roughly 390 usable pixels, so combat and the voting
  * intermission each get their own compact layout instead of one tall page.
  */
+/**
+ * Combat and the result screen both take the whole viewport, so the shell drops
+ * its centering and lets the card stretch.
+ */
+function shellPhaseModifier(phase: EncounterPhase | undefined): string {
+  if (phase === "combat") return " controller-shell--combat";
+  return phase === "result" ? " controller-shell--result" : "";
+}
+
 function playCardPhaseModifier(phase: EncounterPhase | undefined): string {
   if (phase === "combat") return " play-card--combat";
-  return phase === "intermission" ? " play-card--intermission" : "";
+  if (phase === "intermission") return " play-card--intermission";
+  return phase === "result" ? " play-card--result" : "";
 }
 
 function formatLatency(latencyMs: number | null | undefined): string {
