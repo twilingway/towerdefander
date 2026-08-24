@@ -51,7 +51,8 @@ describe("controller room view", () => {
           velocityY: 0,
           radius: 52,
           hp: 900,
-          maxHp: 1000
+          maxHp: 1000,
+          heading: 0
         },
         turretAngle: 0,
         shield: {
@@ -61,6 +62,7 @@ describe("controller room view", () => {
           energy: 64,
           capacity: 100
         },
+        machineGun: { heat: 0, capacity: 100, overheated: false },
         encounter: {
           phase: "combat",
           hasOutcome: false,
@@ -87,6 +89,8 @@ describe("controller room view", () => {
       energy: 64,
       capacity: 100
     });
+    expect(view?.game?.machineGun).toEqual({ heat: 0, capacity: 100, overheated: false });
+    expect(view?.game?.spaceship.heading).toBe(0);
     expect(findCurrentPlayer(view, "p2")?.role).toBe("shield");
     expect(findCurrentPlayer(view, "p2")?.latencyMs).toBe(62);
     expect(view?.displayLatencyMs).toBeNull();
@@ -127,7 +131,8 @@ describe("controller room view", () => {
           velocityY: 0,
           radius: 52,
           hp: 1000,
-          maxHp: 1000
+          maxHp: 1000,
+          heading: Math.PI / 4
         },
         turretAngle: 0,
         shield: {
@@ -137,6 +142,7 @@ describe("controller room view", () => {
           energy: 100,
           capacity: 100
         },
+        machineGun: { heat: 40, capacity: 100, overheated: false },
         encounter: {
           phase: "intermission",
           outcome: null,
@@ -212,7 +218,8 @@ describe("controller room view", () => {
           velocityY: 0,
           radius: 52,
           hp: 0,
-          maxHp: 1000
+          maxHp: 1000,
+          heading: Math.PI / 4
         },
         turretAngle: 0,
         shield: {
@@ -222,6 +229,7 @@ describe("controller room view", () => {
           energy: 0,
           capacity: 100
         },
+        machineGun: { heat: 100, capacity: 100, overheated: true },
         encounter: {
           phase: "result",
           hasOutcome: true,

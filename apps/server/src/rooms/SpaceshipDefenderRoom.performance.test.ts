@@ -89,7 +89,8 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
       room.handlePilotInput(pilot.client, {
         ...envelope(room, pilot),
         sequence,
-        vector: { x: 1, y: 0 }
+        vector: { x: 1, y: 0 },
+        mgFiring: false
       });
       room.handleGunnerInput(gunner.client, {
         ...envelope(room, gunner),

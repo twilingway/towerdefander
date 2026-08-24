@@ -105,7 +105,8 @@ export function createWorstCaseCombatFixture(
     return {
       ...movingEntity(id, sequence, position, { x: 16, y: 0 }, 8),
       projectileId: id,
-      damage: config.friendlyProjectileDamage
+      damage: config.friendlyProjectileDamage,
+      source: "cannon"
     } satisfies ProjectileState;
   });
 

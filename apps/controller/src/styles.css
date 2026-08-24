@@ -354,6 +354,30 @@ button:disabled {
   background: linear-gradient(135deg, #377dbb, #4da9d8);
 }
 
+.hold-action--pilot {
+  color: #fff2ec;
+  background: linear-gradient(135deg, #e0563f, #a82f2f);
+}
+
+.hold-action--pilot.is-overheated {
+  filter: saturate(0.4) brightness(0.75);
+}
+
+.mg-control {
+  display: grid;
+  width: 100%;
+  gap: 0.65rem;
+}
+
+.mg-heat {
+  border-color: rgb(255 138 94 / 45%);
+  background: #270a0a;
+}
+
+.mg-heat span {
+  background: linear-gradient(90deg, #ffb54a, #ff6b3d, #e03f2f);
+}
+
 .shield-control {
   display: grid;
   width: 100%;

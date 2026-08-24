@@ -400,7 +400,8 @@ function sendCombatInputs(elapsedMs, expectedGeneration) {
   pilotRoom().send(clientMessage.pilotInput, {
     ...envelope(pilotRoom()),
     sequence: pilotSequence,
-    vector: pilotVector(elapsedMs)
+    vector: pilotVector(elapsedMs),
+    mgFiring: false
   });
   gunnerSequence += 1;
   gunnerRoom().send(clientMessage.gunnerInput, {
@@ -451,7 +452,8 @@ async function neutralize() {
   bestEffortSend(pilotRoom(), clientMessage.pilotInput, {
     ...envelope(pilotRoom()),
     sequence: pilotSequence,
-    vector: { x: 0, y: 0 }
+    vector: { x: 0, y: 0 },
+    mgFiring: false
   });
   gunnerSequence += 1;
   bestEffortSend(gunnerRoom(), clientMessage.gunnerInput, {

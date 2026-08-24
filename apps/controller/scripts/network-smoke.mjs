@@ -79,7 +79,8 @@ try {
   pilot.send(clientMessage.pilotInput, {
     ...envelope(pilot),
     sequence: pilotSequence,
-    vector: { x: 1, y: 0 }
+    vector: { x: 1, y: 0 },
+    mgFiring: false
   });
   await waitFor(() => display.state.game.spaceship.x > startX);
 
@@ -115,7 +116,8 @@ try {
   shield.send(clientMessage.pilotInput, {
     ...envelope(shield),
     sequence: shieldSequence,
-    vector: { x: -1, y: 0 }
+    vector: { x: -1, y: 0 },
+    mgFiring: false
   });
   if ((await roleError).code !== "role_mismatch") throw new Error("Wrong role was accepted.");
   startRoleSchedulers();

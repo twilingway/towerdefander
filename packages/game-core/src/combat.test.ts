@@ -99,7 +99,7 @@ describe("deterministic combat foundation", () => {
         shield: { capacityBonus: 100, rechargeMultiplier: 2, arcWidthBonus: 1 }
       },
       inputs: {
-        pilot: { vector: { x: 1, y: 0 }, receivedTick: 5 },
+        pilot: { vector: { x: 1, y: 0 }, mgFiring: false, receivedTick: 5 },
         gunner: { vector: { x: 1, y: 0 }, firing: true, receivedTick: 5 },
         shield: { vector: { x: 1, y: 0 }, active: true, receivedTick: 5 }
       }
@@ -340,6 +340,7 @@ describe("combat motion and collision", () => {
       velocity: { x: 0, y: 0 },
       radius: config.projectileRadius,
       damage: config.friendlyProjectileDamage,
+      source: "cannon",
       spawnedTick: 0
     }));
     const state: SpaceshipSimulationState = {

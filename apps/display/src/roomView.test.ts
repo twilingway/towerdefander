@@ -46,7 +46,8 @@ describe("display room view", () => {
           velocityY: 0,
           radius: 52,
           hp: 850,
-          maxHp: 1000
+          maxHp: 1000,
+          heading: Math.PI / 3
         },
         turretAngle: 0,
         shield: {
@@ -56,6 +57,7 @@ describe("display room view", () => {
           energy: 75,
           capacity: 100
         },
+        machineGun: { heat: 30, capacity: 100, overheated: false },
         encounter: {
           phase: "combat",
           hasOutcome: false,
@@ -120,10 +122,34 @@ describe("display room view", () => {
               y: 2200,
               velocityX: 720,
               velocityY: 0,
-              radius: 8
+              radius: 8,
+              source: "cannon"
+            },
+            {
+              entityId: "projectile-1",
+              spawnSequence: 4,
+              kind: "friendly",
+              x: 2350,
+              y: 2200,
+              velocityX: 760,
+              velocityY: 0,
+              radius: 5,
+              source: "machineGun"
             }
           ]),
-          hostileProjectiles: collection([]),
+          hostileProjectiles: collection([
+            {
+              entityId: "hostile-0",
+              spawnSequence: 5,
+              kind: "hostile",
+              x: 2100,
+              y: 2200,
+              velocityX: -300,
+              velocityY: 0,
+              radius: 9,
+              source: ""
+            }
+          ]),
           homingMissiles: collection([])
         }
       }
@@ -133,7 +159,13 @@ describe("display room view", () => {
     expect(view?.game?.obstacles).toEqual([
       { obstacleId: "cloud", kind: "circle", x: 2200, y: 1600, radius: 20 }
     ]);
-    expect(view?.game?.friendlyProjectiles).toHaveLength(1);
+    expect(view?.game?.friendlyProjectiles).toHaveLength(2);
+    expect(view?.game?.friendlyProjectiles[0]?.source).toBe("cannon");
+    expect(view?.game?.friendlyProjectiles[1]?.source).toBe("machineGun");
+    expect(view?.game?.hostileProjectiles).toHaveLength(1);
+    expect(view?.game?.hostileProjectiles[0]).not.toHaveProperty("source");
+    expect(view?.game?.spaceship.heading).toBe(Math.PI / 3);
+    expect(view?.game?.machineGun).toEqual({ heat: 30, capacity: 100, overheated: false });
     expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
     expect(view?.game?.encounter.outcome).toBeNull();

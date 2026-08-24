@@ -57,6 +57,7 @@ interface NetworkAsteroidState extends NetworkCombatEntityState {
 
 interface NetworkProjectileState extends NetworkCombatEntityState {
   kind: ProjectileKind;
+  source?: string;
 }
 
 interface NetworkHomingMissileState extends NetworkCombatEntityState {
@@ -77,6 +78,11 @@ interface NetworkGameState {
     active: boolean;
     energy: number;
     capacity: number;
+  };
+  machineGun: {
+    heat: number;
+    capacity: number;
+    overheated: boolean;
   };
   encounter: {
     phase: EncounterPhase;
@@ -162,6 +168,7 @@ export function toDisplayRoomView(
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
+            machineGun: { ...game.machineGun },
             encounter: {
               phase: game.encounter.phase,
               outcome:
@@ -198,8 +205,8 @@ export function toDisplayRoomView(
             ),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),
-            friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles),
-            hostileProjectiles: toSpawnOrder(display.hostileProjectiles),
+            friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
+            hostileProjectiles: toSpawnOrder(display.hostileProjectiles).map(toPublicProjectile),
             homingMissiles: toSpawnOrder(display.homingMissiles)
           }
         : null
@@ -208,6 +215,28 @@ export function toDisplayRoomView(
 
 function toSpawnOrder<T extends { spawnSequence: number }>(collection: ValueCollection<T>): T[] {
   return [...collection.values()].sort((left, right) => left.spawnSequence - right.spawnSequence);
+}
+
+function toPublicProjectile(projectile: NetworkProjectileState) {
+  const base = {
+    entityId: projectile.entityId,
+    spawnSequence: projectile.spawnSequence,
+    kind: projectile.kind,
+    x: projectile.x,
+    y: projectile.y,
+    velocityX: projectile.velocityX,
+    velocityY: projectile.velocityY,
+    radius: projectile.radius
+  };
+  const source = normalizeProjectileSource(projectile.source);
+  return source === undefined ? base : { ...base, source };
+}
+
+function normalizeProjectileSource(
+  source: string | undefined
+): "cannon" | "machineGun" | undefined {
+  if (source === "cannon" || source === "machineGun") return source;
+  return undefined;
 }
 
 function toPublicLatency(latencyMs: number | undefined): number | null {

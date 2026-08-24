@@ -11,6 +11,7 @@ import {
   type CrewRole,
   type EncounterPhase,
   type PublicControllerUpgradeView,
+  type PublicMachineGunView,
   type PublicRoleModifiersView,
   type PublicShieldView,
   type PublicPlayerView,
@@ -48,9 +49,15 @@ interface ControlState {
   readonly vector: ControlVector;
   readonly firing: boolean;
   readonly active: boolean;
+  readonly mgFiring: boolean;
 }
 
-const NEUTRAL_CONTROL: ControlState = { vector: { x: 0, y: 0 }, firing: false, active: false };
+const NEUTRAL_CONTROL: ControlState = {
+  vector: { x: 0, y: 0 },
+  firing: false,
+  active: false,
+  mgFiring: false
+};
 const AIM_RELEASE_DELAY_MS = 60;
 const gameServerUrl = readStringEnvironment(
   import.meta.env.VITE_GAME_SERVER_URL,
@@ -223,7 +230,11 @@ export function ControllerApp() {
       sequence
     } as const;
     if (currentPlayer.role === "pilot") {
-      room.send(clientMessage.pilotInput, { ...envelope, vector: control.vector });
+      room.send(clientMessage.pilotInput, {
+        ...envelope,
+        vector: control.vector,
+        mgFiring: control.mgFiring
+      });
     } else if (currentPlayer.role === "gunner") {
       room.send(clientMessage.gunnerInput, {
         ...envelope,
@@ -403,6 +414,7 @@ export function ControllerApp() {
             <RoleControlPanel
               role={currentPlayer.role}
               shield={view.game?.shield}
+              machineGun={view.game?.machineGun}
               encounterPhase={view.game?.encounter.phase}
               connectionDisabled={status === "reconnecting"}
               generation={`${String(view.runNumber)}:${String(connectionEpoch)}`}
@@ -605,6 +617,7 @@ export function createActionId(): string {
 function RoleControlPanel({
   role,
   shield,
+  machineGun,
   encounterPhase,
   connectionDisabled,
   generation,
@@ -612,6 +625,7 @@ function RoleControlPanel({
   onSend
 }: {
   readonly role: CrewRole;
+  readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
   readonly encounterPhase: EncounterPhase | undefined;
   readonly connectionDisabled: boolean;
@@ -681,10 +695,18 @@ function RoleControlPanel({
     update({ vector: NEUTRAL_CONTROL.vector });
   }
 
+  function setFireDesired(desired: boolean): void {
+    if (role === "pilot") {
+      update({ mgFiring: desired });
+    } else {
+      update({ firing: desired });
+    }
+  }
+
   function beginFire(): void {
     clearFireReleaseTimer();
     firePressedAtReference.current = performance.now();
-    update({ firing: true });
+    setFireDesired(true);
   }
 
   function endFire(): void {
@@ -693,12 +715,12 @@ function RoleControlPanel({
     const remainingMs = getFireReleaseDelay(pressedAt, performance.now());
     clearFireReleaseTimer();
     if (remainingMs === 0) {
-      update({ firing: false });
+      setFireDesired(false);
       return;
     }
     fireReleaseTimerReference.current = window.setTimeout(() => {
       fireReleaseTimerReference.current = undefined;
-      update({ firing: false });
+      setFireDesired(false);
     }, remainingMs);
   }
 
@@ -706,7 +728,7 @@ function RoleControlPanel({
     firePressedAtReference.current = undefined;
     firePointerReference.current = undefined;
     clearFireReleaseTimer();
-    update({ firing: false });
+    setFireDesired(false);
   }
 
   function toggleShield(): void {
@@ -747,7 +769,13 @@ function RoleControlPanel({
           if (!event.repeat) toggleShield();
           return;
         }
-        if (event.code === "Space" && role === "gunner" && !keys.has("Space")) beginFire();
+        if (
+          event.code === "Space" &&
+          (role === "gunner" || role === "pilot") &&
+          !keys.has("Space")
+        ) {
+          beginFire();
+        }
         keys.add(event.code);
         applyKeys();
       }
@@ -755,7 +783,7 @@ function RoleControlPanel({
     function onKeyUp(event: KeyboardEvent): void {
       if (event.code === "Space" && role === "shield") return;
       keys.delete(event.code);
-      if (event.code === "Space" && role === "gunner") endFire();
+      if (event.code === "Space" && (role === "gunner" || role === "pilot")) endFire();
       applyKeys();
     }
     function neutralize(): void {
@@ -824,6 +852,51 @@ function RoleControlPanel({
         onRelease={releaseAim}
         onCancel={cancelAim}
       />
+      {role === "pilot" && (
+        <div className="mg-control">
+          {machineGun !== undefined && (
+            <>
+              <div className="shield-energy mg-heat" aria-label="Нагрев носового пулемёта">
+                <span
+                  style={{ width: `${String((machineGun.heat / machineGun.capacity) * 100)}%` }}
+                />
+              </div>
+              <strong>
+                Нагрев {Math.round(machineGun.heat)} / {Math.round(machineGun.capacity)}
+              </strong>
+            </>
+          )}
+          <button
+            type="button"
+            className={`hold-action hold-action--pilot${machineGun?.overheated ? " is-overheated" : ""}`}
+            data-testid="mg-fire-button"
+            disabled={!controlsEnabled}
+            onPointerDown={(event) => {
+              if (!event.isPrimary || event.button !== 0) return;
+              firePointerReference.current = event.pointerId;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              beginFire();
+            }}
+            onPointerUp={(event) => {
+              if (firePointerReference.current !== event.pointerId) return;
+              firePointerReference.current = undefined;
+              endFire();
+            }}
+            onPointerCancel={(event) => {
+              if (firePointerReference.current !== event.pointerId) return;
+              firePointerReference.current = undefined;
+              cancelFire();
+            }}
+            onLostPointerCapture={(event) => {
+              if (firePointerReference.current !== event.pointerId) return;
+              firePointerReference.current = undefined;
+              cancelFire();
+            }}
+          >
+            {machineGun?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ИЗ НОСА"}
+          </button>
+        </div>
+      )}
       {role === "gunner" && (
         <button
           type="button"
@@ -879,7 +952,10 @@ function RoleControlPanel({
           </button>
         </div>
       )}
-      <small>Desktop: {role === "pilot" ? "WASD или стрелки" : "мышь/стрелки + Space"}</small>
+      <small>
+        Desktop:{" "}
+        {role === "pilot" ? "WASD или стрелки, Space — огонь из носа" : "мышь/стрелки + Space"}
+      </small>
     </div>
   );
 }

@@ -25,6 +25,13 @@ export class SpaceshipState extends Schema {
   @type("float64") radius = 0;
   @type("float64") hp = 0;
   @type("float64") maxHp = 0;
+  @type("float64") heading = 0;
+}
+
+export class MachineGunState extends Schema {
+  @type("float64") heat = 0;
+  @type("float64") capacity = 0;
+  @type("boolean") overheated = false;
 }
 
 export class ShieldState extends Schema {
@@ -142,6 +149,7 @@ export class ProjectileState extends Schema {
   @type("float64") velocityX = 0;
   @type("float64") velocityY = 0;
   @type("float64") radius = 0;
+  @type("string") source = "";
 }
 
 export class HomingMissileState extends Schema {
@@ -173,6 +181,7 @@ export class SpaceshipGameState extends Schema {
   @type(SpaceshipState) spaceship = new SpaceshipState();
   @type("float64") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();
+  @type(MachineGunState) machineGun = new MachineGunState();
   @type(EncounterState) encounter = new EncounterState();
   @type(RoleModifiersState) roleModifiers = new RoleModifiersState();
   @view(2)

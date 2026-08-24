@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 11 as const;
+export const PROTOCOL_VERSION = 12 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -56,6 +56,9 @@ export const enemyKindSchema = z.enum(ENEMY_KINDS);
 export type EnemyKind = z.infer<typeof enemyKindSchema>;
 export const projectileKindSchema = z.enum(PROJECTILE_KINDS);
 export type ProjectileKind = z.infer<typeof projectileKindSchema>;
+export const PROJECTILE_SOURCES = ["cannon", "machineGun"] as const;
+export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
+export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
 export const upgradeIdSchema = z.enum(UPGRADE_IDS);
 export type UpgradeId = z.infer<typeof upgradeIdSchema>;
 export const upgradeSelectionSourceSchema = z.enum(["player", "fallback"]);
@@ -101,7 +104,8 @@ export const publicSpaceshipViewSchema = z
     velocityY: finite,
     radius: finite.positive(),
     hp: finite.nonnegative(),
-    maxHp: finite.positive()
+    maxHp: finite.positive(),
+    heading: finite
   })
   .strict()
   .superRefine((value, context) => {
@@ -123,6 +127,19 @@ export const publicShieldViewSchema = z
       issue(context, ["energy"], "Shield energy must not exceed capacity.");
   });
 export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
+
+export const publicMachineGunViewSchema = z
+  .object({
+    heat: finite.nonnegative(),
+    capacity: finite.nonnegative(),
+    overheated: z.boolean()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.heat > value.capacity)
+      issue(context, ["heat"], "Machine gun heat must not exceed capacity.");
+  });
+export type PublicMachineGunView = z.infer<typeof publicMachineGunViewSchema>;
 
 export const publicEncounterViewSchema = z
   .object({
@@ -304,7 +321,7 @@ export const publicAsteroidViewSchema = z
   });
 export type PublicAsteroidView = z.infer<typeof publicAsteroidViewSchema>;
 export const publicProjectileViewSchema = z
-  .object({ ...entityShape, kind: projectileKindSchema })
+  .object({ ...entityShape, kind: projectileKindSchema, source: projectileSourceSchema.optional() })
   .strict();
 export type PublicProjectileView = z.infer<typeof publicProjectileViewSchema>;
 export const publicHomingMissileViewSchema = z.object({ ...entityShape, heading: finite }).strict();
@@ -319,6 +336,7 @@ const gameShape = {
   spaceship: publicSpaceshipViewSchema,
   turretAngle: finite,
   shield: publicShieldViewSchema,
+  machineGun: publicMachineGunViewSchema,
   encounter: publicEncounterViewSchema,
   roleModifiers: publicRoleModifiersViewSchema
 } satisfies z.ZodRawShape;
@@ -576,7 +594,7 @@ export type ContinuousInputEnvelope = z.infer<typeof continuousInputEnvelopeSche
 export const readyCommandSchema = commandEnvelopeSchema;
 export type ReadyCommand = CommandEnvelope;
 export const pilotInputCommandSchema = continuousInputEnvelopeSchema
-  .extend({ vector: vector2Schema })
+  .extend({ vector: vector2Schema, mgFiring: z.boolean() })
   .strict();
 export type PilotInputCommand = z.infer<typeof pilotInputCommandSchema>;
 export const gunnerInputCommandSchema = continuousInputEnvelopeSchema

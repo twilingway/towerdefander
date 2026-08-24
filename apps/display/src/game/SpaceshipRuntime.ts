@@ -49,10 +49,12 @@ interface CombatVisual {
 class SpaceshipScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
   private spaceshipBody: Phaser.GameObjects.Graphics | undefined;
+  private noseMarker: Phaser.GameObjects.Graphics | undefined;
   private turret: Phaser.GameObjects.Rectangle | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
   private visualShieldAngle: number;
   private spaceshipTransition: PointTransition;
+  private headingTransition: AngleTransition;
   private turretTransition: AngleTransition;
   private shieldTransition: AngleTransition;
   private readonly snapshotReset = new SnapshotResetLatch();
@@ -68,6 +70,11 @@ class SpaceshipScene extends Phaser.Scene {
     this.snapshot = snapshot;
     this.visualShieldAngle = snapshot.shield.angle;
     this.spaceshipTransition = createPointTransition(snapshot.spaceship, snapshot.spaceship, 0);
+    this.headingTransition = createAngleTransition(
+      snapshot.spaceship.heading,
+      snapshot.spaceship.heading,
+      0
+    );
     this.turretTransition = createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, 0);
     this.shieldTransition = createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, 0);
   }
@@ -91,6 +98,14 @@ class SpaceshipScene extends Phaser.Scene {
     this.spaceshipBody.fillCircle(0, 0, 18);
     this.spaceshipBody.setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y);
 
+    const shipRadius = this.snapshot.spaceship.radius;
+    this.noseMarker = this.add.graphics().setDepth(11);
+    this.noseMarker.fillStyle(0xffd36f, 1);
+    this.noseMarker.fillTriangle(shipRadius - 4, -9, shipRadius + 12, 0, shipRadius - 4, 9);
+    this.noseMarker
+      .setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y)
+      .setRotation(this.snapshot.spaceship.heading);
+
     this.turret = this.add
       .rectangle(this.snapshot.spaceship.x, this.snapshot.spaceship.y, 92, 16, 0xffd36f)
       .setOrigin(0.16, 0.5)
@@ -109,6 +124,11 @@ class SpaceshipScene extends Phaser.Scene {
     const now = performance.now();
     const spaceshipPosition = interpolateTransition(this.spaceshipTransition, now);
     this.spaceshipBody.setPosition(spaceshipPosition.x, spaceshipPosition.y);
+    if (this.noseMarker !== undefined) {
+      this.noseMarker
+        .setPosition(spaceshipPosition.x, spaceshipPosition.y)
+        .setRotation(interpolateAngleTransition(this.headingTransition, now));
+    }
     this.turret.setPosition(spaceshipPosition.x, spaceshipPosition.y);
     this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
     this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
@@ -131,6 +151,11 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapToSnapshot(snapshot, now);
     } else {
       this.spaceshipTransition = createPointTransition(this.spaceshipBody, snapshot.spaceship, now);
+      this.headingTransition = createAngleTransition(
+        this.noseMarker?.rotation ?? snapshot.spaceship.heading,
+        snapshot.spaceship.heading,
+        now
+      );
       this.turretTransition = createAngleTransition(
         this.turret.rotation,
         snapshot.turretAngle,
@@ -216,11 +241,21 @@ class SpaceshipScene extends Phaser.Scene {
   private snapToSnapshot(snapshot: DisplayGameSnapshot, now: number): void {
     if (this.spaceshipBody === undefined || this.turret === undefined) return;
     this.spaceshipBody.setPosition(snapshot.spaceship.x, snapshot.spaceship.y);
+    if (this.noseMarker !== undefined) {
+      this.noseMarker
+        .setPosition(snapshot.spaceship.x, snapshot.spaceship.y)
+        .setRotation(snapshot.spaceship.heading);
+    }
     this.turret.setPosition(snapshot.spaceship.x, snapshot.spaceship.y);
     this.turret.setRotation(snapshot.turretAngle);
     this.visualShieldAngle = snapshot.shield.angle;
     const transitions = createSnappedVisualTransitions(snapshot, now);
     this.spaceshipTransition = transitions.spaceship;
+    this.headingTransition = createAngleTransition(
+      snapshot.spaceship.heading,
+      snapshot.spaceship.heading,
+      now
+    );
     this.turretTransition = transitions.turret;
     this.shieldTransition = transitions.shield;
   }
@@ -332,10 +367,10 @@ class SpaceshipScene extends Phaser.Scene {
       );
       container.add([trail, body]);
     } else {
-      const friendly = entity.kind === "friendly";
+      const style = getProjectileStyle(entity);
       const bullet = this.add
-        .circle(0, 0, entity.radius, friendly ? 0xffd36f : 0xff685f, 1)
-        .setStrokeStyle(2, friendly ? 0xfff1b2 : 0xffc2bd);
+        .circle(0, 0, entity.radius, style.fill, 1)
+        .setStrokeStyle(2, style.stroke);
       container.add(bullet);
     }
     return container;
@@ -360,6 +395,14 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
 
 function getEnemyColor(kind: EnemyKind): number {
   return kind === "gunship" ? 0xe65f4b : 0xaa5bd6;
+}
+
+function getProjectileStyle(entity: PublicProjectileView): { fill: number; stroke: number } {
+  if (entity.kind === "friendly" && entity.source === "machineGun") {
+    return { fill: 0x5fe8d8, stroke: 0xbffcf2 };
+  }
+  const friendly = entity.kind === "friendly";
+  return { fill: friendly ? 0xffd36f : 0xff685f, stroke: friendly ? 0xfff1b2 : 0xffc2bd };
 }
 
 function getEntityDepth(entity: CombatEntity): number {

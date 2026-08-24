@@ -6,6 +6,7 @@ import {
   applyPilotInput,
   applyShieldInput,
   cancelGunnerControl,
+  cancelPilotControl,
   cancelQueuedFire,
   cancelShieldControl,
   canonicalizeAngle,
@@ -42,7 +43,11 @@ function holdPilot(
 ) {
   let current = state;
   for (let step = 0; step < steps; step += 1) {
-    current = applyPilotInput(current, { vector, receivedTick: current.clock.tick });
+    current = applyPilotInput(current, {
+      vector,
+      mgFiring: false,
+      receivedTick: current.clock.tick
+    });
     current = advanceSpaceshipSimulation(current, config);
   }
   return current;
@@ -167,7 +172,11 @@ describe("pilot movement", () => {
     const releaseX = state.spaceship.x;
     const velocities: number[] = [];
 
-    state = applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: state.clock.tick });
+    state = applyPilotInput(state, {
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
     for (let step = 0; step < 8; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
       velocities.push(state.spaceship.velocity.x);
@@ -200,7 +209,7 @@ describe("pilot movement", () => {
       spaceship: { x: 147, y: 100, velocity: { x: 100, y: 100 } }
     };
     const bounded = advanceSpaceshipSimulation(
-      applyPilotInput(nearRight, { vector: { x: 1, y: 1 }, receivedTick: 0 }),
+      applyPilotInput(nearRight, { vector: { x: 1, y: 1 }, mgFiring: false, receivedTick: 0 }),
       config
     );
 
@@ -222,7 +231,7 @@ describe("pilot movement", () => {
       }
     };
     const movedInward = advanceSpaceshipSimulation(
-      applyPilotInput(inward, { vector: { x: -1, y: 0 }, receivedTick: 0 }),
+      applyPilotInput(inward, { vector: { x: -1, y: 0 }, mgFiring: false, receivedTick: 0 }),
       config
     );
     expect(movedInward.spaceship.x).toBeLessThan(config.worldWidth - config.spaceshipRadius);
@@ -233,6 +242,7 @@ describe("pilot movement", () => {
     const config = createSpaceshipSimulationConfig();
     const moving = applyPilotInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 1, y: 0 },
+      mgFiring: false,
       receivedTick: 0
     });
     const afterFourSteps = advance(moving, config, 4);
@@ -247,7 +257,11 @@ describe("pilot movement", () => {
   it("brakes instead of teleporting velocity to zero after trusted neutral input", () => {
     const config = createSpaceshipSimulationConfig();
     let state = holdPilot(createSpaceshipSimulationState(config, 1), config, { x: 1, y: 0 }, 10);
-    state = applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: state.clock.tick });
+    state = applyPilotInput(state, {
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
     state = advanceSpaceshipSimulation(state, config);
 
     expect(state.spaceship.velocity.x).toBe(280);
@@ -256,11 +270,11 @@ describe("pilot movement", () => {
   it("rejects non-finite vectors, invalid deltas, and future received ticks", () => {
     const state = createSpaceshipSimulationState(createSpaceshipSimulationConfig(), 1);
     expect(() =>
-      applyPilotInput(state, { vector: { x: Number.NaN, y: 0 }, receivedTick: 0 })
+      applyPilotInput(state, { vector: { x: Number.NaN, y: 0 }, mgFiring: false, receivedTick: 0 })
     ).toThrow(RangeError);
-    expect(() => applyPilotInput(state, { vector: { x: 0, y: 0 }, receivedTick: 1 })).toThrow(
-      RangeError
-    );
+    expect(() =>
+      applyPilotInput(state, { vector: { x: 0, y: 0 }, mgFiring: false, receivedTick: 1 })
+    ).toThrow(RangeError);
     expect(() => moveVectorTowards({ x: 0, y: 0 }, { x: 1, y: 0 }, -1)).toThrow(RangeError);
   });
 });
@@ -928,7 +942,7 @@ describe("deterministic spaceship trace", () => {
 
     const run = () => {
       let state = createSpaceshipSimulationState(config, 1);
-      state = applyPilotInput(state, { vector: { x: 1, y: -1 }, receivedTick: 0 });
+      state = applyPilotInput(state, { vector: { x: 1, y: -1 }, mgFiring: false, receivedTick: 0 });
       state = applyGunnerInput(state, {
         vector: { x: 0, y: 1 },
         firing: true,
@@ -942,11 +956,275 @@ describe("deterministic spaceship trace", () => {
       state = advance(state, config, 3);
       state = applyPilotInput(state, {
         vector: { x: 0, y: 0 },
+        mgFiring: false,
         receivedTick: state.clock.tick
       });
       return advance(state, config, 12);
     };
 
     expect(run()).toEqual(run());
+  });
+});
+
+describe("pilot nose machine gun", () => {
+  const ZERO = { x: 0, y: 0 };
+
+  const mgSpawnsOnTick = (state: SpaceshipSimulationState) =>
+    state.projectiles.filter(
+      (projectile) =>
+        projectile.source === "machineGun" && projectile.spawnedTick === state.clock.tick
+    ).length;
+
+  it("spawns a nose projectile along the heading with fixed MG stats", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 1);
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    state = advanceSpaceshipSimulation(state, config);
+
+    const shots = state.projectiles.filter((projectile) => projectile.source === "machineGun");
+    expect(shots).toHaveLength(1);
+    const shot = shots[0];
+    if (shot === undefined) return;
+    // Nose offset along +x (heading 0) from the world center.
+    expect(shot.x).toBeCloseTo(
+      config.worldWidth / 2 + config.spaceshipRadius + config.mgProjectileRadius
+    );
+    expect(shot.y).toBeCloseTo(config.worldHeight / 2);
+    expect(shot.velocity.x).toBeCloseTo(config.mgProjectileSpeedPerSecond);
+    expect(shot.velocity.y).toBeCloseTo(0);
+    expect(shot.damage).toBe(config.mgDamage);
+    expect(shot.radius).toBe(config.mgProjectileRadius);
+  });
+
+  it("fires at a 2-tick cooldown cadence (5 shots in 10 ticks)", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 1);
+    let totalSpawns = 0;
+    for (let i = 0; i < 10; i++) {
+      state = applyPilotInput(state, {
+        vector: ZERO,
+        mgFiring: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      totalSpawns += mgSpawnsOnTick(state);
+    }
+    expect(totalSpawns).toBe(5);
+  });
+
+  it("queues a rising edge and coalesces taps into one shot", () => {
+    const config = createSpaceshipSimulationConfig();
+
+    // Short tap: true then false before the next advance still fires once.
+    let state = createSpaceshipSimulationState(config, 1);
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    expect(state.queuedMgFire).toBe(true);
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    expect(state.queuedMgFire).toBe(true); // still queued after the falling edge
+    state = advanceSpaceshipSimulation(state, config);
+    expect(mgSpawnsOnTick(state)).toBe(1); // fired once from the queued edge
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    state = advanceSpaceshipSimulation(state, config);
+    expect(mgSpawnsOnTick(state)).toBe(0); // no second shot
+
+    // Coalescing: multiple rising edges before one advance collapse into a single shot.
+    state = createSpaceshipSimulationState(config, 1);
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    expect(state.queuedMgFire).toBe(true); // coalesced into one request
+    state = advanceSpaceshipSimulation(state, config);
+    expect(mgSpawnsOnTick(state)).toBe(1); // only one shot despite two rising edges
+  });
+
+  it("overheats exactly on the 25th shot when cooling is disabled", () => {
+    const config = createSpaceshipSimulationConfig({ mgCoolingPerSecond: 0 });
+    let state = createSpaceshipSimulationState(config, 1);
+    let totalSpawns = 0;
+    for (let i = 0; i < 80 && !state.mgOverheated; i++) {
+      state = applyPilotInput(state, {
+        vector: ZERO,
+        mgFiring: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      totalSpawns += mgSpawnsOnTick(state);
+    }
+    expect(state.mgOverheated).toBe(true);
+    expect(totalSpawns).toBe(25); // the 25th shot pushes heat to capacity
+  });
+
+  it("cools from overheat down to the rearm threshold in 47 ticks", () => {
+    const config = createSpaceshipSimulationConfig(); // cooling 30/s -> 1.5/tick, rearm at 30
+    let state: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 1),
+      mgHeat: config.mgHeatCapacity,
+      mgOverheated: true
+    };
+    let ticks = 0;
+    while (state.mgOverheated && ticks < 200) {
+      state = applyPilotInput(state, {
+        vector: ZERO,
+        mgFiring: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      ticks++;
+    }
+    expect(ticks).toBe(47); // 100 -> <=30 at 1.5/tick
+  });
+
+  it("auto-resumes firing while held after rearming", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 1);
+    const spawnedTicks: number[] = [];
+    let overheatTick: number | null = null;
+    let rearmTick: number | null = null;
+    for (let i = 0; i < 300; i++) {
+      const wasOverheated = state.mgOverheated;
+      state = applyPilotInput(state, {
+        vector: ZERO,
+        mgFiring: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      if (mgSpawnsOnTick(state) > 0) spawnedTicks.push(state.clock.tick);
+      if (!wasOverheated && state.mgOverheated) overheatTick = state.clock.tick;
+      if (wasOverheated && !state.mgOverheated && rearmTick === null) rearmTick = state.clock.tick;
+    }
+    expect(overheatTick).not.toBeNull(); // it did overheat while held
+    expect(rearmTick).not.toBeNull(); // and rearmed via cooling
+    if (rearmTick === null) return;
+    const resumedSpawns = spawnedTicks.filter((tick) => tick > rearmTick).length;
+    expect(resumedSpawns).toBeGreaterThan(0); // fired again without re-pressing
+  });
+
+  it("cancels the heading target and zeroes mgFiring when pilot input goes stale", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 1);
+    state = applyPilotInput(state, {
+      vector: { x: 0, y: 1 },
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    expect(state.headingTargetAngle).toBeCloseTo(Math.PI / 2); // target set from the vector
+    for (let i = 0; i < config.inputTimeoutTicks + 2; i++) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    expect(state.headingTargetAngle).toBeNull(); // stale input cancels the target
+    expect(state.inputs.pilot?.mgFiring ?? false).toBe(false); // stale input zeroes mgFiring
+  });
+
+  it("cancelPilotControl clears queued fire, target and intent but keeps angle and heat", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 1),
+      spaceshipHeading: 0.7,
+      mgHeat: 42
+    };
+    state = applyPilotInput(state, {
+      vector: { x: 1, y: 0 },
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    expect(state.queuedMgFire).toBe(true);
+    const cancelled = cancelPilotControl(state);
+    expect(cancelled.queuedMgFire).toBe(false);
+    expect(cancelled.headingTargetAngle).toBeNull();
+    expect(cancelled.inputs.pilot?.mgFiring ?? false).toBe(false);
+    expect(cancelled.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
+    expect(cancelled.spaceshipHeading).toBe(0.7); // current angle preserved
+    expect(cancelled.mgHeat).toBe(42); // heat preserved
+  });
+
+  it("neutralizes MG in intermission and keeps cooling heat", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 1),
+      encounterPhase: "intermission",
+      mgHeat: 80
+    };
+    state = applyPilotInput(state, {
+      vector: { x: 1, y: 0 },
+      mgFiring: true,
+      receivedTick: state.clock.tick
+    });
+    expect(state.queuedMgFire).toBe(true); // pending request before the tick
+    const heatBefore = state.mgHeat;
+    state = advanceSpaceshipSimulation(state, config); // one intermission tick
+    expect(state.queuedMgFire).toBe(false); // neutralized
+    expect(state.inputs.pilot?.mgFiring ?? false).toBe(false);
+    expect(state.headingTargetAngle).toBeNull();
+    expect(state.mgHeat).toBeLessThan(heatBefore); // heat keeps cooling in intermission
+  });
+
+  it("latches the heading target on zero vector and converges without overshoot", () => {
+    const config = createSpaceshipSimulationConfig();
+
+    // Latch: a non-zero vector sets the target, a zero vector keeps it.
+    let state = createSpaceshipSimulationState(config, 1);
+    state = applyPilotInput(state, {
+      vector: { x: 0, y: 1 },
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    const latchedTarget = state.headingTargetAngle;
+    expect(latchedTarget).toBeCloseTo(Math.PI / 2);
+    state = applyPilotInput(state, {
+      vector: ZERO,
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    expect(state.headingTargetAngle).toBe(latchedTarget); // zero vector keeps the latched target
+
+    // No overshoot: drive toward a fixed target and verify it never crosses.
+    const target = Math.PI / 3;
+    state = createSpaceshipSimulationState(config, 1);
+    let overshot = false;
+    let settledFor = 0;
+    for (let i = 0; i < 400 && settledFor < 12; i++) {
+      state = applyPilotInput(state, {
+        vector: { x: Math.cos(target), y: Math.sin(target) },
+        mgFiring: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      const delta = shortestAngleDelta(state.spaceshipHeading, target); // + below, - past the target
+      if (delta < -1e-4) overshot = true;
+      settledFor =
+        Math.abs(delta) < 1e-3 && Math.abs(state.headingAngularVelocity) < 1e-3
+          ? settledFor + 1
+          : 0;
+    }
+    expect(overshot).toBe(false); // never crossed the target
+    expect(settledFor).toBeGreaterThanOrEqual(12); // converged and held
   });
 });

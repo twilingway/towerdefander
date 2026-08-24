@@ -4,6 +4,7 @@ import {
   applyPilotInput,
   applyShieldInput,
   cancelGunnerControl,
+  cancelPilotControl,
   cancelShieldControl,
   chooseRoleUpgrade,
   createCleanSpaceshipRun,
@@ -371,6 +372,7 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     this.gameState = applyPilotInput(this.gameState, {
       vector: command.vector,
+      mgFiring: command.mgFiring,
       receivedTick: this.gameState.clock.tick
     });
   }
@@ -664,6 +666,7 @@ export class SpaceshipDefenderRoom extends Room<{
     target.spaceship.radius = this.gameConfig.spaceshipRadius;
     target.spaceship.hp = game.spaceshipHp;
     target.spaceship.maxHp = game.spaceshipMaxHp;
+    target.spaceship.heading = game.spaceshipHeading;
     target.turretAngle = game.turretAngle;
     target.shield.angle = game.shieldAngle;
     target.shield.active = game.shieldActive;
@@ -675,6 +678,9 @@ export class SpaceshipDefenderRoom extends Room<{
         Math.PI * 2,
         this.gameConfig.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus
       ) / 2;
+    target.machineGun.heat = game.mgHeat;
+    target.machineGun.capacity = this.gameConfig.mgHeatCapacity;
+    target.machineGun.overheated = game.mgOverheated;
     target.encounter.phase = game.encounterPhase;
     target.encounter.hasOutcome = game.outcome !== null;
     target.encounter.outcome = game.outcome ?? "defeat";
@@ -758,9 +764,8 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
     const role = this.state.players.get(playerId)?.role;
-    const receivedTick = this.gameState.clock.tick;
     if (role === "pilot") {
-      this.gameState = applyPilotInput(this.gameState, { vector: { x: 0, y: 0 }, receivedTick });
+      this.gameState = cancelPilotControl(this.gameState);
     } else if (role === "gunner") {
       this.gameState = cancelGunnerControl(this.gameState);
     } else if (role === "shield") {
@@ -771,11 +776,7 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private neutralizeAllRoles(): void {
     if (this.gameState === undefined) return;
-    const receivedTick = this.gameState.clock.tick;
-    this.gameState = applyPilotInput(this.gameState, {
-      vector: { x: 0, y: 0 },
-      receivedTick
-    });
+    this.gameState = cancelPilotControl(this.gameState);
     this.gameState = cancelGunnerControl(this.gameState);
     this.gameState = cancelShieldControl(this.gameState);
   }
@@ -1170,6 +1171,7 @@ function syncProjectile(
   target.velocityX = source.velocity.x;
   target.velocityY = source.velocity.y;
   target.radius = source.radius;
+  target.source = kind === "friendly" ? (source as CoreProjectileState).source : "";
 }
 
 function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissileState): void {

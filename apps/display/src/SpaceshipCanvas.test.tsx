@@ -74,10 +74,12 @@ const testGame = {
     velocityY: 0,
     radius: 52,
     hp: 1000,
-    maxHp: 1000
+    maxHp: 1000,
+    heading: Math.PI / 4
   },
   turretAngle: 0,
   shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: 0.72 },
+  machineGun: { heat: 0, capacity: 100, overheated: false },
   encounter: {
     phase: "combat",
     outcome: null,

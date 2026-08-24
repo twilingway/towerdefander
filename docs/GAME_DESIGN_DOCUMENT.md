@@ -6,7 +6,7 @@
 игрока смотрят на общий большой экран и управляют разными системами корабля из браузеров своих
 устройств:
 
-- pilot отвечает за позиционирование и уклонение;
+- pilot отвечает за позиционирование, уклонение и носовой огонь;
 - gunner направляет оружие и уничтожает угрозы;
 - shield operator разворачивает и расходует directional energy shield.
 
@@ -33,6 +33,9 @@ credits economy и покупки прямо во время боя требую
 - WASD/arrows или virtual stick;
 - мягкий разгон и торможение;
 - уклонение от снарядов, ракет и астероидов;
+- носовой пулемёт: стреляет вдоль текущего heading корабля (heading плавно доворачивается за
+  направлением движения), hold-to-fire с накоплением тепла на каждый выстрел; перегрев блокирует
+  огонь до остывания и rearm, поэтому пилот балансирует между манёвром и непрерывным огнём;
 - будущие upgrades: speed, acceleration, hull и repair.
 
 ### Gunner
@@ -96,7 +99,7 @@ simulation. Display только интерполирует snapshots и рис�
 ## 7. Multiplayer architecture
 
 - server: authoritative Colyseus room `spaceship_defender`;
-- protocol: strict versioned schemas, current target v11;
+- protocol: strict versioned schemas, current target v12;
 - core: deterministic 50 ms fixed step с explicit seeded randomness;
 - world: server-authoritative circle `4400×4400`, radius `2200`; spaceship и enemy ships не могут
   покинуть арену, а transient hazards удаляются только за внешней circular envelope;

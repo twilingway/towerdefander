@@ -355,6 +355,7 @@ describe("circular transient cleanup", () => {
       velocity: { x: 3000, y: 0 },
       radius: config.projectileRadius,
       damage: config.friendlyProjectileDamage,
+      source: "cannon",
       spawnedTick: 0
     };
     const result = combatStep(

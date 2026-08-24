@@ -298,7 +298,8 @@ describe("SpaceshipDefenderRoom v11 lifecycle", () => {
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber,
       sequence: 99,
-      vector: { x: 1, y: 0 }
+      vector: { x: 1, y: 0 },
+      mgFiring: false
     });
     const allow = vi.spyOn(room, "allowReconnection").mockResolvedValue(pilot.client);
 
@@ -315,7 +316,8 @@ describe("SpaceshipDefenderRoom v11 lifecycle", () => {
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber,
       sequence: 1,
-      vector: { x: -1, y: 0 }
+      vector: { x: -1, y: 0 },
+      mgFiring: false
     });
     room.advanceGameStep();
     expect(room.state.game.spaceship.velocityX).toBe(-32);
@@ -413,8 +415,18 @@ describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber
     } as const;
-    room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: 1, y: 0 } });
-    room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: -1, y: 0 } });
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 2,
+      vector: { x: 1, y: 0 },
+      mgFiring: false
+    });
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 1,
+      vector: { x: -1, y: 0 },
+      mgFiring: false
+    });
     room.advanceGameStep();
     expect(room.state.game.spaceship).toMatchObject({ x: 2201.6, velocityX: 32, velocityY: 0 });
   });
@@ -432,9 +444,15 @@ describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
     room.handlePilotInput(pilot.client, {
       ...envelope,
       sequence: Number.MAX_SAFE_INTEGER + 1,
-      vector: { x: -1, y: 0 }
+      vector: { x: -1, y: 0 },
+      mgFiring: false
     });
-    room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: 1, y: 0 } });
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 1,
+      vector: { x: 1, y: 0 },
+      mgFiring: false
+    });
     room.advanceGameStep();
 
     expect(countErrors(pilot, "invalid_message")).toBe(1);
@@ -729,7 +747,8 @@ describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
       playerId: "someone-else",
       runNumber: room.state.runNumber,
       sequence: 1,
-      vector: { x: 1, y: 0 }
+      vector: { x: 1, y: 0 },
+      mgFiring: false
     });
     expect(countErrors(pilot, "identity_mismatch")).toBe(1);
     room.handlePilotInput(pilot.client, {
@@ -739,6 +758,7 @@ describe("SpaceshipDefenderRoom v11 authoritative inputs", () => {
       runNumber: room.state.runNumber,
       sequence: 1,
       vector: { x: 1, y: 0 },
+      mgFiring: false,
       extra: true
     });
     expect(countErrors(pilot, "invalid_message")).toBe(1);
@@ -1059,15 +1079,30 @@ describe("SpaceshipDefenderRoom v11 combat projection and upgrades", () => {
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber
     } as const;
-    room.handlePilotInput(pilot.client, { ...envelope, sequence: 1, vector: { x: 1, y: 0 } });
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 1,
+      vector: { x: 1, y: 0 },
+      mgFiring: false
+    });
     forceIntermission(room);
     expect(internals(room).gameState?.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
 
-    room.handlePilotInput(pilot.client, { ...envelope, sequence: 99, vector: { x: 1, y: 0 } });
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 99,
+      vector: { x: 1, y: 0 },
+      mgFiring: false
+    });
     expect(countErrors(pilot, "invalid_phase")).toBe(1);
     for (let index = 0; index < 200; index += 1) room.advanceGameStep();
     expect(room.state.game.encounter).toMatchObject({ phase: "combat", waveNumber: 2 });
-    room.handlePilotInput(pilot.client, { ...envelope, sequence: 2, vector: { x: -1, y: 0 } });
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 2,
+      vector: { x: -1, y: 0 },
+      mgFiring: false
+    });
     expect(internals(room).gameState?.inputs.pilot?.vector).toEqual({ x: -1, y: 0 });
   });
 
@@ -1112,7 +1147,8 @@ describe("SpaceshipDefenderRoom v11 rematch isolation", () => {
       playerId: pilot.client.sessionId,
       runNumber: oldRunNumber,
       sequence: 999,
-      vector: { x: 1, y: 0 }
+      vector: { x: 1, y: 0 },
+      mgFiring: false
     });
     room.handleUpgradeChoose(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1172,7 +1208,8 @@ describe("SpaceshipDefenderRoom v11 rematch isolation", () => {
       playerId: pilot.client.sessionId,
       runNumber: room.state.runNumber,
       sequence: 7,
-      vector: { x: 1, y: 0 }
+      vector: { x: 1, y: 0 },
+      mgFiring: false
     });
     forceIntermission(room);
     chooseUpgrade(room, pilot, "pilot", "77777777-7777-4777-8777-777777777777");
