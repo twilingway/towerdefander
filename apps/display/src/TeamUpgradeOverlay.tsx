@@ -1,8 +1,10 @@
 import {
   CREW_ROLES,
-  type CrewRole,
+  TEAM_UPGRADE_PRICE,
   type PublicTeamUpgradeView
 } from "@spaceship-defender/protocol";
+
+import { roleLabel } from "./roleLabel.js";
 
 interface TeamUpgradeOverlayProps {
   readonly teamUpgrade: PublicTeamUpgradeView;
@@ -20,7 +22,7 @@ export function TeamUpgradeOverlay({
   phaseTicksRemaining
 }: TeamUpgradeOverlayProps) {
   const offer = teamUpgrade.offer;
-  const price = offer?.cards[0]?.price ?? 0;
+  const price = TEAM_UPGRADE_PRICE;
   return (
     <div className="encounter-overlay encounter-overlay--intermission" role="status">
       <p className="eyebrow">Волна {waveNumber} завершена</p>
@@ -65,8 +67,4 @@ export function TeamUpgradeOverlay({
 
 function formatCountdown(ticks: number): string {
   return `${(ticks / 20).toFixed(1)} с`;
-}
-
-function roleLabel(role: CrewRole): string {
-  return role === "pilot" ? "Пилот" : role === "gunner" ? "Наводчик" : "Оператор щита";
 }

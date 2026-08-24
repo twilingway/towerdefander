@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createRadarProjection,
+  getCurrentWaveUpgrade,
   getResourcePercent,
   projectWorldToRadar
 } from "./combatHudViewModel.js";
@@ -29,5 +30,22 @@ describe("combat HUD view model", () => {
       x: 100,
       y: 12
     });
+  });
+});
+
+describe("current wave upgrade", () => {
+  const selection = { waveNumber: 3, upgradeId: "pilot_speed" } as const;
+
+  it("presents the purchase in the wave it paid for", () => {
+    expect(getCurrentWaveUpgrade(selection, 4)).toBe(selection);
+  });
+
+  it("hides a purchase that an older wave paid for", () => {
+    expect(getCurrentWaveUpgrade(selection, 5)).toBeNull();
+    expect(getCurrentWaveUpgrade(selection, 3)).toBeNull();
+  });
+
+  it("has nothing to present without a selection", () => {
+    expect(getCurrentWaveUpgrade(null, 2)).toBeNull();
   });
 });

@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change room-rematch-lifecycle-stats. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Terminal result сохраняет комнату для повторного забега
 
 При завершении run server SHALL остановить боевую симуляцию, нейтрализовать continuous intents,
@@ -139,4 +141,3 @@ deadlines. Disposal SHALL один раз остановить simulation, laten
 
 - **WHEN** команда запускает новый run в той же комнате до absolute deadline
 - **THEN** wave 1 получает новый wave deadline, но исходный 12-часовой timestamp комнаты не меняется
-

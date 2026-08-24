@@ -37,3 +37,15 @@ export function projectWorldToRadar(
     y: projection.center + (worldY - worldHeight / 2) * projection.scale
   };
 }
+
+/**
+ * A team upgrade is paid for at the end of one wave and applies to the next,
+ * and the authoritative selection then stays put until another purchase
+ * replaces it. Only the wave it actually paid for may present it as current.
+ */
+export function getCurrentWaveUpgrade<TSelection extends { readonly waveNumber: number }>(
+  selection: TSelection | null,
+  waveNumber: number
+): TSelection | null {
+  return selection !== null && selection.waveNumber + 1 === waveNumber ? selection : null;
+}

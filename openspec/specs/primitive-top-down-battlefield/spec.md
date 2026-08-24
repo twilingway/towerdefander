@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change flying-castle-core. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Display показывает top-down мир примитивами
 
 Phaser SHALL отображать square bounding world `4400×4400`, одну arena circumference radius 2200,
@@ -281,4 +283,3 @@ timeout result display SHALL явно сообщать «Время волны �
 
 - **WHEN** display получает frozen defeat с `defeatReason=wave_timeout`
 - **THEN** result overlay показывает причину timeout, итоговую волну, счёт и готовность к rematch
-

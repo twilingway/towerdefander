@@ -1,6 +1,7 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
+import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
 import { findNearestVisibleDemoTarget, findNearestVisibleDemoThreat } from "./visibleDemo.js";
 
@@ -98,7 +99,10 @@ export function SpaceshipCanvas({
       data-credits={game.credits}
       data-wave-number={game.encounter.waveNumber}
       data-encounter-phase={game.encounter.phase}
-      data-team-upgrade-id={game.teamUpgrade.selection?.upgradeId ?? ""}
+      data-team-upgrade-id={
+        getCurrentWaveUpgrade(game.teamUpgrade.selection, game.encounter.waveNumber)?.upgradeId ??
+        ""
+      }
       data-turret-angle={game.turretAngle}
       data-enemy-count={game.enemyShips.length}
       data-asteroid-count={game.asteroids.length}

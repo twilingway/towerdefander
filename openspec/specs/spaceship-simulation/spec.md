@@ -4,7 +4,9 @@
 
 TBD - created by archiving change spaceship-defender-identity-refactor. Update Purpose after
 archive.
+
 ## Requirements
+
 ### Requirement: Симуляция создаёт явный мир космического корабля
 
 Game-core SHALL создавать детерминированное состояние из явного config и non-zero uint32 run seed.
@@ -354,4 +356,3 @@ SHALL очистить queued MG fire request, задать mgFiring false и о
 - **WHEN** pilot disconnect происходит с pending MG fire request
 - **THEN** server очищает pending request и heading target; reconnect начинается с mgFiring=false,
   не создаёт delayed projectile и не продолжает traverse
-

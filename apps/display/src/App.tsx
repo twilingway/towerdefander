@@ -15,6 +15,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CombatRadar } from "./CombatRadar.js";
+import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { MachineGunHeat } from "./MachineGunHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
@@ -27,6 +28,7 @@ import {
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
+import { roleLabel } from "./roleLabel.js";
 import { isVisibleDemoMode } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -187,6 +189,11 @@ export function DisplayApp() {
     );
   }
 
+  const waveUpgrade =
+    view.game === null
+      ? null
+      : getCurrentWaveUpgrade(view.game.teamUpgrade.selection, view.game.encounter.waveNumber);
+
   return (
     <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
       <header className="room-header">
@@ -301,9 +308,9 @@ export function DisplayApp() {
               <span>Кредиты</span>
               <strong>{view.game.credits}</strong>
               <small>
-                {view.game.teamUpgrade.selection === null
-                  ? "улучшений ещё нет"
-                  : `улучшение: ${roleLabel(view.game.teamUpgrade.selection.role)}`}
+                {waveUpgrade === null
+                  ? "в этой волне улучшений нет"
+                  : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
               </small>
             </div>
             <MachineGunHeat machineGun={view.game.machineGun} />
@@ -381,10 +388,6 @@ function formatLatency(latencyMs: number | null | undefined): string {
 
 function encounterLabel(phase: EncounterPhase): string {
   return phase === "combat" ? "бой" : phase === "intermission" ? "передышка" : "результат";
-}
-
-function roleLabel(role: CrewRole): string {
-  return role === "pilot" ? "Пилот" : role === "gunner" ? "Наводчик" : "Оператор щита";
 }
 
 function latencyRoleLabel(role: CrewRole): string {

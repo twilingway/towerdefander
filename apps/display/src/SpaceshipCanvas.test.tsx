@@ -66,6 +66,7 @@ describe("SpaceshipCanvas", () => {
         game={{
           ...testGame,
           credits: 7,
+          encounter: { ...testGame.encounter, waveNumber: 2 },
           teamUpgrade: {
             ...testGame.teamUpgrade,
             selection: {
@@ -83,8 +84,9 @@ describe("SpaceshipCanvas", () => {
     );
 
     expect(markup).toContain('data-credits="7"');
-    expect(markup).toContain('data-wave-number="1"');
+    expect(markup).toContain('data-wave-number="2"');
     expect(markup).toContain('data-encounter-phase="combat"');
+    // The wave-1 purchase applies to wave 2 and only to wave 2.
     expect(markup).toContain('data-team-upgrade-id="gunner_damage"');
   });
 });

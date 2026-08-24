@@ -32,4 +32,11 @@ describe("vote intent", () => {
     expect(nextVoteRevision(0)).toBe(1);
     expect(nextVoteRevision(4)).toBe(5);
   });
+
+  it("never reissues a revision that is still in flight", () => {
+    // The server keeps the accepted revision when it rejects a command, so a
+    // second click after an unconfirmed vote must not reuse the same number.
+    expect(nextVoteRevision(0, 1)).toBe(2);
+    expect(nextVoteRevision(2, 1)).toBe(3);
+  });
 });

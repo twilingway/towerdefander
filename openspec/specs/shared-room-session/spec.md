@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change bootstrap-network-vertical-slice. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Сервер запускает матч после готовности трёх ролей
 
 Server SHALL запускать simulation только когда pilot, gunner и shield подключены и каждый ready.
@@ -173,4 +175,3 @@ reason.
 
 - **WHEN** v12 display или controller подключается к v13 room
 - **THEN** server отклоняет соединение существующей ошибкой `protocol_mismatch` до mutation state
-

@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change tyrian-combat-roguelite-slice. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Core создаёт детерминированный combat world
 
 Game-core SHALL создавать combat state только из validated circular arena config и явного non-zero
@@ -168,4 +170,3 @@ caps на равных с снарядами пушки: 32 friendly projectile 
   пилота
 - **THEN** ни одно оружие не создаёт снаряд, оба pending request очищаются вместе со своими
   cooldowns, а после освобождения cap burst не происходит
-

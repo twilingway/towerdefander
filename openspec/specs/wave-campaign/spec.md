@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change build-visual-wave-mvp. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Run выполняет бесконечные возрастающие waves
 
 Current strict active run SHALL публиковать monotonic `waveNumber`, encounter phase и countdown.
@@ -99,4 +101,3 @@ frozen `result/defeat` с `defeatReason=wave_timeout`, сохранить фак
 
 - **WHEN** server clock достиг deadline до применения очередного combat step
 - **THEN** timeout result имеет приоритет, а очередные movement, spawn и damage не применяются
-

@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change flying-castle-core. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Комната имеет три стабильные роли
 
 Server SHALL назначать controller roles в порядке `pilot`, `gunner`, `shield` при входе и SHALL
@@ -364,4 +366,3 @@ display. Terminal panel SHALL различать `spaceship_destroyed` и `wave_
 
 - **WHEN** controller получает result с `defeatReason=wave_timeout`
 - **THEN** panel сообщает об истечении времени и позволяет отправить обычный rematch ready один раз
-

@@ -26,7 +26,12 @@ export function keepVoteIntent(
   return projection.acceptedRevision >= pending.revision ? undefined : pending;
 }
 
-/** Revisions are strictly increasing per role, so a rejected vote reuses none. */
-export function nextVoteRevision(acceptedRevision: number): number {
-  return acceptedRevision + 1;
+/**
+ * Revisions are strictly increasing per role, and the server keeps the accepted
+ * one when it rejects a command. Counting from the confirmed revision alone
+ * would reissue a number already in flight, which the server answers with
+ * `stale_action`, so the highest revision this client has sent counts too.
+ */
+export function nextVoteRevision(acceptedRevision: number, sentRevision = 0): number {
+  return Math.max(acceptedRevision, sentRevision) + 1;
 }

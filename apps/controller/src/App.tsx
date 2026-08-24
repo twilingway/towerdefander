@@ -2,6 +2,7 @@ import { Client, type Room } from "@colyseus/sdk";
 import {
   CREW_ROLES,
   PROTOCOL_VERSION,
+  TEAM_UPGRADE_PRICE,
   clientMessage,
   roomClosingSchema,
   serverLatencyProbeSchema,
@@ -522,6 +523,7 @@ export function TeamUpgradePanel({
   readonly onVote: (upgradeId: UpgradeId, revision: number, actionId: string) => void;
 }) {
   const pendingReference = useRef<VoteIntent | undefined>(undefined);
+  const sentRevisionReference = useRef(0);
   const voteReference = useRef(onVote);
   voteReference.current = onVote;
   const [pendingUpgradeId, setPendingUpgradeId] = useState<UpgradeId>();
@@ -548,8 +550,14 @@ export function TeamUpgradePanel({
   }, [offerId, ownRevision]);
 
   useEffect(() => {
-    // A rejected vote never reaches the projection, so the server error is the
-    // only signal that unlocks the cards again.
+    // Every offer restarts the authoritative revision sequence for this role.
+    sentRevisionReference.current = 0;
+  }, [offerId]);
+
+  useEffect(() => {
+    // A rejected vote never reaches the projection, so a server error is the
+    // only signal that this one is not on its way any more. Errors the ballot
+    // did not cause land here too, which costs nothing but a cleared label.
     if (errorEpoch === 0) return;
     pendingReference.current = undefined;
     setPendingUpgradeId(undefined);
@@ -564,7 +572,9 @@ export function TeamUpgradePanel({
     );
   }
 
-  const price = offer.cards[0]?.price ?? 0;
+  // The protocol pins one price for every card; reading it from a card would
+  // report 0 for an empty offer and hide the insufficient-credits warning.
+  const price = TEAM_UPGRADE_PRICE;
   return (
     <div className="upgrade-panel">
       <p className="eyebrow">Передышка · {(phaseTicksRemaining / 20).toFixed(1)} с</p>
@@ -588,12 +598,15 @@ export function TeamUpgradePanel({
               className={`upgrade-card ${chosen ? "upgrade-card--selected" : ""}`}
               key={card.upgradeId}
               data-upgrade-id={card.upgradeId}
+              data-price={card.price}
               aria-pressed={chosen}
-              disabled={reconnecting || pendingUpgradeId !== undefined}
+              /* A vote in flight never locks the ballot: a lost or rejected
+                 command must not cost the crew its remaining seconds. */
+              disabled={reconnecting}
               onClick={() => {
-                if (pendingReference.current !== undefined) return;
                 const actionId = createActionId();
-                const revision = nextVoteRevision(ownRevision);
+                const revision = nextVoteRevision(ownRevision, sentRevisionReference.current);
+                sentRevisionReference.current = revision;
                 pendingReference.current = {
                   offerId: offer.offerId,
                   upgradeId: card.upgradeId,
