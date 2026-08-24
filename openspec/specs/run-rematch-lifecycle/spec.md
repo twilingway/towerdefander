@@ -3,9 +3,7 @@
 ## Purpose
 
 TBD - created by archiving change room-rematch-lifecycle-stats. Update Purpose after archive.
-
 ## Requirements
-
 ### Requirement: Terminal result сохраняет комнату для повторного забега
 
 При завершении run server SHALL остановить боевую симуляцию, нейтрализовать continuous intents,
@@ -103,13 +101,14 @@ SHALL NOT считаться явным выходом и SHALL сохранят
 
 ### Requirement: Заброшенные комнаты имеют ограниченный lifetime
 
-Server SHALL иметь конфигурируемые deadlines с defaults: display reconnect grace 30 секунд, never-
-started lobby 15 минут, terminal result 10 минут, 5 минут после исчезновения всех connected и
-reserved controller identities и absolute room lifetime 4 часа. Самый ранний применимый deadline
-SHALL закрывать room. Fresh lobby SHALL использовать 15 минут до первого controller join; после того
-как хотя бы один controller был и все identities освобождены, SHALL действовать 5 минут.
-Gameplay/latency traffic SHALL NOT продлевать fixed lobby/result/absolute deadlines. Disposal SHALL
-один раз остановить simulation, latency probes, TTL timers и очистить journals/metadata.
+Server SHALL иметь конфигурируемые deadlines с defaults: display reconnect grace 30 секунд,
+never-started lobby 15 минут, terminal result 10 минут, 5 минут после исчезновения всех connected и
+reserved controller identities и absolute room lifetime 12 часов. Самый ранний применимый closing
+deadline SHALL закрывать room. Fresh lobby SHALL использовать 15 минут до первого controller join;
+после того как хотя бы один controller был и все identities освобождены, SHALL действовать 5 минут.
+Gameplay/latency traffic, wave transition и rematch SHALL NOT продлевать fixed lobby/result/absolute
+deadlines. Disposal SHALL один раз остановить simulation, latency probes, wave timer и TTL timers и
+очистить journals/metadata.
 
 #### Scenario: Display не восстановился
 
@@ -133,5 +132,11 @@ Gameplay/latency traffic SHALL NOT продлевать fixed lobby/result/absol
 
 #### Scenario: Достигнут абсолютный lifetime
 
-- **WHEN** room существует 4 часа независимо от текущей phase и activity
-- **THEN** server закрывает room и освобождает все timers/state
+- **WHEN** room существует 12 часов независимо от текущей phase, wave и rematch activity
+- **THEN** server закрывает room с `room_lifetime_expired` и освобождает все timers/state
+
+#### Scenario: Rematch не продлевает hard cap
+
+- **WHEN** команда запускает новый run в той же комнате до absolute deadline
+- **THEN** wave 1 получает новый wave deadline, но исходный 12-часовой timestamp комнаты не меняется
+
