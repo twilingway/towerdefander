@@ -1,7 +1,7 @@
 # SpaceShip Defender — Game Design Document
 
 - Версия документа: 2026-08-24
-- Текущий сетевой контракт: protocol v13
+- Текущий сетевой контракт: protocol v14
 
 ## 1. Статусы и назначение документа
 
@@ -104,7 +104,7 @@ lobby
   → готовность 3/3
   → combat wave
   → уничтожены все wave-угрозы
-  → 10-секундная intermission и выбор role upgrade
+  → 30-секундная intermission и командное голосование за один paid role upgrade
   → следующая усиленная wave
   → HP корабля достигает 0 ИЛИ истекает server-authoritative deadline волны
   → result / defeat
@@ -117,6 +117,10 @@ intents. При переходе в result финальное состояние
 экрана.
 
 ## 6. Роли и управление
+
+Controller ориентирован на телефон в landscape: слева расположен круглый joystick роли, справа —
+круглая action-zone. Две зоны принимают разные touch pointer одновременно. В portrait сохраняется
+компактный fallback, а на компьютере — keyboard/mouse управление.
 
 ### 6.1. Pilot
 
@@ -284,17 +288,23 @@ result/rematch flow.
 - hostile bullets, missiles и asteroids наносят урон кораблю;
 - enemy ships пока не наносят contact damage;
 - оба friendly weapons могут повреждать enemy ships/asteroids и сбивать missiles;
-- score: enemy ship `25`, asteroid `10`, intercepted missile `5`;
+- score: enemy ship `25`, missile `5`, asteroid `10`; projectile kill и shield interception дают
+  одинаковую однократную награду;
 - при `HP=0` simulation замораживает финальное состояние и публикует `result/defeat`.
 
-Score сейчас является показателем результата run, а не валютой.
+Score является нетратимым показателем результата run. Общие credits экипажа начисляются отдельно:
+wave asteroid `1`, gunship `2`, missile carrier `4`; ambient asteroid и missile дают `0` credits,
+чтобы исключить бесконечный фарм.
 
 ## 12. Прогрессия между волнами
 
 ### Реализовано
 
-Intermission длится 10 секунд. Каждая роль получает три собственные карточки в случайном порядке и
-выбирает одну. Если участник не успел, сервер применяет первую карточку как fallback.
+Intermission длится 30 секунд. Общий offer содержит по одной deterministic card для pilot, gunner и
+shield; каждая стоит 5 credits. Все три role slots видят общий balance и могут менять свой голос до
+deadline. Побеждает максимум голосов, при ничьей — первая из проголосованных cards в опубликованном
+порядке. Без голосов либо при недостатке credits покупка пропускается. За одну волну применяется не
+более одного upgrade.
 
 | Роль   | Улучшение        |                 Эффект |
 | ------ | ---------------- | ---------------------: |
@@ -308,25 +318,15 @@ Intermission длится 10 секунд. Каждая роль получае�
 | Shield | Recharge         |                   +15% |
 | Shield | Arc width        |                   +10° |
 
-Выбор является server-authoritative и идемпотентным по `actionId`; повторная доставка команды не
-тратит ресурс и не применяет эффект дважды.
+Vote и resolution являются server-authoritative. `actionId` и monotonic revision защищают
+duplicate/out-of-order delivery; credits списываются атомарно только на deadline и modifier не может
+примениться дважды. Reconnect восстанавливает vote role slot, replacement может его изменить.
 
-### Целевая credits economy
+### Дальнейшее развитие экономики
 
-В будущем score и бесплатные interval upgrades могут быть дополнены либо частично заменены credits,
-зарабатываемыми за уничтожение целей. Покупки предполагаются прямо во время combat без остановки
-simulation.
-
-До реализации нужно определить:
-
-- источник credits, награды, caps и правила общего/личного владения;
-- цены и tiers для hull, shield, main cannon и machine gun;
-- idempotent purchase contract и поведение при duplicate/reconnect;
-- интерфейс покупки, не мешающий управлению ролью;
-- взаимодействие credits с бесплатными карточками между волнами;
-- ограничения, предотвращающие snowball и обязательный grind.
-
-Persistent meta-progression, аккаунты и долгосрочный inventory в текущую концепцию не входят.
+После проверки baseline можно отдельно проектировать tier prices, новые cards и покупки прямо во
+время combat. Persistent meta-progression, аккаунты, персональные кошельки и долгосрочный inventory
+в текущую концепцию не входят.
 
 ## 13. Lobby, reconnect и завершение комнаты
 
@@ -368,12 +368,12 @@ Read-only `/stats/rooms` показывает активные комнаты, p
 - React shell управляет lobby, HUD, overlays и room lifecycle;
 - Phaser рисует 2D-мир и интерполирует authoritative transforms между snapshot ticks;
 - fullscreen игровое поле занимает весь viewport;
-- HUD показывает wave, hull, shield, score, количество enemies/missiles и накопленные modifiers;
+- HUD показывает wave, hull, shield, score, credits, количество enemies/missiles и modifiers;
 - HUD показывает authoritative countdown до провала текущей волны;
 - heat/overheat носового пулемёта отображается в нижнем HUD;
 - круглый radar расположен снизу по центру над HUD;
 - ping display и controller roles отображается отдельно;
-- intermission overlay показывает countdown;
+- intermission overlay показывает countdown, три общие cards, цену и голоса role slots;
 - result overlay различает уничтожение корабля и истечение времени, показывает wave, score и
   готовность команды к rematch.
 
@@ -388,9 +388,11 @@ HUD и radar читают последний server snapshot и не предс�
 - touch, mouse и keyboard поддерживаются без отдельных приложений;
 - действия вне stick/button не меняют aim;
 - pointer cancel, blur и потеря вкладкой видимости нейтрализуют опасные удерживаемые команды;
-- controller показывает connection state, role, ready, ping, combat summary и личный upgrade offer;
+- controller показывает connection state, role, ready, ping, combat summary, score/credits и общий
+  team-upgrade offer;
 - все три controller показывают тот же authoritative countdown текущей волны, что и общий display;
-- только pilot видит MG heat/fire, только shield — energy/toggle, только gunner — main fire;
+- левый joystick управляет movement/aim, правая круглая зона — MG/main fire либо shield toggle;
+- только pilot видит MG heat, только shield — energy, только gunner — main cannon status;
 - reconnect восстанавливает identity и актуальный snapshot, но не восстанавливает старое нажатие или
   незавершённую angular target.
 
@@ -438,10 +440,11 @@ Audio пока не реализован. В будущем нужны:
 ### Реализовано
 
 - Node.js/Colyseus room `spaceship_defender` — единственный источник trusted state;
-- protocol v13 использует строгие versioned schemas и публикует wave countdown/defeat reason;
+- protocol v14 использует строгие schemas и публикует wave countdown, economy и team votes;
 - deterministic game-core работает fixed step `50 ms / 20 Hz`;
 - controllers отправляют intents с sequence, duplicate/out-of-order input игнорируется;
-- display получает полную combat projection, controllers — компактное состояние и личный offer;
+- display получает полную combat projection, controllers — компактное состояние; общий economy
+  offer/votes видят все клиенты;
 - simulation не зависит от Phaser, React, DOM, network, wall clock и unseeded randomness;
 - Phaser существует только в `apps/display`;
 - render smoothing не влияет на collision, damage или AI.
@@ -464,11 +467,12 @@ Audio пока не реализован. В будущем нужны:
 ### Реализовано
 
 - `pnpm demo:visible` запускает отдельный внешний Chrome, display и три SDK auto-controller;
-- auto-crew управляет всеми ролями, выбирает upgrades и проходит смену волн;
+- auto-crew управляет всеми ролями, голосует за team upgrade и проходит смену волн;
 - overlay показывает Render FPS, Snapshot Hz и Control Hz;
 - «Пауза автопилота» останавливает только автоматические controller intents; server simulation,
   враги и волны продолжают работать;
-- `pnpm demo:verify` проверяет movement, main cannon, MG, shield, intermission, upgrades и wave 2;
+- `pnpm demo:verify` проверяет movement, main cannon, MG, shield, intermission, team purchase и wave
+  2;
 - `/stats/rooms` служит операционной диагностикой комнат.
 
 Gameplay-путь demo покрыт автоматической проверкой. Lifecycle внешнего Chrome, включая аварийное
@@ -511,7 +515,7 @@ Gameplay-путь demo покрыт автоматической проверк�
 
 ## 21. Ближайшие продуктовые этапы
 
-1. Спроектировать credits и in-combat modernization.
+1. Провести balance pass общей credits economy и отдельно спроектировать in-combat modernization.
 2. Добавлять enemy archetypes по одному вместе с телеграфами, counterplay и balance tests.
 3. Определить elites, boss lifecycle и условие victory/конечного run.
 4. Выполнить deep-space background/art pass.
@@ -537,8 +541,7 @@ Gameplay-путь demo покрыт автоматической проверк�
 ## 23. Открытые продуктовые вопросы
 
 - Какой target duration и явное условие victory должен иметь основной run?
-- Credits общие для экипажа или принадлежат ролям?
-- Сохраняются ли бесплатные межволновые карточки после появления in-combat shop?
+- Как масштабировать credits rewards и price после первых игровых сессий?
 - Какие MG upgrades дают развитие пилоту без конкуренции с main gunner?
 - Как телеграфировать новые типы атак на общем display и controller?
 - Какой первый boss проверяет координацию всех трёх ролей, а не только DPS?

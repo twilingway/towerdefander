@@ -32,7 +32,7 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 - `apps/controller` — responsive role controllers;
 - `apps/server` — Colyseus room, validation, simulation, lifecycle и statistics;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — strict protocol v13 и shared schemas.
+- `packages/protocol` — strict protocol v14 и shared schemas.
 
 ## 3. Реализованный foundation
 
@@ -43,7 +43,7 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 - gunships, missile carriers, bullets, homing missiles и постоянный seeded-поток астероидов,
   входящих с разных сторон арены;
 - seeded spawn/RNG, swept collisions, HP, damage, score и defeat;
-- 200-tick interval и role-specific upgrade cards;
+- общий credits balance и 600-tick командное голосование за один paid role upgrade;
 - result, unanimous rematch, explicit exit/close, reconnect/replacement;
 - 20-минутный deadline каждой combat wave, timeout defeat, room TTL и защищённая read-only
   statistics page;
@@ -60,7 +60,7 @@ Source tree очищен от двух прежних product names и испо�
 - code vocabulary `Spaceship`/`spaceship`;
 - npm scope `@spaceship-defender/*`;
 - Colyseus room type `spaceship_defender`;
-- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v13;
+- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v14;
 - `SpaceshipDefenderRoom/State` и `SpaceshipSimulation*` API;
 - удаление unused classic defense core/assets/spec catalog entries;
 - обновление UI, tests, scripts, README, GDD, AGENTS и OpenSpec context.
@@ -78,19 +78,18 @@ rooms v9 не мигрируют: server/display/controllers обновляют�
   пересекают арену по случайным воспроизводимым траекториям;
 - display рисует круговую границу и маскирует игровую сетку, оставляя снаружи глубокий космос.
 
-## 6. Следующий gameplay change — credits и combat modernization
+## 6. Gameplay foundation — credits и team upgrades
 
-Нужно отдельно определить:
+- score остаётся нетратимым результатом run, credits принадлежат всему экипажу;
+- wave asteroid/gunship/missile carrier дают соответственно `1/2/4` credits, а ambient targets и
+  missiles не позволяют фармить валюту;
+- projectile kill и shield interception ракеты/астероида дают одинаковый однократный score reward;
+- между waves экипаж 30 секунд голосует за одну из cards pilot/gunner/shield стоимостью 5 credits;
+- protocol v14, revision и action journal защищают vote/reconnect/duplicate delivery;
+- balance, votes и итоговый modifier являются server-authoritative.
 
-- authoritative credits source/rewards и caps;
-- цены и upgrade catalog для hull/shield/weapons;
-- idempotent purchase command с `actionId`;
-- purchases во время combat без остановки simulation;
-- персональная или командная ownership model;
-- controller UI, feedback, duplicate/reconnect behavior;
-- взаимодействие с текущими interval upgrade cards.
-
-До принятия этих решений текущая версия честно остаётся на score + бесплатных interval upgrades.
+Покупки непосредственно во время combat, tier prices и persistent economy остаются отдельным будущим
+change после balance pass.
 
 ## 7. Следующий visual change — deep-space art pass
 
@@ -107,7 +106,7 @@ rooms v9 не мигрируют: server/display/controllers обновляют�
 
 ## 8. Дальнейшие этапы
 
-1. Спроектировать credits + in-combat modernization.
+1. Провести balance pass credits/rewards и спроектировать отдельную in-combat modernization.
 2. Добавить новые enemy archetypes, elites и bosses вместе с balance pass.
 3. Реализовать accepted 2D art/VFX/audio pipeline с Android TV budget.
 4. Добавить thin Capacitor Android TV shell, launcher, fullscreen, wake lock и lifecycle.
@@ -117,7 +116,7 @@ rooms v9 не мигрируют: server/display/controllers обновляют�
 Отдельная команда `pnpm demo:visible` показывает общий экран в headed Chrome и управляет тремя
 обычными controller connections. Harness не меняет protocol, balance или trusted state и служит для
 совместного визуального тестирования movement/fire/shield, смены волн и будущего проектирования NPC.
-`pnpm demo:verify` конечным сценарием проверяет бой, upgrade interval и переход к wave 2.
+`pnpm demo:verify` конечным сценарием проверяет бой, team-upgrade vote и переход к wave 2.
 
 ## 10. Definition of done для каждого change
 

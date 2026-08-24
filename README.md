@@ -13,20 +13,20 @@ state; клиенты отправляют только intents.
 
 ## Текущий gameplay
 
-- deterministic fixed-step simulation 20 Hz и protocol v13;
+- deterministic fixed-step simulation 20 Hz и protocol v14;
 - круглая server-authoritative арена `4400×4400`, радиус `2200`;
 - волны gunships и missile carriers, а также постоянный поток астероидов с разных сторон арены;
 - friendly/hostile projectiles и limited-turn homing missiles;
-- swept collisions, HP, damage, score и directional shield interception;
-- три role-owned upgrade cards между волнами;
+- swept collisions, HP, damage, score, общий credits balance и directional shield interception;
+- 30-секундное командное голосование за один платный role upgrade между волнами;
 - 20-минутный server-authoritative deadline каждой combat wave с отдельной причиной timeout defeat;
 - defeat, unanimous rematch в той же комнате, reconnect и replacement;
 - автоматические TTL комнат и read-only `/stats/rooms`;
 - Phaser primitives на display и responsive React controllers.
 
-Product north star — уничтожать нарастающие волны, зарабатывать credits и прямо во время боя
-модернизировать корпус, щиты и оружие. Credits economy и combat upgrade flow будут отдельным
-OpenSpec change: текущая версия пока использует score и бесплатный выбор между волнами.
+Product north star — уничтожать нарастающие волны, зарабатывать credits и модернизировать корпус,
+щиты и оружие. Первый economy slice использует общий кошелёк и одну командную покупку между волнами;
+покупки непосредственно во время combat остаются будущим расширением.
 
 ## Визуальное направление
 
@@ -44,7 +44,7 @@ apps/
   controller/    responsive browser controllers трёх ролей
   server/        authoritative Colyseus room, lifecycle и statistics
 packages/
-  protocol/      protocol v13 schemas и shared contracts
+  protocol/      protocol v14 schemas и shared contracts
   game-core/     pure deterministic simulation без DOM/network/timers
   config/        shared TypeScript configuration
 openspec/        current specs и change lifecycle
@@ -82,10 +82,10 @@ pnpm demo:visible
 
 Команда сначала собирает authoritative server, затем поднимает изолированные local services и
 открывает обычный Chrome. Три SDK-контроллера подключаются как pilot/gunner/shield, проходят бой,
-выбирают upgrades между волнами и продолжают следующие волны. В overlay доступны «Пауза автопилота»,
-«Продолжить» и Stop. Пауза останавливает только автоматические команды: серверная симуляция и враги
-продолжают работать. Stop или закрытие Chrome нейтрализует роли и завершает только процессы этой
-демонстрации.
+голосуют за общий upgrade между волнами и продолжают следующие волны. В overlay доступны «Пауза
+автопилота», «Продолжить» и Stop. Пауза останавливает только автоматические команды: серверная
+симуляция и враги продолжают работать. Stop или закрытие Chrome нейтрализует роли и завершает только
+процессы этой демонстрации.
 
 Конечная headless-проверка того же сценария запускается отдельно и не входит в `pnpm check`:
 
