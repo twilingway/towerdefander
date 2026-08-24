@@ -5,7 +5,8 @@ import {
   getKeyboardVector,
   getNextShieldDesiredActive,
   LatestInputScheduler,
-  normalizeControlVector
+  normalizeControlVector,
+  PointerCycle
 } from "./controlInput.js";
 
 describe("controller input", () => {
@@ -35,6 +36,37 @@ describe("controller input", () => {
     expect(getNextShieldDesiredActive(false, 100)).toBe(true);
     expect(getNextShieldDesiredActive(true, 100)).toBe(false);
     expect(getNextShieldDesiredActive(false, 0)).toBe(false);
+  });
+
+  it("lets the stick and action zone own independent pointer ids", () => {
+    const stick = new PointerCycle();
+    const action = new PointerCycle();
+
+    expect(stick.claim(1, 0)).toBe(true);
+    expect(action.claim(2, 0)).toBe(true);
+    expect(stick.owns(1)).toBe(true);
+    expect(action.owns(2)).toBe(true);
+    expect(action.complete(2)).toBe(true);
+    expect(stick.owns(1)).toBe(true);
+  });
+
+  it("ignores foreign pointers and safely cancels only the owned cycle", () => {
+    const cycle = new PointerCycle();
+
+    expect(cycle.claim(7, 0)).toBe(true);
+    expect(cycle.claim(8, 0)).toBe(false);
+    expect(cycle.complete(8)).toBe(false);
+    expect(cycle.cancel(8)).toBe(false);
+    expect(cycle.owns(7)).toBe(true);
+    expect(cycle.cancel(7)).toBe(true);
+    expect(cycle.current()).toBeUndefined();
+  });
+
+  it("rejects non-primary mouse buttons without relying on touch isPrimary", () => {
+    const cycle = new PointerCycle();
+
+    expect(cycle.claim(2, 1)).toBe(false);
+    expect(cycle.claim(2, 0)).toBe(true);
   });
 
   it("coalesces pointer flood and prioritizes latest release", () => {

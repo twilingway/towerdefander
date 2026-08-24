@@ -44,6 +44,38 @@ export function getNextShieldDesiredActive(currentDesired: boolean, energy: numb
   return next && energy <= 0 ? currentDesired : next;
 }
 
+export class PointerCycle {
+  private pointerId: number | undefined;
+
+  claim(pointerId: number, button: number): boolean {
+    if (button !== 0 || this.pointerId !== undefined) return false;
+    this.pointerId = pointerId;
+    return true;
+  }
+
+  owns(pointerId: number): boolean {
+    return this.pointerId === pointerId;
+  }
+
+  complete(pointerId: number): boolean {
+    if (!this.owns(pointerId)) return false;
+    this.pointerId = undefined;
+    return true;
+  }
+
+  cancel(pointerId?: number): boolean {
+    if (this.pointerId === undefined || (pointerId !== undefined && !this.owns(pointerId))) {
+      return false;
+    }
+    this.pointerId = undefined;
+    return true;
+  }
+
+  current(): number | undefined {
+    return this.pointerId;
+  }
+}
+
 export class LatestInputScheduler<T> {
   private current: T;
   private lastSentAt = Number.NEGATIVE_INFINITY;

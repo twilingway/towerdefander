@@ -326,15 +326,26 @@ button:disabled {
 
 .role-control {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
   gap: 1rem;
   place-items: center;
   touch-action: none;
   user-select: none;
 }
 
+.role-control[hidden] {
+  display: none;
+}
+
+.role-control > .phase-copy,
+.role-control > small {
+  grid-column: 1 / -1;
+}
+
 .virtual-stick {
   position: relative;
-  width: min(56vw, 12.5rem);
+  width: min(42vw, 12.5rem);
   border: 3px solid #52736c;
   border-radius: 50%;
   background: radial-gradient(circle, #1b3937 0 20%, #132827 22% 64%, #0d1d1e 66%);
@@ -379,10 +390,21 @@ button:disabled {
 }
 
 .hold-action {
-  width: 100%;
-  min-height: 5.5rem;
+  width: min(42vw, 12.5rem);
+  min-height: 0;
+  border: 3px solid rgb(255 255 255 / 28%);
+  border-radius: 50%;
   color: #10201f;
+  aspect-ratio: 1;
+  box-shadow:
+    inset 0 0 2.5rem rgb(0 0 0 / 20%),
+    0 0.8rem 2rem rgb(0 0 0 / 25%);
   touch-action: none;
+}
+
+.action-zone.is-pressed {
+  transform: scale(0.96);
+  filter: brightness(1.22);
 }
 
 .hold-action--gunner {
@@ -407,6 +429,7 @@ button:disabled {
   display: grid;
   width: 100%;
   gap: 0.65rem;
+  justify-items: center;
 }
 
 .mg-heat {
@@ -422,6 +445,7 @@ button:disabled {
   display: grid;
   width: 100%;
   gap: 0.65rem;
+  justify-items: center;
 }
 
 .shield-energy {
@@ -457,5 +481,83 @@ button:disabled {
   .role-badge,
   .play-card > .error-message {
     grid-column: 1 / -1;
+  }
+
+  .controller-shell--combat {
+    min-height: 100dvh;
+    padding: 0;
+    overflow: hidden;
+    place-items: stretch;
+  }
+
+  .card.play-card--combat {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    width: 100%;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    gap: 0.35rem 0.75rem;
+    padding: 0.45rem 0.75rem;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .play-card--combat > .status-row {
+    grid-column: 1;
+  }
+
+  .play-card--combat > .combat-summary {
+    grid-row: 1;
+    grid-column: 2;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .play-card--combat > h1,
+  .play-card--combat > .role-badge,
+  .play-card--combat > .error-message,
+  .play-card--combat .role-control > .phase-copy,
+  .play-card--combat .role-control > small {
+    display: none;
+  }
+
+  .play-card--combat > .role-control {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-height: 0;
+    gap: 0.5rem;
+  }
+
+  .play-card--combat .virtual-stick,
+  .play-card--combat .hold-action {
+    width: min(52dvh, 28vw, 12.5rem);
+  }
+
+  .play-card--combat .mg-control,
+  .play-card--combat .shield-control {
+    align-content: center;
+    width: min(100%, 18rem);
+    gap: 0.3rem;
+  }
+
+  .play-card--combat .mg-control strong,
+  .play-card--combat .shield-control strong {
+    font-size: 0.72rem;
+  }
+
+  .play-card--combat > .leave-room-button {
+    position: absolute;
+    bottom: 0.35rem;
+    left: 50%;
+    z-index: 5;
+    width: min(9rem, 22vw);
+    min-height: 2rem;
+    margin: 0;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.68rem;
+    transform: translateX(-50%);
   }
 }

@@ -1,19 +1,35 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { normalizeControlVector, type ControlVector } from "./controlInput.js";
+import { normalizeControlVector, PointerCycle, type ControlVector } from "./controlInput.js";
 
 interface VirtualStickProps {
   readonly label: string;
   readonly onChange: (vector: ControlVector) => void;
   readonly onRelease?: () => void;
   readonly onCancel?: () => void;
+  readonly enabled?: boolean;
+  readonly resetKey?: string;
 }
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
 
-export function VirtualStick({ label, onChange, onRelease, onCancel }: VirtualStickProps) {
+export function VirtualStick({
+  label,
+  onChange,
+  onRelease,
+  onCancel,
+  enabled = true,
+  resetKey = ""
+}: VirtualStickProps) {
   const hostReference = useRef<HTMLDivElement>(null);
-  const pointerReference = useRef<number | undefined>(undefined);
+  const pointerCycleReference = useRef<PointerCycle>(undefined);
+  const pointerCycle = (pointerCycleReference.current ??= new PointerCycle());
+  const onChangeReference = useRef(onChange);
+  const onReleaseReference = useRef(onRelease);
+  const onCancelReference = useRef(onCancel);
+  onChangeReference.current = onChange;
+  onReleaseReference.current = onRelease;
+  onCancelReference.current = onCancel;
   const [vector, setVector] = useState<ControlVector>(NEUTRAL);
 
   function applyPointer(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -28,23 +44,51 @@ export function VirtualStick({ label, onChange, onRelease, onCancel }: VirtualSt
       y: (event.clientY - (bounds.top + bounds.height / 2)) / radius
     });
     setVector(next);
-    onChange(next);
+    onChangeReference.current(next);
   }
 
   function release(event?: ReactPointerEvent<HTMLDivElement>, cancelled = false): void {
-    if (event !== undefined && pointerReference.current !== event.pointerId) {
-      return;
-    }
-    pointerReference.current = undefined;
+    const released =
+      event === undefined
+        ? pointerCycle.cancel()
+        : cancelled
+          ? pointerCycle.cancel(event.pointerId)
+          : pointerCycle.complete(event.pointerId);
+    if (!released) return;
     setVector(NEUTRAL);
     if (cancelled) {
-      (onCancel ?? onRelease)?.();
-    } else if (onRelease !== undefined) {
-      onRelease();
+      (onCancelReference.current ?? onReleaseReference.current)?.();
+    } else if (onReleaseReference.current !== undefined) {
+      onReleaseReference.current();
     } else {
-      onChange(NEUTRAL);
+      onChangeReference.current(NEUTRAL);
     }
   }
+
+  useEffect(() => {
+    function cancelPointer(): void {
+      const pointerId = pointerCycle.current();
+      if (pointerId === undefined) return;
+      const host = hostReference.current;
+      if (host?.hasPointerCapture(pointerId) === true) host.releasePointerCapture(pointerId);
+      if (!pointerCycle.cancel(pointerId)) return;
+      setVector(NEUTRAL);
+      (onCancelReference.current ?? onReleaseReference.current)?.();
+    }
+
+    function onVisibilityChange(): void {
+      if (document.visibilityState === "hidden") cancelPointer();
+    }
+
+    if (!enabled) cancelPointer();
+    window.addEventListener("blur", cancelPointer);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("blur", cancelPointer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      cancelPointer();
+    };
+  }, [enabled, resetKey]);
 
   return (
     <div
@@ -53,14 +97,16 @@ export function VirtualStick({ label, onChange, onRelease, onCancel }: VirtualSt
       role="application"
       aria-label={label}
       data-testid="virtual-stick"
+      aria-disabled={!enabled}
       onPointerDown={(event) => {
-        if (!event.isPrimary || event.button !== 0) return;
-        pointerReference.current = event.pointerId;
+        if (!enabled || !pointerCycle.claim(event.pointerId, event.button)) {
+          return;
+        }
         event.currentTarget.setPointerCapture(event.pointerId);
         applyPointer(event);
       }}
       onPointerMove={(event) => {
-        if (pointerReference.current === event.pointerId) {
+        if (pointerCycle.owns(event.pointerId)) {
           applyPointer(event);
         }
       }}
@@ -70,10 +116,8 @@ export function VirtualStick({ label, onChange, onRelease, onCancel }: VirtualSt
       onPointerCancel={(event) => {
         release(event, true);
       }}
-      onLostPointerCapture={() => {
-        if (pointerReference.current !== undefined) {
-          release(undefined, true);
-        }
+      onLostPointerCapture={(event) => {
+        release(event, true);
       }}
     >
       <span

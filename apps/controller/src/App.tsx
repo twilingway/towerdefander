@@ -43,6 +43,7 @@ import {
 } from "./roomView.js";
 import { VirtualStick } from "./VirtualStick.js";
 import { WaveCountdown } from "./WaveCountdown.js";
+import { ActionZone } from "./ActionZone.js";
 
 type ControllerRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "join" | "joining" | "connected" | "reconnecting" | "disconnected";
@@ -337,8 +338,12 @@ export function ControllerApp() {
   }
 
   return (
-    <main className="controller-shell">
-      <section className="card play-card">
+    <main
+      className={`controller-shell${view?.game?.encounter.phase === "combat" ? " controller-shell--combat" : ""}`}
+    >
+      <section
+        className={`card play-card${view?.game?.encounter.phase === "combat" ? " play-card--combat" : ""}`}
+      >
         <div className="status-row">
           <span className="eyebrow">Комната {view?.roomId ?? roomCode}</span>
           <span className="network-status">
@@ -655,7 +660,6 @@ function RoleControlPanel({
   const firePressedAtReference = useRef<number | undefined>(undefined);
   const fireReleaseTimerReference = useRef<number | undefined>(undefined);
   const aimReleaseTimerReference = useRef<number | undefined>(undefined);
-  const firePointerReference = useRef<number | undefined>(undefined);
   const shieldSnapshotReference = useRef(shield);
   const shieldDesiredActiveReference = useRef(shield?.active ?? false);
   const previousShieldActiveReference = useRef(shield?.active ?? false);
@@ -744,7 +748,6 @@ function RoleControlPanel({
 
   function cancelFire(): void {
     firePressedAtReference.current = undefined;
-    firePointerReference.current = undefined;
     clearFireReleaseTimer();
     setFireDesired(false);
   }
@@ -819,7 +822,6 @@ function RoleControlPanel({
     document.addEventListener("visibilitychange", neutralize);
     return () => {
       controlReference.current = NEUTRAL_CONTROL;
-      firePointerReference.current = undefined;
       clearAimReleaseTimer();
       clearFireReleaseTimer();
       scheduler?.update(NEUTRAL_CONTROL, performance.now());
@@ -837,7 +839,6 @@ function RoleControlPanel({
     const scheduler = schedulerReference.current;
     controlReference.current = NEUTRAL_CONTROL;
     shieldDesiredActiveReference.current = false;
-    firePointerReference.current = undefined;
     clearAimReleaseTimer();
     clearFireReleaseTimer();
     const now = performance.now();
@@ -869,6 +870,8 @@ function RoleControlPanel({
         onChange={updateAim}
         onRelease={releaseAim}
         onCancel={cancelAim}
+        enabled={controlsEnabled}
+        resetKey={generation}
       />
       {role === "pilot" && (
         <div className="mg-control">
@@ -884,67 +887,31 @@ function RoleControlPanel({
               </strong>
             </>
           )}
-          <button
-            type="button"
-            className={`hold-action hold-action--pilot${machineGun?.overheated ? " is-overheated" : ""}`}
-            data-testid="mg-fire-button"
+          <ActionZone
+            label={machineGun?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ИЗ НОСА"}
+            testId="mg-fire-button"
+            className={`hold-action--pilot${machineGun?.overheated ? " is-overheated" : ""}`}
             disabled={!controlsEnabled}
-            onPointerDown={(event) => {
-              if (!event.isPrimary || event.button !== 0) return;
-              firePointerReference.current = event.pointerId;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              beginFire();
-            }}
-            onPointerUp={(event) => {
-              if (firePointerReference.current !== event.pointerId) return;
-              firePointerReference.current = undefined;
-              endFire();
-            }}
-            onPointerCancel={(event) => {
-              if (firePointerReference.current !== event.pointerId) return;
-              firePointerReference.current = undefined;
-              cancelFire();
-            }}
-            onLostPointerCapture={(event) => {
-              if (firePointerReference.current !== event.pointerId) return;
-              firePointerReference.current = undefined;
-              cancelFire();
-            }}
-          >
-            {machineGun?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ИЗ НОСА"}
-          </button>
+            mode="hold"
+            resetKey={generation}
+            onBegin={beginFire}
+            onEnd={endFire}
+            onCancel={cancelFire}
+          />
         </div>
       )}
       {role === "gunner" && (
-        <button
-          type="button"
-          className="hold-action hold-action--gunner"
-          data-testid="fire-button"
+        <ActionZone
+          label="УДЕРЖИВАТЬ ОГОНЬ"
+          testId="fire-button"
+          className="hold-action--gunner"
           disabled={!controlsEnabled}
-          onPointerDown={(event) => {
-            if (!event.isPrimary || event.button !== 0) return;
-            firePointerReference.current = event.pointerId;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            beginFire();
-          }}
-          onPointerUp={(event) => {
-            if (firePointerReference.current !== event.pointerId) return;
-            firePointerReference.current = undefined;
-            endFire();
-          }}
-          onPointerCancel={(event) => {
-            if (firePointerReference.current !== event.pointerId) return;
-            firePointerReference.current = undefined;
-            cancelFire();
-          }}
-          onLostPointerCapture={(event) => {
-            if (firePointerReference.current !== event.pointerId) return;
-            firePointerReference.current = undefined;
-            cancelFire();
-          }}
-        >
-          УДЕРЖИВАТЬ ОГОНЬ
-        </button>
+          mode="hold"
+          resetKey={generation}
+          onBegin={beginFire}
+          onEnd={endFire}
+          onCancel={cancelFire}
+        />
       )}
       {role === "shield" && shield !== undefined && (
         <div className="shield-control">
@@ -954,20 +921,22 @@ function RoleControlPanel({
           <strong>
             Энергия {Math.round(shield.energy)} / {Math.round(shield.capacity)}
           </strong>
-          <button
-            type="button"
-            className="hold-action hold-action--shield"
-            data-testid="shield-button"
-            aria-pressed={shield.active}
+          <ActionZone
+            label={
+              shield.active
+                ? "ВЫКЛЮЧИТЬ ЩИТ"
+                : shield.energy <= 0
+                  ? "ЩИТ ВОССТАНАВЛИВАЕТСЯ"
+                  : "ВКЛЮЧИТЬ ЩИТ"
+            }
+            testId="shield-button"
+            className="hold-action--shield"
             disabled={!controlsEnabled || (!shield.active && shield.energy <= 0)}
-            onClick={toggleShield}
-          >
-            {shield.active
-              ? "ВЫКЛЮЧИТЬ ЩИТ"
-              : shield.energy <= 0
-                ? "ЩИТ ВОССТАНАВЛИВАЕТСЯ"
-                : "ВКЛЮЧИТЬ ЩИТ"}
-          </button>
+            mode="toggle"
+            active={shield.active}
+            resetKey={generation}
+            onToggle={toggleShield}
+          />
         </div>
       )}
       <small>
