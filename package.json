@@ -9,7 +9,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @spaceship-defender/server --filter @spaceship-defender/display --filter @spaceship-defender/controller dev",
+    "dev": "pnpm --parallel --filter @spaceship-defender/server --filter @spaceship-defender/display --filter @spaceship-defender/controller --filter @spaceship-defender/admin dev",
     "build": "pnpm -r build",
     "benchmark:combat": "pnpm --filter @spaceship-defender/server benchmark:combat",
     "demo:visible": "node scripts/run-visible-demo.mjs",
