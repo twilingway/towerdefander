@@ -200,6 +200,84 @@ describe("deterministic combat foundation", () => {
     );
   });
 
+  it("spawns a boss only on configured boss waves", () => {
+    const config = createSpaceshipSimulationConfig();
+    const bossInterval = config.waveCampaign.director.bossWaveInterval;
+    expect(bossInterval).toBe(5);
+    expect(config.enemyArchetypes.boss.unlockWave).toBe(10);
+    for (const wave of [1, 5, 9, 11, 12]) {
+      expect(createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "boss")).toBe(false);
+    }
+    for (const wave of [10, 15, 20]) {
+      expect(createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "boss")).toBe(true);
+    }
+  });
+
+  it("never picks a boss as ordinary director filler", () => {
+    const config = createSpaceshipSimulationConfig({
+      waveCampaign: {
+        ...createSpaceshipSimulationConfig().waveCampaign,
+        director: {
+          ...createSpaceshipSimulationConfig().waveCampaign.director,
+          bossWaveInterval: null
+        }
+      }
+    });
+    for (let wave = 1; wave <= 30; wave += 1) {
+      expect(createWavePlan(config, 77, wave).plan.some(({ kind }) => kind === "boss")).toBe(false);
+    }
+  });
+
+  it("fires a boss burst on one cooldown and respects the missile cap", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 100_000 });
+    const boss = config.enemyArchetypes.boss;
+    const initial = createSpaceshipSimulationState(config, 31);
+    const bossEnemy: CombatEnemyState = {
+      id: "boss-1",
+      spawnSequence: 1,
+      kind: "boss",
+      previousX: initial.spaceship.x + boss.preferredDistance,
+      previousY: initial.spaceship.y,
+      x: initial.spaceship.x + boss.preferredDistance,
+      y: initial.spaceship.y,
+      velocity: { x: 0, y: 0 },
+      heading: 0,
+      radius: boss.radius,
+      spawnedTick: 0,
+      hp: boss.hp,
+      maxHp: boss.hp,
+      attackCooldownTicks: 0
+    };
+    const stepped = advanceSpaceshipSimulation(
+      { ...initial, pendingSpawns: [], enemies: [bossEnemy] },
+      config
+    );
+    expect(stepped.homingMissiles).toHaveLength(boss.weapon.burstCount);
+    const headings = stepped.homingMissiles.map(({ heading }) => heading);
+    expect(new Set(headings).size).toBe(boss.weapon.burstCount);
+    expect(stepped.enemies[0]?.attackCooldownTicks).toBe(boss.weapon.cooldownTicks);
+
+    const nearCap = advanceSpaceshipSimulation(
+      {
+        ...initial,
+        pendingSpawns: [],
+        enemies: [bossEnemy],
+        homingMissiles: Array.from({ length: config.caps.homingMissiles - 1 }, (_, index) => ({
+          ...missileFromWeapon(boss.weapon),
+          id: `filler-${String(index)}`,
+          spawnSequence: 100 + index,
+          previousX: 100,
+          previousY: 100,
+          x: 100,
+          y: 100
+        }))
+      },
+      config
+    );
+    expect(nearCap.homingMissiles.length).toBeLessThanOrEqual(config.caps.homingMissiles);
+    expect(nearCap.enemies[0]?.attackCooldownTicks).toBe(boss.weapon.cooldownTicks);
+  });
+
   it("produces the same combat snapshot from the same seed and input trace", () => {
     const config = createSpaceshipSimulationConfig();
     const run = () => {

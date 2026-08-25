@@ -178,7 +178,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       hpMultiplierCap: 8,
       tempoGrowth: 0.05,
       tempoMultiplierCap: 3,
-      bossWaveInterval: null
+      bossWaveInterval: 5
     }
   },
   enemyArchetypes: {
@@ -227,6 +227,75 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       unlockWave: 3,
       scoreReward: 25,
       creditReward: 4
+    },
+    sniper: {
+      hp: 70,
+      radius: 30,
+      speedPerSecond: 70,
+      preferredDistance: 1400,
+      weapon: {
+        kind: "bullet",
+        cooldownTicks: 100,
+        damage: 35,
+        shieldHitCost: 10,
+        projectileRadius: 9,
+        projectileSpeedPerSecond: 900,
+        projectileLifetimeTicks: 120,
+        turnRatePerSecond: Math.PI / 2,
+        burstCount: 1,
+        burstSpreadRadians: 0
+      },
+      spawnPolicy: "standard",
+      spawnCost: 3,
+      unlockWave: 5,
+      scoreReward: 30,
+      creditReward: 3
+    },
+    interceptor: {
+      hp: 22,
+      radius: 18,
+      speedPerSecond: 260,
+      preferredDistance: 320,
+      weapon: {
+        kind: "bullet",
+        cooldownTicks: 12,
+        damage: 4,
+        shieldHitCost: 2,
+        projectileRadius: 5,
+        projectileSpeedPerSecond: 520,
+        projectileLifetimeTicks: 90,
+        turnRatePerSecond: Math.PI / 2,
+        burstCount: 1,
+        burstSpreadRadians: 0
+      },
+      spawnPolicy: "standard",
+      spawnCost: 1,
+      unlockWave: 1,
+      scoreReward: 12,
+      creditReward: 1
+    },
+    boss: {
+      hp: 900,
+      radius: 90,
+      speedPerSecond: 60,
+      preferredDistance: 700,
+      weapon: {
+        kind: "missile",
+        cooldownTicks: 60,
+        damage: 30,
+        shieldHitCost: 12,
+        projectileRadius: 14,
+        projectileSpeedPerSecond: 240,
+        projectileLifetimeTicks: 300,
+        turnRatePerSecond: Math.PI / 2,
+        burstCount: 3,
+        burstSpreadRadians: Math.PI / 6
+      },
+      spawnPolicy: "boss",
+      spawnCost: 20,
+      unlockWave: 10,
+      scoreReward: 250,
+      creditReward: 30
     }
   },
   asteroidHp: 65,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const PROTOCOL_VERSION = 14 as const;
+export const PROTOCOL_VERSION = 15 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -9,7 +9,7 @@ export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
 export const DEFEAT_REASONS = ["spaceship_destroyed", "wave_timeout"] as const;
 export const WAVE_TTL_SECONDS = 20 * 60;
 export const MAX_WAVE_TTL_SECONDS = 24 * 60 * 60;
-export const ENEMY_KINDS = ["gunship", "missileCarrier"] as const;
+export const ENEMY_KINDS = ["gunship", "missileCarrier", "sniper", "interceptor", "boss"] as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
 export const ROOM_CLOSING_REASONS = [
   "display_left",

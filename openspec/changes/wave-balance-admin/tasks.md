@@ -24,12 +24,12 @@
 
 ## 3. Три новых типа врагов
 
-- [ ] 3.1 Добавить `sniper`, `interceptor`, `boss` в `EnemyKind` и `ENEMY_KINDS` с baseline-числами
+- [x] 3.1 Добавить `sniper`, `interceptor`, `boss` в `EnemyKind` и `ENEMY_KINDS` с baseline-числами
       архетипов, поднять `PROTOCOL_VERSION` до 15; проверить тесты protocol и game-core.
-- [ ] 3.2 Реализовать залповый огонь по `burstCount`/`burstSpreadRadians` в пределах caps и
+- [x] 3.2 Реализовать залповый огонь по `burstCount`/`burstSpreadRadians` в пределах caps и
       `bossWaveInterval` в директоре; покрыть тестами один cooldown на залп, отсутствие burst сразу
       после освобождения cap и появление boss на настроенной волне.
-- [ ] 3.3 Прогнать `pnpm benchmark:combat` и зафиксировать время шага против reference; при просадке
+- [x] 3.3 Прогнать `pnpm benchmark:combat` и зафиксировать время шага против reference; при просадке
       скорректировать `spawnCost` boss и sniper, не трогая caps.
 
 ## 4. Схемы баланса в protocol

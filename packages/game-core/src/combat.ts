@@ -9,7 +9,7 @@ export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
 export type DefeatReason = "spaceship_destroyed" | "wave_timeout";
 export type GameplayRole = "pilot" | "gunner" | "shield";
-export const ENEMY_KINDS = ["gunship", "missileCarrier"] as const;
+export const ENEMY_KINDS = ["gunship", "missileCarrier", "sniper", "interceptor", "boss"] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 export type SpawnKind = EnemyKind | "asteroid";
 

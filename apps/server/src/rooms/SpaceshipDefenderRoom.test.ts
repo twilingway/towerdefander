@@ -22,7 +22,7 @@ import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
-const LEGACY_PROTOCOL_VERSION = 13;
+const LEGACY_PROTOCOL_VERSION = 14;
 
 interface TestClient {
   readonly client: Client;
@@ -181,8 +181,8 @@ function voteUpgrade(
   void role;
 }
 
-describe("SpaceshipDefenderRoom v14 lifecycle", () => {
-  it("accepts only strict protocol v14 display create options and rejects v13 before mutation", () => {
+describe("SpaceshipDefenderRoom v15 lifecycle", () => {
+  it("accepts only strict protocol v15 display create options and rejects v14 before mutation", () => {
     const room = new SpaceshipDefenderRoom();
     room.roomId = "ROOM123";
     expect(() => {
@@ -815,7 +815,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v14 combat projection and upgrades", () => {
+describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
   it("keeps the explicit run seed private and publishes the combat summary", () => {
     const { room } = startGame();
 
@@ -1306,7 +1306,7 @@ describe("SpaceshipDefenderRoom v14 combat projection and upgrades", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v14 rematch isolation", () => {
+describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
   it("rejects stale ready, input and upgrade before per-run mutation", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
@@ -1450,7 +1450,7 @@ describe("SpaceshipDefenderRoom v14 rematch isolation", () => {
   });
 });
 
-describe("SpaceshipDefenderRoom v14 disposal and operations metadata", () => {
+describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
   it("closes the whole room only when the display leaves explicitly", async () => {
     const room = createRoom();
     const display = joinDisplay(room);
