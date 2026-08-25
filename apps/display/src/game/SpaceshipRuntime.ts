@@ -42,6 +42,7 @@ type CombatEntity =
 
 interface CombatVisual {
   readonly object: Phaser.GameObjects.Container;
+  readonly healthBar: Phaser.GameObjects.Graphics | undefined;
   position: PointTransition;
   angle: AngleTransition;
 }
@@ -139,6 +140,8 @@ class SpaceshipScene extends Phaser.Scene {
       const position = interpolateTransition(visual.position, now);
       visual.object.setPosition(position.x, position.y);
       visual.object.rotation = interpolateAngleTransition(visual.angle, now);
+      // Keep the bar level while the hull it belongs to turns.
+      if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }
   }
 
@@ -309,10 +312,12 @@ class SpaceshipScene extends Phaser.Scene {
       const heading = getEntityHeading(entity);
       const visual = this.combatVisuals.get(entityId);
       if (visual === undefined) {
-        const object = this.createCombatVisual(entity).setPosition(entity.x, entity.y);
-        object.rotation = heading;
+        const created = this.createCombatVisual(entity);
+        created.object.setPosition(entity.x, entity.y);
+        created.object.rotation = heading;
         this.combatVisuals.set(entityId, {
-          object,
+          object: created.object,
+          healthBar: created.healthBar,
           position: createPointTransition(entity, entity, now),
           angle: createAngleTransition(heading, heading, now)
         });
@@ -322,26 +327,31 @@ class SpaceshipScene extends Phaser.Scene {
         if (snap) visual.object.setPosition(entity.x, entity.y).setRotation(heading);
         visual.position = createPointTransition(fromPoint, entity, now);
         visual.angle = createAngleTransition(fromHeading, heading, now);
+        if (visual.healthBar !== undefined && entity.visualKind === "enemy") {
+          drawEnemyHealthBar(visual.healthBar, entity);
+        }
       }
     }
   }
 
-  private createCombatVisual(entity: CombatEntity): Phaser.GameObjects.Container {
+  private createCombatVisual(entity: CombatEntity): {
+    readonly object: Phaser.GameObjects.Container;
+    readonly healthBar: Phaser.GameObjects.Graphics | undefined;
+  } {
     const container = this.add.container(entity.x, entity.y).setDepth(getEntityDepth(entity));
+    let healthBar: Phaser.GameObjects.Graphics | undefined;
     if (entity.visualKind === "enemy") {
+      const visual = ENEMY_VISUALS[entity.kind];
       const body = this.add.graphics();
-      const color = getEnemyColor(entity.kind);
-      body.fillStyle(color, 1);
-      body.lineStyle(3, 0xffd1b0, 0.8);
-      if (entity.kind === "gunship") {
-        body.fillTriangle(24, 0, -18, -15, -18, 15);
-        body.strokeTriangle(24, 0, -18, -15, -18, 15);
-      } else {
-        body.fillRoundedRect(-25, -17, 50, 34, 8);
-        body.strokeRoundedRect(-25, -17, 50, 34, 8);
-        body.fillTriangle(31, 0, 14, -11, 14, 11);
-      }
+      body.fillStyle(visual.color, 1);
+      body.lineStyle(3, visual.outline, 0.8);
+      visual.draw(body, entity.radius);
       container.add(body);
+      if (visual.showHealthBar) {
+        healthBar = this.add.graphics();
+        drawEnemyHealthBar(healthBar, entity);
+        container.add(healthBar);
+      }
     } else if (entity.visualKind === "asteroid") {
       const rock = this.add.circle(0, 0, entity.radius, 0x766f77, 1).setStrokeStyle(4, 0xbba9a2);
       const crater = this.add.circle(
@@ -373,7 +383,7 @@ class SpaceshipScene extends Phaser.Scene {
         .setStrokeStyle(2, style.stroke);
       container.add(bullet);
     }
-    return container;
+    return { object: container, healthBar };
   }
 }
 
@@ -393,8 +403,121 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
   ];
 }
 
-function getEnemyColor(kind: EnemyKind): number {
-  return kind === "gunship" ? 0xe65f4b : 0xaa5bd6;
+interface EnemyVisual {
+  readonly color: number;
+  readonly outline: number;
+  readonly showHealthBar: boolean;
+  draw(body: Phaser.GameObjects.Graphics, radius: number): void;
+}
+
+/** Complete over EnemyKind, so a new kind fails to compile instead of borrowing another silhouette. */
+export const ENEMY_VISUALS: Record<EnemyKind, EnemyVisual> = {
+  gunship: {
+    color: 0xe65f4b,
+    outline: 0xffd1b0,
+    showHealthBar: false,
+    draw(body, radius) {
+      const nose = radius * 0.86;
+      const tail = radius * 0.64;
+      const span = radius * 0.54;
+      body.fillTriangle(nose, 0, -tail, -span, -tail, span);
+      body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
+    }
+  },
+  missileCarrier: {
+    color: 0xaa5bd6,
+    outline: 0xffd1b0,
+    showHealthBar: false,
+    draw(body, radius) {
+      const halfWidth = radius * 0.66;
+      const halfHeight = radius * 0.45;
+      body.fillRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
+      body.strokeRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
+      body.fillTriangle(
+        radius * 0.82,
+        0,
+        halfWidth * 0.56,
+        -radius * 0.29,
+        halfWidth * 0.56,
+        radius * 0.29
+      );
+    }
+  },
+  sniper: {
+    color: 0x4bb1e6,
+    outline: 0xd6f0ff,
+    showHealthBar: false,
+    draw(body, radius) {
+      const nose = radius * 1.25;
+      const tail = radius * 0.7;
+      const span = radius * 0.38;
+      const points = [
+        new Phaser.Math.Vector2(nose, 0),
+        new Phaser.Math.Vector2(0, -span),
+        new Phaser.Math.Vector2(-tail, 0),
+        new Phaser.Math.Vector2(0, span)
+      ];
+      body.fillPoints(points, true);
+      body.strokePoints(points, true);
+    }
+  },
+  interceptor: {
+    color: 0xf2c14b,
+    outline: 0xfff0c2,
+    showHealthBar: false,
+    draw(body, radius) {
+      const nose = radius * 1.1;
+      const tail = radius * 0.75;
+      const span = radius * 0.85;
+      body.fillTriangle(nose, 0, -tail, -span, -tail, span);
+      body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
+      body.fillTriangle(-tail * 0.2, 0, -tail, -span * 0.35, -tail, span * 0.35);
+    }
+  },
+  boss: {
+    color: 0x8f2f4d,
+    outline: 0xffb0c8,
+    showHealthBar: true,
+    draw(body, radius) {
+      const points = Array.from({ length: 6 }, (_, index) => {
+        const angle = (index / 6) * Math.PI * 2;
+        return new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
+      });
+      body.fillPoints(points, true);
+      body.strokePoints(points, true);
+      body.lineStyle(3, 0xffe08a, 0.9);
+      body.strokeCircle(0, 0, radius * 0.48);
+      body.fillStyle(0xffe08a, 0.85);
+      body.fillTriangle(
+        radius * 0.95,
+        0,
+        radius * 0.3,
+        -radius * 0.28,
+        radius * 0.3,
+        radius * 0.28
+      );
+    }
+  }
+};
+
+const HEALTH_BAR_BACKGROUND = 0x2a0d16;
+const HEALTH_BAR_FILL = 0xff5f7a;
+
+export function drawEnemyHealthBar(
+  bar: Phaser.GameObjects.Graphics,
+  entity: PublicEnemyView
+): void {
+  const width = entity.radius * 1.8;
+  const height = Math.max(5, entity.radius * 0.12);
+  const top = -entity.radius - height * 2.4;
+  const ratio = Math.max(0, Math.min(1, entity.hp / entity.maxHp));
+  bar.clear();
+  bar.fillStyle(HEALTH_BAR_BACKGROUND, 0.85);
+  bar.fillRect(-width / 2, top, width, height);
+  bar.fillStyle(HEALTH_BAR_FILL, 1);
+  bar.fillRect(-width / 2, top, width * ratio, height);
+  bar.lineStyle(2, 0xffd1b0, 0.7);
+  bar.strokeRect(-width / 2, top, width, height);
 }
 
 function getProjectileStyle(entity: PublicProjectileView): { fill: number; stroke: number } {
