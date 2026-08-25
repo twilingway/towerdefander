@@ -316,32 +316,46 @@ button:disabled {
   display: none;
 }
 
-/* The stick and the action button always share the first row; the heat and
-   shield readouts get a row of their own below, and in combat they leave the
-   flow entirely — so every role puts both circles where the gunner's are. */
+/* Combat controls are a full-screen touch layer on every device and
+   orientation: the movement stick sits in the bottom-left thumb arc, the
+   primary action mirrors it bottom-right, and both stay clear of the screen
+   edge — the layout touch-control guides converge on. The circles are placed
+   against this layer, not against each other, so a readout can never move one.
+   `--control-gutter` starts at the 24dp Samsung One UI asks for on rounded
+   screens and grows with the viewport; `--control-size` keeps the circles
+   thumb-sized on a small phone and caps them on a tablet. */
 .role-control {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: 100%;
-  gap: 1rem;
-  align-content: start;
-  place-items: start center;
+  --control-gutter: clamp(0.75rem, 3vmin, 1.5rem);
+  --control-inset-bottom: max(var(--control-gutter), env(safe-area-inset-bottom));
+  --control-size: clamp(6.5rem, min(38vmin, 42dvh), 12.5rem);
+  --stick-travel: calc(var(--control-size) * 0.27);
+
+  position: absolute;
+  inset: 0;
   touch-action: none;
   user-select: none;
+  /* The layer spans the whole card, so it would swallow taps meant for the
+     status row and its exit button; only the controls themselves take input. */
+  pointer-events: none;
 }
 
 .role-control[hidden] {
   display: none;
 }
 
+/* Both hints belong to a scrolling page; the touch layer has no room for
+   them. */
 .role-control > .phase-copy,
 .role-control > small {
-  grid-column: 1 / -1;
+  display: none;
 }
 
 .virtual-stick {
-  position: relative;
-  width: min(42vw, 12.5rem);
+  position: absolute;
+  bottom: var(--control-inset-bottom);
+  left: max(var(--control-gutter), env(safe-area-inset-left));
+  width: var(--control-size);
+  pointer-events: auto;
   border: 3px solid #52736c;
   border-radius: 50%;
   background: radial-gradient(circle, #1b3937 0 20%, #132827 22% 64%, #0d1d1e 66%);
@@ -376,7 +390,7 @@ button:disabled {
   top: 50%;
   left: 50%;
   z-index: 2;
-  width: 4.25rem;
+  width: calc(var(--control-size) * 0.34);
   border: 4px solid #dff8ed;
   border-radius: 50%;
   background: #48a98d;
@@ -386,8 +400,12 @@ button:disabled {
 }
 
 .hold-action {
-  width: min(42vw, 12.5rem);
+  position: absolute;
+  right: max(var(--control-gutter), env(safe-area-inset-right));
+  bottom: var(--control-inset-bottom);
+  width: var(--control-size);
   min-height: 0;
+  pointer-events: auto;
   border: 3px solid rgb(255 255 255 / 28%);
   border-radius: 50%;
   color: #10201f;
@@ -421,14 +439,19 @@ button:disabled {
   filter: saturate(0.4) brightness(0.75);
 }
 
-/* Its own grid row under the stick and the action button, so heat and shield
-   energy never shift either circle. */
+/* Directly above the action button it belongs to — the button owns the corner,
+   and the readout must not eat into either thumb arc. */
 .control-readout {
+  position: absolute;
+  right: max(var(--control-gutter), env(safe-area-inset-right));
+  bottom: calc(var(--control-inset-bottom) + var(--control-size) + 0.4rem);
   display: grid;
-  grid-column: 1 / -1;
-  justify-self: center;
-  width: min(100%, 18rem);
-  gap: 0.35rem;
+  width: var(--control-size);
+  gap: 0.2rem;
+}
+
+.control-readout strong {
+  font-size: 0.72rem;
 }
 
 .mg-heat {
@@ -461,6 +484,49 @@ button:disabled {
   filter: brightness(1.2);
 }
 
+/* Combat owns the whole viewport on every device, so the touch layer above has
+   real screen edges to anchor its controls to. */
+.controller-shell--combat {
+  min-height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  place-items: stretch;
+}
+
+/* The third class outweighs the landscape `.card.play-card` rule below, which
+   caps the card at 52rem and would pull both controls away from the edges on a
+   wide, short screen. */
+.card.play-card.play-card--combat {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  width: 100%;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  gap: 0.35rem;
+  padding: max(0.45rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.45rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+}
+
+.play-card--combat .status-row > .room-identity > .role-badge,
+.play-card--combat > .error-message {
+  display: none;
+}
+
+/* Combat parks the rare exit action in the top-right status cluster, at one
+   fixed size everywhere: viewport-relative sizing made it either unreadable or
+   wide enough to crowd a thumb zone. */
+.network-status > .leave-room-button {
+  width: 8.5rem;
+  min-height: 1.9rem;
+  margin-top: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
+}
+
 @media (orientation: landscape) and (height <= 620px) {
   .card.play-card {
     grid-template-columns: minmax(12rem, 1fr) minmax(18rem, 1.4fr);
@@ -473,26 +539,21 @@ button:disabled {
     grid-column: 1 / -1;
   }
 
+  /* A short landscape screen keeps the portrait lobby — one centered card,
+     full-width rows — and only tightens the padding and gaps so the roster and
+     both buttons fit 375px of height without scrolling. */
   .controller-shell--lobby {
-    min-height: 100dvh;
-    padding: 0;
-    place-items: stretch;
-  }
-
-  /* The lobby has nothing to pair side by side, so its rows stack in one
-     column like the intermission and result screens do — and every block is
-     squeezed so the roster and both buttons fit a 375px-tall landscape phone
-     without scrolling. */
-  .card.play-card--lobby {
-    grid-template-columns: minmax(0, 1fr);
-    /* The shell stretches its items, and a stretched item with an explicit
-       width lands at the start of the row. */
-    justify-self: center;
-    align-content: space-between;
-    min-height: 100dvh;
-    gap: 0.4rem;
     padding: max(0.5rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
       max(0.5rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .card.play-card--lobby {
+    grid-template-columns: minmax(0, 1fr);
+    /* Wide enough that "Оператор щита" in the badge still leaves the room code
+       on one line — a narrower card wraps it and every role looks different. */
+    width: min(100%, 30rem);
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
   }
 
   .play-card--lobby > .controller-roster {
@@ -501,93 +562,11 @@ button:disabled {
     padding: 0.5rem 0.65rem;
   }
 
-  /* Same shape as the rematch button on the result screen. */
-  .play-card--lobby > .ready-button {
-    justify-self: center;
-    width: 240px;
-    max-width: 100%;
-  }
-
+  .play-card--lobby > .ready-button,
   .play-card--lobby > .leave-room-button {
-    justify-self: center;
-    width: min(14rem, 40vw);
-    min-height: 2rem;
+    min-height: 2.5rem;
     margin-top: 0;
     padding: 0.3rem 0.5rem;
-    font-size: 0.68rem;
-  }
-
-  .controller-shell--combat {
-    min-height: 100dvh;
-    padding: 0;
-    overflow: hidden;
-    place-items: stretch;
-  }
-
-  .card.play-card--combat {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(15rem, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    width: 100%;
-    min-height: 100dvh;
-    max-height: 100dvh;
-    gap: 0.35rem 0.75rem;
-    padding: max(0.45rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
-      max(0.45rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
-    overflow: hidden;
-    border: 0;
-    border-radius: 0;
-  }
-
-  .play-card--combat .status-row > .room-identity > .role-badge,
-  .play-card--combat > .error-message,
-  .play-card--combat .role-control > .phase-copy,
-  .play-card--combat .role-control > small {
-    display: none;
-  }
-
-  .play-card--combat > .role-control {
-    position: relative;
-    grid-row: 2;
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    min-height: 0;
-    gap: 0.5rem;
-  }
-
-  .play-card--combat .virtual-stick,
-  .play-card--combat .hold-action {
-    width: min(52dvh, 28vw, 12.5rem);
-  }
-
-  /* The card centers its rows, so any height the readout adds would lift both
-     circles above where the gunner's sit. Out of flow, sized like the button,
-     it just hangs under it. */
-  .play-card--combat .control-readout {
-    position: absolute;
-    top: calc(100% + 0.35rem);
-    left: 75%;
-    width: min(52dvh, 28vw, 12.5rem);
-    gap: 0.2rem;
-    translate: -50% 0;
-  }
-
-  .play-card--combat .control-readout strong {
-    font-size: 0.72rem;
-  }
-
-  .play-card--combat > .leave-room-button {
-    position: absolute;
-    bottom: 0.35rem;
-    left: 50%;
-    z-index: 5;
-    width: min(9rem, 22vw);
-    min-height: 2rem;
-    margin: 0;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.68rem;
-    transform: translateX(-50%);
   }
 
   .play-card > .upgrade-panel {
@@ -607,11 +586,19 @@ button:disabled {
     display: none;
   }
 
+  /* A full-height card stretches its rows, which floated the status row into
+     the middle of its own track; spreading the rows instead pins the room code
+     and the network cluster to the top corners, the way combat has them. */
   .card.play-card--intermission {
     grid-template-columns: minmax(0, 1fr);
+    align-content: space-between;
     height: 100%;
     gap: 0.35rem;
     padding: 0.5rem 0.75rem;
+  }
+
+  .play-card--intermission > .status-row {
+    align-items: start;
   }
 
   .card.play-card--intermission .status-row > .room-identity > .role-badge {

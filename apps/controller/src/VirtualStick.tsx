@@ -123,7 +123,9 @@ export function VirtualStick({
       <span
         className="virtual-stick__knob"
         style={{
-          transform: `translate(calc(-50% + ${String(vector.x * 54)}px), calc(-50% + ${String(vector.y * 54)}px))`
+          // --stick-travel scales with the stick, so the knob stays inside the
+          // ring on a small phone and on a tablet alike.
+          transform: `translate(calc(-50% + var(--stick-travel, 3.375rem) * ${String(vector.x)}), calc(-50% + var(--stick-travel, 3.375rem) * ${String(vector.y)}))`
         }}
       />
     </div>

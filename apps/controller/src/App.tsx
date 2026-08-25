@@ -110,6 +110,7 @@ export function ControllerApp() {
   );
   const connectedToRoom = status === "connected" || status === "reconnecting";
   const inLobby = activeView?.phase === "lobby";
+  const inCombat = activeView?.game?.encounter.phase === "combat";
 
   useEffect(() => {
     if (preview) return;
@@ -395,6 +396,22 @@ export function ControllerApp() {
     );
   }
 
+  // Combat hangs the exit off the network cluster instead of the card, so it
+  // stays out of both thumb zones.
+  const leaveRoomButton =
+    activeView !== undefined && currentPlayer !== undefined ? (
+      <button
+        type="button"
+        className="secondary-button leave-room-button"
+        disabled={activeStatus === "reconnecting"}
+        onClick={() => {
+          void leaveRoom();
+        }}
+      >
+        Выйти из комнаты
+      </button>
+    ) : null;
+
   return (
     <main
       className={`controller-shell${inLobby ? " controller-shell--lobby" : ""}${shellPhaseModifier(
@@ -429,6 +446,7 @@ export function ControllerApp() {
               До сервера{" "}
               {formatLatency(currentPlayer?.connected === true ? currentPlayer.latencyMs : null)}
             </span>
+            {inCombat && leaveRoomButton}
           </span>
         </div>
         {error.length > 0 && <p className="error-message">{error}</p>}
@@ -497,18 +515,7 @@ export function ControllerApp() {
             />
           </>
         )}
-        {activeView !== undefined && currentPlayer !== undefined && (
-          <button
-            type="button"
-            className="secondary-button leave-room-button"
-            disabled={activeStatus === "reconnecting"}
-            onClick={() => {
-              void leaveRoom();
-            }}
-          >
-            Выйти из комнаты
-          </button>
-        )}
+        {!inCombat && leaveRoomButton}
       </section>
     </main>
   );
