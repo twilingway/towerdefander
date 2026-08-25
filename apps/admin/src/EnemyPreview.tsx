@@ -21,6 +21,7 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
   const scale = previewScale(archetype.radius, visual.modelScale, visual.shape, BOX);
   const hitRadius = archetype.radius * scale.factor;
   const modelRadius = hitRadius * visual.modelScale;
+  const shipRadius = SPACESHIP_WORLD_RADIUS * scale.factor;
   const drawing = shapeDrawing(visual.shape, modelRadius);
   const barWidth = modelRadius * 1.8;
   const barHeight = Math.max(3, modelRadius * 0.12);
@@ -34,17 +35,11 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
         role="img"
         aria-label={`Внешний вид: ${archetype.label}`}
       >
-        <circle
-          className="preview__reference"
-          cx={CENTER}
-          cy={CENTER}
-          r={SPACESHIP_WORLD_RADIUS * scale.factor}
-        />
         {drawing.polygon.length > 0 ? (
           <polygon
             points={toSvgPoints(drawing.polygon, CENTER)}
             fill={visual.color}
-            fillOpacity={0.85}
+            fillOpacity={0.72}
             stroke={visual.outline}
             strokeWidth={2.5}
             strokeLinejoin="round"
@@ -61,16 +56,13 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
             strokeWidth={2}
           />
         ))}
+        <circle className="preview__reference" cx={CENTER} cy={CENTER} r={shipRadius} />
         <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={hitRadius} />
-        <text className="preview__tag preview__tag--hit" x={CENTER + 3} y={CENTER - hitRadius - 3}>
-          поражение {archetype.radius}
+        <text className="preview__tag preview__tag--hit" x={4} y={12}>
+          ● поражение {archetype.radius}
         </text>
-        <text
-          className="preview__tag preview__tag--ship"
-          x={CENTER + 3}
-          y={CENTER - SPACESHIP_WORLD_RADIUS * scale.factor - 3}
-        >
-          корабль {SPACESHIP_WORLD_RADIUS}
+        <text className="preview__tag preview__tag--ship" x={4} y={BOX - 5}>
+          ◌ корабль {SPACESHIP_WORLD_RADIUS}
         </text>
         {visual.showHealthBar ? (
           <g>

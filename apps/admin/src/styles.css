@@ -557,14 +557,16 @@ body {
 
 .preview__reference {
   fill: none;
-  stroke: var(--line);
-  stroke-dasharray: 3 5;
+  stroke: #8ea0bb;
+  stroke-dasharray: 3 4;
+  stroke-opacity: 0.9;
+  stroke-width: 1.2;
 }
 
 .preview__hitbox {
   fill: none;
-  stroke: rgba(79, 209, 197, 0.75);
-  stroke-width: 1.5;
+  stroke: #4fd1c5;
+  stroke-width: 1.8;
 }
 
 .preview__key {

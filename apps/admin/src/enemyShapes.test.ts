@@ -2,6 +2,7 @@ import { ENEMY_SHAPES } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
+  SPACESHIP_WORLD_RADIUS,
   modelWorldRadius,
   previewScale,
   shapeDrawing,
@@ -59,6 +60,19 @@ describe("preview geometry", () => {
     const boss = previewScale(90, 1, "hexagon", box);
     expect(boss.factor).toBeLessThan(previewScale(52, 1, "hexagon", box).factor);
     expect(90 * boss.factor).toBeLessThanOrEqual(box * 0.46 + 1e-9);
+  });
+
+  it("keeps both rings and their labels inside the frame", () => {
+    const box = 148;
+    const half = box * 0.46;
+    for (const hitRadius of [8, 18, 28, 52, 90, 400]) {
+      const { factor } = previewScale(hitRadius, 1, "arrowhead", box);
+      expect(hitRadius * factor, `hit ring escapes at ${String(hitRadius)}`).toBeLessThan(half);
+      expect(
+        SPACESHIP_WORLD_RADIUS * factor,
+        `ship ring escapes at ${String(hitRadius)}`
+      ).toBeLessThan(half);
+    }
   });
 
   it("reports the world radius the model occupies", () => {

@@ -151,7 +151,8 @@ export function previewScale(
   box: number
 ): PreviewScale {
   const half = box * 0.46;
-  const anchor = Math.max(hitRadius, SPACESHIP_WORLD_RADIUS, 1);
+  // Headroom so the outermost ring and its label stay inside the frame.
+  const anchor = Math.max(hitRadius, SPACESHIP_WORLD_RADIUS, 1) * 1.2;
   const factor = half / anchor;
   return {
     factor,
