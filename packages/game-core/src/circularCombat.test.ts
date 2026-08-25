@@ -51,7 +51,7 @@ function quietEnemy(
     heading: 0,
     hp: 1_000_000,
     maxHp: 1_000_000,
-    attackCooldownTicks: 1_000_000,
+    weaponCooldownTicks: [1_000_000],
     ...overrides
   };
 }

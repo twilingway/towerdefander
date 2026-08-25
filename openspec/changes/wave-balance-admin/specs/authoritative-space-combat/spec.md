@@ -11,17 +11,18 @@ kind SHALL быть идентификатором каталога, а не ф�
 корпуса и обводки, флаг индикатора HP, — который SHALL публиковаться дисплею один раз на run. Enemy
 с оружием типа bullet SHALL держать configured дистанцию до current spaceship position и стрелять
 линейными bullets; enemy с оружием типа missile SHALL запускать homing missile, heading которой
-меняется к current spaceship position по shortest arc не быстрее configured turn rate. Archetype с
-burst count больше единицы SHALL создавать за один cooldown несколько снарядов, разложенных по
-configured spread, в пределах entity caps. Hostile bullets и homing missiles SHALL нести собственные
-damage и shield hit cost, унаследованные от архетипа стрелка, так что разные типы врагов SHALL мочь
-иметь разное оружие. Enemy ships SHALL spawn-иться полностью внутри seeded point на arena
-circumference, SHALL оставаться внутри circle при chase/retreat/orbit и SHALL NOT удаляться boundary
-cleanup. Wave-origin и independent ambient asteroids SHALL spawn-иться на perimeter с seeded inward
-velocity и сохранять её до collision, destruction, lifetime либо выхода за circular padding. Ambient
-asteroids SHALL генерироваться каждые 40–100 combat ticks из отдельного RNG domain и SHALL NOT
-входить в remaining wave population. Enemy decisions SHALL выполняться только fixed step и в
-стабильном spawn-sequence order.
+меняется к current spaceship position по shortest arc не быстрее configured turn rate. Archetype
+SHALL нести один или несколько weapons; каждый weapon SHALL иметь собственный cooldown и SHALL
+стрелять независимо от остальных. Weapon с burst count больше единицы SHALL создавать за один
+cooldown несколько снарядов, разложенных по configured spread, в пределах entity caps. Hostile
+bullets и homing missiles SHALL нести собственные damage и shield hit cost, унаследованные от
+архетипа стрелка, так что разные типы врагов SHALL мочь иметь разное оружие. Enemy ships SHALL
+spawn-иться полностью внутри seeded point на arena circumference, SHALL оставаться внутри circle при
+chase/retreat/orbit и SHALL NOT удаляться boundary cleanup. Wave-origin и independent ambient
+asteroids SHALL spawn-иться на perimeter с seeded inward velocity и сохранять её до collision,
+destruction, lifetime либо выхода за circular padding. Ambient asteroids SHALL генерироваться каждые
+40–100 combat ticks из отдельного RNG domain и SHALL NOT входить в remaining wave population. Enemy
+decisions SHALL выполняться только fixed step и в стабильном spawn-sequence order.
 
 #### Scenario: Gunship атакует
 
@@ -69,6 +70,12 @@ asteroids SHALL генерироваться каждые 40–100 combat ticks 
 - **WHEN** boss с burst count больше единицы завершает cooldown и missile cap свободен
 - **THEN** core создаёт несколько homing missiles за один tick в пределах caps и назначает один
   общий cooldown без немедленного повторного залпа
+
+#### Scenario: Враг с несколькими орудиями
+
+- **WHEN** архетип несёт два weapons с разными cooldown и оба готовы
+- **THEN** за один tick создаются снаряды обоих, после чего каждый weapon перезаряжается своим
+  cooldown, и быстрый успевает выстрелить снова, пока медленный ещё перезаряжается
 
 #### Scenario: Оператор добавляет собственный архетип
 

@@ -14,6 +14,12 @@ import {
 
 const RUN_SEED = 0x5eed_196;
 
+function requireWeapon(config: SpaceshipSimulationConfig, kind: string) {
+  const weapon = getEnemyArchetype(config, kind).weapons[0];
+  if (weapon === undefined) throw new Error(`archetype ${kind} has no weapon`);
+  return weapon;
+}
+
 interface EntityPosition {
   readonly x: number;
   readonly y: number;
@@ -44,7 +50,7 @@ export function createWorstCaseCombatFixture(
       heading: 0.2,
       hp: 10_000,
       maxHp: 10_000,
-      attackCooldownTicks: 10_000
+      weaponCooldownTicks: [10_000]
     } satisfies CombatEnemyState;
   });
   const asteroids = Array.from({ length: config.caps.asteroids }, (_, index) => {
@@ -73,7 +79,7 @@ export function createWorstCaseCombatFixture(
       0.3
     );
     const sequence = spawnSequence++;
-    const weapon = getEnemyArchetype(config, "gunship").weapon;
+    const weapon = requireWeapon(config, "gunship");
     return {
       ...movingEntity(`hostile-${String(sequence)}`, sequence, position, { x: 9, y: 3 }, 7),
       damage: weapon.damage,
@@ -90,7 +96,7 @@ export function createWorstCaseCombatFixture(
       0.4
     );
     const sequence = spawnSequence++;
-    const weapon = getEnemyArchetype(config, "missileCarrier").weapon;
+    const weapon = requireWeapon(config, "missileCarrier");
     return {
       ...movingEntity(`missile-${String(sequence)}`, sequence, position, { x: 12, y: -6 }, 12),
       heading: -0.4,

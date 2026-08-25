@@ -187,18 +187,20 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 28,
       speedPerSecond: 150,
       preferredDistance: 650,
-      weapon: {
-        kind: "bullet",
-        cooldownTicks: 30,
-        damage: 10,
-        shieldHitCost: 4,
-        projectileRadius: 7,
-        projectileSpeedPerSecond: 440,
-        projectileLifetimeTicks: 180,
-        turnRatePerSecond: Math.PI / 2,
-        burstCount: 1,
-        burstSpreadRadians: 0
-      },
+      weapons: [
+        {
+          kind: "bullet",
+          cooldownTicks: 30,
+          damage: 10,
+          shieldHitCost: 4,
+          projectileRadius: 7,
+          projectileSpeedPerSecond: 440,
+          projectileLifetimeTicks: 180,
+          turnRatePerSecond: Math.PI / 2,
+          burstCount: 1,
+          burstSpreadRadians: 0
+        }
+      ],
       visual: {
         shape: "arrowhead",
         color: "#e65f4b",
@@ -217,18 +219,20 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 38,
       speedPerSecond: 95,
       preferredDistance: 900,
-      weapon: {
-        kind: "missile",
-        cooldownTicks: 70,
-        damage: 30,
-        shieldHitCost: 12,
-        projectileRadius: 12,
-        projectileSpeedPerSecond: 260,
-        projectileLifetimeTicks: 240,
-        turnRatePerSecond: Math.PI / 2,
-        burstCount: 1,
-        burstSpreadRadians: 0
-      },
+      weapons: [
+        {
+          kind: "missile",
+          cooldownTicks: 70,
+          damage: 30,
+          shieldHitCost: 12,
+          projectileRadius: 12,
+          projectileSpeedPerSecond: 260,
+          projectileLifetimeTicks: 240,
+          turnRatePerSecond: Math.PI / 2,
+          burstCount: 1,
+          burstSpreadRadians: 0
+        }
+      ],
       visual: {
         shape: "block",
         color: "#aa5bd6",
@@ -247,18 +251,20 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 30,
       speedPerSecond: 70,
       preferredDistance: 1400,
-      weapon: {
-        kind: "bullet",
-        cooldownTicks: 100,
-        damage: 35,
-        shieldHitCost: 10,
-        projectileRadius: 9,
-        projectileSpeedPerSecond: 900,
-        projectileLifetimeTicks: 120,
-        turnRatePerSecond: Math.PI / 2,
-        burstCount: 1,
-        burstSpreadRadians: 0
-      },
+      weapons: [
+        {
+          kind: "bullet",
+          cooldownTicks: 100,
+          damage: 35,
+          shieldHitCost: 10,
+          projectileRadius: 9,
+          projectileSpeedPerSecond: 900,
+          projectileLifetimeTicks: 120,
+          turnRatePerSecond: Math.PI / 2,
+          burstCount: 1,
+          burstSpreadRadians: 0
+        }
+      ],
       visual: {
         shape: "diamond",
         color: "#4bb1e6",
@@ -277,18 +283,20 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 18,
       speedPerSecond: 260,
       preferredDistance: 320,
-      weapon: {
-        kind: "bullet",
-        cooldownTicks: 12,
-        damage: 4,
-        shieldHitCost: 2,
-        projectileRadius: 5,
-        projectileSpeedPerSecond: 520,
-        projectileLifetimeTicks: 90,
-        turnRatePerSecond: Math.PI / 2,
-        burstCount: 1,
-        burstSpreadRadians: 0
-      },
+      weapons: [
+        {
+          kind: "bullet",
+          cooldownTicks: 12,
+          damage: 4,
+          shieldHitCost: 2,
+          projectileRadius: 5,
+          projectileSpeedPerSecond: 520,
+          projectileLifetimeTicks: 90,
+          turnRatePerSecond: Math.PI / 2,
+          burstCount: 1,
+          burstSpreadRadians: 0
+        }
+      ],
       visual: {
         shape: "dart",
         color: "#f2c14b",
@@ -307,18 +315,20 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 90,
       speedPerSecond: 60,
       preferredDistance: 700,
-      weapon: {
-        kind: "missile",
-        cooldownTicks: 60,
-        damage: 30,
-        shieldHitCost: 12,
-        projectileRadius: 14,
-        projectileSpeedPerSecond: 240,
-        projectileLifetimeTicks: 300,
-        turnRatePerSecond: Math.PI / 2,
-        burstCount: 3,
-        burstSpreadRadians: Math.PI / 6
-      },
+      weapons: [
+        {
+          kind: "missile",
+          cooldownTicks: 60,
+          damage: 30,
+          shieldHitCost: 12,
+          projectileRadius: 14,
+          projectileSpeedPerSecond: 240,
+          projectileLifetimeTicks: 300,
+          turnRatePerSecond: Math.PI / 2,
+          burstCount: 3,
+          burstSpreadRadians: Math.PI / 6
+        }
+      ],
       visual: {
         shape: "hexagon",
         color: "#8f2f4d",

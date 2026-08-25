@@ -94,7 +94,7 @@ async function temporaryPresetPath(): Promise<string> {
 function tunedPresetsFile(hp: number): BalancePresetsFile {
   const tuning = createDefaultTuning();
   return {
-    version: 2,
+    version: 3,
     activePresetId: "tuned",
     presets: [
       {
@@ -269,7 +269,7 @@ describe("version 1 migration", () => {
     expect(warn).not.toHaveBeenCalled();
 
     const state = store.getState();
-    expect(state.version).toBe(2);
+    expect(state.version).toBe(3);
     expect(state.activePresetId).toBe("operator");
     const wave = state.presets[0]?.tuning.waveCampaign.waves[0];
     expect(wave?.entries.map(({ kind }) => kind)).toEqual(["interceptor", "asteroid"]);
@@ -277,6 +277,35 @@ describe("version 1 migration", () => {
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "interceptor").visual.shape).toBe(
       "dart"
     );
+  });
+
+  it("turns a version 2 single weapon into a weapon list", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning = createDefaultTuning();
+    const archetypes = Object.fromEntries(
+      Object.entries(tuning.enemyArchetypes).map(([kind, archetype]) => {
+        const legacy: Record<string, unknown> = { ...archetype, weapon: archetype.weapons[0] };
+        delete legacy.weapons;
+        return [kind, legacy];
+      })
+    );
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 2,
+        activePresetId: "operator",
+        presets: [
+          { id: "operator", name: "Operator", tuning: { ...tuning, enemyArchetypes: archetypes } }
+        ]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(3);
+    expect(getEnemyArchetype(store.getActiveSimulationConfig(), "boss").weapons).toHaveLength(1);
   });
 
   it("leaves a current document untouched", () => {

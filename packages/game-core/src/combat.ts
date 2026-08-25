@@ -109,7 +109,8 @@ export interface EnemyArchetype {
   readonly radius: number;
   readonly speedPerSecond: number;
   readonly preferredDistance: number;
-  readonly weapon: EnemyWeaponTuning;
+  /** At least one; each barrel keeps its own cooldown. */
+  readonly weapons: readonly EnemyWeaponTuning[];
   readonly visual: EnemyVisual;
   readonly label: string;
   readonly spawnPolicy: EnemySpawnPolicy;
@@ -220,7 +221,8 @@ export interface CombatEnemyState extends MovingEntity {
   readonly heading: number;
   readonly hp: number;
   readonly maxHp: number;
-  readonly attackCooldownTicks: number;
+  /** One entry per archetype weapon, in the archetype's order. */
+  readonly weaponCooldownTicks: readonly number[];
 }
 
 export interface AsteroidState extends MovingEntity {
@@ -470,11 +472,16 @@ function validateEnemyArchetypes(config: CombatConfig): void {
     if (archetype.label.length === 0) {
       throw new RangeError(`${kind}.label must not be empty`);
     }
+    if (archetype.weapons.length === 0) {
+      throw new RangeError(`${kind}.weapons must describe at least one weapon`);
+    }
     const positiveIntegers: readonly (readonly [string, number])[] = [
       ["unlockWave", archetype.unlockWave],
-      ["weapon.cooldownTicks", archetype.weapon.cooldownTicks],
-      ["weapon.projectileLifetimeTicks", archetype.weapon.projectileLifetimeTicks],
-      ["weapon.burstCount", archetype.weapon.burstCount]
+      ...archetype.weapons.flatMap((weapon, index): readonly (readonly [string, number])[] => [
+        [`weapons[${String(index)}].cooldownTicks`, weapon.cooldownTicks],
+        [`weapons[${String(index)}].projectileLifetimeTicks`, weapon.projectileLifetimeTicks],
+        [`weapons[${String(index)}].burstCount`, weapon.burstCount]
+      ])
     ];
     for (const [name, value] of positiveIntegers) {
       if (!Number.isSafeInteger(value) || value <= 0) {
@@ -487,11 +494,13 @@ function validateEnemyArchetypes(config: CombatConfig): void {
       ["speedPerSecond", archetype.speedPerSecond],
       ["preferredDistance", archetype.preferredDistance],
       ["spawnCost", archetype.spawnCost],
-      ["weapon.damage", archetype.weapon.damage],
-      ["weapon.shieldHitCost", archetype.weapon.shieldHitCost],
-      ["weapon.projectileRadius", archetype.weapon.projectileRadius],
-      ["weapon.projectileSpeedPerSecond", archetype.weapon.projectileSpeedPerSecond],
-      ["weapon.turnRatePerSecond", archetype.weapon.turnRatePerSecond]
+      ...archetype.weapons.flatMap((weapon, index): readonly (readonly [string, number])[] => [
+        [`weapons[${String(index)}].damage`, weapon.damage],
+        [`weapons[${String(index)}].shieldHitCost`, weapon.shieldHitCost],
+        [`weapons[${String(index)}].projectileRadius`, weapon.projectileRadius],
+        [`weapons[${String(index)}].projectileSpeedPerSecond`, weapon.projectileSpeedPerSecond],
+        [`weapons[${String(index)}].turnRatePerSecond`, weapon.turnRatePerSecond]
+      ])
     ];
     for (const [name, value] of positiveFinite) {
       if (!Number.isFinite(value) || value <= 0) {
@@ -501,15 +510,22 @@ function validateEnemyArchetypes(config: CombatConfig): void {
     const nonNegativeFinite: readonly (readonly [string, number])[] = [
       ["scoreReward", archetype.scoreReward],
       ["creditReward", archetype.creditReward],
-      ["weapon.burstSpreadRadians", archetype.weapon.burstSpreadRadians]
+      ...archetype.weapons.map((weapon, index): readonly [string, number] => [
+        `weapons[${String(index)}].burstSpreadRadians`,
+        weapon.burstSpreadRadians
+      ])
     ];
     for (const [name, value] of nonNegativeFinite) {
       if (!Number.isFinite(value) || value < 0) {
         throw new RangeError(`${kind}.${name} must be a non-negative finite number`);
       }
     }
-    if (archetype.weapon.burstSpreadRadians > Math.PI * 2) {
-      throw new RangeError(`${kind}.weapon.burstSpreadRadians cannot exceed a full circle`);
+    for (const [index, weapon] of archetype.weapons.entries()) {
+      if (weapon.burstSpreadRadians > Math.PI * 2) {
+        throw new RangeError(
+          `${kind}.weapons[${String(index)}].burstSpreadRadians cannot exceed a full circle`
+        );
+      }
     }
   }
 }
@@ -1067,60 +1083,62 @@ function moveAndSpawnThreats(
     state.projectiles.length;
 
   for (const enemy of enemies) {
-    if (enemy.attackCooldownTicks > 0) continue;
-    const weapon = archetypeOf(config, enemy.kind).weapon;
-    for (let shot = 0; shot < weapon.burstCount; shot += 1) {
-      const aimOffset = burstAimOffset(weapon, shot);
-      if (weapon.kind === "bullet") {
-        if (
-          !canAddEntity(config, "hostileProjectile", hostileProjectiles.length, workingDynamicCount)
-        ) {
-          break;
-        }
-        hostileProjectiles = [
-          ...hostileProjectiles,
-          createHostileBullet(
-            enemy,
-            state.spaceship,
-            weapon,
-            aimOffset,
-            nextSpawnSequence,
-            state.clock.tick
-          )
-        ];
-      } else {
-        if (!canAddEntity(config, "homingMissile", homingMissiles.length, workingDynamicCount)) {
-          break;
-        }
-        homingMissiles = [
-          ...homingMissiles,
-          createMissile(
-            enemy,
-            state.spaceship,
-            weapon,
-            aimOffset,
-            nextSpawnSequence,
-            state.clock.tick
-          )
-        ];
-      }
-      nextSpawnSequence += 1;
-      workingDynamicCount += 1;
-    }
-  }
-  enemies = enemies.map((enemy) =>
-    enemy.attackCooldownTicks > 0
-      ? enemy
-      : {
-          ...enemy,
-          attackCooldownTicks: Math.max(
-            1,
-            Math.ceil(
-              archetypeOf(config, enemy.kind).weapon.cooldownTicks / difficulty.tempoMultiplier
+    const weapons = archetypeOf(config, enemy.kind).weapons;
+    weapons.forEach((weapon, weaponIndex) => {
+      if ((enemy.weaponCooldownTicks[weaponIndex] ?? 0) > 0) return;
+      for (let shot = 0; shot < weapon.burstCount; shot += 1) {
+        const aimOffset = burstAimOffset(weapon, shot);
+        if (weapon.kind === "bullet") {
+          if (
+            !canAddEntity(
+              config,
+              "hostileProjectile",
+              hostileProjectiles.length,
+              workingDynamicCount
             )
-          )
+          ) {
+            break;
+          }
+          hostileProjectiles = [
+            ...hostileProjectiles,
+            createHostileBullet(
+              enemy,
+              state.spaceship,
+              weapon,
+              aimOffset,
+              nextSpawnSequence,
+              state.clock.tick
+            )
+          ];
+        } else {
+          if (!canAddEntity(config, "homingMissile", homingMissiles.length, workingDynamicCount)) {
+            break;
+          }
+          homingMissiles = [
+            ...homingMissiles,
+            createMissile(
+              enemy,
+              state.spaceship,
+              weapon,
+              aimOffset,
+              nextSpawnSequence,
+              state.clock.tick
+            )
+          ];
         }
-  );
+        nextSpawnSequence += 1;
+        workingDynamicCount += 1;
+      }
+    });
+  }
+  enemies = enemies.map((enemy) => ({
+    ...enemy,
+    weaponCooldownTicks: archetypeOf(config, enemy.kind).weapons.map((weapon, weaponIndex) => {
+      const remaining = enemy.weaponCooldownTicks[weaponIndex] ?? 0;
+      if (remaining > 0) return remaining;
+      return Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier));
+    })
+  }));
 
   let pendingSpawns = state.pendingSpawns;
   let spawnRngState = state.spawnRngState;
@@ -1234,7 +1252,7 @@ function moveEnemy(
       constrained.velocity.x === 0 && constrained.velocity.y === 0
         ? enemy.heading
         : Math.atan2(constrained.velocity.y, constrained.velocity.x),
-    attackCooldownTicks: Math.max(0, enemy.attackCooldownTicks - 1)
+    weaponCooldownTicks: enemy.weaponCooldownTicks.map((ticks) => Math.max(0, ticks - 1))
   };
 }
 
@@ -1432,9 +1450,8 @@ function spawnEntity(
       spawnedTick: tick,
       hp,
       maxHp: hp,
-      attackCooldownTicks: Math.max(
-        1,
-        Math.ceil(archetype.weapon.cooldownTicks / difficulty.tempoMultiplier)
+      weaponCooldownTicks: archetype.weapons.map((weapon) =>
+        Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier))
       )
     }
   };

@@ -4,6 +4,7 @@ import {
   ENEMY_SHAPES,
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
+  MAX_ENEMY_WEAPONS,
   SPAWN_SECTORS,
   balancePresetsFileSchema,
   type BalancePreset,
@@ -424,10 +425,34 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
     });
   };
 
-  const patchWeapon = (kind: string, patch: Partial<EnemyArchetype["weapon"]>): void => {
+  const patchWeapon = (
+    kind: string,
+    weaponIndex: number,
+    patch: Partial<EnemyArchetype["weapons"][number]>
+  ): void => {
     const current = archetypeOf(kind);
     if (current === undefined) return;
-    patchArchetype(kind, { weapon: { ...current.weapon, ...patch } });
+    patchArchetype(kind, {
+      weapons: current.weapons.map((weapon, index) =>
+        index === weaponIndex ? { ...weapon, ...patch } : weapon
+      )
+    });
+  };
+
+  const addWeapon = (kind: string): void => {
+    const current = archetypeOf(kind);
+    if (current === undefined || current.weapons.length >= MAX_ENEMY_WEAPONS) return;
+    const last = current.weapons[current.weapons.length - 1];
+    if (last === undefined) return;
+    patchArchetype(kind, { weapons: [...current.weapons, { ...last }] });
+  };
+
+  const removeWeapon = (kind: string, weaponIndex: number): void => {
+    const current = archetypeOf(kind);
+    if (current === undefined || current.weapons.length === 1) return;
+    patchArchetype(kind, {
+      weapons: current.weapons.filter((_, index) => index !== weaponIndex)
+    });
   };
 
   const patchVisual = (kind: string, patch: Partial<EnemyArchetype["visual"]>): void => {
@@ -675,94 +700,127 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                 />
               </div>
 
-              <h4 className="card__subtitle">Оружие</h4>
-              <div className="card__grid">
-                <label className="field">
-                  <span className="field__caption">Тип</span>
-                  <select
-                    className="field__input"
-                    value={archetype.weapon.kind}
-                    onChange={(event) => {
-                      patchWeapon(kind, {
-                        kind: event.target.value === "missile" ? "missile" : "bullet"
-                      });
-                    }}
-                  >
-                    <option value="bullet">пуля</option>
-                    <option value="missile">ракета</option>
-                  </select>
-                </label>
-                <NumberField
-                  caption="Перезарядка, тиков"
-                  min={1}
-                  value={archetype.weapon.cooldownTicks}
-                  onChange={(cooldownTicks) => {
-                    patchWeapon(kind, { cooldownTicks: Math.max(1, Math.round(cooldownTicks)) });
+              <h4 className="card__subtitle">
+                Оружие
+                <button
+                  className="button card__add-weapon"
+                  type="button"
+                  disabled={archetype.weapons.length >= MAX_ENEMY_WEAPONS}
+                  onClick={() => {
+                    addWeapon(kind);
                   }}
-                />
-                <NumberField
-                  caption="Урон"
-                  value={archetype.weapon.damage}
-                  onChange={(damage) => {
-                    patchWeapon(kind, { damage });
-                  }}
-                />
-                <NumberField
-                  caption="Цена для щита"
-                  value={archetype.weapon.shieldHitCost}
-                  onChange={(shieldHitCost) => {
-                    patchWeapon(kind, { shieldHitCost });
-                  }}
-                />
-                <NumberField
-                  caption="Скорость снаряда"
-                  value={archetype.weapon.projectileSpeedPerSecond}
-                  onChange={(projectileSpeedPerSecond) => {
-                    patchWeapon(kind, { projectileSpeedPerSecond });
-                  }}
-                />
-                <NumberField
-                  caption="Радиус снаряда"
-                  value={archetype.weapon.projectileRadius}
-                  onChange={(projectileRadius) => {
-                    patchWeapon(kind, { projectileRadius });
-                  }}
-                />
-                <NumberField
-                  caption="Жизнь снаряда, тиков"
-                  min={1}
-                  value={archetype.weapon.projectileLifetimeTicks}
-                  onChange={(projectileLifetimeTicks) => {
-                    patchWeapon(kind, {
-                      projectileLifetimeTicks: Math.max(1, Math.round(projectileLifetimeTicks))
-                    });
-                  }}
-                />
-                <NumberField
-                  caption="Снарядов в залпе"
-                  min={1}
-                  value={archetype.weapon.burstCount}
-                  onChange={(burstCount) => {
-                    patchWeapon(kind, { burstCount: Math.max(1, Math.round(burstCount)) });
-                  }}
-                />
-                <NumberField
-                  caption="Разброс залпа, рад"
-                  step={0.05}
-                  value={archetype.weapon.burstSpreadRadians}
-                  onChange={(burstSpreadRadians) => {
-                    patchWeapon(kind, { burstSpreadRadians });
-                  }}
-                />
-                <NumberField
-                  caption="Поворот ракеты, рад/с"
-                  step={0.05}
-                  value={archetype.weapon.turnRatePerSecond}
-                  onChange={(turnRatePerSecond) => {
-                    patchWeapon(kind, { turnRatePerSecond });
-                  }}
-                />
-              </div>
+                >
+                  + орудие
+                </button>
+              </h4>
+              {archetype.weapons.map((weapon, weaponIndex) => (
+                <div className="weapon" key={`${kind}-weapon-${String(weaponIndex)}`}>
+                  <div className="weapon__head">
+                    <span className="field__caption">Орудие {weaponIndex + 1}</span>
+                    <button
+                      className="button button--ghost"
+                      type="button"
+                      disabled={archetype.weapons.length === 1}
+                      onClick={() => {
+                        removeWeapon(kind, weaponIndex);
+                      }}
+                    >
+                      Убрать
+                    </button>
+                  </div>
+                  <div className="card__grid">
+                    <label className="field">
+                      <span className="field__caption">Тип</span>
+                      <select
+                        className="field__input"
+                        value={weapon.kind}
+                        onChange={(event) => {
+                          patchWeapon(kind, weaponIndex, {
+                            kind: event.target.value === "missile" ? "missile" : "bullet"
+                          });
+                        }}
+                      >
+                        <option value="bullet">пуля</option>
+                        <option value="missile">ракета</option>
+                      </select>
+                    </label>
+                    <NumberField
+                      caption="Перезарядка, тиков"
+                      min={1}
+                      value={weapon.cooldownTicks}
+                      onChange={(cooldownTicks) => {
+                        patchWeapon(kind, weaponIndex, {
+                          cooldownTicks: Math.max(1, Math.round(cooldownTicks))
+                        });
+                      }}
+                    />
+                    <NumberField
+                      caption="Урон"
+                      value={weapon.damage}
+                      onChange={(damage) => {
+                        patchWeapon(kind, weaponIndex, { damage });
+                      }}
+                    />
+                    <NumberField
+                      caption="Цена для щита"
+                      value={weapon.shieldHitCost}
+                      onChange={(shieldHitCost) => {
+                        patchWeapon(kind, weaponIndex, { shieldHitCost });
+                      }}
+                    />
+                    <NumberField
+                      caption="Скорость снаряда"
+                      value={weapon.projectileSpeedPerSecond}
+                      onChange={(projectileSpeedPerSecond) => {
+                        patchWeapon(kind, weaponIndex, { projectileSpeedPerSecond });
+                      }}
+                    />
+                    <NumberField
+                      caption="Радиус снаряда"
+                      value={weapon.projectileRadius}
+                      onChange={(projectileRadius) => {
+                        patchWeapon(kind, weaponIndex, { projectileRadius });
+                      }}
+                    />
+                    <NumberField
+                      caption="Жизнь снаряда, тиков"
+                      min={1}
+                      value={weapon.projectileLifetimeTicks}
+                      onChange={(projectileLifetimeTicks) => {
+                        patchWeapon(kind, weaponIndex, {
+                          projectileLifetimeTicks: Math.max(1, Math.round(projectileLifetimeTicks))
+                        });
+                      }}
+                    />
+                    <NumberField
+                      caption="Снарядов в залпе"
+                      min={1}
+                      value={weapon.burstCount}
+                      onChange={(burstCount) => {
+                        patchWeapon(kind, weaponIndex, {
+                          burstCount: Math.max(1, Math.round(burstCount))
+                        });
+                      }}
+                    />
+                    <NumberField
+                      caption="Разброс залпа, рад"
+                      step={0.05}
+                      value={weapon.burstSpreadRadians}
+                      onChange={(burstSpreadRadians) => {
+                        patchWeapon(kind, weaponIndex, { burstSpreadRadians });
+                      }}
+                    />
+                    <NumberField
+                      caption="Поворот ракеты, рад/с"
+                      step={0.05}
+                      value={weapon.turnRatePerSecond}
+                      onChange={(turnRatePerSecond) => {
+                        patchWeapon(kind, weaponIndex, { turnRatePerSecond });
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
             </article>
           );
         })}

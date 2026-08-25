@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import {
   BALANCE_FILE_VERSION,
   FALLBACK_ENEMY_SHAPE,
-  LEGACY_BALANCE_FILE_VERSION,
+  LEGACY_BALANCE_FILE_VERSIONS,
   balancePresetsFileSchema,
   type BalancePreset,
   type BalancePresetsFile,
@@ -50,8 +50,10 @@ function migrateWave(wave: unknown): unknown {
 function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(archetype)) return archetype;
   const known = defaults.enemyArchetypes[kind];
-  return {
+  const singleWeapon = archetype.weapon;
+  const migrated: LegacyRecord = {
     ...archetype,
+    weapons: archetype.weapons ?? (singleWeapon === undefined ? known?.weapons : [singleWeapon]),
     visual: archetype.visual ??
       known?.visual ?? {
         shape: FALLBACK_ENEMY_SHAPE,
@@ -61,6 +63,8 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
       },
     label: archetype.label ?? known?.label ?? kind
   };
+  delete migrated.weapon;
+  return migrated;
 }
 
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
@@ -88,7 +92,9 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
  * forward instead of silently replacing an operator's balance with defaults.
  */
 export function migrateBalanceDocument(raw: unknown): unknown {
-  if (!isRecord(raw) || raw.version !== LEGACY_BALANCE_FILE_VERSION) return raw;
+  const version = isRecord(raw) ? raw.version : undefined;
+  const isLegacy = LEGACY_BALANCE_FILE_VERSIONS.some((candidate) => candidate === version);
+  if (!isRecord(raw) || !isLegacy) return raw;
   const defaults = createDefaultTuning();
   return {
     ...raw,

@@ -13,18 +13,20 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
     radius: 28,
     speedPerSecond: 150,
     preferredDistance: 650,
-    weapon: {
-      kind: "bullet",
-      cooldownTicks: 30,
-      damage: 10,
-      shieldHitCost: 4,
-      projectileRadius: 7,
-      projectileSpeedPerSecond: 440,
-      projectileLifetimeTicks: 180,
-      turnRatePerSecond: Math.PI / 2,
-      burstCount: 1,
-      burstSpreadRadians: 0
-    },
+    weapons: [
+      {
+        kind: "bullet",
+        cooldownTicks: 30,
+        damage: 10,
+        shieldHitCost: 4,
+        projectileRadius: 7,
+        projectileSpeedPerSecond: 440,
+        projectileLifetimeTicks: 180,
+        turnRatePerSecond: Math.PI / 2,
+        burstCount: 1,
+        burstSpreadRadians: 0
+      }
+    ],
     visual: { shape: "arrowhead", color: "#e65f4b", outline: "#ffd1b0", showHealthBar: false },
     label: "Test",
     spawnPolicy: "standard",

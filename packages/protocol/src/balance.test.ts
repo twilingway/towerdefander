@@ -14,18 +14,20 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
     radius: 28,
     speedPerSecond: 150,
     preferredDistance: 650,
-    weapon: {
-      kind: "bullet",
-      cooldownTicks: 30,
-      damage: 10,
-      shieldHitCost: 4,
-      projectileRadius: 7,
-      projectileSpeedPerSecond: 440,
-      projectileLifetimeTicks: 180,
-      turnRatePerSecond: Math.PI / 2,
-      burstCount: 1,
-      burstSpreadRadians: 0
-    },
+    weapons: [
+      {
+        kind: "bullet",
+        cooldownTicks: 30,
+        damage: 10,
+        shieldHitCost: 4,
+        projectileRadius: 7,
+        projectileSpeedPerSecond: 440,
+        projectileLifetimeTicks: 180,
+        turnRatePerSecond: Math.PI / 2,
+        burstCount: 1,
+        burstSpreadRadians: 0
+      }
+    ],
     visual: { shape: "arrowhead", color: "#e65f4b", outline: "#ffd1b0", showHealthBar: false },
     label: "Test archetype",
     spawnPolicy: "standard",
@@ -79,7 +81,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 2,
+    version: 3,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -239,7 +241,10 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 3 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 4 }).success).toBe(
+      false
+    );
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 2 }).success).toBe(
       false
     );
   });
@@ -249,7 +254,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 2,
+        version: 3,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);
