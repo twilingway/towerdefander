@@ -39,8 +39,22 @@ function bossAfterEscortConfig() {
       waves: [
         {
           entries: [
-            { kind: "gunship", count: 1, spawnIntervalTicks: 1, sectors: [] },
-            { kind: "boss", count: 1, spawnIntervalTicks: 1, sectors: [] }
+            {
+              kind: "gunship",
+              count: 1,
+              spawnIntervalTicks: 1,
+              sectors: [],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            },
+            {
+              kind: "boss",
+              count: 1,
+              spawnIntervalTicks: 1,
+              sectors: [],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            }
           ],
           hpMultiplier: null,
           tempoMultiplier: null
@@ -58,14 +72,37 @@ function scriptedCampaignConfig() {
       waves: [
         {
           entries: [
-            { kind: "gunship", count: 3, spawnIntervalTicks: 3, sectors: ["N"] },
-            { kind: "asteroid", count: 1, spawnIntervalTicks: 9, sectors: ["SE"] }
+            {
+              kind: "gunship",
+              count: 3,
+              spawnIntervalTicks: 3,
+              sectors: ["N"],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            },
+            {
+              kind: "asteroid",
+              count: 1,
+              spawnIntervalTicks: 9,
+              sectors: ["SE"],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            }
           ],
           hpMultiplier: 2.5,
           tempoMultiplier: null
         },
         {
-          entries: [{ kind: "asteroid", count: 2, spawnIntervalTicks: 5, sectors: [] }],
+          entries: [
+            {
+              kind: "asteroid",
+              count: 2,
+              spawnIntervalTicks: 5,
+              sectors: [],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            }
+          ],
           hpMultiplier: null,
           tempoMultiplier: null
         }
@@ -330,7 +367,16 @@ describe("deterministic combat foundation", () => {
         ...base.waveCampaign,
         waves: [
           {
-            entries: [{ kind: "gunship", count: 12, spawnIntervalTicks: 1, sectors: ["N", "S"] }],
+            entries: [
+              {
+                kind: "gunship",
+                count: 12,
+                spawnIntervalTicks: 1,
+                sectors: ["N", "S"],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
             hpMultiplier: null,
             tempoMultiplier: null
           }
@@ -370,7 +416,16 @@ describe("deterministic combat foundation", () => {
         ...base.waveCampaign,
         waves: [
           {
-            entries: [{ kind: "eliteGunship", count: 2, spawnIntervalTicks: 1, sectors: [] }],
+            entries: [
+              {
+                kind: "eliteGunship",
+                count: 2,
+                spawnIntervalTicks: 1,
+                sectors: [],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
             hpMultiplier: null,
             tempoMultiplier: null
           }
@@ -393,7 +448,16 @@ describe("deterministic combat foundation", () => {
           ...base.waveCampaign,
           waves: [
             {
-              entries: [{ kind: "dreadnought", count: 1, spawnIntervalTicks: 12, sectors: [] }],
+              entries: [
+                {
+                  kind: "dreadnought",
+                  count: 1,
+                  spawnIntervalTicks: 12,
+                  sectors: [],
+                  hpMultiplier: null,
+                  tempoMultiplier: null
+                }
+              ],
               hpMultiplier: null,
               tempoMultiplier: null
             }
@@ -465,6 +529,48 @@ describe("deterministic combat foundation", () => {
     expect(fastShots).toBeGreaterThan(1);
     expect(slowShots).toBe(1);
     expect(state.enemies[0]?.weaponCooldownTicks[1]).toBeGreaterThan(0);
+  });
+
+  it("lets one group override the wave curve without touching the others", () => {
+    const base = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({
+      ambientAsteroidIntervalMinTicks: 100_000,
+      ambientAsteroidIntervalMaxTicks: 100_000,
+      waveCampaign: {
+        ...base.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 1,
+                spawnIntervalTicks: 1,
+                sectors: [],
+                hpMultiplier: 4,
+                tempoMultiplier: null
+              },
+              {
+                kind: "gunship",
+                count: 1,
+                spawnIntervalTicks: 1,
+                sectors: [],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    });
+    let state = createSpaceshipSimulationState(config, 61);
+    for (let step = 0; step < 6; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    const baseHp = getEnemyArchetype(config, "gunship").hp;
+    const spawned = state.enemies.map(({ maxHp }) => maxHp).sort((left, right) => left - right);
+    expect(spawned).toEqual([baseHp, baseHp * 4]);
   });
 
   it("refuses an archetype without any weapon", () => {

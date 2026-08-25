@@ -59,6 +59,9 @@ export interface WaveSpawnEntry {
   readonly spawnIntervalTicks: number;
   /** Empty means the whole circumference. */
   readonly sectors: readonly SpawnSector[];
+  /** Overrides the wave and director multipliers for this group only. */
+  readonly hpMultiplier: number | null;
+  readonly tempoMultiplier: number | null;
 }
 
 export interface WaveDefinition {
@@ -252,6 +255,8 @@ export interface PendingSpawn {
   readonly planSequence: number;
   readonly spawnIntervalTicks: number;
   readonly sectors: readonly SpawnSector[];
+  readonly hpMultiplier: number | null;
+  readonly tempoMultiplier: number | null;
 }
 
 export interface CombatStateFields {
@@ -567,6 +572,14 @@ function validateWaveCampaign(config: CombatConfig): void {
           throw new RangeError(`${entryLabel}.sectors contains an unknown spawn sector`);
         }
       }
+      for (const [name, value] of [
+        ["hpMultiplier", entry.hpMultiplier],
+        ["tempoMultiplier", entry.tempoMultiplier]
+      ] as const) {
+        if (value !== null && (!Number.isFinite(value) || value <= 0)) {
+          throw new RangeError(`${entryLabel}.${name} must be null or a positive finite number`);
+        }
+      }
     });
   });
 }
@@ -634,7 +647,9 @@ function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSpawn[] {
         kind: entry.kind,
         planSequence: plan.length,
         spawnIntervalTicks: entry.spawnIntervalTicks,
-        sectors: entry.sectors
+        sectors: entry.sectors,
+        hpMultiplier: entry.hpMultiplier,
+        tempoMultiplier: entry.tempoMultiplier
       });
     }
   }
@@ -716,7 +731,9 @@ function createDirectedWavePlan(
       kind,
       planSequence,
       spawnIntervalTicks: config.enemySpawnIntervalTicks,
-      sectors: []
+      sectors: [],
+      hpMultiplier: null,
+      tempoMultiplier: null
     })),
     rngState
   };
@@ -1158,7 +1175,8 @@ function moveAndSpawnThreats(
         state.clock.tick,
         state.waveNumber,
         config,
-        pending.sectors
+        pending.sectors,
+        { hpMultiplier: pending.hpMultiplier, tempoMultiplier: pending.tempoMultiplier }
       );
       spawnRngState = result.rngState;
       nextSpawnSequence += 1;
@@ -1185,7 +1203,8 @@ function moveAndSpawnThreats(
       state.clock.tick,
       state.waveNumber,
       config,
-      []
+      [],
+      { hpMultiplier: null, tempoMultiplier: null }
     );
     ambientAsteroidRngState = result.rngState;
     nextSpawnSequence += 1;
@@ -1383,7 +1402,8 @@ function spawnEntity(
   tick: number,
   waveNumber: number,
   config: CombatConfig,
-  sectors: readonly SpawnSector[]
+  sectors: readonly SpawnSector[],
+  overrides: { readonly hpMultiplier: number | null; readonly tempoMultiplier: number | null }
 ): {
   readonly rngState: number;
   readonly enemy: CombatEnemyState | null;
@@ -1399,7 +1419,13 @@ function spawnEntity(
   // values[2] was already drawn and unused, so multi-sector picking costs no extra RNG.
   const entryAngle = sectorEntryAngle(sectors, values[0] ?? 0, values[2] ?? 0);
   const arena = arenaFromConfig(config);
-  const difficulty = getWaveDifficulty(config, waveNumber);
+  const waveDifficulty = getWaveDifficulty(config, waveNumber);
+  // A group may override the wave curve for itself only.
+  const difficulty: WaveDifficulty = {
+    budget: waveDifficulty.budget,
+    hpMultiplier: overrides.hpMultiplier ?? waveDifficulty.hpMultiplier,
+    tempoMultiplier: overrides.tempoMultiplier ?? waveDifficulty.tempoMultiplier
+  };
   if (kind === "asteroid") {
     const point = pointOnCircle(arena, entryAngle, arena.radius);
     const exitOffset = ((values[1] ?? 0.5) * 2 - 1) * (Math.PI / 3);

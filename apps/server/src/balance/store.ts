@@ -37,7 +37,12 @@ function readArray(source: LegacyRecord, key: string): readonly unknown[] {
 function migrateEntry(entry: unknown): unknown {
   if (!isRecord(entry)) return entry;
   const sector = entry.sector;
-  const migrated: LegacyRecord = { ...entry, sectors: typeof sector === "string" ? [sector] : [] };
+  const migrated: LegacyRecord = {
+    ...entry,
+    sectors: entry.sectors ?? (typeof sector === "string" ? [sector] : []),
+    hpMultiplier: entry.hpMultiplier ?? null,
+    tempoMultiplier: entry.tempoMultiplier ?? null
+  };
   delete migrated.sector;
   return migrated;
 }

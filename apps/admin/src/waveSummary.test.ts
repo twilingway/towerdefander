@@ -5,7 +5,15 @@ import {
 } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
-import { directorBudgetAt, spawnCostOf, summariseCampaign, summariseWave } from "./waveSummary.js";
+import {
+  directorBudgetAt,
+  secondsToTicks,
+  ticksToSeconds,
+  entryStats,
+  spawnCostOf,
+  summariseCampaign,
+  summariseWave
+} from "./waveSummary.js";
 
 function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
   return {
@@ -49,8 +57,22 @@ function tuning(): BalanceTuning {
       waves: [
         {
           entries: [
-            { kind: "gunship", count: 3, spawnIntervalTicks: 20, sectors: ["N"] },
-            { kind: "asteroid", count: 2, spawnIntervalTicks: 10, sectors: [] }
+            {
+              kind: "gunship",
+              count: 3,
+              spawnIntervalTicks: 20,
+              sectors: ["N"],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            },
+            {
+              kind: "asteroid",
+              count: 2,
+              spawnIntervalTicks: 10,
+              sectors: [],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            }
           ],
           hpMultiplier: null,
           tempoMultiplier: null
@@ -122,6 +144,31 @@ describe("wave summary", () => {
     expect(summariseWave(value, wave, 3).overBudget).toBe(false);
   });
 
+  it("projects the hp a group will actually spawn with", () => {
+    const value = tuning();
+    const wave = value.waveCampaign.waves[0];
+    const entry = wave?.entries[0];
+    if (entry === undefined) throw new Error("fixture must contain an entry");
+    // Wave 3 under the default curve: 1 + 0.12 * 2 = 1.24.
+    const onWaveThree = entryStats(value, entry, 3);
+    expect(onWaveThree.hpMultiplier).toBeCloseTo(1.24);
+    expect(onWaveThree.hp).toBeCloseTo(50 * 1.24);
+    // A per-group override wins over the wave curve.
+    const overridden = entryStats(value, { ...entry, hpMultiplier: 5 }, 3);
+    expect(overridden.hp).toBeCloseTo(250);
+    expect(overridden.tempoMultiplier).toBeCloseTo(onWaveThree.tempoMultiplier);
+  });
+
+  it("shortens the reload as the tempo multiplier grows", () => {
+    const value = tuning();
+    const entry = value.waveCampaign.waves[0]?.entries[0];
+    if (entry === undefined) throw new Error("fixture must contain an entry");
+    const slow = entryStats(value, { ...entry, tempoMultiplier: 1 }, 1);
+    const fast = entryStats(value, { ...entry, tempoMultiplier: 3 }, 1);
+    expect(slow.cooldownTicks).toBe(30);
+    expect(fast.cooldownTicks).toBe(10);
+  });
+
   it("numbers campaign waves from one", () => {
     const value = tuning();
     const campaign = {
@@ -132,5 +179,25 @@ describe("wave summary", () => {
       }
     };
     expect(summariseCampaign(campaign).map(({ waveNumber }) => waveNumber)).toEqual([1, 2]);
+  });
+});
+
+describe("tick and second conversion", () => {
+  it("round-trips the values operators actually type", () => {
+    for (const ticks of [1, 12, 30, 180, 600]) {
+      expect(secondsToTicks(ticksToSeconds(ticks))).toBe(ticks);
+    }
+    expect(ticksToSeconds(12)).toBe(0.6);
+    expect(secondsToTicks(0.6)).toBe(12);
+  });
+
+  it("keeps a tiny value at one tick instead of zero", () => {
+    expect(secondsToTicks(0.01)).toBe(1);
+    expect(secondsToTicks(0)).toBe(1);
+  });
+
+  it("snaps a value between ticks to the nearest step", () => {
+    expect(secondsToTicks(0.62)).toBe(12);
+    expect(secondsToTicks(0.68)).toBe(14);
   });
 });

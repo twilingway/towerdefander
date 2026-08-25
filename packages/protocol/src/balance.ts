@@ -7,9 +7,9 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 
-export const BALANCE_FILE_VERSION = 3 as const;
+export const BALANCE_FILE_VERSION = 4 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -113,7 +113,10 @@ export const waveSpawnEntrySchema = z
     count: positiveInteger.max(200),
     spawnIntervalTicks: positiveInteger.max(20_000),
     // Empty means the whole circumference; several sectors are picked between per spawn.
-    sectors: z.array(spawnSectorSchema).max(SPAWN_SECTORS.length).readonly()
+    sectors: z.array(spawnSectorSchema).max(SPAWN_SECTORS.length).readonly(),
+    /** Overrides the wave and director multipliers for this group only. */
+    hpMultiplier: positiveFinite.nullable(),
+    tempoMultiplier: positiveFinite.nullable()
   })
   .strict();
 export type WaveSpawnEntry = z.infer<typeof waveSpawnEntrySchema>;

@@ -25,7 +25,14 @@ import {
   saveBalance,
   validateBalance
 } from "./balanceClient.js";
-import { summariseCampaign, spawnCostOf } from "./waveSummary.js";
+import {
+  TICK_SECONDS,
+  entryStats,
+  secondsToTicks,
+  spawnCostOf,
+  summariseCampaign,
+  ticksToSeconds
+} from "./waveSummary.js";
 
 const TABS = ["waves", "enemies", "director", "presets"] as const;
 type Tab = (typeof TABS)[number];
@@ -134,6 +141,32 @@ function NumberField({ caption, value, step = 1, min = 0, onChange }: NumberFiel
   );
 }
 
+interface SecondsFieldProps {
+  readonly caption: string;
+  readonly ticks: number;
+  readonly onChange: (ticks: number) => void;
+}
+
+/** The simulation counts 50 ms ticks; operators think in seconds. */
+function SecondsField({ caption, ticks, onChange }: SecondsFieldProps) {
+  return (
+    <label className="field">
+      <span className="field__caption">{caption}</span>
+      <input
+        className="field__input"
+        type="number"
+        step={TICK_SECONDS}
+        min={TICK_SECONDS}
+        value={ticksToSeconds(ticks)}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (Number.isFinite(next) && next > 0) onChange(secondsToTicks(next));
+        }}
+      />
+    </label>
+  );
+}
+
 function activePresetOf(document: BalancePresetsFile): BalancePreset | undefined {
   return document.presets.find(({ id }) => id === document.activePresetId);
 }
@@ -147,9 +180,18 @@ function withTuning(document: BalancePresetsFile, tuning: BalanceTuning): Balanc
   };
 }
 
+const DEFAULT_SECTOR: SpawnSector = "N";
+
 function createEntry(tuning: BalanceTuning): WaveSpawnEntry {
   const first = spawnKindsOf(tuning)[0] ?? ASTEROID_SPAWN_KIND;
-  return { kind: first, count: 2, spawnIntervalTicks: 12, sectors: [] };
+  return {
+    kind: first,
+    count: 2,
+    spawnIntervalTicks: 12,
+    sectors: [DEFAULT_SECTOR],
+    hpMultiplier: null,
+    tempoMultiplier: null
+  };
 }
 
 function createWave(tuning: BalanceTuning, previous: WaveDefinition | undefined): WaveDefinition {
@@ -203,7 +245,7 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
         <p className="screen__hint">
           <strong>Тип</strong> — кто спавнится, в скобках его цена в бюджете директора.{" "}
           <strong>Количество</strong> — сколько штук в группе. <strong>Интервал</strong> — пауза
-          между соседними спавнами группы; один тик = 50 мс, то есть 12 тиков = 0.6 с.{" "}
+          между соседними спавнами группы, в секундах (шаг 0.05 с — один шаг симуляции).{" "}
           <strong>Секторы</strong> — с каких сторон арены они приходят: N сверху, E справа, S снизу,
           W слева, каждый сектор шириной 45°. Отмечено несколько — каждый спавн случайно берёт один
           из них; не отмечено ничего — приходят со всей окружности. Точка внутри сектора всегда
@@ -246,85 +288,145 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
               </div>
 
               <table className="entries">
+                <colgroup>
+                  <col className="entries__col-type" />
+                  <col className="entries__col-small" />
+                  <col className="entries__col-small" />
+                  <col className="entries__col-sectors" />
+                  <col className="entries__col-stat" />
+                  <col className="entries__col-stat" />
+                  <col className="entries__col-action" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>Тип</th>
                     <th>Количество</th>
-                    <th title="Пауза между спавнами группы; 1 тик = 50 мс">Интервал, тиков</th>
+                    <th title="Пауза между соседними спавнами группы">Интервал, с</th>
                     <th title="Стороны арены, с которых приходит группа">Секторы</th>
+                    <th title="HP одной единицы на этой волне с учётом множителя">HP ×</th>
+                    <th title="Перезарядка первого орудия на этой волне">Темп ×</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {wave.entries.map((entry, entryIndex) => (
-                    <tr key={`entry-${String(waveIndex)}-${String(entryIndex)}`}>
-                      <td>
-                        <select
-                          className="field__input"
-                          value={entry.kind}
-                          onChange={(event) => {
-                            patchEntry(waveIndex, entryIndex, {
-                              kind: event.target.value
-                            });
-                          }}
-                        >
-                          {spawnKindsOf(tuning).map((kind) => (
-                            <option key={kind} value={kind}>
-                              {labelOf(tuning, kind)} ({spawnCostOf(tuning, kind)})
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          className="field__input"
-                          type="number"
-                          min={1}
-                          value={entry.count}
-                          onChange={(event) => {
-                            patchEntry(waveIndex, entryIndex, {
-                              count: Math.max(1, Number(event.target.value) || 1)
-                            });
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="field__input"
-                          type="number"
-                          min={1}
-                          value={entry.spawnIntervalTicks}
-                          onChange={(event) => {
-                            patchEntry(waveIndex, entryIndex, {
-                              spawnIntervalTicks: Math.max(1, Number(event.target.value) || 1)
-                            });
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <SectorPicker
-                          value={entry.sectors}
-                          onChange={(sectors) => {
-                            patchEntry(waveIndex, entryIndex, { sectors });
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          className="button button--ghost"
-                          type="button"
-                          disabled={wave.entries.length === 1}
-                          onClick={() => {
-                            patchWave(waveIndex, {
-                              entries: wave.entries.filter((_, at) => at !== entryIndex)
-                            });
-                          }}
-                        >
-                          Убрать
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {wave.entries.map((entry, entryIndex) => {
+                    const stats = entryStats(tuning, entry, waveIndex + 1);
+                    return (
+                      <tr key={`entry-${String(waveIndex)}-${String(entryIndex)}`}>
+                        <td>
+                          <select
+                            className="field__input"
+                            value={entry.kind}
+                            onChange={(event) => {
+                              patchEntry(waveIndex, entryIndex, {
+                                kind: event.target.value
+                              });
+                            }}
+                          >
+                            {spawnKindsOf(tuning).map((kind) => (
+                              <option key={kind} value={kind}>
+                                {labelOf(tuning, kind)} ({spawnCostOf(tuning, kind)})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            className="field__input"
+                            type="number"
+                            min={1}
+                            value={entry.count}
+                            onChange={(event) => {
+                              patchEntry(waveIndex, entryIndex, {
+                                count: Math.max(1, Number(event.target.value) || 1)
+                              });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="field__input"
+                            type="number"
+                            min={1}
+                            value={entry.spawnIntervalTicks}
+                            onChange={(event) => {
+                              patchEntry(waveIndex, entryIndex, {
+                                spawnIntervalTicks: Math.max(1, Number(event.target.value) || 1)
+                              });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <SectorPicker
+                            value={entry.sectors}
+                            onChange={(sectors) => {
+                              patchEntry(waveIndex, entryIndex, { sectors });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <div className="stat">
+                            <input
+                              className="field__input stat__input"
+                              type="number"
+                              step={0.1}
+                              min={0}
+                              placeholder="по волне"
+                              value={entry.hpMultiplier ?? ""}
+                              onChange={(event) => {
+                                const raw = event.target.value;
+                                patchEntry(waveIndex, entryIndex, {
+                                  hpMultiplier: raw === "" ? null : Number(raw)
+                                });
+                              }}
+                            />
+                            <span className="stat__value">
+                              {Math.round(stats.hp)} HP
+                              <em>×{stats.hpMultiplier.toFixed(2)}</em>
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="stat">
+                            <input
+                              className="field__input stat__input"
+                              type="number"
+                              step={0.1}
+                              min={0}
+                              placeholder="по волне"
+                              value={entry.tempoMultiplier ?? ""}
+                              onChange={(event) => {
+                                const raw = event.target.value;
+                                patchEntry(waveIndex, entryIndex, {
+                                  tempoMultiplier: raw === "" ? null : Number(raw)
+                                });
+                              }}
+                            />
+                            <span className="stat__value">
+                              {stats.cooldownTicks === null
+                                ? `урон ${String(stats.damage ?? 0)}`
+                                : `выстрел / ${String(ticksToSeconds(stats.cooldownTicks))} с`}
+                              <em>×{stats.tempoMultiplier.toFixed(2)}</em>
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <button
+                            className="button button--ghost"
+                            type="button"
+                            disabled={wave.entries.length === 1}
+                            onClick={() => {
+                              patchWave(waveIndex, {
+                                entries: wave.entries.filter((_, at) => at !== entryIndex)
+                              });
+                            }}
+                          >
+                            Убрать
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
@@ -461,6 +563,49 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
     patchArchetype(kind, { visual: { ...current.visual, ...patch } });
   };
 
+  const createArchetype = (): void => {
+    if (catalogue.length >= MAX_ENEMY_ARCHETYPES) return;
+    const id = nextArchetypeId(tuning, "enemy");
+    onChange({
+      ...tuning,
+      enemyArchetypes: {
+        ...tuning.enemyArchetypes,
+        [id]: {
+          hp: 60,
+          radius: 26,
+          speedPerSecond: 160,
+          preferredDistance: 600,
+          weapons: [
+            {
+              kind: "bullet",
+              cooldownTicks: 30,
+              damage: 10,
+              shieldHitCost: 4,
+              projectileRadius: 7,
+              projectileSpeedPerSecond: 440,
+              projectileLifetimeTicks: 180,
+              turnRatePerSecond: Math.PI / 2,
+              burstCount: 1,
+              burstSpreadRadians: 0
+            }
+          ],
+          visual: {
+            shape: "arrowhead",
+            color: "#7c9cf5",
+            outline: "#d7e2ff",
+            showHealthBar: false
+          },
+          label: "Новый враг",
+          spawnPolicy: "standard",
+          spawnCost: 2,
+          unlockWave: 1,
+          scoreReward: 20,
+          creditReward: 2
+        }
+      }
+    });
+  };
+
   const cloneArchetype = (kind: string): void => {
     const source = archetypeOf(kind);
     if (source === undefined || catalogue.length >= MAX_ENEMY_ARCHETYPES) return;
@@ -517,6 +662,66 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           босс-волн.
         </p>
       </header>
+
+      <div className="row">
+        <button
+          className="button button--primary"
+          type="button"
+          disabled={catalogue.length >= MAX_ENEMY_ARCHETYPES}
+          onClick={createArchetype}
+        >
+          + добавить врага
+        </button>
+        <span className="screen__hint">
+          В каталоге {catalogue.length} из {MAX_ENEMY_ARCHETYPES}
+        </span>
+      </div>
+
+      <details className="legend">
+        <summary>Что означает каждый параметр</summary>
+        <dl className="legend__list">
+          <dt>HP</dt>
+          <dd>здоровье на волне 1; на следующих умножается на множитель волны</dd>
+          <dt>Радиус</dt>
+          <dd>размер корпуса: и хитбокс, и размер силуэта на экране</dd>
+          <dt>Скорость</dt>
+          <dd>единиц мира в секунду; корабль игроков делает 320</dd>
+          <dt>Дистанция</dt>
+          <dd>
+            на каком удалении от корабля враг старается держаться: ближе — подлетает, дальше —
+            отходит, на месте — облетает по дуге
+          </dd>
+          <dt>Цена спавна</dt>
+          <dd>вес при наборе волны процедурным директором; на явные волны из таблицы не влияет</dd>
+          <dt>Волна разблокировки</dt>
+          <dd>с какой волны директор вправе его брать; в явной таблице не проверяется</dd>
+          <dt>Появление</dt>
+          <dd>
+            в общем потоке волны либо после её зачистки — второй режим выводит тип из обычного пула
+            директора, и он приходит только по интервалу босс-волн
+          </dd>
+          <dt>Очки / Кредиты</dt>
+          <dd>
+            что получает экипаж за убийство: очки — результат забега, кредиты тратятся на апгрейды
+          </dd>
+          <dt>Оружие: перезарядка</dt>
+          <dd>секунд между выстрелами этого ствола; множитель темпа волны её сокращает</dd>
+          <dt>Оружие: урон</dt>
+          <dd>сколько снимает одно попадание по корпусу; от волны не растёт</dd>
+          <dt>Оружие: цена для щита</dt>
+          <dd>
+            сколько энергии щита уходит на перехват этого снаряда, если щит смотрит в ту сторону
+          </dd>
+          <dt>Оружие: жизнь снаряда</dt>
+          <dd>через сколько секунд снаряд исчезает сам, даже не попав</dd>
+          <dt>Оружие: залп и разброс</dt>
+          <dd>сколько снарядов уходит за одну перезарядку и на какой угол они разложены веером</dd>
+          <dt>Оружие: поворот ракеты</dt>
+          <dd>
+            радиан в секунду — насколько резко ракета доворачивает за кораблём; для пуль не важен
+          </dd>
+        </dl>
+      </details>
 
       <div className="cards">
         {catalogue.map((kind) => {
@@ -744,14 +949,11 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                         <option value="missile">ракета</option>
                       </select>
                     </label>
-                    <NumberField
-                      caption="Перезарядка, тиков"
-                      min={1}
-                      value={weapon.cooldownTicks}
+                    <SecondsField
+                      caption="Перезарядка, с"
+                      ticks={weapon.cooldownTicks}
                       onChange={(cooldownTicks) => {
-                        patchWeapon(kind, weaponIndex, {
-                          cooldownTicks: Math.max(1, Math.round(cooldownTicks))
-                        });
+                        patchWeapon(kind, weaponIndex, { cooldownTicks });
                       }}
                     />
                     <NumberField
@@ -782,14 +984,11 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                         patchWeapon(kind, weaponIndex, { projectileRadius });
                       }}
                     />
-                    <NumberField
-                      caption="Жизнь снаряда, тиков"
-                      min={1}
-                      value={weapon.projectileLifetimeTicks}
+                    <SecondsField
+                      caption="Жизнь снаряда, с"
+                      ticks={weapon.projectileLifetimeTicks}
                       onChange={(projectileLifetimeTicks) => {
-                        patchWeapon(kind, weaponIndex, {
-                          projectileLifetimeTicks: Math.max(1, Math.round(projectileLifetimeTicks))
-                        });
+                        patchWeapon(kind, weaponIndex, { projectileLifetimeTicks });
                       }}
                     />
                     <NumberField
@@ -930,23 +1129,39 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
 
       <h3 className="card__subtitle">Опасности и темп</h3>
       <div className="card__grid">
-        <NumberField
-          caption="Интервал спавна волны, тиков"
-          min={1}
-          value={tuning.enemySpawnIntervalTicks}
+        <SecondsField
+          caption="Интервал спавна у директора, с"
+          ticks={tuning.enemySpawnIntervalTicks}
           onChange={(enemySpawnIntervalTicks) => {
-            onChange({
-              ...tuning,
-              enemySpawnIntervalTicks: Math.max(1, Math.round(enemySpawnIntervalTicks))
-            });
+            onChange({ ...tuning, enemySpawnIntervalTicks });
           }}
         />
-        <NumberField
-          caption="Интермиссия, тиков"
-          min={1}
-          value={tuning.intermissionTicks}
+        <SecondsField
+          caption="Интермиссия, с"
+          ticks={tuning.intermissionTicks}
           onChange={(intermissionTicks) => {
-            onChange({ ...tuning, intermissionTicks: Math.max(1, Math.round(intermissionTicks)) });
+            onChange({ ...tuning, intermissionTicks });
+          }}
+        />
+        <SecondsField
+          caption="Астероид: время жизни, с"
+          ticks={tuning.asteroidLifetimeTicks}
+          onChange={(asteroidLifetimeTicks) => {
+            onChange({ ...tuning, asteroidLifetimeTicks });
+          }}
+        />
+        <SecondsField
+          caption="Ambient-астероид: пауза от, с"
+          ticks={tuning.ambientAsteroidIntervalMinTicks}
+          onChange={(ambientAsteroidIntervalMinTicks) => {
+            onChange({ ...tuning, ambientAsteroidIntervalMinTicks });
+          }}
+        />
+        <SecondsField
+          caption="Ambient-астероид: пауза до, с"
+          ticks={tuning.ambientAsteroidIntervalMaxTicks}
+          onChange={(ambientAsteroidIntervalMaxTicks) => {
+            onChange({ ...tuning, ambientAsteroidIntervalMaxTicks });
           }}
         />
         <NumberField

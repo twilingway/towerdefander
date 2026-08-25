@@ -45,7 +45,16 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     waveCampaign: {
       waves: [
         {
-          entries: [{ kind: "gunship", count: 2, spawnIntervalTicks: 12, sectors: ["N"] }],
+          entries: [
+            {
+              kind: "gunship",
+              count: 2,
+              spawnIntervalTicks: 12,
+              sectors: ["N"],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            }
+          ],
           hpMultiplier: null,
           tempoMultiplier: null
         }
@@ -81,7 +90,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 3,
+    version: 4,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -161,7 +170,16 @@ describe("balance tuning schema", () => {
         ...tuning().waveCampaign,
         waves: [
           {
-            entries: [{ kind, count: 1, spawnIntervalTicks: 12, sectors: [] }],
+            entries: [
+              {
+                kind,
+                count: 1,
+                spawnIntervalTicks: 12,
+                sectors: [],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
             hpMultiplier: null,
             tempoMultiplier: null
           }
@@ -180,7 +198,16 @@ describe("balance tuning schema", () => {
         ...tuning().waveCampaign,
         waves: [
           {
-            entries: [{ kind: "gunship", count: 1, spawnIntervalTicks: 12, sectors: ["UP"] }],
+            entries: [
+              {
+                kind: "gunship",
+                count: 1,
+                spawnIntervalTicks: 12,
+                sectors: ["UP"],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
             hpMultiplier: null,
             tempoMultiplier: null
           }
@@ -241,10 +268,10 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 4 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 5 }).success).toBe(
       false
     );
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 2 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 3 }).success).toBe(
       false
     );
   });
@@ -254,7 +281,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 3,
+        version: 4,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

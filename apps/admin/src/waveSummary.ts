@@ -1,10 +1,22 @@
 import {
   ASTEROID_SPAWN_KIND,
   type BalanceTuning,
-  type WaveDefinition
+  type WaveDefinition,
+  type WaveSpawnEntry
 } from "@spaceship-defender/protocol";
 
 const FIXED_STEP_MS = 50;
+/** One simulation step. Operators edit seconds; the preset stores ticks. */
+export const TICK_SECONDS = FIXED_STEP_MS / 1000;
+
+export function ticksToSeconds(ticks: number): number {
+  return Number((ticks * TICK_SECONDS).toFixed(2));
+}
+
+/** Never rounds down to zero: a value has to survive as at least one tick. */
+export function secondsToTicks(seconds: number): number {
+  return Math.max(1, Math.round(seconds / TICK_SECONDS));
+}
 
 export interface WaveSummary {
   readonly waveNumber: number;
@@ -25,6 +37,60 @@ export function directorBudgetAt(tuning: BalanceTuning, waveNumber: number): num
   const director = tuning.waveCampaign.director;
   const offset = Math.max(0, waveNumber - 1);
   return Math.min(director.budgetCap, director.baseBudget + director.budgetGrowth * offset);
+}
+
+/** Mirrors getWaveDifficulty so the console shows the numbers the run will use. */
+export function waveMultipliers(
+  tuning: BalanceTuning,
+  waveNumber: number
+): { readonly hp: number; readonly tempo: number } {
+  const director = tuning.waveCampaign.director;
+  const offset = Math.max(0, waveNumber - 1);
+  const wave = tuning.waveCampaign.waves[waveNumber - 1];
+  return {
+    hp: wave?.hpMultiplier ?? Math.min(director.hpMultiplierCap, 1 + director.hpGrowth * offset),
+    tempo:
+      wave?.tempoMultiplier ??
+      Math.min(director.tempoMultiplierCap, 1 + director.tempoGrowth * offset)
+  };
+}
+
+export interface EntryStats {
+  readonly hp: number;
+  readonly hpMultiplier: number;
+  readonly tempoMultiplier: number;
+  readonly cooldownTicks: number | null;
+  readonly damage: number | null;
+}
+
+/** What a single member of this group will actually be worth on that wave. */
+export function entryStats(
+  tuning: BalanceTuning,
+  entry: WaveSpawnEntry,
+  waveNumber: number
+): EntryStats {
+  const wave = waveMultipliers(tuning, waveNumber);
+  const hpMultiplier = entry.hpMultiplier ?? wave.hp;
+  const tempoMultiplier = entry.tempoMultiplier ?? wave.tempo;
+  if (entry.kind === ASTEROID_SPAWN_KIND) {
+    return {
+      hp: tuning.asteroidHp * hpMultiplier,
+      hpMultiplier,
+      tempoMultiplier,
+      cooldownTicks: null,
+      damage: tuning.asteroidDamage
+    };
+  }
+  const archetype = tuning.enemyArchetypes[entry.kind];
+  const weapon = archetype?.weapons[0];
+  return {
+    hp: (archetype?.hp ?? 0) * hpMultiplier,
+    hpMultiplier,
+    tempoMultiplier,
+    cooldownTicks:
+      weapon === undefined ? null : Math.max(1, Math.ceil(weapon.cooldownTicks / tempoMultiplier)),
+    damage: weapon?.damage ?? null
+  };
 }
 
 export function summariseWave(
