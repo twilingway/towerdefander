@@ -94,7 +94,7 @@ async function temporaryPresetPath(): Promise<string> {
 function tunedPresetsFile(hp: number): BalancePresetsFile {
   const tuning = createDefaultTuning();
   return {
-    version: 6,
+    version: 7,
     activePresetId: "tuned",
     presets: [
       {
@@ -269,7 +269,7 @@ describe("version 1 migration", () => {
     expect(warn).not.toHaveBeenCalled();
 
     const state = store.getState();
-    expect(state.version).toBe(6);
+    expect(state.version).toBe(7);
     expect(state.activePresetId).toBe("operator");
     const wave = state.presets[0]?.tuning.waveCampaign.waves[0];
     expect(wave?.entries.map(({ kind }) => kind)).toEqual(["interceptor", "asteroid"]);
@@ -304,7 +304,7 @@ describe("version 1 migration", () => {
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().version).toBe(6);
+    expect(store.getState().version).toBe(7);
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "boss").weapons).toHaveLength(1);
   });
 
@@ -326,9 +326,52 @@ describe("version 1 migration", () => {
     await store.load();
 
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().version).toBe(6);
+    expect(store.getState().version).toBe(7);
     expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(1600);
     expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(1600);
+  });
+
+  it("gives a version 6 weapon most of its own reach as a firing range", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const archetypes = Object.fromEntries(
+      Object.entries(defaults.enemyArchetypes).map(([kind, archetype]) => [
+        kind,
+        {
+          ...archetype,
+          weapons: archetype.weapons.map((weapon) => {
+            const legacy: Record<string, unknown> = { ...weapon };
+            delete legacy.engagementRange;
+            return legacy;
+          })
+        }
+      ])
+    );
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 6,
+        activePresetId: "operator",
+        presets: [
+          {
+            id: "operator",
+            name: "Operator",
+            tuning: { ...defaults, enemyArchetypes: archetypes }
+          }
+        ]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(7);
+    // Gunship bullets reach 440 * 180 * 0.05 = 3960 world units.
+    expect(
+      getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").weapons[0]
+    ).toMatchObject({ engagementRange: 2772 });
   });
 
   it("leaves a current document untouched", () => {

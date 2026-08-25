@@ -15,6 +15,7 @@ import {
   type BalanceTuning,
   type EnemyArchetype,
   type EnemyShape,
+  type EnemyWeaponTuning,
   type SpawnKind,
   type SpawnSector,
   type WaveDefinition,
@@ -35,7 +36,8 @@ import {
   secondsToTicks,
   spawnCostOf,
   summariseCampaign,
-  ticksToSeconds
+  ticksToSeconds,
+  weaponReach
 } from "./waveSummary.js";
 
 const TABS = ["waves", "enemies", "director", "presets"] as const;
@@ -592,6 +594,7 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
               projectileRadius: 7,
               projectileSpeedPerSecond: 440,
               projectileLifetimeTicks: 180,
+              engagementRange: 1200,
               turnRatePerSecond: Math.PI / 2,
               burstCount: 1,
               burstSpreadRadians: 0
@@ -728,6 +731,11 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           </dd>
           <dt>Оружие: жизнь снаряда</dt>
           <dd>через сколько секунд снаряд исчезает сам, даже не попав</dd>
+          <dt>Оружие: дальность огня</dt>
+          <dd>
+            с какого удаления ствол открывает огонь; дальше он молчит и держит заряд, поэтому
+            стреляет в тот же тик, когда корабль вошёл в дальность
+          </dd>
           <dt>Оружие: залп и разброс</dt>
           <dd>сколько снарядов уходит за одну перезарядку и на какой угол они разложены веером</dd>
           <dt>Оружие: поворот ракеты</dt>
@@ -1022,6 +1030,17 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                       }}
                     />
                     <NumberField
+                      caption="Дальность огня"
+                      min={1}
+                      step={50}
+                      value={weapon.engagementRange}
+                      onChange={(engagementRange) => {
+                        patchWeapon(kind, weaponIndex, {
+                          engagementRange: Math.max(1, Math.round(engagementRange))
+                        });
+                      }}
+                    />
+                    <NumberField
                       caption="Снарядов в залпе"
                       min={1}
                       value={weapon.burstCount}
@@ -1048,6 +1067,9 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                       }}
                     />
                   </div>
+                  <p className="screen__hint">
+                    {rangeHint(weapon, archetype.preferredDistance, tuning.cameraViewWidth)}
+                  </p>
                 </div>
               ))}
             </article>
@@ -1258,6 +1280,30 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
       </p>
     </section>
   );
+}
+
+/**
+ * The frame is 16:9, so its shorter half is what a target is guaranteed to be
+ * inside; a shooter further out opens fire from beyond the screen edge.
+ */
+function rangeHint(
+  weapon: EnemyWeaponTuning,
+  preferredDistance: number,
+  cameraViewWidth: number
+): string {
+  const reach = weaponReach(weapon);
+  const framed = Math.round((cameraViewWidth * CAMERA_VIEW_ASPECT) / 2);
+  const base = `Досягаемость снаряда ${String(reach)}, в кадре цель гарантированно видна до ${String(framed)}.`;
+  if (weapon.engagementRange > reach) {
+    return `${base} Дальность больше досягаемости: часть выстрелов истечёт по пути.`;
+  }
+  if (weapon.engagementRange < preferredDistance) {
+    return `${base} Дальность меньше дистанции удержания ${String(preferredDistance)}: враг зависнет вне неё и не выстрелит.`;
+  }
+  if (weapon.engagementRange > framed) {
+    return `${base} Огонь открывается из-за края экрана.`;
+  }
+  return base;
 }
 
 function clampCameraViewWidth(value: number): number {

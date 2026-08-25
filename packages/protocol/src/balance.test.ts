@@ -25,6 +25,7 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
         projectileRadius: 7,
         projectileSpeedPerSecond: 440,
         projectileLifetimeTicks: 180,
+        engagementRange: 1200,
         turnRatePerSecond: Math.PI / 2,
         burstCount: 1,
         burstSpreadRadians: 0
@@ -99,7 +100,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 6,
+    version: 7,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -289,10 +290,10 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 7 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 8 }).success).toBe(
       false
     );
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 5 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 6 }).success).toBe(
       false
     );
   });
@@ -302,7 +303,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 6,
+        version: 7,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

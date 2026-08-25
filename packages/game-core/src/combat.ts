@@ -45,6 +45,8 @@ export interface EnemyWeaponTuning {
   readonly projectileRadius: number;
   readonly projectileSpeedPerSecond: number;
   readonly projectileLifetimeTicks: number;
+  /** World units to the spaceship at which this weapon opens fire. */
+  readonly engagementRange: number;
   readonly turnRatePerSecond: number;
   readonly burstCount: number;
   readonly burstSpreadRadians: number;
@@ -513,6 +515,7 @@ function validateEnemyArchetypes(config: CombatConfig): void {
         [`weapons[${String(index)}].shieldHitCost`, weapon.shieldHitCost],
         [`weapons[${String(index)}].projectileRadius`, weapon.projectileRadius],
         [`weapons[${String(index)}].projectileSpeedPerSecond`, weapon.projectileSpeedPerSecond],
+        [`weapons[${String(index)}].engagementRange`, weapon.engagementRange],
         [`weapons[${String(index)}].turnRatePerSecond`, weapon.turnRatePerSecond]
       ])
     ];
@@ -1108,10 +1111,19 @@ function moveAndSpawnThreats(
     homingMissiles.length +
     state.projectiles.length;
 
+  // A weapon that held its fire keeps its charge, so it shoots on the first
+  // tick the spaceship enters its range instead of waiting out a cooldown.
+  const firedWeapons = new Set<string>();
   for (const enemy of enemies) {
     const weapons = archetypeOf(config, enemy.kind).weapons;
+    const distanceToSpaceship = Math.hypot(
+      state.spaceship.x - enemy.x,
+      state.spaceship.y - enemy.y
+    );
     weapons.forEach((weapon, weaponIndex) => {
       if ((enemy.weaponCooldownTicks[weaponIndex] ?? 0) > 0) return;
+      if (distanceToSpaceship > weapon.engagementRange) return;
+      firedWeapons.add(`${enemy.id}:${String(weaponIndex)}`);
       for (let shot = 0; shot < weapon.burstCount; shot += 1) {
         const aimOffset = burstAimOffset(weapon, shot);
         if (weapon.kind === "bullet") {
@@ -1162,6 +1174,7 @@ function moveAndSpawnThreats(
     weaponCooldownTicks: archetypeOf(config, enemy.kind).weapons.map((weapon, weaponIndex) => {
       const remaining = enemy.weaponCooldownTicks[weaponIndex] ?? 0;
       if (remaining > 0) return remaining;
+      if (!firedWeapons.has(`${enemy.id}:${String(weaponIndex)}`)) return remaining;
       return Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier));
     })
   }));

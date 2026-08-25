@@ -1,6 +1,7 @@
 import {
   ASTEROID_SPAWN_KIND,
   type BalanceTuning,
+  type EnemyWeaponTuning,
   type WaveDefinition,
   type WaveSpawnEntry
 } from "@spaceship-defender/protocol";
@@ -16,6 +17,16 @@ export function ticksToSeconds(ticks: number): number {
 /** Never rounds down to zero: a value has to survive as at least one tick. */
 export function secondsToTicks(seconds: number): number {
   return Math.max(1, Math.round(seconds / TICK_SECONDS));
+}
+
+/**
+ * How far a shot from this weapon can travel before its lifetime runs out. A
+ * homing missile spends part of that on turning, so its useful range is lower.
+ */
+export function weaponReach(weapon: EnemyWeaponTuning): number {
+  return Math.round(
+    weapon.projectileSpeedPerSecond * weapon.projectileLifetimeTicks * TICK_SECONDS
+  );
 }
 
 export interface WaveSummary {

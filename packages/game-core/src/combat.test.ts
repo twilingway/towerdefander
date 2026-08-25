@@ -537,6 +537,54 @@ describe("deterministic combat foundation", () => {
     expect(state.enemies[0]?.weaponCooldownTicks[1]).toBeGreaterThan(0);
   });
 
+  it("holds fire outside its range and shoots when the target comes inside", () => {
+    const base = createSpaceshipSimulationConfig();
+    const bullet = firstWeapon(base, "gunship");
+    // A sentry that barely moves, so only the distance decides when it fires.
+    const sentry = {
+      ...getEnemyArchetype(base, "gunship"),
+      speedPerSecond: 0.001,
+      preferredDistance: 100,
+      weapons: [{ ...bullet, cooldownTicks: 30, engagementRange: 500 }]
+    };
+    const config = createSpaceshipSimulationConfig({
+      enemySpawnIntervalTicks: 100_000,
+      enemyArchetypes: { ...base.enemyArchetypes, sentry }
+    });
+    const initial = createSpaceshipSimulationState(config, 77);
+    const stand = (offsetX: number): CombatEnemyState => ({
+      id: "sentry-1",
+      spawnSequence: 1,
+      kind: "sentry",
+      previousX: initial.spaceship.x + offsetX,
+      previousY: initial.spaceship.y,
+      x: initial.spaceship.x + offsetX,
+      y: initial.spaceship.y,
+      velocity: { x: 0, y: 0 },
+      heading: 0,
+      radius: sentry.radius,
+      spawnedTick: 0,
+      hp: sentry.hp,
+      maxHp: sentry.hp,
+      weaponCooldownTicks: [0]
+    });
+
+    const held = advanceSpaceshipSimulation(
+      { ...initial, pendingSpawns: [], enemies: [stand(900)] },
+      config
+    );
+    // Out of range: no shot, and the barrel keeps its charge instead of reloading.
+    expect(held.hostileProjectiles).toHaveLength(0);
+    expect(held.enemies[0]?.weaponCooldownTicks).toEqual([0]);
+
+    const opened = advanceSpaceshipSimulation(
+      { ...initial, pendingSpawns: [], enemies: [stand(400)] },
+      config
+    );
+    expect(opened.hostileProjectiles).toHaveLength(1);
+    expect(opened.enemies[0]?.weaponCooldownTicks).toEqual([30]);
+  });
+
   it("lets one group override the wave curve without touching the others", () => {
     const base = createSpaceshipSimulationConfig();
     const config = createSpaceshipSimulationConfig({
@@ -997,10 +1045,11 @@ describe("combat motion and collision", () => {
       id: `gunship-cap-${String(index)}`,
       spawnSequence: index + 1,
       kind: "gunship",
-      previousX: 4400,
-      previousY: 400 + index * 4,
-      x: 4400,
-      y: 400 + index * 4,
+      // Inside gunship engagement range, so the ready ones actually shoot.
+      previousX: 3000,
+      previousY: 2200 + index * 4,
+      x: 3000,
+      y: 2200 + index * 4,
       velocity: { x: 0, y: 0 },
       radius: getEnemyArchetype(config, "gunship").radius,
       spawnedTick: 0,

@@ -12,7 +12,8 @@ import {
   entryStats,
   spawnCostOf,
   summariseCampaign,
-  summariseWave
+  summariseWave,
+  weaponReach
 } from "./waveSummary.js";
 
 function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
@@ -30,6 +31,7 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
         projectileRadius: 7,
         projectileSpeedPerSecond: 440,
         projectileLifetimeTicks: 180,
+        engagementRange: 1200,
         turnRatePerSecond: Math.PI / 2,
         burstCount: 1,
         burstSpreadRadians: 0
@@ -206,5 +208,17 @@ describe("tick and second conversion", () => {
   it("snaps a value between ticks to the nearest step", () => {
     expect(secondsToTicks(0.62)).toBe(12);
     expect(secondsToTicks(0.68)).toBe(14);
+  });
+});
+
+describe("weapon reach", () => {
+  it("turns projectile speed and lifetime into world units", () => {
+    const weapon = archetype(2).weapons[0];
+    if (weapon === undefined) throw new Error("fixture must carry a weapon");
+    // 440 units per second for 180 ticks of 50 ms.
+    expect(weaponReach(weapon)).toBe(3960);
+    expect(
+      weaponReach({ ...weapon, projectileSpeedPerSecond: 900, projectileLifetimeTicks: 120 })
+    ).toBe(5400);
   });
 });

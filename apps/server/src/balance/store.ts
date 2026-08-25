@@ -52,14 +52,38 @@ function migrateWave(wave: unknown): unknown {
   return { ...wave, entries: readArray(wave, "entries").map(migrateEntry) };
 }
 
+/** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
+const TICK_SECONDS = 0.05;
+/** A shot at the very edge of its reach expires on arrival, so aim shorter. */
+const MIGRATED_RANGE_SHARE = 0.7;
+
+/**
+ * Version 6 weapons had no range and opened fire from anywhere in the arena.
+ * Give a migrated weapon most of its own projectile reach instead of a shared
+ * default, so an operator preset keeps shooting from a distance its bullets
+ * actually cover.
+ */
+function migrateWeapon(weapon: unknown): unknown {
+  if (!isRecord(weapon) || weapon.engagementRange !== undefined) return weapon;
+  const reach =
+    Number(weapon.projectileSpeedPerSecond) * Number(weapon.projectileLifetimeTicks) * TICK_SECONDS;
+  return {
+    ...weapon,
+    engagementRange:
+      Number.isFinite(reach) && reach > 0 ? Math.round(reach * MIGRATED_RANGE_SHARE) : 1200
+  };
+}
+
 function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(archetype)) return archetype;
   const known = defaults.enemyArchetypes[kind];
   const singleWeapon = archetype.weapon;
   const visual = isRecord(archetype.visual) ? archetype.visual : undefined;
+  const weapons =
+    archetype.weapons ?? (singleWeapon === undefined ? known?.weapons : [singleWeapon]);
   const migrated: LegacyRecord = {
     ...archetype,
-    weapons: archetype.weapons ?? (singleWeapon === undefined ? known?.weapons : [singleWeapon]),
+    weapons: Array.isArray(weapons) ? weapons.map(migrateWeapon) : weapons,
     visual:
       visual === undefined
         ? (known?.visual ?? {
@@ -99,9 +123,9 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
 /**
  * Version 1 stored one `sector` per wave entry and had no visuals, because the
  * enemy kinds were a fixed enum drawn by the display; version 5 still framed
- * the world with a literal in the display instead of `cameraViewWidth`. Carry
- * those documents forward instead of silently replacing an operator's balance
- * with defaults.
+ * the world with a literal in the display instead of `cameraViewWidth`, and
+ * version 6 let every weapon fire across the whole arena. Carry those documents
+ * forward instead of silently replacing an operator's balance with defaults.
  */
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;

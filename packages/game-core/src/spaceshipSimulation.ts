@@ -203,6 +203,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 7,
           projectileSpeedPerSecond: 440,
           projectileLifetimeTicks: 180,
+          engagementRange: 1200,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0
@@ -236,6 +237,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 12,
           projectileSpeedPerSecond: 260,
           projectileLifetimeTicks: 240,
+          engagementRange: 1700,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0
@@ -269,6 +271,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 9,
           projectileSpeedPerSecond: 900,
           projectileLifetimeTicks: 120,
+          engagementRange: 3000,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0
@@ -302,6 +305,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 5,
           projectileSpeedPerSecond: 520,
           projectileLifetimeTicks: 90,
+          engagementRange: 600,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0
@@ -335,6 +339,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 14,
           projectileSpeedPerSecond: 240,
           projectileLifetimeTicks: 300,
+          engagementRange: 1600,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 3,
           burstSpreadRadians: Math.PI / 6
