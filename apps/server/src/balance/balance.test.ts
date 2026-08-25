@@ -6,10 +6,13 @@ import type { Request, RequestHandler, Response } from "express";
 import { balancePresetsFileSchema, type BalancePresetsFile } from "@spaceship-defender/protocol";
 import { describe, expect, it, vi } from "vitest";
 
+import { Readable } from "node:stream";
+
 import {
   createBalanceSaveHandler,
   createBalanceStateHandler,
-  createBalanceValidateHandler
+  createBalanceValidateHandler,
+  readJsonBody
 } from "./routes.js";
 import { BalanceStore, createDefaultPresetsFile, createDefaultTuning } from "./store.js";
 
@@ -300,5 +303,63 @@ describe("balance routes", () => {
       output.response
     );
     expect(output.state.body).toMatchObject({ valid: false });
+  });
+});
+
+describe("json body reader", () => {
+  async function readBody(payload: string): Promise<{ body: unknown; state: ResponseState }> {
+    const state: ResponseState = { status: 200, headers: {}, body: undefined };
+    const input = Readable.from(
+      payload.length === 0 ? [] : [Buffer.from(payload, "utf8")]
+    ) as unknown as Request;
+    (input as unknown as { destroy: () => void }).destroy = () => undefined;
+
+    const settled = new Promise<void>((resolve) => {
+      const fakeResponse = {
+        setHeader(name: string, value: string) {
+          state.headers[name.toLowerCase()] = value;
+          return this;
+        },
+        status(status: number) {
+          state.status = status;
+          return this;
+        },
+        type() {
+          return this;
+        },
+        json(body: unknown) {
+          state.body = body;
+          resolve();
+          return this;
+        },
+        send(body: unknown) {
+          state.body = body;
+          resolve();
+          return this;
+        }
+      } as unknown as Response;
+      readJsonBody()(input, fakeResponse, () => {
+        resolve();
+      });
+    });
+
+    await settled;
+    return { body: (input as unknown as { body: unknown }).body, state };
+  }
+
+  it("parses a JSON payload onto the request", async () => {
+    const result = await readBody(JSON.stringify({ hello: "world" }));
+    expect(result.body).toEqual({ hello: "world" });
+  });
+
+  it("answers 400 for a payload that is not JSON", async () => {
+    const result = await readBody("{ not json");
+    expect(result.state.status).toBe(400);
+    expect(result.state.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("treats an empty payload as no body", async () => {
+    const result = await readBody("");
+    expect(result.body).toBeUndefined();
   });
 });

@@ -12,8 +12,60 @@ export interface BalanceRouteOptions {
 
 export interface BalanceRouteRegistrar {
   get(path: string, handler: RequestHandler): unknown;
-  put(path: string, handler: RequestHandler): unknown;
-  post(path: string, handler: RequestHandler): unknown;
+  put(path: string, ...handlers: RequestHandler[]): unknown;
+  post(path: string, ...handlers: RequestHandler[]): unknown;
+}
+
+const MAX_BODY_BYTES = 1_048_576;
+
+/**
+ * Minimal JSON body reader. Express ships with Colyseus but is not a declared
+ * dependency of this app, so the bundle must not import it at runtime.
+ */
+export function readJsonBody(): RequestHandler {
+  return (request: Request, response: Response, next: (error?: unknown) => void): void => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let settled = false;
+    const fail = (status: number, message: string): void => {
+      if (settled) return;
+      settled = true;
+      request.destroy();
+      applyNoStoreHeaders(response);
+      response.status(status).json({ error: message });
+    };
+
+    request.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        fail(413, "Balance document is too large.");
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("error", () => {
+      fail(400, "Balance document could not be read.");
+    });
+    request.on("end", () => {
+      if (settled) return;
+      settled = true;
+      if (chunks.length === 0) {
+        (request as unknown as { body: unknown }).body = undefined;
+        next();
+        return;
+      }
+      try {
+        (request as unknown as { body: unknown }).body = JSON.parse(
+          Buffer.concat(chunks).toString("utf8")
+        );
+      } catch {
+        applyNoStoreHeaders(response);
+        response.status(400).json({ error: "Balance document is not valid JSON." });
+        return;
+      }
+      next();
+    });
+  };
 }
 
 function applyNoStoreHeaders(response: Response): void {
@@ -104,6 +156,6 @@ export function registerBalanceRoutes(
 ): void {
   app.get("/admin/balance", createBalanceStateHandler(options));
   app.get("/admin/balance/defaults", createBalanceDefaultsHandler(options));
-  app.post("/admin/balance/validate", createBalanceValidateHandler(options));
-  app.put("/admin/balance", createBalanceSaveHandler(options));
+  app.post("/admin/balance/validate", readJsonBody(), createBalanceValidateHandler(options));
+  app.put("/admin/balance", readJsonBody(), createBalanceSaveHandler(options));
 }

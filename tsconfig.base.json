@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     "allowJs": false,
+    // Workspace packages are consumed as TypeScript source and are also run
+    // directly by Node's type stripping, which does not rewrite .js to .ts.
+    "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "exactOptionalPropertyTypes": true,

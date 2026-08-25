@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ENEMY_KINDS } from "./enemyKinds.js";
+import { ENEMY_KINDS } from "./enemyKinds.ts";
 
 export const BALANCE_FILE_VERSION = 1 as const;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;

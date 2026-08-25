@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-export { ENEMY_KINDS } from "./enemyKinds.js";
-import { ENEMY_KINDS } from "./enemyKinds.js";
+export { ENEMY_KINDS } from "./enemyKinds.ts";
+import { ENEMY_KINDS } from "./enemyKinds.ts";
 
 export const PROTOCOL_VERSION = 15 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
@@ -704,4 +704,4 @@ export const serverErrorSchema = z
   .strict();
 export type ServerError = z.infer<typeof serverErrorSchema>;
 
-export * from "./balance.js";
+export * from "./balance.ts";

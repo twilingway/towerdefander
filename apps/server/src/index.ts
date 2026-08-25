@@ -1,5 +1,5 @@
 import { defineServer, matchMaker } from "colyseus";
-import express, { type Request, type Response } from "express";
+import type { Request, Response } from "express";
 import { ROOM_TYPE } from "@spaceship-defender/protocol";
 
 import { getBalanceStore, registerBalanceRoutes } from "./balance/index.js";
@@ -23,7 +23,6 @@ const gameServer = defineServer({
       password: statsPassword,
       queryRooms: () => matchMaker.query({ name: ROOM_TYPE })
     });
-    app.use("/admin", express.json({ limit: "1mb" }));
     registerBalanceRoutes(app, { password: balancePassword, store: balanceStore });
   }
 });
