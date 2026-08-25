@@ -80,6 +80,18 @@ describe("balance application to runs", () => {
     room.onDispose();
   });
 
+  it("publishes the tuned camera frame to the display projection", () => {
+    const tuning = createDefaultTuning();
+    vi.spyOn(store, "getActiveTuning").mockReturnValue({ ...tuning, cameraViewWidth: 3200 });
+    const room = startedRoom();
+
+    // The display frames the world from this value, so a dropped sync would
+    // silently leave every screen on the schema default.
+    expect(activeConfig(room).cameraViewWidth).toBe(3200);
+    expect(room.state.game.display.cameraViewWidth).toBe(3200);
+    room.onDispose();
+  });
+
   it("keeps a running run on the balance it started with", () => {
     vi.spyOn(store, "getActiveTuning").mockReturnValue(tuningWithGunshipHp(128));
     const room = startedRoom();
