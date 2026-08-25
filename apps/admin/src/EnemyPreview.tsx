@@ -62,8 +62,15 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
           />
         ))}
         <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={hitRadius} />
-        <text className="preview__tag" x={CENTER + hitRadius + 3} y={CENTER - 3}>
-          {archetype.radius}
+        <text className="preview__tag preview__tag--hit" x={CENTER + 3} y={CENTER - hitRadius - 3}>
+          поражение {archetype.radius}
+        </text>
+        <text
+          className="preview__tag preview__tag--ship"
+          x={CENTER + 3}
+          y={CENTER - SPACESHIP_WORLD_RADIUS * scale.factor - 3}
+        >
+          корабль {SPACESHIP_WORLD_RADIUS}
         </text>
         {visual.showHealthBar ? (
           <g>
@@ -87,12 +94,12 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
         ) : null}
       </svg>
       <figcaption className="preview__caption">
-        <span className="preview__row preview__row--hit">зона поражения {archetype.radius}</span>
+        <span className="preview__row preview__row--hit">сплошной круг — по нему бьют снаряды</span>
         <span className="preview__row preview__row--model">
           модель {modelWorldRadius(archetype.radius, visual.modelScale)}
           {scale.modelOverflows ? " (шире кадра)" : ""}
         </span>
-        <span className="preview__key">пунктир — корпус корабля ({SPACESHIP_WORLD_RADIUS})</span>
+        <span className="preview__key">пунктир — корпус корабля, только для сравнения</span>
       </figcaption>
     </figure>
   );

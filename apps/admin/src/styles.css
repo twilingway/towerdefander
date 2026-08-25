@@ -532,8 +532,15 @@ body {
 }
 
 .preview__tag {
-  fill: rgba(79, 209, 197, 0.9);
   font-size: 9px;
+}
+
+.preview__tag--hit {
+  fill: rgba(79, 209, 197, 0.95);
+}
+
+.preview__tag--ship {
+  fill: var(--ink-dim);
 }
 
 .preview__row {
