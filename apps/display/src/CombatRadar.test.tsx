@@ -8,6 +8,7 @@ const baseGame: DisplayGameSnapshot = {
   tick: 1,
   elapsedMs: 50,
   worldWidth: 4_400,
+  cameraViewWidth: 1600,
   worldHeight: 4_400,
   arenaRadius: 2_200,
   spaceship: {

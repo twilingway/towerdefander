@@ -108,7 +108,8 @@ function tuning(): BalanceTuning {
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
-    missileInterceptScoreReward: 5
+    missileInterceptScoreReward: 5,
+    cameraViewWidth: 1600
   };
 }
 

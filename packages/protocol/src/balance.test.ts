@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BUILTIN_ENEMY_KINDS,
+  CAMERA_VIEW_WIDTH_MAX,
+  CAMERA_VIEW_WIDTH_MIN,
   balancePresetsFileSchema,
   balanceTuningSchema,
   type BalanceTuning,
@@ -90,13 +92,14 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
     missileInterceptScoreReward: 5,
+    cameraViewWidth: 1600,
     ...overrides
   };
 }
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 5,
+    version: 6,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -105,6 +108,18 @@ function presetsFile(value: BalanceTuning = tuning()) {
 describe("balance tuning schema", () => {
   it("accepts a complete tuning document", () => {
     expect(balanceTuningSchema.safeParse(tuning()).success).toBe(true);
+  });
+
+  it("keeps the camera frame between the readable and the whole-world bounds", () => {
+    expect(balanceTuningSchema.safeParse(tuning({ cameraViewWidth: 2400 })).success).toBe(true);
+    expect(
+      balanceTuningSchema.safeParse({ ...tuning(), cameraViewWidth: CAMERA_VIEW_WIDTH_MIN - 1 })
+        .success
+    ).toBe(false);
+    expect(
+      balanceTuningSchema.safeParse({ ...tuning(), cameraViewWidth: CAMERA_VIEW_WIDTH_MAX + 1 })
+        .success
+    ).toBe(false);
   });
 
   it("rejects a non-positive archetype hp", () => {
@@ -274,10 +289,10 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 6 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 7 }).success).toBe(
       false
     );
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 4 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 5 }).success).toBe(
       false
     );
   });
@@ -287,7 +302,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 5,
+        version: 6,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

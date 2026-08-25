@@ -1,3 +1,4 @@
+import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import type {
   DisplayGameSnapshot,
   EnemyShape,
@@ -147,9 +148,15 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
+    const framedWidth = this.snapshot.cameraViewWidth;
     this.snapshot = snapshot;
     const shouldSnap = this.snapshotReset.consumeForSnapshot();
     if (!this.sys.isActive()) return;
+    // The framed slice comes from the balance preset, so a new run - or a
+    // preview slider - can widen it while the scene keeps running.
+    if (snapshot.cameraViewWidth !== framedWidth) {
+      this.configureViewport(this.rendererWidth, this.rendererHeight);
+    }
     const now = performance.now();
     if (shouldSnap || this.spaceshipBody === undefined || this.turret === undefined) {
       this.snapToSnapshot(snapshot, now);
@@ -269,7 +276,12 @@ class SpaceshipScene extends Phaser.Scene {
   };
 
   private configureViewport(actualWidth: number, actualHeight: number): void {
-    const viewport = getResponsiveViewport(actualWidth, actualHeight);
+    const viewport = getResponsiveViewport(
+      actualWidth,
+      actualHeight,
+      this.snapshot.cameraViewWidth,
+      this.snapshot.cameraViewWidth * CAMERA_VIEW_ASPECT
+    );
     this.rendererWidth = actualWidth;
     this.rendererHeight = actualHeight;
     this.viewportWidth = viewport.width;

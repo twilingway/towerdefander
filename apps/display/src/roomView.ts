@@ -143,6 +143,7 @@ interface NetworkGameState {
   credits: number;
   teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
+    cameraViewWidth: number;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
@@ -261,6 +262,7 @@ export function toDisplayRoomView(
                     height: obstacle.height
                   }
             ),
+            cameraViewWidth: display.cameraViewWidth,
             enemyCatalogue: [...display.enemyCatalogue.values()].map((entry) => ({
               kind: entry.kind,
               label: entry.label,

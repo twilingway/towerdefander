@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ASTEROID_SPAWN_KIND,
+  CAMERA_VIEW_ASPECT,
+  CAMERA_VIEW_WIDTH_MAX,
+  CAMERA_VIEW_WIDTH_MIN,
   ENEMY_SHAPES,
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
@@ -1222,6 +1225,25 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
         />
       </div>
 
+      <h3 className="card__subtitle">Камера мира</h3>
+      <div className="card__grid">
+        <NumberField
+          caption="Ширина кадра, мировых единиц"
+          min={CAMERA_VIEW_WIDTH_MIN}
+          step={50}
+          value={tuning.cameraViewWidth}
+          onChange={(cameraViewWidth) => {
+            onChange({ ...tuning, cameraViewWidth: clampCameraViewWidth(cameraViewWidth) });
+          }}
+        />
+      </div>
+      <p className="screen__hint">
+        Дисплей показывает не меньше этого участка мира, высота — 9/16 от ширины, то есть{" "}
+        {Math.round(tuning.cameraViewWidth * CAMERA_VIEW_ASPECT)} единиц. Чем больше значение, тем
+        дальше камера и тем раньше видно подлетающих врагов. Кадр применяется со следующего запуска
+        боя, допустимый диапазон — от {CAMERA_VIEW_WIDTH_MIN} до {CAMERA_VIEW_WIDTH_MAX}.
+      </p>
+
       <h3 className="card__subtitle">Лимиты сущностей (только чтение)</h3>
       <ul className="caps">
         {ENTITY_CAPS.map(([caption, value]) => (
@@ -1236,6 +1258,10 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
       </p>
     </section>
   );
+}
+
+function clampCameraViewWidth(value: number): number {
+  return Math.min(CAMERA_VIEW_WIDTH_MAX, Math.max(CAMERA_VIEW_WIDTH_MIN, Math.round(value)));
 }
 
 interface PresetsScreenProps {

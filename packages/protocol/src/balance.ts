@@ -7,9 +7,9 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 
-export const BALANCE_FILE_VERSION = 5 as const;
+export const BALANCE_FILE_VERSION = 6 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -24,6 +24,19 @@ export const enemySpawnPolicySchema = z.enum(ENEMY_SPAWN_POLICIES);
 export type EnemySpawnPolicy = z.infer<typeof enemySpawnPolicySchema>;
 
 export const ASTEROID_SPAWN_KIND = "asteroid" as const;
+
+/**
+ * World units the display frames at its narrowest; the height follows as 9/16
+ * of it. The lower bound keeps the spaceship readable, the upper one is the
+ * whole square world, past which there is nothing left to reveal.
+ */
+export const CAMERA_VIEW_WIDTH_MIN = 800;
+export const CAMERA_VIEW_WIDTH_MAX = 4400;
+export const CAMERA_VIEW_ASPECT = 9 / 16;
+export const cameraViewWidthSchema = z
+  .number()
+  .min(CAMERA_VIEW_WIDTH_MIN)
+  .max(CAMERA_VIEW_WIDTH_MAX);
 export const enemyArchetypeIdSchema = z
   .string()
   .min(1)
@@ -171,7 +184,8 @@ export const balanceTuningSchema = z
     asteroidSpawnCost: positiveInteger,
     asteroidScoreReward: nonNegativeFinite,
     asteroidCreditReward: nonNegativeFinite,
-    missileInterceptScoreReward: nonNegativeFinite
+    missileInterceptScoreReward: nonNegativeFinite,
+    cameraViewWidth: cameraViewWidthSchema
   })
   .strict()
   .superRefine((value, context) => {

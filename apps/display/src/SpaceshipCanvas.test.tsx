@@ -7,6 +7,7 @@ import {
   SpaceshipCanvas,
   prepareRuntimeHydration,
   shouldPrepareRuntimeHydration,
+  shouldReframeRuntime,
   shouldUpdateRuntime
 } from "./SpaceshipCanvas.js";
 
@@ -14,6 +15,12 @@ describe("SpaceshipCanvas", () => {
   it("does not restart Phaser interpolation for a telemetry-only patch", () => {
     expect(shouldUpdateRuntime(42, 42)).toBe(false);
     expect(shouldUpdateRuntime(42, 43)).toBe(true);
+  });
+
+  it("reframes the runtime when a held tick keeps a moved camera width", () => {
+    expect(shouldUpdateRuntime(240, 240)).toBe(false);
+    expect(shouldReframeRuntime(1600, 1600)).toBe(false);
+    expect(shouldReframeRuntime(1600, 2400)).toBe(true);
   });
 
   it("rehydrates exactly once even when reconnect keeps the defeated snapshot tick", () => {
@@ -95,6 +102,7 @@ const testGame = {
   tick: 1,
   elapsedMs: 50,
   worldWidth: 4400,
+  cameraViewWidth: 1600,
   worldHeight: 4400,
   arenaRadius: 2200,
   spaceship: {

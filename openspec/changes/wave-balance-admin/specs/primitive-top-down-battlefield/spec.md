@@ -55,3 +55,46 @@ hostile bullets и homing missiles. Каждый enemy kind SHALL иметь с�
 - **WHEN** encounter phase становится `result`, outcome равен `defeat` и HP равен нулю
 - **THEN** display показывает frozen final battlefield, wave/score и поражение без локального
   restart
+
+### Requirement: Display показывает top-down мир примитивами
+
+Phaser SHALL отображать square bounding world `4400×4400`, одну arena circumference radius 2200,
+background grid только внутри arena, распределённые внутри circle декоративные не участвующие в
+collision примитивы, spaceship body, turret, shield arc и projectiles средствами Graphics/Shape без
+bitmap assets. Область за circle SHALL оставаться более тёмным deep-space background. Active
+battlefield SHALL занимать весь CSS viewport без card padding, border, фиксированной 16:9 рамки и
+letterbox. Базовая logical view SHALL браться из display-проекции снапшота: ширина равна
+authoritative `cameraViewWidth`, высота — `9/16` от неё, а не литералу в коде дисплея. При другом
+aspect ratio camera SHALL расширять видимую область по одной оси без растяжения world/circle и без
+обрезания базовой области. Изменение authoritative кадра SHALL перенастраивать camera без
+пересоздания Room/runtime. React HUD, room code и connection status SHALL быть overlays и SHALL NOT
+уменьшать Phaser viewport.
+
+#### Scenario: Матч начинается
+
+- **WHEN** room переходит в active и display получает первый snapshot
+- **THEN** canvas покрывает viewport и показывает круглую нерастянутую arena, grid внутри неё,
+  spaceship и примитивный мир, а компактный React HUD поверх показывает roles/status/ping
+
+#### Scenario: Снаряд создан
+
+- **WHEN** snapshot впервые содержит projectile `entityId`
+- **THEN** display создаёт отдельный круг и двигает его к авторитетной position
+
+#### Scenario: Экран меняет размер
+
+- **WHEN** active display меняется между `1920×1080`, `1366×768` и `1024×768`
+- **THEN** renderer/camera обновляются без пересоздания Room/runtime, canvas покрывает viewport,
+  arena остаётся кругом и базовая logical область видима
+
+#### Scenario: Оператор расширил кадр камеры
+
+- **WHEN** активный пресет задаёт `cameraViewWidth` вдвое больше прежнего и начинается новый run
+- **THEN** тот же renderer показывает вдвое более широкий участок мира с той же пропорцией `16:9` и
+  прежним поведением camera bounds
+
+#### Scenario: Ползунок превью меняет кадр
+
+- **WHEN** в dev-превью дисплея сдвинут ползунок ширины кадра камеры
+- **THEN** сцена немедленно перерисовывается новым кадром без перезагрузки, а показанное число
+  совпадает с тем, которое сохраняется в консоли баланса

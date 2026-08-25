@@ -7,8 +7,9 @@ import {
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
+import { cameraViewWidthSchema } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 16 as const;
+export const PROTOCOL_VERSION = 17 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -554,6 +555,8 @@ export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntry
 export const displayGameSnapshotSchema = z
   .object({
     ...gameShape,
+    /** Narrowest slice of the world the display frames; height follows as 9/16. */
+    cameraViewWidth: cameraViewWidthSchema,
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),

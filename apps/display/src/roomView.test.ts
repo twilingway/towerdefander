@@ -77,6 +77,7 @@ describe("display room view", () => {
         },
         credits: 6,
         display: {
+          cameraViewWidth: 1600,
           enemyCatalogue: [],
           obstacles: collection([
             {

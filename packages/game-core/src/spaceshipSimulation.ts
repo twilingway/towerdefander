@@ -20,6 +20,12 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly fixedStepMs: number;
   readonly worldWidth: number;
   readonly worldHeight: number;
+  /**
+   * Presentation only: the narrowest slice of the world the display frames, in
+   * world units. The simulation never reads it; it travels with the balance
+   * preset the way enemy visuals do.
+   */
+  readonly cameraViewWidth: number;
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;
@@ -128,6 +134,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   fixedStepMs: 50,
   worldWidth: 4400,
   worldHeight: 4400,
+  cameraViewWidth: 1600,
   arenaRadius: 2200,
   spaceshipSpeedPerSecond: 320,
   spaceshipAccelerationPerSecondSquared: 640,
@@ -395,6 +402,7 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
   const positiveFiniteNumbers: readonly (readonly [string, number])[] = [
     ["worldWidth", config.worldWidth],
     ["worldHeight", config.worldHeight],
+    ["cameraViewWidth", config.cameraViewWidth],
     ["spaceshipSpeedPerSecond", config.spaceshipSpeedPerSecond],
     ["spaceshipAccelerationPerSecondSquared", config.spaceshipAccelerationPerSecondSquared],
     ["spaceshipBrakingPerSecondSquared", config.spaceshipBrakingPerSecondSquared],

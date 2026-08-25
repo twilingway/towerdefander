@@ -1,5 +1,8 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  CAMERA_VIEW_ASPECT,
+  CAMERA_VIEW_WIDTH_MAX,
+  CAMERA_VIEW_WIDTH_MIN,
   CREW_ROLES,
   PROTOCOL_VERSION,
   ROOM_TYPE,
@@ -30,6 +33,7 @@ import {
 import {
   createPreviewRoomView,
   isPreviewMode,
+  PREVIEW_CAMERA_VIEW_WIDTH,
   PREVIEW_PHASES,
   type PreviewPhase
 } from "./previewMode.js";
@@ -66,11 +70,12 @@ export function DisplayApp() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
   // and the Phaser frame all render through the production path.
   const previewView = useMemo(
-    () => (preview ? createPreviewRoomView(previewPhase) : undefined),
-    [preview, previewPhase]
+    () => (preview ? createPreviewRoomView(previewPhase, previewCameraViewWidth) : undefined),
+    [preview, previewPhase, previewCameraViewWidth]
   );
   const view = previewView ?? networkView;
   const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
@@ -216,7 +221,12 @@ export function DisplayApp() {
   return (
     <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
       {previewView !== undefined && (
-        <PreviewControls phase={previewPhase} onPhaseChange={setPreviewPhase} />
+        <PreviewControls
+          phase={previewPhase}
+          onPhaseChange={setPreviewPhase}
+          cameraViewWidth={previewCameraViewWidth}
+          onCameraViewWidthChange={setPreviewCameraViewWidth}
+        />
       )}
       <header className="room-header">
         <div>
@@ -406,10 +416,14 @@ export function DisplayApp() {
 
 export function PreviewControls({
   phase,
-  onPhaseChange
+  onPhaseChange,
+  cameraViewWidth,
+  onCameraViewWidthChange
 }: {
   readonly phase: PreviewPhase;
   readonly onPhaseChange: (phase: PreviewPhase) => void;
+  readonly cameraViewWidth: number;
+  readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -443,6 +457,22 @@ export function PreviewControls({
               {previewPhaseLabel(candidate)}
             </button>
           ))}
+          <label className="preview-controls__camera">
+            <span>
+              Кадр камеры {cameraViewWidth} × {Math.round(cameraViewWidth * CAMERA_VIEW_ASPECT)}
+            </span>
+            <input
+              type="range"
+              min={CAMERA_VIEW_WIDTH_MIN}
+              max={CAMERA_VIEW_WIDTH_MAX}
+              step={50}
+              value={cameraViewWidth}
+              data-testid="preview-camera-view-width"
+              onChange={(event) => {
+                onCameraViewWidthChange(Number(event.target.value));
+              }}
+            />
+          </label>
         </>
       )}
     </div>

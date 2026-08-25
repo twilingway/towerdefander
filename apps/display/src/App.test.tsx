@@ -41,7 +41,12 @@ describe("layout preview", () => {
 
   it("marks the selected phase in the preview switcher", () => {
     const markup = renderToStaticMarkup(
-      <PreviewControls phase="result" onPhaseChange={() => undefined} />
+      <PreviewControls
+        phase="result"
+        onPhaseChange={() => undefined}
+        cameraViewWidth={1600}
+        onCameraViewWidthChange={() => undefined}
+      />
     );
 
     expect(markup).toContain("Итог");
@@ -50,7 +55,12 @@ describe("layout preview", () => {
 
   it("opens expanded and offers a collapse control", () => {
     const markup = renderToStaticMarkup(
-      <PreviewControls phase="combat" onPhaseChange={() => undefined} />
+      <PreviewControls
+        phase="combat"
+        onPhaseChange={() => undefined}
+        cameraViewWidth={1600}
+        onCameraViewWidthChange={() => undefined}
+      />
     );
 
     expect(markup).toContain('aria-expanded="true"');

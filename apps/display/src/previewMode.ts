@@ -20,6 +20,9 @@ export function isPreviewMode(search: string, development: boolean): boolean {
   return development && new URLSearchParams(search).get("preview") === "1";
 }
 
+/** Frame the fixtures start at; the preview slider overrides it per render. */
+export const PREVIEW_CAMERA_VIEW_WIDTH = 1600;
+
 const PREVIEW_PLAYERS = [
   {
     playerId: "preview-pilot",
@@ -52,6 +55,7 @@ const PREVIEW_WORLD = {
   elapsedMs: 12_000,
   worldWidth: 4400,
   worldHeight: 4400,
+  cameraViewWidth: PREVIEW_CAMERA_VIEW_WIDTH,
   arenaRadius: 2200,
   spaceship: {
     x: 2200,
@@ -87,7 +91,10 @@ const EMPTY_TEAM_UPGRADE = {
   selection: null
 } as const;
 
-export function createPreviewRoomView(phase: PreviewPhase): DisplayRoomView {
+export function createPreviewRoomView(
+  phase: PreviewPhase,
+  cameraViewWidth: number = PREVIEW_CAMERA_VIEW_WIDTH
+): DisplayRoomView {
   return {
     roomId: "PREVIEW",
     phase: phase === "lobby" ? "lobby" : "active",
@@ -95,14 +102,18 @@ export function createPreviewRoomView(phase: PreviewPhase): DisplayRoomView {
     displayConnected: true,
     displayLatencyMs: 18,
     players: [...PREVIEW_PLAYERS],
-    game: phase === "lobby" ? null : createPreviewGame(phase)
+    game: phase === "lobby" ? null : createPreviewGame(phase, cameraViewWidth)
   };
 }
 
-function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): DisplayGameSnapshot {
+function createPreviewGame(
+  phase: Exclude<PreviewPhase, "lobby">,
+  cameraViewWidth: number
+): DisplayGameSnapshot {
   if (phase === "combat") {
     return {
       ...PREVIEW_WORLD,
+      cameraViewWidth,
       shield: { angle: Math.PI / 2, arcHalfAngle: 0.8, active: true, energy: 64, capacity: 120 },
       machineGun: { heat: 46, capacity: 100, overheated: false },
       encounter: {
@@ -212,6 +223,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): DisplayGameSn
     return {
       ...PREVIEW_WORLD,
       ...EMPTY_WORLD_ENTITIES,
+      cameraViewWidth,
       shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 120, capacity: 120 },
       machineGun: { heat: 0, capacity: 100, overheated: false },
       encounter: {
@@ -265,6 +277,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): DisplayGameSn
   return {
     ...PREVIEW_WORLD,
     ...EMPTY_WORLD_ENTITIES,
+    cameraViewWidth,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
     shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 0, capacity: 120 },
     machineGun: { heat: 100, capacity: 100, overheated: true },

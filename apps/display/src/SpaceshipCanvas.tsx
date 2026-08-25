@@ -24,6 +24,7 @@ export function SpaceshipCanvas({
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
+  const lastRuntimeCameraViewWidthReference = useRef(game.cameraViewWidth);
   const lastRuntimeRunNumberReference = useRef(runNumber);
   const lastRuntimeConnectionEpochReference = useRef(connectionEpoch);
   const [failed, setFailed] = useState(false);
@@ -43,6 +44,7 @@ export function SpaceshipCanvas({
         if (!disposed) {
           runtimeReference.current = createSpaceshipRuntime(host, latestGame.current);
           lastRuntimeTickReference.current = latestGame.current.tick;
+          lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
           lastRuntimeConnectionEpochReference.current = latestConnectionEpoch.current;
         }
@@ -70,13 +72,17 @@ export function SpaceshipCanvas({
     );
     if (shouldHydrate) {
       prepareRuntimeHydration(runtime, game);
-    } else if (shouldUpdateRuntime(lastRuntimeTickReference.current, game.tick)) {
+    } else if (
+      shouldUpdateRuntime(lastRuntimeTickReference.current, game.tick) ||
+      shouldReframeRuntime(lastRuntimeCameraViewWidthReference.current, game.cameraViewWidth)
+    ) {
       runtime.update(game);
     } else {
       return;
     }
 
     lastRuntimeTickReference.current = game.tick;
+    lastRuntimeCameraViewWidthReference.current = game.cameraViewWidth;
     lastRuntimeRunNumberReference.current = runNumber;
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, runNumber]);
@@ -144,6 +150,17 @@ export function SpaceshipCanvas({
 
 export function shouldUpdateRuntime(previousTick: number, nextTick: number): boolean {
   return previousTick !== nextTick;
+}
+
+/**
+ * The preview holds one fixture tick still while its camera slider moves, so a
+ * reframed snapshot has to reach the runtime on its own.
+ */
+export function shouldReframeRuntime(
+  previousCameraViewWidth: number,
+  nextCameraViewWidth: number
+): boolean {
+  return previousCameraViewWidth !== nextCameraViewWidth;
 }
 
 export function shouldPrepareRuntimeHydration(

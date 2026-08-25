@@ -45,6 +45,13 @@ describe("spaceship view model", () => {
     expect(getResponsiveViewport(1024, 768)).toEqual({ zoom: 0.64, width: 1600, height: 1200 });
   });
 
+  it("frames the tuned camera width instead of the design default", () => {
+    const framed = getResponsiveViewport(1920, 1080, 3200, 3200 * (9 / 16));
+    expect(framed.zoom).toBeCloseTo(0.6);
+    expect(framed.width).toBeCloseTo(3200);
+    expect(framed.height).toBeCloseTo(1800);
+  });
+
   it("converts a centered world view into Phaser renderer-space scroll", () => {
     expect(
       getPhaserCameraScroll({

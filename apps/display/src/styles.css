@@ -844,6 +844,19 @@ p {
   color: #e6b85c;
 }
 
+.preview-controls__camera {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.preview-controls__camera input {
+  width: 8rem;
+  accent-color: #e6b85c;
+}
+
 .preview-controls--collapsed {
   padding: 0.2rem;
   background: rgb(8 18 20 / 55%);

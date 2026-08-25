@@ -84,6 +84,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
     ...preset,
     tuning: {
       ...tuning,
+      cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
           kind,
@@ -97,8 +98,10 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
 
 /**
  * Version 1 stored one `sector` per wave entry and had no visuals, because the
- * enemy kinds were a fixed enum drawn by the display. Carry those documents
- * forward instead of silently replacing an operator's balance with defaults.
+ * enemy kinds were a fixed enum drawn by the display; version 5 still framed
+ * the world with a literal in the display instead of `cameraViewWidth`. Carry
+ * those documents forward instead of silently replacing an operator's balance
+ * with defaults.
  */
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;
@@ -130,7 +133,8 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidSpawnCost: config.asteroidSpawnCost,
     asteroidScoreReward: config.asteroidScoreReward,
     asteroidCreditReward: config.asteroidCreditReward,
-    missileInterceptScoreReward: config.missileInterceptScoreReward
+    missileInterceptScoreReward: config.missileInterceptScoreReward,
+    cameraViewWidth: config.cameraViewWidth
   };
 }
 

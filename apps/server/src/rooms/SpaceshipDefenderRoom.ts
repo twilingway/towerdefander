@@ -687,6 +687,7 @@ export class SpaceshipDefenderRoom extends Room<{
     target.worldWidth = this.gameConfig.worldWidth;
     target.worldHeight = this.gameConfig.worldHeight;
     target.arenaRadius = this.gameConfig.arenaRadius;
+    target.display.cameraViewWidth = this.gameConfig.cameraViewWidth;
     target.spaceship.x = game.spaceship.x;
     target.spaceship.y = game.spaceship.y;
     target.spaceship.velocityX = game.spaceship.velocity.x;
