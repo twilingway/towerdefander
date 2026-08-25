@@ -133,15 +133,16 @@ export function shapeReach(shape: EnemyShape): number {
 }
 
 export interface PreviewScale {
-  /** World units per pixel-free unit: multiply a world radius to get svg units. */
+  /** Multiply a world radius by this to get svg units. */
   readonly factor: number;
-  readonly fitted: boolean;
+  /** True when the drawn model reaches past the frame at this scale. */
+  readonly modelOverflows: boolean;
 }
 
 /**
- * One scale per card, chosen so both the hitbox ring and the model fit the box.
- * Everything is compared against the same reference span, so a bigger enemy
- * still looks bigger — until it outgrows the frame and the view zooms out.
+ * The view scale follows the hit radius and the player hull only, never the
+ * model scale. That keeps both rings still while the model grows around them,
+ * which is the whole point of showing them together.
  */
 export function previewScale(
   hitRadius: number,
@@ -149,12 +150,16 @@ export function previewScale(
   shape: EnemyShape,
   box: number
 ): PreviewScale {
-  const referenceSpan = 120;
   const half = box * 0.46;
-  const worldExtent = Math.max(hitRadius, hitRadius * modelScale * shapeReach(shape), 1);
-  const naturalFactor = half / referenceSpan;
-  if (worldExtent * naturalFactor <= half) {
-    return { factor: naturalFactor, fitted: false };
-  }
-  return { factor: half / worldExtent, fitted: true };
+  const anchor = Math.max(hitRadius, SPACESHIP_WORLD_RADIUS, 1);
+  const factor = half / anchor;
+  return {
+    factor,
+    modelOverflows: hitRadius * modelScale * shapeReach(shape) * factor > half
+  };
+}
+
+/** World radius the silhouette actually occupies. */
+export function modelWorldRadius(hitRadius: number, modelScale: number): number {
+  return Math.round(hitRadius * modelScale);
 }

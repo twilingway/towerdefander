@@ -1,7 +1,13 @@
 import { ENEMY_SHAPES } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
-import { previewScale, shapeDrawing, shapeReach, toSvgPoints } from "./enemyShapes.js";
+import {
+  modelWorldRadius,
+  previewScale,
+  shapeDrawing,
+  shapeReach,
+  toSvgPoints
+} from "./enemyShapes.js";
 
 describe("preview geometry", () => {
   it("draws something for every shape the protocol allows", () => {
@@ -33,30 +39,31 @@ describe("preview geometry", () => {
     }
   });
 
-  it("keeps the scale proportional while everything fits", () => {
-    const box = 132;
-    const small = previewScale(20, 1, "arrowhead", box);
-    const large = previewScale(40, 1, "arrowhead", box);
-    // Same factor means a twice bigger hull really draws twice as big.
-    expect(large.factor).toBeCloseTo(small.factor);
-    expect(large.fitted).toBe(false);
+  it("keeps the rings still when only the model scale changes", () => {
+    const box = 148;
+    const plain = previewScale(28, 1, "arrowhead", box);
+    const grown = previewScale(28, 2.6, "arrowhead", box);
+    // Same hit radius means the same view scale: the rings must not move.
+    expect(grown.factor).toBeCloseTo(plain.factor);
+    expect(plain.modelOverflows).toBe(false);
+    expect(grown.modelOverflows).toBe(true);
   });
 
-  it("zooms out instead of letting a large enemy spill out of the frame", () => {
-    const box = 132;
-    const huge = previewScale(400, 1, "arrowhead", box);
-    expect(huge.fitted).toBe(true);
-    expect(400 * huge.factor).toBeLessThanOrEqual(box * 0.46 + 1e-9);
+  it("scales the view with the hit radius so bigger enemies read bigger", () => {
+    const box = 148;
+    // Below the player hull the reference keeps the scale fixed for comparison.
+    expect(previewScale(20, 1, "arrowhead", box).factor).toBeCloseTo(
+      previewScale(40, 1, "arrowhead", box).factor
+    );
+    // Past it, the hitbox drives the zoom and stays inside the frame.
+    const boss = previewScale(90, 1, "hexagon", box);
+    expect(boss.factor).toBeLessThan(previewScale(52, 1, "hexagon", box).factor);
+    expect(90 * boss.factor).toBeLessThanOrEqual(box * 0.46 + 1e-9);
   });
 
-  it("accounts for the model scale when fitting", () => {
-    const box = 132;
-    const plain = previewScale(90, 1, "hexagon", box);
-    const oversized = previewScale(90, 4, "hexagon", box);
-    // A model four times the hitbox has to zoom out; the hitbox stays smaller.
-    expect(oversized.fitted).toBe(true);
-    expect(oversized.factor).toBeLessThan(plain.factor);
-    expect(90 * 4 * oversized.factor).toBeLessThanOrEqual(box * 0.46 + 1e-9);
+  it("reports the world radius the model occupies", () => {
+    expect(modelWorldRadius(28, 2.6)).toBe(73);
+    expect(modelWorldRadius(28, 1)).toBe(28);
   });
 
   it("measures how far each silhouette reaches past its radius", () => {

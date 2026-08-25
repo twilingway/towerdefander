@@ -518,7 +518,7 @@ body {
 }
 
 .preview {
-  flex: 0 0 132px;
+  flex: 0 0 148px;
   margin: 0;
 }
 
@@ -527,8 +527,25 @@ body {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: block;
-  height: 132px;
-  width: 132px;
+  height: 148px;
+  width: 148px;
+}
+
+.preview__tag {
+  fill: rgba(79, 209, 197, 0.9);
+  font-size: 9px;
+}
+
+.preview__row {
+  display: block;
+}
+
+.preview__row--hit {
+  color: rgba(79, 209, 197, 0.9);
+}
+
+.preview__row--model {
+  color: var(--ink);
 }
 
 .preview__reference {

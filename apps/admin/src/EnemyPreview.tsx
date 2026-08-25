@@ -1,15 +1,21 @@
 import type { EnemyArchetype } from "@spaceship-defender/protocol";
 
-import { SPACESHIP_WORLD_RADIUS, previewScale, shapeDrawing, toSvgPoints } from "./enemyShapes.js";
+import {
+  SPACESHIP_WORLD_RADIUS,
+  modelWorldRadius,
+  previewScale,
+  shapeDrawing,
+  toSvgPoints
+} from "./enemyShapes.js";
 
-const BOX = 132;
+const BOX = 148;
 const CENTER = BOX / 2;
 
 export interface EnemyPreviewProps {
   readonly archetype: EnemyArchetype;
 }
 
-/** Shows the drawn model, its hit radius and the health bar a run will use. */
+/** Shows the drawn model against the hit radius it will really be shot at. */
 export function EnemyPreview({ archetype }: EnemyPreviewProps) {
   const { visual } = archetype;
   const scale = previewScale(archetype.radius, visual.modelScale, visual.shape, BOX);
@@ -38,6 +44,7 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
           <polygon
             points={toSvgPoints(drawing.polygon, CENTER)}
             fill={visual.color}
+            fillOpacity={0.85}
             stroke={visual.outline}
             strokeWidth={2.5}
             strokeLinejoin="round"
@@ -55,6 +62,9 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
           />
         ))}
         <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={hitRadius} />
+        <text className="preview__tag" x={CENTER + hitRadius + 3} y={CENTER - 3}>
+          {archetype.radius}
+        </text>
         {visual.showHealthBar ? (
           <g>
             <rect
@@ -77,12 +87,12 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
         ) : null}
       </svg>
       <figcaption className="preview__caption">
-        поражение {archetype.radius} · модель ×{visual.modelScale}
-        {scale.fitted ? " · вид уменьшен" : ""}
-        <br />
-        <span className="preview__key">
-          сплошной круг — зона поражения, пунктир — корпус корабля
+        <span className="preview__row preview__row--hit">зона поражения {archetype.radius}</span>
+        <span className="preview__row preview__row--model">
+          модель {modelWorldRadius(archetype.radius, visual.modelScale)}
+          {scale.modelOverflows ? " (шире кадра)" : ""}
         </span>
+        <span className="preview__key">пунктир — корпус корабля ({SPACESHIP_WORLD_RADIUS})</span>
       </figcaption>
     </figure>
   );
