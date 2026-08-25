@@ -45,7 +45,7 @@ function quietEnemy(
     x: config.worldWidth / 2 + 700,
     y: config.worldHeight / 2,
     velocity: { x: 0, y: 0 },
-    radius: config.gunshipRadius,
+    radius: config.enemyArchetypes.gunship.radius,
     spawnedTick: 0,
     heading: 0,
     hp: 1_000_000,
@@ -134,7 +134,7 @@ describe("circular combat spawning and movement", () => {
       ambientAsteroidIntervalMinTicks: 100_000,
       ambientAsteroidIntervalMaxTicks: 100_000
     });
-    const legalRadius = config.arenaRadius - config.gunshipRadius;
+    const legalRadius = config.arenaRadius - config.enemyArchetypes.gunship.radius;
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 73),
       pendingSpawns: [],
@@ -149,8 +149,8 @@ describe("circular combat spawning and movement", () => {
         quietEnemy(config, {
           x: config.worldWidth / 2 + legalRadius,
           previousX: config.worldWidth / 2 + legalRadius,
-          y: config.worldHeight / 2 - config.gunshipPreferredDistance,
-          previousY: config.worldHeight / 2 - config.gunshipPreferredDistance
+          y: config.worldHeight / 2 - config.enemyArchetypes.gunship.preferredDistance,
+          previousY: config.worldHeight / 2 - config.enemyArchetypes.gunship.preferredDistance
         })
       ]
     };
@@ -335,7 +335,8 @@ describe("circular transient cleanup", () => {
   it("registers a swept friendly hit before removing an endpoint outside the arena", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 33);
-    const enemyX = config.worldWidth / 2 + config.arenaRadius - config.gunshipRadius;
+    const enemyX =
+      config.worldWidth / 2 + config.arenaRadius - config.enemyArchetypes.gunship.radius;
     const enemy = quietEnemy(config, {
       x: enemyX,
       previousX: enemyX,

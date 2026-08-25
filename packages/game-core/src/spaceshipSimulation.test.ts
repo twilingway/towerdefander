@@ -142,8 +142,23 @@ describe("spaceship configuration", () => {
         ambientAsteroidIntervalMaxTicks: 100
       })
     ).toThrow(RangeError);
-    expect(() => createSpaceshipSimulationConfig({ gunshipRadius: 2201 })).toThrow(RangeError);
-    expect(() => createSpaceshipSimulationConfig({ carrierRadius: 2201 })).toThrow(RangeError);
+    const archetypes = createSpaceshipSimulationConfig().enemyArchetypes;
+    expect(() =>
+      createSpaceshipSimulationConfig({
+        enemyArchetypes: {
+          ...archetypes,
+          gunship: { ...archetypes.gunship, radius: 2201 }
+        }
+      })
+    ).toThrow(RangeError);
+    expect(() =>
+      createSpaceshipSimulationConfig({
+        enemyArchetypes: {
+          ...archetypes,
+          missileCarrier: { ...archetypes.missileCarrier, radius: 2201 }
+        }
+      })
+    ).toThrow(RangeError);
     expect(() => createSpaceshipSimulationConfig({ worldPadding: 257 })).toThrow(RangeError);
     expect(() =>
       createSpaceshipSimulationConfig({ asteroidRadius: 257, worldPadding: 256 })

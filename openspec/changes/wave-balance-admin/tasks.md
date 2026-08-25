@@ -1,12 +1,12 @@
 ## 1. Таблица архетипов в pure core
 
-- [ ] 1.1 Ввести `EnemyWeaponTuning` и `EnemyArchetype`, заменить поля `gunship*`/`carrier*`/
+- [x] 1.1 Ввести `EnemyWeaponTuning` и `EnemyArchetype`, заменить поля `gunship*`/`carrier*`/
       `hostileBullet*`/`missile*` в `CombatConfig` на `enemyArchetypes`, перенести дефолты без
       изменения чисел; проверить `pnpm --filter @spaceship-defender/game-core exec vitest run`.
-- [ ] 1.2 Перенести `damage`, `shieldHitCost` и `turnRatePerSecond` на инстансы hostile bullet и
+- [x] 1.2 Перенести `damage`, `shieldHitCost` и `turnRatePerSecond` на инстансы hostile bullet и
       homing missile, читать их при разрешении щита и урона вместо ветвления по типу; проверить
       тесты щита и коллизий.
-- [ ] 1.3 Убрать все ветвления по enemy kind в `moveEnemy`, блоке стрельбы, `spawnEntity` и
+- [x] 1.3 Убрать все ветвления по enemy kind в `moveEnemy`, блоке стрельбы, `spawnEntity` и
       начислении score/credits в пользу чтения архетипа; проверить, что тесты детерминизма и наград
       проходят без правки ожиданий.
 

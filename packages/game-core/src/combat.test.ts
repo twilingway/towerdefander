@@ -20,10 +20,38 @@ import {
   type SpaceshipSimulationState,
   type AsteroidState,
   type CombatEnemyState,
+  type EnemyWeaponTuning,
   type HostileProjectileState,
   type HomingMissileState,
   type ProjectileState
 } from "./index.js";
+
+function bulletFromWeapon(weapon: EnemyWeaponTuning): HostileProjectileState {
+  return {
+    id: "hostile-test",
+    spawnSequence: 1,
+    previousX: 0,
+    previousY: 0,
+    x: 0,
+    y: 0,
+    velocity: { x: 0, y: 0 },
+    radius: weapon.projectileRadius,
+    spawnedTick: 0,
+    damage: weapon.damage,
+    shieldHitCost: weapon.shieldHitCost,
+    lifetimeTicks: weapon.projectileLifetimeTicks
+  };
+}
+
+function missileFromWeapon(weapon: EnemyWeaponTuning): HomingMissileState {
+  return {
+    ...bulletFromWeapon(weapon),
+    id: "missile-test",
+    heading: 0,
+    speedPerSecond: weapon.projectileSpeedPerSecond,
+    turnRatePerSecond: weapon.turnRatePerSecond
+  };
+}
 
 describe("deterministic combat foundation", () => {
   it("requires a non-zero uint32 seed", () => {
@@ -163,9 +191,11 @@ describe("combat motion and collision", () => {
 
   it("limits homing turn across the canonical angle boundary", () => {
     const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1000 });
+    const weapon = config.enemyArchetypes.missileCarrier.weapon;
     const initial = createSpaceshipSimulationState(config, 8);
     const heading = Math.PI - 0.02;
     const missile: HomingMissileState = {
+      ...missileFromWeapon(weapon),
       id: "missile-test",
       spawnSequence: 1,
       previousX: initial.spaceship.x + 500,
@@ -173,13 +203,11 @@ describe("combat motion and collision", () => {
       x: initial.spaceship.x + 500,
       y: initial.spaceship.y + 10,
       velocity: {
-        x: Math.cos(heading) * config.missileSpeedPerSecond,
-        y: Math.sin(heading) * config.missileSpeedPerSecond
+        x: Math.cos(heading) * weapon.projectileSpeedPerSecond,
+        y: Math.sin(heading) * weapon.projectileSpeedPerSecond
       },
-      radius: config.missileRadius,
       spawnedTick: 0,
-      heading,
-      damage: config.missileDamage
+      heading
     };
     const state: SpaceshipSimulationState = {
       ...initial,
@@ -190,7 +218,7 @@ describe("combat motion and collision", () => {
     const moved = advanced.homingMissiles[0];
     expect(moved).toBeDefined();
     expect(Math.abs(shortestAngleDelta(heading, moved?.heading ?? 0))).toBeLessThanOrEqual(
-      config.missileTurnRatePerSecond * (config.fixedStepMs / 1000) + 1e-12
+      weapon.turnRatePerSecond * (config.fixedStepMs / 1000) + 1e-12
     );
   });
 
@@ -206,16 +234,12 @@ describe("combat motion and collision", () => {
       pendingSpawns: []
     };
     const bullet: HostileProjectileState = {
-      id: "hostile-test",
-      spawnSequence: 1,
+      ...bulletFromWeapon(config.enemyArchetypes.gunship.weapon),
       previousX: state.spaceship.x - 140,
       previousY: state.spaceship.y,
       x: state.spaceship.x - 140,
       y: state.spaceship.y,
-      velocity: { x: 2000, y: 0 },
-      radius: config.hostileBulletRadius,
-      spawnedTick: 0,
-      damage: config.hostileBulletDamage
+      velocity: { x: 2000, y: 0 }
     };
     const stepped = advanceCombat(
       {
@@ -232,7 +256,9 @@ describe("combat motion and collision", () => {
     );
     expect(stepped.shieldEnergy).toBe(0);
     expect(stepped.shieldActive).toBe(false);
-    expect(stepped.spaceshipHp).toBe(config.spaceshipMaxHp - config.hostileBulletDamage);
+    expect(stepped.spaceshipHp).toBe(
+      config.spaceshipMaxHp - config.enemyArchetypes.gunship.weapon.damage
+    );
   });
 
   it("rewards missile and wave asteroid shield interceptions exactly once", () => {
@@ -241,17 +267,13 @@ describe("combat motion and collision", () => {
     const x = initial.spaceship.x + config.shieldRadius;
     const y = initial.spaceship.y;
     const missile: HomingMissileState = {
+      ...missileFromWeapon(config.enemyArchetypes.missileCarrier.weapon),
       id: "shield-missile",
-      spawnSequence: 1,
       previousX: x,
       previousY: y,
       x,
       y,
-      velocity: { x: 0, y: 0 },
-      radius: config.missileRadius,
-      spawnedTick: 0,
-      heading: Math.PI,
-      damage: config.missileDamage
+      heading: Math.PI
     };
     const asteroid: AsteroidState = {
       id: "shield-asteroid",
@@ -422,11 +444,11 @@ describe("combat motion and collision", () => {
       x: 4400,
       y: 400 + index * 4,
       velocity: { x: 0, y: 0 },
-      radius: config.gunshipRadius,
+      radius: config.enemyArchetypes.gunship.radius,
       spawnedTick: 0,
       heading: 0,
-      hp: config.gunshipHp,
-      maxHp: config.gunshipHp,
+      hp: config.enemyArchetypes.gunship.hp,
+      maxHp: config.enemyArchetypes.gunship.hp,
       attackCooldownTicks: index < 3 ? 0 : 20
     }));
     const asteroids: AsteroidState[] = Array.from({ length: 16 }, (_, index) => ({
@@ -445,29 +467,22 @@ describe("combat motion and collision", () => {
       damage: config.asteroidDamage
     }));
     const hostileProjectiles: HostileProjectileState[] = Array.from({ length: 95 }, (_, index) => ({
+      ...bulletFromWeapon(config.enemyArchetypes.gunship.weapon),
       id: `hostile-cap-${String(index)}`,
       spawnSequence: 57 + index,
       previousX: 300,
       previousY: 2700,
       x: 300,
-      y: 2700,
-      velocity: { x: 0, y: 0 },
-      radius: config.hostileBulletRadius,
-      spawnedTick: 0,
-      damage: config.hostileBulletDamage
+      y: 2700
     }));
     const homingMissiles: HomingMissileState[] = Array.from({ length: 12 }, (_, index) => ({
+      ...missileFromWeapon(config.enemyArchetypes.missileCarrier.weapon),
       id: `missile-cap-${String(index)}`,
       spawnSequence: 152 + index,
       previousX: 4200,
       previousY: 2900,
       x: 4200,
-      y: 2900,
-      velocity: { x: 0, y: 0 },
-      radius: config.missileRadius,
-      spawnedTick: 0,
-      heading: 0,
-      damage: config.missileDamage
+      y: 2900
     }));
     const projectiles: ProjectileState[] = Array.from({ length: 32 }, (_, index) => ({
       id: `projectile-cap-${String(index)}`,

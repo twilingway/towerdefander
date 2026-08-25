@@ -72,9 +72,12 @@ export function createWorstCaseCombatFixture(
       0.3
     );
     const sequence = spawnSequence++;
+    const weapon = config.enemyArchetypes.gunship.weapon;
     return {
       ...movingEntity(`hostile-${String(sequence)}`, sequence, position, { x: 9, y: 3 }, 7),
-      damage: config.hostileBulletDamage
+      damage: weapon.damage,
+      shieldHitCost: weapon.shieldHitCost,
+      lifetimeTicks: weapon.projectileLifetimeTicks
     } satisfies HostileProjectileState;
   });
   const homingMissiles = Array.from({ length: config.caps.homingMissiles }, (_, index) => {
@@ -86,10 +89,15 @@ export function createWorstCaseCombatFixture(
       0.4
     );
     const sequence = spawnSequence++;
+    const weapon = config.enemyArchetypes.missileCarrier.weapon;
     return {
       ...movingEntity(`missile-${String(sequence)}`, sequence, position, { x: 12, y: -6 }, 12),
       heading: -0.4,
-      damage: config.missileDamage
+      damage: weapon.damage,
+      shieldHitCost: weapon.shieldHitCost,
+      lifetimeTicks: weapon.projectileLifetimeTicks,
+      speedPerSecond: weapon.projectileSpeedPerSecond,
+      turnRatePerSecond: weapon.turnRatePerSecond
     } satisfies HomingMissileState;
   });
   const projectiles = Array.from({ length: config.caps.friendlyProjectiles }, (_, index) => {

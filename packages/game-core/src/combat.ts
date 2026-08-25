@@ -9,7 +9,8 @@ export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
 export type DefeatReason = "spaceship_destroyed" | "wave_timeout";
 export type GameplayRole = "pilot" | "gunner" | "shield";
-export type EnemyKind = "gunship" | "missileCarrier";
+export const ENEMY_KINDS = ["gunship", "missileCarrier"] as const;
+export type EnemyKind = (typeof ENEMY_KINDS)[number];
 export type SpawnKind = EnemyKind | "asteroid";
 
 export type UpgradeId =
@@ -32,6 +33,33 @@ export interface CombatCaps {
   readonly dynamicEntities: number;
 }
 
+export type EnemyWeaponKind = "bullet" | "missile";
+
+export interface EnemyWeaponTuning {
+  readonly kind: EnemyWeaponKind;
+  readonly cooldownTicks: number;
+  readonly damage: number;
+  readonly shieldHitCost: number;
+  readonly projectileRadius: number;
+  readonly projectileSpeedPerSecond: number;
+  readonly projectileLifetimeTicks: number;
+  readonly turnRatePerSecond: number;
+  readonly burstCount: number;
+  readonly burstSpreadRadians: number;
+}
+
+export interface EnemyArchetype {
+  readonly hp: number;
+  readonly radius: number;
+  readonly speedPerSecond: number;
+  readonly preferredDistance: number;
+  readonly weapon: EnemyWeaponTuning;
+  readonly spawnCost: number;
+  readonly unlockWave: number;
+  readonly scoreReward: number;
+  readonly creditReward: number;
+}
+
 export interface CombatConfig {
   readonly fixedStepMs: number;
   readonly worldWidth: number;
@@ -40,11 +68,7 @@ export interface CombatConfig {
   readonly spaceshipMaxHp: number;
   readonly shieldRadius: number;
   readonly shieldArcRadians: number;
-  readonly hostileBulletShieldHitCost: number;
-  readonly missileShieldHitCost: number;
   readonly asteroidShieldHitCost: number;
-  readonly hostileBulletDamage: number;
-  readonly missileDamage: number;
   readonly asteroidDamage: number;
   readonly friendlyProjectileDamage: number;
   readonly enemySpawnIntervalTicks: number;
@@ -58,27 +82,15 @@ export interface CombatConfig {
   readonly waveHpMultiplierCap: number;
   readonly waveTempoGrowth: number;
   readonly waveTempoMultiplierCap: number;
-  readonly gunshipHp: number;
-  readonly gunshipRadius: number;
-  readonly gunshipSpeedPerSecond: number;
-  readonly gunshipPreferredDistance: number;
-  readonly gunshipFireCooldownTicks: number;
-  readonly carrierHp: number;
-  readonly carrierRadius: number;
-  readonly carrierSpeedPerSecond: number;
-  readonly carrierPreferredDistance: number;
-  readonly carrierFireCooldownTicks: number;
+  readonly enemyArchetypes: Readonly<Record<EnemyKind, EnemyArchetype>>;
   readonly asteroidHp: number;
   readonly asteroidRadius: number;
   readonly asteroidSpeedPerSecond: number;
   readonly asteroidLifetimeTicks: number;
-  readonly hostileBulletRadius: number;
-  readonly hostileBulletSpeedPerSecond: number;
-  readonly hostileBulletLifetimeTicks: number;
-  readonly missileRadius: number;
-  readonly missileSpeedPerSecond: number;
-  readonly missileTurnRatePerSecond: number;
-  readonly missileLifetimeTicks: number;
+  readonly asteroidSpawnCost: number;
+  readonly asteroidScoreReward: number;
+  readonly asteroidCreditReward: number;
+  readonly missileInterceptScoreReward: number;
   readonly worldPadding: number;
   readonly spatialCellSize: number;
   readonly caps: CombatCaps;
@@ -166,11 +178,17 @@ export interface AsteroidState extends MovingEntity {
 
 export interface HostileProjectileState extends MovingEntity {
   readonly damage: number;
+  readonly shieldHitCost: number;
+  readonly lifetimeTicks: number;
 }
 
 export interface HomingMissileState extends MovingEntity {
   readonly heading: number;
   readonly damage: number;
+  readonly shieldHitCost: number;
+  readonly lifetimeTicks: number;
+  readonly speedPerSecond: number;
+  readonly turnRatePerSecond: number;
 }
 
 export interface PendingSpawn {
@@ -277,11 +295,8 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["waveBaseBudget", config.waveBaseBudget],
     ["waveBudgetGrowth", config.waveBudgetGrowth],
     ["waveBudgetCap", config.waveBudgetCap],
-    ["gunshipFireCooldownTicks", config.gunshipFireCooldownTicks],
-    ["carrierFireCooldownTicks", config.carrierFireCooldownTicks],
     ["asteroidLifetimeTicks", config.asteroidLifetimeTicks],
-    ["hostileBulletLifetimeTicks", config.hostileBulletLifetimeTicks],
-    ["missileLifetimeTicks", config.missileLifetimeTicks],
+    ["asteroidSpawnCost", config.asteroidSpawnCost],
     ["caps.enemyShips", config.caps.enemyShips],
     ["caps.asteroids", config.caps.asteroids],
     ["caps.hostileProjectiles", config.caps.hostileProjectiles],
@@ -302,33 +317,16 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["spaceshipMaxHp", config.spaceshipMaxHp],
     ["shieldRadius", config.shieldRadius],
     ["shieldArcRadians", config.shieldArcRadians],
-    ["hostileBulletShieldHitCost", config.hostileBulletShieldHitCost],
-    ["missileShieldHitCost", config.missileShieldHitCost],
     ["asteroidShieldHitCost", config.asteroidShieldHitCost],
-    ["hostileBulletDamage", config.hostileBulletDamage],
-    ["missileDamage", config.missileDamage],
     ["asteroidDamage", config.asteroidDamage],
     ["friendlyProjectileDamage", config.friendlyProjectileDamage],
     ["waveHpGrowth", config.waveHpGrowth],
     ["waveHpMultiplierCap", config.waveHpMultiplierCap],
     ["waveTempoGrowth", config.waveTempoGrowth],
     ["waveTempoMultiplierCap", config.waveTempoMultiplierCap],
-    ["gunshipHp", config.gunshipHp],
-    ["gunshipRadius", config.gunshipRadius],
-    ["gunshipSpeedPerSecond", config.gunshipSpeedPerSecond],
-    ["gunshipPreferredDistance", config.gunshipPreferredDistance],
-    ["carrierHp", config.carrierHp],
-    ["carrierRadius", config.carrierRadius],
-    ["carrierSpeedPerSecond", config.carrierSpeedPerSecond],
-    ["carrierPreferredDistance", config.carrierPreferredDistance],
     ["asteroidHp", config.asteroidHp],
     ["asteroidRadius", config.asteroidRadius],
     ["asteroidSpeedPerSecond", config.asteroidSpeedPerSecond],
-    ["hostileBulletRadius", config.hostileBulletRadius],
-    ["hostileBulletSpeedPerSecond", config.hostileBulletSpeedPerSecond],
-    ["missileRadius", config.missileRadius],
-    ["missileSpeedPerSecond", config.missileSpeedPerSecond],
-    ["missileTurnRatePerSecond", config.missileTurnRatePerSecond],
     ["worldPadding", config.worldPadding],
     ["spatialCellSize", config.spatialCellSize]
   ];
@@ -337,6 +335,17 @@ export function validateCombatConfig(config: CombatConfig): void {
       throw new RangeError(`${name} must be a positive finite number`);
     }
   }
+  const nonNegativeFinite: readonly (readonly [string, number])[] = [
+    ["asteroidScoreReward", config.asteroidScoreReward],
+    ["asteroidCreditReward", config.asteroidCreditReward],
+    ["missileInterceptScoreReward", config.missileInterceptScoreReward]
+  ];
+  for (const [name, value] of nonNegativeFinite) {
+    if (!Number.isFinite(value) || value < 0) {
+      throw new RangeError(`${name} must be a non-negative finite number`);
+    }
+  }
+  validateEnemyArchetypes(config);
   if (config.shieldArcRadians > Math.PI * 2) {
     throw new RangeError("shieldArcRadians cannot exceed a full circle");
   }
@@ -348,8 +357,10 @@ export function validateCombatConfig(config: CombatConfig): void {
       "ambientAsteroidIntervalMinTicks cannot exceed ambientAsteroidIntervalMaxTicks"
     );
   }
-  if (config.gunshipRadius > config.arenaRadius || config.carrierRadius > config.arenaRadius) {
-    throw new RangeError("enemy ship radii must fit inside the circular arena");
+  for (const archetype of Object.values(config.enemyArchetypes)) {
+    if (archetype.radius > config.arenaRadius) {
+      throw new RangeError("enemy ship radii must fit inside the circular arena");
+    }
   }
   if (config.worldPadding > MAX_PUBLIC_TRANSIENT_PADDING) {
     throw new RangeError("worldPadding cannot exceed the public transient envelope");
@@ -365,6 +376,57 @@ export function validateCombatConfig(config: CombatConfig): void {
     config.caps.friendlyProjectiles;
   if (config.caps.dynamicEntities > typedCapTotal) {
     throw new RangeError("dynamicEntities cap cannot exceed the sum of typed caps");
+  }
+}
+
+function validateEnemyArchetypes(config: CombatConfig): void {
+  for (const kind of ENEMY_KINDS) {
+    // Presets arrive as untrusted JSON, so a kind can be missing at runtime.
+    const archetype = config.enemyArchetypes[kind] as EnemyArchetype | undefined;
+    if (archetype === undefined) {
+      throw new RangeError(`enemyArchetypes must describe ${kind}`);
+    }
+    const positiveIntegers: readonly (readonly [string, number])[] = [
+      ["unlockWave", archetype.unlockWave],
+      ["weapon.cooldownTicks", archetype.weapon.cooldownTicks],
+      ["weapon.projectileLifetimeTicks", archetype.weapon.projectileLifetimeTicks],
+      ["weapon.burstCount", archetype.weapon.burstCount]
+    ];
+    for (const [name, value] of positiveIntegers) {
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new RangeError(`${kind}.${name} must be a positive safe integer`);
+      }
+    }
+    const positiveFinite: readonly (readonly [string, number])[] = [
+      ["hp", archetype.hp],
+      ["radius", archetype.radius],
+      ["speedPerSecond", archetype.speedPerSecond],
+      ["preferredDistance", archetype.preferredDistance],
+      ["spawnCost", archetype.spawnCost],
+      ["weapon.damage", archetype.weapon.damage],
+      ["weapon.shieldHitCost", archetype.weapon.shieldHitCost],
+      ["weapon.projectileRadius", archetype.weapon.projectileRadius],
+      ["weapon.projectileSpeedPerSecond", archetype.weapon.projectileSpeedPerSecond],
+      ["weapon.turnRatePerSecond", archetype.weapon.turnRatePerSecond]
+    ];
+    for (const [name, value] of positiveFinite) {
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new RangeError(`${kind}.${name} must be a positive finite number`);
+      }
+    }
+    const nonNegativeFinite: readonly (readonly [string, number])[] = [
+      ["scoreReward", archetype.scoreReward],
+      ["creditReward", archetype.creditReward],
+      ["weapon.burstSpreadRadians", archetype.weapon.burstSpreadRadians]
+    ];
+    for (const [name, value] of nonNegativeFinite) {
+      if (!Number.isFinite(value) || value < 0) {
+        throw new RangeError(`${kind}.${name} must be a non-negative finite number`);
+      }
+    }
+    if (archetype.weapon.burstSpreadRadians > Math.PI * 2) {
+      throw new RangeError(`${kind}.weapon.burstSpreadRadians cannot exceed a full circle`);
+    }
   }
 }
 
@@ -413,18 +475,21 @@ export function createWavePlan(
   const difficulty = getWaveDifficulty(config, waveNumber);
   let remaining = difficulty.budget;
   let rngState = deriveDomainSeed(runSeed, waveNumber, SPAWN_DOMAIN);
+  const carrier = config.enemyArchetypes.missileCarrier;
+  const gunship = config.enemyArchetypes.gunship;
   const kinds: SpawnKind[] = [];
-  if (waveNumber >= 3 && remaining >= 4) {
+  if (waveNumber >= carrier.unlockWave && remaining >= carrier.spawnCost) {
     kinds.push("missileCarrier");
-    remaining -= 4;
+    remaining -= carrier.spawnCost;
   }
   while (remaining > 0) {
     const [next, random] = nextUint32(rngState);
     rngState = next;
-    const canAffordGunship = remaining >= 2;
-    const kind: SpawnKind = canAffordGunship && random % 3 !== 0 ? "gunship" : "asteroid";
+    const canAffordGunship =
+      remaining >= gunship.spawnCost && waveNumber >= gunship.unlockWave && random % 3 !== 0;
+    const kind: SpawnKind = canAffordGunship ? "gunship" : "asteroid";
     kinds.push(kind);
-    remaining -= kind === "gunship" ? 2 : 1;
+    remaining -= kind === "gunship" ? gunship.spawnCost : config.asteroidSpawnCost;
   }
   for (let index = kinds.length - 1; index > 0; index -= 1) {
     const [next, random] = nextUint32(rngState);
@@ -791,7 +856,7 @@ function moveAndSpawnThreats(
     moveLinear(projectile, secondsPerStep)
   );
   let homingMissiles = state.homingMissiles.map((missile) =>
-    moveMissile(missile, state.spaceship, config, secondsPerStep)
+    moveMissile(missile, state.spaceship, secondsPerStep)
   );
   let nextSpawnSequence = state.nextSpawnSequence;
   let workingDynamicCount =
@@ -803,22 +868,42 @@ function moveAndSpawnThreats(
 
   for (const enemy of enemies) {
     if (enemy.attackCooldownTicks > 0) continue;
-    if (enemy.kind === "gunship") {
-      if (
-        canAddEntity(config, "hostileProjectile", hostileProjectiles.length, workingDynamicCount)
-      ) {
+    const weapon = config.enemyArchetypes[enemy.kind].weapon;
+    for (let shot = 0; shot < weapon.burstCount; shot += 1) {
+      const aimOffset = burstAimOffset(weapon, shot);
+      if (weapon.kind === "bullet") {
+        if (
+          !canAddEntity(config, "hostileProjectile", hostileProjectiles.length, workingDynamicCount)
+        ) {
+          break;
+        }
         hostileProjectiles = [
           ...hostileProjectiles,
-          createHostileBullet(enemy, state.spaceship, config, nextSpawnSequence, state.clock.tick)
+          createHostileBullet(
+            enemy,
+            state.spaceship,
+            weapon,
+            aimOffset,
+            nextSpawnSequence,
+            state.clock.tick
+          )
         ];
-        nextSpawnSequence += 1;
-        workingDynamicCount += 1;
+      } else {
+        if (!canAddEntity(config, "homingMissile", homingMissiles.length, workingDynamicCount)) {
+          break;
+        }
+        homingMissiles = [
+          ...homingMissiles,
+          createMissile(
+            enemy,
+            state.spaceship,
+            weapon,
+            aimOffset,
+            nextSpawnSequence,
+            state.clock.tick
+          )
+        ];
       }
-    } else if (canAddEntity(config, "homingMissile", homingMissiles.length, workingDynamicCount)) {
-      homingMissiles = [
-        ...homingMissiles,
-        createMissile(enemy, state.spaceship, config, nextSpawnSequence, state.clock.tick)
-      ];
       nextSpawnSequence += 1;
       workingDynamicCount += 1;
     }
@@ -831,9 +916,7 @@ function moveAndSpawnThreats(
           attackCooldownTicks: Math.max(
             1,
             Math.ceil(
-              (enemy.kind === "gunship"
-                ? config.gunshipFireCooldownTicks
-                : config.carrierFireCooldownTicks) / difficulty.tempoMultiplier
+              config.enemyArchetypes[enemy.kind].weapon.cooldownTicks / difficulty.tempoMultiplier
             )
           )
         }
@@ -916,10 +999,9 @@ function moveEnemy(
   const deltaX = spaceship.x - enemy.x;
   const deltaY = spaceship.y - enemy.y;
   const distance = Math.hypot(deltaX, deltaY) || 1;
-  const preferred =
-    enemy.kind === "gunship" ? config.gunshipPreferredDistance : config.carrierPreferredDistance;
-  const speed =
-    enemy.kind === "gunship" ? config.gunshipSpeedPerSecond : config.carrierSpeedPerSecond;
+  const archetype = config.enemyArchetypes[enemy.kind];
+  const preferred = archetype.preferredDistance;
+  const speed = archetype.speedPerSecond;
   const radial = distance > preferred + 30 ? 1 : distance < preferred - 30 ? -1 : 0;
   const orbit = radial === 0 ? (enemy.spawnSequence % 2 === 0 ? 0.35 : -0.35) : 0;
   const velocity = {
@@ -963,19 +1045,18 @@ function moveLinear<T extends MovingEntity>(entity: T, secondsPerStep: number): 
 function moveMissile(
   missile: HomingMissileState,
   spaceship: { readonly x: number; readonly y: number },
-  config: CombatConfig,
   secondsPerStep: number
 ): HomingMissileState {
   const targetHeading = Math.atan2(spaceship.y - missile.y, spaceship.x - missile.x);
   const turn = clamp(
     shortestAngleDelta(missile.heading, targetHeading),
-    -config.missileTurnRatePerSecond * secondsPerStep,
-    config.missileTurnRatePerSecond * secondsPerStep
+    -missile.turnRatePerSecond * secondsPerStep,
+    missile.turnRatePerSecond * secondsPerStep
   );
   const heading = canonicalizeAngle(missile.heading + turn);
   const velocity = {
-    x: Math.cos(heading) * config.missileSpeedPerSecond,
-    y: Math.sin(heading) * config.missileSpeedPerSecond
+    x: Math.cos(heading) * missile.speedPerSecond,
+    y: Math.sin(heading) * missile.speedPerSecond
   };
   return {
     ...missile,
@@ -988,14 +1069,21 @@ function moveMissile(
   };
 }
 
+function burstAimOffset(weapon: EnemyWeaponTuning, shot: number): number {
+  if (weapon.burstCount <= 1) return 0;
+  const step = weapon.burstSpreadRadians / (weapon.burstCount - 1);
+  return -weapon.burstSpreadRadians / 2 + step * shot;
+}
+
 function createHostileBullet(
   enemy: CombatEnemyState,
   spaceship: { readonly x: number; readonly y: number },
-  config: CombatConfig,
+  weapon: EnemyWeaponTuning,
+  aimOffset: number,
   spawnSequence: number,
   tick: number
 ): HostileProjectileState {
-  const direction = unitDirection(enemy.x, enemy.y, spaceship.x, spaceship.y);
+  const heading = Math.atan2(spaceship.y - enemy.y, spaceship.x - enemy.x) + aimOffset;
   return {
     id: `hostile-${String(spawnSequence)}`,
     spawnSequence,
@@ -1004,23 +1092,28 @@ function createHostileBullet(
     x: enemy.x,
     y: enemy.y,
     velocity: {
-      x: direction.x * config.hostileBulletSpeedPerSecond,
-      y: direction.y * config.hostileBulletSpeedPerSecond
+      x: Math.cos(heading) * weapon.projectileSpeedPerSecond,
+      y: Math.sin(heading) * weapon.projectileSpeedPerSecond
     },
-    radius: config.hostileBulletRadius,
+    radius: weapon.projectileRadius,
     spawnedTick: tick,
-    damage: config.hostileBulletDamage
+    damage: weapon.damage,
+    shieldHitCost: weapon.shieldHitCost,
+    lifetimeTicks: weapon.projectileLifetimeTicks
   };
 }
 
 function createMissile(
   enemy: CombatEnemyState,
   spaceship: { readonly x: number; readonly y: number },
-  config: CombatConfig,
+  weapon: EnemyWeaponTuning,
+  aimOffset: number,
   spawnSequence: number,
   tick: number
 ): HomingMissileState {
-  const heading = Math.atan2(spaceship.y - enemy.y, spaceship.x - enemy.x);
+  const heading = canonicalizeAngle(
+    Math.atan2(spaceship.y - enemy.y, spaceship.x - enemy.x) + aimOffset
+  );
   return {
     id: `missile-${String(spawnSequence)}`,
     spawnSequence,
@@ -1029,13 +1122,17 @@ function createMissile(
     x: enemy.x,
     y: enemy.y,
     velocity: {
-      x: Math.cos(heading) * config.missileSpeedPerSecond,
-      y: Math.sin(heading) * config.missileSpeedPerSecond
+      x: Math.cos(heading) * weapon.projectileSpeedPerSecond,
+      y: Math.sin(heading) * weapon.projectileSpeedPerSecond
     },
-    radius: config.missileRadius,
+    radius: weapon.projectileRadius,
     spawnedTick: tick,
     heading,
-    damage: config.missileDamage
+    damage: weapon.damage,
+    shieldHitCost: weapon.shieldHitCost,
+    lifetimeTicks: weapon.projectileLifetimeTicks,
+    speedPerSecond: weapon.projectileSpeedPerSecond,
+    turnRatePerSecond: weapon.turnRatePerSecond
   };
 }
 
@@ -1091,10 +1188,10 @@ function spawnEntity(
       }
     };
   }
-  const isGunship = kind === "gunship";
-  const entityRadius = isGunship ? config.gunshipRadius : config.carrierRadius;
+  const archetype = config.enemyArchetypes[kind];
+  const entityRadius = archetype.radius;
   const point = pointOnCircle(arena, entryAngle, arena.radius - entityRadius);
-  const hp = (isGunship ? config.gunshipHp : config.carrierHp) * difficulty.hpMultiplier;
+  const hp = archetype.hp * difficulty.hpMultiplier;
   return {
     rngState,
     asteroid: null,
@@ -1114,10 +1211,7 @@ function spawnEntity(
       maxHp: hp,
       attackCooldownTicks: Math.max(
         1,
-        Math.ceil(
-          (isGunship ? config.gunshipFireCooldownTicks : config.carrierFireCooldownTicks) /
-            difficulty.tempoMultiplier
-        )
+        Math.ceil(archetype.weapon.cooldownTicks / difficulty.tempoMultiplier)
       )
     }
   };
@@ -1171,7 +1265,7 @@ function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): Comb
     removedProjectiles.add(candidate.sourceId);
     if (candidate.targetKind === "missile") {
       removedTargets.add(candidate.targetId);
-      score += 5;
+      score += config.missileInterceptScoreReward;
       continue;
     }
     const existingDamage = damage.get(candidate.targetId) ?? 0;
@@ -1183,13 +1277,14 @@ function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): Comb
     if (target !== undefined && existingDamage + projectile.damage >= target.hp) {
       removedTargets.add(candidate.targetId);
       if (candidate.targetKind === "enemy") {
-        score += 25;
         const enemy = target as CombatEnemyState;
-        credits += enemy.kind === "gunship" ? 2 : 4;
+        const archetype = config.enemyArchetypes[enemy.kind];
+        score += archetype.scoreReward;
+        credits += archetype.creditReward;
       } else {
-        score += 10;
+        score += config.asteroidScoreReward;
         const asteroid = target as AsteroidState;
-        if (asteroid.origin === "wave") credits += 1;
+        if (asteroid.origin === "wave") credits += config.asteroidCreditReward;
       }
     }
   }
@@ -1213,6 +1308,7 @@ interface SpaceshipThreatCandidate {
   readonly sourceSequence: number;
   readonly sourceId: string;
   readonly kind: "bullet" | "missile" | "asteroid";
+  readonly shieldHitCost: number;
   readonly shieldHit: boolean;
 }
 
@@ -1220,10 +1316,15 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
   const threats: readonly (MovingEntity & {
     readonly threatKind: SpaceshipThreatCandidate["kind"];
     readonly damage: number;
+    readonly shieldHitCost: number;
   })[] = [
     ...state.hostileProjectiles.map((entity) => ({ ...entity, threatKind: "bullet" as const })),
     ...state.homingMissiles.map((entity) => ({ ...entity, threatKind: "missile" as const })),
-    ...state.asteroids.map((entity) => ({ ...entity, threatKind: "asteroid" as const }))
+    ...state.asteroids.map((entity) => ({
+      ...entity,
+      threatKind: "asteroid" as const,
+      shieldHitCost: config.asteroidShieldHitCost
+    }))
   ];
   const spaceshipTarget: MovingEntity = {
     id: "spaceship",
@@ -1247,6 +1348,7 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
           sourceSequence: threat.spawnSequence,
           sourceId: threat.id,
           kind: threat.threatKind,
+          shieldHitCost: threat.shieldHitCost,
           shieldHit: true
         });
       }
@@ -1258,6 +1360,7 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
         sourceSequence: threat.spawnSequence,
         sourceId: threat.id,
         kind: threat.threatKind,
+        shieldHitCost: threat.shieldHitCost,
         shieldHit: false
       });
     }
@@ -1278,15 +1381,15 @@ function resolveSpaceshipThreats(state: CombatStepState, config: CombatConfig): 
   for (const candidate of candidates) {
     if (removed.has(candidate.sourceId)) continue;
     if (candidate.shieldHit && shieldActive) {
-      const cost = shieldHitCost(candidate.kind, config);
+      const cost = candidate.shieldHitCost;
       if (shieldEnergy >= cost) {
         shieldEnergy -= cost;
         removed.add(candidate.sourceId);
-        if (candidate.kind === "missile") score += 5;
+        if (candidate.kind === "missile") score += config.missileInterceptScoreReward;
         if (candidate.kind === "asteroid") {
-          score += 10;
+          score += config.asteroidScoreReward;
           const asteroid = state.asteroids.find(({ id }) => id === candidate.sourceId);
-          if (asteroid?.origin === "wave") credits += 1;
+          if (asteroid?.origin === "wave") credits += config.asteroidCreditReward;
         }
         if (shieldEnergy === 0) {
           shieldActive = false;
@@ -1335,13 +1438,10 @@ function removeExpiredAndOutOfBounds(
         state.clock.tick - entity.spawnedTick < config.asteroidLifetimeTicks && isInBounds(entity)
     ),
     hostileProjectiles: state.hostileProjectiles.filter(
-      (entity) =>
-        state.clock.tick - entity.spawnedTick < config.hostileBulletLifetimeTicks &&
-        isInBounds(entity)
+      (entity) => state.clock.tick - entity.spawnedTick < entity.lifetimeTicks && isInBounds(entity)
     ),
     homingMissiles: state.homingMissiles.filter(
-      (entity) =>
-        state.clock.tick - entity.spawnedTick < config.missileLifetimeTicks && isInBounds(entity)
+      (entity) => state.clock.tick - entity.spawnedTick < entity.lifetimeTicks && isInBounds(entity)
     ),
     projectiles: state.projectiles.filter((entity) =>
       isWithinCircularEnvelope(entity.x, entity.y, entity.radius, arena, config.worldPadding)
@@ -1442,12 +1542,6 @@ function isInsideShieldArc(
     config.shieldArcRadians + state.roleModifiers.shield.arcWidthBonus
   );
   return Math.abs(shortestAngleDelta(state.shieldAngle, bearing)) <= arc / 2;
-}
-
-function shieldHitCost(kind: SpaceshipThreatCandidate["kind"], config: CombatConfig): number {
-  if (kind === "missile") return config.missileShieldHitCost;
-  if (kind === "asteroid") return config.asteroidShieldHitCost;
-  return config.hostileBulletShieldHitCost;
 }
 
 function canSpawnKind(
