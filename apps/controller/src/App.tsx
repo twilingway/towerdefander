@@ -109,6 +109,7 @@ export function ControllerApp() {
     previewView === undefined ? playerId : previewPlayerId(previewRole)
   );
   const connectedToRoom = status === "connected" || status === "reconnecting";
+  const inLobby = activeView?.phase === "lobby";
 
   useEffect(() => {
     if (preview) return;
@@ -395,7 +396,11 @@ export function ControllerApp() {
   }
 
   return (
-    <main className={`controller-shell${shellPhaseModifier(activeView?.game?.encounter.phase)}`}>
+    <main
+      className={`controller-shell${inLobby ? " controller-shell--lobby" : ""}${shellPhaseModifier(
+        activeView?.game?.encounter.phase
+      )}`}
+    >
       {previewView !== undefined && (
         <PreviewControls
           role={previewRole}
@@ -405,10 +410,17 @@ export function ControllerApp() {
         />
       )}
       <section
-        className={`card play-card${playCardPhaseModifier(activeView?.game?.encounter.phase)}`}
+        className={`card play-card${inLobby ? " play-card--lobby" : ""}${playCardPhaseModifier(
+          activeView?.game?.encounter.phase
+        )}`}
       >
         <div className="status-row">
-          <span className="eyebrow">Комната {activeView?.roomId ?? roomCode}</span>
+          <div className="room-identity">
+            <p className="role-badge">
+              {currentPlayer === undefined ? "Назначаем роль…" : roleLabel(currentPlayer.role)}
+            </p>
+            <span className="eyebrow">Комната {activeView?.roomId ?? roomCode}</span>
+          </div>
           <span className="network-status">
             <span className={`connection connection--${activeStatus}`}>
               {activeStatus === "reconnecting" ? "Переподключение…" : "В сети"}
@@ -419,10 +431,6 @@ export function ControllerApp() {
             </span>
           </span>
         </div>
-        <h1>{currentPlayer?.playerName ?? playerName}</h1>
-        <p className="role-badge">
-          {currentPlayer === undefined ? "Назначаем роль…" : roleLabel(currentPlayer.role)}
-        </p>
         {error.length > 0 && <p className="error-message">{error}</p>}
 
         {activeView?.phase === "lobby" ? (
@@ -441,6 +449,7 @@ export function ControllerApp() {
             </div>
             <button
               type="button"
+              className="ready-button"
               onClick={sendReady}
               disabled={currentPlayer?.ready === true || activeStatus === "reconnecting"}
             >
@@ -1041,19 +1050,7 @@ function RoleControlPanel({
         resetKey={generation}
       />
       {role === "pilot" && (
-        <div className="mg-control">
-          {machineGun !== undefined && (
-            <>
-              <div className="shield-energy mg-heat" aria-label="Нагрев носового пулемёта">
-                <span
-                  style={{ width: `${String((machineGun.heat / machineGun.capacity) * 100)}%` }}
-                />
-              </div>
-              <strong>
-                Нагрев {Math.round(machineGun.heat)} / {Math.round(machineGun.capacity)}
-              </strong>
-            </>
-          )}
+        <>
           <ActionZone
             label={machineGun?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ИЗ НОСА"}
             testId="mg-fire-button"
@@ -1065,7 +1062,19 @@ function RoleControlPanel({
             onEnd={endFire}
             onCancel={cancelFire}
           />
-        </div>
+          {machineGun !== undefined && (
+            <div className="control-readout">
+              <div className="shield-energy mg-heat" aria-label="Нагрев носового пулемёта">
+                <span
+                  style={{ width: `${String((machineGun.heat / machineGun.capacity) * 100)}%` }}
+                />
+              </div>
+              <strong>
+                Нагрев {Math.round(machineGun.heat)} / {Math.round(machineGun.capacity)}
+              </strong>
+            </div>
+          )}
+        </>
       )}
       {role === "gunner" && (
         <ActionZone
@@ -1081,13 +1090,7 @@ function RoleControlPanel({
         />
       )}
       {role === "shield" && shield !== undefined && (
-        <div className="shield-control">
-          <div className="shield-energy" aria-label="Энергия щита">
-            <span style={{ width: `${String((shield.energy / shield.capacity) * 100)}%` }} />
-          </div>
-          <strong>
-            Энергия {Math.round(shield.energy)} / {Math.round(shield.capacity)}
-          </strong>
+        <>
           <ActionZone
             label={
               shield.active
@@ -1104,7 +1107,15 @@ function RoleControlPanel({
             resetKey={generation}
             onToggle={toggleShield}
           />
-        </div>
+          <div className="control-readout">
+            <div className="shield-energy" aria-label="Энергия щита">
+              <span style={{ width: `${String((shield.energy / shield.capacity) * 100)}%` }} />
+            </div>
+            <strong>
+              Энергия {Math.round(shield.energy)} / {Math.round(shield.capacity)}
+            </strong>
+          </div>
+        </>
       )}
       <small>
         Desktop:{" "}
