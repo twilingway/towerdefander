@@ -48,6 +48,7 @@ import { StateView } from "@colyseus/schema";
 import { CloseCode, Room, ServerError, type Client } from "colyseus";
 import { randomInt, randomUUID } from "node:crypto";
 
+import { getBalanceStore } from "../balance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import {
@@ -619,7 +620,8 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
     const previousSeed = this.gameState?.runSeed;
-    this.gameConfig = createSpaceshipSimulationConfig();
+    // A run keeps the balance it started with; console edits land on the next run.
+    this.gameConfig = getBalanceStore().getActiveSimulationConfig();
     this.gameState = createCleanSpaceshipRun(this.gameConfig, createRunSeed(previousSeed));
     this.state.runNumber += 1;
     this.state.phase = "active";

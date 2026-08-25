@@ -41,16 +41,16 @@
 
 ## 5. Сервер: пресеты и admin API
 
-- [ ] 5.1 Добавить `BALANCE_PRESET_PATH` и `ADMIN_BALANCE_PASSWORD` в `apps/server/src/config.ts` и
+- [x] 5.1 Добавить `BALANCE_PRESET_PATH` и `ADMIN_BALANCE_PASSWORD` в `apps/server/src/config.ts` и
       `.env.example`; проверить тесты конфигурации.
-- [ ] 5.2 Реализовать `apps/server/src/balance/store.ts`: чтение файла, разбор схемой, кэш,
+- [x] 5.2 Реализовать `apps/server/src/balance/store.ts`: чтение файла, разбор схемой, кэш,
       атомарная запись через временный файл и rename, работа на defaults при отсутствующем либо
       повреждённом файле; покрыть тестами оба отказных случая.
-- [ ] 5.3 Реализовать `apps/server/src/balance/routes.ts` с `GET /admin/balance`,
+- [x] 5.3 Реализовать `apps/server/src/balance/routes.ts` с `GET /admin/balance`,
       `GET /admin/balance/defaults`, `POST /admin/balance/validate`, `PUT /admin/balance`,
       авторизацией через существующий loopback/Basic-хелпер и заголовками `no-store`; покрыть
       тестами 401 без пароля не с loopback, 400 на невалидный пресет и успешное сохранение.
-- [ ] 5.4 Применять активный пресет в `tryStartRun` и не трогать идущий run; покрыть тестом, что
+- [x] 5.4 Применять активный пресет в `tryStartRun` и не трогать идущий run; покрыть тестом, что
       следующий run стартует на новом балансе, а текущий продолжает на прежнем.
 
 ## 6. Дисплей

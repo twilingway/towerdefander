@@ -71,7 +71,7 @@ export type WaveSpawnEntry = z.infer<typeof waveSpawnEntrySchema>;
 
 export const waveDefinitionSchema = z
   .object({
-    entries: z.array(waveSpawnEntrySchema).min(1).max(64),
+    entries: z.array(waveSpawnEntrySchema).min(1).max(64).readonly(),
     hpMultiplier: positiveFinite.nullable(),
     tempoMultiplier: positiveFinite.nullable()
   })
@@ -94,7 +94,7 @@ export type DirectorTuning = z.infer<typeof directorTuningSchema>;
 
 export const waveCampaignSchema = z
   .object({
-    waves: z.array(waveDefinitionSchema).max(200),
+    waves: z.array(waveDefinitionSchema).max(200).readonly(),
     director: directorTuningSchema
   })
   .strict();

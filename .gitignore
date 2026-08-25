@@ -22,3 +22,6 @@ apps/display/android/app/build/
 
 playwright-report/
 test-results/
+
+# Balance presets written by the admin console at runtime.
+data/

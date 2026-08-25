@@ -14,6 +14,8 @@ describe("readServerConfig", () => {
       waveTtlSeconds: 1200,
       absoluteTtlSeconds: 43_200,
       statsPassword: undefined,
+      balancePassword: undefined,
+      balancePresetPath: "./data/balance.json",
       gracefullyShutdown: true
     });
   });
@@ -29,6 +31,8 @@ describe("readServerConfig", () => {
       waveTtlSeconds: 1200,
       absoluteTtlSeconds: 43_200,
       statsPassword: undefined,
+      balancePassword: undefined,
+      balancePresetPath: "./data/balance.json",
       gracefullyShutdown: true
     });
   });

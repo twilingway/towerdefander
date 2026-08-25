@@ -8,12 +8,15 @@ export interface ServerConfig {
   waveTtlSeconds: number;
   absoluteTtlSeconds: number;
   statsPassword: string | undefined;
+  balancePassword: string | undefined;
+  balancePresetPath: string;
   gracefullyShutdown: boolean;
 }
 
 const MAX_PHASE_TTL_SECONDS = 86_400;
 const MAX_ABSOLUTE_TTL_SECONDS = 604_800;
 const MAX_STATS_PASSWORD_BYTES = 256;
+const DEFAULT_BALANCE_PRESET_PATH = "./data/balance.json";
 
 function readIntegerSeconds(
   environment: NodeJS.ProcessEnv,
@@ -40,6 +43,8 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const configuredPort = environment.PORT?.trim();
   const configuredGraceSeconds = environment.RECONNECTION_GRACE_SECONDS?.trim();
   const rawStatsPassword = environment.ROOM_STATS_PASSWORD;
+  const rawBalancePassword = environment.ADMIN_BALANCE_PASSWORD;
+  const configuredBalancePath = environment.BALANCE_PRESET_PATH?.trim();
   const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
   const host =
     configuredHost === undefined || configuredHost.length === 0 ? "0.0.0.0" : configuredHost;
@@ -79,6 +84,14 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   );
   const statsPassword =
     rawStatsPassword === undefined || rawStatsPassword.length === 0 ? undefined : rawStatsPassword;
+  const balancePassword =
+    rawBalancePassword === undefined || rawBalancePassword.length === 0
+      ? undefined
+      : rawBalancePassword;
+  const balancePresetPath =
+    configuredBalancePath === undefined || configuredBalancePath.length === 0
+      ? DEFAULT_BALANCE_PRESET_PATH
+      : configuredBalancePath;
 
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
     throw new Error(`PORT must be an integer between 1 and 65535; received "${rawPort}".`);
@@ -101,6 +114,15 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     );
   }
 
+  if (
+    balancePassword !== undefined &&
+    Buffer.byteLength(balancePassword, "utf8") > MAX_STATS_PASSWORD_BYTES
+  ) {
+    throw new Error(
+      `ADMIN_BALANCE_PASSWORD must be at most ${String(MAX_STATS_PASSWORD_BYTES)} UTF-8 bytes.`
+    );
+  }
+
   return {
     host,
     port,
@@ -111,6 +133,8 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     waveTtlSeconds,
     absoluteTtlSeconds,
     statsPassword,
+    balancePassword,
+    balancePresetPath,
     gracefullyShutdown
   };
 }
