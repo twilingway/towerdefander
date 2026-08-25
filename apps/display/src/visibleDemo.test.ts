@@ -20,6 +20,7 @@ describe("visible demo helpers", () => {
 
   it("selects the nearest shootable public target deterministically", () => {
     const nearest = findNearestVisibleDemoTarget({
+      cameraViewWidth: 1600,
       spaceship: { x: 100, y: 100 },
       enemyShips: [enemy("enemy-later", 8, 120, 100)],
       asteroids: [asteroid("asteroid-first", 3, 80, 100)],
@@ -32,6 +33,7 @@ describe("visible demo helpers", () => {
   it("returns no target for an empty public combat snapshot", () => {
     expect(
       findNearestVisibleDemoTarget({
+        cameraViewWidth: 1600,
         spaceship: { x: 100, y: 100 },
         enemyShips: [],
         asteroids: [],
@@ -40,8 +42,45 @@ describe("visible demo helpers", () => {
     ).toBeUndefined();
   });
 
+  it("ignores entities the camera never frames, however close they are", () => {
+    const spaceship = { x: 2200, y: 2200 };
+    const cameraViewWidth = 1600;
+
+    expect(
+      findNearestVisibleDemoTarget({
+        cameraViewWidth,
+        spaceship,
+        enemyShips: [enemy("enemy-below-frame", 1, 2200, 2700)],
+        asteroids: [asteroid("asteroid-on-screen", 2, 2900, 2200)],
+        homingMissiles: []
+      })
+    ).toMatchObject({ entityId: "asteroid-on-screen" });
+
+    expect(
+      findNearestVisibleDemoTarget({
+        cameraViewWidth,
+        spaceship,
+        enemyShips: [enemy("enemy-right-of-frame", 1, 3100, 2200)],
+        asteroids: [],
+        homingMissiles: []
+      })
+    ).toBeUndefined();
+
+    expect(
+      findNearestVisibleDemoThreat({
+        cameraViewWidth,
+        spaceship,
+        enemyShips: [],
+        asteroids: [],
+        hostileProjectiles: [{ ...moving("bullet-off-screen", 1, 2200, 2660), kind: "hostile" }],
+        homingMissiles: [missile("missile-on-screen", 2, 2900, 2200)]
+      })
+    ).toMatchObject({ entityId: "missile-on-screen" });
+  });
+
   it("selects a hostile projectile as the nearest shield threat", () => {
     const threat = findNearestVisibleDemoThreat({
+      cameraViewWidth: 1600,
       spaceship: { x: 100, y: 100 },
       enemyShips: [enemy("enemy", 1, 200, 100)],
       asteroids: [],

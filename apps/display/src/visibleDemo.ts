@@ -1,3 +1,4 @@
+import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import type {
   PublicAsteroidView,
   PublicEnemyView,
@@ -28,6 +29,7 @@ export interface VisibleDemoTarget {
 }
 
 interface VisibleDemoGame {
+  readonly cameraViewWidth: number;
   readonly spaceship: Pick<PublicSpaceshipView, "x" | "y">;
   readonly enemyShips: readonly PublicEnemyView[];
   readonly asteroids: readonly PublicAsteroidView[];
@@ -73,16 +75,26 @@ export function findNearestVisibleDemoThreat(
   ]);
 }
 
+/**
+ * The bot only fires at what a player on the same screen can see, so entities
+ * outside the framed slice are skipped even when they are the nearest in the
+ * arena. The frame follows the authoritative `cameraViewWidth`.
+ */
 function findNearestVisibleDemoEntity(
-  game: Pick<VisibleDemoGame, "spaceship">,
+  game: Pick<VisibleDemoGame, "spaceship" | "cameraViewWidth">,
   targets: readonly VisibleDemoTarget[]
 ): VisibleDemoTarget | undefined {
   let nearest: VisibleDemoTarget | undefined;
   let nearestDistanceSquared = Number.POSITIVE_INFINITY;
+  const halfWidth = game.cameraViewWidth / 2;
+  const halfHeight = (game.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2;
 
   for (const target of targets) {
     const deltaX = target.x - game.spaceship.x;
     const deltaY = target.y - game.spaceship.y;
+    if (Math.abs(deltaX) > halfWidth || Math.abs(deltaY) > halfHeight) {
+      continue;
+    }
     const distanceSquared = deltaX * deltaX + deltaY * deltaY;
     if (
       distanceSquared < nearestDistanceSquared ||

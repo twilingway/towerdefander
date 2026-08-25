@@ -6,6 +6,8 @@
       проверить отсутствие overlay на обычном URL.
 - [x] 1.3 Добавить dev-only render FPS, authoritative snapshot Hz и auto-control Hz diagnostics с
       bounded React update cadence и pure rate tests.
+- [x] 1.4 Ограничить выбор цели и угрозы кадром камеры дисплея, чтобы auto-crew не стрелял по
+      сущностям за пределами экрана; покрыть unit-тестом.
 
 ## 2. Visible harness orchestration
 

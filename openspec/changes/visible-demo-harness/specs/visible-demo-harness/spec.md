@@ -23,13 +23,20 @@
 Harness SHALL подключать ровно три authenticated controller connections с ролями pilot, gunner и
 shield. Auto-crew SHALL отправлять только current strict ready/input/upgrade commands с корректными
 identity, runNumber и monotonic sequence; server/game-core SHALL оставаться единственными
-владельцами positions, collisions, damage, wave и result.
+владельцами positions, collisions, damage, wave и result. Auto-crew SHALL выбирать цель и угрозу
+только среди сущностей внутри кадра камеры дисплея, чтобы демонстрация не стреляла по тому, чего
+зритель на экране не видит.
 
 #### Scenario: Бой начинается
 
 - **WHEN** display room создана и три demo controller подключены
 - **THEN** все три отправляют ready, run переходит в combat и display показывает движение, fire и
   shield actions
+
+#### Scenario: Враг вне кадра камеры
+
+- **WHEN** ближайшая сущность находится дальше кадра камеры, а в кадре есть более далёкая
+- **THEN** auto-crew целится в ту, что видна на экране, а при пустом кадре не выбирает цель вовсе
 
 #### Scenario: Волна закончилась
 
