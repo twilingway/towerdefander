@@ -48,12 +48,47 @@ export interface EnemyWeaponTuning {
   readonly burstSpreadRadians: number;
 }
 
+export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
+export type SpawnSector = (typeof SPAWN_SECTORS)[number];
+
+export interface WaveSpawnEntry {
+  readonly kind: SpawnKind;
+  readonly count: number;
+  readonly spawnIntervalTicks: number;
+  readonly sector: SpawnSector | null;
+}
+
+export interface WaveDefinition {
+  readonly entries: readonly WaveSpawnEntry[];
+  readonly hpMultiplier: number | null;
+  readonly tempoMultiplier: number | null;
+}
+
+export interface DirectorTuning {
+  readonly baseBudget: number;
+  readonly budgetGrowth: number;
+  readonly budgetCap: number;
+  readonly hpGrowth: number;
+  readonly hpMultiplierCap: number;
+  readonly tempoGrowth: number;
+  readonly tempoMultiplierCap: number;
+  readonly bossWaveInterval: number | null;
+}
+
+export interface WaveCampaign {
+  readonly waves: readonly WaveDefinition[];
+  readonly director: DirectorTuning;
+}
+
+export type EnemySpawnPolicy = "standard" | "boss";
+
 export interface EnemyArchetype {
   readonly hp: number;
   readonly radius: number;
   readonly speedPerSecond: number;
   readonly preferredDistance: number;
   readonly weapon: EnemyWeaponTuning;
+  readonly spawnPolicy: EnemySpawnPolicy;
   readonly spawnCost: number;
   readonly unlockWave: number;
   readonly scoreReward: number;
@@ -75,13 +110,7 @@ export interface CombatConfig {
   readonly ambientAsteroidIntervalMinTicks: number;
   readonly ambientAsteroidIntervalMaxTicks: number;
   readonly intermissionTicks: number;
-  readonly waveBaseBudget: number;
-  readonly waveBudgetGrowth: number;
-  readonly waveBudgetCap: number;
-  readonly waveHpGrowth: number;
-  readonly waveHpMultiplierCap: number;
-  readonly waveTempoGrowth: number;
-  readonly waveTempoMultiplierCap: number;
+  readonly waveCampaign: WaveCampaign;
   readonly enemyArchetypes: Readonly<Record<EnemyKind, EnemyArchetype>>;
   readonly asteroidHp: number;
   readonly asteroidRadius: number;
@@ -194,6 +223,8 @@ export interface HomingMissileState extends MovingEntity {
 export interface PendingSpawn {
   readonly kind: SpawnKind;
   readonly planSequence: number;
+  readonly spawnIntervalTicks: number;
+  readonly sector: SpawnSector | null;
 }
 
 export interface CombatStateFields {
@@ -212,6 +243,7 @@ export interface CombatStateFields {
   readonly score: number;
   readonly credits: number;
   readonly nextSpawnSequence: number;
+  readonly nextWaveSpawnTick: number;
   readonly pendingSpawns: readonly PendingSpawn[];
   readonly enemies: readonly CombatEnemyState[];
   readonly asteroids: readonly AsteroidState[];
@@ -292,9 +324,9 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["ambientAsteroidIntervalMinTicks", config.ambientAsteroidIntervalMinTicks],
     ["ambientAsteroidIntervalMaxTicks", config.ambientAsteroidIntervalMaxTicks],
     ["intermissionTicks", config.intermissionTicks],
-    ["waveBaseBudget", config.waveBaseBudget],
-    ["waveBudgetGrowth", config.waveBudgetGrowth],
-    ["waveBudgetCap", config.waveBudgetCap],
+    ["waveCampaign.director.baseBudget", config.waveCampaign.director.baseBudget],
+    ["waveCampaign.director.budgetGrowth", config.waveCampaign.director.budgetGrowth],
+    ["waveCampaign.director.budgetCap", config.waveCampaign.director.budgetCap],
     ["asteroidLifetimeTicks", config.asteroidLifetimeTicks],
     ["asteroidSpawnCost", config.asteroidSpawnCost],
     ["caps.enemyShips", config.caps.enemyShips],
@@ -320,10 +352,10 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["asteroidShieldHitCost", config.asteroidShieldHitCost],
     ["asteroidDamage", config.asteroidDamage],
     ["friendlyProjectileDamage", config.friendlyProjectileDamage],
-    ["waveHpGrowth", config.waveHpGrowth],
-    ["waveHpMultiplierCap", config.waveHpMultiplierCap],
-    ["waveTempoGrowth", config.waveTempoGrowth],
-    ["waveTempoMultiplierCap", config.waveTempoMultiplierCap],
+    ["waveCampaign.director.hpGrowth", config.waveCampaign.director.hpGrowth],
+    ["waveCampaign.director.hpMultiplierCap", config.waveCampaign.director.hpMultiplierCap],
+    ["waveCampaign.director.tempoGrowth", config.waveCampaign.director.tempoGrowth],
+    ["waveCampaign.director.tempoMultiplierCap", config.waveCampaign.director.tempoMultiplierCap],
     ["asteroidHp", config.asteroidHp],
     ["asteroidRadius", config.asteroidRadius],
     ["asteroidSpeedPerSecond", config.asteroidSpeedPerSecond],
@@ -346,6 +378,7 @@ export function validateCombatConfig(config: CombatConfig): void {
     }
   }
   validateEnemyArchetypes(config);
+  validateWaveCampaign(config);
   if (config.shieldArcRadians > Math.PI * 2) {
     throw new RangeError("shieldArcRadians cannot exceed a full circle");
   }
@@ -430,6 +463,45 @@ function validateEnemyArchetypes(config: CombatConfig): void {
   }
 }
 
+function validateWaveCampaign(config: CombatConfig): void {
+  const campaign = config.waveCampaign;
+  const bossInterval = campaign.director.bossWaveInterval;
+  if (bossInterval !== null && (!Number.isSafeInteger(bossInterval) || bossInterval <= 0)) {
+    throw new RangeError(
+      "waveCampaign.director.bossWaveInterval must be null or a positive integer"
+    );
+  }
+  campaign.waves.forEach((wave, index) => {
+    const label = `waveCampaign.waves[${String(index)}]`;
+    if (wave.entries.length === 0) {
+      throw new RangeError(`${label} must spawn at least one threat`);
+    }
+    for (const [name, value] of [
+      ["hpMultiplier", wave.hpMultiplier],
+      ["tempoMultiplier", wave.tempoMultiplier]
+    ] as const) {
+      if (value !== null && (!Number.isFinite(value) || value <= 0)) {
+        throw new RangeError(`${label}.${name} must be null or a positive finite number`);
+      }
+    }
+    wave.entries.forEach((entry, entryIndex) => {
+      const entryLabel = `${label}.entries[${String(entryIndex)}]`;
+      if (entry.kind !== "asteroid" && !ENEMY_KINDS.includes(entry.kind)) {
+        throw new RangeError(`${entryLabel}.kind is not a known spawn kind`);
+      }
+      if (!Number.isSafeInteger(entry.count) || entry.count <= 0) {
+        throw new RangeError(`${entryLabel}.count must be a positive safe integer`);
+      }
+      if (!Number.isSafeInteger(entry.spawnIntervalTicks) || entry.spawnIntervalTicks <= 0) {
+        throw new RangeError(`${entryLabel}.spawnIntervalTicks must be a positive safe integer`);
+      }
+      if (entry.sector !== null && !SPAWN_SECTORS.includes(entry.sector)) {
+        throw new RangeError(`${entryLabel}.sector is not a known spawn sector`);
+      }
+    });
+  });
+}
+
 export function deriveDomainSeed(runSeed: number, waveNumber: number, domain: number): number {
   validateRunSeed(runSeed);
   if (!Number.isSafeInteger(waveNumber) || waveNumber <= 0) {
@@ -452,18 +524,23 @@ export function nextUint32(state: number): readonly [number, number] {
   return [next === 0 ? 0x6d2b_79f5 : next, next >>> 0];
 }
 
+function getScriptedWave(config: CombatConfig, waveNumber: number): WaveDefinition | null {
+  if (!Number.isSafeInteger(waveNumber) || waveNumber <= 0) return null;
+  return config.waveCampaign.waves[waveNumber - 1] ?? null;
+}
+
 export function getWaveDifficulty(config: CombatConfig, waveNumber: number): WaveDifficulty {
+  const director = config.waveCampaign.director;
   const waveOffset = Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, waveNumber - 1));
+  const scripted = getScriptedWave(config, waveNumber);
   return {
-    budget: Math.min(
-      config.waveBudgetCap,
-      config.waveBaseBudget + config.waveBudgetGrowth * waveOffset
-    ),
-    hpMultiplier: Math.min(config.waveHpMultiplierCap, 1 + config.waveHpGrowth * waveOffset),
-    tempoMultiplier: Math.min(
-      config.waveTempoMultiplierCap,
-      1 + config.waveTempoGrowth * waveOffset
-    )
+    budget: Math.min(director.budgetCap, director.baseBudget + director.budgetGrowth * waveOffset),
+    hpMultiplier:
+      scripted?.hpMultiplier ??
+      Math.min(director.hpMultiplierCap, 1 + director.hpGrowth * waveOffset),
+    tempoMultiplier:
+      scripted?.tempoMultiplier ??
+      Math.min(director.tempoMultiplierCap, 1 + director.tempoGrowth * waveOffset)
   };
 }
 
@@ -472,24 +549,70 @@ export function createWavePlan(
   runSeed: number,
   waveNumber: number
 ): { readonly plan: readonly PendingSpawn[]; readonly rngState: number } {
-  const difficulty = getWaveDifficulty(config, waveNumber);
-  let remaining = difficulty.budget;
-  let rngState = deriveDomainSeed(runSeed, waveNumber, SPAWN_DOMAIN);
-  const carrier = config.enemyArchetypes.missileCarrier;
-  const gunship = config.enemyArchetypes.gunship;
+  const rngState = deriveDomainSeed(runSeed, waveNumber, SPAWN_DOMAIN);
+  const scripted = getScriptedWave(config, waveNumber);
+  if (scripted !== null) {
+    return { plan: createScriptedWavePlan(scripted), rngState };
+  }
+  return createDirectedWavePlan(config, waveNumber, rngState);
+}
+
+function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSpawn[] {
+  const plan: PendingSpawn[] = [];
+  for (const entry of wave.entries) {
+    for (let index = 0; index < entry.count; index += 1) {
+      plan.push({
+        kind: entry.kind,
+        planSequence: plan.length,
+        spawnIntervalTicks: entry.spawnIntervalTicks,
+        sector: entry.sector
+      });
+    }
+  }
+  return plan;
+}
+
+function createDirectedWavePlan(
+  config: CombatConfig,
+  waveNumber: number,
+  initialRngState: number
+): { readonly plan: readonly PendingSpawn[]; readonly rngState: number } {
+  let remaining = getWaveDifficulty(config, waveNumber).budget;
+  let rngState = initialRngState;
+  const spawnCostOf = (kind: SpawnKind): number =>
+    kind === "asteroid" ? config.asteroidSpawnCost : config.enemyArchetypes[kind].spawnCost;
+  const available = ENEMY_KINDS.filter((kind) => {
+    const archetype = config.enemyArchetypes[kind];
+    return archetype.spawnPolicy === "standard" && waveNumber >= archetype.unlockWave;
+  }).sort((left, right) => spawnCostOf(right) - spawnCostOf(left) || left.localeCompare(right));
   const kinds: SpawnKind[] = [];
-  if (waveNumber >= carrier.unlockWave && remaining >= carrier.spawnCost) {
-    kinds.push("missileCarrier");
-    remaining -= carrier.spawnCost;
+  const anchor = available[0];
+  if (anchor !== undefined && remaining >= spawnCostOf(anchor)) {
+    kinds.push(anchor);
+    remaining -= spawnCostOf(anchor);
+  }
+  const bossInterval = config.waveCampaign.director.bossWaveInterval;
+  if (bossInterval !== null && waveNumber % bossInterval === 0) {
+    const boss = ENEMY_KINDS.find(
+      (kind) =>
+        config.enemyArchetypes[kind].spawnPolicy === "boss" &&
+        waveNumber >= config.enemyArchetypes[kind].unlockWave
+    );
+    if (boss !== undefined) {
+      kinds.push(boss);
+    }
   }
   while (remaining > 0) {
-    const [next, random] = nextUint32(rngState);
-    rngState = next;
-    const canAffordGunship =
-      remaining >= gunship.spawnCost && waveNumber >= gunship.unlockWave && random % 3 !== 0;
-    const kind: SpawnKind = canAffordGunship ? "gunship" : "asteroid";
+    const [afterPick, pick] = nextUint32(rngState);
+    const [afterChoice, choice] = nextUint32(afterPick);
+    rngState = afterChoice;
+    const affordable = available.filter((kind) => spawnCostOf(kind) <= remaining);
+    const kind: SpawnKind =
+      affordable.length === 0 || pick % 3 === 0
+        ? "asteroid"
+        : (affordable[choice % affordable.length] ?? "asteroid");
     kinds.push(kind);
-    remaining -= kind === "gunship" ? gunship.spawnCost : config.asteroidSpawnCost;
+    remaining -= spawnCostOf(kind);
   }
   for (let index = kinds.length - 1; index > 0; index -= 1) {
     const [next, random] = nextUint32(rngState);
@@ -503,7 +626,12 @@ export function createWavePlan(
     }
   }
   return {
-    plan: kinds.map((kind, planSequence) => ({ kind, planSequence })),
+    plan: kinds.map((kind, planSequence) => ({
+      kind,
+      planSequence,
+      spawnIntervalTicks: config.enemySpawnIntervalTicks,
+      sector: null
+    })),
     rngState
   };
 }
@@ -533,6 +661,7 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     score: 0,
     credits: 0,
     nextSpawnSequence: 1,
+    nextWaveSpawnTick: 0,
     pendingSpawns: plan,
     enemies: [],
     asteroids: [],
@@ -707,6 +836,7 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
     ambientAsteroidRngState: ambientSchedule.rngState,
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     pendingSpawns: wave.plan,
+    nextWaveSpawnTick: 0,
     teamUpgradeOffer: null,
     teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
     shieldActive: false,
@@ -924,7 +1054,8 @@ function moveAndSpawnThreats(
 
   let pendingSpawns = state.pendingSpawns;
   let spawnRngState = state.spawnRngState;
-  if (pendingSpawns.length > 0 && state.encounterTick % config.enemySpawnIntervalTicks === 0) {
+  let nextWaveSpawnTick = state.nextWaveSpawnTick;
+  if (pendingSpawns.length > 0 && state.encounterTick >= nextWaveSpawnTick) {
     const pending = pendingSpawns[0];
     if (
       pending !== undefined &&
@@ -937,11 +1068,13 @@ function moveAndSpawnThreats(
         nextSpawnSequence,
         state.clock.tick,
         state.waveNumber,
-        config
+        config,
+        pending.sector
       );
       spawnRngState = result.rngState;
       nextSpawnSequence += 1;
       pendingSpawns = pendingSpawns.slice(1);
+      nextWaveSpawnTick = state.encounterTick + pending.spawnIntervalTicks;
       if (result.enemy !== null) enemies = [...enemies, result.enemy];
       if (result.asteroid !== null) asteroids = [...asteroids, result.asteroid];
       workingDynamicCount += 1;
@@ -962,7 +1095,8 @@ function moveAndSpawnThreats(
       nextSpawnSequence,
       state.clock.tick,
       state.waveNumber,
-      config
+      config,
+      null
     );
     ambientAsteroidRngState = result.rngState;
     nextSpawnSequence += 1;
@@ -984,6 +1118,7 @@ function moveAndSpawnThreats(
     homingMissiles,
     pendingSpawns,
     spawnRngState,
+    nextWaveSpawnTick,
     ambientAsteroidRngState,
     ambientAsteroidSpawnDueTick,
     nextSpawnSequence
@@ -1136,6 +1271,14 @@ function createMissile(
   };
 }
 
+function sectorEntryAngle(sector: SpawnSector | null, unitRandom: number): number {
+  if (sector === null) return unitRandom * Math.PI * 2;
+  // Screen-space bearings: north points up, angles grow clockwise.
+  const sectorWidth = Math.PI / 4;
+  const sectorCenter = -Math.PI / 2 + SPAWN_SECTORS.indexOf(sector) * sectorWidth;
+  return sectorCenter + (unitRandom - 0.5) * sectorWidth;
+}
+
 function spawnEntity(
   kind: SpawnKind,
   origin: "wave" | "ambient",
@@ -1143,7 +1286,8 @@ function spawnEntity(
   spawnSequence: number,
   tick: number,
   waveNumber: number,
-  config: CombatConfig
+  config: CombatConfig,
+  sector: SpawnSector | null
 ): {
   readonly rngState: number;
   readonly enemy: CombatEnemyState | null;
@@ -1156,7 +1300,7 @@ function spawnEntity(
     rngState = next;
     values.push(random / UINT32_MAX);
   }
-  const entryAngle = (values[0] ?? 0) * Math.PI * 2;
+  const entryAngle = sectorEntryAngle(sector, values[0] ?? 0);
   const arena = arenaFromConfig(config);
   const difficulty = getWaveDifficulty(config, waveNumber);
   if (kind === "asteroid") {
@@ -1602,6 +1746,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     encounterTick: state.encounterTick,
     score: state.score,
     credits: state.credits,
+    nextWaveSpawnTick: state.nextWaveSpawnTick,
     nextSpawnSequence: state.nextSpawnSequence,
     pendingSpawns: state.pendingSpawns,
     enemies: state.enemies,

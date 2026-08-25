@@ -93,7 +93,9 @@ describe("circular combat spawning and movement", () => {
     for (let seed = 1; seed <= 32; seed += 1) {
       const initial = {
         ...createSpaceshipSimulationState(config, seed),
-        pendingSpawns: [{ kind: "gunship" as const, planSequence: 0 }]
+        pendingSpawns: [
+          { kind: "gunship" as const, planSequence: 0, spawnIntervalTicks: 12, sector: null }
+        ]
       };
       const first = advanceSpaceshipSimulation(initial, config);
       const replay = advanceSpaceshipSimulation(initial, config);
@@ -116,7 +118,7 @@ describe("circular combat spawning and movement", () => {
     const state = advanceSpaceshipSimulation(
       {
         ...createSpaceshipSimulationState(config, 55),
-        pendingSpawns: [{ kind: "asteroid", planSequence: 0 }]
+        pendingSpawns: [{ kind: "asteroid", planSequence: 0, spawnIntervalTicks: 12, sector: null }]
       },
       config
     );
@@ -173,7 +175,7 @@ describe("ambient asteroid scheduler", () => {
     const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1 });
     const initial: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 311),
-      pendingSpawns: [{ kind: "gunship", planSequence: 0 }]
+      pendingSpawns: [{ kind: "gunship", planSequence: 0, spawnIntervalTicks: 12, sector: null }]
     };
     const withoutAmbient = advanceSpaceshipSimulation(
       { ...initial, ambientAsteroidSpawnDueTick: null },
@@ -243,7 +245,7 @@ describe("ambient asteroid scheduler", () => {
     const asteroids = Array.from({ length: 15 }, (_, index) => ambientAsteroid(config, index));
     const state: SpaceshipSimulationState = {
       ...initial,
-      pendingSpawns: [{ kind: "asteroid", planSequence: 0 }],
+      pendingSpawns: [{ kind: "asteroid", planSequence: 0, spawnIntervalTicks: 12, sector: null }],
       asteroids,
       ambientAsteroidSpawnDueTick: 0
     };

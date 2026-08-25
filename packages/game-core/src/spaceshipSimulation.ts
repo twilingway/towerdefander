@@ -168,13 +168,19 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   ambientAsteroidIntervalMinTicks: 40,
   ambientAsteroidIntervalMaxTicks: 100,
   intermissionTicks: 600,
-  waveBaseBudget: 5,
-  waveBudgetGrowth: 2,
-  waveBudgetCap: 120,
-  waveHpGrowth: 0.12,
-  waveHpMultiplierCap: 8,
-  waveTempoGrowth: 0.05,
-  waveTempoMultiplierCap: 3,
+  waveCampaign: {
+    waves: [],
+    director: {
+      baseBudget: 5,
+      budgetGrowth: 2,
+      budgetCap: 120,
+      hpGrowth: 0.12,
+      hpMultiplierCap: 8,
+      tempoGrowth: 0.05,
+      tempoMultiplierCap: 3,
+      bossWaveInterval: null
+    }
+  },
   enemyArchetypes: {
     gunship: {
       hp: 50,
@@ -193,6 +199,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 1,
         burstSpreadRadians: 0
       },
+      spawnPolicy: "standard",
       spawnCost: 2,
       unlockWave: 1,
       scoreReward: 25,
@@ -215,6 +222,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 1,
         burstSpreadRadians: 0
       },
+      spawnPolicy: "standard",
       spawnCost: 4,
       unlockWave: 3,
       scoreReward: 25,

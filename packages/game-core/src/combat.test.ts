@@ -26,6 +26,30 @@ import {
   type ProjectileState
 } from "./index.js";
 
+function scriptedCampaignConfig() {
+  const base = createSpaceshipSimulationConfig();
+  return createSpaceshipSimulationConfig({
+    waveCampaign: {
+      ...base.waveCampaign,
+      waves: [
+        {
+          entries: [
+            { kind: "gunship", count: 3, spawnIntervalTicks: 3, sector: "N" },
+            { kind: "asteroid", count: 1, spawnIntervalTicks: 9, sector: "SE" }
+          ],
+          hpMultiplier: 2.5,
+          tempoMultiplier: null
+        },
+        {
+          entries: [{ kind: "asteroid", count: 2, spawnIntervalTicks: 5, sector: null }],
+          hpMultiplier: null,
+          tempoMultiplier: null
+        }
+      ]
+    }
+  });
+}
+
 function bulletFromWeapon(weapon: EnemyWeaponTuning): HostileProjectileState {
   return {
     id: "hostile-test",
@@ -77,8 +101,9 @@ describe("deterministic combat foundation", () => {
     expect(createTeamUpgradeOffer(123, 8)).toEqual(offers);
   });
 
-  it("unlocks carriers at wave three and scales difficulty monotonically", () => {
+  it("unlocks a kind at its configured wave and scales difficulty monotonically", () => {
     const config = createSpaceshipSimulationConfig();
+    expect(config.enemyArchetypes.missileCarrier.unlockWave).toBe(3);
     expect(createWavePlan(config, 91, 1).plan.some(({ kind }) => kind === "missileCarrier")).toBe(
       false
     );
@@ -95,6 +120,84 @@ describe("deterministic combat foundation", () => {
       expect(next.hpMultiplier).toBeGreaterThanOrEqual(current.hpMultiplier);
       expect(next.tempoMultiplier).toBeGreaterThanOrEqual(current.tempoMultiplier);
     }
+  });
+
+  it("moves a kind unlock by reconfiguring the archetype", () => {
+    const base = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({
+      enemyArchetypes: {
+        ...base.enemyArchetypes,
+        missileCarrier: { ...base.enemyArchetypes.missileCarrier, unlockWave: 6 }
+      }
+    });
+    for (const wave of [3, 4, 5]) {
+      expect(
+        createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "missileCarrier")
+      ).toBe(false);
+    }
+    expect(createWavePlan(config, 91, 6).plan.some(({ kind }) => kind === "missileCarrier")).toBe(
+      true
+    );
+  });
+
+  it("builds a scripted wave exactly as configured and keeps it seed independent", () => {
+    const config = scriptedCampaignConfig();
+    const plan = createWavePlan(config, 91, 1).plan;
+    expect(plan.map(({ kind }) => kind)).toEqual(["gunship", "gunship", "gunship", "asteroid"]);
+    expect(createWavePlan(config, 4242, 1).plan).toEqual(plan);
+    expect(plan.map(({ spawnIntervalTicks }) => spawnIntervalTicks)).toEqual([3, 3, 3, 9]);
+    expect(plan.map(({ sector }) => sector)).toEqual(["N", "N", "N", "SE"]);
+  });
+
+  it("falls back to the director past the last scripted wave", () => {
+    const config = scriptedCampaignConfig();
+    const scripted = createWavePlan(config, 91, 2).plan;
+    expect(scripted.map(({ kind }) => kind)).toEqual(["asteroid", "asteroid"]);
+    const directed = createWavePlan(config, 91, 3);
+    expect(directed.plan.length).toBeGreaterThan(0);
+    expect(directed.plan.every(({ sector }) => sector === null)).toBe(true);
+    expect(createWavePlan(config, 91, 3)).toEqual(directed);
+  });
+
+  it("honours per-entry spawn intervals when draining a scripted wave", () => {
+    const config = scriptedCampaignConfig();
+    let state = createSpaceshipSimulationState(config, 12);
+    const spawnTicks: number[] = [];
+    let previousPending = state.pendingSpawns.length;
+    for (let step = 0; step < 12; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+      if (state.pendingSpawns.length < previousPending) {
+        spawnTicks.push(state.encounterTick);
+        previousPending = state.pendingSpawns.length;
+      }
+    }
+    expect(spawnTicks).toEqual([1, 4, 7, 10]);
+  });
+
+  it("keeps scripted spawns inside their configured sector", () => {
+    const config = scriptedCampaignConfig();
+    let state = createSpaceshipSimulationState(config, 12);
+    for (let step = 0; step < 8; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    const centerX = config.worldWidth / 2;
+    const centerY = config.worldHeight / 2;
+    expect(state.enemies.length).toBeGreaterThan(0);
+    for (const enemy of state.enemies) {
+      const bearing = Math.atan2(enemy.y - centerY, enemy.x - centerX);
+      expect(Math.abs(shortestAngleDelta(-Math.PI / 2, bearing))).toBeLessThanOrEqual(
+        Math.PI / 8 + 1e-9
+      );
+    }
+  });
+
+  it("applies scripted difficulty overrides instead of director growth", () => {
+    const config = scriptedCampaignConfig();
+    expect(getWaveDifficulty(config, 1).hpMultiplier).toBe(2.5);
+    expect(getWaveDifficulty(config, 1).tempoMultiplier).toBe(1);
+    expect(getWaveDifficulty(config, 2).hpMultiplier).toBe(
+      getWaveDifficulty(createSpaceshipSimulationConfig(), 2).hpMultiplier
+    );
   });
 
   it("produces the same combat snapshot from the same seed and input trace", () => {
