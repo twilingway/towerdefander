@@ -13,9 +13,13 @@ state; клиенты отправляют только intents.
 
 ## Текущий gameplay
 
-- deterministic fixed-step simulation 20 Hz и protocol v14;
-- круглая server-authoritative арена `4400×4400`, радиус `2200`;
-- волны gunships и missile carriers, а также постоянный поток астероидов с разных сторон арены;
+- deterministic fixed-step simulation 20 Hz и protocol v17;
+- круглая server-authoritative арена `4400×4400`, радиус `2200`, кадр камеры настраивается балансом;
+- каталог из пяти врагов — перехватчик, ганшип, снайпер, ракетоносец и босс, — который редактируется
+  из консоли баланса без пересборки сервера;
+- явная таблица волн поверх процедурного директора и постоянный поток астероидов с разных сторон
+  арены;
+- у каждого орудия врага своя дальность открытия огня: вне её ствол молчит и держит заряд;
 - friendly/hostile projectiles и limited-turn homing missiles;
 - swept collisions, HP, damage, score, общий credits balance и directional shield interception;
 - 30-секундное командное голосование за один платный role upgrade между волнами;
@@ -43,8 +47,9 @@ apps/
   display/       React HUD + Phaser world для большого экрана
   controller/    responsive browser controllers трёх ролей
   server/        authoritative Colyseus room, lifecycle и statistics
+  admin/         консоль баланса: волны, враги, директор, камера
 packages/
-  protocol/      protocol v14 schemas и shared contracts
+  protocol/      protocol v17 schemas и shared contracts
   game-core/     pure deterministic simulation без DOM/network/timers
   config/        shared TypeScript configuration
 openspec/        current specs и change lifecycle
@@ -66,6 +71,7 @@ pnpm dev
 
 - display: `http://localhost:5173`;
 - controller: `http://localhost:5174`;
+- консоль баланса: `http://localhost:5175`;
 - server/health: `http://localhost:2567` и `http://localhost:2567/health`;
 - room statistics: `http://localhost:2567/stats/rooms`.
 
@@ -99,6 +105,20 @@ Auto-crew является только developer harness. Будущие NPC б
 Для телефона замените `localhost` в `.env.local` на LAN-адрес компьютера. Для internet deployment
 нужны HTTPS/WSS, публичные client/server endpoints и TLS reverse proxy. Без `ROOM_STATS_PASSWORD`
 statistics доступны только с loopback; удалённый доступ использует Basic `admin:<password>` за TLS.
+
+## Консоль баланса
+
+Консоль поднимается вместе с `pnpm dev` на `:5175` и правит активный пресет через защищённый
+`/admin/balance`: таблицу волн, каталог врагов с орудиями и дальностями огня, параметры директора и
+кадр камеры мира. Сохранённый пресет применяется со следующего запуска боя, идущий бой не меняется.
+
+Пресеты лежат в файле версии `7` по пути `BALANCE_PRESET_PATH` (по умолчанию
+`apps/server/data/balance.json`, не в git). Файл не обязателен: без него сервер работает на
+встроенных значениях, а файл прежней версии мигрируется при загрузке. Как и statistics, API доступен
+с loopback без пароля; удалённый доступ требует `ADMIN_BALANCE_PASSWORD` и TLS.
+
+Кадр камеры удобно подбирать в dev-превью дисплея: `http://localhost:5173/?preview=1` рисует
+фикстуру без сервера и даёт ползунок ширины кадра, значение которого затем вбивается в консоль.
 
 ## Проверки
 

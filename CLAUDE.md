@@ -15,7 +15,8 @@ Node 22+ and pnpm 10.34.5 (`corepack enable pnpm`). Copy `.env.example` to `.env
 pnpm dev
 ```
 
-Runs server (`:2567`), display (`:5173`), and controller (`:5174`) in parallel.
+Runs server (`:2567`), display (`:5173`), controller (`:5174`), and the balance console (`:5175`) in
+parallel.
 
 Full gate before declaring work complete — format, lint, typecheck, unit tests, build, network
 smoke, Playwright e2e:
@@ -33,7 +34,7 @@ does not, because some `test` scripts chain commands):
 pnpm --filter @spaceship-defender/game-core exec vitest run src/combat.test.ts -t "shield"
 ```
 
-Workspace names: `@spaceship-defender/{server,display,controller,game-core,protocol}`.
+Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core,protocol}`.
 
 | Command                                 | Purpose                                                                            |
 | --------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -56,7 +57,8 @@ controllers send intents and render authoritative snapshots.
 ```text
 apps/display    React shell + HUD, Phaser world (Phaser lives only here)
 apps/controller React pilot/gunner/shield panels, touch + mouse + keyboard
-apps/server     Colyseus room, lifecycle timers, /health, /stats/rooms
+apps/server     Colyseus room, lifecycle timers, /health, /stats/rooms, /admin/balance
+apps/admin      React balance console: waves, enemy catalogue, director, camera frame
 packages/protocol   zod schemas, message names, shared constants (source of truth)
 packages/game-core  pure deterministic simulation
 ```
@@ -92,9 +94,13 @@ Simulation tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 14) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 17) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
+`packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
+they carry their own `BALANCE_FILE_VERSION` (currently 7) with migrations in
+`apps/server/src/balance/store.ts`, and a balance-only change bumps that file version instead of the
+protocol.
 
 Clients do not read Colyseus schema objects directly in UI code. `apps/display/src/roomView.ts`
 (`toDisplayRoomView`) and `apps/controller/src/roomView.ts` (`toControllerRoomView`) flatten

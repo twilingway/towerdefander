@@ -31,8 +31,9 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 - `apps/display` — большой экран, React HUD и Phaser world;
 - `apps/controller` — responsive role controllers;
 - `apps/server` — Colyseus room, validation, simulation, lifecycle и statistics;
+- `apps/admin` — консоль баланса: волны, каталог врагов, директор и кадр камеры;
 - `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — strict protocol v14 и shared schemas.
+- `packages/protocol` — strict protocol v17 и shared schemas.
 
 ## 3. Реализованный foundation
 
@@ -40,8 +41,12 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 - круглая authoritative арена `4400×4400`, радиус `2200`, и fullscreen camera с cosmic overscan;
 - 20 Hz fixed-step, мягкое движение и плавный traverse turret/shield;
 - hold-fire, shield toggle, drain/recharge и authoritative RTT;
-- gunships, missile carriers, bullets, homing missiles и постоянный seeded-поток астероидов,
-  входящих с разных сторон арены;
+- каталог из пяти архетипов — перехватчик, ганшип, снайпер, ракетоносец и босс — с собственными
+  силуэтами, орудиями и дальностями открытия огня;
+- явная таблица волн поверх процедурного директора и постоянный seeded-поток астероидов, входящих с
+  разных сторон арены;
+- файл пресетов баланса и защищённый `/admin/balance`, из которого консоль правит кампанию, врагов и
+  кадр камеры без пересборки сервера;
 - seeded spawn/RNG, swept collisions, HP, damage, score и defeat;
 - общий credits balance и 600-tick командное голосование за один paid role upgrade;
 - result, unanimous rematch, explicit exit/close, reconnect/replacement;
@@ -60,7 +65,7 @@ Source tree очищен от двух прежних product names и испо�
 - code vocabulary `Spaceship`/`spaceship`;
 - npm scope `@spaceship-defender/*`;
 - Colyseus room type `spaceship_defender`;
-- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v14;
+- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v17;
 - `SpaceshipDefenderRoom/State` и `SpaceshipSimulation*` API;
 - удаление unused classic defense core/assets/spec catalog entries;
 - обновление UI, tests, scripts, README, GDD, AGENTS и OpenSpec context.
@@ -81,11 +86,11 @@ rooms v9 не мигрируют: server/display/controllers обновляют�
 ## 6. Gameplay foundation — credits и team upgrades
 
 - score остаётся нетратимым результатом run, credits принадлежат всему экипажу;
-- wave asteroid/gunship/missile carrier дают соответственно `1/2/4` credits, а ambient targets и
-  missiles не позволяют фармить валюту;
+- награда за цель живёт в каталоге архетипов: wave asteroid и перехватчик `1`, ганшип `2`, снайпер
+  `3`, ракетоносец `4`, босс `30` credits, а ambient targets и missiles не позволяют фармить валюту;
 - projectile kill и shield interception ракеты/астероида дают одинаковый однократный score reward;
 - между waves экипаж 30 секунд голосует за одну из cards pilot/gunner/shield стоимостью 5 credits;
-- protocol v14, revision и action journal защищают vote/reconnect/duplicate delivery;
+- protocol v17, revision и action journal защищают vote/reconnect/duplicate delivery;
 - balance, votes и итоговый modifier являются server-authoritative.
 
 Покупки непосредственно во время combat, tier prices и persistent economy остаются отдельным будущим
@@ -106,8 +111,9 @@ change после balance pass.
 
 ## 8. Дальнейшие этапы
 
-1. Провести balance pass credits/rewards и спроектировать отдельную in-combat modernization.
-2. Добавить новые enemy archetypes, elites и bosses вместе с balance pass.
+1. Провести balance pass credits/rewards в консоли и спроектировать отдельную in-combat
+   modernization.
+2. Добавить архетипы `charger`/`support`, elites и многофазных боссов вместе с balance pass.
 3. Реализовать accepted 2D art/VFX/audio pipeline с Android TV budget.
 4. Добавить thin Capacitor Android TV shell, launcher, fullscreen, wake lock и lifecycle.
 

@@ -45,3 +45,20 @@ Pure fixed-step p95 укладывается в утверждённый ори�
 
 Pure p95 сохраняет запас более чем в 12 раз относительно ориентира `2 ms`; circular authority не
 изменяет утверждённые entity caps.
+
+## Balance catalogue reference — 26 августа 2026
+
+После перехода на таблицу архетипов, дальность открытия огня у каждого орудия и кадр камеры в
+display-проекции (protocol v17), на том же Ryzen 9 5900X / Node.js `v22.22.1`:
+
+- pure fixed-step: p50 `0.0629 ms`, p95 `0.1781 ms`, max `0.6663 ms`;
+- schema sync: p50 `0.1594 ms`, p95 `0.1943 ms`, max `0.5488 ms`;
+- combined room fixed-step: p50 `0.2238 ms`, p95 `0.3099 ms`, max `0.7978 ms`;
+- полный display snapshot: `19427 bytes`;
+- latency-only patch: `15 bytes`;
+- moving-entities patch: `5127 bytes`.
+
+Проверка дистанции добавляет один `Math.hypot` на живого врага за тик, и pure p95 остаётся более чем
+в 11 раз ниже ориентира `2 ms`. Снапшот вырос на `~400 bytes` из-за каталога визуалов врагов; patch
+движущихся сущностей и latency-only patch практически не изменились, то есть каталог и кадр камеры
+передаются один раз, а не каждый тик.
