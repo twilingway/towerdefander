@@ -1,4 +1,8 @@
-import { ENEMY_KINDS, type BalanceTuning, type EnemyArchetype } from "@spaceship-defender/protocol";
+import {
+  BUILTIN_ENEMY_KINDS,
+  type BalanceTuning,
+  type EnemyArchetype
+} from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
 import { directorBudgetAt, spawnCostOf, summariseCampaign, summariseWave } from "./waveSummary.js";
@@ -21,6 +25,8 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
       burstCount: 1,
       burstSpreadRadians: 0
     },
+    visual: { shape: "arrowhead", color: "#e65f4b", outline: "#ffd1b0", showHealthBar: false },
+    label: "Test",
     spawnPolicy: "standard",
     spawnCost,
     unlockWave,
@@ -32,17 +38,17 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
 function tuning(): BalanceTuning {
   return {
     enemyArchetypes: Object.fromEntries(
-      ENEMY_KINDS.map((kind) => [
+      BUILTIN_ENEMY_KINDS.map((kind) => [
         kind,
         archetype(kind === "boss" ? 20 : 2, kind === "boss" ? 10 : 1)
       ])
-    ) as BalanceTuning["enemyArchetypes"],
+    ),
     waveCampaign: {
       waves: [
         {
           entries: [
-            { kind: "gunship", count: 3, spawnIntervalTicks: 20, sector: "N" },
-            { kind: "asteroid", count: 2, spawnIntervalTicks: 10, sector: null }
+            { kind: "gunship", count: 3, spawnIntervalTicks: 20, sectors: ["N"] },
+            { kind: "asteroid", count: 2, spawnIntervalTicks: 10, sectors: [] }
           ],
           hpMultiplier: null,
           tempoMultiplier: null

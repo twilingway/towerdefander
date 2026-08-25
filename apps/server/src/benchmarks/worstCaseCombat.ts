@@ -1,5 +1,6 @@
 import {
   createSpaceshipSimulationConfig,
+  getEnemyArchetype,
   createSpaceshipSimulationState,
   dynamicEntityCount,
   type AsteroidState,
@@ -72,7 +73,7 @@ export function createWorstCaseCombatFixture(
       0.3
     );
     const sequence = spawnSequence++;
-    const weapon = config.enemyArchetypes.gunship.weapon;
+    const weapon = getEnemyArchetype(config, "gunship").weapon;
     return {
       ...movingEntity(`hostile-${String(sequence)}`, sequence, position, { x: 9, y: 3 }, 7),
       damage: weapon.damage,
@@ -89,7 +90,7 @@ export function createWorstCaseCombatFixture(
       0.4
     );
     const sequence = spawnSequence++;
-    const weapon = config.enemyArchetypes.missileCarrier.weapon;
+    const weapon = getEnemyArchetype(config, "missileCarrier").weapon;
     return {
       ...movingEntity(`missile-${String(sequence)}`, sequence, position, { x: 12, y: -6 }, 12),
       heading: -0.4,

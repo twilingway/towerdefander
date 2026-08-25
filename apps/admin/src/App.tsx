@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ENEMY_KINDS,
-  SPAWN_KINDS,
+  ASTEROID_SPAWN_KIND,
+  ENEMY_SHAPES,
+  ENEMY_ARCHETYPE_ID_PATTERN,
+  MAX_ENEMY_ARCHETYPES,
   SPAWN_SECTORS,
   balancePresetsFileSchema,
   type BalancePreset,
   type BalancePresetsFile,
   type BalanceTuning,
   type EnemyArchetype,
+  type EnemyShape,
   type SpawnKind,
   type SpawnSector,
   type WaveDefinition,
@@ -33,13 +36,26 @@ const TAB_LABELS: Record<Tab, string> = {
   presets: "Пресеты"
 };
 
-const ENEMY_LABELS: Record<string, string> = {
-  gunship: "Ганшип",
-  missileCarrier: "Ракетоносец",
-  sniper: "Снайпер",
-  interceptor: "Перехватчик",
-  boss: "Босс",
-  asteroid: "Астероид"
+const SHAPE_LABELS: Record<EnemyShape, string> = {
+  arrowhead: "клин",
+  block: "блок",
+  diamond: "ромб",
+  dart: "стрела",
+  hexagon: "гекс",
+  cross: "крест",
+  ring: "кольцо",
+  spike: "шип"
+};
+
+const SECTOR_HINTS: Record<SpawnSector, string> = {
+  N: "сверху",
+  NE: "сверху справа",
+  E: "справа",
+  SE: "снизу справа",
+  S: "снизу",
+  SW: "снизу слева",
+  W: "слева",
+  NW: "сверху слева"
 };
 
 const ENTITY_CAPS: readonly (readonly [string, number])[] = [
@@ -51,8 +67,43 @@ const ENTITY_CAPS: readonly (readonly [string, number])[] = [
   ["Всего сущностей", 196]
 ];
 
-function label(kind: string): string {
-  return ENEMY_LABELS[kind] ?? kind;
+function spawnKindsOf(tuning: BalanceTuning): readonly SpawnKind[] {
+  return [...Object.keys(tuning.enemyArchetypes).sort(), ASTEROID_SPAWN_KIND];
+}
+
+function labelOf(tuning: BalanceTuning, kind: string): string {
+  if (kind === ASTEROID_SPAWN_KIND) return "Астероид";
+  return tuning.enemyArchetypes[kind]?.label ?? kind;
+}
+
+interface SectorPickerProps {
+  readonly value: readonly SpawnSector[];
+  readonly onChange: (sectors: readonly SpawnSector[]) => void;
+}
+
+/** Checkbox chips: nothing ticked means the whole circumference. */
+function SectorPicker({ value, onChange }: SectorPickerProps) {
+  return (
+    <div className="sectors" role="group" aria-label="Секторы появления">
+      {SPAWN_SECTORS.map((sector) => {
+        const active = value.includes(sector);
+        return (
+          <button
+            key={sector}
+            type="button"
+            title={SECTOR_HINTS[sector]}
+            className={`sectors__chip${active ? " sectors__chip--on" : ""}`}
+            aria-pressed={active}
+            onClick={() => {
+              onChange(active ? value.filter((item) => item !== sector) : [...value, sector]);
+            }}
+          >
+            {sector}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 interface NumberFieldProps {
@@ -95,13 +146,14 @@ function withTuning(document: BalancePresetsFile, tuning: BalanceTuning): Balanc
   };
 }
 
-function createEntry(): WaveSpawnEntry {
-  return { kind: "interceptor", count: 2, spawnIntervalTicks: 12, sector: null };
+function createEntry(tuning: BalanceTuning): WaveSpawnEntry {
+  const first = spawnKindsOf(tuning)[0] ?? ASTEROID_SPAWN_KIND;
+  return { kind: first, count: 2, spawnIntervalTicks: 12, sectors: [] };
 }
 
-function createWave(previous: WaveDefinition | undefined): WaveDefinition {
+function createWave(tuning: BalanceTuning, previous: WaveDefinition | undefined): WaveDefinition {
   if (previous === undefined) {
-    return { entries: [createEntry()], hpMultiplier: null, tempoMultiplier: null };
+    return { entries: [createEntry(tuning)], hpMultiplier: null, tempoMultiplier: null };
   }
   return {
     entries: previous.entries.map((entry) => ({ ...entry })),
@@ -147,6 +199,15 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
           Волны из таблицы идут точно как записаны. Волны после последней строит процедурный
           директор.
         </p>
+        <p className="screen__hint">
+          <strong>Тип</strong> — кто спавнится, в скобках его цена в бюджете директора.{" "}
+          <strong>Количество</strong> — сколько штук в группе. <strong>Интервал</strong> — пауза
+          между соседними спавнами группы; один тик = 50 мс, то есть 12 тиков = 0.6 с.{" "}
+          <strong>Секторы</strong> — с каких сторон арены они приходят: N сверху, E справа, S снизу,
+          W слева, каждый сектор шириной 45°. Отмечено несколько — каждый спавн случайно берёт один
+          из них; не отмечено ничего — приходят со всей окружности. Точка внутри сектора всегда
+          выбирается случайно от сида забега.
+        </p>
       </header>
 
       {waves.length === 0 ? (
@@ -169,8 +230,8 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                   {summary?.directorBudget ?? 0}
                 </span>
                 <span className="wave__meta">
-                  {summary?.threatCount ?? 0} целей · спавн{" "}
-                  {(summary?.spawnSeconds ?? 0).toFixed(1)}с
+                  {summary?.threatCount ?? 0} целей · вся группа выходит за{" "}
+                  {(summary?.spawnSeconds ?? 0).toFixed(1)} с
                 </span>
                 <button
                   className="button button--ghost"
@@ -188,8 +249,8 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                   <tr>
                     <th>Тип</th>
                     <th>Количество</th>
-                    <th>Интервал, тиков</th>
-                    <th>Сектор</th>
+                    <th title="Пауза между спавнами группы; 1 тик = 50 мс">Интервал, тиков</th>
+                    <th title="Стороны арены, с которых приходит группа">Секторы</th>
                     <th />
                   </tr>
                 </thead>
@@ -202,13 +263,13 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                           value={entry.kind}
                           onChange={(event) => {
                             patchEntry(waveIndex, entryIndex, {
-                              kind: event.target.value as SpawnKind
+                              kind: event.target.value
                             });
                           }}
                         >
-                          {SPAWN_KINDS.map((kind) => (
+                          {spawnKindsOf(tuning).map((kind) => (
                             <option key={kind} value={kind}>
-                              {label(kind)} ({spawnCostOf(tuning, kind)})
+                              {labelOf(tuning, kind)} ({spawnCostOf(tuning, kind)})
                             </option>
                           ))}
                         </select>
@@ -240,23 +301,12 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                         />
                       </td>
                       <td>
-                        <select
-                          className="field__input"
-                          value={entry.sector ?? ""}
-                          onChange={(event) => {
-                            const raw = event.target.value;
-                            patchEntry(waveIndex, entryIndex, {
-                              sector: raw === "" ? null : (raw as SpawnSector)
-                            });
+                        <SectorPicker
+                          value={entry.sectors}
+                          onChange={(sectors) => {
+                            patchEntry(waveIndex, entryIndex, { sectors });
                           }}
-                        >
-                          <option value="">по всей окружности</option>
-                          {SPAWN_SECTORS.map((sector) => (
-                            <option key={sector} value={sector}>
-                              {sector}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </td>
                       <td>
                         <button
@@ -282,7 +332,7 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                   className="button"
                   type="button"
                   onClick={() => {
-                    patchWave(waveIndex, { entries: [...wave.entries, createEntry()] });
+                    patchWave(waveIndex, { entries: [...wave.entries, createEntry(tuning)] });
                   }}
                 >
                   + строка состава
@@ -331,7 +381,7 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
         className="button button--primary"
         type="button"
         onClick={() => {
-          replaceWaves([...waves, createWave(waves[waves.length - 1])]);
+          replaceWaves([...waves, createWave(tuning, waves[waves.length - 1])]);
         }}
       >
         + волна (копия последней)
@@ -345,9 +395,29 @@ interface EnemiesScreenProps {
   readonly onChange: (tuning: BalanceTuning) => void;
 }
 
+function usageOf(tuning: BalanceTuning, kind: string): readonly number[] {
+  return tuning.waveCampaign.waves
+    .map((wave, index) => (wave.entries.some((entry) => entry.kind === kind) ? index + 1 : 0))
+    .filter((waveNumber) => waveNumber > 0);
+}
+
+function nextArchetypeId(tuning: BalanceTuning, base: string): string {
+  const seed = base.length > 0 ? base : "enemy";
+  for (let suffix = 2; suffix < 100; suffix += 1) {
+    const candidate = `${seed}${String(suffix)}`;
+    if (!Object.hasOwn(tuning.enemyArchetypes, candidate)) return candidate;
+  }
+  return `${seed}${String(Date.now())}`;
+}
+
 function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
+  const catalogue = Object.keys(tuning.enemyArchetypes).sort();
+
+  const archetypeOf = (kind: string): EnemyArchetype | undefined => tuning.enemyArchetypes[kind];
+
   const patchArchetype = (kind: string, patch: Partial<EnemyArchetype>): void => {
-    const current = tuning.enemyArchetypes[kind as keyof typeof tuning.enemyArchetypes];
+    const current = archetypeOf(kind);
+    if (current === undefined) return;
     onChange({
       ...tuning,
       enemyArchetypes: { ...tuning.enemyArchetypes, [kind]: { ...current, ...patch } }
@@ -355,8 +425,60 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
   };
 
   const patchWeapon = (kind: string, patch: Partial<EnemyArchetype["weapon"]>): void => {
-    const current = tuning.enemyArchetypes[kind as keyof typeof tuning.enemyArchetypes];
+    const current = archetypeOf(kind);
+    if (current === undefined) return;
     patchArchetype(kind, { weapon: { ...current.weapon, ...patch } });
+  };
+
+  const patchVisual = (kind: string, patch: Partial<EnemyArchetype["visual"]>): void => {
+    const current = archetypeOf(kind);
+    if (current === undefined) return;
+    patchArchetype(kind, { visual: { ...current.visual, ...patch } });
+  };
+
+  const cloneArchetype = (kind: string): void => {
+    const source = archetypeOf(kind);
+    if (source === undefined || catalogue.length >= MAX_ENEMY_ARCHETYPES) return;
+    const id = nextArchetypeId(tuning, kind);
+    onChange({
+      ...tuning,
+      enemyArchetypes: {
+        ...tuning.enemyArchetypes,
+        [id]: { ...source, label: `${source.label} (копия)` }
+      }
+    });
+  };
+
+  const removeArchetype = (kind: string): void => {
+    const rest = Object.fromEntries(
+      Object.entries(tuning.enemyArchetypes).filter(([id]) => id !== kind)
+    );
+    onChange({ ...tuning, enemyArchetypes: rest });
+  };
+
+  const renameArchetype = (kind: string, nextId: string): void => {
+    const source = archetypeOf(kind);
+    if (source === undefined || nextId === kind) return;
+    if (!ENEMY_ARCHETYPE_ID_PATTERN.test(nextId)) return;
+    if (Object.hasOwn(tuning.enemyArchetypes, nextId)) return;
+    const renamed = Object.fromEntries(
+      Object.entries(tuning.enemyArchetypes).map(([id, archetype]) =>
+        id === kind ? [nextId, archetype] : [id, archetype]
+      )
+    );
+    onChange({
+      ...tuning,
+      enemyArchetypes: renamed,
+      waveCampaign: {
+        ...tuning.waveCampaign,
+        waves: tuning.waveCampaign.waves.map((wave) => ({
+          ...wave,
+          entries: wave.entries.map((entry) =>
+            entry.kind === kind ? { ...entry, kind: nextId } : entry
+          )
+        }))
+      }
+    });
   };
 
   return (
@@ -372,11 +494,112 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
       </header>
 
       <div className="cards">
-        {ENEMY_KINDS.map((kind) => {
-          const archetype = tuning.enemyArchetypes[kind];
+        {catalogue.map((kind) => {
+          const archetype = archetypeOf(kind);
+          if (archetype === undefined) return null;
+          const usedIn = usageOf(tuning, kind);
           return (
             <article className="card" key={kind}>
-              <h3 className="card__title">{label(kind)}</h3>
+              <header className="card__head">
+                <input
+                  className="field__input card__name"
+                  value={archetype.label}
+                  aria-label="Название"
+                  onChange={(event) => {
+                    patchArchetype(kind, { label: event.target.value });
+                  }}
+                />
+                <input
+                  className="field__input card__id"
+                  value={kind}
+                  aria-label="Идентификатор"
+                  spellCheck={false}
+                  onChange={(event) => {
+                    renameArchetype(kind, event.target.value);
+                  }}
+                />
+                <button
+                  className="button"
+                  type="button"
+                  disabled={catalogue.length >= MAX_ENEMY_ARCHETYPES}
+                  onClick={() => {
+                    cloneArchetype(kind);
+                  }}
+                >
+                  Копия
+                </button>
+                <button
+                  className="button button--ghost"
+                  type="button"
+                  disabled={usedIn.length > 0 || catalogue.length === 1}
+                  title={
+                    usedIn.length > 0
+                      ? `Используется в волнах: ${usedIn.join(", ")}`
+                      : "Удалить архетип"
+                  }
+                  onClick={() => {
+                    removeArchetype(kind);
+                  }}
+                >
+                  Удалить
+                </button>
+              </header>
+              {usedIn.length > 0 ? (
+                <p className="card__usage">В таблице волн: {usedIn.join(", ")}</p>
+              ) : null}
+
+              <h4 className="card__subtitle">Внешний вид</h4>
+              <div className="shapes" role="group" aria-label="Силуэт">
+                {ENEMY_SHAPES.map((shape) => (
+                  <button
+                    key={shape}
+                    type="button"
+                    className={`sectors__chip${archetype.visual.shape === shape ? " sectors__chip--on" : ""}`}
+                    aria-pressed={archetype.visual.shape === shape}
+                    onClick={() => {
+                      patchVisual(kind, { shape });
+                    }}
+                  >
+                    {SHAPE_LABELS[shape]}
+                  </button>
+                ))}
+              </div>
+              <div className="card__grid">
+                <label className="field">
+                  <span className="field__caption">Цвет корпуса</span>
+                  <input
+                    className="field__input"
+                    type="color"
+                    value={archetype.visual.color}
+                    onChange={(event) => {
+                      patchVisual(kind, { color: event.target.value });
+                    }}
+                  />
+                </label>
+                <label className="field">
+                  <span className="field__caption">Цвет обводки</span>
+                  <input
+                    className="field__input"
+                    type="color"
+                    value={archetype.visual.outline}
+                    onChange={(event) => {
+                      patchVisual(kind, { outline: event.target.value });
+                    }}
+                  />
+                </label>
+                <label className="field field--inline">
+                  <input
+                    type="checkbox"
+                    checked={archetype.visual.showHealthBar}
+                    onChange={(event) => {
+                      patchVisual(kind, { showHealthBar: event.target.checked });
+                    }}
+                  />
+                  <span className="field__caption">Полоса HP над корпусом</span>
+                </label>
+              </div>
+
+              <h4 className="card__subtitle">Характеристики</h4>
               <div className="card__grid">
                 <NumberField
                   caption="HP"

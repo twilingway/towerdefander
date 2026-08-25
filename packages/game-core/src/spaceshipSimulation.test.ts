@@ -13,6 +13,7 @@ import {
   createSpaceshipSimulationConfig,
   createSpaceshipSimulationState,
   deactivateShield,
+  getEnemyArchetype,
   moveVectorTowards,
   moveScalarTowards,
   normalizeVector,
@@ -142,23 +143,17 @@ describe("spaceship configuration", () => {
         ambientAsteroidIntervalMaxTicks: 100
       })
     ).toThrow(RangeError);
-    const archetypes = createSpaceshipSimulationConfig().enemyArchetypes;
-    expect(() =>
-      createSpaceshipSimulationConfig({
-        enemyArchetypes: {
-          ...archetypes,
-          gunship: { ...archetypes.gunship, radius: 2201 }
-        }
-      })
-    ).toThrow(RangeError);
-    expect(() =>
-      createSpaceshipSimulationConfig({
-        enemyArchetypes: {
-          ...archetypes,
-          missileCarrier: { ...archetypes.missileCarrier, radius: 2201 }
-        }
-      })
-    ).toThrow(RangeError);
+    const base = createSpaceshipSimulationConfig();
+    for (const kind of ["gunship", "missileCarrier"]) {
+      expect(() =>
+        createSpaceshipSimulationConfig({
+          enemyArchetypes: {
+            ...base.enemyArchetypes,
+            [kind]: { ...getEnemyArchetype(base, kind), radius: 2201 }
+          }
+        })
+      ).toThrow(RangeError);
+    }
     expect(() => createSpaceshipSimulationConfig({ worldPadding: 257 })).toThrow(RangeError);
     expect(() =>
       createSpaceshipSimulationConfig({ asteroidRadius: 257, worldPadding: 256 })

@@ -55,6 +55,7 @@ import {
   AsteroidState,
   EnemyState,
   HomingMissileState,
+  EnemyVisualState,
   ObstacleState,
   PlayerState,
   ProjectileState,
@@ -634,11 +635,28 @@ export class SpaceshipDefenderRoom extends Room<{
     this.lifecycleDeadlines.delete("result_expired");
     this.rescheduleLifecycle();
     this.initializeDecorations();
+    this.publishEnemyCatalogue();
     this.armWaveDeadline();
     this.syncGameState();
     this.startSimulation();
     this.updateStatus("combat");
     this.queueMetadataUpdate();
+  }
+
+  /** The catalogue is fixed for the run, so the display receives it once at start. */
+  private publishEnemyCatalogue(): void {
+    const catalogue = this.state.game.display.enemyCatalogue;
+    catalogue.clear();
+    for (const [kind, archetype] of Object.entries(this.gameConfig.enemyArchetypes)) {
+      const entry = new EnemyVisualState();
+      entry.kind = kind;
+      entry.label = archetype.label;
+      entry.shape = archetype.visual.shape;
+      entry.color = archetype.visual.color;
+      entry.outline = archetype.visual.outline;
+      entry.showHealthBar = archetype.visual.showHealthBar;
+      catalogue.set(kind, entry);
+    }
   }
 
   private initializeDecorations(): void {

@@ -1,8 +1,14 @@
 import { z } from "zod";
 
-import { ENEMY_KINDS } from "./enemyKinds.ts";
+import {
+  ENEMY_ARCHETYPE_ID_PATTERN,
+  ENEMY_SHAPES,
+  MAX_ENEMY_ARCHETYPES,
+  MAX_ENEMY_ARCHETYPE_ID_LENGTH
+} from "./enemyKinds.ts";
 
-export const BALANCE_FILE_VERSION = 1 as const;
+export const BALANCE_FILE_VERSION = 2 as const;
+export const LEGACY_BALANCE_FILE_VERSION = 1 as const;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
 export type SpawnSector = z.infer<typeof spawnSectorSchema>;
@@ -15,9 +21,30 @@ export const ENEMY_SPAWN_POLICIES = ["standard", "boss"] as const;
 export const enemySpawnPolicySchema = z.enum(ENEMY_SPAWN_POLICIES);
 export type EnemySpawnPolicy = z.infer<typeof enemySpawnPolicySchema>;
 
-export const SPAWN_KINDS = [...ENEMY_KINDS, "asteroid"] as const;
-export const spawnKindSchema = z.enum(SPAWN_KINDS);
+export const ASTEROID_SPAWN_KIND = "asteroid" as const;
+export const enemyArchetypeIdSchema = z
+  .string()
+  .min(1)
+  .max(MAX_ENEMY_ARCHETYPE_ID_LENGTH)
+  .regex(ENEMY_ARCHETYPE_ID_PATTERN, "Archetype id must start with a lowercase letter.");
+export type EnemyArchetypeId = z.infer<typeof enemyArchetypeIdSchema>;
+/** A wave entry spawns either a catalogue archetype or the ambient hazard. */
+export const spawnKindSchema = enemyArchetypeIdSchema;
 export type SpawnKind = z.infer<typeof spawnKindSchema>;
+
+export const enemyShapeSchema = z.enum(ENEMY_SHAPES);
+export const hexColorSchema = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Colour must be a #rrggbb value.");
+export const enemyVisualSchema = z
+  .object({
+    shape: enemyShapeSchema,
+    color: hexColorSchema,
+    outline: hexColorSchema,
+    showHealthBar: z.boolean()
+  })
+  .strict();
+export type EnemyVisual = z.infer<typeof enemyVisualSchema>;
 
 const positiveFinite = z.number().positive();
 const nonNegativeFinite = z.number().nonnegative();
@@ -46,6 +73,8 @@ export const enemyArchetypeSchema = z
     speedPerSecond: positiveFinite,
     preferredDistance: positiveFinite,
     weapon: enemyWeaponTuningSchema,
+    visual: enemyVisualSchema,
+    label: z.string().min(1).max(48),
     spawnPolicy: enemySpawnPolicySchema,
     spawnCost: positiveFinite,
     unlockWave: positiveInteger,
@@ -56,15 +85,33 @@ export const enemyArchetypeSchema = z
 export type EnemyArchetype = z.infer<typeof enemyArchetypeSchema>;
 
 export const enemyArchetypeTableSchema = z
-  .object(Object.fromEntries(ENEMY_KINDS.map((kind) => [kind, enemyArchetypeSchema])))
-  .strict() as z.ZodType<Record<(typeof ENEMY_KINDS)[number], EnemyArchetype>>;
+  .record(enemyArchetypeIdSchema, enemyArchetypeSchema)
+  .superRefine((value, context) => {
+    const ids = Object.keys(value);
+    if (ids.length === 0) {
+      context.addIssue({ code: "custom", message: "Catalogue must hold at least one archetype." });
+    }
+    if (ids.length > MAX_ENEMY_ARCHETYPES) {
+      context.addIssue({
+        code: "custom",
+        message: `Catalogue cannot hold more than ${String(MAX_ENEMY_ARCHETYPES)} archetypes.`
+      });
+    }
+    if (ids.includes(ASTEROID_SPAWN_KIND)) {
+      context.addIssue({
+        code: "custom",
+        message: `"${ASTEROID_SPAWN_KIND}" is the ambient hazard and cannot be an archetype id.`
+      });
+    }
+  });
 
 export const waveSpawnEntrySchema = z
   .object({
     kind: spawnKindSchema,
     count: positiveInteger.max(200),
     spawnIntervalTicks: positiveInteger.max(20_000),
-    sector: spawnSectorSchema.nullable()
+    // Empty means the whole circumference; several sectors are picked between per spawn.
+    sectors: z.array(spawnSectorSchema).max(SPAWN_SECTORS.length).readonly()
   })
   .strict();
 export type WaveSpawnEntry = z.infer<typeof waveSpawnEntrySchema>;

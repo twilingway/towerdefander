@@ -335,3 +335,58 @@ body {
 .hidden-input {
   display: none;
 }
+
+.sectors,
+.shapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sectors__chip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  min-width: 34px;
+  padding: 4px 7px;
+}
+
+.sectors__chip:hover {
+  border-color: var(--accent);
+}
+
+.sectors__chip--on {
+  background: rgba(79, 209, 197, 0.16);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.card__head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card__name {
+  flex: 1 1 140px;
+  font-weight: 600;
+}
+
+.card__id {
+  flex: 0 1 130px;
+  color: var(--ink-dim);
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 12px;
+}
+
+.card__usage {
+  color: var(--ink-dim);
+  margin: 0 0 8px;
+}

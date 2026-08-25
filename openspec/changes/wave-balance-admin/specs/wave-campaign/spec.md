@@ -7,20 +7,22 @@ Wave 1 SHALL начаться при старте run. Wave campaign SHALL со�
 процедурного director: если `waveNumber` не превышает длину таблицы, состав волны SHALL строиться
 ровно из её записей в объявленном порядке, без обращения к spawn RNG за составом; иначе состав SHALL
 строиться процедурным director из spawn budget. Каждая запись таблицы SHALL задавать kind,
-количество, интервал спавна внутри группы и optional сектор появления; сектор SHALL ограничивать
-seeded spawn angle, но SHALL NOT делать его фиксированным. Волна таблицы SHALL мочь переопределять
-множители HP и attack tempo; при отсутствии переопределения действуют формулы director. Доступность
-kind SHALL определяться его configured wave разблокировки, а стоимость в budget — его configured
-spawn cost; оба SHALL быть данными конфигурации, а не литералами кода. Для волн, которые строит
-director, spawn budget, enemy HP и attack tempo SHALL монотонно увеличивать либо сохранять сложность
-до validated saturation limits, не уменьшая difficulty следующей wave; для явных волн авторитетна
-таблица как она задана. Run SHALL быть бесконечным до terminal result/defeat; victory в этом slice
-отсутствует. Kind с политикой появления «boss» SHALL замыкать план волны, SHALL NOT участвовать в
-перемешивании состава и SHALL появляться только после уничтожения всех остальных wave-угроз; ambient
-asteroids SHALL NOT задерживать его появление. Пока такой kind остаётся в очереди спавна, волна
-SHALL NOT завершаться. Circular arena boundary SHALL NOT сама уничтожать enemy ships или уменьшать
-remaining wave population. Ambient asteroids SHALL существовать независимо от wave budget и SHALL
-NOT препятствовать intermission, когда wave-origin population уничтожена.
+количество, интервал спавна внутри группы и набор секторов появления; отмеченные секторы SHALL
+ограничивать seeded spawn angle, но SHALL NOT делать его фиксированным, при нескольких отмеченных
+каждый spawn SHALL выбирать один из них тем же seeded потоком, а пустой набор SHALL означать всю
+окружность. Волна таблицы SHALL мочь переопределять множители HP и attack tempo; при отсутствии
+переопределения действуют формулы director. Доступность kind SHALL определяться его configured wave
+разблокировки, а стоимость в budget — его configured spawn cost; оба SHALL быть данными
+конфигурации, а не литералами кода. Для волн, которые строит director, spawn budget, enemy HP и
+attack tempo SHALL монотонно увеличивать либо сохранять сложность до validated saturation limits, не
+уменьшая difficulty следующей wave; для явных волн авторитетна таблица как она задана. Run SHALL
+быть бесконечным до terminal result/defeat; victory в этом slice отсутствует. Kind с политикой
+появления «boss» SHALL замыкать план волны, SHALL NOT участвовать в перемешивании состава и SHALL
+появляться только после уничтожения всех остальных wave-угроз; ambient asteroids SHALL NOT
+задерживать его появление. Пока такой kind остаётся в очереди спавна, волна SHALL NOT завершаться.
+Circular arena boundary SHALL NOT сама уничтожать enemy ships или уменьшать remaining wave
+population. Ambient asteroids SHALL существовать независимо от wave budget и SHALL NOT
+препятствовать intermission, когда wave-origin population уничтожена.
 
 #### Scenario: Первая combat wave опубликована
 
@@ -67,9 +69,14 @@ NOT препятствовать intermission, когда wave-origin population
 
 #### Scenario: Сектор ограничивает точку появления
 
-- **WHEN** запись явной волны задаёт сектор появления
+- **WHEN** запись явной волны задаёт один сектор появления
 - **THEN** все её spawns появляются внутри этого сектора arena circumference, оставаясь seeded и
   воспроизводимыми
+
+#### Scenario: Группа приходит с нескольких сторон
+
+- **WHEN** запись явной волны отмечает несколько секторов
+- **THEN** её spawns распределяются между отмеченными секторами и не появляются вне их
 
 #### Scenario: Enemy прижат к границе
 

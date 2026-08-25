@@ -13,6 +13,7 @@ import {
   createWavePlan,
   dynamicEntityCount,
   failWaveByTimeout,
+  getEnemyArchetype,
   getWaveDifficulty,
   relativeSweptCircleTime,
   shortestAngleDelta,
@@ -37,8 +38,8 @@ function bossAfterEscortConfig() {
       waves: [
         {
           entries: [
-            { kind: "gunship", count: 1, spawnIntervalTicks: 1, sector: null },
-            { kind: "boss", count: 1, spawnIntervalTicks: 1, sector: null }
+            { kind: "gunship", count: 1, spawnIntervalTicks: 1, sectors: [] },
+            { kind: "boss", count: 1, spawnIntervalTicks: 1, sectors: [] }
           ],
           hpMultiplier: null,
           tempoMultiplier: null
@@ -56,14 +57,14 @@ function scriptedCampaignConfig() {
       waves: [
         {
           entries: [
-            { kind: "gunship", count: 3, spawnIntervalTicks: 3, sector: "N" },
-            { kind: "asteroid", count: 1, spawnIntervalTicks: 9, sector: "SE" }
+            { kind: "gunship", count: 3, spawnIntervalTicks: 3, sectors: ["N"] },
+            { kind: "asteroid", count: 1, spawnIntervalTicks: 9, sectors: ["SE"] }
           ],
           hpMultiplier: 2.5,
           tempoMultiplier: null
         },
         {
-          entries: [{ kind: "asteroid", count: 2, spawnIntervalTicks: 5, sector: null }],
+          entries: [{ kind: "asteroid", count: 2, spawnIntervalTicks: 5, sectors: [] }],
           hpMultiplier: null,
           tempoMultiplier: null
         }
@@ -125,7 +126,7 @@ describe("deterministic combat foundation", () => {
 
   it("unlocks a kind at its configured wave and scales difficulty monotonically", () => {
     const config = createSpaceshipSimulationConfig();
-    expect(config.enemyArchetypes.missileCarrier.unlockWave).toBe(3);
+    expect(getEnemyArchetype(config, "missileCarrier").unlockWave).toBe(3);
     expect(createWavePlan(config, 91, 1).plan.some(({ kind }) => kind === "missileCarrier")).toBe(
       false
     );
@@ -149,7 +150,7 @@ describe("deterministic combat foundation", () => {
     const config = createSpaceshipSimulationConfig({
       enemyArchetypes: {
         ...base.enemyArchetypes,
-        missileCarrier: { ...base.enemyArchetypes.missileCarrier, unlockWave: 6 }
+        missileCarrier: { ...getEnemyArchetype(base, "missileCarrier"), unlockWave: 6 }
       }
     });
     for (const wave of [3, 4, 5]) {
@@ -168,7 +169,7 @@ describe("deterministic combat foundation", () => {
     expect(plan.map(({ kind }) => kind)).toEqual(["gunship", "gunship", "gunship", "asteroid"]);
     expect(createWavePlan(config, 4242, 1).plan).toEqual(plan);
     expect(plan.map(({ spawnIntervalTicks }) => spawnIntervalTicks)).toEqual([3, 3, 3, 9]);
-    expect(plan.map(({ sector }) => sector)).toEqual(["N", "N", "N", "SE"]);
+    expect(plan.map(({ sectors }) => sectors)).toEqual([["N"], ["N"], ["N"], ["SE"]]);
   });
 
   it("falls back to the director past the last scripted wave", () => {
@@ -177,7 +178,7 @@ describe("deterministic combat foundation", () => {
     expect(scripted.map(({ kind }) => kind)).toEqual(["asteroid", "asteroid"]);
     const directed = createWavePlan(config, 91, 3);
     expect(directed.plan.length).toBeGreaterThan(0);
-    expect(directed.plan.every(({ sector }) => sector === null)).toBe(true);
+    expect(directed.plan.every(({ sectors }) => sectors.length === 0)).toBe(true);
     expect(createWavePlan(config, 91, 3)).toEqual(directed);
   });
 
@@ -226,7 +227,7 @@ describe("deterministic combat foundation", () => {
     const config = createSpaceshipSimulationConfig();
     const bossInterval = config.waveCampaign.director.bossWaveInterval;
     expect(bossInterval).toBe(5);
-    expect(config.enemyArchetypes.boss.unlockWave).toBe(10);
+    expect(getEnemyArchetype(config, "boss").unlockWave).toBe(10);
     for (const wave of [1, 5, 9, 11, 12]) {
       expect(createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "boss")).toBe(false);
     }
@@ -313,6 +314,101 @@ describe("deterministic combat foundation", () => {
     expect(advanceSpaceshipSimulation(stillQueued, config).encounterPhase).toBe("combat");
   });
 
+  it("spreads a group across every marked sector and stays inside them", () => {
+    const base = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({
+      ambientAsteroidIntervalMinTicks: 100_000,
+      ambientAsteroidIntervalMaxTicks: 100_000,
+      waveCampaign: {
+        ...base.waveCampaign,
+        waves: [
+          {
+            entries: [{ kind: "gunship", count: 12, spawnIntervalTicks: 1, sectors: ["N", "S"] }],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    });
+    let state = createSpaceshipSimulationState(config, 4242);
+    for (let step = 0; step < 24; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    const centerX = config.worldWidth / 2;
+    const centerY = config.worldHeight / 2;
+    const half = Math.PI / 8 + 1e-9;
+    const seen = new Set<string>();
+    expect(state.enemies.length).toBeGreaterThan(4);
+    for (const enemy of state.enemies) {
+      const bearing = Math.atan2(enemy.y - centerY, enemy.x - centerX);
+      const north = Math.abs(shortestAngleDelta(-Math.PI / 2, bearing)) <= half;
+      const south = Math.abs(shortestAngleDelta(Math.PI / 2, bearing)) <= half;
+      expect(north || south).toBe(true);
+      seen.add(north ? "N" : "S");
+    }
+    expect([...seen].sort()).toEqual(["N", "S"]);
+  });
+
+  it("runs a catalogue archetype the game never shipped", () => {
+    const base = createSpaceshipSimulationConfig();
+    const elite = {
+      ...getEnemyArchetype(base, "gunship"),
+      hp: 480,
+      label: "Элитный ганшип",
+      visual: { shape: "spike" as const, color: "#22c55e", outline: "#bbf7d0", showHealthBar: true }
+    };
+    const config = createSpaceshipSimulationConfig({
+      enemyArchetypes: { ...base.enemyArchetypes, eliteGunship: elite },
+      waveCampaign: {
+        ...base.waveCampaign,
+        waves: [
+          {
+            entries: [{ kind: "eliteGunship", count: 2, spawnIntervalTicks: 1, sectors: [] }],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    });
+    let state = createSpaceshipSimulationState(config, 31);
+    for (let step = 0; step < 6; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    expect(state.enemies.map(({ kind }) => kind)).toEqual(["eliteGunship", "eliteGunship"]);
+    expect(state.enemies[0]?.maxHp).toBe(480);
+  });
+
+  it("refuses a campaign that names an archetype outside the catalogue", () => {
+    const base = createSpaceshipSimulationConfig();
+    expect(() =>
+      createSpaceshipSimulationConfig({
+        waveCampaign: {
+          ...base.waveCampaign,
+          waves: [
+            {
+              entries: [{ kind: "dreadnought", count: 1, spawnIntervalTicks: 12, sectors: [] }],
+              hpMultiplier: null,
+              tempoMultiplier: null
+            }
+          ]
+        }
+      })
+    ).toThrow(RangeError);
+  });
+
+  it("refuses an empty catalogue and an archetype that squats the hazard id", () => {
+    const base = createSpaceshipSimulationConfig();
+    expect(() => createSpaceshipSimulationConfig({ enemyArchetypes: {} })).toThrow(RangeError);
+    expect(() =>
+      createSpaceshipSimulationConfig({
+        enemyArchetypes: {
+          ...base.enemyArchetypes,
+          asteroid: getEnemyArchetype(base, "gunship")
+        }
+      })
+    ).toThrow(RangeError);
+  });
+
   it("never picks a boss as ordinary director filler", () => {
     const config = createSpaceshipSimulationConfig({
       waveCampaign: {
@@ -330,7 +426,7 @@ describe("deterministic combat foundation", () => {
 
   it("fires a boss burst on one cooldown and respects the missile cap", () => {
     const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 100_000 });
-    const boss = config.enemyArchetypes.boss;
+    const boss = getEnemyArchetype(config, "boss");
     const initial = createSpaceshipSimulationState(config, 31);
     const bossEnemy: CombatEnemyState = {
       id: "boss-1",
@@ -472,7 +568,7 @@ describe("combat motion and collision", () => {
 
   it("limits homing turn across the canonical angle boundary", () => {
     const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1000 });
-    const weapon = config.enemyArchetypes.missileCarrier.weapon;
+    const weapon = getEnemyArchetype(config, "missileCarrier").weapon;
     const initial = createSpaceshipSimulationState(config, 8);
     const heading = Math.PI - 0.02;
     const missile: HomingMissileState = {
@@ -515,7 +611,7 @@ describe("combat motion and collision", () => {
       pendingSpawns: []
     };
     const bullet: HostileProjectileState = {
-      ...bulletFromWeapon(config.enemyArchetypes.gunship.weapon),
+      ...bulletFromWeapon(getEnemyArchetype(config, "gunship").weapon),
       previousX: state.spaceship.x - 140,
       previousY: state.spaceship.y,
       x: state.spaceship.x - 140,
@@ -538,7 +634,7 @@ describe("combat motion and collision", () => {
     expect(stepped.shieldEnergy).toBe(0);
     expect(stepped.shieldActive).toBe(false);
     expect(stepped.spaceshipHp).toBe(
-      config.spaceshipMaxHp - config.enemyArchetypes.gunship.weapon.damage
+      config.spaceshipMaxHp - getEnemyArchetype(config, "gunship").weapon.damage
     );
   });
 
@@ -548,7 +644,7 @@ describe("combat motion and collision", () => {
     const x = initial.spaceship.x + config.shieldRadius;
     const y = initial.spaceship.y;
     const missile: HomingMissileState = {
-      ...missileFromWeapon(config.enemyArchetypes.missileCarrier.weapon),
+      ...missileFromWeapon(getEnemyArchetype(config, "missileCarrier").weapon),
       id: "shield-missile",
       previousX: x,
       previousY: y,
@@ -725,11 +821,11 @@ describe("combat motion and collision", () => {
       x: 4400,
       y: 400 + index * 4,
       velocity: { x: 0, y: 0 },
-      radius: config.enemyArchetypes.gunship.radius,
+      radius: getEnemyArchetype(config, "gunship").radius,
       spawnedTick: 0,
       heading: 0,
-      hp: config.enemyArchetypes.gunship.hp,
-      maxHp: config.enemyArchetypes.gunship.hp,
+      hp: getEnemyArchetype(config, "gunship").hp,
+      maxHp: getEnemyArchetype(config, "gunship").hp,
       attackCooldownTicks: index < 3 ? 0 : 20
     }));
     const asteroids: AsteroidState[] = Array.from({ length: 16 }, (_, index) => ({
@@ -748,7 +844,7 @@ describe("combat motion and collision", () => {
       damage: config.asteroidDamage
     }));
     const hostileProjectiles: HostileProjectileState[] = Array.from({ length: 95 }, (_, index) => ({
-      ...bulletFromWeapon(config.enemyArchetypes.gunship.weapon),
+      ...bulletFromWeapon(getEnemyArchetype(config, "gunship").weapon),
       id: `hostile-cap-${String(index)}`,
       spawnSequence: 57 + index,
       previousX: 300,
@@ -757,7 +853,7 @@ describe("combat motion and collision", () => {
       y: 2700
     }));
     const homingMissiles: HomingMissileState[] = Array.from({ length: 12 }, (_, index) => ({
-      ...missileFromWeapon(config.enemyArchetypes.missileCarrier.weapon),
+      ...missileFromWeapon(getEnemyArchetype(config, "missileCarrier").weapon),
       id: `missile-cap-${String(index)}`,
       spawnSequence: 152 + index,
       previousX: 4200,

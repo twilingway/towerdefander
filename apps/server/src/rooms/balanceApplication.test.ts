@@ -1,5 +1,5 @@
 import { PLAYER_CAPACITY, PROTOCOL_VERSION } from "@spaceship-defender/protocol";
-import type { SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
+import { getEnemyArchetype, type SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
 import type { BalanceTuning } from "@spaceship-defender/protocol";
 import type { Client } from "colyseus";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,13 +51,19 @@ function activeConfig(room: Room): SpaceshipSimulationConfig {
   return (room as unknown as { gameConfig: SpaceshipSimulationConfig }).gameConfig;
 }
 
+function requireArchetype(tuning: BalanceTuning, kind: string) {
+  const archetype = tuning.enemyArchetypes[kind];
+  if (archetype === undefined) throw new Error(`missing archetype ${kind}`);
+  return archetype;
+}
+
 function tuningWithGunshipHp(hp: number): BalanceTuning {
   const tuning = createDefaultTuning();
   return {
     ...tuning,
     enemyArchetypes: {
       ...tuning.enemyArchetypes,
-      gunship: { ...tuning.enemyArchetypes.gunship, hp }
+      gunship: { ...requireArchetype(tuning, "gunship"), hp }
     }
   };
 }
@@ -70,17 +76,17 @@ describe("balance application to runs", () => {
   it("starts a run on the active preset", () => {
     vi.spyOn(store, "getActiveTuning").mockReturnValue(tuningWithGunshipHp(512));
     const room = startedRoom();
-    expect(activeConfig(room).enemyArchetypes.gunship.hp).toBe(512);
+    expect(getEnemyArchetype(activeConfig(room), "gunship").hp).toBe(512);
     room.onDispose();
   });
 
   it("keeps a running run on the balance it started with", () => {
     vi.spyOn(store, "getActiveTuning").mockReturnValue(tuningWithGunshipHp(128));
     const room = startedRoom();
-    expect(activeConfig(room).enemyArchetypes.gunship.hp).toBe(128);
+    expect(getEnemyArchetype(activeConfig(room), "gunship").hp).toBe(128);
 
     vi.spyOn(store, "getActiveTuning").mockReturnValue(tuningWithGunshipHp(999));
-    expect(activeConfig(room).enemyArchetypes.gunship.hp).toBe(128);
+    expect(getEnemyArchetype(activeConfig(room), "gunship").hp).toBe(128);
     room.onDispose();
   });
 });

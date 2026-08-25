@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Request, RequestHandler, Response } from "express";
-import { balancePresetsFileSchema, type BalancePresetsFile } from "@spaceship-defender/protocol";
+import {
+  balancePresetsFileSchema,
+  type BalancePresetsFile,
+  type BalanceTuning
+} from "@spaceship-defender/protocol";
+import { getEnemyArchetype } from "@spaceship-defender/game-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { Readable } from "node:stream";
@@ -14,7 +19,18 @@ import {
   createBalanceValidateHandler,
   readJsonBody
 } from "./routes.js";
-import { BalanceStore, createDefaultPresetsFile, createDefaultTuning } from "./store.js";
+import {
+  BalanceStore,
+  createDefaultPresetsFile,
+  createDefaultTuning,
+  migrateBalanceDocument
+} from "./store.js";
+
+function requireArchetype(tuning: BalanceTuning, kind: string) {
+  const archetype = tuning.enemyArchetypes[kind];
+  if (archetype === undefined) throw new Error(`missing archetype ${kind}`);
+  return archetype;
+}
 
 function basicAuthorization(username: string, password: string): string {
   return `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`;
@@ -78,7 +94,7 @@ async function temporaryPresetPath(): Promise<string> {
 function tunedPresetsFile(hp: number): BalancePresetsFile {
   const tuning = createDefaultTuning();
   return {
-    version: 1,
+    version: 2,
     activePresetId: "tuned",
     presets: [
       {
@@ -88,7 +104,7 @@ function tunedPresetsFile(hp: number): BalancePresetsFile {
           ...tuning,
           enemyArchetypes: {
             ...tuning.enemyArchetypes,
-            gunship: { ...tuning.enemyArchetypes.gunship, hp }
+            gunship: { ...requireArchetype(tuning, "gunship"), hp }
           }
         }
       }
@@ -145,7 +161,7 @@ describe("balance store", () => {
               ...tuning,
               enemyArchetypes: {
                 ...tuning.enemyArchetypes,
-                gunship: { ...tuning.enemyArchetypes.gunship, radius: 999_999 }
+                gunship: { ...requireArchetype(tuning, "gunship"), radius: 999_999 }
               }
             }
           }
@@ -167,14 +183,14 @@ describe("balance store", () => {
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getActiveSimulationConfig().enemyArchetypes.gunship.hp).toBe(777);
+    expect(getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").hp).toBe(777);
   });
 
   it("writes the document to disk and swaps the active tuning", async () => {
     const filePath = await temporaryPresetPath();
     const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
     await store.save(tunedPresetsFile(321));
-    expect(store.getActiveSimulationConfig().enemyArchetypes.gunship.hp).toBe(321);
+    expect(getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").hp).toBe(321);
     const persisted: unknown = JSON.parse(await readFile(filePath, "utf8"));
     expect(balancePresetsFileSchema.parse(persisted).activePresetId).toBe("tuned");
   });
@@ -201,6 +217,71 @@ describe("balance store", () => {
       } as BalancePresetsFile)
     ).rejects.toThrow();
     expect(store.getActiveTuning()).toEqual(createDefaultTuning());
+  });
+});
+
+describe("version 1 migration", () => {
+  function legacyDocument() {
+    const tuning = createDefaultTuning();
+    const archetypes = Object.fromEntries(
+      Object.entries(tuning.enemyArchetypes).map(([kind, archetype]) => {
+        const legacy: Record<string, unknown> = { ...archetype };
+        delete legacy.visual;
+        delete legacy.label;
+        return [kind, legacy];
+      })
+    );
+    return {
+      version: 1,
+      activePresetId: "operator",
+      presets: [
+        {
+          id: "operator",
+          name: "Operator",
+          tuning: {
+            ...tuning,
+            enemyArchetypes: archetypes,
+            waveCampaign: {
+              ...tuning.waveCampaign,
+              waves: [
+                {
+                  entries: [
+                    { kind: "interceptor", count: 2, spawnIntervalTicks: 12, sector: "SE" },
+                    { kind: "asteroid", count: 1, spawnIntervalTicks: 8, sector: null }
+                  ],
+                  hpMultiplier: null,
+                  tempoMultiplier: null
+                }
+              ]
+            }
+          }
+        }
+      ]
+    };
+  }
+
+  it("carries a version 1 file forward instead of dropping the operator balance", async () => {
+    const filePath = await temporaryPresetPath();
+    await writeFile(filePath, JSON.stringify(legacyDocument()), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+    expect(warn).not.toHaveBeenCalled();
+
+    const state = store.getState();
+    expect(state.version).toBe(2);
+    expect(state.activePresetId).toBe("operator");
+    const wave = state.presets[0]?.tuning.waveCampaign.waves[0];
+    expect(wave?.entries.map(({ kind }) => kind)).toEqual(["interceptor", "asteroid"]);
+    expect(wave?.entries.map(({ sectors }) => sectors)).toEqual([["SE"], []]);
+    expect(getEnemyArchetype(store.getActiveSimulationConfig(), "interceptor").visual.shape).toBe(
+      "dart"
+    );
+  });
+
+  it("leaves a current document untouched", () => {
+    const current = tunedPresetsFile(99);
+    expect(migrateBalanceDocument(current)).toBe(current);
   });
 });
 
@@ -264,7 +345,7 @@ describe("balance routes", () => {
       saved.response
     );
     expect(saved.state.status).toBe(200);
-    expect(store.getActiveSimulationConfig().enemyArchetypes.gunship.hp).toBe(404);
+    expect(getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").hp).toBe(404);
 
     const rejected = response();
     await invoke(
@@ -273,10 +354,10 @@ describe("balance routes", () => {
       rejected.response
     );
     expect(rejected.state.status).toBe(400);
-    expect(store.getActiveSimulationConfig().enemyArchetypes.gunship.hp).toBe(404);
+    expect(getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").hp).toBe(404);
     const persisted: unknown = JSON.parse(await readFile(filePath, "utf8"));
     expect(
-      balancePresetsFileSchema.parse(persisted).presets[0]?.tuning.enemyArchetypes.gunship.hp
+      balancePresetsFileSchema.parse(persisted).presets[0]?.tuning.enemyArchetypes.gunship?.hp
     ).toBe(404);
   });
 

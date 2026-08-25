@@ -44,6 +44,7 @@ const baseGame: DisplayGameSnapshot = {
     votes: { pilot: null, gunner: null, shield: null },
     selection: null
   },
+  enemyCatalogue: [],
   obstacles: [],
   enemyShips: [
     {

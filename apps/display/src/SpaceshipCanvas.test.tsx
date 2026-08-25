@@ -131,6 +131,7 @@ const testGame = {
     votes: { pilot: null, gunner: null, shield: null },
     selection: null
   },
+  enemyCatalogue: [],
   obstacles: [],
   enemyShips: [],
   asteroids: [

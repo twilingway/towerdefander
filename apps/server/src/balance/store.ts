@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 
 import {
   BALANCE_FILE_VERSION,
+  FALLBACK_ENEMY_SHAPE,
+  LEGACY_BALANCE_FILE_VERSION,
   balancePresetsFileSchema,
   type BalancePreset,
   type BalancePresetsFile,
@@ -15,6 +17,85 @@ import {
 } from "@spaceship-defender/game-core";
 
 const DEFAULT_PRESET_ID = "default";
+
+type LegacyRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is LegacyRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readRecord(source: LegacyRecord, key: string): LegacyRecord {
+  const value = source[key];
+  return isRecord(value) ? value : {};
+}
+
+function readArray(source: LegacyRecord, key: string): readonly unknown[] {
+  const value = source[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function migrateEntry(entry: unknown): unknown {
+  if (!isRecord(entry)) return entry;
+  const sector = entry.sector;
+  const migrated: LegacyRecord = { ...entry, sectors: typeof sector === "string" ? [sector] : [] };
+  delete migrated.sector;
+  return migrated;
+}
+
+function migrateWave(wave: unknown): unknown {
+  if (!isRecord(wave)) return wave;
+  return { ...wave, entries: readArray(wave, "entries").map(migrateEntry) };
+}
+
+function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTuning): unknown {
+  if (!isRecord(archetype)) return archetype;
+  const known = defaults.enemyArchetypes[kind];
+  return {
+    ...archetype,
+    visual: archetype.visual ??
+      known?.visual ?? {
+        shape: FALLBACK_ENEMY_SHAPE,
+        color: "#e65f4b",
+        outline: "#ffd1b0",
+        showHealthBar: false
+      },
+    label: archetype.label ?? known?.label ?? kind
+  };
+}
+
+function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
+  if (!isRecord(preset)) return preset;
+  const tuning = readRecord(preset, "tuning");
+  const campaign = readRecord(tuning, "waveCampaign");
+  return {
+    ...preset,
+    tuning: {
+      ...tuning,
+      enemyArchetypes: Object.fromEntries(
+        Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
+          kind,
+          migrateArchetype(kind, archetype, defaults)
+        ])
+      ),
+      waveCampaign: { ...campaign, waves: readArray(campaign, "waves").map(migrateWave) }
+    }
+  };
+}
+
+/**
+ * Version 1 stored one `sector` per wave entry and had no visuals, because the
+ * enemy kinds were a fixed enum drawn by the display. Carry those documents
+ * forward instead of silently replacing an operator's balance with defaults.
+ */
+export function migrateBalanceDocument(raw: unknown): unknown {
+  if (!isRecord(raw) || raw.version !== LEGACY_BALANCE_FILE_VERSION) return raw;
+  const defaults = createDefaultTuning();
+  return {
+    ...raw,
+    version: BALANCE_FILE_VERSION,
+    presets: readArray(raw, "presets").map((preset) => migratePreset(preset, defaults))
+  };
+}
 
 export function createDefaultTuning(): BalanceTuning {
   const config = createSpaceshipSimulationConfig();
@@ -101,7 +182,7 @@ export class BalanceStore {
       return;
     }
 
-    const parsed = balancePresetsFileSchema.safeParse(parsedJson);
+    const parsed = balancePresetsFileSchema.safeParse(migrateBalanceDocument(parsedJson));
     if (!parsed.success) {
       this.logger.warn(
         `Balance preset file ${this.filePath} failed validation; using built-in defaults.`

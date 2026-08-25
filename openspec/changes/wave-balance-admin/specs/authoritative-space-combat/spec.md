@@ -4,9 +4,12 @@
 
 Combat config SHALL описывать каждый enemy kind одной записью таблицы архетипов, содержащей HP,
 радиус, скорость, предпочитаемую дистанцию, параметры оружия, стоимость спавна, волну разблокировки
-и награды; поведение врага SHALL выводиться из этой записи, а не из отдельных полей на тип. Wave
-SHALL создавать `gunship`, `missileCarrier`, `sniper`, `interceptor`, `boss` и `asteroid`. Enemy с
-оружием типа bullet SHALL держать configured дистанцию до current spaceship position и стрелять
+и награды; поведение врага SHALL выводиться из этой записи, а не из отдельных полей на тип. Enemy
+kind SHALL быть идентификатором каталога, а не фиксированным перечислением: каталог SHALL содержать
+пять встроенных архетипов и SHALL допускать созданные оператором, до документированного предела.
+Каждый архетип SHALL нести собственный визуал — силуэт из известного дисплею набора форм, цвета
+корпуса и обводки, флаг индикатора HP, — который SHALL публиковаться дисплею один раз на run. Enemy
+с оружием типа bullet SHALL держать configured дистанцию до current spaceship position и стрелять
 линейными bullets; enemy с оружием типа missile SHALL запускать homing missile, heading которой
 меняется к current spaceship position по shortest arc не быстрее configured turn rate. Archetype с
 burst count больше единицы SHALL создавать за один cooldown несколько снарядов, разложенных по
@@ -67,6 +70,17 @@ asteroids SHALL генерироваться каждые 40–100 combat ticks 
 - **THEN** core создаёт несколько homing missiles за один tick в пределах caps и назначает один
   общий cooldown без немедленного повторного залпа
 
+#### Scenario: Оператор добавляет собственный архетип
+
+- **WHEN** каталог содержит архетип, которого нет среди встроенных, и таблица волн его называет
+- **THEN** run спавнит его с его собственными характеристиками, а дисплей рисует его силуэтом и
+  цветом из каталога
+
+#### Scenario: Дисплей встречает неизвестный силуэт
+
+- **WHEN** снапшот содержит enemy, форма которого дисплею неизвестна
+- **THEN** дисплей рисует его запасным силуэтом и продолжает работу
+
 #### Scenario: Разные стрелки наносят разный урон
 
 - **WHEN** hostile bullets двух разных архетипов попадают в spaceship
@@ -74,22 +88,23 @@ asteroids SHALL генерироваться каждые 40–100 combat ticks 
 
 ## ADDED Requirements
 
-### Requirement: Protocol v15 публикует расширенный набор enemy kinds
+### Requirement: Protocol v16 публикует каталог врагов
 
-Protocol v15 SHALL публиковать enemy kind из набора `gunship`, `missileCarrier`, `sniper`,
-`interceptor`, `boss` в display game views. Create, join и gameplay message v14 SHALL получать
-`protocol_mismatch` до roster, watermark, journal или world mutation. Enemy caps SHALL остаться
-`40/16/96/12/32` и общий cap 196 независимо от числа архетипов.
+Protocol v16 SHALL публиковать enemy kind как идентификатор каталога и SHALL включать в display game
+view сам каталог: для каждого архетипа его идентификатор, название, силуэт, цвета и флаг индикатора
+HP. Create, join и gameplay message v15 SHALL получать `protocol_mismatch` до roster, watermark,
+journal или world mutation. Enemy caps SHALL остаться `40/16/96/12/32` и общий cap 196 независимо от
+числа архетипов в каталоге.
 
-#### Scenario: V14 создаёт новую комнату
+#### Scenario: V15 создаёт новую комнату
 
-- **WHEN** display отправляет create options с protocolVersion 14
+- **WHEN** display отправляет create options с protocolVersion 15
 - **THEN** server отклоняет create как `protocol_mismatch` и не создаёт gameplay room
 
-#### Scenario: Display получает новый kind
+#### Scenario: Display получает каталог run
 
-- **WHEN** authoritative snapshot содержит enemy с kind `sniper`, `interceptor` либо `boss`
-- **THEN** v15 projection проходит валидацию схемы и содержит этот kind без замены на существующий
+- **WHEN** run стартует и display получает первый active snapshot
+- **THEN** snapshot содержит каталог всех архетипов этого run, включая созданные оператором
 
 #### Scenario: Boss не расширяет caps
 

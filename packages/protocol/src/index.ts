@@ -1,9 +1,14 @@
 import { z } from "zod";
 
-export { ENEMY_KINDS } from "./enemyKinds.ts";
-import { ENEMY_KINDS } from "./enemyKinds.ts";
+export * from "./enemyKinds.ts";
+import {
+  ENEMY_ARCHETYPE_ID_PATTERN,
+  ENEMY_SHAPES,
+  MAX_ENEMY_ARCHETYPES,
+  MAX_ENEMY_ARCHETYPE_ID_LENGTH
+} from "./enemyKinds.ts";
 
-export const PROTOCOL_VERSION = 15 as const;
+export const PROTOCOL_VERSION = 16 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -59,7 +64,11 @@ export const terminalOutcomeSchema = z.enum(TERMINAL_OUTCOMES);
 export type TerminalOutcome = z.infer<typeof terminalOutcomeSchema>;
 export const defeatReasonSchema = z.enum(DEFEAT_REASONS);
 export type DefeatReason = z.infer<typeof defeatReasonSchema>;
-export const enemyKindSchema = z.enum(ENEMY_KINDS);
+export const enemyKindSchema = z
+  .string()
+  .min(1)
+  .max(MAX_ENEMY_ARCHETYPE_ID_LENGTH)
+  .regex(ENEMY_ARCHETYPE_ID_PATTERN, "Enemy kind must be a catalogue id.");
 export type EnemyKind = z.infer<typeof enemyKindSchema>;
 export const projectileKindSchema = z.enum(PROJECTILE_KINDS);
 export type ProjectileKind = z.infer<typeof projectileKindSchema>;
@@ -528,9 +537,23 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
 
 export const controllerGameSnapshotSchema = z.object(gameShape).strict().superRefine(refineWorld);
 export type ControllerGameSnapshot = z.infer<typeof controllerGameSnapshotSchema>;
+/** Per-run enemy catalogue: the display draws silhouettes from data, not from code. */
+export const publicEnemyCatalogueEntrySchema = z
+  .object({
+    kind: enemyKindSchema,
+    label: z.string().min(1).max(48),
+    shape: z.enum(ENEMY_SHAPES),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    outline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    showHealthBar: z.boolean()
+  })
+  .strict();
+export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;
+
 export const displayGameSnapshotSchema = z
   .object({
     ...gameShape,
+    enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),

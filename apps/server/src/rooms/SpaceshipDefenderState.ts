@@ -176,7 +176,18 @@ export class HomingMissileState extends Schema {
   @type("float64") heading = 0;
 }
 
+/** Per-run enemy catalogue: the display draws silhouettes from this, not from code. */
+export class EnemyVisualState extends Schema {
+  @type("string") kind = "";
+  @type("string") label = "";
+  @type("string") shape = "arrowhead";
+  @type("string") color = "#e65f4b";
+  @type("string") outline = "#ffd1b0";
+  @type("boolean") showHealthBar = false;
+}
+
 export class SpaceshipDisplayState extends Schema {
+  @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
   @type({ map: AsteroidState }) asteroids = new MapSchema<AsteroidState>();

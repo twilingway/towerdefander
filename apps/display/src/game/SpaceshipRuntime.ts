@@ -1,7 +1,8 @@
 import type {
   DisplayGameSnapshot,
-  EnemyKind,
+  EnemyShape,
   PublicAsteroidView,
+  PublicEnemyCatalogueEntry,
   PublicEnemyView,
   PublicHomingMissileView,
   PublicProjectileView
@@ -341,11 +342,9 @@ class SpaceshipScene extends Phaser.Scene {
     const container = this.add.container(entity.x, entity.y).setDepth(getEntityDepth(entity));
     let healthBar: Phaser.GameObjects.Graphics | undefined;
     if (entity.visualKind === "enemy") {
-      const visual = ENEMY_VISUALS[entity.kind];
+      const visual = resolveEnemyVisual(this.snapshot.enemyCatalogue, entity.kind);
       const body = this.add.graphics();
-      body.fillStyle(visual.color, 1);
-      body.lineStyle(3, visual.outline, 0.8);
-      visual.draw(body, entity.radius);
+      drawEnemyBody(body, visual, entity.radius);
       container.add(body);
       if (visual.showHealthBar) {
         healthBar = this.add.graphics();
@@ -403,102 +402,120 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
   ];
 }
 
-interface EnemyVisual {
-  readonly color: number;
-  readonly outline: number;
-  readonly showHealthBar: boolean;
-  draw(body: Phaser.GameObjects.Graphics, radius: number): void;
-}
+type ShapeDrawer = (body: Phaser.GameObjects.Graphics, radius: number) => void;
 
-/** Complete over EnemyKind, so a new kind fails to compile instead of borrowing another silhouette. */
-export const ENEMY_VISUALS: Record<EnemyKind, EnemyVisual> = {
-  gunship: {
-    color: 0xe65f4b,
-    outline: 0xffd1b0,
-    showHealthBar: false,
-    draw(body, radius) {
-      const nose = radius * 0.86;
-      const tail = radius * 0.64;
-      const span = radius * 0.54;
-      body.fillTriangle(nose, 0, -tail, -span, -tail, span);
-      body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
-    }
+/** Complete over EnemyShape, so a new shape fails to compile instead of vanishing. */
+const ENEMY_SHAPE_DRAWERS: Record<EnemyShape, ShapeDrawer> = {
+  arrowhead(body, radius) {
+    const nose = radius * 0.86;
+    const tail = radius * 0.64;
+    const span = radius * 0.54;
+    body.fillTriangle(nose, 0, -tail, -span, -tail, span);
+    body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
   },
-  missileCarrier: {
-    color: 0xaa5bd6,
-    outline: 0xffd1b0,
-    showHealthBar: false,
-    draw(body, radius) {
-      const halfWidth = radius * 0.66;
-      const halfHeight = radius * 0.45;
-      body.fillRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
-      body.strokeRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
-      body.fillTriangle(
-        radius * 0.82,
-        0,
-        halfWidth * 0.56,
-        -radius * 0.29,
-        halfWidth * 0.56,
-        radius * 0.29
-      );
-    }
+  block(body, radius) {
+    const halfWidth = radius * 0.66;
+    const halfHeight = radius * 0.45;
+    body.fillRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
+    body.strokeRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
+    body.fillTriangle(
+      radius * 0.82,
+      0,
+      halfWidth * 0.56,
+      -radius * 0.29,
+      halfWidth * 0.56,
+      radius * 0.29
+    );
   },
-  sniper: {
-    color: 0x4bb1e6,
-    outline: 0xd6f0ff,
-    showHealthBar: false,
-    draw(body, radius) {
-      const nose = radius * 1.25;
-      const tail = radius * 0.7;
-      const span = radius * 0.38;
-      const points = [
-        new Phaser.Math.Vector2(nose, 0),
-        new Phaser.Math.Vector2(0, -span),
-        new Phaser.Math.Vector2(-tail, 0),
-        new Phaser.Math.Vector2(0, span)
-      ];
-      body.fillPoints(points, true);
-      body.strokePoints(points, true);
-    }
+  diamond(body, radius) {
+    const points = [
+      new Phaser.Math.Vector2(radius * 1.25, 0),
+      new Phaser.Math.Vector2(0, -radius * 0.38),
+      new Phaser.Math.Vector2(-radius * 0.7, 0),
+      new Phaser.Math.Vector2(0, radius * 0.38)
+    ];
+    body.fillPoints(points, true);
+    body.strokePoints(points, true);
   },
-  interceptor: {
-    color: 0xf2c14b,
-    outline: 0xfff0c2,
-    showHealthBar: false,
-    draw(body, radius) {
-      const nose = radius * 1.1;
-      const tail = radius * 0.75;
-      const span = radius * 0.85;
-      body.fillTriangle(nose, 0, -tail, -span, -tail, span);
-      body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
-      body.fillTriangle(-tail * 0.2, 0, -tail, -span * 0.35, -tail, span * 0.35);
-    }
+  dart(body, radius) {
+    const nose = radius * 1.1;
+    const tail = radius * 0.75;
+    const span = radius * 0.85;
+    body.fillTriangle(nose, 0, -tail, -span, -tail, span);
+    body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
+    body.fillTriangle(-tail * 0.2, 0, -tail, -span * 0.35, -tail, span * 0.35);
   },
-  boss: {
-    color: 0x8f2f4d,
-    outline: 0xffb0c8,
-    showHealthBar: true,
-    draw(body, radius) {
-      const points = Array.from({ length: 6 }, (_, index) => {
-        const angle = (index / 6) * Math.PI * 2;
-        return new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
-      });
-      body.fillPoints(points, true);
-      body.strokePoints(points, true);
-      body.lineStyle(3, 0xffe08a, 0.9);
-      body.strokeCircle(0, 0, radius * 0.48);
-      body.fillStyle(0xffe08a, 0.85);
-      body.fillTriangle(
-        radius * 0.95,
-        0,
-        radius * 0.3,
-        -radius * 0.28,
-        radius * 0.3,
-        radius * 0.28
-      );
-    }
+  hexagon(body, radius) {
+    body.fillPoints(regularPolygon(6, radius), true);
+    body.strokePoints(regularPolygon(6, radius), true);
+    body.strokeCircle(0, 0, radius * 0.48);
+    body.fillTriangle(radius * 0.95, 0, radius * 0.3, -radius * 0.28, radius * 0.3, radius * 0.28);
+  },
+  cross(body, radius) {
+    const arm = radius * 0.32;
+    const reach = radius;
+    body.fillRect(-reach, -arm, reach * 2, arm * 2);
+    body.fillRect(-arm, -reach, arm * 2, reach * 2);
+    body.strokeRect(-reach, -arm, reach * 2, arm * 2);
+  },
+  ring(body, radius) {
+    body.strokeCircle(0, 0, radius);
+    body.strokeCircle(0, 0, radius * 0.55);
+    body.fillTriangle(radius, 0, radius * 0.35, -radius * 0.3, radius * 0.35, radius * 0.3);
+  },
+  spike(body, radius) {
+    const points = Array.from({ length: 10 }, (_, index) => {
+      const angle = (index / 10) * Math.PI * 2;
+      const reach = index % 2 === 0 ? radius : radius * 0.5;
+      return new Phaser.Math.Vector2(Math.cos(angle) * reach, Math.sin(angle) * reach);
+    });
+    body.fillPoints(points, true);
+    body.strokePoints(points, true);
   }
 };
+
+function regularPolygon(sides: number, radius: number): Phaser.Math.Vector2[] {
+  return Array.from({ length: sides }, (_, index) => {
+    const angle = (index / sides) * Math.PI * 2;
+    return new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
+  });
+}
+
+const FALLBACK_ENEMY_VISUAL: PublicEnemyCatalogueEntry = {
+  kind: "unknown",
+  label: "Unknown",
+  shape: "arrowhead",
+  color: "#e65f4b",
+  outline: "#ffd1b0",
+  showHealthBar: false
+};
+
+export function toColorValue(hex: string): number {
+  const parsed = Number.parseInt(hex.replace("#", ""), 16);
+  return Number.isFinite(parsed) ? parsed : 0xffffff;
+}
+
+/** An archetype the display has no entry for still gets drawn, just generically. */
+export function resolveEnemyVisual(
+  catalogue: readonly PublicEnemyCatalogueEntry[],
+  kind: string
+): PublicEnemyCatalogueEntry {
+  return catalogue.find((entry) => entry.kind === kind) ?? FALLBACK_ENEMY_VISUAL;
+}
+
+export function drawEnemyBody(
+  body: Phaser.GameObjects.Graphics,
+  visual: PublicEnemyCatalogueEntry,
+  radius: number
+): void {
+  body.fillStyle(toColorValue(visual.color), 1);
+  body.lineStyle(3, toColorValue(visual.outline), 0.8);
+  // Shape comes from untrusted preset data, so an unknown value still draws.
+  const draw = Object.hasOwn(ENEMY_SHAPE_DRAWERS, visual.shape)
+    ? ENEMY_SHAPE_DRAWERS[visual.shape]
+    : ENEMY_SHAPE_DRAWERS.arrowhead;
+  draw(body, radius);
+}
 
 const HEALTH_BAR_BACKGROUND = 0x2a0d16;
 const HEALTH_BAR_FILL = 0xff5f7a;

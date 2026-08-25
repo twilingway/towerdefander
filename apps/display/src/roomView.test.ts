@@ -77,6 +77,7 @@ describe("display room view", () => {
         },
         credits: 6,
         display: {
+          enemyCatalogue: [],
           obstacles: collection([
             {
               obstacleId: "cloud",

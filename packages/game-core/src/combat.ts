@@ -9,9 +9,11 @@ export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
 export type DefeatReason = "spaceship_destroyed" | "wave_timeout";
 export type GameplayRole = "pilot" | "gunner" | "shield";
-export const ENEMY_KINDS = ["gunship", "missileCarrier", "sniper", "interceptor", "boss"] as const;
-export type EnemyKind = (typeof ENEMY_KINDS)[number];
-export type SpawnKind = EnemyKind | "asteroid";
+/** Catalogue id, not a fixed enum: operators add archetypes from the console. */
+export type EnemyKind = string;
+export const ASTEROID_SPAWN_KIND = "asteroid" as const;
+/** A catalogue id, or ASTEROID_SPAWN_KIND for the ambient hazard. */
+export type SpawnKind = EnemyKind;
 
 export type UpgradeId =
   | "pilot_speed"
@@ -55,7 +57,8 @@ export interface WaveSpawnEntry {
   readonly kind: SpawnKind;
   readonly count: number;
   readonly spawnIntervalTicks: number;
-  readonly sector: SpawnSector | null;
+  /** Empty means the whole circumference. */
+  readonly sectors: readonly SpawnSector[];
 }
 
 export interface WaveDefinition {
@@ -82,12 +85,33 @@ export interface WaveCampaign {
 
 export type EnemySpawnPolicy = "standard" | "boss";
 
+export const ENEMY_SHAPES = [
+  "arrowhead",
+  "block",
+  "diamond",
+  "dart",
+  "hexagon",
+  "cross",
+  "ring",
+  "spike"
+] as const;
+export type EnemyShape = (typeof ENEMY_SHAPES)[number];
+
+export interface EnemyVisual {
+  readonly shape: EnemyShape;
+  readonly color: string;
+  readonly outline: string;
+  readonly showHealthBar: boolean;
+}
+
 export interface EnemyArchetype {
   readonly hp: number;
   readonly radius: number;
   readonly speedPerSecond: number;
   readonly preferredDistance: number;
   readonly weapon: EnemyWeaponTuning;
+  readonly visual: EnemyVisual;
+  readonly label: string;
   readonly spawnPolicy: EnemySpawnPolicy;
   readonly spawnCost: number;
   readonly unlockWave: number;
@@ -112,6 +136,7 @@ export interface CombatConfig {
   readonly intermissionTicks: number;
   readonly waveCampaign: WaveCampaign;
   readonly enemyArchetypes: Readonly<Record<EnemyKind, EnemyArchetype>>;
+
   readonly asteroidHp: number;
   readonly asteroidRadius: number;
   readonly asteroidSpeedPerSecond: number;
@@ -224,7 +249,7 @@ export interface PendingSpawn {
   readonly kind: SpawnKind;
   readonly planSequence: number;
   readonly spawnIntervalTicks: number;
-  readonly sector: SpawnSector | null;
+  readonly sectors: readonly SpawnSector[];
 }
 
 export interface CombatStateFields {
@@ -412,12 +437,38 @@ export function validateCombatConfig(config: CombatConfig): void {
   }
 }
 
+/** Config validation guarantees the id resolves; this keeps the hot path honest. */
+export function getEnemyArchetype(config: CombatConfig, kind: EnemyKind): EnemyArchetype {
+  return archetypeOf(config, kind);
+}
+
+function archetypeOf(config: CombatConfig, kind: EnemyKind): EnemyArchetype {
+  const archetype = config.enemyArchetypes[kind];
+  if (archetype === undefined) {
+    throw new RangeError(`enemyArchetypes has no archetype "${kind}"`);
+  }
+  return archetype;
+}
+
+function enemyKindsOf(config: CombatConfig): readonly EnemyKind[] {
+  return Object.keys(config.enemyArchetypes);
+}
+
 function validateEnemyArchetypes(config: CombatConfig): void {
-  for (const kind of ENEMY_KINDS) {
-    // Presets arrive as untrusted JSON, so a kind can be missing at runtime.
-    const archetype = config.enemyArchetypes[kind] as EnemyArchetype | undefined;
-    if (archetype === undefined) {
-      throw new RangeError(`enemyArchetypes must describe ${kind}`);
+  const kinds = enemyKindsOf(config);
+  if (kinds.length === 0) {
+    throw new RangeError("enemyArchetypes must describe at least one archetype");
+  }
+  if (Object.hasOwn(config.enemyArchetypes, "asteroid")) {
+    throw new RangeError('"asteroid" is the ambient hazard and cannot be an archetype id');
+  }
+  for (const kind of kinds) {
+    const archetype = archetypeOf(config, kind);
+    if (!ENEMY_SHAPES.includes(archetype.visual.shape)) {
+      throw new RangeError(`${kind}.visual.shape is not a shape the display can draw`);
+    }
+    if (archetype.label.length === 0) {
+      throw new RangeError(`${kind}.label must not be empty`);
     }
     const positiveIntegers: readonly (readonly [string, number])[] = [
       ["unlockWave", archetype.unlockWave],
@@ -486,8 +537,8 @@ function validateWaveCampaign(config: CombatConfig): void {
     }
     wave.entries.forEach((entry, entryIndex) => {
       const entryLabel = `${label}.entries[${String(entryIndex)}]`;
-      if (entry.kind !== "asteroid" && !ENEMY_KINDS.includes(entry.kind)) {
-        throw new RangeError(`${entryLabel}.kind is not a known spawn kind`);
+      if (entry.kind !== "asteroid" && !Object.hasOwn(config.enemyArchetypes, entry.kind)) {
+        throw new RangeError(`${entryLabel}.kind is not in the enemy catalogue`);
       }
       if (!Number.isSafeInteger(entry.count) || entry.count <= 0) {
         throw new RangeError(`${entryLabel}.count must be a positive safe integer`);
@@ -495,8 +546,10 @@ function validateWaveCampaign(config: CombatConfig): void {
       if (!Number.isSafeInteger(entry.spawnIntervalTicks) || entry.spawnIntervalTicks <= 0) {
         throw new RangeError(`${entryLabel}.spawnIntervalTicks must be a positive safe integer`);
       }
-      if (entry.sector !== null && !SPAWN_SECTORS.includes(entry.sector)) {
-        throw new RangeError(`${entryLabel}.sector is not a known spawn sector`);
+      for (const sector of entry.sectors) {
+        if (!SPAWN_SECTORS.includes(sector)) {
+          throw new RangeError(`${entryLabel}.sectors contains an unknown spawn sector`);
+        }
       }
     });
   });
@@ -565,7 +618,7 @@ function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSpawn[] {
         kind: entry.kind,
         planSequence: plan.length,
         spawnIntervalTicks: entry.spawnIntervalTicks,
-        sector: entry.sector
+        sectors: entry.sectors
       });
     }
   }
@@ -575,16 +628,15 @@ function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSpawn[] {
 function findBossKindForWave(config: CombatConfig, waveNumber: number): EnemyKind | undefined {
   const interval = config.waveCampaign.director.bossWaveInterval;
   if (interval === null || waveNumber % interval !== 0) return undefined;
-  return ENEMY_KINDS.find(
-    (kind) =>
-      config.enemyArchetypes[kind].spawnPolicy === "boss" &&
-      waveNumber >= config.enemyArchetypes[kind].unlockWave
-  );
+  return enemyKindsOf(config).find((kind) => {
+    const archetype = archetypeOf(config, kind);
+    return archetype.spawnPolicy === "boss" && waveNumber >= archetype.unlockWave;
+  });
 }
 
 /** A boss holds its slot until the rest of the wave is destroyed. */
 function waitsForClearedWave(config: CombatConfig, kind: SpawnKind): boolean {
-  return kind !== "asteroid" && config.enemyArchetypes[kind].spawnPolicy === "boss";
+  return kind !== "asteroid" && archetypeOf(config, kind).spawnPolicy === "boss";
 }
 
 function hasLiveWaveThreats(
@@ -602,11 +654,13 @@ function createDirectedWavePlan(
   let remaining = getWaveDifficulty(config, waveNumber).budget;
   let rngState = initialRngState;
   const spawnCostOf = (kind: SpawnKind): number =>
-    kind === "asteroid" ? config.asteroidSpawnCost : config.enemyArchetypes[kind].spawnCost;
-  const available = ENEMY_KINDS.filter((kind) => {
-    const archetype = config.enemyArchetypes[kind];
-    return archetype.spawnPolicy === "standard" && waveNumber >= archetype.unlockWave;
-  }).sort((left, right) => spawnCostOf(right) - spawnCostOf(left) || left.localeCompare(right));
+    kind === "asteroid" ? config.asteroidSpawnCost : archetypeOf(config, kind).spawnCost;
+  const available = enemyKindsOf(config)
+    .filter((kind) => {
+      const archetype = archetypeOf(config, kind);
+      return archetype.spawnPolicy === "standard" && waveNumber >= archetype.unlockWave;
+    })
+    .sort((left, right) => spawnCostOf(right) - spawnCostOf(left) || left.localeCompare(right));
   const kinds: SpawnKind[] = [];
   const anchor = available[0];
   if (anchor !== undefined && remaining >= spawnCostOf(anchor)) {
@@ -646,7 +700,7 @@ function createDirectedWavePlan(
       kind,
       planSequence,
       spawnIntervalTicks: config.enemySpawnIntervalTicks,
-      sector: null
+      sectors: []
     })),
     rngState
   };
@@ -1014,7 +1068,7 @@ function moveAndSpawnThreats(
 
   for (const enemy of enemies) {
     if (enemy.attackCooldownTicks > 0) continue;
-    const weapon = config.enemyArchetypes[enemy.kind].weapon;
+    const weapon = archetypeOf(config, enemy.kind).weapon;
     for (let shot = 0; shot < weapon.burstCount; shot += 1) {
       const aimOffset = burstAimOffset(weapon, shot);
       if (weapon.kind === "bullet") {
@@ -1062,7 +1116,7 @@ function moveAndSpawnThreats(
           attackCooldownTicks: Math.max(
             1,
             Math.ceil(
-              config.enemyArchetypes[enemy.kind].weapon.cooldownTicks / difficulty.tempoMultiplier
+              archetypeOf(config, enemy.kind).weapon.cooldownTicks / difficulty.tempoMultiplier
             )
           )
         }
@@ -1086,7 +1140,7 @@ function moveAndSpawnThreats(
         state.clock.tick,
         state.waveNumber,
         config,
-        pending.sector
+        pending.sectors
       );
       spawnRngState = result.rngState;
       nextSpawnSequence += 1;
@@ -1113,7 +1167,7 @@ function moveAndSpawnThreats(
       state.clock.tick,
       state.waveNumber,
       config,
-      null
+      []
     );
     ambientAsteroidRngState = result.rngState;
     nextSpawnSequence += 1;
@@ -1151,7 +1205,7 @@ function moveEnemy(
   const deltaX = spaceship.x - enemy.x;
   const deltaY = spaceship.y - enemy.y;
   const distance = Math.hypot(deltaX, deltaY) || 1;
-  const archetype = config.enemyArchetypes[enemy.kind];
+  const archetype = archetypeOf(config, enemy.kind);
   const preferred = archetype.preferredDistance;
   const speed = archetype.speedPerSecond;
   const radial = distance > preferred + 30 ? 1 : distance < preferred - 30 ? -1 : 0;
@@ -1288,12 +1342,19 @@ function createMissile(
   };
 }
 
-function sectorEntryAngle(sector: SpawnSector | null, unitRandom: number): number {
-  if (sector === null) return unitRandom * Math.PI * 2;
+function sectorEntryAngle(
+  sectors: readonly SpawnSector[],
+  angleRandom: number,
+  pickRandom: number
+): number {
+  if (sectors.length === 0) return angleRandom * Math.PI * 2;
+  const pickedIndex = Math.min(sectors.length - 1, Math.floor(pickRandom * sectors.length));
+  const sector = sectors[pickedIndex];
+  if (sector === undefined) return angleRandom * Math.PI * 2;
   // Screen-space bearings: north points up, angles grow clockwise.
   const sectorWidth = Math.PI / 4;
   const sectorCenter = -Math.PI / 2 + SPAWN_SECTORS.indexOf(sector) * sectorWidth;
-  return sectorCenter + (unitRandom - 0.5) * sectorWidth;
+  return sectorCenter + (angleRandom - 0.5) * sectorWidth;
 }
 
 function spawnEntity(
@@ -1304,7 +1365,7 @@ function spawnEntity(
   tick: number,
   waveNumber: number,
   config: CombatConfig,
-  sector: SpawnSector | null
+  sectors: readonly SpawnSector[]
 ): {
   readonly rngState: number;
   readonly enemy: CombatEnemyState | null;
@@ -1317,7 +1378,8 @@ function spawnEntity(
     rngState = next;
     values.push(random / UINT32_MAX);
   }
-  const entryAngle = sectorEntryAngle(sector, values[0] ?? 0);
+  // values[2] was already drawn and unused, so multi-sector picking costs no extra RNG.
+  const entryAngle = sectorEntryAngle(sectors, values[0] ?? 0, values[2] ?? 0);
   const arena = arenaFromConfig(config);
   const difficulty = getWaveDifficulty(config, waveNumber);
   if (kind === "asteroid") {
@@ -1349,7 +1411,7 @@ function spawnEntity(
       }
     };
   }
-  const archetype = config.enemyArchetypes[kind];
+  const archetype = archetypeOf(config, kind);
   const entityRadius = archetype.radius;
   const point = pointOnCircle(arena, entryAngle, arena.radius - entityRadius);
   const hp = archetype.hp * difficulty.hpMultiplier;
@@ -1439,7 +1501,7 @@ function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): Comb
       removedTargets.add(candidate.targetId);
       if (candidate.targetKind === "enemy") {
         const enemy = target as CombatEnemyState;
-        const archetype = config.enemyArchetypes[enemy.kind];
+        const archetype = archetypeOf(config, enemy.kind);
         score += archetype.scoreReward;
         credits += archetype.creditReward;
       } else {

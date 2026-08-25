@@ -199,6 +199,13 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 1,
         burstSpreadRadians: 0
       },
+      visual: {
+        shape: "arrowhead",
+        color: "#e65f4b",
+        outline: "#ffd1b0",
+        showHealthBar: false
+      },
+      label: "Ганшип",
       spawnPolicy: "standard",
       spawnCost: 2,
       unlockWave: 1,
@@ -222,6 +229,13 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 1,
         burstSpreadRadians: 0
       },
+      visual: {
+        shape: "block",
+        color: "#aa5bd6",
+        outline: "#ffd1b0",
+        showHealthBar: false
+      },
+      label: "Ракетоносец",
       spawnPolicy: "standard",
       spawnCost: 4,
       unlockWave: 3,
@@ -245,6 +259,13 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 1,
         burstSpreadRadians: 0
       },
+      visual: {
+        shape: "diamond",
+        color: "#4bb1e6",
+        outline: "#d6f0ff",
+        showHealthBar: false
+      },
+      label: "Снайпер",
       spawnPolicy: "standard",
       spawnCost: 3,
       unlockWave: 5,
@@ -268,6 +289,13 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 1,
         burstSpreadRadians: 0
       },
+      visual: {
+        shape: "dart",
+        color: "#f2c14b",
+        outline: "#fff0c2",
+        showHealthBar: false
+      },
+      label: "Перехватчик",
       spawnPolicy: "standard",
       spawnCost: 1,
       unlockWave: 1,
@@ -291,6 +319,13 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         burstCount: 3,
         burstSpreadRadians: Math.PI / 6
       },
+      visual: {
+        shape: "hexagon",
+        color: "#8f2f4d",
+        outline: "#ffb0c8",
+        showHealthBar: true
+      },
+      label: "Босс",
       spawnPolicy: "boss",
       spawnCost: 20,
       unlockWave: 10,

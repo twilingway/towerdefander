@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getEnemyArchetype,
   advanceCombat,
   advanceSpaceshipSimulation,
   createSpaceshipSimulationConfig,
@@ -45,7 +46,7 @@ function quietEnemy(
     x: config.worldWidth / 2 + 700,
     y: config.worldHeight / 2,
     velocity: { x: 0, y: 0 },
-    radius: config.enemyArchetypes.gunship.radius,
+    radius: getEnemyArchetype(config, "gunship").radius,
     spawnedTick: 0,
     heading: 0,
     hp: 1_000_000,
@@ -94,7 +95,7 @@ describe("circular combat spawning and movement", () => {
       const initial = {
         ...createSpaceshipSimulationState(config, seed),
         pendingSpawns: [
-          { kind: "gunship" as const, planSequence: 0, spawnIntervalTicks: 12, sector: null }
+          { kind: "gunship" as const, planSequence: 0, spawnIntervalTicks: 12, sectors: [] }
         ]
       };
       const first = advanceSpaceshipSimulation(initial, config);
@@ -118,7 +119,7 @@ describe("circular combat spawning and movement", () => {
     const state = advanceSpaceshipSimulation(
       {
         ...createSpaceshipSimulationState(config, 55),
-        pendingSpawns: [{ kind: "asteroid", planSequence: 0, spawnIntervalTicks: 12, sector: null }]
+        pendingSpawns: [{ kind: "asteroid", planSequence: 0, spawnIntervalTicks: 12, sectors: [] }]
       },
       config
     );
@@ -136,7 +137,7 @@ describe("circular combat spawning and movement", () => {
       ambientAsteroidIntervalMinTicks: 100_000,
       ambientAsteroidIntervalMaxTicks: 100_000
     });
-    const legalRadius = config.arenaRadius - config.enemyArchetypes.gunship.radius;
+    const legalRadius = config.arenaRadius - getEnemyArchetype(config, "gunship").radius;
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 73),
       pendingSpawns: [],
@@ -151,8 +152,8 @@ describe("circular combat spawning and movement", () => {
         quietEnemy(config, {
           x: config.worldWidth / 2 + legalRadius,
           previousX: config.worldWidth / 2 + legalRadius,
-          y: config.worldHeight / 2 - config.enemyArchetypes.gunship.preferredDistance,
-          previousY: config.worldHeight / 2 - config.enemyArchetypes.gunship.preferredDistance
+          y: config.worldHeight / 2 - getEnemyArchetype(config, "gunship").preferredDistance,
+          previousY: config.worldHeight / 2 - getEnemyArchetype(config, "gunship").preferredDistance
         })
       ]
     };
@@ -175,7 +176,7 @@ describe("ambient asteroid scheduler", () => {
     const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1 });
     const initial: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 311),
-      pendingSpawns: [{ kind: "gunship", planSequence: 0, spawnIntervalTicks: 12, sector: null }]
+      pendingSpawns: [{ kind: "gunship", planSequence: 0, spawnIntervalTicks: 12, sectors: [] }]
     };
     const withoutAmbient = advanceSpaceshipSimulation(
       { ...initial, ambientAsteroidSpawnDueTick: null },
@@ -245,7 +246,7 @@ describe("ambient asteroid scheduler", () => {
     const asteroids = Array.from({ length: 15 }, (_, index) => ambientAsteroid(config, index));
     const state: SpaceshipSimulationState = {
       ...initial,
-      pendingSpawns: [{ kind: "asteroid", planSequence: 0, spawnIntervalTicks: 12, sector: null }],
+      pendingSpawns: [{ kind: "asteroid", planSequence: 0, spawnIntervalTicks: 12, sectors: [] }],
       asteroids,
       ambientAsteroidSpawnDueTick: 0
     };
@@ -338,7 +339,7 @@ describe("circular transient cleanup", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 33);
     const enemyX =
-      config.worldWidth / 2 + config.arenaRadius - config.enemyArchetypes.gunship.radius;
+      config.worldWidth / 2 + config.arenaRadius - getEnemyArchetype(config, "gunship").radius;
     const enemy = quietEnemy(config, {
       x: enemyX,
       previousX: enemyX,

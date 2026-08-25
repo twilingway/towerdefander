@@ -1,7 +1,16 @@
-import { ENEMY_KINDS, type PublicEnemyView } from "@spaceship-defender/protocol";
+import {
+  ENEMY_SHAPES,
+  type PublicEnemyCatalogueEntry,
+  type PublicEnemyView
+} from "@spaceship-defender/protocol";
 import { describe, expect, it, vi } from "vitest";
 
-import { ENEMY_VISUALS, drawEnemyHealthBar } from "./SpaceshipRuntime.js";
+import {
+  drawEnemyBody,
+  drawEnemyHealthBar,
+  resolveEnemyVisual,
+  toColorValue
+} from "./SpaceshipRuntime.js";
 
 interface FillRectCall {
   readonly x: number;
@@ -10,9 +19,18 @@ interface FillRectCall {
   readonly height: number;
 }
 
+interface DrawOperation {
+  readonly name: string;
+  readonly args: readonly unknown[];
+}
+
 function graphicsSpy() {
   const fillRects: FillRectCall[] = [];
   const calls: string[] = [];
+  const ops: DrawOperation[] = [];
+  const record = (name: string, args: readonly unknown[]): void => {
+    ops.push({ name, args });
+  };
   const graphics = {
     clear() {
       calls.push("clear");
@@ -26,38 +44,47 @@ function graphicsSpy() {
     },
     fillRect(x: number, y: number, width: number, height: number) {
       fillRects.push({ x, y, width, height });
+      record("fillRect", [x, y, width, height]);
       return this;
     },
-    strokeRect() {
+    strokeRect(...args: unknown[]) {
+      record("strokeRect", args);
       return this;
     },
-    fillTriangle() {
+    fillTriangle(...args: unknown[]) {
       calls.push("fillTriangle");
+      record("fillTriangle", args);
       return this;
     },
-    strokeTriangle() {
+    strokeTriangle(...args: unknown[]) {
+      record("strokeTriangle", args);
       return this;
     },
-    fillRoundedRect() {
+    fillRoundedRect(...args: unknown[]) {
       calls.push("fillRoundedRect");
+      record("fillRoundedRect", args);
       return this;
     },
-    strokeRoundedRect() {
+    strokeRoundedRect(...args: unknown[]) {
+      record("strokeRoundedRect", args);
       return this;
     },
-    fillPoints() {
+    fillPoints(...args: unknown[]) {
       calls.push("fillPoints");
+      record("fillPoints", args);
       return this;
     },
-    strokePoints() {
+    strokePoints(...args: unknown[]) {
+      record("strokePoints", args);
       return this;
     },
-    strokeCircle() {
+    strokeCircle(...args: unknown[]) {
       calls.push("strokeCircle");
+      record("strokeCircle", args);
       return this;
     }
   };
-  return { graphics, fillRects, calls };
+  return { graphics, fillRects, calls, ops };
 }
 
 function enemy(overrides: Partial<PublicEnemyView> = {}): PublicEnemyView {
@@ -77,30 +104,56 @@ function enemy(overrides: Partial<PublicEnemyView> = {}): PublicEnemyView {
   };
 }
 
+function catalogueEntry(
+  overrides: Partial<PublicEnemyCatalogueEntry> = {}
+): PublicEnemyCatalogueEntry {
+  return {
+    kind: "gunship",
+    label: "Ганшип",
+    shape: "arrowhead",
+    color: "#e65f4b",
+    outline: "#ffd1b0",
+    showHealthBar: false,
+    ...overrides
+  };
+}
+
 describe("enemy visuals", () => {
-  it("describes every published enemy kind", () => {
-    expect(Object.keys(ENEMY_VISUALS).sort()).toEqual([...ENEMY_KINDS].sort());
-  });
-
-  it("gives each kind its own colour", () => {
-    const colors = Object.values(ENEMY_VISUALS).map(({ color }) => color);
-    expect(new Set(colors).size).toBe(colors.length);
-  });
-
-  it("shows a health bar only for the boss", () => {
-    const withBar = ENEMY_KINDS.filter((kind) => ENEMY_VISUALS[kind].showHealthBar);
-    expect(withBar).toEqual(["boss"]);
+  it("draws every shape the protocol can publish", () => {
+    for (const shape of ENEMY_SHAPES) {
+      const spy = graphicsSpy();
+      drawEnemyBody(spy.graphics as never, catalogueEntry({ shape }), 40);
+      expect(spy.ops.length, `shape ${shape} drew nothing`).toBeGreaterThan(0);
+    }
   });
 
   it("scales each silhouette with the authoritative radius", () => {
-    for (const kind of ENEMY_KINDS) {
+    for (const shape of ENEMY_SHAPES) {
       const small = graphicsSpy();
       const large = graphicsSpy();
-      ENEMY_VISUALS[kind].draw(small.graphics as never, 10);
-      ENEMY_VISUALS[kind].draw(large.graphics as never, 90);
-      expect(small.calls.length).toBeGreaterThan(0);
-      expect(large.calls).toEqual(small.calls);
+      drawEnemyBody(small.graphics as never, catalogueEntry({ shape }), 10);
+      drawEnemyBody(large.graphics as never, catalogueEntry({ shape }), 90);
+      expect(large.ops.map(({ name }) => name)).toEqual(small.ops.map(({ name }) => name));
+      expect(
+        large.ops.map(({ args }) => args),
+        `shape ${shape} ignores radius`
+      ).not.toEqual(small.ops.map(({ args }) => args));
     }
+  });
+
+  it("falls back to a generic silhouette for an archetype it has never seen", () => {
+    const catalogue = [catalogueEntry()];
+    expect(resolveEnemyVisual(catalogue, "gunship").label).toBe("Ганшип");
+    const unknown = resolveEnemyVisual(catalogue, "eliteSniper");
+    expect(unknown.shape).toBe("arrowhead");
+    const spy = graphicsSpy();
+    drawEnemyBody(spy.graphics as never, unknown, 30);
+    expect(spy.ops.length).toBeGreaterThan(0);
+  });
+
+  it("reads colours from catalogue data", () => {
+    expect(toColorValue("#22c55e")).toBe(0x22c55e);
+    expect(toColorValue("not-a-colour")).toBe(0xffffff);
   });
 });
 

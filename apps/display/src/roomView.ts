@@ -143,6 +143,7 @@ interface NetworkGameState {
   credits: number;
   teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
+    enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;
@@ -150,6 +151,15 @@ interface NetworkGameState {
     hostileProjectiles: ValueCollection<NetworkProjectileState>;
     homingMissiles: ValueCollection<NetworkHomingMissileState>;
   };
+}
+
+interface NetworkEnemyVisualState {
+  kind: string;
+  label: string;
+  shape: string;
+  color: string;
+  outline: string;
+  showHealthBar: boolean;
 }
 
 export interface NetworkRoomState {
@@ -250,6 +260,14 @@ export function toDisplayRoomView(
                     height: obstacle.height
                   }
             ),
+            enemyCatalogue: [...display.enemyCatalogue.values()].map((entry) => ({
+              kind: entry.kind,
+              label: entry.label,
+              shape: entry.shape,
+              color: entry.color,
+              outline: entry.outline,
+              showHealthBar: entry.showHealthBar
+            })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  ENEMY_KINDS,
+  BUILTIN_ENEMY_KINDS,
   balancePresetsFileSchema,
   balanceTuningSchema,
   type BalanceTuning,
@@ -26,6 +26,8 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
       burstCount: 1,
       burstSpreadRadians: 0
     },
+    visual: { shape: "arrowhead", color: "#e65f4b", outline: "#ffd1b0", showHealthBar: false },
+    label: "Test archetype",
     spawnPolicy: "standard",
     spawnCost: 2,
     unlockWave: 1,
@@ -37,13 +39,11 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
 
 function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
   return {
-    enemyArchetypes: Object.fromEntries(
-      ENEMY_KINDS.map((kind) => [kind, archetype()])
-    ) as BalanceTuning["enemyArchetypes"],
+    enemyArchetypes: Object.fromEntries(BUILTIN_ENEMY_KINDS.map((kind) => [kind, archetype()])),
     waveCampaign: {
       waves: [
         {
-          entries: [{ kind: "gunship", count: 2, spawnIntervalTicks: 12, sector: "N" }],
+          entries: [{ kind: "gunship", count: 2, spawnIntervalTicks: 12, sectors: ["N"] }],
           hpMultiplier: null,
           tempoMultiplier: null
         }
@@ -79,7 +79,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 1,
+    version: 2,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -104,33 +104,71 @@ describe("balance tuning schema", () => {
     expect(balanceTuningSchema.safeParse(broken).success).toBe(false);
   });
 
-  it("rejects a partial archetype table", () => {
-    const partial = Object.fromEntries(
-      ENEMY_KINDS.filter((kind) => kind !== "boss").map((kind) => [kind, archetype()])
-    );
+  it("accepts a catalogue with an operator-made archetype", () => {
+    const extended = tuning();
     expect(
       balanceTuningSchema.safeParse({
-        ...tuning(),
-        enemyArchetypes: partial
+        ...extended,
+        enemyArchetypes: { ...extended.enemyArchetypes, eliteSniper: archetype() }
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects an empty catalogue", () => {
+    expect(balanceTuningSchema.safeParse({ ...tuning(), enemyArchetypes: {} }).success).toBe(false);
+  });
+
+  it("rejects an archetype id that is not an identifier", () => {
+    const extended = tuning();
+    for (const badId of ["Elite Sniper", "9lives", "-dash", "asteroid"]) {
+      expect(
+        balanceTuningSchema.safeParse({
+          ...extended,
+          enemyArchetypes: { ...extended.enemyArchetypes, [badId]: archetype() }
+        }).success
+      ).toBe(false);
+    }
+  });
+
+  it("rejects a visual the display cannot draw", () => {
+    const extended = tuning();
+    expect(
+      balanceTuningSchema.safeParse({
+        ...extended,
+        enemyArchetypes: {
+          ...extended.enemyArchetypes,
+          gunship: { ...archetype(), visual: { ...archetype().visual, shape: "blob" } }
+        }
+      }).success
+    ).toBe(false);
+    expect(
+      balanceTuningSchema.safeParse({
+        ...extended,
+        enemyArchetypes: {
+          ...extended.enemyArchetypes,
+          gunship: { ...archetype(), visual: { ...archetype().visual, color: "red" } }
+        }
       }).success
     ).toBe(false);
   });
 
-  it("rejects an unknown spawn kind in a wave entry", () => {
-    const broken = {
+  it("accepts any catalogue id as a wave entry kind and rejects malformed ones", () => {
+    const build = (kind: string) => ({
       ...tuning(),
       waveCampaign: {
         ...tuning().waveCampaign,
         waves: [
           {
-            entries: [{ kind: "dreadnought", count: 1, spawnIntervalTicks: 12, sector: null }],
+            entries: [{ kind, count: 1, spawnIntervalTicks: 12, sectors: [] }],
             hpMultiplier: null,
             tempoMultiplier: null
           }
         ]
       }
-    };
-    expect(balanceTuningSchema.safeParse(broken).success).toBe(false);
+    });
+    // Cross-checking the id against the catalogue is the simulation validator's job.
+    expect(balanceTuningSchema.safeParse(build("eliteSniper")).success).toBe(true);
+    expect(balanceTuningSchema.safeParse(build("Elite Sniper")).success).toBe(false);
   });
 
   it("rejects an unknown spawn sector", () => {
@@ -140,7 +178,7 @@ describe("balance tuning schema", () => {
         ...tuning().waveCampaign,
         waves: [
           {
-            entries: [{ kind: "gunship", count: 1, spawnIntervalTicks: 12, sector: "UP" }],
+            entries: [{ kind: "gunship", count: 1, spawnIntervalTicks: 12, sectors: ["UP"] }],
             hpMultiplier: null,
             tempoMultiplier: null
           }
@@ -201,7 +239,7 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 2 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 3 }).success).toBe(
       false
     );
   });
@@ -211,7 +249,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 1,
+        version: 2,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

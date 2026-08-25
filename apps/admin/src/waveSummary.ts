@@ -1,4 +1,8 @@
-import type { BalanceTuning, SpawnKind, WaveDefinition } from "@spaceship-defender/protocol";
+import {
+  ASTEROID_SPAWN_KIND,
+  type BalanceTuning,
+  type WaveDefinition
+} from "@spaceship-defender/protocol";
 
 const FIXED_STEP_MS = 50;
 
@@ -11,8 +15,9 @@ export interface WaveSummary {
   readonly overBudget: boolean;
 }
 
-export function spawnCostOf(tuning: BalanceTuning, kind: SpawnKind): number {
-  return kind === "asteroid" ? tuning.asteroidSpawnCost : tuning.enemyArchetypes[kind].spawnCost;
+export function spawnCostOf(tuning: BalanceTuning, kind: string): number {
+  if (kind === ASTEROID_SPAWN_KIND) return tuning.asteroidSpawnCost;
+  return tuning.enemyArchetypes[kind]?.spawnCost ?? 0;
 }
 
 /** Mirrors getWaveDifficulty in game-core so the console can show the same budget. */

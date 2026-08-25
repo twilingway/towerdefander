@@ -69,6 +69,7 @@ const PREVIEW_WORLD = {
     gunner: { damageMultiplier: 1.15, cooldownMultiplier: 0.9, projectileSpeedMultiplier: 1 },
     shield: { capacityBonus: 20, rechargeMultiplier: 1, arcWidthBonus: 0 }
   },
+  enemyCatalogue: [],
   obstacles: []
 };
 
