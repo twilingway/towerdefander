@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export { ENEMY_KINDS } from "./enemyKinds.js";
+import { ENEMY_KINDS } from "./enemyKinds.js";
+
 export const PROTOCOL_VERSION = 15 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
@@ -9,7 +12,6 @@ export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
 export const DEFEAT_REASONS = ["spaceship_destroyed", "wave_timeout"] as const;
 export const WAVE_TTL_SECONDS = 20 * 60;
 export const MAX_WAVE_TTL_SECONDS = 24 * 60 * 60;
-export const ENEMY_KINDS = ["gunship", "missileCarrier", "sniper", "interceptor", "boss"] as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
 export const ROOM_CLOSING_REASONS = [
   "display_left",
@@ -701,3 +703,5 @@ export const serverErrorSchema = z
   .object({ code: serverErrorCodeSchema, message: z.string().min(1) })
   .strict();
 export type ServerError = z.infer<typeof serverErrorSchema>;
+
+export * from "./balance.js";
