@@ -35,7 +35,13 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
         burstSpreadRadians: 0
       }
     ],
-    visual: { shape: "arrowhead", color: "#e65f4b", outline: "#ffd1b0", showHealthBar: false },
+    visual: {
+      shape: "arrowhead",
+      color: "#e65f4b",
+      outline: "#ffd1b0",
+      modelScale: 1,
+      showHealthBar: false
+    },
     label: "Test",
     spawnPolicy: "standard",
     spawnCost,

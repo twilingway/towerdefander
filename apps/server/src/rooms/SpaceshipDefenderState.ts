@@ -183,6 +183,7 @@ export class EnemyVisualState extends Schema {
   @type("string") shape = "arrowhead";
   @type("string") color = "#e65f4b";
   @type("string") outline = "#ffd1b0";
+  @type("float32") modelScale = 1;
   @type("boolean") showHealthBar = false;
 }
 

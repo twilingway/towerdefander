@@ -408,7 +408,13 @@ describe("deterministic combat foundation", () => {
       ...getEnemyArchetype(base, "gunship"),
       hp: 480,
       label: "Элитный ганшип",
-      visual: { shape: "spike" as const, color: "#22c55e", outline: "#bbf7d0", showHealthBar: true }
+      visual: {
+        shape: "spike" as const,
+        color: "#22c55e",
+        outline: "#bbf7d0",
+        modelScale: 1,
+        showHealthBar: true
+      }
     };
     const config = createSpaceshipSimulationConfig({
       enemyArchetypes: { ...base.enemyArchetypes, eliteGunship: elite },

@@ -340,7 +340,19 @@ body {
 .shapes {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
+}
+
+/* Keeps the eight chips on a single row inside the wave table. */
+.entries .sectors {
+  flex-wrap: nowrap;
+}
+
+.entries .sectors__chip {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 2px;
+  text-align: center;
 }
 
 .sectors__chip {
@@ -391,22 +403,28 @@ body {
   margin: 0 0 8px;
 }
 
+/* Input and readout share the cell instead of huddling on the left. */
 .stat {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .stat__input {
-  width: 74px;
+  flex: 1 1 60px;
+  min-width: 54px;
 }
 
 .stat__value {
   color: var(--ink-dim);
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   font-size: 12px;
   line-height: 1.3;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -452,25 +470,88 @@ body {
 
 /* Type needs room for long names; counts and intervals are short numbers. */
 .entries__col-type {
-  width: 19%;
+  width: 17%;
 }
 
 .entries__col-small {
-  width: 7%;
+  width: 6%;
 }
 
+/* Fits the "Интервал, с" heading on one line. */
+.entries__col-interval {
+  width: 9%;
+}
+
+/* Wide enough that all eight sector chips stay on one line. */
 .entries__col-sectors {
-  width: 21%;
+  width: 26%;
 }
 
 .entries__col-stat {
-  width: 20%;
+  width: 18%;
 }
 
 .entries__col-action {
-  width: 6%;
+  width: 5%;
+}
+
+.entries th {
+  white-space: nowrap;
 }
 
 .entries td .field__input {
   min-width: 0;
+}
+
+.appearance {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+}
+
+.appearance__controls {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.preview {
+  flex: 0 0 132px;
+  margin: 0;
+}
+
+.preview__canvas {
+  background: #0a1220;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: block;
+  height: 132px;
+  width: 132px;
+}
+
+.preview__reference {
+  fill: none;
+  stroke: var(--line);
+  stroke-dasharray: 3 5;
+}
+
+.preview__hitbox {
+  fill: none;
+  stroke: rgba(79, 209, 197, 0.75);
+  stroke-width: 1.5;
+}
+
+.preview__key {
+  display: block;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.preview__caption {
+  color: var(--ink-dim);
+  font-size: 11px;
+  margin-top: 4px;
+  text-align: center;
 }

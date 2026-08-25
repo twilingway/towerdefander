@@ -654,6 +654,7 @@ export class SpaceshipDefenderRoom extends Room<{
       entry.shape = archetype.visual.shape;
       entry.color = archetype.visual.color;
       entry.outline = archetype.visual.outline;
+      entry.modelScale = archetype.visual.modelScale;
       entry.showHealthBar = archetype.visual.showHealthBar;
       catalogue.set(kind, entry);
     }

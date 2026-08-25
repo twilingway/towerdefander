@@ -7,22 +7,23 @@ Combat config SHALL описывать каждый enemy kind одной зап
 и награды; поведение врага SHALL выводиться из этой записи, а не из отдельных полей на тип. Enemy
 kind SHALL быть идентификатором каталога, а не фиксированным перечислением: каталог SHALL содержать
 пять встроенных архетипов и SHALL допускать созданные оператором, до документированного предела.
-Каждый архетип SHALL нести собственный визуал — силуэт из известного дисплею набора форм, цвета
-корпуса и обводки, флаг индикатора HP, — который SHALL публиковаться дисплею один раз на run. Enemy
-с оружием типа bullet SHALL держать configured дистанцию до current spaceship position и стрелять
-линейными bullets; enemy с оружием типа missile SHALL запускать homing missile, heading которой
-меняется к current spaceship position по shortest arc не быстрее configured turn rate. Archetype
-SHALL нести один или несколько weapons; каждый weapon SHALL иметь собственный cooldown и SHALL
-стрелять независимо от остальных. Weapon с burst count больше единицы SHALL создавать за один
-cooldown несколько снарядов, разложенных по configured spread, в пределах entity caps. Hostile
-bullets и homing missiles SHALL нести собственные damage и shield hit cost, унаследованные от
-архетипа стрелка, так что разные типы врагов SHALL мочь иметь разное оружие. Enemy ships SHALL
-spawn-иться полностью внутри seeded point на arena circumference, SHALL оставаться внутри circle при
-chase/retreat/orbit и SHALL NOT удаляться boundary cleanup. Wave-origin и independent ambient
-asteroids SHALL spawn-иться на perimeter с seeded inward velocity и сохранять её до collision,
-destruction, lifetime либо выхода за circular padding. Ambient asteroids SHALL генерироваться каждые
-40–100 combat ticks из отдельного RNG domain и SHALL NOT входить в remaining wave population. Enemy
-decisions SHALL выполняться только fixed step и в стабильном spawn-sequence order.
+Каждый архетип SHALL нести собственный визуал — силуэт из известного дисплею набора форм, масштаб
+модели относительно радиуса поражения, цвета корпуса и обводки, флаг индикатора HP, — который SHALL
+публиковаться дисплею один раз на run. Enemy с оружием типа bullet SHALL держать configured
+дистанцию до current spaceship position и стрелять линейными bullets; enemy с оружием типа missile
+SHALL запускать homing missile, heading которой меняется к current spaceship position по shortest
+arc не быстрее configured turn rate. Archetype SHALL нести один или несколько weapons; каждый weapon
+SHALL иметь собственный cooldown и SHALL стрелять независимо от остальных. Weapon с burst count
+больше единицы SHALL создавать за один cooldown несколько снарядов, разложенных по configured
+spread, в пределах entity caps. Hostile bullets и homing missiles SHALL нести собственные damage и
+shield hit cost, унаследованные от архетипа стрелка, так что разные типы врагов SHALL мочь иметь
+разное оружие. Enemy ships SHALL spawn-иться полностью внутри seeded point на arena circumference,
+SHALL оставаться внутри circle при chase/retreat/orbit и SHALL NOT удаляться boundary cleanup.
+Wave-origin и independent ambient asteroids SHALL spawn-иться на perimeter с seeded inward velocity
+и сохранять её до collision, destruction, lifetime либо выхода за circular padding. Ambient
+asteroids SHALL генерироваться каждые 40–100 combat ticks из отдельного RNG domain и SHALL NOT
+входить в remaining wave population. Enemy decisions SHALL выполняться только fixed step и в
+стабильном spawn-sequence order.
 
 #### Scenario: Gunship атакует
 
@@ -82,6 +83,12 @@ decisions SHALL выполняться только fixed step и в стаби�
 - **WHEN** каталог содержит архетип, которого нет среди встроенных, и таблица волн его называет
 - **THEN** run спавнит его с его собственными характеристиками, а дисплей рисует его силуэтом и
   цветом из каталога
+
+#### Scenario: Модель крупнее зоны поражения
+
+- **WHEN** архетип задаёт масштаб модели больше единицы
+- **THEN** дисплей рисует силуэт увеличенным, а попадания и удержание в арене по-прежнему считаются
+  по радиусу поражения
 
 #### Scenario: Дисплей встречает неизвестный силуэт
 

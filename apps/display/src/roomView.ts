@@ -159,6 +159,7 @@ interface NetworkEnemyVisualState {
   shape: string;
   color: string;
   outline: string;
+  modelScale: number;
   showHealthBar: boolean;
 }
 
@@ -266,6 +267,7 @@ export function toDisplayRoomView(
               shape: entry.shape,
               color: entry.color,
               outline: entry.outline,
+              modelScale: entry.modelScale,
               showHealthBar: entry.showHealthBar
             })),
             enemyShips: toSpawnOrder(display.enemyShips),

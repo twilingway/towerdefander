@@ -18,6 +18,7 @@ import {
   type WaveSpawnEntry
 } from "@spaceship-defender/protocol";
 
+import { EnemyPreview } from "./EnemyPreview.js";
 import {
   BalanceRequestError,
   fetchBalance,
@@ -291,7 +292,7 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                 <colgroup>
                   <col className="entries__col-type" />
                   <col className="entries__col-small" />
-                  <col className="entries__col-small" />
+                  <col className="entries__col-interval" />
                   <col className="entries__col-sectors" />
                   <col className="entries__col-stat" />
                   <col className="entries__col-stat" />
@@ -347,12 +348,16 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                           <input
                             className="field__input"
                             type="number"
-                            min={1}
-                            value={entry.spawnIntervalTicks}
+                            step={TICK_SECONDS}
+                            min={TICK_SECONDS}
+                            value={ticksToSeconds(entry.spawnIntervalTicks)}
                             onChange={(event) => {
-                              patchEntry(waveIndex, entryIndex, {
-                                spawnIntervalTicks: Math.max(1, Number(event.target.value) || 1)
-                              });
+                              const next = Number(event.target.value);
+                              if (Number.isFinite(next) && next > 0) {
+                                patchEntry(waveIndex, entryIndex, {
+                                  spawnIntervalTicks: secondsToTicks(next)
+                                });
+                              }
                             }}
                           />
                         </td>
@@ -371,7 +376,7 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                               type="number"
                               step={0.1}
                               min={0}
-                              placeholder="по волне"
+                              placeholder="авто"
                               value={entry.hpMultiplier ?? ""}
                               onChange={(event) => {
                                 const raw = event.target.value;
@@ -393,7 +398,7 @@ function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                               type="number"
                               step={0.1}
                               min={0}
-                              placeholder="по волне"
+                              placeholder="авто"
                               value={entry.tempoMultiplier ?? ""}
                               onChange={(event) => {
                                 const raw = event.target.value;
@@ -593,6 +598,7 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
             shape: "arrowhead",
             color: "#7c9cf5",
             outline: "#d7e2ff",
+            modelScale: 1,
             showHealthBar: false
           },
           label: "Новый враг",
@@ -682,8 +688,10 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
         <dl className="legend__list">
           <dt>HP</dt>
           <dd>здоровье на волне 1; на следующих умножается на множитель волны</dd>
-          <dt>Радиус</dt>
-          <dd>размер корпуса: и хитбокс, и размер силуэта на экране</dd>
+          <dt>Радиус поражения</dt>
+          <dd>хитбокс: по нему считаются попадания и удержание врага в арене</dd>
+          <dt>Масштаб модели</dt>
+          <dd>во сколько раз силуэт рисуется крупнее хитбокса; на попадания не влияет</dd>
           <dt>Скорость</dt>
           <dd>единиц мира в секунду; корабль игроков делает 320</dd>
           <dt>Дистанция</dt>
@@ -779,54 +787,77 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
               ) : null}
 
               <h4 className="card__subtitle">Внешний вид</h4>
-              <div className="shapes" role="group" aria-label="Силуэт">
-                {ENEMY_SHAPES.map((shape) => (
-                  <button
-                    key={shape}
-                    type="button"
-                    className={`sectors__chip${archetype.visual.shape === shape ? " sectors__chip--on" : ""}`}
-                    aria-pressed={archetype.visual.shape === shape}
-                    onClick={() => {
-                      patchVisual(kind, { shape });
-                    }}
-                  >
-                    {SHAPE_LABELS[shape]}
-                  </button>
-                ))}
-              </div>
-              <div className="card__grid">
-                <label className="field">
-                  <span className="field__caption">Цвет корпуса</span>
-                  <input
-                    className="field__input"
-                    type="color"
-                    value={archetype.visual.color}
-                    onChange={(event) => {
-                      patchVisual(kind, { color: event.target.value });
-                    }}
-                  />
-                </label>
-                <label className="field">
-                  <span className="field__caption">Цвет обводки</span>
-                  <input
-                    className="field__input"
-                    type="color"
-                    value={archetype.visual.outline}
-                    onChange={(event) => {
-                      patchVisual(kind, { outline: event.target.value });
-                    }}
-                  />
-                </label>
-                <label className="field field--inline">
-                  <input
-                    type="checkbox"
-                    checked={archetype.visual.showHealthBar}
-                    onChange={(event) => {
-                      patchVisual(kind, { showHealthBar: event.target.checked });
-                    }}
-                  />
-                  <span className="field__caption">Полоса HP над корпусом</span>
-                </label>
+              <div className="appearance">
+                <EnemyPreview archetype={archetype} />
+                <div className="appearance__controls">
+                  <div className="shapes" role="group" aria-label="Силуэт">
+                    {ENEMY_SHAPES.map((shape) => (
+                      <button
+                        key={shape}
+                        type="button"
+                        className={`sectors__chip${archetype.visual.shape === shape ? " sectors__chip--on" : ""}`}
+                        aria-pressed={archetype.visual.shape === shape}
+                        onClick={() => {
+                          patchVisual(kind, { shape });
+                        }}
+                      >
+                        {SHAPE_LABELS[shape]}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="card__grid">
+                    <label className="field">
+                      <span className="field__caption">Цвет корпуса</span>
+                      <input
+                        className="field__input"
+                        type="color"
+                        value={archetype.visual.color}
+                        onChange={(event) => {
+                          patchVisual(kind, { color: event.target.value });
+                        }}
+                      />
+                    </label>
+                    <label className="field">
+                      <span className="field__caption">Цвет обводки</span>
+                      <input
+                        className="field__input"
+                        type="color"
+                        value={archetype.visual.outline}
+                        onChange={(event) => {
+                          patchVisual(kind, { outline: event.target.value });
+                        }}
+                      />
+                    </label>
+                    <label className="field field--inline">
+                      <input
+                        type="checkbox"
+                        checked={archetype.visual.showHealthBar}
+                        onChange={(event) => {
+                          patchVisual(kind, { showHealthBar: event.target.checked });
+                        }}
+                      />
+                      <span className="field__caption">Полоса HP над корпусом</span>
+                    </label>
+                    <NumberField
+                      caption="Радиус поражения"
+                      value={archetype.radius}
+                      onChange={(radius) => {
+                        patchArchetype(kind, { radius });
+                      }}
+                    />
+                    <NumberField
+                      caption="Масштаб модели"
+                      step={0.1}
+                      min={0.2}
+                      value={archetype.visual.modelScale}
+                      onChange={(modelScale) => {
+                        patchVisual(kind, {
+                          modelScale: Math.min(4, Math.max(0.2, modelScale))
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
 
               <h4 className="card__subtitle">Характеристики</h4>
@@ -836,13 +867,6 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                   value={archetype.hp}
                   onChange={(hp) => {
                     patchArchetype(kind, { hp });
-                  }}
-                />
-                <NumberField
-                  caption="Радиус"
-                  value={archetype.radius}
-                  onChange={(radius) => {
-                    patchArchetype(kind, { radius });
                   }}
                 />
                 <NumberField

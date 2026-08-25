@@ -113,6 +113,7 @@ function catalogueEntry(
     shape: "arrowhead",
     color: "#e65f4b",
     outline: "#ffd1b0",
+    modelScale: 1,
     showHealthBar: false,
     ...overrides
   };

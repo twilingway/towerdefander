@@ -7,9 +7,9 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 
-export const BALANCE_FILE_VERSION = 4 as const;
+export const BALANCE_FILE_VERSION = 5 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -43,6 +43,8 @@ export const enemyVisualSchema = z
     shape: enemyShapeSchema,
     color: hexColorSchema,
     outline: hexColorSchema,
+    /** Drawn size relative to the hit radius; 1 means the model matches the hitbox. */
+    modelScale: z.number().min(0.2).max(4),
     showHealthBar: z.boolean()
   })
   .strict();

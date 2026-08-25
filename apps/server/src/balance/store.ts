@@ -56,16 +56,20 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
   if (!isRecord(archetype)) return archetype;
   const known = defaults.enemyArchetypes[kind];
   const singleWeapon = archetype.weapon;
+  const visual = isRecord(archetype.visual) ? archetype.visual : undefined;
   const migrated: LegacyRecord = {
     ...archetype,
     weapons: archetype.weapons ?? (singleWeapon === undefined ? known?.weapons : [singleWeapon]),
-    visual: archetype.visual ??
-      known?.visual ?? {
-        shape: FALLBACK_ENEMY_SHAPE,
-        color: "#e65f4b",
-        outline: "#ffd1b0",
-        showHealthBar: false
-      },
+    visual:
+      visual === undefined
+        ? (known?.visual ?? {
+            shape: FALLBACK_ENEMY_SHAPE,
+            color: "#e65f4b",
+            outline: "#ffd1b0",
+            modelScale: 1,
+            showHealthBar: false
+          })
+        : { ...visual, modelScale: visual.modelScale ?? 1 },
     label: archetype.label ?? known?.label ?? kind
   };
   delete migrated.weapon;

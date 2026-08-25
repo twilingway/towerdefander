@@ -94,7 +94,7 @@ async function temporaryPresetPath(): Promise<string> {
 function tunedPresetsFile(hp: number): BalancePresetsFile {
   const tuning = createDefaultTuning();
   return {
-    version: 4,
+    version: 5,
     activePresetId: "tuned",
     presets: [
       {
@@ -269,7 +269,7 @@ describe("version 1 migration", () => {
     expect(warn).not.toHaveBeenCalled();
 
     const state = store.getState();
-    expect(state.version).toBe(4);
+    expect(state.version).toBe(5);
     expect(state.activePresetId).toBe("operator");
     const wave = state.presets[0]?.tuning.waveCampaign.waves[0];
     expect(wave?.entries.map(({ kind }) => kind)).toEqual(["interceptor", "asteroid"]);
@@ -304,7 +304,7 @@ describe("version 1 migration", () => {
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().version).toBe(4);
+    expect(store.getState().version).toBe(5);
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "boss").weapons).toHaveLength(1);
   });
 

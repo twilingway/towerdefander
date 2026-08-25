@@ -28,7 +28,13 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
         burstSpreadRadians: 0
       }
     ],
-    visual: { shape: "arrowhead", color: "#e65f4b", outline: "#ffd1b0", showHealthBar: false },
+    visual: {
+      shape: "arrowhead",
+      color: "#e65f4b",
+      outline: "#ffd1b0",
+      modelScale: 1,
+      showHealthBar: false
+    },
     label: "Test archetype",
     spawnPolicy: "standard",
     spawnCost: 2,
@@ -90,7 +96,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 4,
+    version: 5,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -268,10 +274,10 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 5 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 6 }).success).toBe(
       false
     );
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 3 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 4 }).success).toBe(
       false
     );
   });
@@ -281,7 +287,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 4,
+        version: 5,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

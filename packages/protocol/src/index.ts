@@ -545,6 +545,7 @@ export const publicEnemyCatalogueEntrySchema = z
     shape: z.enum(ENEMY_SHAPES),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     outline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    modelScale: z.number().min(0.2).max(4),
     showHealthBar: z.boolean()
   })
   .strict();

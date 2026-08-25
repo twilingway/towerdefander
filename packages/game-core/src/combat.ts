@@ -104,6 +104,8 @@ export interface EnemyVisual {
   readonly shape: EnemyShape;
   readonly color: string;
   readonly outline: string;
+  /** Drawn size relative to the hit radius; the hitbox itself never changes. */
+  readonly modelScale: number;
   readonly showHealthBar: boolean;
 }
 
@@ -473,6 +475,13 @@ function validateEnemyArchetypes(config: CombatConfig): void {
     const archetype = archetypeOf(config, kind);
     if (!ENEMY_SHAPES.includes(archetype.visual.shape)) {
       throw new RangeError(`${kind}.visual.shape is not a shape the display can draw`);
+    }
+    if (
+      !Number.isFinite(archetype.visual.modelScale) ||
+      archetype.visual.modelScale < 0.2 ||
+      archetype.visual.modelScale > 4
+    ) {
+      throw new RangeError(`${kind}.visual.modelScale must be between 0.2 and 4`);
     }
     if (archetype.label.length === 0) {
       throw new RangeError(`${kind}.label must not be empty`);

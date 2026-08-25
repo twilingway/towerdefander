@@ -487,6 +487,7 @@ const FALLBACK_ENEMY_VISUAL: PublicEnemyCatalogueEntry = {
   shape: "arrowhead",
   color: "#e65f4b",
   outline: "#ffd1b0",
+  modelScale: 1,
   showHealthBar: false
 };
 
@@ -514,7 +515,8 @@ export function drawEnemyBody(
   const draw = Object.hasOwn(ENEMY_SHAPE_DRAWERS, visual.shape)
     ? ENEMY_SHAPE_DRAWERS[visual.shape]
     : ENEMY_SHAPE_DRAWERS.arrowhead;
-  draw(body, radius);
+  // The hitbox stays at radius; only the drawn model takes the scale.
+  draw(body, radius * visual.modelScale);
 }
 
 const HEALTH_BAR_BACKGROUND = 0x2a0d16;

@@ -205,6 +205,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         shape: "arrowhead",
         color: "#e65f4b",
         outline: "#ffd1b0",
+        modelScale: 1,
         showHealthBar: false
       },
       label: "Ганшип",
@@ -237,6 +238,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         shape: "block",
         color: "#aa5bd6",
         outline: "#ffd1b0",
+        modelScale: 1,
         showHealthBar: false
       },
       label: "Ракетоносец",
@@ -269,6 +271,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         shape: "diamond",
         color: "#4bb1e6",
         outline: "#d6f0ff",
+        modelScale: 1,
         showHealthBar: false
       },
       label: "Снайпер",
@@ -301,6 +304,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         shape: "dart",
         color: "#f2c14b",
         outline: "#fff0c2",
+        modelScale: 1,
         showHealthBar: false
       },
       label: "Перехватчик",
@@ -333,6 +337,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         shape: "hexagon",
         color: "#8f2f4d",
         outline: "#ffb0c8",
+        modelScale: 1,
         showHealthBar: true
       },
       label: "Босс",
