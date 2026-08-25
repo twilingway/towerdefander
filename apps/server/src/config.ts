@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 export interface ServerConfig {
   host: string;
   port: number;
@@ -16,7 +18,10 @@ export interface ServerConfig {
 const MAX_PHASE_TTL_SECONDS = 86_400;
 const MAX_ABSOLUTE_TTL_SECONDS = 604_800;
 const MAX_STATS_PASSWORD_BYTES = 256;
-const DEFAULT_BALANCE_PRESET_PATH = "./data/balance.json";
+// Resolved against this package, not the working directory: `pnpm dev` starts
+// the server from apps/server while the visible demo starts it from the repo
+// root, and both must read the same presets.
+const DEFAULT_BALANCE_PRESET_PATH = fileURLToPath(new URL("../data/balance.json", import.meta.url));
 
 function readIntegerSeconds(
   environment: NodeJS.ProcessEnv,

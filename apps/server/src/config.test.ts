@@ -1,10 +1,14 @@
+import { isAbsolute } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { readServerConfig } from "./config.js";
 
 describe("readServerConfig", () => {
   it("uses LAN-safe defaults", () => {
-    expect(readServerConfig({})).toEqual({
+    const { balancePresetPath, ...rest } = readServerConfig({});
+    expect(balancePresetPath).toContain("balance.json");
+    expect(rest).toEqual({
       host: "0.0.0.0",
       port: 2567,
       reconnectionGraceSeconds: 30,
@@ -15,13 +19,14 @@ describe("readServerConfig", () => {
       absoluteTtlSeconds: 43_200,
       statsPassword: undefined,
       balancePassword: undefined,
-      balancePresetPath: "./data/balance.json",
       gracefullyShutdown: true
     });
   });
 
   it("accepts explicit host and port", () => {
-    expect(readServerConfig({ HOST: "127.0.0.1", PORT: "3000" })).toEqual({
+    const { balancePresetPath, ...rest } = readServerConfig({ HOST: "127.0.0.1", PORT: "3000" });
+    expect(balancePresetPath).toContain("balance.json");
+    expect(rest).toEqual({
       host: "127.0.0.1",
       port: 3000,
       reconnectionGraceSeconds: 30,
@@ -32,9 +37,20 @@ describe("readServerConfig", () => {
       absoluteTtlSeconds: 43_200,
       statsPassword: undefined,
       balancePassword: undefined,
-      balancePresetPath: "./data/balance.json",
       gracefullyShutdown: true
     });
+  });
+
+  it("resolves the preset path against the server package, not the working directory", () => {
+    const { balancePresetPath } = readServerConfig({});
+    expect(isAbsolute(balancePresetPath)).toBe(true);
+    expect(balancePresetPath.replaceAll("\\", "/")).toMatch(/apps\/server\/data\/balance\.json$/);
+  });
+
+  it("still honours an explicit BALANCE_PRESET_PATH", () => {
+    expect(readServerConfig({ BALANCE_PRESET_PATH: "/srv/balance.json" }).balancePresetPath).toBe(
+      "/srv/balance.json"
+    );
   });
 
   it.each(["0", "65536", "abc", "12.5"])("rejects invalid PORT=%s", (port) => {
