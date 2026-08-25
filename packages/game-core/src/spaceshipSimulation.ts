@@ -134,7 +134,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   fixedStepMs: 50,
   worldWidth: 4400,
   worldHeight: 4400,
-  cameraViewWidth: 1600,
+  cameraViewWidth: 2200,
   arenaRadius: 2200,
   spaceshipSpeedPerSecond: 320,
   spaceshipAccelerationPerSecondSquared: 640,

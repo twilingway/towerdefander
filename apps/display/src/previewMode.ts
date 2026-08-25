@@ -21,7 +21,7 @@ export function isPreviewMode(search: string, development: boolean): boolean {
 }
 
 /** Frame the fixtures start at; the preview slider overrides it per render. */
-export const PREVIEW_CAMERA_VIEW_WIDTH = 1600;
+export const PREVIEW_CAMERA_VIEW_WIDTH = 2200;
 
 const PREVIEW_PLAYERS = [
   {

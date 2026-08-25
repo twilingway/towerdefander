@@ -327,8 +327,8 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(7);
-    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(1600);
-    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(1600);
+    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2200);
+    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2200);
   });
 
   it("gives a version 6 weapon most of its own reach as a firing range", async () => {

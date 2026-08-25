@@ -188,7 +188,7 @@ export class EnemyVisualState extends Schema {
 }
 
 export class SpaceshipDisplayState extends Schema {
-  @type("float32") cameraViewWidth = 1600;
+  @type("float32") cameraViewWidth = 2200;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
