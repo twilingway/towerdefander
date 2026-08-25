@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Client } from "@colyseus/sdk";
@@ -23,7 +25,10 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
     ...process.env,
     HOST: "127.0.0.1",
     PORT: String(port),
-    RECONNECTION_GRACE_SECONDS: "0.25"
+    RECONNECTION_GRACE_SECONDS: "0.25",
+    // Point at a path that never exists so the run uses built-in balance
+    // defaults instead of whatever an operator saved from the console.
+    BALANCE_PRESET_PATH: join(tmpdir(), `smoke-balance-${randomUUID()}.json`)
   },
   stdio: "ignore",
   windowsHide: true

@@ -364,7 +364,10 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
       <header className="screen__header">
         <h2>Архетипы врагов</h2>
         <p className="screen__hint">
-          Стоимость спавна и волна разблокировки влияют и на таблицу волн, и на директора.
+          Стоимость спавна и волна разблокировки влияют и на таблицу волн, и на директора. Тип с
+          появлением «после зачистки волны» выходит из общего пула директора: он приходит последним
+          и только когда все остальные угрозы волны уничтожены, а сама волна выбирается интервалом
+          босс-волн.
         </p>
       </header>
 
@@ -418,6 +421,21 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                     patchArchetype(kind, { unlockWave: Math.max(1, Math.round(unlockWave)) });
                   }}
                 />
+                <label className="field">
+                  <span className="field__caption">Появление</span>
+                  <select
+                    className="field__input"
+                    value={archetype.spawnPolicy}
+                    onChange={(event) => {
+                      patchArchetype(kind, {
+                        spawnPolicy: event.target.value === "boss" ? "boss" : "standard"
+                      });
+                    }}
+                  >
+                    <option value="standard">в общем потоке волны</option>
+                    <option value="boss">после зачистки волны</option>
+                  </select>
+                </label>
                 <NumberField
                   caption="Очки"
                   value={archetype.scoreReward}

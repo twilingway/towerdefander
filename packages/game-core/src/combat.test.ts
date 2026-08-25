@@ -26,6 +26,28 @@ import {
   type ProjectileState
 } from "./index.js";
 
+/** Wave 1 is one gunship followed by the boss, so the hold-until-clear rule is observable. */
+function bossAfterEscortConfig() {
+  const base = createSpaceshipSimulationConfig();
+  return createSpaceshipSimulationConfig({
+    ambientAsteroidIntervalMinTicks: 100_000,
+    ambientAsteroidIntervalMaxTicks: 100_000,
+    waveCampaign: {
+      ...base.waveCampaign,
+      waves: [
+        {
+          entries: [
+            { kind: "gunship", count: 1, spawnIntervalTicks: 1, sector: null },
+            { kind: "boss", count: 1, spawnIntervalTicks: 1, sector: null }
+          ],
+          hpMultiplier: null,
+          tempoMultiplier: null
+        }
+      ]
+    }
+  });
+}
+
 function scriptedCampaignConfig() {
   const base = createSpaceshipSimulationConfig();
   return createSpaceshipSimulationConfig({
@@ -211,6 +233,84 @@ describe("deterministic combat foundation", () => {
     for (const wave of [10, 15, 20]) {
       expect(createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "boss")).toBe(true);
     }
+  });
+
+  it("closes the directed plan with the boss instead of shuffling it in", () => {
+    const config = createSpaceshipSimulationConfig();
+    for (const seed of [7, 91, 4242, 90_001]) {
+      const plan = createWavePlan(config, seed, 10).plan;
+      expect(plan.filter(({ kind }) => kind === "boss")).toHaveLength(1);
+      expect(plan[plan.length - 1]?.kind).toBe("boss");
+    }
+  });
+
+  it("holds the boss while wave threats are still alive", () => {
+    const config = bossAfterEscortConfig();
+    let state = createSpaceshipSimulationState(config, 21);
+    for (let step = 0; step < 40; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    expect(state.enemies.map(({ kind }) => kind)).toEqual(["gunship"]);
+    expect(state.pendingSpawns.map(({ kind }) => kind)).toEqual(["boss"]);
+    expect(state.encounterPhase).toBe("combat");
+  });
+
+  it("releases the boss once the wave is cleared", () => {
+    const config = bossAfterEscortConfig();
+    let state = createSpaceshipSimulationState(config, 21);
+    for (let step = 0; step < 10; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    expect(state.pendingSpawns.map(({ kind }) => kind)).toEqual(["boss"]);
+    state = advanceSpaceshipSimulation({ ...state, enemies: [], asteroids: [] }, config);
+    expect(state.enemies.map(({ kind }) => kind)).toEqual(["boss"]);
+    expect(state.pendingSpawns).toHaveLength(0);
+  });
+
+  it("lets an ambient asteroid coexist with the boss release", () => {
+    const config = bossAfterEscortConfig();
+    let state = createSpaceshipSimulationState(config, 21);
+    for (let step = 0; step < 10; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    const drifting: AsteroidState = {
+      id: "ambient-1",
+      spawnSequence: 900,
+      origin: "ambient",
+      previousX: config.worldWidth / 2 + 900,
+      previousY: config.worldHeight / 2,
+      x: config.worldWidth / 2 + 900,
+      y: config.worldHeight / 2,
+      velocity: { x: 0, y: 0 },
+      radius: config.asteroidRadius,
+      spawnedTick: 0,
+      hp: config.asteroidHp,
+      maxHp: config.asteroidHp,
+      damage: config.asteroidDamage
+    };
+    const released = advanceSpaceshipSimulation(
+      { ...state, enemies: [], asteroids: [drifting] },
+      config
+    );
+    expect(released.enemies.map(({ kind }) => kind)).toEqual(["boss"]);
+
+    const blocked = advanceSpaceshipSimulation(
+      { ...state, enemies: [], asteroids: [{ ...drifting, origin: "wave" }] },
+      config
+    );
+    expect(blocked.enemies).toHaveLength(0);
+    expect(blocked.pendingSpawns.map(({ kind }) => kind)).toEqual(["boss"]);
+  });
+
+  it("keeps the wave in combat while the boss is still queued", () => {
+    const config = bossAfterEscortConfig();
+    let state = createSpaceshipSimulationState(config, 21);
+    for (let step = 0; step < 10; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    const stillQueued = { ...state, enemies: [], asteroids: [] };
+    expect(stillQueued.pendingSpawns.map(({ kind }) => kind)).toEqual(["boss"]);
+    expect(advanceSpaceshipSimulation(stillQueued, config).encounterPhase).toBe("combat");
   });
 
   it("never picks a boss as ordinary director filler", () => {

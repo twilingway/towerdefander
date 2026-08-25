@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const isWindows = process.platform === "win32";
 const packageRunner = isWindows ? "pnpm.cmd" : "pnpm";
@@ -13,7 +16,10 @@ try {
       HOST: "127.0.0.1",
       PORT: String(serverPort),
       GRACEFUL_SHUTDOWN: "false",
-      RECONNECTION_GRACE_SECONDS: "2"
+      RECONNECTION_GRACE_SECONDS: "2",
+      // Point at a path that never exists so the run uses built-in balance
+      // defaults instead of whatever an operator saved from the console.
+      BALANCE_PRESET_PATH: join(tmpdir(), `e2e-balance-${randomUUID()}.json`)
     }),
     startProcess(
       "node",

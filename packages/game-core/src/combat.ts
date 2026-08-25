@@ -572,6 +572,28 @@ function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSpawn[] {
   return plan;
 }
 
+function findBossKindForWave(config: CombatConfig, waveNumber: number): EnemyKind | undefined {
+  const interval = config.waveCampaign.director.bossWaveInterval;
+  if (interval === null || waveNumber % interval !== 0) return undefined;
+  return ENEMY_KINDS.find(
+    (kind) =>
+      config.enemyArchetypes[kind].spawnPolicy === "boss" &&
+      waveNumber >= config.enemyArchetypes[kind].unlockWave
+  );
+}
+
+/** A boss holds its slot until the rest of the wave is destroyed. */
+function waitsForClearedWave(config: CombatConfig, kind: SpawnKind): boolean {
+  return kind !== "asteroid" && config.enemyArchetypes[kind].spawnPolicy === "boss";
+}
+
+function hasLiveWaveThreats(
+  enemies: readonly CombatEnemyState[],
+  asteroids: readonly AsteroidState[]
+): boolean {
+  return enemies.length > 0 || asteroids.some(({ origin }) => origin === "wave");
+}
+
 function createDirectedWavePlan(
   config: CombatConfig,
   waveNumber: number,
@@ -590,17 +612,6 @@ function createDirectedWavePlan(
   if (anchor !== undefined && remaining >= spawnCostOf(anchor)) {
     kinds.push(anchor);
     remaining -= spawnCostOf(anchor);
-  }
-  const bossInterval = config.waveCampaign.director.bossWaveInterval;
-  if (bossInterval !== null && waveNumber % bossInterval === 0) {
-    const boss = ENEMY_KINDS.find(
-      (kind) =>
-        config.enemyArchetypes[kind].spawnPolicy === "boss" &&
-        waveNumber >= config.enemyArchetypes[kind].unlockWave
-    );
-    if (boss !== undefined) {
-      kinds.push(boss);
-    }
   }
   while (remaining > 0) {
     const [afterPick, pick] = nextUint32(rngState);
@@ -624,6 +635,11 @@ function createDirectedWavePlan(
       kinds[index] = swap;
       kinds[swapIndex] = current;
     }
+  }
+  // Appended after the shuffle so the boss always closes the wave.
+  const boss = findBossKindForWave(config, waveNumber);
+  if (boss !== undefined) {
+    kinds.push(boss);
   }
   return {
     plan: kinds.map((kind, planSequence) => ({
@@ -1059,7 +1075,8 @@ function moveAndSpawnThreats(
     const pending = pendingSpawns[0];
     if (
       pending !== undefined &&
-      canSpawnKind(config, pending.kind, enemies, asteroids, workingDynamicCount)
+      canSpawnKind(config, pending.kind, enemies, asteroids, workingDynamicCount) &&
+      !(waitsForClearedWave(config, pending.kind) && hasLiveWaveThreats(enemies, asteroids))
     ) {
       const result = spawnEntity(
         pending.kind,
