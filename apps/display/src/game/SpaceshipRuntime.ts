@@ -362,17 +362,17 @@ class SpaceshipScene extends Phaser.Scene {
       container.add([rock, crater]);
     } else if (entity.visualKind === "missile") {
       const body = this.add.rectangle(0, 0, entity.radius * 3.2, entity.radius * 1.3, 0xff704d);
-      const trail = this.add.triangle(
-        -entity.radius * 2.2,
+      // Graphics keeps the plume on the missile axis; a Triangle would centre
+      // itself on its bounding box and drift the flame sideways.
+      const trail = this.add.graphics();
+      trail.fillStyle(0xffd36f, 0.8);
+      trail.fillTriangle(
+        -entity.radius * 2.9,
         0,
-        0,
-        0,
-        entity.radius,
-        -entity.radius,
-        entity.radius,
-        entity.radius,
-        0xffd36f,
-        0.8
+        -entity.radius * 1.6,
+        -entity.radius * 0.65,
+        -entity.radius * 1.6,
+        entity.radius * 0.65
       );
       container.add([trail, body]);
     } else {
