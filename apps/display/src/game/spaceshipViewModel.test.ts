@@ -8,6 +8,7 @@ import {
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
+  getShieldDashSegments,
   getShieldVisualStyle,
   getTimelineAlpha,
   interpolateAngle,
@@ -120,8 +121,66 @@ describe("spaceship view model", () => {
   });
 
   it("uses distinct active and inactive shield styles", () => {
-    expect(getShieldVisualStyle(true)).toEqual({ lineWidth: 16, color: 0x65baff, alpha: 0.9 });
-    expect(getShieldVisualStyle(false)).toEqual({ lineWidth: 6, color: 0x6f91a4, alpha: 0.35 });
+    expect(getShieldVisualStyle(true)).toEqual({
+      lineWidth: 16,
+      color: 0x65baff,
+      alpha: 0.9,
+      dash: null
+    });
+    expect(getShieldVisualStyle(false)).toEqual({
+      lineWidth: 6,
+      color: 0x6f91a4,
+      alpha: 0.35,
+      dash: { lengthPx: 16, gapPx: 12 }
+    });
+  });
+
+  it("dashes the inactive arc without moving the sector it covers", () => {
+    const dash = { lengthPx: 16, gapPx: 12 };
+    // Chosen so the final dash would run past the sector if it were not clipped:
+    // the sweep is not a whole number of dash-and-gap periods.
+    const start = 0.3;
+    const end = 1.65;
+    const segments = getShieldDashSegments(start, end, 104, dash);
+
+    expect(segments.length).toBeGreaterThan(1);
+    expect(segments[0]?.start).toBeCloseTo(start);
+    expect(Math.max(...segments.map((segment) => segment.end))).toBeLessThanOrEqual(end + 1e-9);
+    // The last dash ends exactly on the sector edge because it was clipped there.
+    expect(segments.at(-1)?.end).toBeCloseTo(end);
+    expect(segments.at(-1)?.end).toBeLessThan((segments.at(-1)?.start ?? 0) + 16 / 104);
+    for (const segment of segments) {
+      expect(segment.end).toBeGreaterThan(segment.start);
+      expect(segment.start).toBeGreaterThanOrEqual(start);
+    }
+  });
+
+  it("leaves a gap between dashes proportional to the shield radius", () => {
+    const dash = { lengthPx: 16, gapPx: 12 };
+    const near = getShieldDashSegments(0, 1.8, 104, dash);
+    const far = getShieldDashSegments(0, 1.8, 208, dash);
+
+    // Same world-unit dash on a bigger circle covers less angle, so a wider
+    // shield gets more strokes rather than longer ones.
+    expect(far.length).toBeGreaterThan(near.length);
+    const firstNear = near[0];
+    const firstFar = far[0];
+    if (firstNear === undefined || firstFar === undefined) throw new Error("Expected dashes.");
+    expect(firstNear.end - firstNear.start).toBeCloseTo(16 / 104);
+    expect(firstFar.end - firstFar.start).toBeCloseTo(16 / 208);
+  });
+
+  it("falls back to one stroke when a dash covers the whole sector", () => {
+    expect(getShieldDashSegments(0, 0.1, 104, { lengthPx: 200, gapPx: 12 })).toEqual([
+      { start: 0, end: 0.1 }
+    ]);
+  });
+
+  it("draws nothing for a degenerate arc or radius", () => {
+    const dash = { lengthPx: 16, gapPx: 12 };
+    expect(getShieldDashSegments(0.3, 0.3, 104, dash)).toEqual([]);
+    expect(getShieldDashSegments(0.3, 2.1, 0, dash)).toEqual([]);
+    expect(getShieldDashSegments(0.3, 2.1, 104, { lengthPx: 0, gapPx: 12 })).toEqual([]);
   });
 
   it("uses the authoritative upgraded shield half-angle", () => {

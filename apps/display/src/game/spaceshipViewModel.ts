@@ -33,10 +33,18 @@ export interface ResponsiveViewport {
   readonly height: number;
 }
 
+export interface ShieldDash {
+  /** Along the arc, in world units at the shield radius. */
+  readonly lengthPx: number;
+  readonly gapPx: number;
+}
+
 export interface ShieldVisualStyle {
   readonly lineWidth: number;
   readonly color: number;
   readonly alpha: number;
+  /** Null draws one solid arc; a dash splits it into strokes. */
+  readonly dash: ShieldDash | null;
 }
 
 export interface GridSegment {
@@ -133,8 +141,41 @@ export function getResponsiveViewport(
 
 export function getShieldVisualStyle(active: boolean): ShieldVisualStyle {
   return active
-    ? { lineWidth: 16, color: 0x65baff, alpha: 0.9 }
-    : { lineWidth: 6, color: 0x6f91a4, alpha: 0.35 };
+    ? { lineWidth: 16, color: 0x65baff, alpha: 0.9, dash: null }
+    : { lineWidth: 6, color: 0x6f91a4, alpha: 0.35, dash: { lengthPx: 16, gapPx: 12 } };
+}
+
+export interface ShieldArcSegment {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Splits a shield arc into dashes. Phaser Graphics strokes solid lines only, so
+ * the dashing is geometry rather than a line style. The sector keeps its own
+ * ends: the first dash starts at `start` and the last one is clipped at `end`
+ * rather than allowed to overshoot it.
+ */
+export function getShieldDashSegments(
+  start: number,
+  end: number,
+  radius: number,
+  dash: ShieldDash
+): readonly ShieldArcSegment[] {
+  const sweep = end - start;
+  const period = dash.lengthPx + dash.gapPx;
+  if (!(radius > 0) || !(sweep > 0) || !(dash.lengthPx > 0) || !(period > 0)) return [];
+
+  const dashAngle = dash.lengthPx / radius;
+  const periodAngle = period / radius;
+  // A dash longer than the whole sector degenerates to the solid arc.
+  if (dashAngle >= sweep) return [{ start, end }];
+
+  const segments: ShieldArcSegment[] = [];
+  for (let offset = 0; offset < sweep; offset += periodAngle) {
+    segments.push({ start: start + offset, end: Math.min(end, start + offset + dashAngle) });
+  }
+  return segments;
 }
 
 export function getCameraOverscan(

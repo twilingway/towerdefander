@@ -22,6 +22,7 @@ import {
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
+  getShieldDashSegments,
   getShieldVisualStyle,
   getTimelineAlpha,
   interpolateAngle,
@@ -61,6 +62,7 @@ class SpaceshipScene extends Phaser.Scene {
   private noseMarker: Phaser.GameObjects.Graphics | undefined;
   private turret: Phaser.GameObjects.Rectangle | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
+  private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
   private spaceshipTransition: PointTransition;
   private headingTransition: AngleTransition;
@@ -118,6 +120,7 @@ class SpaceshipScene extends Phaser.Scene {
       .setDepth(12)
       .setRotation(this.snapshot.turretAngle);
     this.shield = this.add.graphics().setDepth(14);
+    this.shieldGlow = attachShieldGlow(this.shield);
     const now = performance.now();
     this.snapToSnapshot(this.snapshot, now);
     this.drawShield();
@@ -249,11 +252,21 @@ class SpaceshipScene extends Phaser.Scene {
     this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
     const style = getShieldVisualStyle(this.snapshot.shield.active);
     const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
-    this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
-    this.shield.beginPath();
     // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
-    this.shield.arc(0, 0, this.snapshot.shieldRadius, arc.start, arc.end, false);
-    this.shield.strokePath();
+    const radius = this.snapshot.shieldRadius;
+    this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
+    if (style.dash === null) {
+      this.shield.beginPath();
+      this.shield.arc(0, 0, radius, arc.start, arc.end, false);
+      this.shield.strokePath();
+    } else {
+      for (const segment of getShieldDashSegments(arc.start, arc.end, radius, style.dash)) {
+        this.shield.beginPath();
+        this.shield.arc(0, 0, radius, segment.start, segment.end, false);
+        this.shield.strokePath();
+      }
+    }
+    if (this.shieldGlow !== undefined) this.shieldGlow.active = this.snapshot.shield.active;
   }
 
   private snapToSnapshot(snapshot: DisplayGameSnapshot, now: number): void {
@@ -446,6 +459,23 @@ export function resolveEnemyVisual(
   kind: string
 ): PublicEnemyCatalogueEntry {
   return catalogue.find((entry) => entry.kind === kind) ?? FALLBACK_ENEMY_VISUAL;
+}
+
+const SHIELD_GLOW_COLOR = 0x65baff;
+const SHIELD_GLOW_OUTER_STRENGTH = 6;
+
+/**
+ * `Phaser.AUTO` can settle on a renderer with no filter support, and then the
+ * game object never gets a filter list. The arc still has to be drawn, so the
+ * glow is treated as an enhancement that may simply be unavailable.
+ */
+function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.Glow | undefined {
+  shield.enableFilters();
+  const filters = shield.filters;
+  if (filters === null) return undefined;
+  const glow = filters.external.addGlow(SHIELD_GLOW_COLOR, SHIELD_GLOW_OUTER_STRENGTH);
+  glow.active = false;
+  return glow;
 }
 
 /**
