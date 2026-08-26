@@ -7,9 +7,9 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 12 as const;
+export const BALANCE_FILE_VERSION = 13 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -292,6 +292,10 @@ export const balanceTuningSchema = z
     turretAngularAccelerationPerSecondSquared: positiveFinite,
     turretAngularBrakingPerSecondSquared: positiveFinite,
 
+    /** Look of the cannon shot; null keeps the display's own primitive. */
+    projectileVisual: entityVisualSchema,
+    /** The gun itself, drawn over the hull and turning with the turret. */
+    turretVisual: entityVisualSchema,
     /** The cannon runs hot too, so picking targets can beat firing at all of them. */
     cannonHeatCapacity: positiveFinite,
     cannonHeatPerShot: positiveFinite,
@@ -304,6 +308,8 @@ export const balanceTuningSchema = z
     mgFireCooldownTicks: positiveInteger,
     mgProjectileSpeedPerSecond: positiveFinite,
     mgProjectileRadius: positiveFinite,
+    /** Look of the nose gun's shot; null keeps the display's own primitive. */
+    mgProjectileVisual: entityVisualSchema,
     mgHeatCapacity: positiveFinite,
     mgHeatPerShot: positiveFinite,
     mgCoolingPerSecond: nonNegativeFinite,

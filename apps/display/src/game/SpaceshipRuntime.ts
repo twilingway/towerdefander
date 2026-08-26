@@ -61,7 +61,7 @@ class SpaceshipScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
   private spaceshipBody: Phaser.GameObjects.Graphics | undefined;
   private noseMarker: Phaser.GameObjects.Graphics | undefined;
-  private turret: Phaser.GameObjects.Rectangle | undefined;
+  private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
   private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
@@ -115,11 +115,7 @@ class SpaceshipScene extends Phaser.Scene {
       .setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y)
       .setRotation(this.snapshot.spaceship.heading);
 
-    this.turret = this.add
-      .rectangle(this.snapshot.spaceship.x, this.snapshot.spaceship.y, 92, 16, 0xffd36f)
-      .setOrigin(0.16, 0.5)
-      .setDepth(12)
-      .setRotation(this.snapshot.turretAngle);
+    this.turret = createTurret(this, this.snapshot);
     this.shield = this.add.graphics().setDepth(14);
     this.shieldGlow = attachShieldGlow(this.shield);
     const now = performance.now();
@@ -505,6 +501,31 @@ function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.G
  * The hull look travels with the preset, so an unknown id falls back the same
  * way an enemy silhouette does rather than leaving the ship invisible.
  */
+/** What the scene needs from the turret, whichever shape it ends up being. */
+type TurretObject = Phaser.GameObjects.Components.Transform &
+  Phaser.GameObjects.GameObject & { rotation: number };
+
+/**
+ * The gun sits on top of the hull and turns with the turret angle. A chosen
+ * asset is drawn centred on the ship, since that is where the mount is; without
+ * one the old bar keeps its off-centre pivot so it still reads as a barrel.
+ */
+function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): TurretObject {
+  const visual = snapshot.turretVisual;
+  if (visual === null) {
+    return scene.add
+      .rectangle(snapshot.spaceship.x, snapshot.spaceship.y, 92, 16, 0xffd36f)
+      .setOrigin(0.16, 0.5)
+      .setDepth(12)
+      .setRotation(snapshot.turretAngle);
+  }
+
+  const gun = scene.add.graphics().setDepth(12);
+  drawCatalogAssetById(gun, visual.shape, snapshot.spaceship.radius * visual.modelScale);
+  gun.setPosition(snapshot.spaceship.x, snapshot.spaceship.y).setRotation(snapshot.turretAngle);
+  return gun;
+}
+
 export function drawSpaceshipHull(
   body: Phaser.GameObjects.Graphics,
   snapshot: Pick<DisplayGameSnapshot, "spaceship" | "spaceshipVisual">

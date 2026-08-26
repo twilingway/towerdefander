@@ -14,6 +14,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState,
   type HomingMissileState as CoreHomingMissileState,
+  type EntityVisual,
   type HostileProjectileState,
   type ProjectileState as CoreProjectileState,
   type RoleModifiers,
@@ -650,6 +651,8 @@ export class SpaceshipDefenderRoom extends Room<{
     display.asteroidVisualScale = this.gameConfig.asteroidVisual?.modelScale ?? 1;
     display.spaceshipVisualShape = this.gameConfig.spaceshipVisual?.shape ?? "";
     display.spaceshipVisualScale = this.gameConfig.spaceshipVisual?.modelScale ?? 1;
+    display.turretVisualShape = this.gameConfig.turretVisual?.shape ?? "";
+    display.turretVisualScale = this.gameConfig.turretVisual?.modelScale ?? 1;
     display.shieldRadius = this.gameConfig.shieldRadius;
     const catalogue = display.enemyCatalogue;
     catalogue.clear();
@@ -748,7 +751,15 @@ export class SpaceshipDefenderRoom extends Room<{
       game.projectiles,
       () => new ProjectileState(),
       (state, projectile) => {
-        syncProjectile(state, projectile, "friendly");
+        // Each barrel gets its own look, so a burst reads as two weapons.
+        syncProjectile(
+          state,
+          projectile,
+          "friendly",
+          projectile.source === "machineGun"
+            ? this.gameConfig.mgProjectileVisual
+            : this.gameConfig.projectileVisual
+        );
       }
     );
     reconcileKeyed(
@@ -1232,7 +1243,8 @@ function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
 function syncProjectile(
   target: ProjectileState,
   source: CoreProjectileState | HostileProjectileState,
-  kind: "friendly" | "hostile"
+  kind: "friendly" | "hostile",
+  friendlyVisual: EntityVisual | null = null
 ): void {
   target.entityId = source.id;
   target.spawnSequence = source.spawnSequence;
@@ -1244,7 +1256,7 @@ function syncProjectile(
   target.radius = source.radius;
   target.source = kind === "friendly" ? (source as CoreProjectileState).source : "";
   // Set once at spawn: the value never changes, so it costs nothing per tick.
-  const visual = kind === "hostile" ? (source as HostileProjectileState).visual : null;
+  const visual = kind === "hostile" ? (source as HostileProjectileState).visual : friendlyVisual;
   target.visualShape = visual?.shape ?? "";
   target.visualScale = visual?.modelScale ?? 1;
 }

@@ -159,6 +159,8 @@ interface NetworkGameState {
     asteroidVisualScale?: number;
     spaceshipVisualShape?: string;
     spaceshipVisualScale?: number;
+    turretVisualShape?: string;
+    turretVisualScale?: number;
     shieldRadius?: number;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
@@ -286,6 +288,7 @@ export function toDisplayRoomView(
               display.spaceshipVisualShape,
               display.spaceshipVisualScale
             ),
+            turretVisual: toEntityVisual(display.turretVisualShape, display.turretVisualScale),
             shieldRadius: display.shieldRadius ?? game.spaceship.radius,
             enemyCatalogue: [...display.enemyCatalogue.values()].map((entry) => ({
               kind: entry.kind,

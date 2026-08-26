@@ -1546,6 +1546,96 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
                 }}
               />
             </div>
+            <AssetPicker
+              label="Пушка на корпусе"
+              value={tuning.turretVisual?.shape ?? null}
+              categories={["weapon", "drone"]}
+              allowNone
+              onChange={(shape) => {
+                patch({
+                  turretVisual:
+                    shape === null
+                      ? null
+                      : { shape, modelScale: tuning.turretVisual?.modelScale ?? 1 }
+                });
+              }}
+            />
+            <div className="card__grid">
+              <NumberField
+                caption="Масштаб модели"
+                step={0.1}
+                min={0.2}
+                value={tuning.turretVisual?.modelScale ?? 1}
+                onChange={(modelScale) => {
+                  patch({ turretVisual: scaleEntityVisual(tuning.turretVisual, modelScale) });
+                }}
+              />
+            </div>
+            <p className="screen__hint">
+              Рисуется поверх корпуса по центру и поворачивается вместе с орудием. Без выбора
+              остаётся прежний ствол-планка.
+            </p>
+            <AssetPicker
+              label="Снаряд пушки"
+              value={tuning.projectileVisual?.shape ?? null}
+              categories={["missile", "weapon"]}
+              allowNone
+              onChange={(shape) => {
+                patch({
+                  projectileVisual:
+                    shape === null
+                      ? null
+                      : { shape, modelScale: tuning.projectileVisual?.modelScale ?? 1 }
+                });
+              }}
+            />
+            <div className="card__grid">
+              <NumberField
+                caption="Масштаб модели"
+                step={0.1}
+                min={0.2}
+                value={tuning.projectileVisual?.modelScale ?? 1}
+                onChange={(modelScale) => {
+                  patch({
+                    projectileVisual: scaleEntityVisual(tuning.projectileVisual, modelScale)
+                  });
+                }}
+              />
+            </div>
+            <p className="screen__hint">
+              Внешний вид выстрела орудия наводчика. Без выбора — точка по умолчанию.
+            </p>
+            <AssetPicker
+              label="Снаряд пулемёта"
+              value={tuning.mgProjectileVisual?.shape ?? null}
+              categories={["missile", "weapon"]}
+              allowNone
+              onChange={(shape) => {
+                patch({
+                  mgProjectileVisual:
+                    shape === null
+                      ? null
+                      : { shape, modelScale: tuning.mgProjectileVisual?.modelScale ?? 1 }
+                });
+              }}
+            />
+            <div className="card__grid">
+              <NumberField
+                caption="Масштаб модели"
+                step={0.1}
+                min={0.2}
+                value={tuning.mgProjectileVisual?.modelScale ?? 1}
+                onChange={(modelScale) => {
+                  patch({
+                    mgProjectileVisual: scaleEntityVisual(tuning.mgProjectileVisual, modelScale)
+                  });
+                }}
+              />
+            </div>
+            <p className="screen__hint">
+              Внешний вид выстрела носового пулемёта; отличайте его от снаряда пушки, чтобы очередь
+              читалась.
+            </p>
             <p className="screen__hint">
               Без выбора корабль рисуется силуэтом по умолчанию. Масштаб меняет только рисунок,
               радиус поражения остаётся своим.

@@ -143,6 +143,7 @@ const testGame = {
   enemyCatalogue: [],
   asteroidVisual: null,
   spaceshipVisual: null,
+  turretVisual: null,
   shieldRadius: 104,
   obstacles: [],
   enemyShips: [],

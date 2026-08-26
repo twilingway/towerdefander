@@ -25,6 +25,11 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
   const hullRadius = tuning.spaceshipRadius * factor;
   const shieldRadius = tuning.shieldRadius * factor;
   const modelRadius = hullRadius * (visual?.modelScale ?? 1);
+  // The gun sits on the hull in the game, so it has to sit on it here too:
+  // picking one and seeing nothing change is indistinguishable from a bug.
+  const turret = tuning.turretVisual;
+  const turretAsset = turret === null ? undefined : getVisualAsset(turret.shape);
+  const turretRadius = hullRadius * (turret?.modelScale ?? 1);
 
   return (
     <figure className="preview">
@@ -32,9 +37,16 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
         className="preview__canvas"
         viewBox={`0 0 ${String(BOX)} ${String(BOX)}`}
         role="img"
-        aria-label={`Корпус игрока: ${asset.name}`}
+        aria-label={
+          turretAsset === undefined
+            ? `Корпус игрока: ${asset.name}`
+            : `Корпус игрока: ${asset.name}, орудие: ${turretAsset.name}`
+        }
       >
         <CatalogAssetShape asset={asset} radius={modelRadius} center={CENTER} />
+        {turretAsset !== undefined && (
+          <CatalogAssetShape asset={turretAsset} radius={turretRadius} center={CENTER} />
+        )}
         <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={hullRadius} />
         <path
           className="preview__shield"
@@ -52,6 +64,9 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
         <span className="preview__row preview__row--model">
           модель {modelWorldRadius(tuning.spaceshipRadius, visual?.modelScale ?? 1)}
         </span>
+        {turretAsset !== undefined && (
+          <span className="preview__row preview__row--model">орудие {turretAsset.name}</span>
+        )}
         <span className="preview__key">дуга — сектор щита на его собственном радиусе</span>
       </figcaption>
     </figure>

@@ -202,6 +202,8 @@ export class SpaceshipDisplayState extends Schema {
   /** Empty means the display draws its own default hull silhouette. */
   @type("string") spaceshipVisualShape = "";
   @type("float32") spaceshipVisualScale = 1;
+  @type("string") turretVisualShape = "";
+  @type("float32") turretVisualScale = 1;
   /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
   @type("float32") shieldRadius = 104;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();

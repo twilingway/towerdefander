@@ -62,6 +62,9 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    * costs nothing, so firing at everything strictly beats picking targets and
    * no amount of gunnery skill can be worth anything.
    */
+  readonly projectileVisual: EntityVisual | null;
+  readonly turretVisual: EntityVisual | null;
+  readonly mgProjectileVisual: EntityVisual | null;
   readonly cannonHeatCapacity: number;
   readonly cannonHeatPerShot: number;
   readonly cannonCoolingPerSecond: number;
@@ -179,6 +182,9 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   mgDamage: 8,
   mgProjectileSpeedPerSecond: 900,
   mgProjectileRadius: 5,
+  projectileVisual: null,
+  turretVisual: null,
+  mgProjectileVisual: null,
   cannonHeatCapacity: 100,
   cannonHeatPerShot: 16,
   cannonCoolingPerSecond: 22,

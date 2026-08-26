@@ -608,6 +608,66 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
+  it("carries the weapon looks into the simulation config", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const document = {
+      version: BALANCE_FILE_VERSION,
+      activePresetId: "operator",
+      presets: [
+        {
+          id: "operator",
+          name: "Operator",
+          tuning: {
+            ...defaults,
+            turretVisual: { shape: "weapon-gatling", modelScale: 1.4 },
+            projectileVisual: { shape: "missile-torpedo", modelScale: 0.8 },
+            mgProjectileVisual: { shape: "missile-needle", modelScale: 0.5 }
+          }
+        }
+      ]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const config = store.getActiveSimulationConfig();
+    expect(config.turretVisual?.shape).toBe("weapon-gatling");
+    // The two barrels keep separate looks, which is the point: a burst has to
+    // read as two weapons rather than one.
+    expect(config.projectileVisual?.shape).toBe("missile-torpedo");
+    expect(config.mgProjectileVisual?.shape).toBe("missile-needle");
+    expect(config.mgProjectileVisual?.modelScale).toBe(0.5);
+  });
+
+  it("gives a preset from before the weapon looks the default of none", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const dated: Record<string, unknown> = { ...defaults };
+    delete dated.turretVisual;
+    delete dated.projectileVisual;
+    delete dated.mgProjectileVisual;
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 12,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning: dated }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getActiveTuning().turretVisual).toBeNull();
+    expect(store.getActiveTuning().projectileVisual).toBeNull();
+    expect(store.getActiveTuning().mgProjectileVisual).toBeNull();
+  });
+
   it("keeps a campaign when a saved profile predates a new profile knob", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
