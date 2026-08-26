@@ -1,3 +1,5 @@
+import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
+
 const TURN_MS = 18_000;
 
 export function pilotVector(elapsedMs) {
@@ -69,6 +71,10 @@ const MAX_EXTRAPOLATION_SECONDS = 0.2;
 const STANDOFF_BAND = 0.15;
 /** Fraction of the arena radius past which the orbit turns back inward. */
 const RIM_FRACTION = 0.8;
+/** Inside this fraction of the arena the search sweeps instead of closing in. */
+const SEARCH_CENTRE_FRACTION = 0.35;
+/** Share of the frame's short side the stand-off ring may occupy. */
+const STANDOFF_FRAME_FRACTION = 0.8;
 
 const ZERO_VECTOR = { x: 0, y: 0 };
 
@@ -196,6 +202,18 @@ export function extrapolateWorld(world, nowMs) {
   };
 }
 
+/**
+ * Already past the rim and still heading out. Enemies are held inside the
+ * arena by the simulation, but asteroids drift through it and then despawn, so
+ * one that is on its way out is not worth a shot or a turret traverse.
+ */
+function isLeavingArena(world, entity) {
+  const offsetX = entity.x - world.worldWidth / 2;
+  const offsetY = entity.y - world.worldHeight / 2;
+  if (Math.hypot(offsetX, offsetY) <= world.arenaRadius) return false;
+  return offsetX * entity.velocityX + offsetY * entity.velocityY >= 0;
+}
+
 function maxEngagementRange(archetype) {
   return archetype.weapons.reduce((widest, weapon) => Math.max(widest, weapon.engagementRange), 0);
 }
@@ -234,6 +252,7 @@ export function rankTargets(world, options = {}) {
   }
 
   for (const rock of world.asteroids) {
+    if (isLeavingArena(world, rock)) continue;
     const seconds = timeToContact(world.ship, world.shieldRadius, rock);
     scored.push({
       entity: rock,
@@ -418,7 +437,54 @@ function escapeVector(world, profile) {
     : right;
 }
 
+/**
+ * Bearing back along the course of the nearest shot crossing the screen. A
+ * sniper reaches almost three times further than the camera frames and a boss
+ * launches from beyond it too, so their shots are the only evidence of them
+ * the bot ever gets. Walking one back points at whatever fired it.
+ */
+export function huntVector(world) {
+  let nearest;
+  for (const shot of [...world.bullets, ...world.missiles]) {
+    if (Math.hypot(shot.velocityX, shot.velocityY) <= Number.EPSILON) continue;
+    const distance = distanceBetween(world.ship, shot);
+    if (nearest !== undefined && distance >= nearest.distance) continue;
+    nearest = { distance, bearing: Math.atan2(-shot.velocityY, -shot.velocityX) };
+  }
+  return nearest === undefined ? undefined : bearingVector(nearest.bearing);
+}
+
+/**
+ * Nothing worth shooting is on screen. Standing still is the one thing the bot
+ * must not do here: several archetypes out-range the camera frame, so parking
+ * means being shot to pieces by something that never comes into view. Incoming
+ * fire is visible even when its owner is not, so the bot walks the shots back
+ * to their source; with the screen truly empty it heads for the middle of the
+ * arena and sweeps there, which is where the frame covers the most ground.
+ */
+function searchVector(world, memory) {
+  const inwardX = world.worldWidth / 2 - world.ship.x;
+  const inwardY = world.worldHeight / 2 - world.ship.y;
+  if (Math.hypot(inwardX, inwardY) > world.arenaRadius * SEARCH_CENTRE_FRACTION) {
+    return normalize({ x: inwardX, y: inwardY });
+  }
+  const inward = normalize({ x: inwardX, y: inwardY });
+  return { x: -inward.y * memory.orbitSign, y: inward.x * memory.orbitSign };
+}
+
+/**
+ * The ring the pilot actually holds. A ring wider than the camera frames
+ * pushes the target off the screen, and what the bot cannot see it drops, so
+ * the operator's number is capped by what a viewer has in front of them. The
+ * frame's short side is its height, so that is what bounds it.
+ */
+export function effectiveStandoff(world, profile) {
+  const halfHeight = (world.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2;
+  return Math.min(profile.standoffDistance, halfHeight * STANDOFF_FRAME_FRACTION);
+}
+
 function orbitVector(world, target, profile, memory, distance) {
+  const standoff = effectiveStandoff(world, profile);
   const radial = normalize({ x: target.x - world.ship.x, y: target.y - world.ship.y });
   let tangential = { x: -radial.y * memory.orbitSign, y: radial.x * memory.orbitSign };
 
@@ -434,10 +500,7 @@ function orbitVector(world, target, profile, memory, distance) {
   }
 
   // Positive closes the range, negative opens it; the rest goes sideways.
-  const closing = Math.max(
-    -1,
-    Math.min(1, (distance - profile.standoffDistance) / profile.standoffDistance)
-  );
+  const closing = Math.max(-1, Math.min(1, (distance - standoff) / standoff));
   const sideways = 1 - Math.abs(closing);
   return normalize({
     x: radial.x * closing + tangential.x * sideways,
@@ -453,17 +516,17 @@ function orbitVector(world, target, profile, memory, distance) {
  */
 export function planPilot(world, profile, memory, options = {}) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
-  const target = commitTarget(rankTargets(world, options), profile, memory, nowMs);
+  const ranked = rankTargets(world, options);
+  const target = commitTarget(ranked, profile, memory, nowMs);
   const escape = escapeVector(world, profile);
   if (escape !== undefined) return { vector: escape, mgFiring: false };
 
-  if (target === undefined) {
-    return { vector: profile.orbit ? ZERO_VECTOR : pilotVector(nowMs), mgFiring: false };
-  }
-
   const speed = options.mgSpeed ?? MG_PROJECTILE_SPEED;
-  const bearing = aimBearing(world, target, speed, profile, memory);
-  const onAxis = Math.abs(shortestAngleDelta(world.ship.heading, bearing)) <= profile.mgConeRadians;
+  const bearing =
+    target === undefined ? undefined : aimBearing(world, target, speed, profile, memory);
+  const onAxis =
+    bearing !== undefined &&
+    Math.abs(shortestAngleDelta(world.ship.heading, bearing)) <= profile.mgConeRadians;
   const mgFiring =
     onAxis &&
     !world.machineGun.overheated &&
@@ -472,8 +535,17 @@ export function planPilot(world, profile, memory, options = {}) {
   // Without the orbit skill the pilot keeps the old circular patrol.
   if (!profile.orbit) return { vector: pilotVector(nowMs), mgFiring };
 
+  // A rock on screen is work for the guns, never a reason to stop hunting: the
+  // ships that actually kill the crew shoot from outside the camera frame, and
+  // the turret keeps servicing the rock while the pilot goes after them.
+  const role = ranked.find(({ entity }) => entity.entityId === target?.entityId)?.role;
+  if (role !== "enemy" && role !== "missile") {
+    return { vector: huntVector(world) ?? searchVector(world, memory), mgFiring };
+  }
+
   const distance = distanceBetween(world.ship, target);
-  if (Math.abs(distance - profile.standoffDistance) <= profile.standoffDistance * STANDOFF_BAND) {
+  const standoff = effectiveStandoff(world, profile);
+  if (Math.abs(distance - standoff) <= standoff * STANDOFF_BAND) {
     return { vector: onAxis ? ZERO_VECTOR : bearingVector(bearing), mgFiring };
   }
   return { vector: orbitVector(world, target, profile, memory, distance), mgFiring };

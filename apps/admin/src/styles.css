@@ -55,6 +55,15 @@ body {
   gap: 4px;
 }
 
+/* A knob its own skill switch has turned off: shown, kept, but not live. */
+.field--off {
+  opacity: 0.45;
+}
+
+.field--off .field__input {
+  cursor: not-allowed;
+}
+
 .field--inline {
   align-items: center;
   flex-direction: row;

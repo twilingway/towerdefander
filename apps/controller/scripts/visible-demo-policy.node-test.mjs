@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createAutopilotMemory,
   directAim,
+  effectiveStandoff,
   extrapolateWorld,
   interceptAim,
   nextShieldActive,
@@ -294,14 +295,31 @@ test("an already covered bearing does not trigger an escape", () => {
 });
 
 test("the orbiting pilot closes an open range and coasts on station", () => {
-  const far = world({ enemies: [enemyAt("far", 1, 2200 + 1500, 2200)] });
+  const ring = effectiveStandoff(world(), ACE);
+  const far = world({ enemies: [enemyAt("far", 1, 2200 + ring + 800, 2200)] });
   assert.ok(planPilot(far, ACE, createAutopilotMemory()).vector.x > 0.5);
 
-  const near = world({ enemies: [enemyAt("near", 1, 2200 + 200, 2200)] });
+  const near = world({ enemies: [enemyAt("near", 1, 2200 + ring / 3, 2200)] });
   assert.ok(planPilot(near, ACE, createAutopilotMemory()).vector.x < 0);
 
-  const onStation = world({ enemies: [enemyAt("station", 1, 2200 + 700, 2200)] });
+  const onStation = world({ enemies: [enemyAt("station", 1, 2200 + ring, 2200)] });
   assert.deepEqual(planPilot(onStation, ACE, createAutopilotMemory()).vector, { x: 0, y: 0 });
+});
+
+test("the stand-off ring never grows past what the camera frames", () => {
+  // The frame is 9/16 of its width, so its short side bounds the ring.
+  const narrow = world({ cameraViewWidth: 800 });
+  assert.ok(effectiveStandoff(narrow, ACE) < ACE.standoffDistance);
+  assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 180) < 1e-9);
+
+  // A frame wide enough leaves the operator's own number alone.
+  const wide = world({ cameraViewWidth: 4400 });
+  assert.equal(effectiveStandoff(wide, ACE), ACE.standoffDistance);
+
+  // A target held on the clamped ring stays inside the frame.
+  const framed = world({ cameraViewWidth: 2200 });
+  const halfHeight = (2200 * 9) / 16 / 2;
+  assert.ok(effectiveStandoff(framed, ACE) < halfHeight);
 });
 
 test("the orbit turns back inward at the arena rim", () => {
@@ -406,7 +424,159 @@ test("the lead solution uses the muzzle velocity the preset will fire with", () 
   const slow = planGunner(crossing, ACE, createAutopilotMemory(), { cannonSpeed: 350 });
   assert.ok(slow.aim.y > stock.aim.y);
 
-  const noseStock = planPilot(crossing, ACE, createAutopilotMemory());
-  const noseSlow = planPilot(crossing, ACE, createAutopilotMemory(), { mgSpeed: 350 });
+  // On the ring the pilot swings the nose onto the same lead bearing, so the
+  // muzzle velocity has to reach it there too.
+  const onRing = world({
+    enemies: [
+      enemyAt("crossing", 1, 2200 + effectiveStandoff(world(), ACE), 2200, { velocityY: 260 })
+    ]
+  });
+  const noseStock = planPilot(onRing, ACE, createAutopilotMemory());
+  const noseSlow = planPilot(onRing, ACE, createAutopilotMemory(), { mgSpeed: 350 });
   assert.notDeepEqual(noseStock.vector, noseSlow.vector);
+});
+
+function rockAt(entityId, spawnSequence, x, y, velocityX, velocityY) {
+  return entity(entityId, spawnSequence, { x, y, velocityX, velocityY, hp: 65, maxHp: 65 });
+}
+
+test("a rock already past the rim and still heading out is not a target", () => {
+  // Arena centre is 2200,2200 with radius 2200: 4300 on x is outside it.
+  const leaving = world({
+    cameraViewWidth: 4400,
+    ship: {
+      x: 4000,
+      y: 2200,
+      heading: 0,
+      velocityX: 0,
+      velocityY: 0,
+      radius: 52,
+      hp: 500,
+      maxHp: 500
+    },
+    asteroids: [rockAt("outbound", 1, 4500, 2200, 190, 0)]
+  });
+  assert.deepEqual(rankTargets(leaving), []);
+  assert.equal(planGunner(leaving, ACE, createAutopilotMemory()).firing, false);
+
+  // The same rock on its way back in is still worth shooting.
+  const returning = world({
+    cameraViewWidth: 4400,
+    ship: {
+      x: 4000,
+      y: 2200,
+      heading: 0,
+      velocityX: 0,
+      velocityY: 0,
+      radius: 52,
+      hp: 500,
+      maxHp: 500
+    },
+    asteroids: [rockAt("inbound", 1, 4500, 2200, -190, 0)]
+  });
+  assert.equal(rankTargets(returning).length, 1);
+});
+
+test("a rock inside the arena stays a target whichever way it drifts", () => {
+  const inside = world({ asteroids: [rockAt("drifting", 1, 2600, 2200, 190, 0)] });
+  assert.equal(rankTargets(inside).length, 1);
+});
+
+test("an empty screen never leaves the pilot parked", () => {
+  const offCentre = world({
+    ship: {
+      x: 3600,
+      y: 2200,
+      heading: 0,
+      velocityX: 0,
+      velocityY: 0,
+      radius: 52,
+      hp: 500,
+      maxHp: 500
+    }
+  });
+  const searching = planPilot(offCentre, ACE, createAutopilotMemory());
+  assert.notDeepEqual(searching.vector, { x: 0, y: 0 });
+  // The arena centre lies at -x from here, so that is the way it heads.
+  assert.ok(searching.vector.x < -0.9);
+
+  // Already in the middle: it sweeps instead of sitting on the spot.
+  const atCentre = planPilot(world(), ACE, createAutopilotMemory());
+  assert.notDeepEqual(atCentre.vector, { x: 0, y: 0 });
+  assert.ok(Math.abs(Math.hypot(atCentre.vector.x, atCentre.vector.y) - 1) < 1e-9);
+});
+
+test("the pilot walks incoming fire back to the shooter it cannot see", () => {
+  // A sniper out-ranges the camera frame, so only its bullet is on screen.
+  const underFire = world({
+    bullets: [entity("shot", 1, { x: 2500, y: 2200, velocityX: -900, velocityY: 0, radius: 7 })]
+  });
+  const hunting = planPilot(underFire, { ...ACE, dodgeBullets: false }, createAutopilotMemory());
+  // The shot travels -x, so its owner sits at +x.
+  assert.ok(hunting.vector.x > 0.9);
+  assert.equal(hunting.mgFiring, false);
+});
+
+test("a visible target still outranks the search", () => {
+  const withTarget = world({
+    enemies: [enemyAt("visible", 1, 2900, 2200)],
+    bullets: [entity("shot", 2, { x: 2500, y: 2200, velocityX: -900, velocityY: 0, radius: 7 })]
+  });
+  const memory = createAutopilotMemory();
+  planPilot(withTarget, { ...ACE, dodgeBullets: false }, memory);
+  assert.equal(memory.target.entityId, "visible");
+});
+
+test("the rookie patrol is untouched by the search behaviour", () => {
+  const empty = world();
+  assert.deepEqual(
+    planPilot(empty, ROOKIE, createAutopilotMemory(), { nowMs: 0 }).vector,
+    pilotVector(0)
+  );
+});
+
+test("a rock on screen does not call off the hunt for an unseen shooter", () => {
+  // The sniper out-ranges the camera, so only its bullet and a drifting rock
+  // are on screen. The turret works the rock; the pilot goes after the sniper.
+  const scene = world({
+    asteroids: [rockAt("rock", 1, 2200, 2400, 0, -190)],
+    bullets: [entity("shot", 2, { x: 2600, y: 2200, velocityX: -900, velocityY: 0, radius: 7 })]
+  });
+  const memory = createAutopilotMemory();
+  const pilot = planPilot(scene, { ...ACE, dodgeBullets: false }, memory);
+  assert.ok(pilot.vector.x > 0.9);
+
+  // The gunner still has a target: the rock is worth credits.
+  assert.equal(
+    planGunner(scene, { ...ACE, dodgeBullets: false }, memory).firing !== undefined,
+    true
+  );
+  assert.equal(memory.target.entityId, "rock");
+});
+
+test("a visible enemy outranks the hunt", () => {
+  const scene = world({
+    enemies: [enemyAt("close", 1, 2200 + 1500, 2200)],
+    bullets: [entity("shot", 2, { x: 2200, y: 2600, velocityX: 0, velocityY: -900, radius: 7 })]
+  });
+  const pilot = planPilot(scene, { ...ACE, dodgeBullets: false }, createAutopilotMemory());
+  // It closes on the enemy at +x rather than chasing the shot back to +y.
+  assert.ok(pilot.vector.x > 0.5);
+});
+
+test("a boss firing from beyond the frame is hunted through its missiles", () => {
+  const scene = world({
+    asteroids: [rockAt("rock", 1, 2200, 2350, 0, -190)],
+    missiles: [entity("inbound", 2, { x: 2200, y: 1400, velocityX: 0, velocityY: 240, radius: 12 })]
+  });
+  // Missiles rank above rocks, so this one is the committed target and the
+  // pilot manoeuvres on it rather than walking it back.
+  const memory = createAutopilotMemory();
+  planPilot(scene, { ...ACE, evadeMissiles: false, dodgeBullets: false }, memory);
+  assert.equal(memory.target.entityId, "inbound");
+
+  // Once it is gone the rock is all that is left, and the pilot hunts again.
+  const afterIntercept = world({ asteroids: [rockAt("rock", 1, 2200, 2350, 0, -190)] });
+  const hunting = planPilot(afterIntercept, ACE, createAutopilotMemory());
+  assert.notDeepEqual(hunting.vector, { x: 0, y: 0 });
 });

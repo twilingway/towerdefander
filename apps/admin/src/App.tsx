@@ -120,18 +120,27 @@ interface NumberFieldProps {
   readonly value: number;
   readonly step?: number;
   readonly min?: number;
+  readonly disabled?: boolean;
   readonly onChange: (value: number) => void;
 }
 
-function NumberField({ caption, value, step = 1, min = 0, onChange }: NumberFieldProps) {
+function NumberField({
+  caption,
+  value,
+  step = 1,
+  min = 0,
+  disabled = false,
+  onChange
+}: NumberFieldProps) {
   return (
-    <label className="field">
+    <label className={disabled ? "field field--off" : "field"}>
       <span className="field__caption">{caption}</span>
       <input
         className="field__input"
         type="number"
         step={step}
         min={min}
+        disabled={disabled}
         value={value}
         onChange={(event) => {
           const next = Number(event.target.value);
@@ -171,6 +180,7 @@ function SecondsField({ caption, ticks, onChange }: SecondsFieldProps) {
 interface DelayFieldProps {
   readonly caption: string;
   readonly ticks: number;
+  readonly disabled?: boolean;
   readonly onChange: (ticks: number) => void;
 }
 
@@ -179,15 +189,16 @@ interface DelayFieldProps {
  * delay is off. The shared converter deliberately floors at one tick, so this
  * one rounds for itself.
  */
-function DelayField({ caption, ticks, onChange }: DelayFieldProps) {
+function DelayField({ caption, ticks, disabled = false, onChange }: DelayFieldProps) {
   return (
-    <label className="field">
+    <label className={disabled ? "field field--off" : "field"}>
       <span className="field__caption">{caption}</span>
       <input
         className="field__input"
         type="number"
         step={TICK_SECONDS}
         min={0}
+        disabled={disabled}
         value={ticksToSeconds(ticks)}
         onChange={(event) => {
           const next = Number(event.target.value);
@@ -335,9 +346,16 @@ function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
             выключения
           </dd>
           <dt>Горизонт уклонения</dt>
-          <dd>насколько вперёд бот ищет попадание, от которого щит его не закроет</dd>
+          <dd>
+            насколько вперёд бот ищет попадание, от которого щит его не закроет. Читается только при
+            включённом уклонении хотя бы от ракет или от пуль
+          </dd>
           <dt>Дистанция боя</dt>
-          <dd>радиус кольца, по которому бот обходит приоритетную цель</dd>
+          <dd>
+            радиус кольца, по которому бот обходит приоритетную цель. Читается только при включённом
+            обходе и ограничивается кадром камеры: цель, которую бот держит дальше, чем видно на
+            экране, он теряет из виду
+          </dd>
         </dl>
       </details>
 
@@ -452,6 +470,7 @@ function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
                 caption="Дистанция боя"
                 step={20}
                 min={200}
+                disabled={!profile.orbit}
                 value={profile.standoffDistance}
                 onChange={(standoffDistance) => {
                   patchProfile(level, { standoffDistance });
@@ -459,6 +478,7 @@ function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
               />
               <DelayField
                 caption="Горизонт уклонения, с"
+                disabled={!profile.evadeMissiles && !profile.dodgeBullets}
                 ticks={profile.evadeHorizonTicks}
                 onChange={(evadeHorizonTicks) => {
                   patchProfile(level, { evadeHorizonTicks });
