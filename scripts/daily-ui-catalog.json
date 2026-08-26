@@ -1,0 +1,32 @@
+[
+  {
+    "id": "admin-waves",
+    "title": "Админка: волны",
+    "url": "http://127.0.0.1:5175",
+    "viewport": { "width": 1440, "height": 1000 },
+    "readySelector": "[data-testid='admin-tab-waves']",
+    "activateTestId": "admin-tab-waves",
+    "panelTestId": "admin-panel-waves",
+    "sources": ["apps/admin/src/App.tsx", "apps/admin/src/styles.css"]
+  },
+  {
+    "id": "admin-autopilot",
+    "title": "Админка: автопилот",
+    "url": "http://127.0.0.1:5175",
+    "viewport": { "width": 1440, "height": 1000 },
+    "readySelector": "[data-testid='admin-tab-autopilot']",
+    "activateTestId": "admin-tab-autopilot",
+    "panelTestId": "admin-panel-autopilot",
+    "sources": ["apps/admin/src/App.tsx", "apps/admin/src/styles.css"]
+  },
+  {
+    "id": "admin-director",
+    "title": "Админка: директор волн",
+    "url": "http://127.0.0.1:5175",
+    "viewport": { "width": 1440, "height": 1000 },
+    "readySelector": "[data-testid='admin-tab-director']",
+    "activateTestId": "admin-tab-director",
+    "panelTestId": "admin-panel-director",
+    "sources": ["apps/admin/src/App.tsx", "apps/admin/src/styles.css"]
+  }
+]

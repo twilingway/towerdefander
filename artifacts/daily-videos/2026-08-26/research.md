@@ -4,6 +4,12 @@
 
 ## Git-коммиты
 
+### ccdf3e4 — добавляем ежедневный отчет
+
+- Полный hash: `ccdf3e4f841b46f432383bbc0781b325f5cf27ac`
+- Авторская дата: 2026-08-26T16:25:55+04:00
+- Затронуто файлов: 12
+
 ### 7b2afb2 — feat(display): show asteroids on the radar and in the HUD
 
 - Полный hash: `7b2afb2f0c950ea797ecb7fe537b26cb383ec68e`
@@ -165,6 +171,7 @@ enemy AI не трогаются; веса формулы приоритизац
 - Добавить локальный skill для подготовки ежедневного материала YouTube Shorts по указанной дате.
 - Добавить не зависящий от сети скрипт, собирающий коммиты за локальный календарный день и связанные OpenSpec-артефакты в Markdown-исходник.
 - Описать в skill способ получить кадры общего экрана и боя через существующий `pnpm demo:visible`; готовый отчёт отделяет подтверждённые факты от предложенного текста диктора.
+- Добавить изолированный historical observer: detached worktree, UI-каталог Playwright, WebM геймплея, локальную SAPI-озвучку, FFmpeg-черновик 1080×1920 и локальный HTML-ежедневник.
 
 ## Capabilities
 
@@ -178,7 +185,7 @@ enemy AI не трогаются; веса формулы приоритизац
 
 ## Impact
 
-Затрагиваются только репозиторные developer-tools: `scripts/`, `.agents/skills/` и новый OpenSpec-артефакт. Новых зависимостей, production API, игровых правил, протокола и развёртывания нет.
+Затрагиваются только репозиторные developer-tools: `scripts/`, `.agents/skills/`, `tools/daily-video-dashboard/`, opt-in demo capture и новый OpenSpec-артефакт. FFmpeg используется только как уже разрешённый локальный encoder; новых npm-зависимостей, production API, игровых правил, протокола и развёртывания нет.
 ```
 
 ### player-ship-tuning

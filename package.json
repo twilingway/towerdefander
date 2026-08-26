@@ -14,6 +14,8 @@
     "benchmark:combat": "pnpm --filter @spaceship-defender/server benchmark:combat",
     "demo:visible": "node scripts/run-visible-demo.mjs",
     "demo:verify": "cross-env DEMO_HEADLESS=1 DEMO_VERIFY=1 DEMO_BOT_LEVEL=rookie node scripts/run-visible-demo.mjs",
+    "daily:video": "node scripts/daily-video.mjs",
+    "daily:dashboard": "node scripts/serve-daily-dashboard.mjs",
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",

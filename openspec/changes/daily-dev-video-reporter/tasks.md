@@ -1,18 +1,30 @@
-## 1. Исходник ежедневного отчёта
+## 1. Источник ежедневного отчёта
 
-- [ ] 1.1 Добавить Node-скрипт, который валидирует дату, читает Git-коммиты дня и создаёт `artifacts/daily-videos/<date>/research.md`; проверить на дате с коммитами и дате без коммитов.
-- [ ] 1.2 Добавить в исходник связь изменённых коммитами OpenSpec change с их proposal и зафиксировать выходной каталог в `.gitignore`; проверить, что commit без OpenSpec не получает выдуманную связь.
+- [x] 1.1 Добавить Node-скрипт, который валидирует дату, читает коммиты Git и создаёт
+      `artifacts/daily-videos/<date>/research.md`.
+- [x] 1.2 Связать изменённые OpenSpec change с proposal и добавить папку артефактов в `.gitignore`.
 
 ## 2. Кадры демо
 
-- [ ] 2.1 Добавить opt-in capture в visible-demo harness с безопасной проверкой `DEMO_CAPTURE_DIR`; проверить, что без переменной demo не создаёт файлы.
-- [ ] 2.2 Сохранить `lobby.png` и `combat.png` в момент репрезентативного боя; проверить PNG-прогоном `pnpm demo:visible` с capture-каталогом.
+- [x] 2.1 Добавить opt-in PNG capture с проверкой безопасного каталога.
+- [x] 2.2 Добавить Playwright WebM recording и проверить `lobby.png`, `combat.png` и WebM в
+      изолированной demo-комнате.
 
-## 3. Skill наблюдателя
+## 3. Historical observer и skill
 
-- [ ] 3.1 Создать репозиторный skill, который превращает research-исходник в русскоязычный сценарий Shorts, shot list и раздел подтверждённых фактов; проверить skill validator.
-- [ ] 3.2 Описать изолированную подготовку исторического выпуска через временный detached Git worktree без checkout основного дерева; проверить на грязном рабочем дереве, что пользовательские изменения не затронуты.
+- [x] 3.1 Создать и провалидировать skill для русскоязычного сценария, статуса и shot list.
+- [x] 3.2 Реализовать detached worktree без checkout основного дерева, включая безопасную очистку и
+      честный fallback без видео.
 
-## 4. Проверка
+## 4. Черновик и ежедневник
 
-- [ ] 4.1 Выполнить релевантные тесты/линт, `pnpm check`, `pnpm spec:validate` и `git diff --check`.
+- [x] 4.1 Добавить UI-каталог, стабильные test id табов/панелей и Playwright capture изменённых
+      записей.
+- [x] 4.2 Добавить локальную SAPI-озвучку, ASS-титры и FFmpeg draft MP4 1080×1920/30 fps.
+- [x] 4.3 Добавить локальный HTTP-ежедневник с календарём, Markdown, UI-кадрами и draft video.
+
+## 5. Проверка
+
+- [x] 5.1 Проверить Node-синтаксис, UI-каталог, SAPI WAV, PNG/WebM capture, ffprobe MP4, HTTP smoke,
+      typecheck и skill validator.
+- [x] 5.2 Выполнить `pnpm check`, `pnpm spec:validate` и `git diff --check`.

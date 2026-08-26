@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve, sep } from "node:path";
 
@@ -34,6 +34,14 @@ const levelOverride = process.env.DEMO_BOT_LEVEL;
 const LEVEL_LABELS = { rookie: "Новичок", veteran: "Ветеран", ace: "Ас" };
 const verificationMode = process.env.DEMO_VERIFY === "1";
 const headless = process.env.DEMO_HEADLESS === "1";
+const captureDirectory = optionalDailyArtifactDirectory(
+  process.env.DEMO_CAPTURE_DIR,
+  "DEMO_CAPTURE_DIR"
+);
+const recordVideoDirectory = optionalDailyArtifactDirectory(
+  process.env.DEMO_RECORD_VIDEO_DIR,
+  "DEMO_RECORD_VIDEO_DIR"
+);
 
 let browser;
 let page;
@@ -146,6 +154,7 @@ try {
   }
   assertCrew();
   abortIfStopped();
+  await captureFrame("lobby");
 
   for (const room of roomsByRole.values()) room.send(clientMessage.ready, envelope(room));
   await waitFor(
@@ -181,6 +190,13 @@ try {
     if (stopRequested) break;
     if (failure !== undefined) throw failure;
     observeVerification(startingPosition);
+    if (
+      latestTelemetry !== undefined &&
+      latestTelemetry.shieldActive &&
+      latestTelemetry.friendlyProjectiles + latestTelemetry.mgProjectiles > 0
+    ) {
+      await captureFrame("combat");
+    }
     if (!headless && latestTelemetry !== undefined && Date.now() - lastCadenceLogAt >= 5_000) {
       lastCadenceLogAt = Date.now();
       console.log(
@@ -307,8 +323,40 @@ try {
 
 async function launchHeadlessBrowser() {
   const launched = await chromium.launch({ headless: true, channel: "chrome" });
-  const context = await launched.newContext({ viewport: { width: 1600, height: 900 } });
+  const context = await launched.newContext({
+    viewport: { width: 1600, height: 900 },
+    ...(recordVideoDirectory === undefined
+      ? {}
+      : { recordVideo: { dir: recordVideoDirectory, size: { width: 1600, height: 900 } } })
+  });
   return { browser: launched, context, page: await context.newPage() };
+}
+
+function optionalDailyArtifactDirectory(value, variableName) {
+  if (value === undefined || value.length === 0) return undefined;
+  const target = resolve(value);
+  const segments = target.split(/[\\/]+/u).map((segment) => segment.toLowerCase());
+  const artifactsIndex = segments.lastIndexOf("artifacts");
+  if (artifactsIndex < 0 || segments[artifactsIndex + 1] !== "daily-videos") {
+    throw new Error(`${variableName} must be inside artifacts/daily-videos.`);
+  }
+  return target;
+}
+
+async function captureFrame(name) {
+  if (captureDirectory === undefined || page === undefined) return;
+  const target = resolve(captureDirectory, `${name}.png`);
+  if (!target.startsWith(`${captureDirectory}${sep}`)) {
+    throw new Error("Capture path escaped the requested directory.");
+  }
+  try {
+    await access(target);
+    return;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  await mkdir(captureDirectory, { recursive: true });
+  await page.screenshot({ path: target });
 }
 
 async function launchExternalVisibleChrome() {

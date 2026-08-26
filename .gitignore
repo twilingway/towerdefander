@@ -25,3 +25,7 @@ test-results/
 
 # Balance presets written by the admin console at runtime.
 data/
+
+# Local, reproducible source material for daily development Shorts.
+artifacts/daily-videos/
+.daily-worktrees/

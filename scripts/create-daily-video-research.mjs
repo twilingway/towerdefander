@@ -139,7 +139,11 @@ function render({ date, commits, changes }) {
       else lines.push("```markdown", change.proposal.trim(), "```", "");
     }
   }
-  lines.push("## Дальше", "", "Передайте этот файл skill ежедневного видео для сценария и списка кадров.");
+  lines.push(
+    "## Дальше",
+    "",
+    "Передайте этот файл skill ежедневного видео для сценария и списка кадров."
+  );
   return `${lines.join("\n")}\n`;
 }
 

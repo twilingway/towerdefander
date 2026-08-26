@@ -103,7 +103,9 @@ async function changedOpenSpecChanges(commits) {
   return await Promise.all(
     [...names].sort().map(async (name) => ({
       name,
-      proposal: await readOptionalText(join(repositoryRoot, "openspec", "changes", name, "proposal.md"))
+      proposal: await readOptionalText(
+        join(repositoryRoot, "openspec", "changes", name, "proposal.md")
+      )
     }))
   );
 }
@@ -150,7 +152,9 @@ function renderReport({ date, commits, changes }) {
     }
   }
   lines.push("## Дальше", "");
-  lines.push("Передайте этот файл skill `daily-dev-video`; он подготовит сценарий Shorts и список кадров.");
+  lines.push(
+    "Передайте этот файл skill `daily-dev-video`; он подготовит сценарий Shorts и список кадров."
+  );
   return `${lines.join("\n")}\n`;
 }
 

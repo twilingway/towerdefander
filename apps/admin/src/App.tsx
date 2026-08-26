@@ -2322,11 +2322,14 @@ export function AdminApp() {
       {status !== null ? <p className="banner banner--ok">{status}</p> : null}
       {dirty ? <p className="banner banner--warn">Есть несохранённые изменения.</p> : null}
 
-      <nav className="tabs">
+      <nav className="tabs" aria-label="Разделы баланса" role="tablist">
         {TABS.map((candidate) => (
           <button
             className={`tabs__tab${candidate === tab ? " tabs__tab--active" : ""}`}
+            data-testid={`admin-tab-${candidate}`}
             key={candidate}
+            role="tab"
+            aria-selected={candidate === tab}
             type="button"
             onClick={() => {
               setTab(candidate);
@@ -2337,25 +2340,27 @@ export function AdminApp() {
         ))}
       </nav>
 
-      {balanceDocument === null || active === undefined ? (
-        <p className="empty">Баланс ещё не загружен.</p>
-      ) : tab === "waves" ? (
-        <WavesScreen tuning={active.tuning} onChange={updateTuning} />
-      ) : tab === "enemies" ? (
-        <EnemiesScreen tuning={active.tuning} onChange={updateTuning} />
-      ) : tab === "player" ? (
-        <PlayerScreen tuning={active.tuning} onChange={updateTuning} />
-      ) : tab === "autopilot" ? (
-        <AutopilotScreen tuning={active.tuning} onChange={updateTuning} />
-      ) : tab === "director" ? (
-        <DirectorScreen tuning={active.tuning} onChange={updateTuning} />
-      ) : (
-        <PresetsScreen
-          document={balanceDocument}
-          onChange={updateDocument}
-          onImportError={setError}
-        />
-      )}
+      <section data-testid={`admin-panel-${tab}`} role="tabpanel">
+        {balanceDocument === null || active === undefined ? (
+          <p className="empty">Баланс ещё не загружен.</p>
+        ) : tab === "waves" ? (
+          <WavesScreen tuning={active.tuning} onChange={updateTuning} />
+        ) : tab === "enemies" ? (
+          <EnemiesScreen tuning={active.tuning} onChange={updateTuning} />
+        ) : tab === "player" ? (
+          <PlayerScreen tuning={active.tuning} onChange={updateTuning} />
+        ) : tab === "autopilot" ? (
+          <AutopilotScreen tuning={active.tuning} onChange={updateTuning} />
+        ) : tab === "director" ? (
+          <DirectorScreen tuning={active.tuning} onChange={updateTuning} />
+        ) : (
+          <PresetsScreen
+            document={balanceDocument}
+            onChange={updateDocument}
+            onImportError={setError}
+          />
+        )}
+      </section>
     </main>
   );
 }
