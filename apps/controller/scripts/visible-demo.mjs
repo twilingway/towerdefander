@@ -17,6 +17,7 @@ import { chromium } from "@playwright/test";
 import {
   createAutopilotMemory,
   extrapolateWorld,
+  measureAngularRates,
   planGunner,
   planPilot,
   planShield,
@@ -24,7 +25,7 @@ import {
 } from "./visible-demo-policy.mjs";
 
 const STEP_MS = 50;
-const TELEMETRY_MS = 100;
+const TELEMETRY_MS = 50;
 const VERIFY_TIMEOUT_MS = 150_000;
 const STATUS_EVENT = "spaceship-visible-demo-status";
 const displayUrl = process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1";
@@ -63,6 +64,8 @@ let autopilotMemory;
 let autopilotMemoryKey;
 let latestTelemetry;
 let latestWorld;
+/** Turret and hull angular speed measured between the last two raw frames. */
+let angularRates = { turret: 0, heading: 0 };
 let lastTelemetryAt = 0;
 let resultObservedAt;
 let readySentForRun;
@@ -464,7 +467,10 @@ async function cleanupExternalChromeProfile() {
 function sendCombatInputs(expectedGeneration) {
   if (paused || expectedGeneration !== generation || latestWorld === undefined) return;
   const nowMs = Date.now();
-  const world = extrapolateWorld(latestWorld, nowMs);
+  const world = extrapolateWorld(latestWorld, nowMs, {
+    angularRates,
+    turretRate: autopilot.turretRate
+  });
   const { profile } = autopilot;
   const memory = autopilotMemoryFor(world.waveNumber);
   const options = {
@@ -715,7 +721,14 @@ async function refreshTelemetry() {
         controlHz: parseOverlay("data-control-hz")
       };
     });
-    latestWorld = await page.evaluate(() => window.__spaceshipDemoWorld);
+    const observed = await page.evaluate(() => window.__spaceshipDemoWorld);
+    // Rates are measured between raw frames only. The extrapolated picture
+    // carries these angles forward itself, so feeding one back in would
+    // compound the estimate on top of itself.
+    if (observed !== undefined && observed.sampledAtMs !== latestWorld?.sampledAtMs) {
+      angularRates = measureAngularRates(latestWorld, observed);
+    }
+    latestWorld = observed;
   } catch (error) {
     if (stopRequested || page.isClosed()) return;
     throw error;

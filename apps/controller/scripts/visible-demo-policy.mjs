@@ -83,6 +83,8 @@ const TURRET_RATE_PER_SECOND = (13 * Math.PI) / 30;
  * every reversal, so it never delivers its top rate around a circle.
  */
 const TRAVERSE_MARGIN = 0.6;
+/** Longest swing the lead solution will wait out; beyond it the guess is noise. */
+const MAX_TRAVERSE_LEAD_SECONDS = 1.5;
 /** Bearing error above which the turret still counts as travelling. */
 const TRAVERSE_SETTLE_RADIANS = 0.25;
 /** How much better a new target must rank to be worth abandoning the traverse. */
@@ -117,8 +119,6 @@ export function createAutopilotMemory(seed = 1) {
     committedAtMs: 0,
     decidedAtMs: undefined,
     orbitSign: 1,
-    /** Last bearing to the committed target, for measuring how fast it sweeps. */
-    bearingSample: undefined,
     shieldActive: false
   };
 }
@@ -193,21 +193,57 @@ function steerMissile(missile, ship, seconds) {
 }
 
 /**
- * Telemetry is sampled at half the rate commands are sent, so the picture is
- * carried forward by its own velocities rather than aimed at stale positions.
- * Missiles are turned toward the ship first, because they home.
+ * Angular speed of the turret and the hull between two telemetry frames. Only
+ * consecutive raw frames may be passed: an extrapolated picture carries these
+ * angles forward itself, so measuring off one would compound its own estimate.
  */
-export function extrapolateWorld(world, nowMs) {
+export function measureAngularRates(previous, next) {
+  if (previous === undefined) return { turret: 0, heading: 0 };
+  const seconds = (next.sampledAtMs - previous.sampledAtMs) / 1000;
+  if (seconds <= 0) return { turret: 0, heading: 0 };
+  return {
+    turret: shortestAngleDelta(previous.turretAngle, next.turretAngle) / seconds,
+    heading: shortestAngleDelta(previous.ship.heading, next.ship.heading) / seconds
+  };
+}
+
+function clampRate(rate, limit) {
+  return Math.max(-limit, Math.min(limit, rate));
+}
+
+/**
+ * Telemetry is sampled slower than commands are sent, so the picture is carried
+ * forward by its own velocities rather than aimed at stale positions. Missiles
+ * are turned toward the ship first, because they home.
+ *
+ * The turret and the hull are carried forward too. Leaving them frozen was worth
+ * up to a quarter radian of phantom aiming error at the traverse rate — several
+ * times the ace firing cone — so the bot opened fire believing it was on bearing
+ * while the mount was still swinging, and the shots passed wide.
+ */
+export function extrapolateWorld(world, nowMs, options = {}) {
   const seconds = Math.min(
     Math.max((nowMs - world.sampledAtMs) / 1000, 0),
     MAX_EXTRAPOLATION_SECONDS
   );
   if (seconds === 0) return world;
-  const ship = advanceEntity(world.ship, seconds);
+  const rates = options.angularRates ?? { turret: 0, heading: 0 };
+  const turretLimit = options.turretRate ?? TURRET_RATE_PER_SECOND;
+  const moved = advanceEntity(world.ship, seconds);
+  const ship = {
+    ...moved,
+    // The hull turns at exactly twice the turret in every stock preset.
+    heading: canonicalizeAngle(moved.heading + clampRate(rates.heading, turretLimit * 2) * seconds)
+  };
 
   return {
     ...world,
     sampledAtMs: nowMs,
+    /** When the picture was actually observed, before any carrying forward. */
+    rawSampledAtMs: world.rawSampledAtMs ?? world.sampledAtMs,
+    turretAngle: canonicalizeAngle(
+      world.turretAngle + clampRate(rates.turret, turretLimit) * seconds
+    ),
     ship,
     enemies: world.enemies.map((enemy) => advanceEntity(enemy, seconds)),
     bullets: world.bullets.map((bullet) => advanceEntity(bullet, seconds)),
@@ -426,13 +462,42 @@ export function planShield(world, profile, memory) {
   return { aim, active: memory.shieldActive };
 }
 
+/**
+ * Where to point so the shot connects, allowing for the mount having to get
+ * there first. Solving for flight time alone aims at where the target was when
+ * the swing started, which against a crossing target is a miss by the width of
+ * the swing — and the swing is the slowest part of the whole shot.
+ */
+function leadWithTraverse(world, target, speed, profile, memory, currentAngle, turnRate) {
+  // Jitter is applied once, on the final solution, so the first pass must not
+  // draw from the noise stream and shift every later draw with it.
+  const straight = { ...profile, aimJitterRadians: 0 };
+  const first = aimBearing(world, target, speed, straight, memory);
+  if (turnRate <= 0) return aimBearing(world, target, speed, profile, memory);
+
+  const traverse = Math.min(
+    Math.abs(shortestAngleDelta(currentAngle, first)) / turnRate,
+    MAX_TRAVERSE_LEAD_SECONDS
+  );
+  if (traverse <= 0) return aimBearing(world, target, speed, profile, memory);
+  return aimBearing(world, advanceEntity(target, traverse), speed, profile, memory);
+}
+
 export function planGunner(world, profile, memory, options = {}) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
   const target = commitTarget(rankTargets(world, options), profile, memory, nowMs, world);
   if (target === undefined) return { aim: bearingVector(world.turretAngle), firing: false };
 
   const speed = options.cannonSpeed ?? CANNON_PROJECTILE_SPEED;
-  const bearing = aimBearing(world, target, speed, profile, memory);
+  const bearing = leadWithTraverse(
+    world,
+    target,
+    speed,
+    profile,
+    memory,
+    world.turretAngle,
+    options.turretRate ?? TURRET_RATE_PER_SECOND
+  );
   // The shot leaves along the turret real angle, so wait out the traverse. A
   // cone narrower than one tick of that traverse would be stepped over without
   // ever being sampled, so arriving within a tick counts as arrived.
@@ -525,19 +590,21 @@ export function effectiveStandoff(world, profile) {
 }
 
 /**
- * How fast the bearing to a target sweeps, in radians per second. Two samples
- * of the same target is all it takes, and the memory already carries the last
- * one for the lead solution.
+ * How fast the bearing to a target sweeps, in radians per second, taken from
+ * the relative velocity rather than from two samples of the bearing. Sampling
+ * cannot work here: between telemetry frames the picture is carried forward by
+ * extrapolation, and once that hits its clamp two consecutive ticks read the
+ * very same positions — a zero sweep no matter how fast the target crosses.
  */
-export function bearingRate(world, target, memory) {
-  const bearing = Math.atan2(target.y - world.ship.y, target.x - world.ship.x);
-  const previous = memory.bearingSample;
-  memory.bearingSample = { entityId: target.entityId, bearing, atMs: world.sampledAtMs };
-  if (previous === undefined || previous.entityId !== target.entityId) return 0;
+export function bearingRate(world, target) {
+  const relativeX = target.x - world.ship.x;
+  const relativeY = target.y - world.ship.y;
+  const rangeSquared = relativeX ** 2 + relativeY ** 2;
+  if (rangeSquared <= Number.EPSILON) return 0;
 
-  const seconds = (world.sampledAtMs - previous.atMs) / 1000;
-  if (seconds <= 0) return 0;
-  return shortestAngleDelta(previous.bearing, bearing) / seconds;
+  const velocityX = (target.velocityX ?? 0) - world.ship.velocityX;
+  const velocityY = (target.velocityY ?? 0) - world.ship.velocityY;
+  return (relativeX * velocityY - relativeY * velocityX) / rangeSquared;
 }
 
 /**
@@ -548,9 +615,9 @@ export function bearingRate(world, target, memory) {
  * the target on a constant bearing, which drives the sweep to nothing and hands
  * the fight to the hull — it turns twice as fast as the turret does.
  */
-function traverseLosing(world, target, memory, options) {
+function traverseLosing(world, target, options) {
   const rate = options.turretRate ?? TURRET_RATE_PER_SECOND;
-  return Math.abs(bearingRate(world, target, memory)) > rate * TRAVERSE_MARGIN;
+  return Math.abs(bearingRate(world, target)) > rate * TRAVERSE_MARGIN;
 }
 
 function orbitVector(world, target, profile, memory, distance) {
@@ -591,8 +658,20 @@ export function planPilot(world, profile, memory, options = {}) {
   const escape = escapeVector(world, profile);
 
   const speed = options.mgSpeed ?? MG_PROJECTILE_SPEED;
+  // The nose gun fires along the hull, which swings at twice the turret rate,
+  // so the same allowance for getting there applies with a doubled rate.
   const bearing =
-    target === undefined ? undefined : aimBearing(world, target, speed, profile, memory);
+    target === undefined
+      ? undefined
+      : leadWithTraverse(
+          world,
+          target,
+          speed,
+          profile,
+          memory,
+          world.ship.heading,
+          (options.turretRate ?? TURRET_RATE_PER_SECOND) * 2
+        );
   const onAxis =
     bearing !== undefined &&
     Math.abs(shortestAngleDelta(world.ship.heading, bearing)) <= profile.mgConeRadians;
@@ -619,7 +698,7 @@ export function planPilot(world, profile, memory, options = {}) {
 
   // Holding a ring around a target the turret cannot track is the stalemate:
   // close on the intercept point instead and let the nose gun finish it.
-  if (traverseLosing(world, target, memory, options)) {
+  if (traverseLosing(world, target, options)) {
     return { vector: bearingVector(bearing), mgFiring };
   }
 

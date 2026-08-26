@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   createAutopilotMemory,
   directAim,
+  bearingRate,
   commitTarget,
   effectiveStandoff,
+  measureAngularRates,
   normalize,
   extrapolateWorld,
   interceptAim,
@@ -739,4 +741,87 @@ test("a cone narrower than one tick of traverse still lets the gun fire", () => 
   // Far off the bearing it still holds fire.
   const swungAway = world({ turretAngle: 1.2, enemies: [target] });
   assert.equal(planGunner(swungAway, ACE, createAutopilotMemory()).firing, false);
+});
+
+test("the aiming picture carries the turret and the hull forward", () => {
+  const frozen = world({ sampledAtMs: 0, turretAngle: 0 });
+  const rates = { turret: 1.2, heading: -0.8 };
+
+  // A tenth of a second of staleness at the stock traverse is already worth
+  // more than the ace firing cone, so leaving these frozen aimed the gun by an
+  // angle the mount had long since left.
+  const carried = extrapolateWorld(frozen, 100, { angularRates: rates });
+  assert.ok(Math.abs(carried.turretAngle - 0.12) < 1e-9);
+  assert.ok(Math.abs(carried.ship.heading - -0.08) < 1e-9);
+
+  // The turret cannot be carried faster than it can physically swing.
+  const absurd = extrapolateWorld(frozen, 100, {
+    angularRates: { turret: 50, heading: 0 },
+    turretRate: 1
+  });
+  assert.ok(Math.abs(absurd.turretAngle - 0.1) < 1e-9);
+
+  // The observation time survives the carrying forward.
+  assert.equal(carried.rawSampledAtMs, 0);
+  assert.equal(extrapolateWorld(carried, 150, { angularRates: rates }).rawSampledAtMs, 0);
+});
+
+test("angular rates are measured between two raw frames", () => {
+  assert.deepEqual(measureAngularRates(undefined, world()), { turret: 0, heading: 0 });
+
+  const first = world({ sampledAtMs: 0, turretAngle: 0 });
+  const second = world({ sampledAtMs: 100, turretAngle: 0.2 });
+  assert.ok(Math.abs(measureAngularRates(first, second).turret - 2) < 1e-9);
+
+  // Same frame twice carries no information and must not read as motion.
+  assert.deepEqual(measureAngularRates(first, first), { turret: 0, heading: 0 });
+});
+
+test("the bearing sweep is read off relative velocity, not off two samples", () => {
+  // A frozen picture is exactly what the extrapolation clamp produces, and
+  // sampling it twice used to report a dead-still target however fast it flew.
+  const crossing = world({
+    enemies: [enemyAt("crossing", 1, 2200 + 400, 2200, { velocityY: 800 })]
+  });
+  const target = crossing.enemies[0];
+  assert.ok(Math.abs(bearingRate(crossing, target) - 2) < 1e-9);
+
+  // Reading the same unchanged picture again gives the same answer.
+  assert.equal(bearingRate(crossing, target), bearingRate(crossing, target));
+
+  // A target running straight away sweeps not at all.
+  const receding = world({
+    enemies: [enemyAt("fleeing", 1, 2200 + 400, 2200, { velocityX: 300 })]
+  });
+  assert.equal(bearingRate(receding, receding.enemies[0]), 0);
+
+  // Own motion counts: drifting sideways sweeps a stationary target.
+  const drifting = world({
+    ship: {
+      x: 2200,
+      y: 2200,
+      heading: 0,
+      velocityX: 0,
+      velocityY: 400,
+      radius: 52,
+      hp: 500,
+      maxHp: 500
+    },
+    enemies: [enemyAt("still", 1, 2200 + 400, 2200)]
+  });
+  assert.ok(Math.abs(bearingRate(drifting, drifting.enemies[0]) - -1) < 1e-9);
+});
+
+test("the lead solution waits out the swing as well as the flight", () => {
+  const crossing = enemyAt("crossing", 1, 2200 + 700, 2200, { velocityY: 300 });
+
+  // Turret already on the bearing: only the flight time is led out.
+  const settled = world({ turretAngle: 0, enemies: [crossing] });
+  const near = planGunner(settled, ACE, createAutopilotMemory()).aim;
+
+  // Turret facing the other way: the swing costs time the target uses to run.
+  const swung = world({ turretAngle: Math.PI, enemies: [crossing] });
+  const far = planGunner(swung, ACE, createAutopilotMemory()).aim;
+
+  assert.ok(far.y > near.y);
 });
