@@ -30,6 +30,17 @@ describe("layout preview", () => {
     expect(markup).not.toContain("Создать комнату");
   });
 
+  it("counts only the rocks that pay credits next to the score", () => {
+    vi.stubGlobal("window", { location: { search: "?preview=1" } });
+
+    const markup = renderToStaticMarkup(<DisplayApp />);
+
+    // The fixture holds one wave rock and one ambient one; only the first pays.
+    expect(markup).toContain('data-testid="hud-field-counts"');
+    expect(markup).toContain("Камни 1");
+    expect(markup).toContain('data-entity-id="preview-asteroid-2"');
+  });
+
   it("keeps the room creation state without the preview parameter", () => {
     vi.stubGlobal("window", { location: { search: "" } });
 

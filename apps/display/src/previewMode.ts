@@ -162,12 +162,25 @@ function createPreviewGame(
       asteroids: [
         {
           entityId: "preview-asteroid-1",
+          origin: "wave",
           spawnSequence: 3,
           x: 2480,
           y: 2860,
           velocityX: -18,
           velocityY: -40,
           radius: 72,
+          hp: 60,
+          maxHp: 60
+        },
+        {
+          entityId: "preview-asteroid-2",
+          origin: "ambient",
+          spawnSequence: 9,
+          x: 1720,
+          y: 1880,
+          velocityX: 30,
+          velocityY: 24,
+          radius: 48,
           hp: 60,
           maxHp: 60
         }

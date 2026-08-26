@@ -217,6 +217,10 @@ export function DisplayApp() {
     view.game === null
       ? null
       : getCurrentWaveUpgrade(view.game.teamUpgrade.selection, view.game.encounter.waveNumber);
+  // Only the rocks that came with the wave pay credits, so those are the ones
+  // worth counting next to the score.
+  const waveAsteroidCount =
+    view.game?.asteroids.filter(({ origin }) => origin === "wave").length ?? 0;
 
   return (
     <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
@@ -332,8 +336,9 @@ export function DisplayApp() {
             <div>
               <span>Счёт</span>
               <strong>{view.game.encounter.score}</strong>
-              <small>
-                Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length}
+              <small data-testid="hud-field-counts">
+                Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length} ·
+                Камни {waveAsteroidCount}
               </small>
             </div>
             <div>

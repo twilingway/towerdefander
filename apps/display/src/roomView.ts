@@ -1,6 +1,7 @@
 import {
   CREW_ROLES,
   displayRoomViewSchema,
+  type AsteroidOrigin,
   type CrewRole,
   type DefeatReason,
   type DisplayRoomView,
@@ -56,6 +57,7 @@ interface NetworkEnemyState extends NetworkCombatEntityState {
 interface NetworkAsteroidState extends NetworkCombatEntityState {
   hp: number;
   maxHp: number;
+  origin: AsteroidOrigin;
 }
 
 interface NetworkProjectileState extends NetworkCombatEntityState {

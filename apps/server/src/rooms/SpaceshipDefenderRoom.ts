@@ -1215,6 +1215,7 @@ function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
 
 function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
   target.entityId = source.id;
+  target.origin = source.origin;
   target.spawnSequence = source.spawnSequence;
   target.x = source.x;
   target.y = source.y;

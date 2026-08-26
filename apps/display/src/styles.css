@@ -563,6 +563,15 @@ p {
   stroke-width: 1;
 }
 
+/* Wave rocks pay credits, so they read brighter than the ambient drift. */
+.combat-radar__asteroid {
+  fill: rgb(120 130 145 / 55%);
+}
+
+.combat-radar__asteroid[data-origin="wave"] {
+  fill: rgb(196 206 222 / 90%);
+}
+
 .combat-radar__enemy {
   fill: #ff625e;
   stroke: #ffd0ca;

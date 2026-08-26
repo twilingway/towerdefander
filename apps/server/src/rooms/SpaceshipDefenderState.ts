@@ -1,5 +1,6 @@
 import { ArraySchema, MapSchema, Schema, type, view } from "@colyseus/schema";
 import type {
+  AsteroidOrigin,
   CrewRole,
   DefeatReason,
   EncounterPhase,
@@ -143,6 +144,7 @@ export class EnemyState extends Schema {
 
 export class AsteroidState extends Schema {
   @type("string") entityId = "";
+  @type("string") origin: AsteroidOrigin = "ambient";
   @type("uint32") spawnSequence = 0;
   @type("float64") x = 0;
   @type("float64") y = 0;

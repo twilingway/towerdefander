@@ -25,13 +25,14 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
       className="combat-radar"
       data-testid="combat-radar"
       data-enemy-count={game.enemyShips.length}
+      data-asteroid-count={game.asteroids.length}
       aria-label="Мини-карта арены по центру снизу"
     >
       <span className="combat-radar__title">РАДАР</span>
       <svg
         viewBox={`0 0 ${String(RADAR_VIEW_BOX_SIZE)} ${String(RADAR_VIEW_BOX_SIZE)}`}
         role="img"
-        aria-label={`Корабль экипажа. Врагов: ${String(game.enemyShips.length)}`}
+        aria-label={`Корабль экипажа. Врагов: ${String(game.enemyShips.length)}. Астероидов: ${String(game.asteroids.length)}`}
       >
         <defs>
           <clipPath id={clipId}>
@@ -60,6 +61,26 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
           />
         </g>
         <g clipPath={`url(#${clipId})`}>
+          {game.asteroids.map((asteroid) => {
+            const point = projectWorldToRadar(
+              asteroid.x,
+              asteroid.y,
+              game.worldWidth,
+              game.worldHeight,
+              projection
+            );
+            return (
+              <circle
+                className="combat-radar__asteroid"
+                data-entity-id={asteroid.entityId}
+                data-origin={asteroid.origin}
+                cx={point.x}
+                cy={point.y}
+                r={2.4}
+                key={asteroid.entityId}
+              />
+            );
+          })}
           {game.enemyShips.map((enemy) => {
             const point = projectWorldToRadar(
               enemy.x,
@@ -95,7 +116,10 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
           r={projection.radius}
         />
       </svg>
-      <span className="sr-only">Ракеты, астероиды и снаряды на мини-карте не отображаются.</span>
+      <span className="sr-only">
+        Астероиды показаны точками: светлые дают кредиты, тёмные — только очки. Ракеты и снаряды на
+        мини-карте не отображаются.
+      </span>
     </aside>
   );
 });

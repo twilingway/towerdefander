@@ -148,6 +148,7 @@ const testGame = {
   asteroids: [
     {
       entityId: "asteroid-near",
+      origin: "wave",
       spawnSequence: 1,
       x: 110,
       y: 100,

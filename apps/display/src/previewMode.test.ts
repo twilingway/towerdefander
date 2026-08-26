@@ -36,7 +36,8 @@ describe("createPreviewRoomView", () => {
     const game = createPreviewRoomView("combat").game;
 
     expect(game?.enemyShips).toHaveLength(2);
-    expect(game?.asteroids).toHaveLength(1);
+    // One rock of each origin, so the preview shows both radar looks at once.
+    expect(game?.asteroids.map((asteroid) => asteroid.origin)).toEqual(["wave", "ambient"]);
     expect(game?.friendlyProjectiles.map((projectile) => projectile.source)).toEqual([
       "cannon",
       "machineGun"

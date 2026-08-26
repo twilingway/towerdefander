@@ -9,7 +9,7 @@ import {
 } from "./enemyKinds.ts";
 import { cameraViewWidthSchema, entityVisualSchema, visualAssetIdSchema } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 19 as const;
+export const PROTOCOL_VERSION = 20 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -73,6 +73,10 @@ export const enemyKindSchema = z
 export type EnemyKind = z.infer<typeof enemyKindSchema>;
 export const projectileKindSchema = z.enum(PROJECTILE_KINDS);
 export type ProjectileKind = z.infer<typeof projectileKindSchema>;
+/** Wave rocks pay credits; the ambient ones only score. */
+export const ASTEROID_ORIGINS = ["wave", "ambient"] as const;
+export const asteroidOriginSchema = z.enum(ASTEROID_ORIGINS);
+export type AsteroidOrigin = z.infer<typeof asteroidOriginSchema>;
 export const PROJECTILE_SOURCES = ["cannon", "machineGun"] as const;
 export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
 export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
@@ -343,7 +347,12 @@ export const publicEnemyViewSchema = z
   });
 export type PublicEnemyView = z.infer<typeof publicEnemyViewSchema>;
 export const publicAsteroidViewSchema = z
-  .object({ ...entityShape, hp: finite.positive(), maxHp: finite.positive() })
+  .object({
+    ...entityShape,
+    hp: finite.positive(),
+    maxHp: finite.positive(),
+    origin: asteroidOriginSchema
+  })
   .strict()
   .superRefine((value, context) => {
     if (value.hp > value.maxHp) issue(context, ["hp"], "Asteroid HP must not exceed max HP.");

@@ -67,6 +67,7 @@ const baseGame: DisplayGameSnapshot = {
   ],
   asteroids: [
     {
+      origin: "wave",
       entityId: "asteroid-1",
       spawnSequence: 2,
       x: 1_000,
@@ -105,11 +106,37 @@ describe("CombatRadar", () => {
     expect(markup).toContain("Корабль экипажа. Врагов: 1");
   });
 
-  it("does not render asteroid, missile or projectile markers", () => {
+  it("does not render missile or projectile markers", () => {
     const markup = renderToStaticMarkup(<CombatRadar game={baseGame} />);
 
-    expect(markup).not.toContain('data-entity-id="asteroid-1"');
     expect(markup).not.toContain('data-entity-id="missile-1"');
+  });
+
+  it("marks the rocks that pay credits apart from the ambient drift", () => {
+    const [wave] = baseGame.asteroids;
+    if (wave === undefined) throw new Error("fixture lost its asteroid");
+    const ambient = {
+      ...wave,
+      entityId: "asteroid-2",
+      spawnSequence: 9,
+      origin: "ambient" as const
+    };
+    const markup = renderToStaticMarkup(
+      <CombatRadar game={{ ...baseGame, asteroids: [...baseGame.asteroids, ambient] }} />
+    );
+
+    expect(markup).toContain('data-entity-id="asteroid-1"');
+    expect(markup).toContain('data-entity-id="asteroid-2"');
+    expect(markup).toContain('data-origin="wave"');
+    expect(markup).toContain('data-origin="ambient"');
+    expect(markup).toContain('data-asteroid-count="2"');
+  });
+
+  it("drops an asteroid marker once the rock is gone", () => {
+    const markup = renderToStaticMarkup(<CombatRadar game={{ ...baseGame, asteroids: [] }} />);
+
+    expect(markup).not.toContain('data-entity-id="asteroid-1"');
+    expect(markup).toContain('data-asteroid-count="0"');
   });
 
   it("removes an enemy marker when it is absent from the next snapshot", () => {

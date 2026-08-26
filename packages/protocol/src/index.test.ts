@@ -156,6 +156,7 @@ function displayRoom(): DisplayRoomView {
       ],
       asteroids: [
         {
+          origin: "wave",
           entityId: "asteroid-1",
           spawnSequence: 2,
           x: 1200,
@@ -240,9 +241,9 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v19 handshake and messages", () => {
-  it("publishes the fixed crew and v19", () => {
-    expect(PROTOCOL_VERSION).toBe(19);
+describe("protocol v20 handshake and messages", () => {
+  it("publishes the fixed crew and v20", () => {
+    expect(PROTOCOL_VERSION).toBe(20);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
@@ -250,7 +251,7 @@ describe("protocol v19 handshake and messages", () => {
 
   it("accepts v19 create/join and rejects v18 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 19 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 20 }).success
     ).toBe(true);
     expect(
       displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 18 }).success
@@ -258,7 +259,7 @@ describe("protocol v19 handshake and messages", () => {
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 19,
+        protocolVersion: 20,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
@@ -272,7 +273,7 @@ describe("protocol v19 handshake and messages", () => {
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 19,
+        protocolVersion: 20,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -281,7 +282,7 @@ describe("protocol v19 handshake and messages", () => {
 
   it("keeps continuous role messages strict on v19 and the active run", () => {
     const envelope = {
-      protocolVersion: 19,
+      protocolVersion: 20,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -369,7 +370,7 @@ describe("protocol v19 handshake and messages", () => {
 
   it("requires the machine gun trigger on v19 pilot input", () => {
     const envelope = {
-      protocolVersion: 19,
+      protocolVersion: 20,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -385,7 +386,7 @@ describe("protocol v19 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 19, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 20, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
@@ -432,7 +433,7 @@ describe("protocol v19 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 19,
+    protocolVersion: 20,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -866,18 +867,18 @@ describe("strict v19 room projections", () => {
 describe("v19 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 19, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 20, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 19,
+        protocolVersion: 20,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 19,
+        protocolVersion: 20,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10

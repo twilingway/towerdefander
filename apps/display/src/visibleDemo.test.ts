@@ -144,7 +144,7 @@ function enemy(entityId: string, spawnSequence: number, x: number, y: number) {
 }
 
 function asteroid(entityId: string, spawnSequence: number, x: number, y: number) {
-  return { ...moving(entityId, spawnSequence, x, y), hp: 10, maxHp: 10 };
+  return { ...moving(entityId, spawnSequence, x, y), hp: 10, maxHp: 10, origin: "wave" as const };
 }
 
 function missile(entityId: string, spawnSequence: number, x: number, y: number) {
