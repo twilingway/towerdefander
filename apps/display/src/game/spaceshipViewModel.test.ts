@@ -8,6 +8,7 @@ import {
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
+  getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
   getTimelineAlpha,
@@ -122,17 +123,72 @@ describe("spaceship view model", () => {
 
   it("uses distinct active and inactive shield styles", () => {
     expect(getShieldVisualStyle(true)).toEqual({
-      lineWidth: 16,
+      lineWidth: 11,
       color: 0x65baff,
-      alpha: 0.9,
-      dash: null
+      alpha: 0.85,
+      dash: null,
+      crescentThickness: 11
     });
     expect(getShieldVisualStyle(false)).toEqual({
       lineWidth: 6,
       color: 0x6f91a4,
       alpha: 0.35,
-      dash: { lengthPx: 16, gapPx: 12 }
+      dash: { lengthPx: 16, gapPx: 12 },
+      crescentThickness: null
     });
+  });
+
+  it("tapers the raised shield to nothing at both tips", () => {
+    const radius = 104;
+    const thickness = 11;
+    const points = getShieldCrescentPoints(0.3, 2.1, radius, thickness, 33);
+    // Outer edge first, inner edge back: one closed band.
+    expect(points).toHaveLength(66);
+
+    const distance = (index: number) => {
+      const point = points[index];
+      if (point === undefined) throw new Error(`missing point ${String(index)}`);
+      return Math.hypot(point.x, point.y);
+    };
+    // Both tips sit exactly on the shield radius, so the band closes on itself.
+    expect(distance(0)).toBeCloseTo(radius);
+    expect(distance(32)).toBeCloseTo(radius);
+    expect(distance(33)).toBeCloseTo(radius);
+    expect(distance(65)).toBeCloseTo(radius);
+    // The middle of the sector is where it is widest.
+    expect(distance(16)).toBeCloseTo(radius + thickness / 2);
+    expect(distance(49)).toBeCloseTo(radius - thickness / 2);
+  });
+
+  it("widens monotonically from the tip to the middle of the sector", () => {
+    const radius = 104;
+    const points = getShieldCrescentPoints(0, 1.8, radius, 11, 21);
+    const outerOffsets = points.slice(0, 11).map((point) => Math.hypot(point.x, point.y) - radius);
+
+    for (let index = 1; index < outerOffsets.length; index += 1) {
+      const previous = outerOffsets[index - 1];
+      const current = outerOffsets[index];
+      if (previous === undefined || current === undefined) throw new Error("missing offset");
+      expect(current).toBeGreaterThan(previous);
+    }
+  });
+
+  it("keeps the crescent inside the sector it is given", () => {
+    const start = 0.3;
+    const end = 2.1;
+    const points = getShieldCrescentPoints(start, end, 104, 11, 24);
+    for (const point of points) {
+      const angle = Math.atan2(point.y, point.x);
+      expect(angle).toBeGreaterThanOrEqual(start - 1e-9);
+      expect(angle).toBeLessThanOrEqual(end + 1e-9);
+    }
+  });
+
+  it("draws no crescent for a degenerate sector, radius or thickness", () => {
+    expect(getShieldCrescentPoints(0.3, 0.3, 104, 11)).toEqual([]);
+    expect(getShieldCrescentPoints(0.3, 2.1, 0, 11)).toEqual([]);
+    expect(getShieldCrescentPoints(0.3, 2.1, 104, 0)).toEqual([]);
+    expect(getShieldCrescentPoints(0.3, 2.1, 104, 11, 1)).toEqual([]);
   });
 
   it("dashes the inactive arc without moving the sector it covers", () => {

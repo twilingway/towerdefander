@@ -22,6 +22,7 @@ import {
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
+  getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
   getTimelineAlpha,
@@ -255,7 +256,17 @@ class SpaceshipScene extends Phaser.Scene {
     // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
     const radius = this.snapshot.shieldRadius;
     this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
-    if (style.dash === null) {
+    if (style.crescentThickness !== null) {
+      const crescent = getShieldCrescentPoints(arc.start, arc.end, radius, style.crescentThickness);
+      if (crescent.length > 0) {
+        this.shield.fillStyle(style.color, style.alpha);
+        this.shield.fillPoints(
+          crescent.map((point) => new Phaser.Math.Vector2(point.x, point.y)),
+          true,
+          true
+        );
+      }
+    } else if (style.dash === null) {
       this.shield.beginPath();
       this.shield.arc(0, 0, radius, arc.start, arc.end, false);
       this.shield.strokePath();
@@ -462,7 +473,11 @@ export function resolveEnemyVisual(
 }
 
 const SHIELD_GLOW_COLOR = 0x65baff;
-const SHIELD_GLOW_OUTER_STRENGTH = 6;
+/** Gentle bloom: the crescent already carries the shape, the glow only softens it. */
+const SHIELD_GLOW_OUTER_STRENGTH = 2.4;
+/** Fixed at creation by Phaser; a wider distance at higher quality falls off smoothly. */
+const SHIELD_GLOW_QUALITY = 16;
+const SHIELD_GLOW_DISTANCE = 24;
 
 /**
  * `Phaser.AUTO` can settle on a renderer with no filter support, and then the
@@ -473,7 +488,15 @@ function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.G
   shield.enableFilters();
   const filters = shield.filters;
   if (filters === null) return undefined;
-  const glow = filters.external.addGlow(SHIELD_GLOW_COLOR, SHIELD_GLOW_OUTER_STRENGTH);
+  const glow = filters.external.addGlow(
+    SHIELD_GLOW_COLOR,
+    SHIELD_GLOW_OUTER_STRENGTH,
+    0,
+    1,
+    false,
+    SHIELD_GLOW_QUALITY,
+    SHIELD_GLOW_DISTANCE
+  );
   glow.active = false;
   return glow;
 }

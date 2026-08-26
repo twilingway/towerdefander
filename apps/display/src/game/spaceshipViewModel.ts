@@ -45,6 +45,11 @@ export interface ShieldVisualStyle {
   readonly alpha: number;
   /** Null draws one solid arc; a dash splits it into strokes. */
   readonly dash: ShieldDash | null;
+  /**
+   * Widest point of a filled crescent, in world units. Null strokes the arc at
+   * `lineWidth` instead.
+   */
+  readonly crescentThickness: number | null;
 }
 
 export interface GridSegment {
@@ -141,8 +146,54 @@ export function getResponsiveViewport(
 
 export function getShieldVisualStyle(active: boolean): ShieldVisualStyle {
   return active
-    ? { lineWidth: 16, color: 0x65baff, alpha: 0.9, dash: null }
-    : { lineWidth: 6, color: 0x6f91a4, alpha: 0.35, dash: { lengthPx: 16, gapPx: 12 } };
+    ? { lineWidth: 11, color: 0x65baff, alpha: 0.85, dash: null, crescentThickness: 11 }
+    : {
+        lineWidth: 6,
+        color: 0x6f91a4,
+        alpha: 0.35,
+        dash: { lengthPx: 16, gapPx: 12 },
+        crescentThickness: null
+      };
+}
+
+/** Samples along the sector; enough that the tapered edge reads as a curve. */
+export const SHIELD_CRESCENT_SAMPLES = 48;
+
+/**
+ * Outlines the raised shield as a crescent: a band that is widest at the middle
+ * of the sector and narrows to nothing at both tips.
+ *
+ * Graphics strokes at one width per path, so a band that changes thickness has
+ * to be a filled shape rather than a thicker line. The outline runs along the
+ * outer edge and returns along the inner one, which also gives the glow filter
+ * a soft tapered silhouette to bloom around instead of a blunt stroke.
+ */
+export function getShieldCrescentPoints(
+  start: number,
+  end: number,
+  radius: number,
+  thickness: number,
+  samples: number = SHIELD_CRESCENT_SAMPLES
+): readonly Point[] {
+  const sweep = end - start;
+  const steps = Math.floor(samples);
+  if (!(radius > 0) || !(sweep > 0) || !(thickness > 0) || steps < 2) return [];
+
+  const halfThickness = thickness / 2;
+  const outer: Point[] = [];
+  const inner: Point[] = [];
+  for (let index = 0; index < steps; index += 1) {
+    const progress = index / (steps - 1);
+    const angle = start + sweep * progress;
+    // A sine profile reaches zero at both tips and its widest in the middle, so
+    // the band closes on itself without a visible seam.
+    const halfWidth = halfThickness * Math.sin(Math.PI * progress);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    outer.push({ x: cos * (radius + halfWidth), y: sin * (radius + halfWidth) });
+    inner.push({ x: cos * (radius - halfWidth), y: sin * (radius - halfWidth) });
+  }
+  return [...outer, ...inner.reverse()];
 }
 
 export interface ShieldArcSegment {
