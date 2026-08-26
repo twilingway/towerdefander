@@ -74,6 +74,7 @@ try {
   demoProcess = startDemoProcess({
     DEMO_DISPLAY_URL: `http://127.0.0.1:${String(displayPort)}/?demo=1`,
     DEMO_GAME_SERVER_URL: `ws://127.0.0.1:${String(serverPort)}`,
+    DEMO_BALANCE_URL: `http://127.0.0.1:${String(serverPort)}`,
     DEMO_HEADLESS: process.env.DEMO_HEADLESS ?? "0",
     DEMO_VERIFY: process.env.DEMO_VERIFY ?? "0"
   });

@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildVisibleDemoWorld,
   calculateVisibleDemoRate,
   findNearestVisibleDemoTarget,
   findNearestVisibleDemoThreat,
   isVisibleDemoMode,
   parseVisibleDemoStatus,
-  sendVisibleDemoCommand
+  publishVisibleDemoWorld,
+  sendVisibleDemoCommand,
+  visibleDemoWorldKey
 } from "./visibleDemo.js";
 
 describe("visible demo helpers", () => {
@@ -146,4 +149,101 @@ function asteroid(entityId: string, spawnSequence: number, x: number, y: number)
 
 function missile(entityId: string, spawnSequence: number, x: number, y: number) {
   return { ...moving(entityId, spawnSequence, x, y), heading: 0, visual: null };
+}
+
+describe("visible demo world picture", () => {
+  it("keeps every framed entity with the fields the bot needs", () => {
+    const world = buildVisibleDemoWorld(worldGame(), 1_700);
+
+    expect(world.sampledAtMs).toBe(1_700);
+    expect(world.tick).toBe(42);
+    expect(world.phase).toBe("combat");
+    expect(world.ship).toMatchObject({ x: 2_200, y: 2_200, heading: 0.5, radius: 52 });
+    expect(world.shield).toMatchObject({ active: false, energy: 80, arcHalfAngle: Math.PI / 4 });
+    expect(world.machineGun).toMatchObject({ heat: 12, capacity: 100, overheated: false });
+    expect(world.enemies).toHaveLength(1);
+    expect(world.enemies[0]).toMatchObject({
+      entityId: "enemy-near",
+      kind: "gunship",
+      hp: 10,
+      velocityX: 2,
+      radius: 10
+    });
+    expect(world.missiles[0]).toMatchObject({ entityId: "missile-near", heading: 0 });
+    expect(world.bullets[0]).toMatchObject({ entityId: "bullet-near" });
+    expect(world.asteroids[0]).toMatchObject({ entityId: "rock-near", maxHp: 10 });
+  });
+
+  it("drops every entity the camera never frames", () => {
+    const world = buildVisibleDemoWorld(
+      worldGame({
+        enemyShips: [enemy("enemy-near", 1, 2_300, 2_200), enemy("enemy-far", 2, 2_200, 3_400)],
+        homingMissiles: [missile("missile-far", 3, 4_000, 2_200)],
+        hostileProjectiles: [projectile("bullet-far", 4, 2_200, 4_000)],
+        asteroids: [asteroid("rock-far", 5, 100, 2_200)]
+      }),
+      0
+    );
+
+    expect(world.enemies.map(({ entityId }) => entityId)).toEqual(["enemy-near"]);
+    expect(world.missiles).toHaveLength(0);
+    expect(world.bullets).toHaveLength(0);
+    expect(world.asteroids).toHaveLength(0);
+  });
+
+  it("survives an empty battlefield", () => {
+    const world = buildVisibleDemoWorld(
+      worldGame({ enemyShips: [], homingMissiles: [], hostileProjectiles: [], asteroids: [] }),
+      0
+    );
+
+    expect(world.enemies).toHaveLength(0);
+    expect(world.missiles).toHaveLength(0);
+    expect(world.bullets).toHaveLength(0);
+    expect(world.asteroids).toHaveLength(0);
+  });
+
+  it("publishes onto the host only when asked", () => {
+    const host: Record<string, unknown> = {};
+    publishVisibleDemoWorld(host, buildVisibleDemoWorld(worldGame(), 5));
+
+    expect(host[visibleDemoWorldKey]).toMatchObject({ sampledAtMs: 5 });
+    expect(() => {
+      publishVisibleDemoWorld(undefined, buildVisibleDemoWorld(worldGame(), 5));
+    }).not.toThrow();
+  });
+});
+
+function projectile(entityId: string, spawnSequence: number, x: number, y: number) {
+  return { ...moving(entityId, spawnSequence, x, y), kind: "hostile" as const, visual: null };
+}
+
+function worldGame(overrides: Record<string, unknown> = {}) {
+  return {
+    tick: 42,
+    cameraViewWidth: 1600,
+    arenaRadius: 2200,
+    worldWidth: 4400,
+    worldHeight: 4400,
+    shieldRadius: 104,
+    turretAngle: 1.2,
+    spaceship: {
+      x: 2_200,
+      y: 2_200,
+      heading: 0.5,
+      velocityX: 10,
+      velocityY: -5,
+      radius: 52,
+      hp: 400,
+      maxHp: 500
+    },
+    shield: { angle: 0.1, active: false, energy: 80, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    machineGun: { heat: 12, capacity: 100, overheated: false },
+    encounter: { phase: "combat" as const, waveNumber: 3 },
+    enemyShips: [enemy("enemy-near", 1, 2_300, 2_200)],
+    homingMissiles: [missile("missile-near", 2, 2_250, 2_200)],
+    hostileProjectiles: [projectile("bullet-near", 3, 2_180, 2_200)],
+    asteroids: [asteroid("rock-near", 4, 2_120, 2_200)],
+    ...overrides
+  };
 }

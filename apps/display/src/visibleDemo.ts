@@ -1,9 +1,12 @@
 import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import type {
   PublicAsteroidView,
+  PublicEncounterView,
   PublicEnemyView,
   PublicHomingMissileView,
+  PublicMachineGunView,
   PublicProjectileView,
+  PublicShieldView,
   PublicSpaceshipView
 } from "@spaceship-defender/protocol";
 
@@ -76,25 +79,32 @@ export function findNearestVisibleDemoThreat(
 }
 
 /**
- * The bot only fires at what a player on the same screen can see, so entities
+ * The bot only acts on what a player on the same screen can see, so entities
  * outside the framed slice are skipped even when they are the nearest in the
  * arena. The frame follows the authoritative `cameraViewWidth`.
  */
+export function isInsideCameraFrame(
+  ship: Pick<PublicSpaceshipView, "x" | "y">,
+  cameraViewWidth: number,
+  entity: Pick<VisibleDemoTarget, "x" | "y">
+): boolean {
+  const halfWidth = cameraViewWidth / 2;
+  const halfHeight = (cameraViewWidth * CAMERA_VIEW_ASPECT) / 2;
+  return Math.abs(entity.x - ship.x) <= halfWidth && Math.abs(entity.y - ship.y) <= halfHeight;
+}
+
+/** Nearest entity inside the camera frame, with a deterministic tie-break. */
 function findNearestVisibleDemoEntity(
   game: Pick<VisibleDemoGame, "spaceship" | "cameraViewWidth">,
   targets: readonly VisibleDemoTarget[]
 ): VisibleDemoTarget | undefined {
   let nearest: VisibleDemoTarget | undefined;
   let nearestDistanceSquared = Number.POSITIVE_INFINITY;
-  const halfWidth = game.cameraViewWidth / 2;
-  const halfHeight = (game.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2;
 
   for (const target of targets) {
+    if (!isInsideCameraFrame(game.spaceship, game.cameraViewWidth, target)) continue;
     const deltaX = target.x - game.spaceship.x;
     const deltaY = target.y - game.spaceship.y;
-    if (Math.abs(deltaX) > halfWidth || Math.abs(deltaY) > halfHeight) {
-      continue;
-    }
     const distanceSquared = deltaX * deltaX + deltaY * deltaY;
     if (
       distanceSquared < nearestDistanceSquared ||
@@ -168,4 +178,169 @@ export function sendVisibleDemoCommand(host: unknown, command: VisibleDemoComman
 
 function compareTargets(left: VisibleDemoTarget, right: VisibleDemoTarget): number {
   return left.spawnSequence - right.spawnSequence || left.entityId.localeCompare(right.entityId);
+}
+
+/** Property the demo page hangs its world picture on for the Node bot to read. */
+export const visibleDemoWorldKey = "__spaceshipDemoWorld";
+
+interface VisibleDemoEntity {
+  readonly entityId: string;
+  readonly spawnSequence: number;
+  readonly x: number;
+  readonly y: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+  readonly radius: number;
+}
+
+export interface VisibleDemoEnemy extends VisibleDemoEntity {
+  readonly kind: string;
+  readonly heading: number;
+  readonly hp: number;
+  readonly maxHp: number;
+}
+
+export interface VisibleDemoMissile extends VisibleDemoEntity {
+  readonly heading: number;
+}
+
+export interface VisibleDemoRock extends VisibleDemoEntity {
+  readonly hp: number;
+  readonly maxHp: number;
+}
+
+/**
+ * Everything the autopilot is allowed to know: the ship's own systems plus the
+ * entities a viewer can actually see on the same screen. Nothing outside the
+ * camera frame is published, so the bot cannot act on what the room shows it
+ * but the screen does not.
+ */
+export interface VisibleDemoWorld {
+  readonly sampledAtMs: number;
+  readonly tick: number;
+  readonly phase: string;
+  readonly waveNumber: number;
+  readonly cameraViewWidth: number;
+  readonly arenaRadius: number;
+  readonly worldWidth: number;
+  readonly worldHeight: number;
+  readonly shieldRadius: number;
+  readonly turretAngle: number;
+  readonly ship: {
+    readonly x: number;
+    readonly y: number;
+    readonly heading: number;
+    readonly velocityX: number;
+    readonly velocityY: number;
+    readonly radius: number;
+    readonly hp: number;
+    readonly maxHp: number;
+  };
+  readonly shield: {
+    readonly angle: number;
+    readonly active: boolean;
+    readonly energy: number;
+    readonly capacity: number;
+    readonly arcHalfAngle: number;
+  };
+  readonly machineGun: {
+    readonly heat: number;
+    readonly capacity: number;
+    readonly overheated: boolean;
+  };
+  readonly enemies: readonly VisibleDemoEnemy[];
+  readonly missiles: readonly VisibleDemoMissile[];
+  readonly bullets: readonly VisibleDemoEntity[];
+  readonly asteroids: readonly VisibleDemoRock[];
+}
+
+interface VisibleDemoWorldGame extends VisibleDemoThreatGame {
+  readonly tick: number;
+  readonly arenaRadius: number;
+  readonly worldWidth: number;
+  readonly worldHeight: number;
+  readonly shieldRadius: number;
+  readonly turretAngle: number;
+  readonly spaceship: PublicSpaceshipView;
+  readonly shield: PublicShieldView;
+  readonly machineGun: PublicMachineGunView;
+  readonly encounter: Pick<PublicEncounterView, "phase" | "waveNumber">;
+}
+
+function toDemoEntity(entity: VisibleDemoEntity): VisibleDemoEntity {
+  return {
+    entityId: entity.entityId,
+    spawnSequence: entity.spawnSequence,
+    x: entity.x,
+    y: entity.y,
+    velocityX: entity.velocityX,
+    velocityY: entity.velocityY,
+    radius: entity.radius
+  };
+}
+
+export function buildVisibleDemoWorld(
+  game: VisibleDemoWorldGame,
+  sampledAtMs: number
+): VisibleDemoWorld {
+  const framed = <T extends VisibleDemoEntity>(entities: readonly T[]): readonly T[] =>
+    entities.filter((entity) => isInsideCameraFrame(game.spaceship, game.cameraViewWidth, entity));
+
+  return {
+    sampledAtMs,
+    tick: game.tick,
+    phase: game.encounter.phase,
+    waveNumber: game.encounter.waveNumber,
+    cameraViewWidth: game.cameraViewWidth,
+    arenaRadius: game.arenaRadius,
+    worldWidth: game.worldWidth,
+    worldHeight: game.worldHeight,
+    shieldRadius: game.shieldRadius,
+    turretAngle: game.turretAngle,
+    ship: {
+      x: game.spaceship.x,
+      y: game.spaceship.y,
+      heading: game.spaceship.heading,
+      velocityX: game.spaceship.velocityX,
+      velocityY: game.spaceship.velocityY,
+      radius: game.spaceship.radius,
+      hp: game.spaceship.hp,
+      maxHp: game.spaceship.maxHp
+    },
+    shield: {
+      angle: game.shield.angle,
+      active: game.shield.active,
+      energy: game.shield.energy,
+      capacity: game.shield.capacity,
+      arcHalfAngle: game.shield.arcHalfAngle
+    },
+    machineGun: {
+      heat: game.machineGun.heat,
+      capacity: game.machineGun.capacity,
+      overheated: game.machineGun.overheated
+    },
+    enemies: framed(game.enemyShips).map((enemy) => ({
+      ...toDemoEntity(enemy),
+      kind: enemy.kind,
+      heading: enemy.heading,
+      hp: enemy.hp,
+      maxHp: enemy.maxHp
+    })),
+    missiles: framed(game.homingMissiles).map((missile) => ({
+      ...toDemoEntity(missile),
+      heading: missile.heading
+    })),
+    bullets: framed(game.hostileProjectiles).map(toDemoEntity),
+    asteroids: framed(game.asteroids).map((asteroid) => ({
+      ...toDemoEntity(asteroid),
+      hp: asteroid.hp,
+      maxHp: asteroid.maxHp
+    }))
+  };
+}
+
+/** Hands the world picture to the Node bot without touching the render path. */
+export function publishVisibleDemoWorld(host: unknown, world: VisibleDemoWorld): void {
+  if (typeof host !== "object" || host === null) return;
+  (host as Record<string, unknown>)[visibleDemoWorldKey] = world;
 }

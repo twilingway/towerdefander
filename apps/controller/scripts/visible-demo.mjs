@@ -15,10 +15,11 @@ import {
 import { chromium } from "@playwright/test";
 
 import {
-  directAim,
-  interceptAim,
-  nextShieldActive,
-  pilotVector,
+  createAutopilotMemory,
+  extrapolateWorld,
+  planGunner,
+  planPilot,
+  planShield,
   runWaveKey
 } from "./visible-demo-policy.mjs";
 
@@ -28,6 +29,9 @@ const VERIFY_TIMEOUT_MS = 150_000;
 const STATUS_EVENT = "spaceship-visible-demo-status";
 const displayUrl = process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1";
 const gameServerUrl = process.env.DEMO_GAME_SERVER_URL ?? "ws://127.0.0.1:36567";
+const balanceUrl = process.env.DEMO_BALANCE_URL ?? "http://127.0.0.1:36567";
+const levelOverride = process.env.DEMO_BOT_LEVEL;
+const LEVEL_LABELS = { rookie: "Новичок", veteran: "Ветеран", ace: "Ас" };
 const verificationMode = process.env.DEMO_VERIFY === "1";
 const headless = process.env.DEMO_HEADLESS === "1";
 
@@ -46,7 +50,11 @@ let pilotSequence = 0;
 let gunnerSequence = 0;
 let shieldSequence = 0;
 let shieldActive = false;
+let autopilot;
+let autopilotMemory;
+let autopilotMemoryKey;
 let latestTelemetry;
+let latestWorld;
 let lastTelemetryAt = 0;
 let resultObservedAt;
 let readySentForRun;
@@ -108,6 +116,9 @@ try {
     else if (command === "stop") requestStop();
   });
 
+  autopilot = await loadAutopilot();
+  console.log(`Autopilot level: ${autopilot.level} (${autopilot.source})`);
+
   await page.goto(displayUrl, { waitUntil: "domcontentloaded" });
   if (!headless) await keepVisiblePageActive(context, page);
   abortIfStopped();
@@ -142,7 +153,19 @@ try {
     8_000
   );
   const startedAt = Date.now();
-  await refreshTelemetry();
+  // The autopilot acts only on the world picture the display publishes, so a
+  // demo that never publishes one has to fail loudly instead of flying blind.
+  try {
+    await waitFor(async () => {
+      await refreshTelemetry();
+      return latestWorld !== undefined;
+    }, 5_000);
+  } catch (error) {
+    if (error instanceof DemoStopped) throw error;
+    throw new Error(
+      "Display published no autopilot world picture; check that the demo build is enabled."
+    );
+  }
   const startingPosition = latestTelemetry?.spaceship;
   verification.combat = true;
   await publishStatus("running", "Автопилот ведёт бой", encounter().waveNumber, "combat");
@@ -175,7 +198,7 @@ try {
     if (currentEncounter.phase === "combat") {
       resultObservedAt = undefined;
       neutralizedPhaseKey = undefined;
-      if (!paused) sendCombatInputs(Date.now() - startedAt, generation);
+      if (!paused) sendCombatInputs(generation);
     } else if (currentEncounter.phase === "intermission") {
       verification.intermission = true;
       await neutralizeForPhase(currentEncounter);
@@ -390,36 +413,112 @@ async function cleanupExternalChromeProfile() {
   await rm(resolvedProfile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
-function sendCombatInputs(elapsedMs, expectedGeneration) {
-  if (paused || expectedGeneration !== generation) return;
-  const telemetry = latestTelemetry;
-  const spaceship = telemetry?.spaceship ?? { x: 2_200, y: 2_200 };
-  const target = telemetry?.target;
-  const threat = telemetry?.threat;
+function sendCombatInputs(expectedGeneration) {
+  if (paused || expectedGeneration !== generation || latestWorld === undefined) return;
+  const nowMs = Date.now();
+  const world = extrapolateWorld(latestWorld, nowMs);
+  const { profile } = autopilot;
+  const memory = autopilotMemoryFor(world.waveNumber);
+  const options = {
+    archetypes: autopilot.archetypes,
+    cannonSpeed: autopilot.cannonSpeed,
+    mgSpeed: autopilot.mgSpeed,
+    nowMs
+  };
 
+  const pilot = planPilot(world, profile, memory, options);
   pilotSequence += 1;
   pilotRoom().send(clientMessage.pilotInput, {
     ...envelope(pilotRoom()),
     sequence: pilotSequence,
-    vector: pilotVector(elapsedMs),
-    mgFiring: target !== undefined
+    vector: pilot.vector,
+    mgFiring: pilot.mgFiring
   });
+  const gunner = planGunner(world, profile, memory, options);
   gunnerSequence += 1;
   gunnerRoom().send(clientMessage.gunnerInput, {
     ...envelope(gunnerRoom()),
     sequence: gunnerSequence,
-    aim: interceptAim(spaceship, target),
-    firing: target !== undefined
+    aim: gunner.aim,
+    firing: gunner.firing
   });
-  shieldActive = nextShieldActive(shieldActive, telemetry?.shieldEnergy ?? 100);
+  const shield = planShield(world, profile, memory);
+  shieldActive = shield.active;
   shieldSequence += 1;
   shieldRoom().send(clientMessage.shieldInput, {
     ...envelope(shieldRoom()),
     sequence: shieldSequence,
-    aim: directAim(spaceship, threat),
-    active: shieldActive
+    aim: shield.aim,
+    active: shield.active
   });
   recordControlBatch();
+}
+
+/**
+ * A fresh scratch space per run and wave: an intermission wipes the world, so a
+ * target committed before it must not survive into the next one. Seeding from
+ * the same key keeps the aim jitter reproducible across replays.
+ */
+function autopilotMemoryFor(waveNumber) {
+  const key = runWaveKey(pilotRoom().state.runNumber, waveNumber);
+  if (autopilotMemoryKey !== key) {
+    autopilotMemoryKey = key;
+    autopilotMemory = createAutopilotMemory(seedFromKey(key));
+  }
+  return autopilotMemory;
+}
+
+function seedFromKey(key) {
+  let hash = 2_166_136_261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * The demo plays by the preset the console edits, so the operator can watch the
+ * same wave through a weaker or a sharper pilot. A missing or malformed preset
+ * is a hard failure rather than a silent fallback to numbers nobody chose.
+ */
+async function loadAutopilot() {
+  const endpoint = `${balanceUrl.replace(/\/+$/u, "")}/admin/balance`;
+  let document;
+  try {
+    const response = await fetch(endpoint);
+    if (!response.ok) {
+      throw new Error(`${String(response.status)} ${response.statusText}`);
+    }
+    document = await response.json();
+  } catch (error) {
+    throw new Error(
+      `Could not read the balance preset from ${endpoint}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+
+  const preset = document?.presets?.find(({ id }) => id === document.activePresetId);
+  const tuning = preset?.tuning;
+  if (tuning?.autopilot === undefined) {
+    throw new Error(`Balance preset from ${endpoint} carries no autopilot section.`);
+  }
+  const requested = levelOverride ?? tuning.autopilot.level;
+  const profile = tuning.autopilot.profiles[requested];
+  if (profile === undefined) {
+    throw new Error(`Balance preset has no autopilot profile named "${String(requested)}".`);
+  }
+  return {
+    level: requested,
+    source: levelOverride === undefined ? "preset" : "DEMO_BOT_LEVEL",
+    profile,
+    archetypes: tuning.enemyArchetypes ?? {},
+    // Both muzzle velocities are preset values, so the lead solution has to
+    // use the ones this run will actually fire with.
+    cannonSpeed: tuning.projectileSpeedPerSecond,
+    mgSpeed: tuning.mgProjectileSpeedPerSecond
+  };
 }
 
 async function pauseAutomation() {
@@ -564,6 +663,7 @@ async function refreshTelemetry() {
         controlHz: parseOverlay("data-control-hz")
       };
     });
+    latestWorld = await page.evaluate(() => window.__spaceshipDemoWorld);
   } catch (error) {
     if (stopRequested || page.isClosed()) return;
     throw error;
@@ -589,11 +689,13 @@ function observeVerification(startingPosition) {
 }
 
 function statusMessage(currentEncounter) {
-  if (currentEncounter.phase === "intermission") return "Выбираем улучшения экипажа";
-  if (currentEncounter.phase === "result") return "Результат боя; готовим повторный запуск";
-  return latestTelemetry?.target === undefined
-    ? "Ищем цель и патрулируем арену"
-    : `Атакуем ${latestTelemetry.target.entityId}`;
+  const level = LEVEL_LABELS[autopilot?.level] ?? String(autopilot?.level ?? "—");
+  if (currentEncounter.phase === "intermission") return `${level} · выбираем улучшения экипажа`;
+  if (currentEncounter.phase === "result") return `${level} · результат боя, готовим повтор`;
+  const target = autopilotMemory?.target;
+  return target === undefined
+    ? `${level} · ищем цель и держим дистанцию`
+    : `${level} · атакуем ${target.entityId}`;
 }
 
 async function publishStatus(state, message, waveNumber, phase) {

@@ -24,7 +24,8 @@ import {
   BalanceStore,
   createDefaultPresetsFile,
   createDefaultTuning,
-  migrateBalanceDocument
+  migrateBalanceDocument,
+  toSimulationConfig
 } from "./store.js";
 
 function requireArchetype(tuning: BalanceTuning, kind: string) {
@@ -521,6 +522,66 @@ describe("version 1 migration", () => {
 
     const migratedOnce = migrateBalanceDocument(document);
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("gives a version 9 document the built-in autopilot levels", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 9 had no autopilot section at all: the demo bot was hardcoded.
+    const legacyTuning: Partial<BalanceTuning> = { ...defaults };
+    delete legacyTuning.autopilot;
+    const document = {
+      version: 9,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+    expect(store.getActiveTuning().autopilot).toEqual(defaults.autopilot);
+
+    // The rest of the preset keeps playing with exactly the numbers it had.
+    const config = store.getActiveSimulationConfig();
+    expect(config.spaceshipSpeedPerSecond).toBe(defaults.spaceshipSpeedPerSecond);
+    expect(config.shieldCapacity).toBe(defaults.shieldCapacity);
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("keeps a hand-tuned autopilot profile and fills only the missing ones", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const handTuned = { ...defaults.autopilot.profiles.ace, mgConeRadians: 0.05 };
+    const document = {
+      version: 9,
+      activePresetId: "operator",
+      presets: [
+        {
+          id: "operator",
+          name: "Operator",
+          tuning: { ...defaults, autopilot: { level: "ace", profiles: { ace: handTuned } } }
+        }
+      ]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
+    await store.load();
+
+    const { autopilot } = store.getActiveTuning();
+    expect(autopilot.level).toBe("ace");
+    expect(autopilot.profiles.ace.mgConeRadians).toBe(0.05);
+    expect(autopilot.profiles.rookie).toEqual(defaults.autopilot.profiles.rookie);
+    expect(autopilot.profiles.veteran).toEqual(defaults.autopilot.profiles.veteran);
+  });
+
+  it("keeps the autopilot section out of the simulation config", () => {
+    const config = toSimulationConfig(createDefaultTuning());
+    expect(config).not.toHaveProperty("autopilot");
   });
 
   it("carries an edited player ship into the next run", async () => {

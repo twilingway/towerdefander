@@ -7,9 +7,9 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 9 as const;
+export const BALANCE_FILE_VERSION = 10 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -177,6 +177,65 @@ export const waveCampaignSchema = z
   .strict();
 export type WaveCampaign = z.infer<typeof waveCampaignSchema>;
 
+/**
+ * Skill levels of the visible-demo autopilot. Presentation-only, like
+ * `cameraViewWidth`: the simulation never reads them, the demo harness does.
+ */
+export const AUTOPILOT_LEVELS = ["rookie", "veteran", "ace"] as const;
+export const autopilotLevelSchema = z.enum(AUTOPILOT_LEVELS);
+export type AutopilotLevel = z.infer<typeof autopilotLevelSchema>;
+
+export const autopilotProfileSchema = z
+  .object({
+    // --- Accuracy and reaction ---
+    /** Ticks a fresh target must persist before the bot commits to it. */
+    reactionTicks: z.number().int().min(0).max(40),
+    /** Ticks between target re-rankings; longer means a more sluggish pilot. */
+    retargetIntervalTicks: z.number().int().min(1).max(60),
+    /** Seeded aim noise in radians. */
+    aimJitterRadians: z.number().min(0).max(0.6),
+    /** 0 aims where the target is, 1 where it will be. */
+    leadFactor: z.number().min(0).max(1),
+
+    // --- Skill set ---
+    orbit: z.boolean(),
+    evadeMissiles: z.boolean(),
+    dodgeBullets: z.boolean(),
+    threatAwareShield: z.boolean(),
+    /** World units the pilot keeps between the hull and its target. */
+    standoffDistance: z.number().min(200).max(2000),
+    /** How far ahead the pilot looks for a hit the shield will not cover. */
+    evadeHorizonTicks: z.number().int().min(0).max(40),
+
+    // --- Resource discipline ---
+    /** Half-angle around the ship heading inside which the nose gun fires. */
+    mgConeRadians: z.number().min(0.02).max(Math.PI),
+    /** Half-angle around the turret bearing inside which the cannon fires. */
+    cannonConeRadians: z.number().min(0.02).max(Math.PI),
+    /** Fraction of heat capacity above which the nose gun holds fire. */
+    mgHeatCeiling: z.number().min(0.1).max(1),
+    /** Ticks before predicted contact at which the shield goes up. */
+    shieldLeadTicks: z.number().int().min(0).max(40),
+    /** Fraction of shield capacity below which the shield stays down. */
+    shieldMinEnergy: z.number().min(0).max(0.9)
+  })
+  .strict();
+export type AutopilotProfile = z.infer<typeof autopilotProfileSchema>;
+
+export const autopilotTuningSchema = z
+  .object({
+    level: autopilotLevelSchema,
+    profiles: z
+      .object({
+        rookie: autopilotProfileSchema,
+        veteran: autopilotProfileSchema,
+        ace: autopilotProfileSchema
+      })
+      .strict()
+  })
+  .strict();
+export type AutopilotTuning = z.infer<typeof autopilotTuningSchema>;
+
 export const balanceTuningSchema = z
   .object({
     enemyArchetypes: enemyArchetypeTableSchema,
@@ -198,6 +257,8 @@ export const balanceTuningSchema = z
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
     cameraViewWidth: cameraViewWidthSchema,
+    /** Demo autopilot skill levels; the simulation never reads this section. */
+    autopilot: autopilotTuningSchema,
 
     // --- Player ship: hull and movement ---
     /** Look of the player hull; null keeps the display's own default silhouette. */

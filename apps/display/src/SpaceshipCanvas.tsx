@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
-import { findNearestVisibleDemoTarget, findNearestVisibleDemoThreat } from "./visibleDemo.js";
+import {
+  buildVisibleDemoWorld,
+  findNearestVisibleDemoTarget,
+  findNearestVisibleDemoThreat,
+  publishVisibleDemoWorld
+} from "./visibleDemo.js";
 
 interface SpaceshipCanvasProps {
   readonly game: DisplayGameSnapshot;
@@ -86,6 +91,12 @@ export function SpaceshipCanvas({
     lastRuntimeRunNumberReference.current = runNumber;
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, runNumber]);
+
+  useEffect(() => {
+    // Demo-only: the Node bot reads this instead of scraping the render path.
+    if (!visibleDemo) return;
+    publishVisibleDemoWorld(globalThis, buildVisibleDemoWorld(game, Date.now()));
+  }, [game, visibleDemo]);
 
   return (
     <div

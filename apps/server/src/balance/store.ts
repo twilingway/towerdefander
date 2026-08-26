@@ -2,11 +2,13 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import {
+  AUTOPILOT_LEVELS,
   BALANCE_FILE_VERSION,
   FALLBACK_VISUAL_ASSET_ID,
   LEGACY_BALANCE_FILE_VERSIONS,
   balancePresetsFileSchema,
   balanceTuningSchema,
+  type AutopilotTuning,
   type BalancePreset,
   type BalancePresetsFile,
   type BalanceTuning
@@ -18,6 +20,69 @@ import {
 } from "@spaceship-defender/game-core";
 
 const DEFAULT_PRESET_ID = "default";
+
+/**
+ * Skill levels of the visible-demo autopilot. `rookie` reproduces the bot that
+ * predated the levels — a wide-open cone, no lead, no evasion — so an operator
+ * has a baseline to compare against; `ace` is the ceiling of what the policy
+ * can do. Nothing here reaches the simulation.
+ */
+const DEFAULT_AUTOPILOT: AutopilotTuning = {
+  level: "veteran",
+  profiles: {
+    rookie: {
+      reactionTicks: 12,
+      retargetIntervalTicks: 40,
+      aimJitterRadians: 0.18,
+      leadFactor: 0,
+      orbit: false,
+      evadeMissiles: false,
+      dodgeBullets: false,
+      threatAwareShield: false,
+      standoffDistance: 900,
+      evadeHorizonTicks: 0,
+      mgConeRadians: Math.PI,
+      cannonConeRadians: Math.PI,
+      mgHeatCeiling: 1,
+      shieldLeadTicks: 0,
+      shieldMinEnergy: 0
+    },
+    veteran: {
+      reactionTicks: 5,
+      retargetIntervalTicks: 10,
+      aimJitterRadians: 0.06,
+      leadFactor: 0.65,
+      orbit: true,
+      evadeMissiles: true,
+      dodgeBullets: false,
+      threatAwareShield: true,
+      standoffDistance: 620,
+      evadeHorizonTicks: 12,
+      mgConeRadians: 0.35,
+      cannonConeRadians: 0.2,
+      mgHeatCeiling: 0.75,
+      shieldLeadTicks: 8,
+      shieldMinEnergy: 0.15
+    },
+    ace: {
+      reactionTicks: 1,
+      retargetIntervalTicks: 2,
+      aimJitterRadians: 0,
+      leadFactor: 1,
+      orbit: true,
+      evadeMissiles: true,
+      dodgeBullets: true,
+      threatAwareShield: true,
+      standoffDistance: 700,
+      evadeHorizonTicks: 20,
+      mgConeRadians: 0.12,
+      cannonConeRadians: 0.06,
+      mgHeatCeiling: 0.7,
+      shieldLeadTicks: 14,
+      shieldMinEnergy: 0.25
+    }
+  }
+};
 
 type LegacyRecord = Record<string, unknown>;
 
@@ -183,6 +248,25 @@ function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): Legac
   return migrated;
 }
 
+/**
+ * Fills the autopilot section level by level rather than wholesale, so a
+ * document that already carries one hand-tuned profile keeps it while the
+ * others arrive from defaults.
+ */
+function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+  const autopilot = readRecord(tuning, "autopilot");
+  const profiles = readRecord(autopilot, "profiles");
+  return {
+    level: autopilot.level ?? defaults.autopilot.level,
+    profiles: Object.fromEntries(
+      AUTOPILOT_LEVELS.map((level) => [
+        level,
+        profiles[level] ?? defaults.autopilot.profiles[level]
+      ])
+    )
+  };
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -192,6 +276,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
     tuning: {
       ...migratePlayerShip(tuning, defaults),
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
+      autopilot: migrateAutopilot(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
@@ -210,7 +295,9 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
  * the world with a literal in the display instead of `cameraViewWidth`, version
  * 6 let every weapon fire across the whole arena, and version 7 picked
  * silhouettes from eight shapes the display drew in code and tinted them with
- * two colours, and version 8 had no player ship in the preset at all. Carry
+ * two colours, and version 8 had no player ship in the preset at all.
+ * Version 9 had no autopilot section, so the demo bot had a single hardcoded
+ * skill. Carry
  * those documents forward instead of silently replacing an operator's balance
  * with defaults.
  */
@@ -252,6 +339,7 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
     cameraViewWidth: config.cameraViewWidth,
+    autopilot: DEFAULT_AUTOPILOT,
     spaceshipVisual: config.spaceshipVisual,
     spaceshipMaxHp: config.spaceshipMaxHp,
     spaceshipRadius: config.spaceshipRadius,
@@ -298,11 +386,14 @@ export function createDefaultPresetsFile(): BalancePresetsFile {
 
 /** Throws a RangeError when the tuning cannot drive a simulation. */
 export function assertTuningIsPlayable(tuning: BalanceTuning): void {
-  validateSpaceshipSimulationConfig(createSpaceshipSimulationConfig(tuning));
+  validateSpaceshipSimulationConfig(toSimulationConfig(tuning));
 }
 
 export function toSimulationConfig(tuning: BalanceTuning): SpaceshipSimulationConfig {
-  return createSpaceshipSimulationConfig(tuning);
+  // The autopilot section drives the demo harness, never the simulation.
+  const simulation: Partial<BalanceTuning> = { ...tuning };
+  delete simulation.autopilot;
+  return createSpaceshipSimulationConfig(simulation);
 }
 
 function findActivePreset(file: BalancePresetsFile): BalancePreset {

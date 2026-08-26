@@ -1,5 +1,6 @@
 import {
   BUILTIN_ENEMY_KINDS,
+  type AutopilotProfile,
   type BalanceTuning,
   type EnemyArchetype
 } from "@spaceship-defender/protocol";
@@ -49,6 +50,26 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
     unlockWave,
     scoreReward: 25,
     creditReward: 2
+  };
+}
+
+function autopilotProfile(): AutopilotProfile {
+  return {
+    reactionTicks: 5,
+    retargetIntervalTicks: 10,
+    aimJitterRadians: 0.06,
+    leadFactor: 0.65,
+    orbit: true,
+    evadeMissiles: true,
+    dodgeBullets: false,
+    threatAwareShield: true,
+    standoffDistance: 620,
+    evadeHorizonTicks: 12,
+    mgConeRadians: 0.35,
+    cannonConeRadians: 0.2,
+    mgHeatCeiling: 0.75,
+    shieldLeadTicks: 8,
+    shieldMinEnergy: 0.15
   };
 }
 
@@ -144,7 +165,15 @@ function tuning(): BalanceTuning {
     shieldAngularAccelerationPerSecondSquared: 3.4,
     shieldAngularBrakingPerSecondSquared: 5.1,
     missileInterceptScoreReward: 5,
-    cameraViewWidth: 1600
+    cameraViewWidth: 1600,
+    autopilot: {
+      level: "veteran",
+      profiles: {
+        rookie: autopilotProfile(),
+        veteran: autopilotProfile(),
+        ace: autopilotProfile()
+      }
+    }
   };
 }
 
