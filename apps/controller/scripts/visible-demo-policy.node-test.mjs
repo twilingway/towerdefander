@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   createAutopilotMemory,
   directAim,
+  commitTarget,
   effectiveStandoff,
+  normalize,
   extrapolateWorld,
   interceptAim,
   nextShieldActive,
@@ -244,12 +246,30 @@ test("a drained shield is told to drop so the rearm latch clears", () => {
   assert.equal(planShield(drained, ROOKIE, createAutopilotMemory()).active, false);
 });
 
-test("the shield stays down above zero but below the profile floor", () => {
-  const low = world({
-    shield: { angle: 0, active: false, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 },
+test("below its reserve the shield spends only on what actually hurts", () => {
+  const battery = { angle: 0, active: false, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 };
+
+  // A bullet is cheap to eat, so the last of the battery is not spent on it.
+  const grazed = world({
+    shield: battery,
+    bullets: [entity("shot", 1, { x: 2400, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  assert.equal(planShield(grazed, ACE, createAutopilotMemory()).active, false);
+
+  // A missile is not: refusing to raise here is how the ace used to die in a
+  // swarm, because under fire the energy never climbs back over the floor.
+  const struck = world({
+    shield: battery,
     missiles: [entity("missile", 1, { x: 2400, y: 2200, velocityX: -240, heading: Math.PI })]
   });
-  assert.equal(planShield(low, ACE, createAutopilotMemory()).active, false);
+  assert.equal(planShield(struck, ACE, createAutopilotMemory()).active, true);
+
+  // Flat empty stays down whatever is coming: there is nothing left to spend.
+  const empty = world({
+    shield: { ...battery, energy: 0 },
+    missiles: [entity("missile", 1, { x: 2400, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(planShield(empty, ACE, createAutopilotMemory()).active, false);
 });
 
 test("a missile inside the horizon turns the pilot across its bearing", () => {
@@ -260,7 +280,25 @@ test("a missile inside the horizon turns the pilot across its bearing", () => {
   // The threat bears +x, so the break is perpendicular: no +x component left.
   assert.ok(Math.abs(evading.vector.x) < 1e-9);
   assert.ok(Math.abs(evading.vector.y) > 0.9);
-  assert.equal(evading.mgFiring, false);
+  // The break does not silence the gun: the missile is dead ahead of the nose,
+  // and a long evasion used to mean the bot never fired at all.
+  assert.equal(evading.mgFiring, true);
+
+  // Off the nose there is still nothing to shoot at.
+  const abeam = world({
+    ship: {
+      x: 2200,
+      y: 2200,
+      heading: Math.PI / 2,
+      velocityX: 0,
+      velocityY: 0,
+      radius: 52,
+      hp: 500,
+      maxHp: 500
+    },
+    missiles: [entity("missile", 1, { x: 2400, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(planPilot(abeam, ACE, createAutopilotMemory()).mgFiring, false);
 
   // Rookie has no evasion horizon at all and keeps flying its circle.
   const oblivious = planPilot(incoming, ROOKIE, createAutopilotMemory());
@@ -579,4 +617,126 @@ test("a boss firing from beyond the frame is hunted through its missiles", () =>
   const afterIntercept = world({ asteroids: [rockAt("rock", 1, 2200, 2350, 0, -190)] });
   const hunting = planPilot(afterIntercept, ACE, createAutopilotMemory());
   assert.notDeepEqual(hunting.vector, { x: 0, y: 0 });
+});
+
+test("a target sweeping faster than the turret ends the orbit", () => {
+  // Inside the ring the orbit backs away, so the sign of the closing component
+  // is what separates holding station from breaking the stalemate. This target
+  // crosses faster than the ace turret can follow, which is the carousel the
+  // bot used to circle in for minutes without firing.
+  const memory = createAutopilotMemory();
+  const near = world({
+    sampledAtMs: 0,
+    enemies: [enemyAt("crossing", 1, 2200 + 200, 2200, { velocityY: 300 })]
+  });
+  planPilot(near, ACE, memory);
+  const later = world({
+    sampledAtMs: 100,
+    enemies: [enemyAt("crossing", 1, 2200 + 200, 2200 + 30, { velocityY: 300 })]
+  });
+  const chasing = planPilot(later, ACE, memory);
+
+  const toTarget = normalize({ x: 200, y: 30 });
+  assert.ok(chasing.vector.x * toTarget.x + chasing.vector.y * toTarget.y > 0.5);
+});
+
+test("a slow-crossing target still gets the orbit", () => {
+  const memory = createAutopilotMemory();
+  const ring = effectiveStandoff(world(), ACE);
+  const first = world({
+    sampledAtMs: 0,
+    enemies: [enemyAt("drifting", 1, 2200 + ring + 100, 2200, { velocityY: 10 })]
+  });
+  planPilot(first, ACE, memory);
+  const second = world({
+    sampledAtMs: 100,
+    enemies: [enemyAt("drifting", 1, 2200 + ring + 100, 2200 + 1, { velocityY: 10 })]
+  });
+  const orbiting = planPilot(second, ACE, memory);
+
+  // Just outside the ring it closes on a curve: some of the vector goes into
+  // circling rather than straight at the target.
+  assert.ok(orbiting.vector.x > 0.2);
+  assert.ok(Math.abs(orbiting.vector.y) > 0.5);
+});
+
+test("the turret rate comes from the preset, not a constant", () => {
+  const toTarget = normalize({ x: 200, y: 3 });
+  const sample = (atMs, y) =>
+    world({
+      sampledAtMs: atMs,
+      enemies: [enemyAt("slow", 1, 2200 + 200, 2200 + y, { velocityY: 30 })]
+    });
+
+  // This target barely drifts, so the stock turret keeps up and the bot holds
+  // its ring — inside which the ring means backing off.
+  const stockMemory = createAutopilotMemory();
+  planPilot(sample(0, 0), ACE, stockMemory);
+  const holding = planPilot(sample(100, 3), ACE, stockMemory);
+  assert.ok(holding.vector.x * toTarget.x + holding.vector.y * toTarget.y < 0);
+
+  // A turret this slow loses even that, so the same picture has to close.
+  const slowMemory = createAutopilotMemory();
+  planPilot(sample(0, 0), ACE, slowMemory, { turretRate: 0.01 });
+  const chasing = planPilot(sample(100, 3), ACE, slowMemory, { turretRate: 0.01 });
+  assert.ok(chasing.vector.x * toTarget.x + chasing.vector.y * toTarget.y > 0.5);
+});
+
+test("a reshuffling swarm does not leave the turret permanently in transit", () => {
+  // Two enemies of near-equal worth on opposite beams. The ranking flips as
+  // they jostle; before, every flip commanded a new bearing the mount never
+  // reached, so the ace crossed a swarm without firing a shot.
+  const memory = createAutopilotMemory();
+  // The turret points +x while the nearer enemy is off to -x, so the mount has
+  // half a turn to cross before it can fire at what it committed to.
+  const near = world({
+    sampledAtMs: 0,
+    turretAngle: 0,
+    enemies: [enemyAt("left", 1, 2200 - 700, 2200), enemyAt("right", 2, 2200 + 1300, 2200)]
+  });
+  assert.equal(commitTarget(rankTargets(near), ACE, memory, 0, near).entityId, "left");
+
+  // They swap places: the ranking now prefers the one the turret happens to
+  // face. Chasing that swap is what left the mount forever in transit.
+  const swapped = world({
+    sampledAtMs: 900,
+    turretAngle: 0,
+    enemies: [enemyAt("left", 1, 2200 - 1300, 2200), enemyAt("right", 2, 2200 + 700, 2200)]
+  });
+  commitTarget(rankTargets(swapped), ACE, memory, 900, swapped);
+  assert.equal(commitTarget(rankTargets(swapped), ACE, memory, 960, swapped).entityId, "left");
+});
+
+test("a decisively better target still takes the turret", () => {
+  const memory = createAutopilotMemory();
+  const rock = {
+    ...entity("rock", 1, { x: 2200 - 900, y: 2200, velocityX: 190 }),
+    hp: 65,
+    maxHp: 65
+  };
+  const first = world({ sampledAtMs: 0, turretAngle: Math.PI, asteroids: [rock] });
+  commitTarget(rankTargets(first), ACE, memory, 0, first);
+
+  // A missile outranks a rock by far, so the traverse spent is worth losing.
+  const urgent = world({
+    sampledAtMs: 900,
+    turretAngle: Math.PI,
+    asteroids: [rock],
+    missiles: [entity("missile", 2, { x: 2500, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  // The reaction delay still applies: it takes the newcomer on the next tick.
+  commitTarget(rankTargets(urgent), ACE, memory, 900, urgent);
+  assert.equal(commitTarget(rankTargets(urgent), ACE, memory, 960, urgent).entityId, "missile");
+});
+
+test("a cone narrower than one tick of traverse still lets the gun fire", () => {
+  // The ace cone is 0.06 rad while the turret covers 0.068 in a tick, so an
+  // exact-cone test can be stepped straight over and never sample true.
+  const target = enemyAt("ahead", 1, 2200 + 600, 2200);
+  const justOutside = world({ turretAngle: 0.065, enemies: [target] });
+  assert.equal(planGunner(justOutside, ACE, createAutopilotMemory()).firing, true);
+
+  // Far off the bearing it still holds fire.
+  const swungAway = world({ turretAngle: 1.2, enemies: [target] });
+  assert.equal(planGunner(swungAway, ACE, createAutopilotMemory()).firing, false);
 });

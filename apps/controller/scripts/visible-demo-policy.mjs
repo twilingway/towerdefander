@@ -75,6 +75,20 @@ const RIM_FRACTION = 0.8;
 const SEARCH_CENTRE_FRACTION = 0.35;
 /** Share of the frame's short side the stand-off ring may occupy. */
 const STANDOFF_FRAME_FRACTION = 0.8;
+/** Stock turret traverse, used only when the caller does not know better. */
+const TURRET_RATE_PER_SECOND = (13 * Math.PI) / 30;
+/**
+ * Share of the turret's traverse the bearing may demand before the geometry
+ * counts as unwinnable. Below one because the turret has to accelerate into
+ * every reversal, so it never delivers its top rate around a circle.
+ */
+const TRAVERSE_MARGIN = 0.6;
+/** Bearing error above which the turret still counts as travelling. */
+const TRAVERSE_SETTLE_RADIANS = 0.25;
+/** How much better a new target must rank to be worth abandoning the traverse. */
+const DECISIVE_SCORE_RATIO = 1.5;
+/** Threat weight from `nextShieldContact` worth spending the last energy on. */
+const COSTLY_THREAT_WEIGHT = 2;
 
 const ZERO_VECTOR = { x: 0, y: 0 };
 
@@ -103,6 +117,8 @@ export function createAutopilotMemory(seed = 1) {
     committedAtMs: 0,
     decidedAtMs: undefined,
     orbitSign: 1,
+    /** Last bearing to the committed target, for measuring how fast it sweeps. */
+    bearingSample: undefined,
     shieldActive: false
   };
 }
@@ -273,7 +289,7 @@ export function rankTargets(world, options = {}) {
  * hold the top spot for the reaction delay before it is taken — otherwise the
  * nose chatters between equally-ranked enemies.
  */
-export function commitTarget(ranked, profile, memory, nowMs) {
+export function commitTarget(ranked, profile, memory, nowMs, world) {
   if (memory.decidedAtMs === nowMs) return memory.target;
   memory.decidedAtMs = nowMs;
 
@@ -305,6 +321,20 @@ export function commitTarget(ranked, profile, memory, nowMs) {
   }
   if (nowMs - memory.committedAtMs < profile.retargetIntervalTicks * TICK_MS) {
     return memory.target;
+  }
+  // A swarm reshuffles the ranking faster than the mount can cross the arc, so
+  // switching on every reshuffle leaves the turret permanently in transit and
+  // never on target. Spend the traverse already invested unless the newcomer is
+  // decisively more dangerous.
+  if (world !== undefined) {
+    const committedScore =
+      ranked.find(({ entity }) => entity.entityId === memory.target.entityId)?.score ?? 0;
+    const bestScore = ranked[0]?.score ?? 0;
+    const aim = directAim(world.ship, memory.target);
+    const pending = Math.abs(shortestAngleDelta(world.turretAngle, Math.atan2(aim.y, aim.x)));
+    if (bestScore <= committedScore * DECISIVE_SCORE_RATIO && pending > TRAVERSE_SETTLE_RADIANS) {
+      return memory.target;
+    }
   }
   if (memory.candidateId !== best.entityId) {
     memory.candidateId = best.entityId;
@@ -385,20 +415,31 @@ export function planShield(world, profile, memory) {
     return { aim, active: false };
   }
 
-  memory.shieldActive = world.shield.energy > world.shield.capacity * profile.shieldMinEnergy;
+  // The hit inside the window is already unavoidable, so a threshold that
+  // refuses to spend the last quarter of the battery just moves the damage onto
+  // the hull — under sustained fire the energy never climbs back and the shield
+  // never comes up again. Below the reserve the bot still spends, but only on
+  // what actually hurts: bullets get through, missiles and rocks do not.
+  const reserved = world.shield.energy <= world.shield.capacity * profile.shieldMinEnergy;
+  memory.shieldActive =
+    world.shield.energy > 0 && (!reserved || contact.weight >= COSTLY_THREAT_WEIGHT);
   return { aim, active: memory.shieldActive };
 }
 
 export function planGunner(world, profile, memory, options = {}) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
-  const target = commitTarget(rankTargets(world, options), profile, memory, nowMs);
+  const target = commitTarget(rankTargets(world, options), profile, memory, nowMs, world);
   if (target === undefined) return { aim: bearingVector(world.turretAngle), firing: false };
 
   const speed = options.cannonSpeed ?? CANNON_PROJECTILE_SPEED;
   const bearing = aimBearing(world, target, speed, profile, memory);
-  // The shot leaves along the turret real angle, so wait out the traverse.
+  // The shot leaves along the turret real angle, so wait out the traverse. A
+  // cone narrower than one tick of that traverse would be stepped over without
+  // ever being sampled, so arriving within a tick counts as arrived.
+  const reach = (options.turretRate ?? TURRET_RATE_PER_SECOND) * (TICK_MS / 1000);
   const firing =
-    Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <= profile.cannonConeRadians;
+    Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <=
+    Math.max(profile.cannonConeRadians, reach);
   return { aim: bearingVector(bearing), firing };
 }
 
@@ -483,6 +524,35 @@ export function effectiveStandoff(world, profile) {
   return Math.min(profile.standoffDistance, halfHeight * STANDOFF_FRAME_FRACTION);
 }
 
+/**
+ * How fast the bearing to a target sweeps, in radians per second. Two samples
+ * of the same target is all it takes, and the memory already carries the last
+ * one for the lead solution.
+ */
+export function bearingRate(world, target, memory) {
+  const bearing = Math.atan2(target.y - world.ship.y, target.x - world.ship.x);
+  const previous = memory.bearingSample;
+  memory.bearingSample = { entityId: target.entityId, bearing, atMs: world.sampledAtMs };
+  if (previous === undefined || previous.entityId !== target.entityId) return 0;
+
+  const seconds = (world.sampledAtMs - previous.atMs) / 1000;
+  if (seconds <= 0) return 0;
+  return shortestAngleDelta(previous.bearing, bearing) / seconds;
+}
+
+/**
+ * A target crossing faster than the turret can follow can never be brought into
+ * the firing cone: the mount tops out at its traverse rate while the bearing
+ * keeps running away, which is how an ace and a gunship ended up circling each
+ * other for minutes without a shot. Flying at the intercept point instead puts
+ * the target on a constant bearing, which drives the sweep to nothing and hands
+ * the fight to the hull — it turns twice as fast as the turret does.
+ */
+function traverseLosing(world, target, memory, options) {
+  const rate = options.turretRate ?? TURRET_RATE_PER_SECOND;
+  return Math.abs(bearingRate(world, target, memory)) > rate * TRAVERSE_MARGIN;
+}
+
 function orbitVector(world, target, profile, memory, distance) {
   const standoff = effectiveStandoff(world, profile);
   const radial = normalize({ x: target.x - world.ship.x, y: target.y - world.ship.y });
@@ -517,9 +587,8 @@ function orbitVector(world, target, profile, memory, distance) {
 export function planPilot(world, profile, memory, options = {}) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
   const ranked = rankTargets(world, options);
-  const target = commitTarget(ranked, profile, memory, nowMs);
+  const target = commitTarget(ranked, profile, memory, nowMs, world);
   const escape = escapeVector(world, profile);
-  if (escape !== undefined) return { vector: escape, mgFiring: false };
 
   const speed = options.mgSpeed ?? MG_PROJECTILE_SPEED;
   const bearing =
@@ -532,6 +601,11 @@ export function planPilot(world, profile, memory, options = {}) {
     !world.machineGun.overheated &&
     world.machineGun.heat <= world.machineGun.capacity * profile.mgHeatCeiling;
 
+  // The break outranks every manoeuvre, but the gun does not stop: firing is a
+  // question of where the nose already points, and a long evasion swings it
+  // across targets that are worth the burst.
+  if (escape !== undefined) return { vector: escape, mgFiring };
+
   // Without the orbit skill the pilot keeps the old circular patrol.
   if (!profile.orbit) return { vector: pilotVector(nowMs), mgFiring };
 
@@ -541,6 +615,12 @@ export function planPilot(world, profile, memory, options = {}) {
   const role = ranked.find(({ entity }) => entity.entityId === target?.entityId)?.role;
   if (role !== "enemy" && role !== "missile") {
     return { vector: huntVector(world) ?? searchVector(world, memory), mgFiring };
+  }
+
+  // Holding a ring around a target the turret cannot track is the stalemate:
+  // close on the intercept point instead and let the nose gun finish it.
+  if (traverseLosing(world, target, memory, options)) {
+    return { vector: bearingVector(bearing), mgFiring };
   }
 
   const distance = distanceBetween(world.ship, target);

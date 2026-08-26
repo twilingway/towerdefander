@@ -471,6 +471,7 @@ function sendCombatInputs(expectedGeneration) {
     archetypes: autopilot.archetypes,
     cannonSpeed: autopilot.cannonSpeed,
     mgSpeed: autopilot.mgSpeed,
+    turretRate: autopilot.turretRate,
     nowMs
   };
 
@@ -565,7 +566,10 @@ async function loadAutopilot() {
     // Both muzzle velocities are preset values, so the lead solution has to
     // use the ones this run will actually fire with.
     cannonSpeed: tuning.projectileSpeedPerSecond,
-    mgSpeed: tuning.mgProjectileSpeedPerSecond
+    mgSpeed: tuning.mgProjectileSpeedPerSecond,
+    // How fast the turret can actually swing decides whether a crossing target
+    // is winnable at all, so the bot has to read it rather than assume it.
+    turretRate: tuning.turretMaxAngularSpeedPerSecond
   };
 }
 
