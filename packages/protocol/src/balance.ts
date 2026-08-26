@@ -7,9 +7,9 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 10 as const;
+export const BALANCE_FILE_VERSION = 11 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -99,6 +99,14 @@ export const enemyArchetypeSchema = z
     radius: positiveFinite,
     speedPerSecond: positiveFinite,
     preferredDistance: positiveFinite,
+    /**
+     * How hard the hull is to turn. The ship carries angular momentum like the
+     * player's does, so a heavy archetype keeps swinging past and a light one
+     * snaps around; without these a course reversal happened inside one tick.
+     */
+    turnRatePerSecond: positiveFinite,
+    turnAccelerationPerSecondSquared: positiveFinite,
+    turnBrakingPerSecondSquared: positiveFinite,
     weapons: z.array(enemyWeaponTuningSchema).min(1).max(MAX_ENEMY_WEAPONS).readonly(),
     visual: enemyVisualSchema,
     label: z.string().min(1).max(48),

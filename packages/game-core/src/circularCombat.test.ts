@@ -49,6 +49,7 @@ function quietEnemy(
     radius: getEnemyArchetype(config, "gunship").radius,
     spawnedTick: 0,
     heading: 0,
+    angularVelocity: 0,
     hp: 1_000_000,
     maxHp: 1_000_000,
     weaponCooldownTicks: [1_000_000],

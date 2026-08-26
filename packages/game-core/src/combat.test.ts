@@ -512,6 +512,7 @@ describe("deterministic combat foundation", () => {
       y: initial.spaceship.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
+      angularVelocity: 0,
       radius: twinGun.radius,
       spawnedTick: 0,
       hp: twinGun.hp,
@@ -571,6 +572,7 @@ describe("deterministic combat foundation", () => {
       y: initial.spaceship.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
+      angularVelocity: 0,
       radius: mixedGun.radius,
       spawnedTick: 0,
       hp: mixedGun.hp,
@@ -653,6 +655,7 @@ describe("deterministic combat foundation", () => {
       y: initial.spaceship.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
+      angularVelocity: 0,
       radius: sentry.radius,
       spawnedTick: 0,
       hp: sentry.hp,
@@ -760,6 +763,7 @@ describe("deterministic combat foundation", () => {
       y: initial.spaceship.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
+      angularVelocity: 0,
       radius: boss.radius,
       spawnedTick: 0,
       hp: boss.hp,
@@ -1145,6 +1149,7 @@ describe("combat motion and collision", () => {
       radius: getEnemyArchetype(config, "gunship").radius,
       spawnedTick: 0,
       heading: 0,
+      angularVelocity: 0,
       hp: getEnemyArchetype(config, "gunship").hp,
       maxHp: getEnemyArchetype(config, "gunship").hp,
       weaponCooldownTicks: [index < 3 ? 0 : 20]
@@ -1351,5 +1356,112 @@ describe("team upgrades", () => {
       expect(skipped.teamUpgradeSelection).toBeNull();
       expect(skipped.roleModifiers).toEqual(initial.roleModifiers);
     }
+  });
+});
+
+describe("enemy turn inertia", () => {
+  function enemyFacing(
+    config: SpaceshipSimulationConfig,
+    kind: string,
+    heading: number,
+    offsetX: number
+  ): CombatEnemyState {
+    const centre = config.worldWidth / 2;
+    return {
+      id: `${kind}-turn`,
+      spawnSequence: 1,
+      kind,
+      previousX: centre + offsetX,
+      previousY: centre,
+      x: centre + offsetX,
+      y: centre,
+      velocity: { x: 0, y: 0 },
+      heading,
+      angularVelocity: 0,
+      radius: getEnemyArchetype(config, kind).radius,
+      spawnedTick: 0,
+      hp: getEnemyArchetype(config, kind).hp,
+      maxHp: getEnemyArchetype(config, kind).hp,
+      weaponCooldownTicks: [1_000_000]
+    };
+  }
+
+  function stepEnemy(
+    config: SpaceshipSimulationConfig,
+    state: SpaceshipSimulationState,
+    enemy: CombatEnemyState,
+    ticks: number
+  ): CombatEnemyState[] {
+    const trail: CombatEnemyState[] = [];
+    // Spawns are drained so the lone enemy under test stays the only one.
+    let current: SpaceshipSimulationState = { ...state, pendingSpawns: [], enemies: [enemy] };
+    for (let index = 0; index < ticks; index += 1) {
+      current = { ...advanceSpaceshipSimulation(current, config), pendingSpawns: [] };
+      const stepped = current.enemies[0];
+      if (stepped === undefined) break;
+      trail.push(stepped);
+    }
+    return trail;
+  }
+
+  it("never turns an enemy faster than its archetype allows", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+    const state = createSpaceshipSimulationState(config, 91);
+    // Facing hard away from the ship it wants to close on, so the whole
+    // half-turn has to be walked out tick by tick.
+    const enemy = enemyFacing(config, "gunship", 0, 1800);
+    const cap =
+      getEnemyArchetype(config, "gunship").turnRatePerSecond * (config.fixedStepMs / 1000);
+
+    const trail = stepEnemy(config, state, enemy, 24);
+    let previous = enemy.heading;
+    for (const stepped of trail) {
+      expect(Math.abs(shortestAngleDelta(previous, stepped.heading))).toBeLessThanOrEqual(
+        cap + 1e-9
+      );
+      previous = stepped.heading;
+    }
+    // It still gets there: the point is the path, not a refusal to turn.
+    expect(Math.abs(shortestAngleDelta(previous, 0))).toBeGreaterThan(1);
+  });
+
+  it("turns a heavier archetype in strictly more ticks than a nimble one", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+    const state = createSpaceshipSimulationState(config, 92);
+
+    function ticksToFace(kind: string): number {
+      const trail = stepEnemy(config, state, enemyFacing(config, kind, 0, 1800), 200);
+      // Ticks until it has swung more than a quarter turn off its start.
+      const settled = trail.findIndex(
+        (stepped) => Math.abs(shortestAngleDelta(stepped.heading, 0)) > Math.PI / 2
+      );
+      return settled === -1 ? Number.POSITIVE_INFINITY : settled;
+    }
+
+    expect(ticksToFace("boss")).toBeGreaterThan(ticksToFace("interceptor"));
+  });
+
+  it("settles onto its preferred range without a jump in course", () => {
+    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+    const state = createSpaceshipSimulationState(config, 93);
+    const archetype = getEnemyArchetype(config, "gunship");
+    // Starts outside the range it wants and crosses into it. This crossing is
+    // where closing used to switch to circling in one tick, flinging the ship
+    // ninety degrees across the line and straight back out again.
+    const enemy = enemyFacing(config, "gunship", Math.PI, archetype.preferredDistance + 200);
+
+    // Measured on velocity, not heading: the turn limiter would hide a jump in
+    // the rendered facing, but the flight path itself has to be continuous.
+    const trail = stepEnemy(config, state, enemy, 120).filter(
+      ({ velocity }) => Math.hypot(velocity.x, velocity.y) > 1
+    );
+    let widest = 0;
+    let previous = Math.atan2(trail[0]?.velocity.y ?? 0, trail[0]?.velocity.x ?? 0);
+    for (const stepped of trail.slice(1)) {
+      const course = Math.atan2(stepped.velocity.y, stepped.velocity.x);
+      widest = Math.max(widest, Math.abs(shortestAngleDelta(previous, course)));
+      previous = course;
+    }
+    expect(widest).toBeLessThan(Math.PI / 6);
   });
 });

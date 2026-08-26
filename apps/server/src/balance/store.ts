@@ -135,6 +135,9 @@ const LEGACY_SHAPE_ASSETS: Readonly<Record<string, string>> = {
   spike: "station-starrelay"
 };
 
+/** The gunship's agility: the middle of the built-in range, used as a fallback. */
+const DEFAULT_ENEMY_TURN_RATE = (2 * Math.PI) / 3;
+
 /** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
 const TICK_SECONDS = 0.05;
 /** A shot at the very edge of its reach expires on arrival, so aim shorter. */
@@ -185,6 +188,20 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
     archetype.weapons ?? (singleWeapon === undefined ? known?.weapons : [singleWeapon]);
   const migrated: LegacyRecord = {
     ...archetype,
+    // Version 10 and earlier turned an enemy hull instantly, so a document from
+    // it has no agility at all. Built-in archetypes get their own numbers back;
+    // an operator's own archetype inherits the gunship's, which is the middle
+    // of the range and the value the console offers for a new entry.
+    turnRatePerSecond:
+      archetype.turnRatePerSecond ?? known?.turnRatePerSecond ?? DEFAULT_ENEMY_TURN_RATE,
+    turnAccelerationPerSecondSquared:
+      archetype.turnAccelerationPerSecondSquared ??
+      known?.turnAccelerationPerSecondSquared ??
+      DEFAULT_ENEMY_TURN_RATE * 2,
+    turnBrakingPerSecondSquared:
+      archetype.turnBrakingPerSecondSquared ??
+      known?.turnBrakingPerSecondSquared ??
+      DEFAULT_ENEMY_TURN_RATE * 3,
     weapons: Array.isArray(weapons) ? weapons.map(migrateWeapon) : weapons,
     visual:
       visual === undefined

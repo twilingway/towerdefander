@@ -23,6 +23,9 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
     radius: 28,
     speedPerSecond: 150,
     preferredDistance: 650,
+    turnRatePerSecond: (2 * Math.PI) / 3,
+    turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
+    turnBrakingPerSecondSquared: 2 * Math.PI,
     weapons: [
       {
         kind: "bullet",

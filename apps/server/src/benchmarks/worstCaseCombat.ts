@@ -48,6 +48,7 @@ export function createWorstCaseCombatFixture(
       ...movingEntity(`enemy-${String(sequence)}`, sequence, position, { x: 18, y: 4 }),
       kind: index % 3 === 0 ? "missileCarrier" : "gunship",
       heading: 0.2,
+      angularVelocity: 0,
       hp: 10_000,
       maxHp: 10_000,
       weaponCooldownTicks: [10_000]

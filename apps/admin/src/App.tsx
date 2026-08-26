@@ -943,6 +943,9 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           radius: 26,
           speedPerSecond: 160,
           preferredDistance: 600,
+          turnRatePerSecond: (2 * Math.PI) / 3,
+          turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
+          turnBrakingPerSecondSquared: 2 * Math.PI,
           weapons: [
             {
               kind: "bullet",
@@ -1223,6 +1226,20 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                   value={archetype.preferredDistance}
                   onChange={(preferredDistance) => {
                     patchArchetype(kind, { preferredDistance });
+                  }}
+                />
+                <DegreesField
+                  caption="Поворот, °/с"
+                  radians={archetype.turnRatePerSecond}
+                  onChange={(turnRatePerSecond) => {
+                    // Acceleration and braking follow the top rate at the same
+                    // 2x / 3x the player's hull uses, so one knob keeps the
+                    // whole momentum profile of a ship consistent.
+                    patchArchetype(kind, {
+                      turnRatePerSecond,
+                      turnAccelerationPerSecondSquared: turnRatePerSecond * 2,
+                      turnBrakingPerSecondSquared: turnRatePerSecond * 3
+                    });
                   }}
                 />
                 <NumberField

@@ -553,6 +553,57 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
+  it("gives a version 10 preset the agility its enemies never had", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 10 turned an enemy hull instantly, so no archetype carries any
+    // of the three turn fields. A saved preset has to keep playing regardless.
+    const legacyArchetypes = Object.fromEntries(
+      Object.entries(defaults.enemyArchetypes).map(([kind, archetype]) => {
+        const stripped: Record<string, unknown> = { ...archetype };
+        delete stripped.turnRatePerSecond;
+        delete stripped.turnAccelerationPerSecondSquared;
+        delete stripped.turnBrakingPerSecondSquared;
+        return [kind, stripped];
+      })
+    );
+    // Plus one the operator made up, which has no built-in numbers to fall back on.
+    legacyArchetypes.homebrew = {
+      ...legacyArchetypes.gunship,
+      label: "Самодел"
+    };
+    const document = {
+      version: 10,
+      activePresetId: "operator",
+      presets: [
+        {
+          id: "operator",
+          name: "Operator",
+          tuning: { ...defaults, enemyArchetypes: legacyArchetypes }
+        }
+      ]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    // Built-in archetypes get their own agility back, not a shared default.
+    const migrated = store.getActiveTuning().enemyArchetypes;
+    expect(migrated.boss?.turnRatePerSecond).toBe(defaults.enemyArchetypes.boss?.turnRatePerSecond ?? Math.PI / 4);
+    expect(migrated.interceptor?.turnRatePerSecond).toBeGreaterThan(
+      migrated.boss?.turnRatePerSecond ?? 0
+    );
+    // The operator's own archetype gets a usable one rather than failing to load.
+    expect(migrated.homebrew?.turnRatePerSecond).toBeGreaterThan(0);
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
   it("keeps a hand-tuned autopilot profile and fills only the missing ones", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();

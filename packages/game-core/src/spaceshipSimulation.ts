@@ -201,6 +201,9 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 28,
       speedPerSecond: 150,
       preferredDistance: 650,
+      turnRatePerSecond: (2 * Math.PI) / 3,
+      turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 3),
+      turnBrakingPerSecondSquared: 3 * ((2 * Math.PI) / 3),
       weapons: [
         {
           kind: "bullet",
@@ -234,6 +237,9 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 38,
       speedPerSecond: 95,
       preferredDistance: 900,
+      turnRatePerSecond: Math.PI / 2,
+      turnAccelerationPerSecondSquared: 2 * (Math.PI / 2),
+      turnBrakingPerSecondSquared: 3 * (Math.PI / 2),
       weapons: [
         {
           kind: "missile",
@@ -267,6 +273,9 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 30,
       speedPerSecond: 70,
       preferredDistance: 1400,
+      turnRatePerSecond: (2 * Math.PI) / 5,
+      turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 5),
+      turnBrakingPerSecondSquared: 3 * ((2 * Math.PI) / 5),
       weapons: [
         {
           kind: "bullet",
@@ -300,6 +309,9 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 18,
       speedPerSecond: 260,
       preferredDistance: 320,
+      turnRatePerSecond: (4 * Math.PI) / 3,
+      turnAccelerationPerSecondSquared: 2 * ((4 * Math.PI) / 3),
+      turnBrakingPerSecondSquared: 3 * ((4 * Math.PI) / 3),
       weapons: [
         {
           kind: "bullet",
@@ -333,6 +345,9 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 90,
       speedPerSecond: 60,
       preferredDistance: 700,
+      turnRatePerSecond: Math.PI / 4,
+      turnAccelerationPerSecondSquared: 2 * (Math.PI / 4),
+      turnBrakingPerSecondSquared: 3 * (Math.PI / 4),
       weapons: [
         {
           kind: "missile",
@@ -1051,7 +1066,7 @@ interface AngularTraverseConfig {
   readonly secondsPerStep: number;
 }
 
-function advanceAngularTraverse(
+export function advanceAngularTraverse(
   state: AngularTraverseState,
   config: AngularTraverseConfig
 ): AngularTraverseState {

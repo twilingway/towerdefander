@@ -1,4 +1,9 @@
-import { canonicalizeAngle, shortestAngleDelta, type Vector2 } from "./spaceshipSimulation.js";
+import {
+  advanceAngularTraverse,
+  canonicalizeAngle,
+  shortestAngleDelta,
+  type Vector2
+} from "./spaceshipSimulation.js";
 import {
   constrainMovingCircleToArena,
   isWithinCircularEnvelope,
@@ -112,6 +117,14 @@ export interface EnemyArchetype {
   readonly radius: number;
   readonly speedPerSecond: number;
   readonly preferredDistance: number;
+  /**
+   * How hard the hull is to turn. The ship carries angular momentum the way the
+   * player's does, so a heavy archetype swings past its course and a light one
+   * snaps onto it; without these a reversal happened inside a single tick.
+   */
+  readonly turnRatePerSecond: number;
+  readonly turnAccelerationPerSecondSquared: number;
+  readonly turnBrakingPerSecondSquared: number;
   /** At least one; each barrel keeps its own cooldown. */
   readonly weapons: readonly EnemyWeaponTuning[];
   readonly visual: EnemyVisual;
@@ -224,6 +237,8 @@ interface MovingEntity {
 export interface CombatEnemyState extends MovingEntity {
   readonly kind: EnemyKind;
   readonly heading: number;
+  /** Spin the hull still carries. Internal: the display only gets `heading`. */
+  readonly angularVelocity: number;
   readonly hp: number;
   readonly maxHp: number;
   /** One entry per archetype weapon, in the archetype's order. */
@@ -339,6 +354,14 @@ export interface UpgradeVoteResult<TState extends CombatStateFields> {
 
 const ROLES: readonly GameplayRole[] = ["pilot", "gunner", "shield"];
 const UINT32_MAX = 0xffff_ffff;
+/**
+ * World units either side of the preferred range over which an enemy trades
+ * closing for circling. Wide enough that the blend is visible rather than a
+ * threshold, narrow enough to leave a long approach at full speed.
+ */
+const ENEMY_RANGE_BAND = 120;
+/** Share of its speed an enemy spends circling once it is on station. */
+const ENEMY_ORBIT_SHARE = 0.35;
 const SPAWN_DOMAIN = 0x5350_4157;
 const OFFER_DOMAIN = 0x4f46_4652;
 const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
@@ -509,6 +532,9 @@ function validateEnemyArchetypes(config: CombatConfig): void {
       ["radius", archetype.radius],
       ["speedPerSecond", archetype.speedPerSecond],
       ["preferredDistance", archetype.preferredDistance],
+      ["turnRatePerSecond", archetype.turnRatePerSecond],
+      ["turnAccelerationPerSecondSquared", archetype.turnAccelerationPerSecondSquared],
+      ["turnBrakingPerSecondSquared", archetype.turnBrakingPerSecondSquared],
       ["spawnCost", archetype.spawnCost],
       ...archetype.weapons.flatMap((weapon, index): readonly (readonly [string, number])[] => [
         [`weapons[${String(index)}].damage`, weapon.damage],
@@ -1267,8 +1293,13 @@ function moveEnemy(
   const archetype = archetypeOf(config, enemy.kind);
   const preferred = archetype.preferredDistance;
   const speed = archetype.speedPerSecond;
-  const radial = distance > preferred + 30 ? 1 : distance < preferred - 30 ? -1 : 0;
-  const orbit = radial === 0 ? (enemy.spawnSequence % 2 === 0 ? 0.35 : -0.35) : 0;
+  // Closing and circling blend by how far off the preferred range the ship is.
+  // A hard switch at a threshold made the direction jump ninety degrees, and
+  // since circling widens the range it pushed the ship straight back across the
+  // line — a limit cycle that read as an enemy twitching on the spot.
+  const radial = clamp((distance - preferred) / ENEMY_RANGE_BAND, -1, 1);
+  const orbitSign = enemy.spawnSequence % 2 === 0 ? 1 : -1;
+  const orbit = orbitSign * ENEMY_ORBIT_SHARE * (1 - Math.abs(radial));
   const velocity = {
     x: ((deltaX / distance) * radial - (deltaY / distance) * orbit) * speed,
     y: ((deltaY / distance) * radial + (deltaX / distance) * orbit) * speed
@@ -1282,6 +1313,22 @@ function moveEnemy(
     },
     arenaFromConfig(config)
   );
+  const stalled = constrained.velocity.x === 0 && constrained.velocity.y === 0;
+  const traverse = advanceAngularTraverse(
+    {
+      angle: enemy.heading,
+      // Stalled against the arena wall it holds its bearing and lets the spin
+      // bleed off, rather than snapping to a course it is not travelling.
+      targetAngle: stalled ? null : Math.atan2(constrained.velocity.y, constrained.velocity.x),
+      angularVelocity: enemy.angularVelocity
+    },
+    {
+      maxAngularSpeed: archetype.turnRatePerSecond,
+      angularAcceleration: archetype.turnAccelerationPerSecondSquared,
+      angularBraking: archetype.turnBrakingPerSecondSquared,
+      secondsPerStep
+    }
+  );
   return {
     ...enemy,
     previousX: enemy.x,
@@ -1289,10 +1336,8 @@ function moveEnemy(
     x: constrained.x,
     y: constrained.y,
     velocity: constrained.velocity,
-    heading:
-      constrained.velocity.x === 0 && constrained.velocity.y === 0
-        ? enemy.heading
-        : Math.atan2(constrained.velocity.y, constrained.velocity.x),
+    heading: traverse.angle,
+    angularVelocity: traverse.angularVelocity,
     weaponCooldownTicks: enemy.weaponCooldownTicks.map((ticks) => Math.max(0, ticks - 1))
   };
 }
@@ -1496,6 +1541,7 @@ function spawnEntity(
       y: point.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
+      angularVelocity: 0,
       radius: entityRadius,
       spawnedTick: tick,
       hp,
