@@ -1868,7 +1868,9 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
         <h2>Процедурный директор</h2>
         <p className="screen__hint">
           Работает для волн после таблицы. Сложность здесь не убывает — этого требует спека
-          кампании.
+          кампании. «Пауза между волнами» — то самое ожидание после зачистки волны, в котором экипаж
+          выбирает улучшение; ставьте секунду-другую, когда смотрите демонстрацию. Как и всё
+          остальное здесь, применяется со следующего запуска боя.
         </p>
       </header>
 
@@ -1957,7 +1959,7 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
           }}
         />
         <SecondsField
-          caption="Интермиссия, с"
+          caption="Пауза между волнами, с"
           ticks={tuning.intermissionTicks}
           onChange={(intermissionTicks) => {
             onChange({ ...tuning, intermissionTicks });

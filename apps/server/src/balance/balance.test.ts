@@ -143,7 +143,8 @@ describe("balance store", () => {
     const warn = vi.fn();
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.at(-1)?.[0]).toContain(".unusable");
     expect(store.getActiveTuning()).toEqual(createDefaultTuning());
   });
 
@@ -174,7 +175,8 @@ describe("balance store", () => {
     const warn = vi.fn();
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.at(-1)?.[0]).toContain(".unusable");
     expect(store.getActiveTuning()).toEqual(createDefaultTuning());
   });
 
@@ -606,6 +608,67 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
+  it("keeps a campaign when a saved profile predates a new profile knob", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Exactly how an operator's waves went missing: one knob was added to the
+    // profile schema, the whole saved profile was carried over unchanged, it
+    // failed the strict schema, and the silent fallback to built-in defaults
+    // put an empty campaign in front of the console — which the next save kept.
+    const dated: Record<string, unknown> = { ...defaults.autopilot.profiles.ace };
+    delete dated.cannonHeatCeiling;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 3,
+            spawnIntervalTicks: 40,
+            sectors: [],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    const document = {
+      version: 11,
+      activePresetId: "operator",
+      presets: [
+        {
+          id: "operator",
+          name: "Operator",
+          tuning: {
+            ...defaults,
+            waveCampaign: { ...defaults.waveCampaign, waves },
+            autopilot: {
+              ...defaults.autopilot,
+              profiles: { ...defaults.autopilot.profiles, ace: dated }
+            }
+          }
+        }
+      ]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    // The campaign is the thing that must survive.
+    expect(store.getActiveTuning().waveCampaign.waves).toHaveLength(1);
+    // And the missing knob is filled rather than fatal.
+    expect(store.getActiveTuning().autopilot.profiles.ace.cannonHeatCeiling).toBe(
+      defaults.autopilot.profiles.ace.cannonHeatCeiling
+    );
+    // A hand-tuned value in the same profile is not trampled by the defaults.
+    expect(store.getActiveTuning().autopilot.profiles.ace.leadFactor).toBe(
+      defaults.autopilot.profiles.ace.leadFactor
+    );
+  });
+
   it("keeps a hand-tuned autopilot profile and fills only the missing ones", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
@@ -696,7 +759,8 @@ describe("version 1 migration", () => {
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
 
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.at(-1)?.[0]).toContain(".unusable");
     // The broken preset never becomes active; built-in defaults stay in place.
     expect(store.getActiveSimulationConfig().mgHeatCapacity).toBe(defaults.mgHeatCapacity);
   });

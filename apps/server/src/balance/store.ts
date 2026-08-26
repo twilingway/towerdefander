@@ -283,10 +283,17 @@ function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknow
   return {
     level: autopilot.level ?? defaults.autopilot.level,
     profiles: Object.fromEntries(
-      AUTOPILOT_LEVELS.map((level) => [
-        level,
-        profiles[level] ?? defaults.autopilot.profiles[level]
-      ])
+      AUTOPILOT_LEVELS.map((level) => {
+        const saved = profiles[level];
+        // Merged field by field, never carried over whole: a profile saved
+        // before a knob existed must gain it, not fail the strict schema.
+        return [
+          level,
+          isRecord(saved)
+            ? { ...defaults.autopilot.profiles[level], ...saved }
+            : defaults.autopilot.profiles[level]
+        ];
+      })
     )
   };
 }
@@ -472,9 +479,14 @@ export class BalanceStore {
 
     const parsed = balancePresetsFileSchema.safeParse(migrateBalanceDocument(parsedJson));
     if (!parsed.success) {
+      const where = parsed.error.issues
+        .slice(0, 5)
+        .map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`)
+        .join("; ");
       this.logger.warn(
-        `Balance preset file ${this.filePath} failed validation; using built-in defaults.`
+        `Balance preset file ${this.filePath} failed validation (${where}); using built-in defaults.`
       );
+      await this.preserveUnusableFile(raw);
       return;
     }
 
@@ -485,10 +497,27 @@ export class BalanceStore {
       this.logger.warn(
         `Balance preset file ${this.filePath} cannot drive a simulation (${reason}); using built-in defaults.`
       );
+      await this.preserveUnusableFile(raw);
       return;
     }
 
     this.file = parsed.data;
+  }
+
+  /**
+   * Keeps a copy of a preset the server could not use. Falling back to defaults
+   * puts an empty campaign in front of the operator, and the next save from the
+   * console writes that over hand-built waves — so the original has to survive
+   * somewhere before that can happen.
+   */
+  private async preserveUnusableFile(raw: string): Promise<void> {
+    const rescued = `${this.filePath}.unusable`;
+    try {
+      await writeFile(rescued, raw, "utf8");
+      this.logger.warn(`Previous balance preset kept at ${rescued}.`);
+    } catch {
+      this.logger.warn(`Could not keep a copy of the unusable preset at ${rescued}.`);
+    }
   }
 
   getState(): BalancePresetsFile {

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, resolve, sep } from "node:path";
@@ -34,6 +34,7 @@ try {
   if (interrupted) throw new Error("Visible demo stopped before startup.");
   await Promise.all([assertPortAvailable(serverPort), assertPortAvailable(displayPort)]);
 
+  const presetPath = await shortenIntermission();
   const server = startProcess(
     process.execPath,
     ["--import", "./scripts/owned-process-guard.mjs", "apps/server/dist/index.js"],
@@ -41,7 +42,8 @@ try {
       HOST: "127.0.0.1",
       PORT: String(serverPort),
       GRACEFUL_SHUTDOWN: "false",
-      RECONNECTION_GRACE_SECONDS: "1"
+      RECONNECTION_GRACE_SECONDS: "1",
+      ...(presetPath === undefined ? {} : { BALANCE_PRESET_PATH: presetPath })
     }
   );
   const display = startProcess(
@@ -102,6 +104,44 @@ try {
   process.removeListener("SIGTERM", handleInterrupt);
   await Promise.allSettled(managedProcesses.reverse().map(stopProcessTree));
   await cleanupOwnedChromeProfile().catch(() => undefined);
+}
+
+const TICK_MS = 50;
+const OPERATOR_PRESET_PATH = "apps/server/data/balance.json";
+
+/**
+ * DEMO_INTERMISSION=2 shortens the wait between waves for this run only. The
+ * console has the same knob, but nothing starts the console during a visible
+ * demo, and the operator's own preset must come back untouched afterwards — so
+ * the override goes into a throwaway copy the server is pointed at instead.
+ */
+async function shortenIntermission() {
+  const requested = process.env.DEMO_INTERMISSION;
+  if (requested === undefined) return undefined;
+  const seconds = Number(requested);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    throw new Error(`DEMO_INTERMISSION must be a positive number of seconds, got "${requested}".`);
+  }
+
+  let document;
+  try {
+    document = JSON.parse(await readFile(OPERATOR_PRESET_PATH, "utf8"));
+  } catch {
+    // No saved preset: the server plays its built-in defaults and there is
+    // nothing here to copy, so leave it to do that.
+    console.log("DEMO_INTERMISSION ignored: no saved balance preset to copy.");
+    return undefined;
+  }
+
+  const ticks = Math.max(1, Math.round((seconds * 1000) / TICK_MS));
+  for (const preset of document.presets ?? []) {
+    if (preset?.tuning !== undefined) preset.tuning.intermissionTicks = ticks;
+  }
+  const directory = await mkdtemp(`${resolve(tmpdir())}${sep}spaceship-demo-`);
+  const copy = `${directory}${sep}balance.json`;
+  await writeFile(copy, JSON.stringify(document), "utf8");
+  console.log(`Intermission shortened to ${String(seconds)}s for this demo run.`);
+  return copy;
 }
 
 function startProcess(command, arguments_, environment) {
