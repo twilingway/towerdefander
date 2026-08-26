@@ -38,8 +38,8 @@ const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
 const SNAPSHOT_TRANSITION_MS = 50;
 const OUTSIDE_SPACE_COLOR = 0x02070d;
-/** The player hull, until a hull catalogue of its own exists. */
-const SPACESHIP_HULL_ASSET_ID = "ship-dart";
+/** Drawn when a preset picks no hull of its own. */
+const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
 const ARENA_SPACE_COLOR = 0x07171f;
 
 type CombatEntity =
@@ -99,11 +99,7 @@ class SpaceshipScene extends Phaser.Scene {
     this.drawDecorations();
 
     this.spaceshipBody = this.add.graphics().setDepth(10);
-    drawCatalogAsset(
-      this.spaceshipBody,
-      getVisualAsset(SPACESHIP_HULL_ASSET_ID),
-      this.snapshot.spaceship.radius
-    );
+    drawSpaceshipHull(this.spaceshipBody, this.snapshot);
     this.spaceshipBody
       .setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y)
       .setRotation(this.snapshot.spaceship.heading);
@@ -255,7 +251,8 @@ class SpaceshipScene extends Phaser.Scene {
     const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
     this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
     this.shield.beginPath();
-    this.shield.arc(0, 0, this.snapshot.spaceship.radius + 34, arc.start, arc.end, false);
+    // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
+    this.shield.arc(0, 0, this.snapshot.shieldRadius, arc.start, arc.end, false);
     this.shield.strokePath();
   }
 
@@ -449,6 +446,19 @@ export function resolveEnemyVisual(
   kind: string
 ): PublicEnemyCatalogueEntry {
   return catalogue.find((entry) => entry.kind === kind) ?? FALLBACK_ENEMY_VISUAL;
+}
+
+/**
+ * The hull look travels with the preset, so an unknown id falls back the same
+ * way an enemy silhouette does rather than leaving the ship invisible.
+ */
+export function drawSpaceshipHull(
+  body: Phaser.GameObjects.Graphics,
+  snapshot: Pick<DisplayGameSnapshot, "spaceship" | "spaceshipVisual">
+): void {
+  const visual = snapshot.spaceshipVisual;
+  const asset = getVisualAsset(visual?.shape ?? DEFAULT_SPACESHIP_HULL_ASSET_ID);
+  drawCatalogAsset(body, asset, snapshot.spaceship.radius * (visual?.modelScale ?? 1));
 }
 
 export function drawEnemyBody(

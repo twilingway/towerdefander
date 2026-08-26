@@ -8,7 +8,8 @@ import {
   validateCombatConfig,
   validateRunSeed,
   type CombatConfig,
-  type CombatStateFields
+  type CombatStateFields,
+  type EntityVisual
 } from "./combat.js";
 
 export interface Vector2 {
@@ -26,6 +27,11 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    * preset the way enemy visuals do.
    */
   readonly cameraViewWidth: number;
+  /**
+   * Presentation only, like `cameraViewWidth`: the silhouette the display draws
+   * for the player hull. The simulation never reads it.
+   */
+  readonly spaceshipVisual: EntityVisual | null;
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;
@@ -135,6 +141,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   worldWidth: 4400,
   worldHeight: 4400,
   cameraViewWidth: 2200,
+  spaceshipVisual: null,
   arenaRadius: 2200,
   spaceshipSpeedPerSecond: 320,
   spaceshipAccelerationPerSecondSquared: 640,

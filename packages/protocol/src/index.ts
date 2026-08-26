@@ -9,7 +9,7 @@ import {
 } from "./enemyKinds.ts";
 import { cameraViewWidthSchema, entityVisualSchema, visualAssetIdSchema } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 18 as const;
+export const PROTOCOL_VERSION = 19 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -566,6 +566,10 @@ export const displayGameSnapshotSchema = z
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
     /** Look of the ambient hazard for this run; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,
+    /** Look of the player hull; null keeps the display's own default silhouette. */
+    spaceshipVisual: entityVisualSchema,
+    /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
+    shieldRadius: finite,
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),

@@ -196,6 +196,11 @@ export class SpaceshipDisplayState extends Schema {
   /** Empty means the display draws its own rock for the ambient hazard. */
   @type("string") asteroidVisualShape = "";
   @type("float32") asteroidVisualScale = 1;
+  /** Empty means the display draws its own default hull silhouette. */
+  @type("string") spaceshipVisualShape = "";
+  @type("float32") spaceshipVisualScale = 1;
+  /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
+  @type("float32") shieldRadius = 104;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();

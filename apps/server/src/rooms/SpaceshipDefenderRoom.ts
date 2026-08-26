@@ -648,6 +648,9 @@ export class SpaceshipDefenderRoom extends Room<{
     const display = this.state.game.display;
     display.asteroidVisualShape = this.gameConfig.asteroidVisual?.shape ?? "";
     display.asteroidVisualScale = this.gameConfig.asteroidVisual?.modelScale ?? 1;
+    display.spaceshipVisualShape = this.gameConfig.spaceshipVisual?.shape ?? "";
+    display.spaceshipVisualScale = this.gameConfig.spaceshipVisual?.modelScale ?? 1;
+    display.shieldRadius = this.gameConfig.shieldRadius;
     const catalogue = display.enemyCatalogue;
     catalogue.clear();
     for (const [kind, archetype] of Object.entries(this.gameConfig.enemyArchetypes)) {

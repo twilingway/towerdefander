@@ -457,6 +457,136 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
+  it("gives a version 8 document the built-in player ship", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 8 kept the whole player ship in code, so none of this was stored.
+    const playerShipFields = new Set([
+      "spaceshipVisual",
+      "spaceshipMaxHp",
+      "spaceshipRadius",
+      "spaceshipSpeedPerSecond",
+      "spaceshipAccelerationPerSecondSquared",
+      "spaceshipBrakingPerSecondSquared",
+      "headingMaxAngularSpeedPerSecond",
+      "headingAngularAccelerationPerSecondSquared",
+      "headingAngularBrakingPerSecondSquared",
+      "friendlyProjectileDamage",
+      "fireCooldownTicks",
+      "projectileSpeedPerSecond",
+      "projectileRadius",
+      "projectileLifetimeMs",
+      "turretMaxAngularSpeedPerSecond",
+      "turretAngularAccelerationPerSecondSquared",
+      "turretAngularBrakingPerSecondSquared",
+      "mgDamage",
+      "mgFireCooldownTicks",
+      "mgProjectileSpeedPerSecond",
+      "mgProjectileRadius",
+      "mgHeatCapacity",
+      "mgHeatPerShot",
+      "mgCoolingPerSecond",
+      "mgRearmThreshold",
+      "shieldCapacity",
+      "shieldDrainPerSecond",
+      "shieldRechargePerSecond",
+      "shieldRadius",
+      "shieldArcRadians",
+      "shieldMaxAngularSpeedPerSecond",
+      "shieldAngularAccelerationPerSecondSquared",
+      "shieldAngularBrakingPerSecondSquared"
+    ]);
+    const legacyTuning = Object.fromEntries(
+      Object.entries(defaults).filter(([field]) => !playerShipFields.has(field))
+    );
+    const document = {
+      version: 8,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    // The preset keeps playing with exactly the numbers it played with before.
+    const config = store.getActiveSimulationConfig();
+    expect(config.spaceshipSpeedPerSecond).toBe(defaults.spaceshipSpeedPerSecond);
+    expect(config.shieldCapacity).toBe(defaults.shieldCapacity);
+    expect(config.mgHeatCapacity).toBe(defaults.mgHeatCapacity);
+    expect(config.spaceshipVisual).toBeNull();
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("carries an edited player ship into the next run", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: BALANCE_FILE_VERSION,
+        activePresetId: "operator",
+        presets: [
+          {
+            id: "operator",
+            name: "Operator",
+            tuning: {
+              ...defaults,
+              spaceshipSpeedPerSecond: 410,
+              shieldCapacity: 180,
+              shieldRadius: 150,
+              spaceshipVisual: { shape: "ship-lancer", modelScale: 1.2 }
+            }
+          }
+        ]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const config = store.getActiveSimulationConfig();
+    expect(config.spaceshipSpeedPerSecond).toBe(410);
+    expect(config.shieldCapacity).toBe(180);
+    expect(config.shieldRadius).toBe(150);
+    expect(config.spaceshipVisual).toEqual({ shape: "ship-lancer", modelScale: 1.2 });
+  });
+
+  it("refuses a player ship the simulation cannot run", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: BALANCE_FILE_VERSION,
+        activePresetId: "operator",
+        presets: [
+          {
+            id: "operator",
+            name: "Operator",
+            // The core caps the rearm threshold by the heat capacity.
+            tuning: { ...defaults, mgHeatCapacity: 40, mgRearmThreshold: 90 }
+          }
+        ]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    // The broken preset never becomes active; built-in defaults stay in place.
+    expect(store.getActiveSimulationConfig().mgHeatCapacity).toBe(defaults.mgHeatCapacity);
+  });
+
   it("leaves a current document untouched", () => {
     const current = tunedPresetsFile(99);
     expect(migrateBalanceDocument(current)).toBe(current);

@@ -8,7 +8,12 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { drawCatalogAsset } from "./catalogRenderer.js";
-import { drawEnemyBody, drawEnemyHealthBar, resolveEnemyVisual } from "./SpaceshipRuntime.js";
+import {
+  drawEnemyBody,
+  drawEnemyHealthBar,
+  drawSpaceshipHull,
+  resolveEnemyVisual
+} from "./SpaceshipRuntime.js";
 
 interface FillRectCall {
   readonly x: number;
@@ -182,6 +187,40 @@ describe("catalogue rendering", () => {
     const fallback = graphicsSpy();
     drawCatalogAsset(fallback.graphics as never, getVisualAsset(FALLBACK_VISUAL_ASSET_ID), 30);
     expect(spy.ops).toEqual(fallback.ops);
+  });
+});
+
+describe("player hull", () => {
+  const spaceship = { radius: 52 } as never;
+
+  it("draws the default silhouette when the preset picks none", () => {
+    const spy = graphicsSpy();
+    drawSpaceshipHull(spy.graphics as never, { spaceship, spaceshipVisual: null });
+    const expected = graphicsSpy();
+    drawCatalogAsset(expected.graphics as never, getVisualAsset("ship-dart"), 52);
+    expect(spy.ops).toEqual(expected.ops);
+  });
+
+  it("draws the hull the preset picked, at the scale it asked for", () => {
+    const spy = graphicsSpy();
+    drawSpaceshipHull(spy.graphics as never, {
+      spaceship,
+      spaceshipVisual: { shape: "ship-lancer", modelScale: 1.5 }
+    });
+    const expected = graphicsSpy();
+    drawCatalogAsset(expected.graphics as never, getVisualAsset("ship-lancer"), 78);
+    expect(spy.ops).toEqual(expected.ops);
+  });
+
+  it("falls back rather than leaving the ship invisible on an unknown hull", () => {
+    const spy = graphicsSpy();
+    drawSpaceshipHull(spy.graphics as never, {
+      spaceship,
+      spaceshipVisual: { shape: "ship-from-the-future", modelScale: 1 } as never
+    });
+    const expected = graphicsSpy();
+    drawCatalogAsset(expected.graphics as never, getVisualAsset(FALLBACK_VISUAL_ASSET_ID), 52);
+    expect(spy.ops).toEqual(expected.ops);
   });
 });
 

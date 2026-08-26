@@ -581,6 +581,13 @@ body {
   text-align: center;
 }
 
+.preview__shield {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
 /* Visual catalogue browser: seventy silhouettes stay folded until asked for. */
 .assets {
   background: var(--surface);

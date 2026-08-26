@@ -596,6 +596,8 @@ describe("deterministic combat foundation", () => {
   it("keeps the run identical when only the looks differ", () => {
     const base = createSpaceshipSimulationConfig();
     const dressed = createSpaceshipSimulationConfig({
+      // The player hull is presentation-only too, so it rides along here.
+      spaceshipVisual: { shape: "boss-mothership", modelScale: 1.4 },
       enemyArchetypes: Object.fromEntries(
         Object.entries(base.enemyArchetypes).map(([kind, archetype]) => [
           kind,

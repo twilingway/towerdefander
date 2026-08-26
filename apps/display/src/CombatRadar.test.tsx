@@ -47,6 +47,8 @@ const baseGame: DisplayGameSnapshot = {
   },
   enemyCatalogue: [],
   asteroidVisual: null,
+  spaceshipVisual: null,
+  shieldRadius: 104,
   obstacles: [],
   enemyShips: [
     {

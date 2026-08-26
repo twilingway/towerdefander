@@ -23,6 +23,7 @@ import {
 
 import { AssetPicker } from "./AssetPicker.js";
 import { EnemyPreview } from "./EnemyPreview.js";
+import { PlayerShipPreview } from "./PlayerShipPreview.js";
 import {
   BalanceRequestError,
   fetchBalance,
@@ -40,12 +41,13 @@ import {
   weaponReach
 } from "./waveSummary.js";
 
-const TABS = ["waves", "enemies", "director", "presets"] as const;
+const TABS = ["waves", "enemies", "player", "director", "presets"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   waves: "Волны",
   enemies: "Враги",
+  player: "Игрок",
   director: "Директор",
   presets: "Пресеты"
 };
@@ -1069,6 +1071,364 @@ function scaleEntityVisual(visual: EntityVisual, modelScale: number): EntityVisu
   return { ...visual, modelScale: Math.min(4, Math.max(0.2, modelScale)) };
 }
 
+interface PlayerScreenProps {
+  readonly tuning: BalanceTuning;
+  readonly onChange: (tuning: BalanceTuning) => void;
+}
+
+/**
+ * The crew ship, grouped by the four combat systems the roles operate. The
+ * preset stores these flat, under the names the simulation config uses; the
+ * grouping lives here because this is where a person needs it.
+ */
+function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
+  const patch = (values: Partial<BalanceTuning>): void => {
+    onChange({ ...tuning, ...values });
+  };
+
+  return (
+    <section className="screen">
+      <header className="screen__header">
+        <h2>Корабль игрока</h2>
+        <p className="screen__hint">
+          Числа применяются к следующему запуску боя: идущий бой их не подхватывает. Ролевые
+          апгрейды множат эти значения во время забега и здесь не настраиваются.
+        </p>
+      </header>
+
+      <details className="legend">
+        <summary>Что значат поля</summary>
+        <dl className="legend__list">
+          <dt>Радиус поражения</dt>
+          <dd>по этому кругу враги считают попадания; силуэт корпуса на попадания не влияет</dd>
+          <dt>Ускорение и торможение</dt>
+          <dd>
+            единиц в секунду за секунду: первое разгоняет корабль к предельной скорости, второе
+            гасит движение, когда пилот отпустил стик
+          </dd>
+          <dt>Поворот носа</dt>
+          <dd>нос доворачивает за вектором пилота, и туда же стреляет носовой пулемёт</dd>
+          <dt>Пушка: время жизни снаряда</dt>
+          <dd>через сколько миллисекунд снаряд исчезает сам, даже не попав</dd>
+          <dt>Пулемёт: ёмкость и нагрев</dt>
+          <dd>
+            каждый выстрел добавляет нагрев, охлаждение снимает его в секунду; на ёмкости пулемёт
+            глохнет и молчит, пока нагрев не упадёт ниже порога возврата
+          </dd>
+          <dt>Щит: радиус</dt>
+          <dd>
+            на каком удалении от центра корабля щит перехватывает снаряды; дисплей рисует дугу ровно
+            по нему
+          </dd>
+          <dt>Щит: ширина сектора</dt>
+          <dd>сколько радиан закрывает щит; расход идёт, только пока он поднят</dd>
+        </dl>
+      </details>
+
+      <article className="card">
+        <h4 className="card__subtitle">Внешний вид</h4>
+        <div className="appearance">
+          <PlayerShipPreview tuning={tuning} />
+          <div className="appearance__controls">
+            <AssetPicker
+              label="Корпус"
+              value={tuning.spaceshipVisual?.shape ?? null}
+              categories={["ship"]}
+              allowNone
+              onChange={(shape) => {
+                patch({
+                  spaceshipVisual:
+                    shape === null
+                      ? null
+                      : { shape, modelScale: tuning.spaceshipVisual?.modelScale ?? 1 }
+                });
+              }}
+            />
+            <div className="card__grid">
+              <NumberField
+                caption="Масштаб модели"
+                step={0.1}
+                min={0.2}
+                value={tuning.spaceshipVisual?.modelScale ?? 1}
+                onChange={(modelScale) => {
+                  patch({ spaceshipVisual: scaleEntityVisual(tuning.spaceshipVisual, modelScale) });
+                }}
+              />
+            </div>
+            <p className="screen__hint">
+              Без выбора корабль рисуется силуэтом по умолчанию. Масштаб меняет только рисунок,
+              радиус поражения остаётся своим.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article className="card">
+        <h3 className="card__subtitle">Корпус и ход</h3>
+        <div className="card__grid">
+          <NumberField
+            caption="HP корпуса"
+            value={tuning.spaceshipMaxHp}
+            onChange={(spaceshipMaxHp) => {
+              patch({ spaceshipMaxHp: spaceshipMaxHp });
+            }}
+          />
+          <NumberField
+            caption="Радиус поражения"
+            value={tuning.spaceshipRadius}
+            onChange={(spaceshipRadius) => {
+              patch({ spaceshipRadius: spaceshipRadius });
+            }}
+          />
+          <NumberField
+            caption="Скорость"
+            value={tuning.spaceshipSpeedPerSecond}
+            onChange={(spaceshipSpeedPerSecond) => {
+              patch({ spaceshipSpeedPerSecond: spaceshipSpeedPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Ускорение"
+            value={tuning.spaceshipAccelerationPerSecondSquared}
+            onChange={(spaceshipAccelerationPerSecondSquared) => {
+              patch({
+                spaceshipAccelerationPerSecondSquared: spaceshipAccelerationPerSecondSquared
+              });
+            }}
+          />
+          <NumberField
+            caption="Торможение"
+            value={tuning.spaceshipBrakingPerSecondSquared}
+            onChange={(spaceshipBrakingPerSecondSquared) => {
+              patch({ spaceshipBrakingPerSecondSquared: spaceshipBrakingPerSecondSquared });
+            }}
+          />
+          <NumberField
+            caption="Поворот носа, рад/с"
+            step={0.05}
+            value={tuning.headingMaxAngularSpeedPerSecond}
+            onChange={(headingMaxAngularSpeedPerSecond) => {
+              patch({ headingMaxAngularSpeedPerSecond: headingMaxAngularSpeedPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Разгон поворота, рад/с²"
+            step={0.05}
+            value={tuning.headingAngularAccelerationPerSecondSquared}
+            onChange={(headingAngularAccelerationPerSecondSquared) => {
+              patch({
+                headingAngularAccelerationPerSecondSquared:
+                  headingAngularAccelerationPerSecondSquared
+              });
+            }}
+          />
+          <NumberField
+            caption="Торможение поворота, рад/с²"
+            step={0.05}
+            value={tuning.headingAngularBrakingPerSecondSquared}
+            onChange={(headingAngularBrakingPerSecondSquared) => {
+              patch({
+                headingAngularBrakingPerSecondSquared: headingAngularBrakingPerSecondSquared
+              });
+            }}
+          />
+        </div>
+
+        <h3 className="card__subtitle">Пушка ганнера</h3>
+        <div className="card__grid">
+          <NumberField
+            caption="Урон"
+            value={tuning.friendlyProjectileDamage}
+            onChange={(friendlyProjectileDamage) => {
+              patch({ friendlyProjectileDamage: friendlyProjectileDamage });
+            }}
+          />
+          <SecondsField
+            caption="Перезарядка, с"
+            ticks={tuning.fireCooldownTicks}
+            onChange={(fireCooldownTicks) => {
+              patch({ fireCooldownTicks });
+            }}
+          />
+          <NumberField
+            caption="Скорость снаряда"
+            value={tuning.projectileSpeedPerSecond}
+            onChange={(projectileSpeedPerSecond) => {
+              patch({ projectileSpeedPerSecond: projectileSpeedPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Радиус снаряда"
+            value={tuning.projectileRadius}
+            onChange={(projectileRadius) => {
+              patch({ projectileRadius: projectileRadius });
+            }}
+          />
+          <NumberField
+            caption="Время жизни снаряда, мс"
+            value={tuning.projectileLifetimeMs}
+            onChange={(projectileLifetimeMs) => {
+              patch({ projectileLifetimeMs: Math.max(1, Math.round(projectileLifetimeMs)) });
+            }}
+          />
+          <NumberField
+            caption="Поворот турели, рад/с"
+            step={0.05}
+            value={tuning.turretMaxAngularSpeedPerSecond}
+            onChange={(turretMaxAngularSpeedPerSecond) => {
+              patch({ turretMaxAngularSpeedPerSecond: turretMaxAngularSpeedPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Разгон турели, рад/с²"
+            step={0.05}
+            value={tuning.turretAngularAccelerationPerSecondSquared}
+            onChange={(turretAngularAccelerationPerSecondSquared) => {
+              patch({
+                turretAngularAccelerationPerSecondSquared: turretAngularAccelerationPerSecondSquared
+              });
+            }}
+          />
+          <NumberField
+            caption="Торможение турели, рад/с²"
+            step={0.05}
+            value={tuning.turretAngularBrakingPerSecondSquared}
+            onChange={(turretAngularBrakingPerSecondSquared) => {
+              patch({ turretAngularBrakingPerSecondSquared: turretAngularBrakingPerSecondSquared });
+            }}
+          />
+        </div>
+
+        <h3 className="card__subtitle">Носовой пулемёт</h3>
+        <div className="card__grid">
+          <NumberField
+            caption="Урон"
+            value={tuning.mgDamage}
+            onChange={(mgDamage) => {
+              patch({ mgDamage: mgDamage });
+            }}
+          />
+          <SecondsField
+            caption="Перезарядка, с"
+            ticks={tuning.mgFireCooldownTicks}
+            onChange={(mgFireCooldownTicks) => {
+              patch({ mgFireCooldownTicks });
+            }}
+          />
+          <NumberField
+            caption="Скорость снаряда"
+            value={tuning.mgProjectileSpeedPerSecond}
+            onChange={(mgProjectileSpeedPerSecond) => {
+              patch({ mgProjectileSpeedPerSecond: mgProjectileSpeedPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Радиус снаряда"
+            value={tuning.mgProjectileRadius}
+            onChange={(mgProjectileRadius) => {
+              patch({ mgProjectileRadius: mgProjectileRadius });
+            }}
+          />
+          <NumberField
+            caption="Ёмкость нагрева"
+            value={tuning.mgHeatCapacity}
+            onChange={(mgHeatCapacity) => {
+              patch({ mgHeatCapacity: mgHeatCapacity });
+            }}
+          />
+          <NumberField
+            caption="Нагрев за выстрел"
+            value={tuning.mgHeatPerShot}
+            onChange={(mgHeatPerShot) => {
+              patch({ mgHeatPerShot: mgHeatPerShot });
+            }}
+          />
+          <NumberField
+            caption="Охлаждение в секунду"
+            value={tuning.mgCoolingPerSecond}
+            onChange={(mgCoolingPerSecond) => {
+              patch({ mgCoolingPerSecond: mgCoolingPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Порог возврата в строй"
+            value={tuning.mgRearmThreshold}
+            onChange={(mgRearmThreshold) => {
+              patch({ mgRearmThreshold: mgRearmThreshold });
+            }}
+          />
+        </div>
+
+        <h3 className="card__subtitle">Щит</h3>
+        <div className="card__grid">
+          <NumberField
+            caption="Ёмкость"
+            value={tuning.shieldCapacity}
+            onChange={(shieldCapacity) => {
+              patch({ shieldCapacity: shieldCapacity });
+            }}
+          />
+          <NumberField
+            caption="Расход в секунду"
+            value={tuning.shieldDrainPerSecond}
+            onChange={(shieldDrainPerSecond) => {
+              patch({ shieldDrainPerSecond: shieldDrainPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Восстановление в секунду"
+            value={tuning.shieldRechargePerSecond}
+            onChange={(shieldRechargePerSecond) => {
+              patch({ shieldRechargePerSecond: shieldRechargePerSecond });
+            }}
+          />
+          <NumberField
+            caption="Радиус"
+            value={tuning.shieldRadius}
+            onChange={(shieldRadius) => {
+              patch({ shieldRadius: shieldRadius });
+            }}
+          />
+          <NumberField
+            caption="Ширина сектора, рад"
+            step={0.05}
+            value={tuning.shieldArcRadians}
+            onChange={(shieldArcRadians) => {
+              patch({ shieldArcRadians: shieldArcRadians });
+            }}
+          />
+          <NumberField
+            caption="Поворот сектора, рад/с"
+            step={0.05}
+            value={tuning.shieldMaxAngularSpeedPerSecond}
+            onChange={(shieldMaxAngularSpeedPerSecond) => {
+              patch({ shieldMaxAngularSpeedPerSecond: shieldMaxAngularSpeedPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Разгон поворота, рад/с²"
+            step={0.05}
+            value={tuning.shieldAngularAccelerationPerSecondSquared}
+            onChange={(shieldAngularAccelerationPerSecondSquared) => {
+              patch({
+                shieldAngularAccelerationPerSecondSquared: shieldAngularAccelerationPerSecondSquared
+              });
+            }}
+          />
+          <NumberField
+            caption="Торможение поворота, рад/с²"
+            step={0.05}
+            value={tuning.shieldAngularBrakingPerSecondSquared}
+            onChange={(shieldAngularBrakingPerSecondSquared) => {
+              patch({ shieldAngularBrakingPerSecondSquared: shieldAngularBrakingPerSecondSquared });
+            }}
+          />
+        </div>
+      </article>
+    </section>
+  );
+}
+
 interface DirectorScreenProps {
   readonly tuning: BalanceTuning;
   readonly onChange: (tuning: BalanceTuning) => void;
@@ -1616,6 +1976,8 @@ export function AdminApp() {
         <WavesScreen tuning={active.tuning} onChange={updateTuning} />
       ) : tab === "enemies" ? (
         <EnemiesScreen tuning={active.tuning} onChange={updateTuning} />
+      ) : tab === "player" ? (
+        <PlayerScreen tuning={active.tuning} onChange={updateTuning} />
       ) : tab === "director" ? (
         <DirectorScreen tuning={active.tuning} onChange={updateTuning} />
       ) : (

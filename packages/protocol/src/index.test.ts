@@ -136,6 +136,8 @@ function displayRoom(): DisplayRoomView {
       cameraViewWidth: 1600,
       enemyCatalogue: [],
       asteroidVisual: null,
+      spaceshipVisual: null,
+      shieldRadius: 104,
       obstacles: [{ obstacleId: "rock", kind: "circle", x: 400, y: 300, radius: 70 }],
       enemyShips: [
         {
@@ -238,48 +240,48 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v18 handshake and messages", () => {
-  it("publishes the fixed crew and v18", () => {
-    expect(PROTOCOL_VERSION).toBe(18);
+describe("protocol v19 handshake and messages", () => {
+  it("publishes the fixed crew and v19", () => {
+    expect(PROTOCOL_VERSION).toBe(19);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v18 create/join and rejects v17 and unknown fields", () => {
+  it("accepts v19 create/join and rejects v18 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 18 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 19 }).success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 17 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 18 }).success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 18,
+        protocolVersion: 19,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 17,
+        protocolVersion: 18,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 18,
+        protocolVersion: 19,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v18 and the active run", () => {
+  it("keeps continuous role messages strict on v19 and the active run", () => {
     const envelope = {
-      protocolVersion: 18,
+      protocolVersion: 19,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -355,7 +357,7 @@ describe("protocol v18 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 17,
+        protocolVersion: 18,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -365,9 +367,9 @@ describe("protocol v18 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v18 pilot input", () => {
+  it("requires the machine gun trigger on v19 pilot input", () => {
     const envelope = {
-      protocolVersion: 18,
+      protocolVersion: 19,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -383,11 +385,11 @@ describe("protocol v18 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 18, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 19, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 17, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 18, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -430,7 +432,7 @@ describe("protocol v18 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 18,
+    protocolVersion: 19,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -519,7 +521,7 @@ describe("shared team upgrade projection", () => {
   });
 });
 
-describe("strict v18 room projections", () => {
+describe("strict v19 room projections", () => {
   it("accepts valid combat display and compact controller views", () => {
     expect(controllerRoomViewSchema.safeParse(controllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(displayRoom()).success).toBe(true);
@@ -861,21 +863,21 @@ describe("strict v18 room projections", () => {
   });
 });
 
-describe("v18 latency diagnostics", () => {
+describe("v19 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 18, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 19, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 18,
+        protocolVersion: 19,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 18,
+        protocolVersion: 19,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -883,13 +885,13 @@ describe("v18 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 17,
+        protocolVersion: 18,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 17, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 18, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BALANCE_FILE_VERSION,
   BUILTIN_ENEMY_KINDS,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
@@ -93,6 +94,39 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidCreditReward: 1,
     asteroidVisual: null,
     missileInterceptScoreReward: 5,
+    spaceshipVisual: null,
+    spaceshipMaxHp: 500,
+    spaceshipRadius: 52,
+    spaceshipSpeedPerSecond: 320,
+    spaceshipAccelerationPerSecondSquared: 640,
+    spaceshipBrakingPerSecondSquared: 800,
+    headingMaxAngularSpeedPerSecond: 2.72,
+    headingAngularAccelerationPerSecondSquared: 5.44,
+    headingAngularBrakingPerSecondSquared: 8.16,
+    friendlyProjectileDamage: 25,
+    fireCooldownTicks: 5,
+    projectileSpeedPerSecond: 720,
+    projectileRadius: 8,
+    projectileLifetimeMs: 1500,
+    turretMaxAngularSpeedPerSecond: 1.36,
+    turretAngularAccelerationPerSecondSquared: 2.72,
+    turretAngularBrakingPerSecondSquared: 4.08,
+    mgDamage: 8,
+    mgFireCooldownTicks: 2,
+    mgProjectileSpeedPerSecond: 900,
+    mgProjectileRadius: 5,
+    mgHeatCapacity: 100,
+    mgHeatPerShot: 4,
+    mgCoolingPerSecond: 30,
+    mgRearmThreshold: 30,
+    shieldCapacity: 100,
+    shieldDrainPerSecond: 20,
+    shieldRechargePerSecond: 10,
+    shieldRadius: 104,
+    shieldArcRadians: Math.PI / 2,
+    shieldMaxAngularSpeedPerSecond: 1.7,
+    shieldAngularAccelerationPerSecondSquared: 3.4,
+    shieldAngularBrakingPerSecondSquared: 5.1,
     cameraViewWidth: 1600,
     ...overrides
   };
@@ -100,7 +134,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 8,
+    version: BALANCE_FILE_VERSION,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -290,12 +324,14 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 9 }).success).toBe(
-      false
-    );
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 7 }).success).toBe(
-      false
-    );
+    expect(
+      balancePresetsFileSchema.safeParse({ ...presetsFile(), version: BALANCE_FILE_VERSION + 1 })
+        .success
+    ).toBe(false);
+    expect(
+      balancePresetsFileSchema.safeParse({ ...presetsFile(), version: BALANCE_FILE_VERSION - 1 })
+        .success
+    ).toBe(false);
   });
 
   it("rejects a preset id that is not kebab-case", () => {
@@ -303,7 +339,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 8,
+        version: BALANCE_FILE_VERSION,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

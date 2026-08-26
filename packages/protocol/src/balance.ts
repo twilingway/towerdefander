@@ -7,9 +7,9 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 8 as const;
+export const BALANCE_FILE_VERSION = 9 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -197,7 +197,50 @@ export const balanceTuningSchema = z
     /** Look of the ambient hazard; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
-    cameraViewWidth: cameraViewWidthSchema
+    cameraViewWidth: cameraViewWidthSchema,
+
+    // --- Player ship: hull and movement ---
+    /** Look of the player hull; null keeps the display's own default silhouette. */
+    spaceshipVisual: entityVisualSchema,
+    spaceshipMaxHp: positiveFinite,
+    spaceshipRadius: positiveFinite,
+    spaceshipSpeedPerSecond: positiveFinite,
+    spaceshipAccelerationPerSecondSquared: positiveFinite,
+    spaceshipBrakingPerSecondSquared: positiveFinite,
+    headingMaxAngularSpeedPerSecond: positiveFinite,
+    headingAngularAccelerationPerSecondSquared: positiveFinite,
+    headingAngularBrakingPerSecondSquared: positiveFinite,
+
+    // --- Player ship: gunner cannon ---
+    friendlyProjectileDamage: positiveFinite,
+    fireCooldownTicks: positiveInteger,
+    projectileSpeedPerSecond: positiveFinite,
+    projectileRadius: positiveFinite,
+    projectileLifetimeMs: positiveInteger,
+    turretMaxAngularSpeedPerSecond: positiveFinite,
+    turretAngularAccelerationPerSecondSquared: positiveFinite,
+    turretAngularBrakingPerSecondSquared: positiveFinite,
+
+    // --- Player ship: nose machine gun ---
+    mgDamage: positiveFinite,
+    mgFireCooldownTicks: positiveInteger,
+    mgProjectileSpeedPerSecond: positiveFinite,
+    mgProjectileRadius: positiveFinite,
+    mgHeatCapacity: positiveFinite,
+    mgHeatPerShot: positiveFinite,
+    mgCoolingPerSecond: nonNegativeFinite,
+    /** Heat the gun must cool below before it fires again; core caps it by capacity. */
+    mgRearmThreshold: nonNegativeFinite,
+
+    // --- Player ship: shield ---
+    shieldCapacity: positiveFinite,
+    shieldDrainPerSecond: positiveFinite,
+    shieldRechargePerSecond: positiveFinite,
+    shieldRadius: positiveFinite,
+    shieldArcRadians: positiveFinite.max(Math.PI * 2),
+    shieldMaxAngularSpeedPerSecond: positiveFinite,
+    shieldAngularAccelerationPerSecondSquared: positiveFinite,
+    shieldAngularBrakingPerSecondSquared: positiveFinite
   })
   .strict()
   .superRefine((value, context) => {

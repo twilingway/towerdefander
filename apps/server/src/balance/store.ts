@@ -135,6 +135,54 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
   return migrated;
 }
 
+/**
+ * Version 8 kept the whole player ship in code, so a document from it has none
+ * of these fields. Filling them from the built-in defaults is what keeps such a
+ * preset playing with the exact numbers it played with before.
+ */
+const PLAYER_SHIP_FIELDS = [
+  "spaceshipMaxHp",
+  "spaceshipRadius",
+  "spaceshipSpeedPerSecond",
+  "spaceshipAccelerationPerSecondSquared",
+  "spaceshipBrakingPerSecondSquared",
+  "headingMaxAngularSpeedPerSecond",
+  "headingAngularAccelerationPerSecondSquared",
+  "headingAngularBrakingPerSecondSquared",
+  "friendlyProjectileDamage",
+  "fireCooldownTicks",
+  "projectileSpeedPerSecond",
+  "projectileRadius",
+  "projectileLifetimeMs",
+  "turretMaxAngularSpeedPerSecond",
+  "turretAngularAccelerationPerSecondSquared",
+  "turretAngularBrakingPerSecondSquared",
+  "mgDamage",
+  "mgFireCooldownTicks",
+  "mgProjectileSpeedPerSecond",
+  "mgProjectileRadius",
+  "mgHeatCapacity",
+  "mgHeatPerShot",
+  "mgCoolingPerSecond",
+  "mgRearmThreshold",
+  "shieldCapacity",
+  "shieldDrainPerSecond",
+  "shieldRechargePerSecond",
+  "shieldRadius",
+  "shieldArcRadians",
+  "shieldMaxAngularSpeedPerSecond",
+  "shieldAngularAccelerationPerSecondSquared",
+  "shieldAngularBrakingPerSecondSquared"
+] as const satisfies readonly (keyof BalanceTuning)[];
+
+function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  const migrated: LegacyRecord = { ...tuning, spaceshipVisual: tuning.spaceshipVisual ?? null };
+  for (const field of PLAYER_SHIP_FIELDS) {
+    migrated[field] = tuning[field] ?? defaults[field];
+  }
+  return migrated;
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -142,7 +190,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   return {
     ...preset,
     tuning: {
-      ...tuning,
+      ...migratePlayerShip(tuning, defaults),
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       asteroidVisual: tuning.asteroidVisual ?? null,
       enemyArchetypes: Object.fromEntries(
@@ -162,8 +210,9 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
  * the world with a literal in the display instead of `cameraViewWidth`, version
  * 6 let every weapon fire across the whole arena, and version 7 picked
  * silhouettes from eight shapes the display drew in code and tinted them with
- * two colours. Carry those documents forward instead of silently replacing an
- * operator's balance with defaults.
+ * two colours, and version 8 had no player ship in the preset at all. Carry
+ * those documents forward instead of silently replacing an operator's balance
+ * with defaults.
  */
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;
@@ -202,7 +251,40 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidCreditReward: config.asteroidCreditReward,
     asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
-    cameraViewWidth: config.cameraViewWidth
+    cameraViewWidth: config.cameraViewWidth,
+    spaceshipVisual: config.spaceshipVisual,
+    spaceshipMaxHp: config.spaceshipMaxHp,
+    spaceshipRadius: config.spaceshipRadius,
+    spaceshipSpeedPerSecond: config.spaceshipSpeedPerSecond,
+    spaceshipAccelerationPerSecondSquared: config.spaceshipAccelerationPerSecondSquared,
+    spaceshipBrakingPerSecondSquared: config.spaceshipBrakingPerSecondSquared,
+    headingMaxAngularSpeedPerSecond: config.headingMaxAngularSpeedPerSecond,
+    headingAngularAccelerationPerSecondSquared: config.headingAngularAccelerationPerSecondSquared,
+    headingAngularBrakingPerSecondSquared: config.headingAngularBrakingPerSecondSquared,
+    friendlyProjectileDamage: config.friendlyProjectileDamage,
+    fireCooldownTicks: config.fireCooldownTicks,
+    projectileSpeedPerSecond: config.projectileSpeedPerSecond,
+    projectileRadius: config.projectileRadius,
+    projectileLifetimeMs: config.projectileLifetimeMs,
+    turretMaxAngularSpeedPerSecond: config.turretMaxAngularSpeedPerSecond,
+    turretAngularAccelerationPerSecondSquared: config.turretAngularAccelerationPerSecondSquared,
+    turretAngularBrakingPerSecondSquared: config.turretAngularBrakingPerSecondSquared,
+    mgDamage: config.mgDamage,
+    mgFireCooldownTicks: config.mgFireCooldownTicks,
+    mgProjectileSpeedPerSecond: config.mgProjectileSpeedPerSecond,
+    mgProjectileRadius: config.mgProjectileRadius,
+    mgHeatCapacity: config.mgHeatCapacity,
+    mgHeatPerShot: config.mgHeatPerShot,
+    mgCoolingPerSecond: config.mgCoolingPerSecond,
+    mgRearmThreshold: config.mgRearmThreshold,
+    shieldCapacity: config.shieldCapacity,
+    shieldDrainPerSecond: config.shieldDrainPerSecond,
+    shieldRechargePerSecond: config.shieldRechargePerSecond,
+    shieldRadius: config.shieldRadius,
+    shieldArcRadians: config.shieldArcRadians,
+    shieldMaxAngularSpeedPerSecond: config.shieldMaxAngularSpeedPerSecond,
+    shieldAngularAccelerationPerSecondSquared: config.shieldAngularAccelerationPerSecondSquared,
+    shieldAngularBrakingPerSecondSquared: config.shieldAngularBrakingPerSecondSquared
   });
 }
 

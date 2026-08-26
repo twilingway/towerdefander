@@ -78,6 +78,9 @@ describe("display room view", () => {
         credits: 6,
         display: {
           cameraViewWidth: 1600,
+          spaceshipVisualShape: "ship-lancer",
+          spaceshipVisualScale: 1.25,
+          shieldRadius: 140,
           enemyCatalogue: [],
           obstacles: collection([
             {
@@ -182,6 +185,8 @@ describe("display room view", () => {
     expect(view?.game?.spaceship.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
+    expect(view?.game?.shieldRadius).toBe(140);
+    expect(view?.game?.spaceshipVisual).toEqual({ shape: "ship-lancer", modelScale: 1.25 });
     expect(view?.displayLatencyMs).toBe(18);
     expect(view?.game?.credits).toBe(6);
     expect(view?.game?.teamUpgrade).toEqual({

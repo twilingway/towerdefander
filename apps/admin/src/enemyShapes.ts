@@ -1,7 +1,10 @@
 import { getVisualAsset, type VisualAsset, type VisualLayer } from "@spaceship-defender/protocol";
 
-/** The player's hull, drawn as a dashed reference ring. */
+/** The player's hull, drawn as a dashed reference ring on the enemy preview. */
 export const SPACESHIP_WORLD_RADIUS = 52;
+
+/** Drawn for the player hull when a preset picks none; mirrors the display. */
+export const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
 
 /** How far one layer reaches from the asset origin, in the asset's own units. */
 function layerReach(layer: VisualLayer): number {
