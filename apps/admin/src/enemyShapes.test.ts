@@ -1,49 +1,40 @@
-import { ENEMY_SHAPES } from "@spaceship-defender/protocol";
+import { VISUAL_ASSETS, getVisualAsset } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
   SPACESHIP_WORLD_RADIUS,
+  assetReach,
   modelWorldRadius,
   previewScale,
-  shapeDrawing,
-  shapeReach,
-  toSvgPoints
+  shapeReach
 } from "./enemyShapes.js";
 
 describe("preview geometry", () => {
-  it("draws something for every shape the protocol allows", () => {
-    for (const shape of ENEMY_SHAPES) {
-      const drawing = shapeDrawing(shape, 40);
-      const marks = drawing.polygon.length + drawing.circles.length;
-      expect(marks, `shape ${shape} draws nothing`).toBeGreaterThan(0);
+  it("measures a reach for every asset the catalogue carries", () => {
+    for (const asset of VISUAL_ASSETS) {
+      expect(assetReach(asset), `asset ${asset.id} measures nothing`).toBeGreaterThan(0);
+      expect(shapeReach(asset.id), `asset ${asset.id} has no relative reach`).toBeGreaterThan(0);
     }
   });
 
-  it("scales with the radius", () => {
-    for (const shape of ENEMY_SHAPES) {
-      const small = shapeDrawing(shape, 10);
-      const large = shapeDrawing(shape, 80);
-      const reach = (points: readonly { readonly x: number; readonly y: number }[]) =>
-        Math.max(0, ...points.map(({ x, y }) => Math.hypot(x, y)));
-      const smallReach = reach(small.polygon) + (small.circles[0]?.radius ?? 0);
-      const largeReach = reach(large.polygon) + (large.circles[0]?.radius ?? 0);
-      expect(largeReach, `shape ${shape} ignores radius`).toBeGreaterThan(smallReach);
-    }
+  it("expresses reach relative to the asset's own nominal radius", () => {
+    const spear = getVisualAsset("ship-spear");
+    expect(shapeReach("ship-spear")).toBeCloseTo(
+      (assetReach(spear) / spear.radius) * spear.scaleHint
+    );
+    // Fins and rings routinely stick out past the collision circle; without that
+    // the preview could never warn about a model wider than its frame.
+    expect(VISUAL_ASSETS.filter((asset) => shapeReach(asset.id) > 1)).not.toHaveLength(0);
   });
 
-  it("points the nose along +X so rotation matches the game", () => {
-    for (const shape of ["arrowhead", "block", "diamond", "dart"] as const) {
-      const { polygon } = shapeDrawing(shape, 40);
-      const furthest = polygon.reduce((best, point) => (point.x > best.x ? point : best));
-      expect(furthest.x, `shape ${shape} has no forward tip`).toBeGreaterThan(0);
-      expect(Math.abs(furthest.y)).toBeLessThan(1e-9);
-    }
+  it("falls back rather than throwing on an id this build does not carry", () => {
+    expect(shapeReach("ship-from-the-future")).toBeCloseTo(shapeReach("ship-spear"));
   });
 
   it("keeps the rings still when only the model scale changes", () => {
     const box = 148;
-    const plain = previewScale(28, 1, "arrowhead", box);
-    const grown = previewScale(28, 2.6, "arrowhead", box);
+    const plain = previewScale(28, 1, "ship-spear", box);
+    const grown = previewScale(28, 2.6, "ship-spear", box);
     // Same hit radius means the same view scale: the rings must not move.
     expect(grown.factor).toBeCloseTo(plain.factor);
     expect(plain.modelOverflows).toBe(false);
@@ -53,12 +44,12 @@ describe("preview geometry", () => {
   it("scales the view with the hit radius so bigger enemies read bigger", () => {
     const box = 148;
     // Below the player hull the reference keeps the scale fixed for comparison.
-    expect(previewScale(20, 1, "arrowhead", box).factor).toBeCloseTo(
-      previewScale(40, 1, "arrowhead", box).factor
+    expect(previewScale(20, 1, "ship-spear", box).factor).toBeCloseTo(
+      previewScale(40, 1, "ship-spear", box).factor
     );
     // Past it, the hitbox drives the zoom and stays inside the frame.
-    const boss = previewScale(90, 1, "hexagon", box);
-    expect(boss.factor).toBeLessThan(previewScale(52, 1, "hexagon", box).factor);
+    const boss = previewScale(90, 1, "boss-dreadnought", box);
+    expect(boss.factor).toBeLessThan(previewScale(52, 1, "boss-dreadnought", box).factor);
     expect(90 * boss.factor).toBeLessThanOrEqual(box * 0.46 + 1e-9);
   });
 
@@ -66,7 +57,7 @@ describe("preview geometry", () => {
     const box = 148;
     const half = box * 0.46;
     for (const hitRadius of [8, 18, 28, 52, 90, 400]) {
-      const { factor } = previewScale(hitRadius, 1, "arrowhead", box);
+      const { factor } = previewScale(hitRadius, 1, "ship-spear", box);
       expect(hitRadius * factor, `hit ring escapes at ${String(hitRadius)}`).toBeLessThan(half);
       expect(
         SPACESHIP_WORLD_RADIUS * factor,
@@ -78,15 +69,5 @@ describe("preview geometry", () => {
   it("reports the world radius the model occupies", () => {
     expect(modelWorldRadius(28, 2.6)).toBe(73);
     expect(modelWorldRadius(28, 1)).toBe(28);
-  });
-
-  it("measures how far each silhouette reaches past its radius", () => {
-    // The diamond nose sticks out; the hexagon sits on its radius.
-    expect(shapeReach("diamond")).toBeGreaterThan(1.2);
-    expect(shapeReach("hexagon")).toBeCloseTo(1);
-  });
-
-  it("offsets svg points by the box centre", () => {
-    expect(toSvgPoints([{ x: -10, y: 5 }], 60)).toBe("50,65");
   });
 });

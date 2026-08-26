@@ -336,8 +336,7 @@ body {
   display: none;
 }
 
-.sectors,
-.shapes {
+.sectors {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
@@ -579,5 +578,110 @@ body {
   color: var(--ink-dim);
   font-size: 11px;
   margin-top: 4px;
+  text-align: center;
+}
+
+/* Visual catalogue browser: seventy silhouettes stay folded until asked for. */
+.assets {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.assets__summary {
+  align-items: baseline;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.assets__caption {
+  color: var(--ink-dim);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.assets__current {
+  color: var(--ink);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assets__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.assets__search {
+  width: 100%;
+}
+
+.assets__grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  margin-top: 10px;
+  max-height: 268px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.asset {
+  background: #0a1220;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink-dim);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 2px;
+  padding: 5px 4px;
+}
+
+.asset:hover {
+  border-color: var(--accent);
+}
+
+.asset--on {
+  background: rgba(79, 209, 197, 0.16);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.asset__thumb {
+  display: block;
+  height: 56px;
+  width: 100%;
+}
+
+.asset__none {
+  align-items: center;
+  color: var(--ink-dim);
+  display: flex;
+  font-size: 11px;
+  height: 56px;
+  justify-content: center;
+  text-align: center;
+}
+
+.asset__name {
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assets__empty {
+  color: var(--ink-dim);
+  grid-column: 1 / -1;
+  margin: 6px 0;
   text-align: center;
 }

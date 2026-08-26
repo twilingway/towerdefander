@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import type { Request, RequestHandler, Response } from "express";
 import {
+  BALANCE_FILE_VERSION,
   balancePresetsFileSchema,
   type BalancePresetsFile,
   type BalanceTuning
@@ -94,7 +95,7 @@ async function temporaryPresetPath(): Promise<string> {
 function tunedPresetsFile(hp: number): BalancePresetsFile {
   const tuning = createDefaultTuning();
   return {
-    version: 7,
+    version: BALANCE_FILE_VERSION,
     activePresetId: "tuned",
     presets: [
       {
@@ -269,13 +270,14 @@ describe("version 1 migration", () => {
     expect(warn).not.toHaveBeenCalled();
 
     const state = store.getState();
-    expect(state.version).toBe(7);
+    expect(state.version).toBe(BALANCE_FILE_VERSION);
     expect(state.activePresetId).toBe("operator");
     const wave = state.presets[0]?.tuning.waveCampaign.waves[0];
     expect(wave?.entries.map(({ kind }) => kind)).toEqual(["interceptor", "asteroid"]);
     expect(wave?.entries.map(({ sectors }) => sectors)).toEqual([["SE"], []]);
+    // The v1 document carried no visual at all, so the built-in default fills in.
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "interceptor").visual.shape).toBe(
-      "dart"
+      "ship-spear"
     );
   });
 
@@ -304,7 +306,7 @@ describe("version 1 migration", () => {
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().version).toBe(7);
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "boss").weapons).toHaveLength(1);
   });
 
@@ -326,7 +328,7 @@ describe("version 1 migration", () => {
     await store.load();
 
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().version).toBe(7);
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
     expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2200);
     expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2200);
   });
@@ -367,11 +369,92 @@ describe("version 1 migration", () => {
     await store.load();
 
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().version).toBe(7);
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
     // Gunship bullets reach 440 * 180 * 0.05 = 3960 world units.
     expect(
       getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").weapons[0]
     ).toMatchObject({ engagementRange: 2772 });
+  });
+
+  it("turns version 7 silhouettes into catalogue assets and drops their colours", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const legacyShapes = [
+      "arrowhead",
+      "block",
+      "diamond",
+      "dart",
+      "hexagon",
+      "cross",
+      "ring",
+      "spike"
+    ] as const;
+    const kinds = Object.keys(defaults.enemyArchetypes);
+    const archetypes = Object.fromEntries(
+      kinds.map((kind, index) => {
+        const archetype = defaults.enemyArchetypes[kind];
+        if (archetype === undefined) throw new Error(`missing archetype ${kind}`);
+        return [
+          kind,
+          {
+            ...archetype,
+            visual: {
+              shape: legacyShapes[index % legacyShapes.length],
+              color: "#e65f4b",
+              outline: "#ffd1b0",
+              modelScale: archetype.visual.modelScale,
+              showHealthBar: archetype.visual.showHealthBar
+            },
+            weapons: archetype.weapons.map((weapon) => {
+              const legacy: Record<string, unknown> = { ...weapon };
+              delete legacy.visual;
+              return legacy;
+            })
+          }
+        ];
+      })
+    );
+    const legacyTuning: Record<string, unknown> = {
+      ...defaults,
+      enemyArchetypes: archetypes
+    };
+    delete legacyTuning.asteroidVisual;
+    const document = {
+      version: 7,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    const tuning = store.getState().presets[0]?.tuning;
+    if (tuning === undefined) throw new Error("Expected the migrated preset.");
+    // Every old silhouette lands on the asset the mapping table names.
+    expect(kinds.map((kind) => tuning.enemyArchetypes[kind]?.visual.shape)).toEqual([
+      "ship-spear",
+      "ship-blockfrigate",
+      "ship-diamond",
+      "ship-arrowhead",
+      "ship-hexcorvette"
+    ]);
+    for (const kind of kinds) {
+      const visual = tuning.enemyArchetypes[kind]?.visual;
+      expect(visual, kind).not.toHaveProperty("color");
+      expect(visual, kind).not.toHaveProperty("outline");
+      expect(tuning.enemyArchetypes[kind]?.weapons.map(({ visual: shot }) => shot)).toEqual(
+        tuning.enemyArchetypes[kind]?.weapons.map(() => null)
+      );
+    }
+    expect(tuning.asteroidVisual).toBeNull();
+
+    // Running the migration again must not move an already-migrated document.
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
   it("leaves a current document untouched", () => {

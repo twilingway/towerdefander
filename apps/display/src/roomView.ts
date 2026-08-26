@@ -61,10 +61,14 @@ interface NetworkAsteroidState extends NetworkCombatEntityState {
 interface NetworkProjectileState extends NetworkCombatEntityState {
   kind: ProjectileKind;
   source?: string;
+  visualShape?: string;
+  visualScale?: number;
 }
 
 interface NetworkHomingMissileState extends NetworkCombatEntityState {
   heading: number;
+  visualShape?: string;
+  visualScale?: number;
 }
 
 interface NetworkUpgradeCardState {
@@ -144,6 +148,8 @@ interface NetworkGameState {
   teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
     cameraViewWidth: number;
+    asteroidVisualShape?: string;
+    asteroidVisualScale?: number;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
@@ -158,8 +164,6 @@ interface NetworkEnemyVisualState {
   kind: string;
   label: string;
   shape: string;
-  color: string;
-  outline: string;
   modelScale: number;
   showHealthBar: boolean;
 }
@@ -263,12 +267,14 @@ export function toDisplayRoomView(
                   }
             ),
             cameraViewWidth: display.cameraViewWidth,
+            asteroidVisual: toEntityVisual(
+              display.asteroidVisualShape,
+              display.asteroidVisualScale
+            ),
             enemyCatalogue: [...display.enemyCatalogue.values()].map((entry) => ({
               kind: entry.kind,
               label: entry.label,
               shape: entry.shape,
-              color: entry.color,
-              outline: entry.outline,
               modelScale: entry.modelScale,
               showHealthBar: entry.showHealthBar
             })),
@@ -276,7 +282,7 @@ export function toDisplayRoomView(
             asteroids: toSpawnOrder(display.asteroids),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
             hostileProjectiles: toSpawnOrder(display.hostileProjectiles).map(toPublicProjectile),
-            homingMissiles: toSpawnOrder(display.homingMissiles)
+            homingMissiles: toSpawnOrder(display.homingMissiles).map(toPublicHomingMissile)
           }
         : null
   });
@@ -324,10 +330,34 @@ function toPublicProjectile(projectile: NetworkProjectileState) {
     y: projectile.y,
     velocityX: projectile.velocityX,
     velocityY: projectile.velocityY,
-    radius: projectile.radius
+    radius: projectile.radius,
+    visual: toEntityVisual(projectile.visualShape, projectile.visualScale)
   };
   const source = normalizeProjectileSource(projectile.source);
   return source === undefined ? base : { ...base, source };
+}
+
+function toPublicHomingMissile(missile: NetworkHomingMissileState) {
+  return {
+    entityId: missile.entityId,
+    spawnSequence: missile.spawnSequence,
+    x: missile.x,
+    y: missile.y,
+    velocityX: missile.velocityX,
+    velocityY: missile.velocityY,
+    radius: missile.radius,
+    heading: missile.heading,
+    visual: toEntityVisual(missile.visualShape, missile.visualScale)
+  };
+}
+
+/** The wire spells "no look" as an empty shape, so it never sends a null branch. */
+function toEntityVisual(
+  shape: string | undefined,
+  modelScale: number | undefined
+): { shape: string; modelScale: number } | null {
+  if (shape === undefined || shape.length === 0) return null;
+  return { shape, modelScale: modelScale ?? 1 };
 }
 
 function normalizeProjectileSource(

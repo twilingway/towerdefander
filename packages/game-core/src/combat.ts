@@ -50,6 +50,8 @@ export interface EnemyWeaponTuning {
   readonly turnRatePerSecond: number;
   readonly burstCount: number;
   readonly burstSpreadRadians: number;
+  /** Look of the shots this barrel fires; null leaves them the display default. */
+  readonly visual: EntityVisual | null;
 }
 
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -90,24 +92,18 @@ export interface WaveCampaign {
 
 export type EnemySpawnPolicy = "standard" | "boss";
 
-export const ENEMY_SHAPES = [
-  "arrowhead",
-  "block",
-  "diamond",
-  "dart",
-  "hexagon",
-  "cross",
-  "ring",
-  "spike"
-] as const;
-export type EnemyShape = (typeof ENEMY_SHAPES)[number];
-
-export interface EnemyVisual {
-  readonly shape: EnemyShape;
-  readonly color: string;
-  readonly outline: string;
+/**
+ * A silhouette id from the shared visual catalogue. The simulation treats it as
+ * opaque: which ids exist is settled by the balance schema in `protocol`, and
+ * the display falls back on its own when a preset names one it cannot draw.
+ */
+export interface EntityVisual {
+  readonly shape: string;
   /** Drawn size relative to the hit radius; the hitbox itself never changes. */
   readonly modelScale: number;
+}
+
+export interface EnemyVisual extends EntityVisual {
   readonly showHealthBar: boolean;
 }
 
@@ -152,6 +148,8 @@ export interface CombatConfig {
   readonly asteroidSpawnCost: number;
   readonly asteroidScoreReward: number;
   readonly asteroidCreditReward: number;
+  /** Look of the ambient hazard; null keeps the display's own rock. */
+  readonly asteroidVisual: EntityVisual | null;
   readonly missileInterceptScoreReward: number;
   readonly worldPadding: number;
   readonly spatialCellSize: number;
@@ -243,6 +241,7 @@ export interface HostileProjectileState extends MovingEntity {
   readonly damage: number;
   readonly shieldHitCost: number;
   readonly lifetimeTicks: number;
+  readonly visual: EntityVisual | null;
 }
 
 export interface HomingMissileState extends MovingEntity {
@@ -252,6 +251,7 @@ export interface HomingMissileState extends MovingEntity {
   readonly lifetimeTicks: number;
   readonly speedPerSecond: number;
   readonly turnRatePerSecond: number;
+  readonly visual: EntityVisual | null;
 }
 
 export interface PendingSpawn {
@@ -475,8 +475,8 @@ function validateEnemyArchetypes(config: CombatConfig): void {
   }
   for (const kind of kinds) {
     const archetype = archetypeOf(config, kind);
-    if (!ENEMY_SHAPES.includes(archetype.visual.shape)) {
-      throw new RangeError(`${kind}.visual.shape is not a shape the display can draw`);
+    if (archetype.visual.shape.length === 0) {
+      throw new RangeError(`${kind}.visual.shape must name a visual catalogue asset`);
     }
     if (
       !Number.isFinite(archetype.visual.modelScale) ||
@@ -1364,7 +1364,8 @@ function createHostileBullet(
     spawnedTick: tick,
     damage: weapon.damage,
     shieldHitCost: weapon.shieldHitCost,
-    lifetimeTicks: weapon.projectileLifetimeTicks
+    lifetimeTicks: weapon.projectileLifetimeTicks,
+    visual: weapon.visual
   };
 }
 
@@ -1397,7 +1398,8 @@ function createMissile(
     shieldHitCost: weapon.shieldHitCost,
     lifetimeTicks: weapon.projectileLifetimeTicks,
     speedPerSecond: weapon.projectileSpeedPerSecond,
-    turnRatePerSecond: weapon.turnRatePerSecond
+    turnRatePerSecond: weapon.turnRatePerSecond,
+    visual: weapon.visual
   };
 }
 

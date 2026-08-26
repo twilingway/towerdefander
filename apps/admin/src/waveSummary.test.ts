@@ -34,13 +34,12 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
         engagementRange: 1200,
         turnRatePerSecond: Math.PI / 2,
         burstCount: 1,
-        burstSpreadRadians: 0
+        burstSpreadRadians: 0,
+        visual: null
       }
     ],
     visual: {
-      shape: "arrowhead",
-      color: "#e65f4b",
-      outline: "#ffd1b0",
+      shape: "ship-spear",
       modelScale: 1,
       showHealthBar: false
     },
@@ -110,6 +109,7 @@ function tuning(): BalanceTuning {
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
+    asteroidVisual: null,
     missileInterceptScoreReward: 5,
     cameraViewWidth: 1600
   };

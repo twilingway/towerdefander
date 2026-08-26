@@ -84,7 +84,8 @@ export function createWorstCaseCombatFixture(
       ...movingEntity(`hostile-${String(sequence)}`, sequence, position, { x: 9, y: 3 }, 7),
       damage: weapon.damage,
       shieldHitCost: weapon.shieldHitCost,
-      lifetimeTicks: weapon.projectileLifetimeTicks
+      lifetimeTicks: weapon.projectileLifetimeTicks,
+      visual: weapon.visual
     } satisfies HostileProjectileState;
   });
   const homingMissiles = Array.from({ length: config.caps.homingMissiles }, (_, index) => {
@@ -104,7 +105,8 @@ export function createWorstCaseCombatFixture(
       shieldHitCost: weapon.shieldHitCost,
       lifetimeTicks: weapon.projectileLifetimeTicks,
       speedPerSecond: weapon.projectileSpeedPerSecond,
-      turnRatePerSecond: weapon.turnRatePerSecond
+      turnRatePerSecond: weapon.turnRatePerSecond,
+      visual: weapon.visual
     } satisfies HomingMissileState;
   });
   const projectiles = Array.from({ length: config.caps.friendlyProjectiles }, (_, index) => {

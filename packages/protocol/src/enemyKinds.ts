@@ -19,17 +19,3 @@ export type BuiltinEnemyKind = (typeof BUILTIN_ENEMY_KINDS)[number];
 export const ENEMY_ARCHETYPE_ID_PATTERN = /^[a-z][a-zA-Z0-9-]*$/;
 export const MAX_ENEMY_ARCHETYPE_ID_LENGTH = 48;
 export const MAX_ENEMY_ARCHETYPES = 32;
-
-/** Silhouettes the display knows how to draw; the archetype picks one. */
-export const ENEMY_SHAPES = [
-  "arrowhead",
-  "block",
-  "diamond",
-  "dart",
-  "hexagon",
-  "cross",
-  "ring",
-  "spike"
-] as const;
-export type EnemyShape = (typeof ENEMY_SHAPES)[number];
-export const FALLBACK_ENEMY_SHAPE: EnemyShape = "arrowhead";

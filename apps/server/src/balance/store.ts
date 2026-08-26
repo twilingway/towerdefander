@@ -3,9 +3,10 @@ import { dirname, join } from "node:path";
 
 import {
   BALANCE_FILE_VERSION,
-  FALLBACK_ENEMY_SHAPE,
+  FALLBACK_VISUAL_ASSET_ID,
   LEGACY_BALANCE_FILE_VERSIONS,
   balancePresetsFileSchema,
+  balanceTuningSchema,
   type BalancePreset,
   type BalancePresetsFile,
   type BalanceTuning
@@ -52,6 +53,23 @@ function migrateWave(wave: unknown): unknown {
   return { ...wave, entries: readArray(wave, "entries").map(migrateEntry) };
 }
 
+/**
+ * Version 7 named silhouettes from a fixed set of eight the display drew in code.
+ * Version 8 replaced that set with the shared visual catalogue, so each old name
+ * maps to the asset closest to the shape it used to draw; `dart` deliberately
+ * goes to `ship-arrowhead` rather than `ship-dart`, which the player hull uses.
+ */
+const LEGACY_SHAPE_ASSETS: Readonly<Record<string, string>> = {
+  arrowhead: "ship-spear",
+  block: "ship-blockfrigate",
+  diamond: "ship-diamond",
+  dart: "ship-arrowhead",
+  hexagon: "ship-hexcorvette",
+  cross: "station-crossdock",
+  ring: "station-ring",
+  spike: "station-starrelay"
+};
+
 /** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
 const TICK_SECONDS = 0.05;
 /** A shot at the very edge of its reach expires on arrival, so aim shorter. */
@@ -64,14 +82,33 @@ const MIGRATED_RANGE_SHARE = 0.7;
  * actually cover.
  */
 function migrateWeapon(weapon: unknown): unknown {
-  if (!isRecord(weapon) || weapon.engagementRange !== undefined) return weapon;
+  if (!isRecord(weapon)) return weapon;
   const reach =
     Number(weapon.projectileSpeedPerSecond) * Number(weapon.projectileLifetimeTicks) * TICK_SECONDS;
   return {
     ...weapon,
     engagementRange:
-      Number.isFinite(reach) && reach > 0 ? Math.round(reach * MIGRATED_RANGE_SHARE) : 1200
+      weapon.engagementRange ??
+      (Number.isFinite(reach) && reach > 0 ? Math.round(reach * MIGRATED_RANGE_SHARE) : 1200),
+    // Version 7 had no look for shots; the display default is what they had.
+    visual: weapon.visual ?? null
   };
+}
+
+/**
+ * Carries a version 7 visual onto the catalogue: the silhouette becomes an asset
+ * id, and the two colours go away because the asset paints itself.
+ */
+function migrateVisual(visual: LegacyRecord): LegacyRecord {
+  const shape = typeof visual.shape === "string" ? visual.shape : "";
+  const migrated: LegacyRecord = {
+    ...visual,
+    shape: LEGACY_SHAPE_ASSETS[shape] ?? (shape.length > 0 ? shape : FALLBACK_VISUAL_ASSET_ID),
+    modelScale: visual.modelScale ?? 1
+  };
+  delete migrated.color;
+  delete migrated.outline;
+  return migrated;
 }
 
 function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTuning): unknown {
@@ -87,13 +124,11 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
     visual:
       visual === undefined
         ? (known?.visual ?? {
-            shape: FALLBACK_ENEMY_SHAPE,
-            color: "#e65f4b",
-            outline: "#ffd1b0",
+            shape: FALLBACK_VISUAL_ASSET_ID,
             modelScale: 1,
             showHealthBar: false
           })
-        : { ...visual, modelScale: visual.modelScale ?? 1 },
+        : migrateVisual(visual),
     label: archetype.label ?? known?.label ?? kind
   };
   delete migrated.weapon;
@@ -109,6 +144,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
     tuning: {
       ...tuning,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
+      asteroidVisual: tuning.asteroidVisual ?? null,
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
           kind,
@@ -123,9 +159,11 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
 /**
  * Version 1 stored one `sector` per wave entry and had no visuals, because the
  * enemy kinds were a fixed enum drawn by the display; version 5 still framed
- * the world with a literal in the display instead of `cameraViewWidth`, and
- * version 6 let every weapon fire across the whole arena. Carry those documents
- * forward instead of silently replacing an operator's balance with defaults.
+ * the world with a literal in the display instead of `cameraViewWidth`, version
+ * 6 let every weapon fire across the whole arena, and version 7 picked
+ * silhouettes from eight shapes the display drew in code and tinted them with
+ * two colours. Carry those documents forward instead of silently replacing an
+ * operator's balance with defaults.
  */
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;
@@ -139,9 +177,14 @@ export function migrateBalanceDocument(raw: unknown): unknown {
   };
 }
 
+/**
+ * Parsed through the schema rather than cast: the simulation treats an asset id
+ * as an opaque string, so this is what proves the built-in archetypes name
+ * silhouettes the catalogue actually carries.
+ */
 export function createDefaultTuning(): BalanceTuning {
   const config = createSpaceshipSimulationConfig();
-  return {
+  return balanceTuningSchema.parse({
     enemyArchetypes: config.enemyArchetypes,
     waveCampaign: config.waveCampaign,
     enemySpawnIntervalTicks: config.enemySpawnIntervalTicks,
@@ -157,9 +200,10 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidSpawnCost: config.asteroidSpawnCost,
     asteroidScoreReward: config.asteroidScoreReward,
     asteroidCreditReward: config.asteroidCreditReward,
+    asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
     cameraViewWidth: config.cameraViewWidth
-  };
+  });
 }
 
 export function createDefaultPresetsFile(): BalancePresetsFile {

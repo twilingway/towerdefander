@@ -163,6 +163,9 @@ export class ProjectileState extends Schema {
   @type("float64") velocityY = 0;
   @type("float64") radius = 0;
   @type("string") source = "";
+  /** Empty means the display draws its own default primitive. */
+  @type("string") visualShape = "";
+  @type("float32") visualScale = 1;
 }
 
 export class HomingMissileState extends Schema {
@@ -174,21 +177,25 @@ export class HomingMissileState extends Schema {
   @type("float64") velocityY = 0;
   @type("float64") radius = 0;
   @type("float64") heading = 0;
+  /** Empty means the display draws its own default primitive. */
+  @type("string") visualShape = "";
+  @type("float32") visualScale = 1;
 }
 
 /** Per-run enemy catalogue: the display draws silhouettes from this, not from code. */
 export class EnemyVisualState extends Schema {
   @type("string") kind = "";
   @type("string") label = "";
-  @type("string") shape = "arrowhead";
-  @type("string") color = "#e65f4b";
-  @type("string") outline = "#ffd1b0";
+  @type("string") shape = "ship-spear";
   @type("float32") modelScale = 1;
   @type("boolean") showHealthBar = false;
 }
 
 export class SpaceshipDisplayState extends Schema {
   @type("float32") cameraViewWidth = 2200;
+  /** Empty means the display draws its own rock for the ambient hazard. */
+  @type("string") asteroidVisualShape = "";
+  @type("float32") asteroidVisualScale = 1;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();

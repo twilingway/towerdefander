@@ -206,13 +206,12 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           engagementRange: 1200,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
-          burstSpreadRadians: 0
+          burstSpreadRadians: 0,
+          visual: null
         }
       ],
       visual: {
-        shape: "arrowhead",
-        color: "#e65f4b",
-        outline: "#ffd1b0",
+        shape: "ship-delta",
         modelScale: 1,
         showHealthBar: false
       },
@@ -240,13 +239,12 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           engagementRange: 1700,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
-          burstSpreadRadians: 0
+          burstSpreadRadians: 0,
+          visual: null
         }
       ],
       visual: {
-        shape: "block",
-        color: "#aa5bd6",
-        outline: "#ffd1b0",
+        shape: "ship-broadwing",
         modelScale: 1,
         showHealthBar: false
       },
@@ -274,13 +272,12 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           engagementRange: 3000,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
-          burstSpreadRadians: 0
+          burstSpreadRadians: 0,
+          visual: null
         }
       ],
       visual: {
-        shape: "diamond",
-        color: "#4bb1e6",
-        outline: "#d6f0ff",
+        shape: "ship-needle",
         modelScale: 1,
         showHealthBar: false
       },
@@ -308,13 +305,12 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           engagementRange: 600,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
-          burstSpreadRadians: 0
+          burstSpreadRadians: 0,
+          visual: null
         }
       ],
       visual: {
-        shape: "dart",
-        color: "#f2c14b",
-        outline: "#fff0c2",
+        shape: "ship-spear",
         modelScale: 1,
         showHealthBar: false
       },
@@ -342,13 +338,12 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           engagementRange: 1600,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 3,
-          burstSpreadRadians: Math.PI / 6
+          burstSpreadRadians: Math.PI / 6,
+          visual: null
         }
       ],
       visual: {
-        shape: "hexagon",
-        color: "#8f2f4d",
-        outline: "#ffb0c8",
+        shape: "boss-dreadnought",
         modelScale: 1,
         showHealthBar: true
       },
@@ -367,6 +362,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   asteroidSpawnCost: 1,
   asteroidScoreReward: 10,
   asteroidCreditReward: 1,
+  asteroidVisual: null,
   missileInterceptScoreReward: 5,
   worldPadding: 256,
   spatialCellSize: 256,

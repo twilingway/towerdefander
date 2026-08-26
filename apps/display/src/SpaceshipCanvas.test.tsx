@@ -140,6 +140,7 @@ const testGame = {
     selection: null
   },
   enemyCatalogue: [],
+  asteroidVisual: null,
   obstacles: [],
   enemyShips: [],
   asteroids: [

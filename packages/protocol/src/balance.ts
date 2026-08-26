@@ -2,14 +2,14 @@ import { z } from "zod";
 
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
-  ENEMY_SHAPES,
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
+import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 7 as const;
+export const BALANCE_FILE_VERSION = 8 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -47,21 +47,27 @@ export type EnemyArchetypeId = z.infer<typeof enemyArchetypeIdSchema>;
 export const spawnKindSchema = enemyArchetypeIdSchema;
 export type SpawnKind = z.infer<typeof spawnKindSchema>;
 
-export const enemyShapeSchema = z.enum(ENEMY_SHAPES);
-export const hexColorSchema = z
-  .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Colour must be a #rrggbb value.");
+/** A silhouette from the shared visual catalogue; the asset carries its own colours. */
+export const visualAssetIdSchema = z.enum(VISUAL_ASSET_IDS);
+export const MODEL_SCALE_MIN = 0.2;
+export const MODEL_SCALE_MAX = 4;
+const modelScaleSchema = z.number().min(MODEL_SCALE_MIN).max(MODEL_SCALE_MAX);
 export const enemyVisualSchema = z
   .object({
-    shape: enemyShapeSchema,
-    color: hexColorSchema,
-    outline: hexColorSchema,
+    shape: visualAssetIdSchema,
     /** Drawn size relative to the hit radius; 1 means the model matches the hitbox. */
-    modelScale: z.number().min(0.2).max(4),
+    modelScale: modelScaleSchema,
     showHealthBar: z.boolean()
   })
   .strict();
 export type EnemyVisual = z.infer<typeof enemyVisualSchema>;
+
+/** A projectile or hazard look; null keeps the display's own default primitive. */
+export const entityVisualSchema = z
+  .object({ shape: visualAssetIdSchema, modelScale: modelScaleSchema })
+  .strict()
+  .nullable();
+export type EntityVisual = z.infer<typeof entityVisualSchema>;
 
 const positiveFinite = z.number().positive();
 const nonNegativeFinite = z.number().nonnegative();
@@ -80,7 +86,9 @@ export const enemyWeaponTuningSchema = z
     engagementRange: positiveFinite,
     turnRatePerSecond: positiveFinite,
     burstCount: positiveInteger.max(16),
-    burstSpreadRadians: nonNegativeFinite.max(Math.PI * 2)
+    burstSpreadRadians: nonNegativeFinite.max(Math.PI * 2),
+    /** Look of the shots this barrel fires; null leaves them the default primitive. */
+    visual: entityVisualSchema
   })
   .strict();
 export type EnemyWeaponTuning = z.infer<typeof enemyWeaponTuningSchema>;
@@ -186,6 +194,8 @@ export const balanceTuningSchema = z
     asteroidSpawnCost: positiveInteger,
     asteroidScoreReward: nonNegativeFinite,
     asteroidCreditReward: nonNegativeFinite,
+    /** Look of the ambient hazard; null keeps the display's own rock. */
+    asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
     cameraViewWidth: cameraViewWidthSchema
   })

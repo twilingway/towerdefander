@@ -1,135 +1,44 @@
-import type { EnemyShape } from "@spaceship-defender/protocol";
-
-export interface ShapePoint {
-  readonly x: number;
-  readonly y: number;
-}
-
-export interface ShapeDrawing {
-  /** Outline the display fills; empty for shapes drawn only from circles. */
-  readonly polygon: readonly ShapePoint[];
-  /** Extra rings, e.g. the boss core; radius is in the same units as the hull. */
-  readonly circles: readonly { readonly radius: number; readonly filled: boolean }[];
-}
-
-function regular(sides: number, radius: number): readonly ShapePoint[] {
-  return Array.from({ length: sides }, (_, index) => {
-    const angle = (index / sides) * Math.PI * 2;
-    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
-  });
-}
-
-/**
- * Mirrors ENEMY_SHAPE_DRAWERS in the display so the console preview matches the
- * silhouette a run will actually draw. Nose points along +X, as in game.
- */
-export function shapeDrawing(shape: EnemyShape, radius: number): ShapeDrawing {
-  switch (shape) {
-    case "arrowhead":
-      return {
-        polygon: [
-          { x: radius * 0.86, y: 0 },
-          { x: -radius * 0.64, y: -radius * 0.54 },
-          { x: -radius * 0.64, y: radius * 0.54 }
-        ],
-        circles: []
-      };
-    case "block": {
-      const halfWidth = radius * 0.66;
-      const halfHeight = radius * 0.45;
-      return {
-        polygon: [
-          { x: -halfWidth, y: -halfHeight },
-          { x: halfWidth, y: -halfHeight },
-          { x: radius * 0.82, y: 0 },
-          { x: halfWidth, y: halfHeight },
-          { x: -halfWidth, y: halfHeight }
-        ],
-        circles: []
-      };
-    }
-    case "diamond":
-      return {
-        polygon: [
-          { x: radius * 1.25, y: 0 },
-          { x: 0, y: -radius * 0.38 },
-          { x: -radius * 0.7, y: 0 },
-          { x: 0, y: radius * 0.38 }
-        ],
-        circles: []
-      };
-    case "dart":
-      return {
-        polygon: [
-          { x: radius * 1.1, y: 0 },
-          { x: -radius * 0.75, y: -radius * 0.85 },
-          { x: -radius * 0.2, y: 0 },
-          { x: -radius * 0.75, y: radius * 0.85 }
-        ],
-        circles: []
-      };
-    case "hexagon":
-      return { polygon: regular(6, radius), circles: [{ radius: radius * 0.48, filled: false }] };
-    case "cross": {
-      const arm = radius * 0.32;
-      return {
-        polygon: [
-          { x: -arm, y: -radius },
-          { x: arm, y: -radius },
-          { x: arm, y: -arm },
-          { x: radius, y: -arm },
-          { x: radius, y: arm },
-          { x: arm, y: arm },
-          { x: arm, y: radius },
-          { x: -arm, y: radius },
-          { x: -arm, y: arm },
-          { x: -radius, y: arm },
-          { x: -radius, y: -arm },
-          { x: -arm, y: -arm }
-        ],
-        circles: []
-      };
-    }
-    case "ring":
-      return {
-        polygon: [
-          { x: radius, y: 0 },
-          { x: radius * 0.35, y: -radius * 0.3 },
-          { x: radius * 0.35, y: radius * 0.3 }
-        ],
-        circles: [
-          { radius, filled: false },
-          { radius: radius * 0.55, filled: false }
-        ]
-      };
-    case "spike":
-      return {
-        polygon: Array.from({ length: 10 }, (_, index) => {
-          const angle = (index / 10) * Math.PI * 2;
-          const reach = index % 2 === 0 ? radius : radius * 0.5;
-          return { x: Math.cos(angle) * reach, y: Math.sin(angle) * reach };
-        }),
-        circles: []
-      };
-  }
-}
-
-export function toSvgPoints(points: readonly ShapePoint[], center: number): string {
-  return points.map(({ x, y }) => `${String(center + x)},${String(center + y)}`).join(" ");
-}
+import { getVisualAsset, type VisualAsset, type VisualLayer } from "@spaceship-defender/protocol";
 
 /** The player's hull, drawn as a dashed reference ring. */
 export const SPACESHIP_WORLD_RADIUS = 52;
 
-/** How far a silhouette of this shape reaches beyond its nominal radius. */
-export function shapeReach(shape: EnemyShape): number {
-  const drawing = shapeDrawing(shape, 1);
-  const polygonReach = Math.max(
-    0,
-    ...drawing.polygon.map(({ x, y }) => Math.hypot(x, y)),
-    ...drawing.circles.map(({ radius }) => radius)
-  );
-  return Math.max(1, polygonReach);
+/** How far one layer reaches from the asset origin, in the asset's own units. */
+function layerReach(layer: VisualLayer): number {
+  switch (layer.t) {
+    case "poly":
+      return Math.max(0, ...layer.pts.map(([x, y]) => Math.hypot(x, y)));
+    case "rect":
+      return Math.max(
+        Math.hypot(layer.x, layer.y),
+        Math.hypot(layer.x + layer.w, layer.y),
+        Math.hypot(layer.x, layer.y + layer.h),
+        Math.hypot(layer.x + layer.w, layer.y + layer.h)
+      );
+    case "rrect":
+      // Any rotation keeps the corners within half the diagonal of the centre.
+      return Math.hypot(layer.x, layer.y) + Math.hypot(layer.w / 2, layer.h / 2);
+    case "circle":
+    case "arc":
+      return Math.hypot(layer.x, layer.y) + layer.r;
+    case "ellipse":
+      return Math.hypot(layer.x, layer.y) + Math.max(layer.w, layer.h) / 2;
+    case "line":
+      return Math.max(Math.hypot(layer.x1, layer.y1), Math.hypot(layer.x2, layer.y2));
+  }
+}
+
+/**
+ * How far the drawn asset reaches beyond its nominal radius, as a multiplier.
+ * Above 1 means the silhouette spills past the hit circle it is scaled to.
+ */
+export function shapeReach(shape: string): number {
+  const asset = getVisualAsset(shape);
+  return (assetReach(asset) / asset.radius) * asset.scaleHint;
+}
+
+export function assetReach(asset: VisualAsset): number {
+  return Math.max(0, ...asset.layers.map(layerReach));
 }
 
 export interface PreviewScale {
@@ -147,7 +56,7 @@ export interface PreviewScale {
 export function previewScale(
   hitRadius: number,
   modelScale: number,
-  shape: EnemyShape,
+  shape: string,
   box: number
 ): PreviewScale {
   const half = box * 0.46;

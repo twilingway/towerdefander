@@ -1,12 +1,7 @@
-import type { EnemyArchetype } from "@spaceship-defender/protocol";
+import { getVisualAsset, type EnemyArchetype } from "@spaceship-defender/protocol";
 
-import {
-  SPACESHIP_WORLD_RADIUS,
-  modelWorldRadius,
-  previewScale,
-  shapeDrawing,
-  toSvgPoints
-} from "./enemyShapes.js";
+import { CatalogAssetShape } from "./catalogSvg.js";
+import { SPACESHIP_WORLD_RADIUS, modelWorldRadius, previewScale } from "./enemyShapes.js";
 
 const BOX = 148;
 const CENTER = BOX / 2;
@@ -18,11 +13,11 @@ export interface EnemyPreviewProps {
 /** Shows the drawn model against the hit radius it will really be shot at. */
 export function EnemyPreview({ archetype }: EnemyPreviewProps) {
   const { visual } = archetype;
+  const asset = getVisualAsset(visual.shape);
   const scale = previewScale(archetype.radius, visual.modelScale, visual.shape, BOX);
   const hitRadius = archetype.radius * scale.factor;
   const modelRadius = hitRadius * visual.modelScale;
   const shipRadius = SPACESHIP_WORLD_RADIUS * scale.factor;
-  const drawing = shapeDrawing(visual.shape, modelRadius);
   const barWidth = modelRadius * 1.8;
   const barHeight = Math.max(3, modelRadius * 0.12);
   const barTop = CENTER - modelRadius - barHeight * 2.4;
@@ -33,29 +28,9 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
         className="preview__canvas"
         viewBox={`0 0 ${String(BOX)} ${String(BOX)}`}
         role="img"
-        aria-label={`Внешний вид: ${archetype.label}`}
+        aria-label={`Внешний вид: ${archetype.label} — ${asset.name}`}
       >
-        {drawing.polygon.length > 0 ? (
-          <polygon
-            points={toSvgPoints(drawing.polygon, CENTER)}
-            fill={visual.color}
-            fillOpacity={0.72}
-            stroke={visual.outline}
-            strokeWidth={2.5}
-            strokeLinejoin="round"
-          />
-        ) : null}
-        {drawing.circles.map((ring, index) => (
-          <circle
-            key={`ring-${String(index)}`}
-            cx={CENTER}
-            cy={CENTER}
-            r={ring.radius}
-            fill={ring.filled ? visual.color : "none"}
-            stroke={visual.outline}
-            strokeWidth={2}
-          />
-        ))}
+        <CatalogAssetShape asset={asset} radius={modelRadius} center={CENTER} />
         <circle className="preview__reference" cx={CENTER} cy={CENTER} r={shipRadius} />
         <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={hitRadius} />
         <text className="preview__tag preview__tag--hit" x={4} y={12}>
@@ -72,7 +47,7 @@ export function EnemyPreview({ archetype }: EnemyPreviewProps) {
               width={barWidth}
               height={barHeight}
               fill="#2a0d16"
-              stroke={visual.outline}
+              stroke="#ffd1b0"
               strokeWidth={1.5}
             />
             <rect

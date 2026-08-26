@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 export * from "./enemyKinds.ts";
+export * from "./visualCatalog.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
-  ENEMY_SHAPES,
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
-import { cameraViewWidthSchema } from "./balance.ts";
+import { cameraViewWidthSchema, entityVisualSchema, visualAssetIdSchema } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 17 as const;
+export const PROTOCOL_VERSION = 18 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -350,10 +350,18 @@ export const publicAsteroidViewSchema = z
   });
 export type PublicAsteroidView = z.infer<typeof publicAsteroidViewSchema>;
 export const publicProjectileViewSchema = z
-  .object({ ...entityShape, kind: projectileKindSchema, source: projectileSourceSchema.optional() })
+  .object({
+    ...entityShape,
+    kind: projectileKindSchema,
+    source: projectileSourceSchema.optional(),
+    /** Set once from the firing weapon; null means the display draws its default. */
+    visual: entityVisualSchema
+  })
   .strict();
 export type PublicProjectileView = z.infer<typeof publicProjectileViewSchema>;
-export const publicHomingMissileViewSchema = z.object({ ...entityShape, heading: finite }).strict();
+export const publicHomingMissileViewSchema = z
+  .object({ ...entityShape, heading: finite, visual: entityVisualSchema })
+  .strict();
 export type PublicHomingMissileView = z.infer<typeof publicHomingMissileViewSchema>;
 
 const gameShape = {
@@ -543,9 +551,7 @@ export const publicEnemyCatalogueEntrySchema = z
   .object({
     kind: enemyKindSchema,
     label: z.string().min(1).max(48),
-    shape: z.enum(ENEMY_SHAPES),
-    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-    outline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    shape: visualAssetIdSchema,
     modelScale: z.number().min(0.2).max(4),
     showHealthBar: z.boolean()
   })
@@ -558,6 +564,8 @@ export const displayGameSnapshotSchema = z
     /** Narrowest slice of the world the display frames; height follows as 9/16. */
     cameraViewWidth: cameraViewWidthSchema,
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
+    /** Look of the ambient hazard for this run; null keeps the display's own rock. */
+    asteroidVisual: entityVisualSchema,
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),

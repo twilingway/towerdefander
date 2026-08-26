@@ -645,15 +645,16 @@ export class SpaceshipDefenderRoom extends Room<{
 
   /** The catalogue is fixed for the run, so the display receives it once at start. */
   private publishEnemyCatalogue(): void {
-    const catalogue = this.state.game.display.enemyCatalogue;
+    const display = this.state.game.display;
+    display.asteroidVisualShape = this.gameConfig.asteroidVisual?.shape ?? "";
+    display.asteroidVisualScale = this.gameConfig.asteroidVisual?.modelScale ?? 1;
+    const catalogue = display.enemyCatalogue;
     catalogue.clear();
     for (const [kind, archetype] of Object.entries(this.gameConfig.enemyArchetypes)) {
       const entry = new EnemyVisualState();
       entry.kind = kind;
       entry.label = archetype.label;
       entry.shape = archetype.visual.shape;
-      entry.color = archetype.visual.color;
-      entry.outline = archetype.visual.outline;
       entry.modelScale = archetype.visual.modelScale;
       entry.showHealthBar = archetype.visual.showHealthBar;
       catalogue.set(kind, entry);
@@ -1235,6 +1236,10 @@ function syncProjectile(
   target.velocityY = source.velocity.y;
   target.radius = source.radius;
   target.source = kind === "friendly" ? (source as CoreProjectileState).source : "";
+  // Set once at spawn: the value never changes, so it costs nothing per tick.
+  const visual = kind === "hostile" ? (source as HostileProjectileState).visual : null;
+  target.visualShape = visual?.shape ?? "";
+  target.visualScale = visual?.modelScale ?? 1;
 }
 
 function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissileState): void {
@@ -1246,6 +1251,8 @@ function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissile
   target.velocityY = source.velocity.y;
   target.radius = source.radius;
   target.heading = source.heading;
+  target.visualShape = source.visual?.shape ?? "";
+  target.visualScale = source.visual?.modelScale ?? 1;
 }
 
 function syncTeamUpgrade(

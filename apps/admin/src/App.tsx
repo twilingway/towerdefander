@@ -4,7 +4,6 @@ import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
-  ENEMY_SHAPES,
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_WEAPONS,
@@ -14,14 +13,15 @@ import {
   type BalancePresetsFile,
   type BalanceTuning,
   type EnemyArchetype,
-  type EnemyShape,
   type EnemyWeaponTuning,
+  type EntityVisual,
   type SpawnKind,
   type SpawnSector,
   type WaveDefinition,
   type WaveSpawnEntry
 } from "@spaceship-defender/protocol";
 
+import { AssetPicker } from "./AssetPicker.js";
 import { EnemyPreview } from "./EnemyPreview.js";
 import {
   BalanceRequestError,
@@ -48,17 +48,6 @@ const TAB_LABELS: Record<Tab, string> = {
   enemies: "Враги",
   director: "Директор",
   presets: "Пресеты"
-};
-
-const SHAPE_LABELS: Record<EnemyShape, string> = {
-  arrowhead: "клин",
-  block: "блок",
-  diamond: "ромб",
-  dart: "стрела",
-  hexagon: "гекс",
-  cross: "крест",
-  ring: "кольцо",
-  spike: "шип"
 };
 
 const SECTOR_HINTS: Record<SpawnSector, string> = {
@@ -597,13 +586,12 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
               engagementRange: 1200,
               turnRatePerSecond: Math.PI / 2,
               burstCount: 1,
-              burstSpreadRadians: 0
+              burstSpreadRadians: 0,
+              visual: null
             }
           ],
           visual: {
-            shape: "arrowhead",
-            color: "#7c9cf5",
-            outline: "#d7e2ff",
+            shape: "ship-arrowhead",
             modelScale: 1,
             showHealthBar: false
           },
@@ -804,44 +792,15 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
               <div className="appearance">
                 <EnemyPreview archetype={archetype} />
                 <div className="appearance__controls">
-                  <div className="shapes" role="group" aria-label="Силуэт">
-                    {ENEMY_SHAPES.map((shape) => (
-                      <button
-                        key={shape}
-                        type="button"
-                        className={`sectors__chip${archetype.visual.shape === shape ? " sectors__chip--on" : ""}`}
-                        aria-pressed={archetype.visual.shape === shape}
-                        onClick={() => {
-                          patchVisual(kind, { shape });
-                        }}
-                      >
-                        {SHAPE_LABELS[shape]}
-                      </button>
-                    ))}
-                  </div>
+                  <AssetPicker
+                    label="Силуэт"
+                    value={archetype.visual.shape}
+                    categories={["ship", "station", "drone", "boss"]}
+                    onChange={(shape) => {
+                      if (shape !== null) patchVisual(kind, { shape });
+                    }}
+                  />
                   <div className="card__grid">
-                    <label className="field">
-                      <span className="field__caption">Цвет корпуса</span>
-                      <input
-                        className="field__input"
-                        type="color"
-                        value={archetype.visual.color}
-                        onChange={(event) => {
-                          patchVisual(kind, { color: event.target.value });
-                        }}
-                      />
-                    </label>
-                    <label className="field">
-                      <span className="field__caption">Цвет обводки</span>
-                      <input
-                        className="field__input"
-                        type="color"
-                        value={archetype.visual.outline}
-                        onChange={(event) => {
-                          patchVisual(kind, { outline: event.target.value });
-                        }}
-                      />
-                    </label>
                     <label className="field field--inline">
                       <input
                         type="checkbox"
@@ -1066,7 +1025,32 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
                         patchWeapon(kind, weaponIndex, { turnRatePerSecond });
                       }}
                     />
+                    <NumberField
+                      caption="Масштаб снаряда"
+                      step={0.1}
+                      min={0.2}
+                      value={weapon.visual?.modelScale ?? 1}
+                      onChange={(modelScale) => {
+                        patchWeapon(kind, weaponIndex, {
+                          visual: scaleEntityVisual(weapon.visual, modelScale)
+                        });
+                      }}
+                    />
                   </div>
+                  <AssetPicker
+                    label="Вид снаряда"
+                    value={weapon.visual?.shape ?? null}
+                    categories={["missile", "weapon"]}
+                    allowNone
+                    onChange={(shape) => {
+                      patchWeapon(kind, weaponIndex, {
+                        visual:
+                          shape === null
+                            ? null
+                            : { shape, modelScale: weapon.visual?.modelScale ?? 1 }
+                      });
+                    }}
+                  />
                   <p className="screen__hint">
                     {rangeHint(weapon, archetype.preferredDistance, tuning.cameraViewWidth)}
                   </p>
@@ -1078,6 +1062,11 @@ function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
       </div>
     </section>
   );
+}
+
+function scaleEntityVisual(visual: EntityVisual, modelScale: number): EntityVisual {
+  if (visual === null) return null;
+  return { ...visual, modelScale: Math.min(4, Math.max(0.2, modelScale)) };
 }
 
 interface DirectorScreenProps {
@@ -1245,7 +1234,36 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
             onChange({ ...tuning, asteroidSpawnCost: Math.max(1, Math.round(asteroidSpawnCost)) });
           }}
         />
+        <NumberField
+          caption="Астероид: масштаб модели"
+          step={0.1}
+          min={0.2}
+          value={tuning.asteroidVisual?.modelScale ?? 1}
+          onChange={(modelScale) => {
+            onChange({
+              ...tuning,
+              asteroidVisual: scaleEntityVisual(tuning.asteroidVisual, modelScale)
+            });
+          }}
+        />
       </div>
+      <AssetPicker
+        label="Астероид: внешний вид"
+        value={tuning.asteroidVisual?.shape ?? null}
+        categories={["drone", "missile"]}
+        allowNone
+        onChange={(shape) => {
+          onChange({
+            ...tuning,
+            asteroidVisual:
+              shape === null ? null : { shape, modelScale: tuning.asteroidVisual?.modelScale ?? 1 }
+          });
+        }}
+      />
+      <p className="screen__hint">
+        Без выбора астероид рисуется обычным камнем. Силуэт из каталога заменяет его целиком, размер
+        по-прежнему берётся из радиуса астероида.
+      </p>
 
       <h3 className="card__subtitle">Камера мира</h3>
       <div className="card__grid">

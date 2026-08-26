@@ -28,13 +28,12 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
         engagementRange: 1200,
         turnRatePerSecond: Math.PI / 2,
         burstCount: 1,
-        burstSpreadRadians: 0
+        burstSpreadRadians: 0,
+        visual: null
       }
     ],
     visual: {
-      shape: "arrowhead",
-      color: "#e65f4b",
-      outline: "#ffd1b0",
+      shape: "ship-spear",
       modelScale: 1,
       showHealthBar: false
     },
@@ -92,6 +91,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
+    asteroidVisual: null,
     missileInterceptScoreReward: 5,
     cameraViewWidth: 1600,
     ...overrides
@@ -100,7 +100,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
 
 function presetsFile(value: BalanceTuning = tuning()) {
   return {
-    version: 7,
+    version: 8,
     activePresetId: "default",
     presets: [{ id: "default", name: "Default", tuning: value }]
   };
@@ -290,10 +290,10 @@ describe("balance presets file schema", () => {
   });
 
   it("rejects an unsupported file version", () => {
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 8 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 9 }).success).toBe(
       false
     );
-    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 6 }).success).toBe(
+    expect(balancePresetsFileSchema.safeParse({ ...presetsFile(), version: 7 }).success).toBe(
       false
     );
   });
@@ -303,7 +303,7 @@ describe("balance presets file schema", () => {
     expect(
       balancePresetsFileSchema.safeParse({
         activePresetId: "Not Kebab",
-        version: 7,
+        version: 8,
         presets: [{ ...file.presets[0], id: "Not Kebab" }]
       }).success
     ).toBe(false);

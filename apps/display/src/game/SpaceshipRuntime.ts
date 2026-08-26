@@ -1,7 +1,10 @@
-import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
+import {
+  CAMERA_VIEW_ASPECT,
+  FALLBACK_VISUAL_ASSET_ID,
+  getVisualAsset
+} from "@spaceship-defender/protocol";
 import type {
   DisplayGameSnapshot,
-  EnemyShape,
   PublicAsteroidView,
   PublicEnemyCatalogueEntry,
   PublicEnemyView,
@@ -29,11 +32,14 @@ import {
   type Point,
   type PointTransition
 } from "./spaceshipViewModel.js";
+import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
 const SNAPSHOT_TRANSITION_MS = 50;
 const OUTSIDE_SPACE_COLOR = 0x02070d;
+/** The player hull, until a hull catalogue of its own exists. */
+const SPACESHIP_HULL_ASSET_ID = "ship-dart";
 const ARENA_SPACE_COLOR = 0x07171f;
 
 type CombatEntity =
@@ -93,13 +99,14 @@ class SpaceshipScene extends Phaser.Scene {
     this.drawDecorations();
 
     this.spaceshipBody = this.add.graphics().setDepth(10);
-    this.spaceshipBody.fillStyle(0x7dd8c4, 1);
-    this.spaceshipBody.fillCircle(0, 0, this.snapshot.spaceship.radius);
-    this.spaceshipBody.lineStyle(7, 0x153b43, 1);
-    this.spaceshipBody.strokeCircle(0, 0, this.snapshot.spaceship.radius);
-    this.spaceshipBody.fillStyle(0xe8be67, 1);
-    this.spaceshipBody.fillCircle(0, 0, 18);
-    this.spaceshipBody.setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y);
+    drawCatalogAsset(
+      this.spaceshipBody,
+      getVisualAsset(SPACESHIP_HULL_ASSET_ID),
+      this.snapshot.spaceship.radius
+    );
+    this.spaceshipBody
+      .setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y)
+      .setRotation(this.snapshot.spaceship.heading);
 
     const shipRadius = this.snapshot.spaceship.radius;
     this.noseMarker = this.add.graphics().setDepth(11);
@@ -126,11 +133,14 @@ class SpaceshipScene extends Phaser.Scene {
       return;
     const now = performance.now();
     const spaceshipPosition = interpolateTransition(this.spaceshipTransition, now);
-    this.spaceshipBody.setPosition(spaceshipPosition.x, spaceshipPosition.y);
+    const spaceshipHeading = interpolateAngleTransition(this.headingTransition, now);
+    this.spaceshipBody
+      .setPosition(spaceshipPosition.x, spaceshipPosition.y)
+      .setRotation(spaceshipHeading);
     if (this.noseMarker !== undefined) {
       this.noseMarker
         .setPosition(spaceshipPosition.x, spaceshipPosition.y)
-        .setRotation(interpolateAngleTransition(this.headingTransition, now));
+        .setRotation(spaceshipHeading);
     }
     this.turret.setPosition(spaceshipPosition.x, spaceshipPosition.y);
     this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
@@ -364,14 +374,25 @@ class SpaceshipScene extends Phaser.Scene {
         container.add(healthBar);
       }
     } else if (entity.visualKind === "asteroid") {
-      const rock = this.add.circle(0, 0, entity.radius, 0x766f77, 1).setStrokeStyle(4, 0xbba9a2);
-      const crater = this.add.circle(
-        -entity.radius * 0.25,
-        -entity.radius * 0.2,
-        entity.radius * 0.22,
-        0x514d59
-      );
-      container.add([rock, crater]);
+      const asteroidVisual = this.snapshot.asteroidVisual;
+      if (asteroidVisual !== null) {
+        const rock = this.add.graphics();
+        drawCatalogAssetById(rock, asteroidVisual.shape, entity.radius * asteroidVisual.modelScale);
+        container.add(rock);
+      } else {
+        const rock = this.add.circle(0, 0, entity.radius, 0x766f77, 1).setStrokeStyle(4, 0xbba9a2);
+        const crater = this.add.circle(
+          -entity.radius * 0.25,
+          -entity.radius * 0.2,
+          entity.radius * 0.22,
+          0x514d59
+        );
+        container.add([rock, crater]);
+      }
+    } else if (entity.visual !== null) {
+      const shot = this.add.graphics();
+      drawCatalogAssetById(shot, entity.visual.shape, entity.radius * entity.visual.modelScale);
+      container.add(shot);
     } else if (entity.visualKind === "missile") {
       const body = this.add.rectangle(0, 0, entity.radius * 3.2, entity.radius * 1.3, 0xff704d);
       // Graphics keeps the plume on the missile axis; a Triangle would centre
@@ -414,99 +435,13 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
   ];
 }
 
-type ShapeDrawer = (body: Phaser.GameObjects.Graphics, radius: number) => void;
-
-/** Complete over EnemyShape, so a new shape fails to compile instead of vanishing. */
-const ENEMY_SHAPE_DRAWERS: Record<EnemyShape, ShapeDrawer> = {
-  arrowhead(body, radius) {
-    const nose = radius * 0.86;
-    const tail = radius * 0.64;
-    const span = radius * 0.54;
-    body.fillTriangle(nose, 0, -tail, -span, -tail, span);
-    body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
-  },
-  block(body, radius) {
-    const halfWidth = radius * 0.66;
-    const halfHeight = radius * 0.45;
-    body.fillRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
-    body.strokeRoundedRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, radius * 0.21);
-    body.fillTriangle(
-      radius * 0.82,
-      0,
-      halfWidth * 0.56,
-      -radius * 0.29,
-      halfWidth * 0.56,
-      radius * 0.29
-    );
-  },
-  diamond(body, radius) {
-    const points = [
-      new Phaser.Math.Vector2(radius * 1.25, 0),
-      new Phaser.Math.Vector2(0, -radius * 0.38),
-      new Phaser.Math.Vector2(-radius * 0.7, 0),
-      new Phaser.Math.Vector2(0, radius * 0.38)
-    ];
-    body.fillPoints(points, true);
-    body.strokePoints(points, true);
-  },
-  dart(body, radius) {
-    const nose = radius * 1.1;
-    const tail = radius * 0.75;
-    const span = radius * 0.85;
-    body.fillTriangle(nose, 0, -tail, -span, -tail, span);
-    body.strokeTriangle(nose, 0, -tail, -span, -tail, span);
-    body.fillTriangle(-tail * 0.2, 0, -tail, -span * 0.35, -tail, span * 0.35);
-  },
-  hexagon(body, radius) {
-    body.fillPoints(regularPolygon(6, radius), true);
-    body.strokePoints(regularPolygon(6, radius), true);
-    body.strokeCircle(0, 0, radius * 0.48);
-    body.fillTriangle(radius * 0.95, 0, radius * 0.3, -radius * 0.28, radius * 0.3, radius * 0.28);
-  },
-  cross(body, radius) {
-    const arm = radius * 0.32;
-    const reach = radius;
-    body.fillRect(-reach, -arm, reach * 2, arm * 2);
-    body.fillRect(-arm, -reach, arm * 2, reach * 2);
-    body.strokeRect(-reach, -arm, reach * 2, arm * 2);
-  },
-  ring(body, radius) {
-    body.strokeCircle(0, 0, radius);
-    body.strokeCircle(0, 0, radius * 0.55);
-    body.fillTriangle(radius, 0, radius * 0.35, -radius * 0.3, radius * 0.35, radius * 0.3);
-  },
-  spike(body, radius) {
-    const points = Array.from({ length: 10 }, (_, index) => {
-      const angle = (index / 10) * Math.PI * 2;
-      const reach = index % 2 === 0 ? radius : radius * 0.5;
-      return new Phaser.Math.Vector2(Math.cos(angle) * reach, Math.sin(angle) * reach);
-    });
-    body.fillPoints(points, true);
-    body.strokePoints(points, true);
-  }
-};
-
-function regularPolygon(sides: number, radius: number): Phaser.Math.Vector2[] {
-  return Array.from({ length: sides }, (_, index) => {
-    const angle = (index / sides) * Math.PI * 2;
-    return new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius);
-  });
-}
-
 const FALLBACK_ENEMY_VISUAL: PublicEnemyCatalogueEntry = {
   kind: "unknown",
   label: "Unknown",
-  shape: "arrowhead",
-  color: "#e65f4b",
-  outline: "#ffd1b0",
+  shape: FALLBACK_VISUAL_ASSET_ID,
   modelScale: 1,
   showHealthBar: false
 };
-
-export function toColorValue(hex: string): number {
-  const parsed = Number.parseInt(hex.replace("#", ""), 16);
-  return Number.isFinite(parsed) ? parsed : 0xffffff;
-}
 
 /** An archetype the display has no entry for still gets drawn, just generically. */
 export function resolveEnemyVisual(
@@ -521,14 +456,9 @@ export function drawEnemyBody(
   visual: PublicEnemyCatalogueEntry,
   radius: number
 ): void {
-  body.fillStyle(toColorValue(visual.color), 1);
-  body.lineStyle(3, toColorValue(visual.outline), 0.8);
-  // Shape comes from untrusted preset data, so an unknown value still draws.
-  const draw = Object.hasOwn(ENEMY_SHAPE_DRAWERS, visual.shape)
-    ? ENEMY_SHAPE_DRAWERS[visual.shape]
-    : ENEMY_SHAPE_DRAWERS.arrowhead;
-  // The hitbox stays at radius; only the drawn model takes the scale.
-  draw(body, radius * visual.modelScale);
+  // The hitbox stays at radius; only the drawn model takes the scale. The id
+  // comes from untrusted preset data, so an unknown one still draws.
+  drawCatalogAssetById(body, visual.shape, radius * visual.modelScale);
 }
 
 const HEALTH_BAR_BACKGROUND = 0x2a0d16;

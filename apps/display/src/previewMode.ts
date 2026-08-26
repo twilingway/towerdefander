@@ -74,6 +74,7 @@ const PREVIEW_WORLD = {
     shield: { capacityBonus: 20, rechargeMultiplier: 1, arcWidthBonus: 0 }
   },
   enemyCatalogue: [],
+  asteroidVisual: null,
   obstacles: []
 };
 
@@ -179,7 +180,8 @@ function createPreviewGame(
           velocityY: -240,
           radius: 10,
           kind: "friendly",
-          source: "cannon"
+          source: "cannon",
+          visual: null
         },
         {
           entityId: "preview-friendly-2",
@@ -190,7 +192,8 @@ function createPreviewGame(
           velocityY: -210,
           radius: 6,
           kind: "friendly",
-          source: "machineGun"
+          source: "machineGun",
+          visual: null
         }
       ],
       hostileProjectiles: [
@@ -202,7 +205,8 @@ function createPreviewGame(
           velocityX: -300,
           velocityY: 180,
           radius: 9,
-          kind: "hostile"
+          kind: "hostile",
+          visual: null
         }
       ],
       homingMissiles: [
@@ -214,7 +218,8 @@ function createPreviewGame(
           velocityX: 200,
           velocityY: -150,
           radius: 14,
-          heading: -Math.PI / 5
+          heading: -Math.PI / 5,
+          visual: null
         }
       ]
     };

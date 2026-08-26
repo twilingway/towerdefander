@@ -130,7 +130,8 @@ function bulletFromWeapon(weapon: EnemyWeaponTuning): HostileProjectileState {
     spawnedTick: 0,
     damage: weapon.damage,
     shieldHitCost: weapon.shieldHitCost,
-    lifetimeTicks: weapon.projectileLifetimeTicks
+    lifetimeTicks: weapon.projectileLifetimeTicks,
+    visual: weapon.visual
   };
 }
 
@@ -535,6 +536,94 @@ describe("deterministic combat foundation", () => {
     expect(fastShots).toBeGreaterThan(1);
     expect(slowShots).toBe(1);
     expect(state.enemies[0]?.weaponCooldownTicks[1]).toBeGreaterThan(0);
+  });
+
+  it("hands each barrel's own look to the shots it fires", () => {
+    const base = createSpaceshipSimulationConfig();
+    const bullet = firstWeapon(base, "gunship");
+    const missile = firstWeapon(base, "boss");
+    const mixedGun = {
+      ...getEnemyArchetype(base, "gunship"),
+      weapons: [
+        { ...bullet, cooldownTicks: 2, visual: { shape: "missile-needle", modelScale: 1.5 } },
+        { ...bullet, cooldownTicks: 2, visual: null },
+        {
+          ...missile,
+          cooldownTicks: 2,
+          burstCount: 1,
+          burstSpreadRadians: 0,
+          visual: { shape: "missile-torpedo", modelScale: 2 }
+        }
+      ]
+    };
+    const config = createSpaceshipSimulationConfig({
+      enemySpawnIntervalTicks: 100_000,
+      enemyArchetypes: { ...base.enemyArchetypes, mixedGun }
+    });
+    const initial = createSpaceshipSimulationState(config, 77);
+    const enemy: CombatEnemyState = {
+      id: "mixed-1",
+      spawnSequence: 1,
+      kind: "mixedGun",
+      previousX: initial.spaceship.x + 600,
+      previousY: initial.spaceship.y,
+      x: initial.spaceship.x + 600,
+      y: initial.spaceship.y,
+      velocity: { x: 0, y: 0 },
+      heading: 0,
+      radius: mixedGun.radius,
+      spawnedTick: 0,
+      hp: mixedGun.hp,
+      maxHp: mixedGun.hp,
+      weaponCooldownTicks: [0, 0, 0]
+    };
+    const opened = advanceSpaceshipSimulation(
+      { ...initial, pendingSpawns: [], enemies: [enemy] },
+      config
+    );
+
+    // Two bullets from two barrels: the first carries its own look, the second
+    // stays empty because that barrel has none.
+    expect(opened.hostileProjectiles.map(({ visual }) => visual)).toEqual([
+      { shape: "missile-needle", modelScale: 1.5 },
+      null
+    ]);
+    expect(opened.homingMissiles.map(({ visual }) => visual)).toEqual([
+      { shape: "missile-torpedo", modelScale: 2 }
+    ]);
+  });
+
+  it("keeps the run identical when only the looks differ", () => {
+    const base = createSpaceshipSimulationConfig();
+    const dressed = createSpaceshipSimulationConfig({
+      enemyArchetypes: Object.fromEntries(
+        Object.entries(base.enemyArchetypes).map(([kind, archetype]) => [
+          kind,
+          {
+            ...archetype,
+            visual: { ...archetype.visual, shape: "boss-mothership" },
+            weapons: archetype.weapons.map((weapon) => ({
+              ...weapon,
+              visual: { shape: "missile-siege", modelScale: 1 }
+            }))
+          }
+        ])
+      )
+    });
+
+    let plain = createSpaceshipSimulationState(base, 404);
+    let painted = createSpaceshipSimulationState(dressed, 404);
+    for (let step = 0; step < 400; step += 1) {
+      plain = advanceSpaceshipSimulation(plain, base);
+      painted = advanceSpaceshipSimulation(painted, dressed);
+    }
+
+    expect(painted.encounterTick).toBe(plain.encounterTick);
+    expect(painted.score).toBe(plain.score);
+    expect(painted.spaceshipHp).toBe(plain.spaceshipHp);
+    expect(painted.enemies.map(({ id, x, y, hp }) => ({ id, x, y, hp }))).toEqual(
+      plain.enemies.map(({ id, x, y, hp }) => ({ id, x, y, hp }))
+    );
   });
 
   it("holds fire outside its range and shoots when the target comes inside", () => {

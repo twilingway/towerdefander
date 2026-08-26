@@ -72,7 +72,9 @@ describe("visible demo helpers", () => {
         spaceship,
         enemyShips: [],
         asteroids: [],
-        hostileProjectiles: [{ ...moving("bullet-off-screen", 1, 2200, 2660), kind: "hostile" }],
+        hostileProjectiles: [
+          { ...moving("bullet-off-screen", 1, 2200, 2660), kind: "hostile", visual: null }
+        ],
         homingMissiles: [missile("missile-on-screen", 2, 2900, 2200)]
       })
     ).toMatchObject({ entityId: "missile-on-screen" });
@@ -84,7 +86,7 @@ describe("visible demo helpers", () => {
       spaceship: { x: 100, y: 100 },
       enemyShips: [enemy("enemy", 1, 200, 100)],
       asteroids: [],
-      hostileProjectiles: [{ ...moving("bullet", 2, 110, 100), kind: "hostile" }],
+      hostileProjectiles: [{ ...moving("bullet", 2, 110, 100), kind: "hostile", visual: null }],
       homingMissiles: []
     });
 
@@ -143,5 +145,5 @@ function asteroid(entityId: string, spawnSequence: number, x: number, y: number)
 }
 
 function missile(entityId: string, spawnSequence: number, x: number, y: number) {
-  return { ...moving(entityId, spawnSequence, x, y), heading: 0 };
+  return { ...moving(entityId, spawnSequence, x, y), heading: 0, visual: null };
 }

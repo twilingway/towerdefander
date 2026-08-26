@@ -46,6 +46,7 @@ const baseGame: DisplayGameSnapshot = {
     selection: null
   },
   enemyCatalogue: [],
+  asteroidVisual: null,
   obstacles: [],
   enemyShips: [
     {
@@ -86,7 +87,8 @@ const baseGame: DisplayGameSnapshot = {
       velocityX: 0,
       velocityY: 0,
       radius: 10,
-      heading: 0
+      heading: 0,
+      visual: null
     }
   ]
 };
