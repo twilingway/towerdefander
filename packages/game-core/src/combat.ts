@@ -3,12 +3,12 @@ import {
   canonicalizeAngle,
   shortestAngleDelta,
   type Vector2
-} from "./spaceshipSimulation.js";
+} from "./spaceshipSimulation.ts";
 import {
   constrainMovingCircleToArena,
   isWithinCircularEnvelope,
   type ArenaCircle
-} from "./arenaGeometry.js";
+} from "./arenaGeometry.ts";
 
 export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";

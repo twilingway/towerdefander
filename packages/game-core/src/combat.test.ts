@@ -26,7 +26,7 @@ import {
   type HostileProjectileState,
   type HomingMissileState,
   type ProjectileState
-} from "./index.js";
+} from "./index.ts";
 
 /** Wave 1 is one gunship followed by the boss, so the hold-until-clear rule is observable. */
 function bossAfterEscortConfig() {

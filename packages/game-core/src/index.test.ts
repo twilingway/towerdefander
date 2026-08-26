@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceClock, createSpaceshipSimulationConfig, createSeededRandom } from "./index.js";
+import { advanceClock, createSpaceshipSimulationConfig, createSeededRandom } from "./index.ts";
 
 describe("deterministic game core primitives", () => {
   it("generates the same sequence for the same seed", () => {

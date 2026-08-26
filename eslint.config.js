@@ -10,6 +10,7 @@ export default tseslint.config(
       "eslint.config.js",
       "scripts/**",
       "apps/controller/scripts/**",
+      "apps/server/scripts/**",
       "apps/display/android/**"
     ]
   },

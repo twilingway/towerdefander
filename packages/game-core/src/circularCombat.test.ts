@@ -12,7 +12,7 @@ import {
   type ProjectileState,
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
-} from "./index.js";
+} from "./index.ts";
 
 function combatStep(
   state: SpaceshipSimulationState,

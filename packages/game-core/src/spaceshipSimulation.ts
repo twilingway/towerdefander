@@ -1,5 +1,5 @@
-import { advanceClock, type SimulationClock } from "./primitives.js";
-import { constrainMovingCircleToArena, isWithinCircularEnvelope } from "./arenaGeometry.js";
+import { advanceClock, type SimulationClock } from "./primitives.ts";
+import { constrainMovingCircleToArena, isWithinCircularEnvelope } from "./arenaGeometry.ts";
 import {
   advanceCombat,
   assertCombatResultInvariant,
@@ -10,7 +10,7 @@ import {
   type CombatConfig,
   type CombatStateFields,
   type EntityVisual
-} from "./combat.js";
+} from "./combat.ts";
 
 export interface Vector2 {
   readonly x: number;

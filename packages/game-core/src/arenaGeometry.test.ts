@@ -5,7 +5,7 @@ import {
   isCircleContainedInArena,
   isWithinCircularEnvelope,
   squaredDistance
-} from "./arenaGeometry.js";
+} from "./arenaGeometry.ts";
 
 const arena = { centerX: 100, centerY: 100, radius: 100 };
 

@@ -593,7 +593,9 @@ describe("version 1 migration", () => {
 
     // Built-in archetypes get their own agility back, not a shared default.
     const migrated = store.getActiveTuning().enemyArchetypes;
-    expect(migrated.boss?.turnRatePerSecond).toBe(defaults.enemyArchetypes.boss?.turnRatePerSecond ?? Math.PI / 4);
+    expect(migrated.boss?.turnRatePerSecond).toBe(
+      defaults.enemyArchetypes.boss?.turnRatePerSecond ?? Math.PI / 4
+    );
     expect(migrated.interceptor?.turnRatePerSecond).toBeGreaterThan(
       migrated.boss?.turnRatePerSecond ?? 0
     );

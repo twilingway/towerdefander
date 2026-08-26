@@ -22,7 +22,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState,
   type Vector2
-} from "./index.js";
+} from "./index.ts";
 
 function advance(
   state: SpaceshipSimulationState,
