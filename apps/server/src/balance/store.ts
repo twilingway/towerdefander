@@ -267,8 +267,22 @@ const PLAYER_SHIP_FIELDS = [
   "shieldAngularBrakingPerSecondSquared"
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
+/**
+ * The gun gained a pivot after operators already had one chosen, and it lives
+ * inside the visual rather than beside it, so the flat field list cannot fill
+ * it. A missing pivot is no offset at all, which is what it drew with before.
+ */
+function migrateTurretVisual(saved: unknown): unknown {
+  if (!isRecord(saved)) return saved ?? null;
+  return { pivotX: 0, pivotY: 0, ...saved };
+}
+
 function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
-  const migrated: LegacyRecord = { ...tuning, spaceshipVisual: tuning.spaceshipVisual ?? null };
+  const migrated: LegacyRecord = {
+    ...tuning,
+    spaceshipVisual: tuning.spaceshipVisual ?? null,
+    turretVisual: migrateTurretVisual(tuning.turretVisual)
+  };
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }

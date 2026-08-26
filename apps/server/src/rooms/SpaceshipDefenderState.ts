@@ -204,6 +204,8 @@ export class SpaceshipDisplayState extends Schema {
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;
+  @type("float32") turretPivotX = 0;
+  @type("float32") turretPivotY = 0;
   /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
   @type("float32") shieldRadius = 104;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();

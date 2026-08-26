@@ -7,9 +7,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 13 as const;
+export const BALANCE_FILE_VERSION = 14 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -68,6 +70,26 @@ export const entityVisualSchema = z
   .strict()
   .nullable();
 export type EntityVisual = z.infer<typeof entityVisualSchema>;
+
+/**
+ * The gun on the hull, with a nudge for where it turns about. Catalogue assets
+ * are drawn around their own origin, which is rarely the mount: the railgun's
+ * breech sits well off it, so without this the gun swings around a point beside
+ * itself. Measured in hull radii, positive x right and positive y down, and it
+ * moves the picture — slide it until the mount sits on the ship's centre.
+ */
+export const PIVOT_LIMIT = 2;
+const pivotOffset = z.number().min(-PIVOT_LIMIT).max(PIVOT_LIMIT);
+export const turretVisualSchema = z
+  .object({
+    shape: visualAssetIdSchema,
+    modelScale: modelScaleSchema,
+    pivotX: pivotOffset,
+    pivotY: pivotOffset
+  })
+  .strict()
+  .nullable();
+export type TurretVisual = z.infer<typeof turretVisualSchema>;
 
 const positiveFinite = z.number().positive();
 const nonNegativeFinite = z.number().nonnegative();
@@ -295,7 +317,7 @@ export const balanceTuningSchema = z
     /** Look of the cannon shot; null keeps the display's own primitive. */
     projectileVisual: entityVisualSchema,
     /** The gun itself, drawn over the hull and turning with the turret. */
-    turretVisual: entityVisualSchema,
+    turretVisual: turretVisualSchema,
     /** The cannon runs hot too, so picking targets can beat firing at all of them. */
     cannonHeatCapacity: positiveFinite,
     cannonHeatPerShot: positiveFinite,

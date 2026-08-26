@@ -9,7 +9,8 @@ import {
   validateRunSeed,
   type CombatConfig,
   type CombatStateFields,
-  type EntityVisual
+  type EntityVisual,
+  type TurretVisual
 } from "./combat.ts";
 
 export interface Vector2 {
@@ -63,7 +64,7 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    * no amount of gunnery skill can be worth anything.
    */
   readonly projectileVisual: EntityVisual | null;
-  readonly turretVisual: EntityVisual | null;
+  readonly turretVisual: TurretVisual;
   readonly mgProjectileVisual: EntityVisual | null;
   readonly cannonHeatCapacity: number;
   readonly cannonHeatPerShot: number;

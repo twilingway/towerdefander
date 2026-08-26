@@ -102,6 +102,9 @@ export type EnemySpawnPolicy = "standard" | "boss";
  * opaque: which ids exist is settled by the balance schema in `protocol`, and
  * the display falls back on its own when a preset names one it cannot draw.
  */
+/** The hull gun, which also records where it turns about. */
+export type TurretVisual = (EntityVisual & { readonly pivotX: number; readonly pivotY: number }) | null;
+
 export interface EntityVisual {
   readonly shape: string;
   /** Drawn size relative to the hit radius; the hitbox itself never changes. */

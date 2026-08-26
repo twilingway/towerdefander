@@ -30,6 +30,10 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
   const turret = tuning.turretVisual;
   const turretAsset = turret === null ? undefined : getVisualAsset(turret.shape);
   const turretRadius = hullRadius * (turret?.modelScale ?? 1);
+  // The same nudge the battlefield applies, so what is tuned here is what
+  // turns out there: the asset moves, the point it spins about does not.
+  const pivotX = (turret?.pivotX ?? 0) * hullRadius;
+  const pivotY = (turret?.pivotY ?? 0) * hullRadius;
 
   return (
     <figure className="preview">
@@ -45,7 +49,12 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
       >
         <CatalogAssetShape asset={asset} radius={modelRadius} center={CENTER} />
         {turretAsset !== undefined && (
-          <CatalogAssetShape asset={turretAsset} radius={turretRadius} center={CENTER} />
+          <g transform={`translate(${String(pivotX)} ${String(pivotY)})`}>
+            <CatalogAssetShape asset={turretAsset} radius={turretRadius} center={CENTER} />
+          </g>
+        )}
+        {turretAsset !== undefined && (
+          <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={2} />
         )}
         <circle className="preview__hitbox" cx={CENTER} cy={CENTER} r={hullRadius} />
         <path

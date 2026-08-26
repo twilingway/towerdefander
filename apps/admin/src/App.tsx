@@ -7,6 +7,7 @@ import {
   CAMERA_VIEW_WIDTH_MIN,
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
+  PIVOT_LIMIT,
   MAX_ENEMY_WEAPONS,
   SPAWN_SECTORS,
   balancePresetsFileSchema,
@@ -1556,7 +1557,12 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
                   turretVisual:
                     shape === null
                       ? null
-                      : { shape, modelScale: tuning.turretVisual?.modelScale ?? 1 }
+                      : {
+                          shape,
+                          modelScale: tuning.turretVisual?.modelScale ?? 1,
+                          pivotX: tuning.turretVisual?.pivotX ?? 0,
+                          pivotY: tuning.turretVisual?.pivotY ?? 0
+                        }
                 });
               }}
             />
@@ -1567,13 +1573,39 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
                 min={0.2}
                 value={tuning.turretVisual?.modelScale ?? 1}
                 onChange={(modelScale) => {
-                  patch({ turretVisual: scaleEntityVisual(tuning.turretVisual, modelScale) });
+                  const current = tuning.turretVisual;
+                  if (current === null) return;
+                  patch({ turretVisual: { ...current, modelScale } });
+                }}
+              />
+              <NumberField
+                caption="Смещение X"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.turretVisual?.pivotX ?? 0}
+                onChange={(pivotX) => {
+                  const current = tuning.turretVisual;
+                  if (current === null) return;
+                  patch({ turretVisual: { ...current, pivotX } });
+                }}
+              />
+              <NumberField
+                caption="Смещение Y"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.turretVisual?.pivotY ?? 0}
+                onChange={(pivotY) => {
+                  const current = tuning.turretVisual;
+                  if (current === null) return;
+                  patch({ turretVisual: { ...current, pivotY } });
                 }}
               />
             </div>
             <p className="screen__hint">
-              Рисуется поверх корпуса по центру и поворачивается вместе с орудием. Без выбора
-              остаётся прежний ствол-планка.
+              Рисуется поверх корпуса и поворачивается вместе с орудием. Ассеты нарисованы вокруг
+              своего начала координат, а оно редко совпадает с креплением — смещение двигает
+              картинку в долях радиуса корпуса, пока крепление не сядет на центр корабля. Проверяйте
+              по превью.
             </p>
             <AssetPicker
               label="Снаряд пушки"

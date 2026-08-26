@@ -620,7 +620,7 @@ describe("version 1 migration", () => {
           name: "Operator",
           tuning: {
             ...defaults,
-            turretVisual: { shape: "weapon-gatling", modelScale: 1.4 },
+            turretVisual: { shape: "weapon-gatling", modelScale: 1.4, pivotX: 0, pivotY: -0.3 },
             projectileVisual: { shape: "missile-torpedo", modelScale: 0.8 },
             mgProjectileVisual: { shape: "missile-needle", modelScale: 0.5 }
           }
@@ -635,6 +635,7 @@ describe("version 1 migration", () => {
     expect(warn).not.toHaveBeenCalled();
     const config = store.getActiveSimulationConfig();
     expect(config.turretVisual?.shape).toBe("weapon-gatling");
+    expect(config.turretVisual?.pivotY).toBe(-0.3);
     // The two barrels keep separate looks, which is the point: a burst has to
     // read as two weapons rather than one.
     expect(config.projectileVisual?.shape).toBe("missile-torpedo");
@@ -666,6 +667,40 @@ describe("version 1 migration", () => {
     expect(store.getActiveTuning().turretVisual).toBeNull();
     expect(store.getActiveTuning().projectileVisual).toBeNull();
     expect(store.getActiveTuning().mgProjectileVisual).toBeNull();
+  });
+
+  it("gives a gun chosen before the pivot existed no offset at all", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // The pivot lives inside the visual rather than beside it, so the flat
+    // field list cannot reach it. This is the exact shape of migration that
+    // cost an operator a wave table once already.
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 13,
+        activePresetId: "operator",
+        presets: [
+          {
+            id: "operator",
+            name: "Operator",
+            tuning: { ...defaults, turretVisual: { shape: "weapon-gatling", modelScale: 1.4 } }
+          }
+        ]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const turret = store.getActiveTuning().turretVisual;
+    expect(turret?.shape).toBe("weapon-gatling");
+    // The choice survives, and the gun draws where it always drew.
+    expect(turret?.modelScale).toBe(1.4);
+    expect(turret?.pivotX).toBe(0);
+    expect(turret?.pivotY).toBe(0);
   });
 
   it("keeps a campaign when a saved profile predates a new profile knob", async () => {

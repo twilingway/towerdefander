@@ -7,9 +7,14 @@ import {
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
-import { cameraViewWidthSchema, entityVisualSchema, visualAssetIdSchema } from "./balance.ts";
+import {
+  cameraViewWidthSchema,
+  entityVisualSchema,
+  turretVisualSchema,
+  visualAssetIdSchema
+} from "./balance.ts";
 
-export const PROTOCOL_VERSION = 22 as const;
+export const PROTOCOL_VERSION = 23 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -581,7 +586,7 @@ export const displayGameSnapshotSchema = z
     asteroidVisual: entityVisualSchema,
     /** Look of the player hull; null keeps the display's own default silhouette. */
     spaceshipVisual: entityVisualSchema,
-    turretVisual: entityVisualSchema,
+    turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,
     obstacles: z.array(publicObstacleViewSchema),

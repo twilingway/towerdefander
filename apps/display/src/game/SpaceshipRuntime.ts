@@ -520,10 +520,19 @@ function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): Turre
       .setRotation(snapshot.turretAngle);
   }
 
-  const gun = scene.add.graphics().setDepth(12);
+  // The drawing is offset inside a container so the container itself still
+  // turns about the ship's centre: nudging the asset must move the gun, never
+  // the point it spins around.
+  const gun = scene.add.graphics();
   drawCatalogAssetById(gun, visual.shape, snapshot.spaceship.radius * visual.modelScale);
-  gun.setPosition(snapshot.spaceship.x, snapshot.spaceship.y).setRotation(snapshot.turretAngle);
-  return gun;
+  gun.setPosition(
+    visual.pivotX * snapshot.spaceship.radius,
+    visual.pivotY * snapshot.spaceship.radius
+  );
+  return scene.add
+    .container(snapshot.spaceship.x, snapshot.spaceship.y, [gun])
+    .setDepth(12)
+    .setRotation(snapshot.turretAngle);
 }
 
 export function drawSpaceshipHull(
