@@ -446,6 +446,28 @@ p {
   background: linear-gradient(90deg, #69d6f5 0%, #ffd45d 62%, #ff5d4f 100%);
 }
 
+/* The cannon reads warmer than the nose gun so the two meters never blur. */
+.hud-energy--cannon i {
+  background: linear-gradient(90deg, #9ad27a 0%, #ffb347 58%, #ff5d4f 100%);
+}
+
+/* Two weapons, one tile: the HUD grid is six columns and a seventh wrapped. */
+.weapon-heat-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+}
+
+.weapon-heat-row .hud-energy {
+  height: 0.35rem;
+}
+
+.weapon-heat-row--overheated {
+  color: #ff6f61;
+}
+
 .machine-gun-hud--overheated {
   color: #ffb0a8;
   border: 1px solid rgb(255 93 79 / 58%);
@@ -456,7 +478,8 @@ p {
   color: #ff6f61;
 }
 
-.machine-gun-hud--overheated .hud-energy--machine-gun i {
+.weapon-heat-row--overheated .hud-energy--machine-gun i,
+.weapon-heat-row--overheated .hud-energy--cannon i {
   background: #ff493c;
   box-shadow: 0 0 0.8rem rgb(255 73 60 / 85%);
 }

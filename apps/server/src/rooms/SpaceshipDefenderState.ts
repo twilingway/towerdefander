@@ -30,6 +30,7 @@ export class SpaceshipState extends Schema {
   @type("float64") heading = 0;
 }
 
+/** Heat meter shape; both weapons run hot the same way. */
 export class MachineGunState extends Schema {
   @type("float64") heat = 0;
   @type("float64") capacity = 0;
@@ -221,6 +222,7 @@ export class SpaceshipGameState extends Schema {
   @type(SpaceshipState) spaceship = new SpaceshipState();
   @type("float64") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();
+  @type(MachineGunState) cannon = new MachineGunState();
   @type(MachineGunState) machineGun = new MachineGunState();
   @type(EncounterState) encounter = new EncounterState();
   @type(RoleModifiersState) roleModifiers = new RoleModifiersState();

@@ -57,6 +57,7 @@ describe("display room view", () => {
           energy: 75,
           capacity: 100
         },
+        cannon: { heat: 30, capacity: 100, overheated: false },
         machineGun: { heat: 30, capacity: 100, overheated: false },
         encounter: {
           phase: "combat",

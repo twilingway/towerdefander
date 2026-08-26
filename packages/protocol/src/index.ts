@@ -9,7 +9,7 @@ import {
 } from "./enemyKinds.ts";
 import { cameraViewWidthSchema, entityVisualSchema, visualAssetIdSchema } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 20 as const;
+export const PROTOCOL_VERSION = 21 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -145,7 +145,7 @@ export const publicShieldViewSchema = z
   });
 export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
 
-export const publicMachineGunViewSchema = z
+export const publicWeaponHeatViewSchema = z
   .object({
     heat: finite.nonnegative(),
     capacity: finite.nonnegative(),
@@ -154,9 +154,12 @@ export const publicMachineGunViewSchema = z
   .strict()
   .superRefine((value, context) => {
     if (value.heat > value.capacity)
-      issue(context, ["heat"], "Machine gun heat must not exceed capacity.");
+      issue(context, ["heat"], "Weapon heat must not exceed capacity.");
   });
-export type PublicMachineGunView = z.infer<typeof publicMachineGunViewSchema>;
+export type PublicWeaponHeatView = z.infer<typeof publicWeaponHeatViewSchema>;
+/** Kept as the old name so existing display and controller code reads the same. */
+export const publicMachineGunViewSchema = publicWeaponHeatViewSchema;
+export type PublicMachineGunView = PublicWeaponHeatView;
 
 export const publicEncounterViewSchema = z
   .object({
@@ -382,6 +385,7 @@ const gameShape = {
   spaceship: publicSpaceshipViewSchema,
   turretAngle: finite,
   shield: publicShieldViewSchema,
+  cannon: publicWeaponHeatViewSchema,
   machineGun: publicMachineGunViewSchema,
   encounter: publicEncounterViewSchema,
   roleModifiers: publicRoleModifiersViewSchema,

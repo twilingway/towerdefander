@@ -7,9 +7,9 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 11 as const;
+export const BALANCE_FILE_VERSION = 12 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -222,6 +222,8 @@ export const autopilotProfileSchema = z
     cannonConeRadians: z.number().min(0.02).max(Math.PI),
     /** Fraction of heat capacity above which the nose gun holds fire. */
     mgHeatCeiling: z.number().min(0.1).max(1),
+    /** Share of the cannon's heat the bot will spend before holding fire. */
+    cannonHeatCeiling: z.number().min(0.1).max(1),
     /** Ticks before predicted contact at which the shield goes up. */
     shieldLeadTicks: z.number().int().min(0).max(40),
     /** Fraction of shield capacity below which the shield stays down. */
@@ -289,6 +291,13 @@ export const balanceTuningSchema = z
     turretMaxAngularSpeedPerSecond: positiveFinite,
     turretAngularAccelerationPerSecondSquared: positiveFinite,
     turretAngularBrakingPerSecondSquared: positiveFinite,
+
+    /** The cannon runs hot too, so picking targets can beat firing at all of them. */
+    cannonHeatCapacity: positiveFinite,
+    cannonHeatPerShot: positiveFinite,
+    cannonCoolingPerSecond: nonNegativeFinite,
+    /** Heat it must cool below before it fires again; core caps it by capacity. */
+    cannonRearmThreshold: nonNegativeFinite,
 
     // --- Player ship: nose machine gun ---
     mgDamage: positiveFinite,

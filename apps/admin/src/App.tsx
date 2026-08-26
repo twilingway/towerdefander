@@ -503,10 +503,17 @@ function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
                 }}
               />
               <PercentField
-                caption="Потолок нагрева, %"
+                caption="Потолок нагрева пулемёта, %"
                 fraction={profile.mgHeatCeiling}
                 onChange={(mgHeatCeiling) => {
                   patchProfile(level, { mgHeatCeiling });
+                }}
+              />
+              <PercentField
+                caption="Потолок нагрева пушки, %"
+                fraction={profile.cannonHeatCeiling}
+                onChange={(cannonHeatCeiling) => {
+                  patchProfile(level, { cannonHeatCeiling });
                 }}
               />
               <DelayField
@@ -1679,6 +1686,34 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
             value={tuning.turretAngularBrakingPerSecondSquared}
             onChange={(turretAngularBrakingPerSecondSquared) => {
               patch({ turretAngularBrakingPerSecondSquared: turretAngularBrakingPerSecondSquared });
+            }}
+          />
+          <NumberField
+            caption="Ёмкость нагрева"
+            value={tuning.cannonHeatCapacity}
+            onChange={(cannonHeatCapacity) => {
+              patch({ cannonHeatCapacity: cannonHeatCapacity });
+            }}
+          />
+          <NumberField
+            caption="Нагрев за выстрел"
+            value={tuning.cannonHeatPerShot}
+            onChange={(cannonHeatPerShot) => {
+              patch({ cannonHeatPerShot: cannonHeatPerShot });
+            }}
+          />
+          <NumberField
+            caption="Охлаждение в секунду"
+            value={tuning.cannonCoolingPerSecond}
+            onChange={(cannonCoolingPerSecond) => {
+              patch({ cannonCoolingPerSecond: cannonCoolingPerSecond });
+            }}
+          />
+          <NumberField
+            caption="Порог возврата в строй"
+            value={tuning.cannonRearmThreshold}
+            onChange={(cannonRearmThreshold) => {
+              patch({ cannonRearmThreshold: cannonRearmThreshold });
             }}
           />
         </div>

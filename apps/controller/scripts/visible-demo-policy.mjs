@@ -502,9 +502,17 @@ export function planGunner(world, profile, memory, options = {}) {
   // cone narrower than one tick of that traverse would be stepped over without
   // ever being sampled, so arriving within a tick counts as arrived.
   const reach = (options.turretRate ?? TURRET_RATE_PER_SECOND) * (TICK_MS / 1000);
+  // The barrel runs hot now, so a shot spent off-bearing is a shot the next
+  // target does not get. Holding fire above the ceiling is what buys the ace
+  // its accuracy back.
+  const cannon = world.cannon;
+  const cool =
+    cannon === undefined ||
+    (!cannon.overheated && cannon.heat <= cannon.capacity * (profile.cannonHeatCeiling ?? 1));
   const firing =
+    cool &&
     Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <=
-    Math.max(profile.cannonConeRadians, reach);
+      Math.max(profile.cannonConeRadians, reach);
   return { aim: bearingVector(bearing), firing };
 }
 

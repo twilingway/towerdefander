@@ -122,6 +122,11 @@ function buildWorld(state, config, sampledAtMs) {
       capacity: config.shieldCapacity,
       arcHalfAngle: config.shieldArcRadians / 2
     },
+    cannon: {
+      heat: state.cannonHeat,
+      capacity: config.cannonHeatCapacity,
+      overheated: state.cannonOverheated
+    },
     machineGun: {
       heat: state.mgHeat,
       capacity: config.mgHeatCapacity,

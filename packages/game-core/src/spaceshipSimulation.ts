@@ -57,6 +57,15 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly mgDamage: number;
   readonly mgProjectileSpeedPerSecond: number;
   readonly mgProjectileRadius: number;
+  /**
+   * The gunner cannon runs hot the way the nose gun does. Without it a shot
+   * costs nothing, so firing at everything strictly beats picking targets and
+   * no amount of gunnery skill can be worth anything.
+   */
+  readonly cannonHeatCapacity: number;
+  readonly cannonHeatPerShot: number;
+  readonly cannonCoolingPerSecond: number;
+  readonly cannonRearmThreshold: number;
   readonly mgHeatCapacity: number;
   readonly mgHeatPerShot: number;
   readonly mgCoolingPerSecond: number;
@@ -121,6 +130,8 @@ export interface SpaceshipSimulationState extends CombatStateFields {
   readonly spaceshipHeading: number;
   readonly headingTargetAngle: number | null;
   readonly headingAngularVelocity: number;
+  readonly cannonHeat: number;
+  readonly cannonOverheated: boolean;
   readonly mgHeat: number;
   readonly mgOverheated: boolean;
   readonly queuedMgFire: boolean;
@@ -168,6 +179,10 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   mgDamage: 8,
   mgProjectileSpeedPerSecond: 900,
   mgProjectileRadius: 5,
+  cannonHeatCapacity: 100,
+  cannonHeatPerShot: 16,
+  cannonCoolingPerSecond: 22,
+  cannonRearmThreshold: 35,
   mgHeatCapacity: 100,
   mgHeatPerShot: 4,
   mgCoolingPerSecond: 30,
@@ -450,6 +465,8 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     ["mgDamage", config.mgDamage],
     ["mgProjectileSpeedPerSecond", config.mgProjectileSpeedPerSecond],
     ["mgProjectileRadius", config.mgProjectileRadius],
+    ["cannonHeatCapacity", config.cannonHeatCapacity],
+    ["cannonHeatPerShot", config.cannonHeatPerShot],
     ["mgHeatCapacity", config.mgHeatCapacity],
     ["mgHeatPerShot", config.mgHeatPerShot]
   ];
@@ -461,6 +478,8 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
   }
 
   const nonNegativeFiniteNumbers: readonly (readonly [string, number])[] = [
+    ["cannonCoolingPerSecond", config.cannonCoolingPerSecond],
+    ["cannonRearmThreshold", config.cannonRearmThreshold],
     ["mgCoolingPerSecond", config.mgCoolingPerSecond],
     ["mgRearmThreshold", config.mgRearmThreshold]
   ];
@@ -471,6 +490,9 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     }
   }
 
+  if (config.cannonRearmThreshold > config.cannonHeatCapacity) {
+    throw new RangeError("cannonRearmThreshold cannot exceed cannonHeatCapacity");
+  }
   if (config.mgRearmThreshold > config.mgHeatCapacity) {
     throw new RangeError("mgRearmThreshold cannot exceed mgHeatCapacity");
   }
@@ -516,6 +538,8 @@ export function createCleanSpaceshipRun(
     spaceshipHeading: 0,
     headingTargetAngle: null,
     headingAngularVelocity: 0,
+    cannonHeat: 0,
+    cannonOverheated: false,
     mgHeat: 0,
     mgOverheated: false,
     queuedMgFire: false,
@@ -784,6 +808,7 @@ export function advanceSpaceshipSimulation(
   let queuedFire = state.queuedFire;
   let lastMgFiredTick = state.lastMgFiredTick;
   let queuedMgFire = state.queuedMgFire;
+  let cannonHeat = state.cannonHeat;
   let mgHeat = state.mgHeat;
 
   const canCreateFriendlyProjectile = (list: readonly ProjectileState[]) =>
@@ -795,9 +820,11 @@ export function advanceSpaceshipSimulation(
     Math.ceil(config.fireCooldownTicks * state.roleModifiers.gunner.cooldownMultiplier)
   );
   const gunnerEligible =
+    !state.cannonOverheated &&
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
     (state.lastFiredTick === null || clock.tick - state.lastFiredTick >= gunnerCooldownTicks);
 
+  let cannonSpawnedThisTick = false;
   if (gunnerEligible) {
     if (canCreateFriendlyProjectile(projectiles)) {
       const direction = { x: Math.cos(turretTraverse.angle), y: Math.sin(turretTraverse.angle) };
@@ -826,9 +853,21 @@ export function advanceSpaceshipSimulation(
       });
       nextProjectileSequence += 1;
       nextSpawnSequence += 1;
+      cannonHeat = Math.min(config.cannonHeatCapacity, cannonHeat + config.cannonHeatPerShot);
+      cannonSpawnedThisTick = true;
     }
     lastFiredTick = clock.tick;
     queuedFire = false;
+  }
+
+  if (!cannonSpawnedThisTick) {
+    cannonHeat = Math.max(0, cannonHeat - config.cannonCoolingPerSecond * secondsPerStep);
+  }
+  let cannonOverheated = state.cannonOverheated;
+  if (!cannonOverheated && cannonHeat >= config.cannonHeatCapacity) {
+    cannonOverheated = true;
+  } else if (cannonOverheated && cannonHeat <= config.cannonRearmThreshold) {
+    cannonOverheated = false;
   }
 
   const mgCooldownTicks = Math.max(1, config.mgFireCooldownTicks);
@@ -900,6 +939,8 @@ export function advanceSpaceshipSimulation(
     nextProjectileSequence,
     lastFiredTick,
     queuedFire,
+    cannonHeat,
+    cannonOverheated,
     mgHeat,
     mgOverheated,
     queuedMgFire,
@@ -915,6 +956,16 @@ function advanceCombatInSpaceshipSimulation(
   if (state.encounterPhase === "intermission") {
     const neutral = neutralizeCombatControls(state);
     const secondsPerStep = config.fixedStepMs / 1000;
+    const cannonHeat = Math.max(
+      0,
+      neutral.cannonHeat - config.cannonCoolingPerSecond * secondsPerStep
+    );
+    let cannonOverheated = neutral.cannonOverheated;
+    if (!cannonOverheated && cannonHeat >= config.cannonHeatCapacity) {
+      cannonOverheated = true;
+    } else if (cannonOverheated && cannonHeat <= config.cannonRearmThreshold) {
+      cannonOverheated = false;
+    }
     const mgHeat = Math.max(0, neutral.mgHeat - config.mgCoolingPerSecond * secondsPerStep);
     let mgOverheated = neutral.mgOverheated;
     if (!mgOverheated && mgHeat >= config.mgHeatCapacity) {
@@ -932,6 +983,8 @@ function advanceCombatInSpaceshipSimulation(
         0,
         config.shieldCapacity + neutral.roleModifiers.shield.capacityBonus
       ),
+      cannonHeat,
+      cannonOverheated,
       mgHeat,
       mgOverheated
     };

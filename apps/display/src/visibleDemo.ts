@@ -243,6 +243,11 @@ export interface VisibleDemoWorld {
     readonly capacity: number;
     readonly arcHalfAngle: number;
   };
+  readonly cannon: {
+    readonly heat: number;
+    readonly capacity: number;
+    readonly overheated: boolean;
+  };
   readonly machineGun: {
     readonly heat: number;
     readonly capacity: number;
@@ -263,6 +268,7 @@ interface VisibleDemoWorldGame extends VisibleDemoThreatGame {
   readonly turretAngle: number;
   readonly spaceship: PublicSpaceshipView;
   readonly shield: PublicShieldView;
+  readonly cannon: PublicMachineGunView;
   readonly machineGun: PublicMachineGunView;
   readonly encounter: Pick<PublicEncounterView, "phase" | "waveNumber">;
 }
@@ -313,6 +319,11 @@ export function buildVisibleDemoWorld(
       energy: game.shield.energy,
       capacity: game.shield.capacity,
       arcHalfAngle: game.shield.arcHalfAngle
+    },
+    cannon: {
+      heat: game.cannon.heat,
+      capacity: game.cannon.capacity,
+      overheated: game.cannon.overheated
     },
     machineGun: {
       heat: game.machineGun.heat,

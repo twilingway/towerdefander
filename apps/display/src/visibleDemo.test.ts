@@ -238,6 +238,7 @@ function worldGame(overrides: Record<string, unknown> = {}) {
       maxHp: 500
     },
     shield: { angle: 0.1, active: false, energy: 80, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    cannon: { heat: 12, capacity: 100, overheated: false },
     machineGun: { heat: 12, capacity: 100, overheated: false },
     encounter: { phase: "combat" as const, waveNumber: 3 },
     enemyShips: [enemy("enemy-near", 1, 2_300, 2_200)],

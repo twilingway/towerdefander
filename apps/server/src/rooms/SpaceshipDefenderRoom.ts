@@ -711,6 +711,9 @@ export class SpaceshipDefenderRoom extends Room<{
         Math.PI * 2,
         this.gameConfig.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus
       ) / 2;
+    target.cannon.heat = game.cannonHeat;
+    target.cannon.capacity = this.gameConfig.cannonHeatCapacity;
+    target.cannon.overheated = game.cannonOverheated;
     target.machineGun.heat = game.mgHeat;
     target.machineGun.capacity = this.gameConfig.mgHeatCapacity;
     target.machineGun.overheated = game.mgOverheated;

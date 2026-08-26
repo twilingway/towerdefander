@@ -62,6 +62,7 @@ describe("controller room view", () => {
           energy: 64,
           capacity: 100
         },
+        cannon: { heat: 0, capacity: 100, overheated: false },
         machineGun: { heat: 0, capacity: 100, overheated: false },
         encounter: {
           phase: "combat",
@@ -150,6 +151,7 @@ describe("controller room view", () => {
           energy: 100,
           capacity: 100
         },
+        cannon: { heat: 40, capacity: 100, overheated: false },
         machineGun: { heat: 40, capacity: 100, overheated: false },
         encounter: {
           phase: "intermission",
@@ -273,6 +275,7 @@ describe("controller room view", () => {
           energy: 0,
           capacity: 100
         },
+        cannon: { heat: 100, capacity: 100, overheated: true },
         machineGun: { heat: 100, capacity: 100, overheated: true },
         encounter: {
           phase: "result",

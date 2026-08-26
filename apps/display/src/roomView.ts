@@ -120,6 +120,11 @@ interface NetworkGameState {
     energy: number;
     capacity: number;
   };
+  cannon: {
+    heat: number;
+    capacity: number;
+    overheated: boolean;
+  };
   machineGun: {
     heat: number;
     capacity: number;
@@ -229,6 +234,7 @@ export function toDisplayRoomView(
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
+            cannon: { ...game.cannon },
             machineGun: { ...game.machineGun },
             encounter: {
               phase: game.encounter.phase,

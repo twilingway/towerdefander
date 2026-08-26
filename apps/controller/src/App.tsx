@@ -14,6 +14,7 @@ import {
   type EncounterPhase,
   type PublicTeamUpgradeView,
   type PublicMachineGunView,
+  type PublicWeaponHeatView,
   type PublicShieldView,
   type PublicPlayerView,
   type TerminalOutcome,
@@ -506,6 +507,7 @@ export function ControllerApp() {
             <RoleControlPanel
               role={currentPlayer.role}
               shield={activeView.game?.shield}
+              cannon={activeView.game?.cannon}
               machineGun={activeView.game?.machineGun}
               encounterPhase={activeView.game?.encounter.phase}
               connectionDisabled={activeStatus === "reconnecting"}
@@ -823,6 +825,7 @@ function previewPhaseLabel(phase: PreviewPhase): string {
 function RoleControlPanel({
   role,
   shield,
+  cannon,
   machineGun,
   encounterPhase,
   connectionDisabled,
@@ -831,6 +834,7 @@ function RoleControlPanel({
   onSend
 }: {
   readonly role: CrewRole;
+  readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
   readonly encounterPhase: EncounterPhase | undefined;
@@ -1084,17 +1088,29 @@ function RoleControlPanel({
         </>
       )}
       {role === "gunner" && (
-        <ActionZone
-          label="УДЕРЖИВАТЬ ОГОНЬ"
-          testId="fire-button"
-          className="hold-action--gunner"
-          disabled={!controlsEnabled}
-          mode="hold"
-          resetKey={generation}
-          onBegin={beginFire}
-          onEnd={endFire}
-          onCancel={cancelFire}
-        />
+        <>
+          <ActionZone
+            label={cannon?.overheated ? "ПЕРЕГРЕВ" : "УДЕРЖИВАТЬ ОГОНЬ"}
+            testId="fire-button"
+            className={`hold-action--gunner${cannon?.overheated ? " is-overheated" : ""}`}
+            disabled={!controlsEnabled}
+            mode="hold"
+            resetKey={generation}
+            onBegin={beginFire}
+            onEnd={endFire}
+            onCancel={cancelFire}
+          />
+          {cannon !== undefined && (
+            <div className="control-readout" data-testid="cannon-heat">
+              <div className="shield-energy mg-heat" aria-label="Нагрев орудия наводчика">
+                <span style={{ width: `${String((cannon.heat / cannon.capacity) * 100)}%` }} />
+              </div>
+              <strong>
+                Нагрев {Math.round(cannon.heat)} / {Math.round(cannon.capacity)}
+              </strong>
+            </div>
+          )}
+        </>
       )}
       {role === "shield" && shield !== undefined && (
         <>

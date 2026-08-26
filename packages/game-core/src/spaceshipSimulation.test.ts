@@ -1238,3 +1238,82 @@ describe("pilot nose machine gun", () => {
     expect(settledFor).toBeGreaterThanOrEqual(12); // converged and held
   });
 });
+
+describe("gunner cannon heat", () => {
+  const AIM = { x: 1, y: 0 };
+  const cannonSpawnsOnTick = (state: SpaceshipSimulationState) =>
+    state.projectiles.filter(
+      (projectile) => projectile.source === "cannon" && projectile.spawnedTick === state.clock.tick
+    ).length;
+
+  function holdTrigger(
+    state: SpaceshipSimulationState,
+    config: SpaceshipSimulationConfig,
+    firing: boolean
+  ): SpaceshipSimulationState {
+    const commanded = applyGunnerInput(state, {
+      vector: AIM,
+      firing,
+      receivedTick: state.clock.tick
+    });
+    return advanceSpaceshipSimulation(commanded, config);
+  }
+
+  it("overheats after a burst when cooling is disabled", () => {
+    // Firing used to be free, which made shooting at everything strictly better
+    // than choosing targets and left gunnery skill worth nothing.
+    const config = createSpaceshipSimulationConfig({ cannonCoolingPerSecond: 0 });
+    let state = createSpaceshipSimulationState(config, 1);
+    let shots = 0;
+    for (let index = 0; index < 200 && !state.cannonOverheated; index += 1) {
+      state = holdTrigger(state, config, true);
+      shots += cannonSpawnsOnTick(state);
+    }
+    expect(state.cannonOverheated).toBe(true);
+    expect(shots).toBe(Math.ceil(config.cannonHeatCapacity / config.cannonHeatPerShot));
+  });
+
+  it("refuses to fire while overheated, however hard the trigger is held", () => {
+    const config = createSpaceshipSimulationConfig({ cannonCoolingPerSecond: 0 });
+    let state: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 2),
+      cannonHeat: config.cannonHeatCapacity,
+      cannonOverheated: true
+    };
+    let shots = 0;
+    for (let index = 0; index < 40; index += 1) {
+      state = holdTrigger(state, config, true);
+      shots += cannonSpawnsOnTick(state);
+    }
+    expect(shots).toBe(0);
+  });
+
+  it("comes back into service once it cools past the rearm threshold", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 3),
+      cannonHeat: config.cannonHeatCapacity,
+      cannonOverheated: true
+    };
+    let ticks = 0;
+    while (state.cannonOverheated && ticks < 400) {
+      state = holdTrigger(state, config, false);
+      ticks += 1;
+    }
+    expect(state.cannonOverheated).toBe(false);
+    expect(state.cannonHeat).toBeLessThanOrEqual(config.cannonRearmThreshold);
+    // It is a real wait, not a formality.
+    expect(ticks).toBeGreaterThan(20);
+  });
+
+  it("cools while the trigger is off and climbs while it is held", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 4);
+    for (let index = 0; index < 6; index += 1) state = holdTrigger(state, config, true);
+    const hot = state.cannonHeat;
+    expect(hot).toBeGreaterThan(0);
+
+    for (let index = 0; index < 6; index += 1) state = holdTrigger(state, config, false);
+    expect(state.cannonHeat).toBeLessThan(hot);
+  });
+});

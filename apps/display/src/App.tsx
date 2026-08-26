@@ -19,7 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CombatRadar } from "./CombatRadar.js";
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
-import { MachineGunHeat } from "./MachineGunHeat.js";
+import { WeaponHeat } from "./WeaponHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
@@ -350,7 +350,7 @@ export function DisplayApp() {
                   : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
               </small>
             </div>
-            <MachineGunHeat machineGun={view.game.machineGun} />
+            <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
           </header>
           <SpaceshipCanvas
             game={view.game}

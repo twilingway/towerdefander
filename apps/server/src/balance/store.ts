@@ -44,6 +44,7 @@ const DEFAULT_AUTOPILOT: AutopilotTuning = {
       mgConeRadians: Math.PI,
       cannonConeRadians: Math.PI,
       mgHeatCeiling: 1,
+      cannonHeatCeiling: 1,
       shieldLeadTicks: 0,
       shieldMinEnergy: 0
     },
@@ -61,6 +62,7 @@ const DEFAULT_AUTOPILOT: AutopilotTuning = {
       mgConeRadians: 0.35,
       cannonConeRadians: 0.2,
       mgHeatCeiling: 0.75,
+      cannonHeatCeiling: 0.8,
       shieldLeadTicks: 8,
       shieldMinEnergy: 0.15
     },
@@ -78,6 +80,7 @@ const DEFAULT_AUTOPILOT: AutopilotTuning = {
       mgConeRadians: 0.12,
       cannonConeRadians: 0.06,
       mgHeatCeiling: 0.7,
+      cannonHeatCeiling: 0.7,
       shieldLeadTicks: 14,
       shieldMinEnergy: 0.25
     }
@@ -239,6 +242,10 @@ const PLAYER_SHIP_FIELDS = [
   "turretMaxAngularSpeedPerSecond",
   "turretAngularAccelerationPerSecondSquared",
   "turretAngularBrakingPerSecondSquared",
+  "cannonHeatCapacity",
+  "cannonHeatPerShot",
+  "cannonCoolingPerSecond",
+  "cannonRearmThreshold",
   "mgDamage",
   "mgFireCooldownTicks",
   "mgProjectileSpeedPerSecond",
@@ -378,6 +385,10 @@ export function createDefaultTuning(): BalanceTuning {
     mgFireCooldownTicks: config.mgFireCooldownTicks,
     mgProjectileSpeedPerSecond: config.mgProjectileSpeedPerSecond,
     mgProjectileRadius: config.mgProjectileRadius,
+    cannonHeatCapacity: config.cannonHeatCapacity,
+    cannonHeatPerShot: config.cannonHeatPerShot,
+    cannonCoolingPerSecond: config.cannonCoolingPerSecond,
+    cannonRearmThreshold: config.cannonRearmThreshold,
     mgHeatCapacity: config.mgHeatCapacity,
     mgHeatPerShot: config.mgHeatPerShot,
     mgCoolingPerSecond: config.mgCoolingPerSecond,

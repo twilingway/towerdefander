@@ -117,6 +117,7 @@ const testGame = {
   },
   turretAngle: 0,
   shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: 0.72 },
+  cannon: { heat: 0, capacity: 100, overheated: false },
   machineGun: { heat: 0, capacity: 100, overheated: false },
   encounter: {
     phase: "combat",

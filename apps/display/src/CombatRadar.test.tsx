@@ -23,6 +23,7 @@ const baseGame: DisplayGameSnapshot = {
   },
   turretAngle: 0,
   shield: { angle: 0, arcHalfAngle: 0.72, active: false, energy: 100, capacity: 100 },
+  cannon: { heat: 0, capacity: 100, overheated: false },
   machineGun: { heat: 0, capacity: 100, overheated: false },
   encounter: {
     phase: "combat",

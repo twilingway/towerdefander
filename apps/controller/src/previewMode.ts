@@ -106,6 +106,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
     return {
       ...PREVIEW_WORLD,
       shield: { angle: Math.PI / 2, arcHalfAngle: 0.8, active: true, energy: 64, capacity: 120 },
+      cannon: { heat: 62, capacity: 100, overheated: false },
       machineGun: { heat: 46, capacity: 100, overheated: false },
       encounter: {
         phase: "combat",
@@ -125,6 +126,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
     return {
       ...PREVIEW_WORLD,
       shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 120, capacity: 120 },
+      cannon: { heat: 0, capacity: 100, overheated: false },
       machineGun: { heat: 0, capacity: 100, overheated: false },
       encounter: {
         phase: "intermission",
@@ -178,6 +180,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
     ...PREVIEW_WORLD,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
     shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 0, capacity: 120 },
+    cannon: { heat: 100, capacity: 100, overheated: true },
     machineGun: { heat: 100, capacity: 100, overheated: true },
     encounter: {
       phase: "result",

@@ -71,6 +71,7 @@ function autopilotProfile(): AutopilotProfile {
     mgConeRadians: 0.35,
     cannonConeRadians: 0.2,
     mgHeatCeiling: 0.75,
+    cannonHeatCeiling: 0.8,
     shieldLeadTicks: 8,
     shieldMinEnergy: 0.15
   };
@@ -155,6 +156,10 @@ function tuning(): BalanceTuning {
     mgFireCooldownTicks: 2,
     mgProjectileSpeedPerSecond: 900,
     mgProjectileRadius: 5,
+    cannonHeatCapacity: 100,
+    cannonHeatPerShot: 16,
+    cannonCoolingPerSecond: 22,
+    cannonRearmThreshold: 35,
     mgHeatCapacity: 100,
     mgHeatPerShot: 4,
     mgCoolingPerSecond: 30,
