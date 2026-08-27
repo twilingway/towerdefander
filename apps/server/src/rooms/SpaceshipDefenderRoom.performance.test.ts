@@ -69,7 +69,10 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
 
     expect(oneEntityPatch.byteLength).toBeLessThan(fullSnapshot.byteLength / 10);
     expect(decodedMap.get(firstEnemyId)).toBe(decodedFirst);
-    expect(decodedFirst.x).toBe(authoritativeFirst.x);
+    // The schema keeps the double the simulation produced and rounds only when
+    // encoding, so the client sees the float32 neighbour: about 0.0002 world
+    // units at this coordinate, four orders below one screen pixel.
+    expect(decodedFirst.x).toBeCloseTo(authoritativeFirst.x, 3);
     expect(decodedMap.get(secondEnemyId)).toBe(decodedSecond);
     expect(decodedSecond.x).toBe(unchangedSecondX);
   });

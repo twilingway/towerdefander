@@ -20,29 +20,29 @@ export class PlayerState extends Schema {
 }
 
 export class SpaceshipState extends Schema {
-  @type("float64") x = 0;
-  @type("float64") y = 0;
-  @type("float64") velocityX = 0;
-  @type("float64") velocityY = 0;
-  @type("float64") radius = 0;
-  @type("float64") hp = 0;
-  @type("float64") maxHp = 0;
-  @type("float64") heading = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") hp = 0;
+  @type("float32") maxHp = 0;
+  @type("float32") heading = 0;
 }
 
 /** Heat meter shape; both weapons run hot the same way. */
 export class MachineGunState extends Schema {
-  @type("float64") heat = 0;
-  @type("float64") capacity = 0;
+  @type("float32") heat = 0;
+  @type("float32") capacity = 0;
   @type("boolean") overheated = false;
 }
 
 export class ShieldState extends Schema {
-  @type("float64") angle = 0;
+  @type("float32") angle = 0;
   @type("boolean") active = false;
-  @type("float64") energy = 0;
-  @type("float64") capacity = 0;
-  @type("float64") arcHalfAngle = Math.PI / 4;
+  @type("float32") energy = 0;
+  @type("float32") capacity = 0;
+  @type("float32") arcHalfAngle = Math.PI / 4;
 }
 
 export class EncounterState extends Schema {
@@ -59,21 +59,21 @@ export class EncounterState extends Schema {
 }
 
 export class PilotModifiersState extends Schema {
-  @type("float64") speedMultiplier = 1;
-  @type("float64") accelerationMultiplier = 1;
-  @type("float64") maxHpBonus = 0;
+  @type("float32") speedMultiplier = 1;
+  @type("float32") accelerationMultiplier = 1;
+  @type("float32") maxHpBonus = 0;
 }
 
 export class GunnerModifiersState extends Schema {
-  @type("float64") damageMultiplier = 1;
-  @type("float64") cooldownMultiplier = 1;
-  @type("float64") projectileSpeedMultiplier = 1;
+  @type("float32") damageMultiplier = 1;
+  @type("float32") cooldownMultiplier = 1;
+  @type("float32") projectileSpeedMultiplier = 1;
 }
 
 export class ShieldModifiersState extends Schema {
-  @type("float64") capacityBonus = 0;
-  @type("float64") rechargeMultiplier = 1;
-  @type("float64") arcWidthBonus = 0;
+  @type("float32") capacityBonus = 0;
+  @type("float32") rechargeMultiplier = 1;
+  @type("float32") arcWidthBonus = 0;
 }
 
 export class RoleModifiersState extends Schema {
@@ -86,7 +86,7 @@ export class UpgradeCardState extends Schema {
   @type("string") upgradeId: UpgradeId = "pilot_speed";
   @type("string") role: CrewRole = "pilot";
   @type("string") label = "";
-  @type("float64") value = 0;
+  @type("float32") value = 0;
   @type("uint8") price = 5;
 }
 
@@ -121,50 +121,50 @@ export class TeamUpgradeState extends Schema {
 export class ObstacleState extends Schema {
   @type("string") obstacleId = "";
   @type("string") kind: "rectangle" | "circle" = "rectangle";
-  @type("float64") x = 0;
-  @type("float64") y = 0;
-  @type("float64") width = 0;
-  @type("float64") height = 0;
-  @type("float64") radius = 0;
-  @type("float64") rotation = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") width = 0;
+  @type("float32") height = 0;
+  @type("float32") radius = 0;
+  @type("float32") rotation = 0;
 }
 
 export class EnemyState extends Schema {
   @type("string") entityId = "";
   @type("uint32") spawnSequence = 0;
   @type("string") kind: EnemyKind = "gunship";
-  @type("float64") x = 0;
-  @type("float64") y = 0;
-  @type("float64") velocityX = 0;
-  @type("float64") velocityY = 0;
-  @type("float64") radius = 0;
-  @type("float64") heading = 0;
-  @type("float64") hp = 0;
-  @type("float64") maxHp = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") heading = 0;
+  @type("float32") hp = 0;
+  @type("float32") maxHp = 0;
 }
 
 export class AsteroidState extends Schema {
   @type("string") entityId = "";
   @type("string") origin: AsteroidOrigin = "ambient";
   @type("uint32") spawnSequence = 0;
-  @type("float64") x = 0;
-  @type("float64") y = 0;
-  @type("float64") velocityX = 0;
-  @type("float64") velocityY = 0;
-  @type("float64") radius = 0;
-  @type("float64") hp = 0;
-  @type("float64") maxHp = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") hp = 0;
+  @type("float32") maxHp = 0;
 }
 
 export class ProjectileState extends Schema {
   @type("string") entityId = "";
   @type("uint32") spawnSequence = 0;
   @type("string") kind: "friendly" | "hostile" = "friendly";
-  @type("float64") x = 0;
-  @type("float64") y = 0;
-  @type("float64") velocityX = 0;
-  @type("float64") velocityY = 0;
-  @type("float64") radius = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
   @type("string") source = "";
   /** Empty means the display draws its own default primitive. */
   @type("string") visualShape = "";
@@ -174,12 +174,12 @@ export class ProjectileState extends Schema {
 export class HomingMissileState extends Schema {
   @type("string") entityId = "";
   @type("uint32") spawnSequence = 0;
-  @type("float64") x = 0;
-  @type("float64") y = 0;
-  @type("float64") velocityX = 0;
-  @type("float64") velocityY = 0;
-  @type("float64") radius = 0;
-  @type("float64") heading = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") heading = 0;
   /** Empty means the display draws its own default primitive. */
   @type("string") visualShape = "";
   @type("float32") visualScale = 1;
@@ -231,7 +231,7 @@ export class SpaceshipGameState extends Schema {
   @type("uint16") worldHeight = 4400;
   @type("uint16") arenaRadius = 2200;
   @type(SpaceshipState) spaceship = new SpaceshipState();
-  @type("float64") turretAngle = 0;
+  @type("float32") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();
   @type(MachineGunState) cannon = new MachineGunState();
   @type(MachineGunState) machineGun = new MachineGunState();

@@ -94,7 +94,7 @@ Simulation tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 17) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 26) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
@@ -157,3 +157,13 @@ project differs:
 - Prettier: 100 columns, double quotes, no trailing commas, `proseWrap: always` (Markdown reflows).
 - Keep the display 2D — pseudo-3D art, layered space, particles, shaders; no true 3D renderer, and
   no `react-phaser-fiber`.
+- **Pick wire field widths from observable precision, not from habit.** Every `@type()` in
+  `SpaceshipDefenderState.ts` is paid per client per tick, and state sync already costs about twice
+  the simulation step (`pnpm benchmark:combat`: `schemaSync` p50 0.16 ms against `pureFixedStep`
+  0.08 ms on 196 entities). No combat quantity gets eight bytes: the arena is 4400 units wide and
+  one unit is under half a pixel on screen, so `float32` covers positions, velocities, radii,
+  angles, health and multipliers with four orders of magnitude to spare. Counters and flags take the
+  narrowest integer that holds their range (`uint8`, `uint16`, `int32`), never a float. Strings on a
+  per-tick field are a smell — send an id once at spawn instead. Simulation arithmetic in
+  `game-core` stays double precision; only the published representation narrows, so determinism is
+  untouched. Widening or narrowing a field is a breaking change: bump `PROTOCOL_VERSION`.
