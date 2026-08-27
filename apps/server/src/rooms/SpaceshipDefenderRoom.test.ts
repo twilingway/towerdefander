@@ -115,14 +115,18 @@ interface RoomInternals {
   gameState: SpaceshipSimulationState | undefined;
   upgradeJournals: Map<string, readonly unknown[]>;
   sequenceWatermarks: Map<string, Map<string, number>>;
-  outstandingLatencyProbes: Map<string, { readonly probeId: string; readonly sentAt: number }>;
-  lifecycleDeadlines: Map<string, number>;
+  latency: { pendingProbe(sessionId: string): { readonly probeId: string } | undefined };
+  lifecycle: {
+    readonly size: number;
+    has(reason: string): boolean;
+    expiresAt(reason: string): number | undefined;
+    set(reason: string, expiresAtMs: number): void;
+  };
   lifecycleGeneration: number;
   waveDeadlineAtMs: number | undefined;
   waveDeadlineGeneration: number;
   metadataWritePromise: Promise<void> | undefined;
   pendingMetadata: unknown;
-  setLifecycleDeadline(reason: string, expiresAtMs: number): void;
   expireWaveDeadlineIfDue(now: number): boolean;
 }
 
@@ -205,7 +209,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
       worldHeight: room.state.game.worldHeight,
       arenaRadius: room.state.game.arenaRadius
     }).toEqual(stateBeforeMismatch);
-    expect(internals(room).lifecycleDeadlines.size).toBe(0);
+    expect(internals(room).lifecycle.size).toBe(0);
     expect(internals(room).pendingMetadata).toBeUndefined();
   });
 
@@ -898,7 +902,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
         defeatReason: "wave_timeout",
         waveSecondsRemaining: 0
       });
-      expect(runtime.lifecycleDeadlines.get("result_expired")).toBe(deadline + 600_000);
+      expect(runtime.lifecycle.expiresAt("result_expired")).toBe(deadline + 600_000);
       expect(room.state.game.tick).toBe(frozenTick);
       room.advanceGameStep();
       expect(room.state.game.tick).toBe(frozenTick);
@@ -936,7 +940,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
         waveSecondsRemaining: 0
       });
       expect(room.state.players.get(pilot.client.sessionId)?.ready).toBe(true);
-      expect(runtime.lifecycleDeadlines.get("result_expired")).toBe(deadline + 600_000);
+      expect(runtime.lifecycle.expiresAt("result_expired")).toBe(deadline + 600_000);
     } finally {
       now.mockRestore();
     }
@@ -977,7 +981,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     try {
       const { room, controllers } = startGame();
       const runtime = internals(room);
-      const hardCap = runtime.lifecycleDeadlines.get("room_lifetime_expired");
+      const hardCap = runtime.lifecycle.expiresAt("room_lifetime_expired");
       const firstDeadline = runtime.waveDeadlineAtMs;
       if (firstDeadline === undefined) throw new Error("Expected a wave deadline.");
       now.mockReturnValue(firstDeadline);
@@ -989,7 +993,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       });
       expect(room.state.runNumber).toBe(2);
       expect(runtime.waveDeadlineAtMs).toBe(firstDeadline + 1_000 + 1_200_000);
-      expect(runtime.lifecycleDeadlines.get("room_lifetime_expired")).toBe(hardCap);
+      expect(runtime.lifecycle.expiresAt("room_lifetime_expired")).toBe(hardCap);
     } finally {
       now.mockRestore();
     }
@@ -1495,7 +1499,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
 
     expect(disconnect).not.toHaveBeenCalled();
     expect(room.state.displayConnected).toBe(true);
-    expect(internals(room).lifecycleDeadlines.has("display_reconnect_expired")).toBe(false);
+    expect(internals(room).lifecycle.has("display_reconnect_expired")).toBe(false);
   });
 
   it("arms fixed lobby, result, zero-controller, display and absolute deadlines", async () => {
@@ -1503,17 +1507,17 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
     try {
       const room = createRoom();
       const runtime = internals(room);
-      expect(runtime.lifecycleDeadlines.get("lobby_expired")).toBe(910_000);
-      expect(runtime.lifecycleDeadlines.get("room_lifetime_expired")).toBe(43_210_000);
-      expect(runtime.lifecycleDeadlines.has("controllers_expired")).toBe(false);
+      expect(runtime.lifecycle.expiresAt("lobby_expired")).toBe(910_000);
+      expect(runtime.lifecycle.expiresAt("room_lifetime_expired")).toBe(43_210_000);
+      expect(runtime.lifecycle.has("controllers_expired")).toBe(false);
 
       const controller = joinController(room, 0);
       await room.onLeave(controller.client, CloseCode.CONSENTED);
-      expect(runtime.lifecycleDeadlines.get("controllers_expired")).toBe(310_000);
+      expect(runtime.lifecycle.expiresAt("controllers_expired")).toBe(310_000);
 
       const active = startGame().room;
       forceResult(active);
-      expect(internals(active).lifecycleDeadlines.get("result_expired")).toBe(610_000);
+      expect(internals(active).lifecycle.expiresAt("result_expired")).toBe(610_000);
 
       const withDisplay = createRoom();
       const display = joinDisplay(withDisplay);
@@ -1526,9 +1530,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       );
       vi.spyOn(withDisplay, "disconnect").mockResolvedValue(undefined);
       const leave = withDisplay.onLeave(display.client, 1006);
-      expect(internals(withDisplay).lifecycleDeadlines.get("display_reconnect_expired")).toBe(
-        40_000
-      );
+      expect(internals(withDisplay).lifecycle.expiresAt("display_reconnect_expired")).toBe(40_000);
       rejectReconnect?.(new Error("expired"));
       await leave;
     } finally {
@@ -1551,7 +1553,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
       const broadcast = vi.spyOn(room, "broadcast");
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
-      internals(room).setLifecycleDeadline(reason, 30_010);
+      internals(room).lifecycle.set(reason, 30_010);
       const callback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       if (callback === undefined) throw new Error("Expected lifecycle callback.");
 
@@ -1576,8 +1578,8 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
       const staleCallback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       const runtime = internals(room);
-      runtime.setLifecycleDeadline("result_expired", 20_100);
-      runtime.setLifecycleDeadline("room_lifetime_expired", 20_100);
+      runtime.lifecycle.set("result_expired", 20_100);
+      runtime.lifecycle.set("room_lifetime_expired", 20_100);
       const currentCallback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       if (staleCallback === undefined || currentCallback === undefined) {
         throw new Error("Expected lifecycle callbacks.");
@@ -1785,9 +1787,7 @@ describe("SpaceshipDefenderRoom v13 latency telemetry", () => {
   it("rejects malformed, v10 and wrong-room pongs with stable actor-only errors and no mutation", () => {
     const room = createRoom();
     const controller = joinController(room, 0);
-    const outstandingBefore = internals(room).outstandingLatencyProbes.get(
-      controller.client.sessionId
-    );
+    const probeBefore = internals(room).latency.pendingProbe(controller.client.sessionId);
 
     room.handleLatencyPong(controller.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1810,8 +1810,8 @@ describe("SpaceshipDefenderRoom v13 latency telemetry", () => {
     expect(countErrors(controller, "protocol_mismatch")).toBe(1);
     expect(countErrors(controller, "identity_mismatch")).toBe(1);
     expect(room.state.players.get(controller.client.sessionId)?.latencyMs).toBe(-1);
-    expect(internals(room).outstandingLatencyProbes.get(controller.client.sessionId)).toBe(
-      outstandingBefore
+    expect(internals(room).latency.pendingProbe(controller.client.sessionId)?.probeId).toBe(
+      probeBefore?.probeId
     );
   });
 

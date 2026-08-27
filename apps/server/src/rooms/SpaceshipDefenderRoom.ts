@@ -1,3 +1,12 @@
+/**
+ * Over the 500-line ceiling on purpose. What could move out has moved: the state
+ * mirror, latency, lifecycle deadlines, the upgrade journal, decorations and the
+ * run seed all live in sibling modules. What is left is one Colyseus surface -
+ * the lifecycle hooks, the message table and the handlers behind it - and those
+ * share `this.clock`, `this.state` and `this.disposing` too closely to split
+ * without turning the room into objects that call each other back. Splitting it
+ * further would move authority around rather than clarify it.
+ */
 import {
   advanceSpaceshipSimulation,
   applyGunnerInput,
@@ -43,13 +52,9 @@ import { getBalanceStore } from "../balance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { DECORATIVE_OBSTACLES } from "./decorations.js";
-import {
-  compareLifecycleDeadlines,
-  type LifecycleDeadline,
-  type LifecycleDeadlineReason
-} from "./lifecycleDeadline.js";
 import { createRunSeed } from "./runSeed.js";
-import { median } from "./statistics.js";
+import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
+import { LifecycleSchedule } from "./lifecycleSchedule.js";
 import { projectGameState } from "./stateProjection.js";
 import {
   upgradeErrorMessage,
@@ -73,20 +78,6 @@ interface RuntimeSchema<T> {
   safeParse(input: unknown): { success: true; data: T } | { success: false };
 }
 
-interface RoomTimer {
-  clear(): void;
-}
-
-interface OutstandingLatencyProbe {
-  readonly probeId: string;
-  readonly sentAt: number;
-  readonly timeout: RoomTimer;
-}
-
-const LATENCY_PROBE_INTERVAL_MS = 2_000;
-const LATENCY_PROBE_TIMEOUT_MS = 5_000;
-const MAX_LATENCY_SAMPLE_MS = 5_000;
-const MAX_LATENCY_SAMPLES = 5;
 const MAX_UPGRADE_JOURNAL_ENTRIES = 32;
 
 const {
@@ -112,17 +103,31 @@ export class SpaceshipDefenderRoom extends Room<{
   private readonly connectionRoles = new Map<string, ConnectionRole>();
   private readonly sequenceWatermarks = new Map<string, Map<InputMessageType, number>>();
   private readonly connectionClients = new Map<string, Client>();
-  private readonly latencySamples = new Map<string, number[]>();
-  private readonly outstandingLatencyProbes = new Map<string, OutstandingLatencyProbe>();
-  private readonly scheduledLatencyProbes = new Map<string, RoomTimer>();
+  private readonly latency = new LatencyTracker({
+    sendProbe: (sessionId, probeId) => {
+      this.connectionClients
+        .get(sessionId)
+        ?.send(serverMessage.latencyProbe, { protocolVersion: PROTOCOL_VERSION, probeId });
+    },
+    schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
+    publish: (sessionId, latencyMs) => {
+      this.publishLatency(sessionId, latencyMs);
+    },
+    now: () => performance.now()
+  });
   private readonly upgradeJournals = new Map<string, UpgradeJournalEntry[]>();
   private displaySessionId: string | undefined;
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
   private gameState: SpaceshipSimulationState | undefined;
   private simulationTimer: RoomTimer | undefined;
-  private lifecycleTimer: RoomTimer | undefined;
-  private lifecycleGeneration = 0;
-  private readonly lifecycleDeadlines = new Map<LifecycleDeadlineReason, number>();
+  private readonly lifecycle = new LifecycleSchedule({
+    schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
+    now: () => Date.now(),
+    onExpired: (reason) => {
+      this.disposeOnce(reason);
+    },
+    isDisposing: () => this.disposing
+  });
   private waveDeadlineTimer: RoomTimer | undefined;
   private waveDeadlineAtMs: number | undefined;
   private waveDeadlineGeneration = 0;
@@ -134,7 +139,6 @@ export class SpaceshipDefenderRoom extends Room<{
   private statsId = "";
   private pendingMetadata: RoomStatsMetadata | undefined;
   private metadataWritePromise: Promise<void> | undefined;
-  private nextLatencyProbeSequence = 1;
 
   override messages = {
     [clientMessage.ready]: (client: Client, payload: unknown) => {
@@ -182,9 +186,8 @@ export class SpaceshipDefenderRoom extends Room<{
     this.createdAtMs = now;
     this.statusChangedAtMs = now;
     this.statsId = randomUUID();
-    this.lifecycleDeadlines.set("lobby_expired", now + lobbyTtlSeconds * 1_000);
-    this.lifecycleDeadlines.set("room_lifetime_expired", now + absoluteTtlSeconds * 1_000);
-    this.rescheduleLifecycle();
+    this.lifecycle.set("lobby_expired", now + lobbyTtlSeconds * 1_000);
+    this.lifecycle.set("room_lifetime_expired", now + absoluteTtlSeconds * 1_000);
     this.queueMetadataUpdate();
   }
 
@@ -203,7 +206,7 @@ export class SpaceshipDefenderRoom extends Room<{
     if (result.data.role === "display") {
       this.joinDisplay(client);
       this.registerLatencyConnection(client);
-      this.clearLifecycleDeadline("display_reconnect_expired");
+      this.lifecycle.clear("display_reconnect_expired");
       this.updateStatusFromRoom();
       this.queueMetadataUpdate();
       return;
@@ -227,7 +230,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.sequenceWatermarks.set(client.sessionId, new Map());
     this.state.players.set(client.sessionId, player);
     this.firstControllerJoined = true;
-    this.clearLifecycleDeadline("controllers_expired");
+    this.lifecycle.clear("controllers_expired");
     this.registerLatencyConnection(client);
     this.queueMetadataUpdate();
   }
@@ -237,7 +240,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.clearLatencyConnection(client.sessionId);
     if (connectionRole === "display") {
       this.state.displayConnected = false;
-      this.setLifecycleDeadline(
+      this.lifecycle.set(
         "display_reconnect_expired",
         Date.now() + reconnectionGraceSeconds * 1_000
       );
@@ -253,7 +256,7 @@ export class SpaceshipDefenderRoom extends Room<{
         this.connectionRoles.set(reconnected.sessionId, "display");
         this.displaySessionId = reconnected.sessionId;
         this.state.displayConnected = true;
-        this.clearLifecycleDeadline("display_reconnect_expired");
+        this.lifecycle.clear("display_reconnect_expired");
         this.registerLatencyConnection(reconnected);
         this.updateStatusFromRoom();
         this.queueMetadataUpdate();
@@ -285,7 +288,7 @@ export class SpaceshipDefenderRoom extends Room<{
       this.connectionRoles.set(reconnected.sessionId, "controller");
       this.sequenceWatermarks.set(reconnected.sessionId, new Map());
       this.registerLatencyConnection(reconnected);
-      this.clearLifecycleDeadline("controllers_expired");
+      this.lifecycle.clear("controllers_expired");
       this.queueMetadataUpdate();
       this.tryStartRun();
     } catch {
@@ -449,20 +452,7 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
 
-    const outstanding = this.outstandingLatencyProbes.get(client.sessionId);
-    if (outstanding?.probeId !== result.data.probeId) return;
-
-    outstanding.timeout.clear();
-    this.outstandingLatencyProbes.delete(client.sessionId);
-    const roundTripTimeMs = Math.round(
-      Math.min(MAX_LATENCY_SAMPLE_MS, Math.max(0, receivedAt - outstanding.sentAt))
-    );
-    const samples = [...(this.latencySamples.get(client.sessionId) ?? []), roundTripTimeMs].slice(
-      -MAX_LATENCY_SAMPLES
-    );
-    this.latencySamples.set(client.sessionId, samples);
-    this.publishLatency(client.sessionId, median(samples));
-    this.scheduleLatencyProbe(client, LATENCY_PROBE_INTERVAL_MS);
+    this.latency.acceptPong(client.sessionId, result.data.probeId, receivedAt);
   }
 
   advanceGameStep(): void {
@@ -584,9 +574,8 @@ export class SpaceshipDefenderRoom extends Room<{
     this.sequenceWatermarks.clear();
     for (const player of players) this.sequenceWatermarks.set(player.playerId, new Map());
     this.upgradeJournals.clear();
-    this.lifecycleDeadlines.delete("lobby_expired");
-    this.lifecycleDeadlines.delete("result_expired");
-    this.rescheduleLifecycle();
+    this.lifecycle.clear("lobby_expired");
+    this.lifecycle.clear("result_expired");
     this.initializeDecorations();
     this.publishEnemyCatalogue();
     this.armWaveDeadline();
@@ -692,51 +681,16 @@ export class SpaceshipDefenderRoom extends Room<{
   private registerLatencyConnection(client: Client): void {
     this.clearLatencyConnection(client.sessionId);
     this.connectionClients.set(client.sessionId, client);
-    this.publishLatency(client.sessionId, -1);
-    this.sendLatencyProbe(client);
-  }
-
-  private sendLatencyProbe(client: Client): void {
-    if (this.connectionClients.get(client.sessionId) !== client) return;
-    const probeId = `latency-${String(this.nextLatencyProbeSequence)}`;
-    this.nextLatencyProbeSequence += 1;
-    const sentAt = performance.now();
-    client.send(serverMessage.latencyProbe, { protocolVersion: PROTOCOL_VERSION, probeId });
-    const timeout = this.clock.setTimeout(() => {
-      const outstanding = this.outstandingLatencyProbes.get(client.sessionId);
-      if (outstanding?.probeId !== probeId) return;
-      this.outstandingLatencyProbes.delete(client.sessionId);
-      this.publishLatency(client.sessionId, -1);
-      this.sendLatencyProbe(client);
-    }, LATENCY_PROBE_TIMEOUT_MS);
-    this.outstandingLatencyProbes.set(client.sessionId, { probeId, sentAt, timeout });
-  }
-
-  private scheduleLatencyProbe(client: Client, delayMs: number): void {
-    this.scheduledLatencyProbes.get(client.sessionId)?.clear();
-    const timer = this.clock.setTimeout(() => {
-      this.scheduledLatencyProbes.delete(client.sessionId);
-      this.sendLatencyProbe(client);
-    }, delayMs);
-    this.scheduledLatencyProbes.set(client.sessionId, timer);
+    this.latency.register(client.sessionId);
   }
 
   private clearLatencyConnection(sessionId: string): void {
-    this.scheduledLatencyProbes.get(sessionId)?.clear();
-    this.scheduledLatencyProbes.delete(sessionId);
-    this.outstandingLatencyProbes.get(sessionId)?.timeout.clear();
-    this.outstandingLatencyProbes.delete(sessionId);
-    this.latencySamples.delete(sessionId);
+    this.latency.clear(sessionId);
     this.connectionClients.delete(sessionId);
-    this.publishLatency(sessionId, -1);
   }
 
   private clearAllLatencyConnections(): void {
-    for (const timer of this.scheduledLatencyProbes.values()) timer.clear();
-    for (const probe of this.outstandingLatencyProbes.values()) probe.timeout.clear();
-    this.scheduledLatencyProbes.clear();
-    this.outstandingLatencyProbes.clear();
-    this.latencySamples.clear();
+    this.latency.clearAll();
     this.connectionClients.clear();
     this.state.displayLatencyMs = -1;
     for (const player of this.state.players.values()) player.latencyMs = -1;
@@ -763,10 +717,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.sequenceWatermarks.delete(playerId);
     this.upgradeJournals.delete(playerId);
     if (this.firstControllerJoined && this.state.players.size === 0 && !this.disposing) {
-      this.setLifecycleDeadline(
-        "controllers_expired",
-        Date.now() + zeroControllerTtlSeconds * 1_000
-      );
+      this.lifecycle.set("controllers_expired", Date.now() + zeroControllerTtlSeconds * 1_000);
     }
     this.queueMetadataUpdate();
   }
@@ -834,52 +785,7 @@ export class SpaceshipDefenderRoom extends Room<{
   private enterTerminalResultLifecycle(): void {
     this.stopSimulation();
     for (const player of this.state.players.values()) player.ready = false;
-    this.setLifecycleDeadline("result_expired", Date.now() + resultTtlSeconds * 1_000);
-  }
-
-  private setLifecycleDeadline(reason: LifecycleDeadlineReason, expiresAtMs: number): void {
-    this.lifecycleDeadlines.set(reason, expiresAtMs);
-    this.rescheduleLifecycle();
-  }
-
-  private clearLifecycleDeadline(reason: LifecycleDeadlineReason): void {
-    if (!this.lifecycleDeadlines.delete(reason)) return;
-    this.rescheduleLifecycle();
-  }
-
-  private rescheduleLifecycle(): void {
-    this.lifecycleGeneration += 1;
-    const generation = this.lifecycleGeneration;
-    this.lifecycleTimer?.clear();
-    this.lifecycleTimer = undefined;
-    if (this.disposing) return;
-    const next = this.nextLifecycleDeadline();
-    if (next === undefined) return;
-    this.lifecycleTimer = this.clock.setTimeout(
-      () => {
-        if (this.disposing || generation !== this.lifecycleGeneration) return;
-        this.lifecycleTimer = undefined;
-        const expired = this.nextLifecycleDeadline(Date.now());
-        if (expired === undefined) {
-          this.rescheduleLifecycle();
-          return;
-        }
-        this.disposeOnce(expired.reason);
-      },
-      Math.max(1, next.expiresAtMs - Date.now())
-    );
-  }
-
-  private nextLifecycleDeadline(expiredAtOrBeforeMs?: number): LifecycleDeadline | undefined {
-    const deadlines = [...this.lifecycleDeadlines].map(([reason, expiresAtMs]) => ({
-      reason,
-      expiresAtMs
-    }));
-    const eligible =
-      expiredAtOrBeforeMs === undefined
-        ? deadlines
-        : deadlines.filter(({ expiresAtMs }) => expiresAtMs <= expiredAtOrBeforeMs);
-    return eligible.sort(compareLifecycleDeadlines)[0];
+    this.lifecycle.set("result_expired", Date.now() + resultTtlSeconds * 1_000);
   }
 
   private disposeOnce(reason: RoomClosingReason): void {
@@ -896,10 +802,7 @@ export class SpaceshipDefenderRoom extends Room<{
   }
 
   private cleanupResources(): void {
-    this.lifecycleGeneration += 1;
-    this.lifecycleTimer?.clear();
-    this.lifecycleTimer = undefined;
-    this.lifecycleDeadlines.clear();
+    this.lifecycle.stop();
     this.clearWaveDeadline();
     this.stopSimulation();
     this.clearAllLatencyConnections();
@@ -913,7 +816,7 @@ export class SpaceshipDefenderRoom extends Room<{
   private updateStatusFromRoom(): void {
     if (this.disposing) {
       this.updateStatus("closing");
-    } else if (this.lifecycleDeadlines.has("display_reconnect_expired")) {
+    } else if (this.lifecycle.has("display_reconnect_expired")) {
       this.updateStatus("display_grace");
     } else if (this.state.phase === "lobby") {
       this.updateStatus("lobby");
@@ -969,7 +872,7 @@ export class SpaceshipDefenderRoom extends Room<{
       displayConnected: this.state.displayConnected,
       createdAtMs: this.createdAtMs,
       statusChangedAtMs: this.statusChangedAtMs,
-      expiresAtMs: this.nextLifecycleDeadline()?.expiresAtMs ?? null
+      expiresAtMs: this.lifecycle.next()?.expiresAtMs ?? null
     };
   }
 

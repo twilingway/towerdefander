@@ -16,7 +16,11 @@ interface TestClient {
 interface RoomInternals {
   gameState: SpaceshipSimulationState | undefined;
   sequenceWatermarks: Map<string, Map<string, number>>;
-  outstandingLatencyProbes: Map<string, { readonly probeId: string; readonly sentAt: number }>;
+  latency: {
+    pendingProbe(
+      sessionId: string
+    ): { readonly probeId: string; readonly sentAt: number } | undefined;
+  };
 }
 
 describe("SpaceshipDefenderRoom cap traffic", () => {
@@ -85,7 +89,7 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
     const pilot = controllerAt(controllers, 0);
     const gunner = controllerAt(controllers, 1);
     const shield = controllerAt(controllers, 2);
-    const outstanding = runtime.outstandingLatencyProbes.get(pilot.client.sessionId);
+    const outstanding = runtime.latency.pendingProbe(pilot.client.sessionId);
     if (outstanding === undefined) throw new Error("Expected the pilot latency probe.");
 
     for (let sequence = 1; sequence <= 20; sequence += 1) {
