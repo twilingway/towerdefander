@@ -150,6 +150,8 @@ project differs:
 
 ## Conventions
 
+- File layout, module size limits, and where a new variant of behavior belongs are in
+  `docs/CODE_STYLE.md`. Read it before adding a file or a branch to an existing one.
 - Strict TypeScript everywhere; ESLint runs `strictTypeChecked` + `stylisticTypeChecked` with
   `consistent-type-imports`. `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess` are on.
 - Identifiers and code comments in English; product docs, OpenSpec artifacts, and player-facing UI

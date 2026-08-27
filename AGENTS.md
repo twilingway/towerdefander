@@ -8,6 +8,8 @@ computer browsers as pilot, gunner, and shield operator.
 
 ## Working agreements
 
+- Follow `docs/CODE_STYLE.md` for file layout, module size, and adding behavior by extension rather
+  than by editing working code.
 - Use TypeScript with strict type checking. Keep identifiers and code comments in English; product
   documentation and OpenSpec artifacts may be in Russian.
 - Use pnpm workspaces. Do not introduce Turborepo or another task runner unless an accepted OpenSpec
