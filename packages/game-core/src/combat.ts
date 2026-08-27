@@ -19,6 +19,7 @@ import { deriveDomainSeed } from "./rng.ts";
 import { validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 import { createWavePlan } from "./waveDirector.ts";
 import { createTeamUpgradeOffer } from "./upgrades.ts";
+import { UPGRADE_CATALOGUE } from "./upgradeCatalogue.ts";
 import { moveAndSpawnThreats } from "./threats.ts";
 import { scheduleAmbientAsteroid } from "./spawning.ts";
 import {
@@ -76,6 +77,7 @@ export { TEAM_UPGRADE_PRICE } from "./combatConstants.ts";
 export { getEnemyArchetype, validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 export { deriveDomainSeed, nextUint32 } from "./rng.ts";
 export { createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
+export { UPGRADE_CATALOGUE, type UpgradeDefinition } from "./upgradeCatalogue.ts";
 export { createWavePlan, getWaveDifficulty } from "./waveDirector.ts";
 export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./spatialGrid.ts";
 
@@ -224,91 +226,12 @@ function applyUpgrade<TState extends CombatStateFields>(
   waveNumber: number,
   upgradeId: UpgradeId
 ): TState {
-  let spaceshipHp = state.spaceshipHp;
-  let spaceshipMaxHp = state.spaceshipMaxHp;
-  let roleModifiers = state.roleModifiers;
-  switch (upgradeId) {
-    case "pilot_speed":
-      roleModifiers = {
-        ...roleModifiers,
-        pilot: {
-          ...roleModifiers.pilot,
-          speedMultiplier: roleModifiers.pilot.speedMultiplier + 0.1
-        }
-      };
-      break;
-    case "pilot_acceleration":
-      roleModifiers = {
-        ...roleModifiers,
-        pilot: {
-          ...roleModifiers.pilot,
-          accelerationMultiplier: roleModifiers.pilot.accelerationMultiplier + 0.12
-        }
-      };
-      break;
-    case "pilot_hull":
-      spaceshipMaxHp += 25;
-      spaceshipHp = Math.min(spaceshipMaxHp, spaceshipHp + 25);
-      roleModifiers = {
-        ...roleModifiers,
-        pilot: { ...roleModifiers.pilot, maxHpBonus: roleModifiers.pilot.maxHpBonus + 25 }
-      };
-      break;
-    case "gunner_damage":
-      roleModifiers = {
-        ...roleModifiers,
-        gunner: {
-          ...roleModifiers.gunner,
-          damageMultiplier: roleModifiers.gunner.damageMultiplier + 0.15
-        }
-      };
-      break;
-    case "gunner_cooldown":
-      roleModifiers = {
-        ...roleModifiers,
-        gunner: {
-          ...roleModifiers.gunner,
-          cooldownMultiplier: Math.max(0.25, roleModifiers.gunner.cooldownMultiplier * 0.9)
-        }
-      };
-      break;
-    case "gunner_projectile_speed":
-      roleModifiers = {
-        ...roleModifiers,
-        gunner: {
-          ...roleModifiers.gunner,
-          projectileSpeedMultiplier: roleModifiers.gunner.projectileSpeedMultiplier + 0.12
-        }
-      };
-      break;
-    case "shield_capacity":
-      roleModifiers = {
-        ...roleModifiers,
-        shield: { ...roleModifiers.shield, capacityBonus: roleModifiers.shield.capacityBonus + 20 }
-      };
-      break;
-    case "shield_recharge":
-      roleModifiers = {
-        ...roleModifiers,
-        shield: {
-          ...roleModifiers.shield,
-          rechargeMultiplier: roleModifiers.shield.rechargeMultiplier + 0.15
-        }
-      };
-      break;
-    case "shield_arc":
-      roleModifiers = {
-        ...roleModifiers,
-        shield: {
-          ...roleModifiers.shield,
-          arcWidthBonus: roleModifiers.shield.arcWidthBonus + Math.PI / 18
-        }
-      };
-      break;
-  }
+  const { roleModifiers, maxHpBonus } = UPGRADE_CATALOGUE[upgradeId].apply(state.roleModifiers);
+  const spaceshipMaxHp = state.spaceshipMaxHp + maxHpBonus;
   return {
     ...state,
-    spaceshipHp,
+    // A hull upgrade repairs by what it adds; the others leave health alone.
+    spaceshipHp: Math.min(spaceshipMaxHp, state.spaceshipHp + maxHpBonus),
     spaceshipMaxHp,
     roleModifiers,
     credits: state.credits - TEAM_UPGRADE_PRICE,

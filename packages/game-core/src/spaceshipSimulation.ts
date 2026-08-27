@@ -4,14 +4,14 @@ import {
   type EntityVisual,
   type TurretVisual
 } from "./combatTypes.ts";
-import { validateRunSeed } from "./combatValidation.ts";
-import {
-  advanceCombat,
-  assertCombatResultInvariant,
-  createInitialCombatState,
-  dynamicEntityCount
-} from "./combat.ts";
+import { assertCombatResultInvariant, dynamicEntityCount } from "./combat.ts";
 import { advanceClock, type SimulationClock } from "./primitives.ts";
+export { createCleanSpaceshipRun, createSpaceshipSimulationState } from "./simulationState.ts";
+import {
+  advanceCombatInSpaceshipSimulation,
+  neutralizeCombatControls
+} from "./simulationCombatBridge.ts";
+import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 import {
   ZERO,
@@ -21,8 +21,7 @@ import {
   isFresh,
   moveProjectiles,
   moveSpaceshipWithinWorld,
-  moveVectorTowards,
-  removeExpiredProjectiles
+  moveVectorTowards
 } from "./simulationMath.ts";
 import { validateSpaceshipSimulationConfig } from "./simulationValidation.ts";
 
@@ -210,60 +209,6 @@ export function createSpaceshipSimulationConfig(
   return config;
 }
 
-export function createSpaceshipSimulationState(
-  config: SpaceshipSimulationConfig,
-  runSeed: number
-): SpaceshipSimulationState {
-  return createCleanSpaceshipRun(config, runSeed);
-}
-
-export function createCleanSpaceshipRun(
-  config: SpaceshipSimulationConfig,
-  runSeed: number
-): SpaceshipSimulationState {
-  validateSpaceshipSimulationConfig(config);
-  validateRunSeed(runSeed);
-
-  return {
-    ...createInitialCombatState(config, runSeed),
-    clock: { tick: 0, elapsedMs: 0 },
-    spaceship: {
-      x: config.worldWidth / 2,
-      y: config.worldHeight / 2,
-      previousX: config.worldWidth / 2,
-      previousY: config.worldHeight / 2,
-      velocity: { x: 0, y: 0 }
-    },
-    turretAngle: 0,
-    turretTargetAngle: null,
-    turretAngularVelocity: 0,
-    shieldAngle: 0,
-    shieldTargetAngle: null,
-    shieldAngularVelocity: 0,
-    shieldActive: false,
-    shieldEnergy: config.shieldCapacity,
-    shieldRearmRequired: false,
-    spaceshipHeading: 0,
-    headingTargetAngle: null,
-    headingAngularVelocity: 0,
-    cannonHeat: 0,
-    cannonOverheated: false,
-    mgHeat: 0,
-    mgOverheated: false,
-    queuedMgFire: false,
-    lastMgFiredTick: null,
-    inputs: {
-      pilot: null,
-      gunner: null,
-      shield: null
-    },
-    projectiles: [],
-    nextProjectileSequence: 0,
-    lastFiredTick: null,
-    queuedFire: false
-  };
-}
-
 export function normalizeVector(vector: Vector2): Vector2 {
   assertFiniteVector(vector);
   const length = Math.hypot(vector.x, vector.y);
@@ -405,51 +350,40 @@ export function advanceSpaceshipSimulation(
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
     (state.lastFiredTick === null || clock.tick - state.lastFiredTick >= gunnerCooldownTicks);
 
-  let cannonSpawnedThisTick = false;
-  if (gunnerEligible) {
-    if (canCreateFriendlyProjectile(projectiles)) {
-      const direction = { x: Math.cos(turretTraverse.angle), y: Math.sin(turretTraverse.angle) };
-      projectiles.push({
-        id: `projectile-${String(nextProjectileSequence)}`,
-        projectileId: `projectile-${String(nextProjectileSequence)}`,
-        spawnSequence: nextSpawnSequence,
-        previousX: spaceship.x + direction.x * (config.spaceshipRadius + config.projectileRadius),
-        previousY: spaceship.y + direction.y * (config.spaceshipRadius + config.projectileRadius),
-        x: spaceship.x + direction.x * (config.spaceshipRadius + config.projectileRadius),
-        y: spaceship.y + direction.y * (config.spaceshipRadius + config.projectileRadius),
-        velocity: {
-          x:
-            direction.x *
-            config.projectileSpeedPerSecond *
-            state.roleModifiers.gunner.projectileSpeedMultiplier,
-          y:
-            direction.y *
-            config.projectileSpeedPerSecond *
-            state.roleModifiers.gunner.projectileSpeedMultiplier
-        },
-        radius: config.projectileRadius,
-        damage: config.friendlyProjectileDamage * state.roleModifiers.gunner.damageMultiplier,
-        spawnedTick: clock.tick,
-        source: "cannon"
-      });
-      nextProjectileSequence += 1;
-      nextSpawnSequence += 1;
-      cannonHeat = Math.min(config.cannonHeatCapacity, cannonHeat + config.cannonHeatPerShot);
-      cannonSpawnedThisTick = true;
+  const cannonShot = advanceFriendlyWeapon({
+    eligible: gunnerEligible,
+    canSpawn: canCreateFriendlyProjectile(projectiles),
+    origin: spaceship,
+    angle: turretTraverse.angle,
+    muzzleOffset: config.spaceshipRadius + config.projectileRadius,
+    speed: config.projectileSpeedPerSecond * state.roleModifiers.gunner.projectileSpeedMultiplier,
+    damage: config.friendlyProjectileDamage * state.roleModifiers.gunner.damageMultiplier,
+    radius: config.projectileRadius,
+    source: "cannon",
+    projectileSequence: nextProjectileSequence,
+    spawnSequence: nextSpawnSequence,
+    tick: clock.tick,
+    secondsPerStep,
+    heat: cannonHeat,
+    overheated: state.cannonOverheated,
+    heatTuning: {
+      capacity: config.cannonHeatCapacity,
+      perShot: config.cannonHeatPerShot,
+      coolingPerSecond: config.cannonCoolingPerSecond,
+      rearmThreshold: config.cannonRearmThreshold
     }
+  });
+  if (cannonShot.projectile !== null) {
+    projectiles.push(cannonShot.projectile);
+    nextProjectileSequence += 1;
+    nextSpawnSequence += 1;
+  }
+  if (cannonShot.triggered) {
     lastFiredTick = clock.tick;
     queuedFire = false;
   }
-
-  if (!cannonSpawnedThisTick) {
-    cannonHeat = Math.max(0, cannonHeat - config.cannonCoolingPerSecond * secondsPerStep);
-  }
-  let cannonOverheated = state.cannonOverheated;
-  if (!cannonOverheated && cannonHeat >= config.cannonHeatCapacity) {
-    cannonOverheated = true;
-  } else if (cannonOverheated && cannonHeat <= config.cannonRearmThreshold) {
-    cannonOverheated = false;
-  }
+  cannonHeat = cannonShot.heat;
+  const cannonOverheated = cannonShot.overheated;
 
   const mgCooldownTicks = Math.max(1, config.mgFireCooldownTicks);
   const mgEligible =
@@ -457,46 +391,40 @@ export function advanceSpaceshipSimulation(
     (state.queuedMgFire || (pilotFresh && state.inputs.pilot?.mgFiring === true)) &&
     (state.lastMgFiredTick === null || clock.tick - state.lastMgFiredTick >= mgCooldownTicks);
 
-  let mgSpawnedThisTick = false;
-  if (mgEligible) {
-    if (canCreateFriendlyProjectile(projectiles)) {
-      const direction = { x: Math.cos(headingTraverse.angle), y: Math.sin(headingTraverse.angle) };
-      const noseOffset = config.spaceshipRadius + config.mgProjectileRadius;
-      projectiles.push({
-        id: `projectile-${String(nextProjectileSequence)}`,
-        projectileId: `projectile-${String(nextProjectileSequence)}`,
-        spawnSequence: nextSpawnSequence,
-        previousX: spaceship.x + direction.x * noseOffset,
-        previousY: spaceship.y + direction.y * noseOffset,
-        x: spaceship.x + direction.x * noseOffset,
-        y: spaceship.y + direction.y * noseOffset,
-        velocity: {
-          x: direction.x * config.mgProjectileSpeedPerSecond,
-          y: direction.y * config.mgProjectileSpeedPerSecond
-        },
-        radius: config.mgProjectileRadius,
-        damage: config.mgDamage,
-        spawnedTick: clock.tick,
-        source: "machineGun"
-      });
-      nextProjectileSequence += 1;
-      nextSpawnSequence += 1;
-      mgHeat = Math.min(config.mgHeatCapacity, mgHeat + config.mgHeatPerShot);
-      mgSpawnedThisTick = true;
+  const mgShot = advanceFriendlyWeapon({
+    eligible: mgEligible,
+    canSpawn: canCreateFriendlyProjectile(projectiles),
+    origin: spaceship,
+    angle: headingTraverse.angle,
+    muzzleOffset: config.spaceshipRadius + config.mgProjectileRadius,
+    speed: config.mgProjectileSpeedPerSecond,
+    damage: config.mgDamage,
+    radius: config.mgProjectileRadius,
+    source: "machineGun",
+    projectileSequence: nextProjectileSequence,
+    spawnSequence: nextSpawnSequence,
+    tick: clock.tick,
+    secondsPerStep,
+    heat: mgHeat,
+    overheated: state.mgOverheated,
+    heatTuning: {
+      capacity: config.mgHeatCapacity,
+      perShot: config.mgHeatPerShot,
+      coolingPerSecond: config.mgCoolingPerSecond,
+      rearmThreshold: config.mgRearmThreshold
     }
+  });
+  if (mgShot.projectile !== null) {
+    projectiles.push(mgShot.projectile);
+    nextProjectileSequence += 1;
+    nextSpawnSequence += 1;
+  }
+  if (mgShot.triggered) {
     lastMgFiredTick = clock.tick;
     queuedMgFire = false;
   }
-
-  if (!mgSpawnedThisTick) {
-    mgHeat = Math.max(0, mgHeat - config.mgCoolingPerSecond * secondsPerStep);
-  }
-  let mgOverheated = state.mgOverheated;
-  if (!mgOverheated && mgHeat >= config.mgHeatCapacity) {
-    mgOverheated = true;
-  } else if (mgOverheated && mgHeat <= config.mgRearmThreshold) {
-    mgOverheated = false;
-  }
+  mgHeat = mgShot.heat;
+  const mgOverheated = mgShot.overheated;
 
   const baseState: SpaceshipSimulationState = {
     ...state,
@@ -528,105 +456,4 @@ export function advanceSpaceshipSimulation(
     lastMgFiredTick
   };
   return advanceCombatInSpaceshipSimulation(baseState, config);
-}
-
-function advanceCombatInSpaceshipSimulation(
-  state: SpaceshipSimulationState,
-  config: SpaceshipSimulationConfig
-): SpaceshipSimulationState {
-  if (state.encounterPhase === "intermission") {
-    const neutral = neutralizeCombatControls(state);
-    const secondsPerStep = config.fixedStepMs / 1000;
-    const cannonHeat = Math.max(
-      0,
-      neutral.cannonHeat - config.cannonCoolingPerSecond * secondsPerStep
-    );
-    let cannonOverheated = neutral.cannonOverheated;
-    if (!cannonOverheated && cannonHeat >= config.cannonHeatCapacity) {
-      cannonOverheated = true;
-    } else if (cannonOverheated && cannonHeat <= config.cannonRearmThreshold) {
-      cannonOverheated = false;
-    }
-    const mgHeat = Math.max(0, neutral.mgHeat - config.mgCoolingPerSecond * secondsPerStep);
-    let mgOverheated = neutral.mgOverheated;
-    if (!mgOverheated && mgHeat >= config.mgHeatCapacity) {
-      mgOverheated = true;
-    } else if (mgOverheated && mgHeat <= config.mgRearmThreshold) {
-      mgOverheated = false;
-    }
-    const recharged = {
-      ...neutral,
-      shieldEnergy: clamp(
-        neutral.shieldEnergy +
-          config.shieldRechargePerSecond *
-            neutral.roleModifiers.shield.rechargeMultiplier *
-            (config.fixedStepMs / 1000),
-        0,
-        config.shieldCapacity + neutral.roleModifiers.shield.capacityBonus
-      ),
-      cannonHeat,
-      cannonOverheated,
-      mgHeat,
-      mgOverheated
-    };
-    const result = advanceCombat(rechargedForCombat(recharged, config), config);
-    return {
-      ...recharged,
-      ...result,
-      projectiles: removeExpiredProjectiles(
-        result.projectiles as readonly ProjectileState[],
-        recharged.clock.tick,
-        config
-      )
-    };
-  }
-  const result = advanceCombat(rechargedForCombat(state, config), config);
-  const next: SpaceshipSimulationState = {
-    ...state,
-    ...result,
-    projectiles: removeExpiredProjectiles(
-      result.projectiles as readonly ProjectileState[],
-      state.clock.tick,
-      config
-    )
-  };
-  return result.encounterPhase === "intermission" ? neutralizeCombatControls(next) : next;
-}
-
-function rechargedForCombat(state: SpaceshipSimulationState, config: SpaceshipSimulationConfig) {
-  return {
-    ...state,
-    spaceship: {
-      ...state.spaceship,
-      previousX: state.spaceship.previousX ?? state.spaceship.x,
-      previousY: state.spaceship.previousY ?? state.spaceship.y,
-      radius: config.spaceshipRadius
-    }
-  };
-}
-
-function neutralizeCombatControls(state: SpaceshipSimulationState): SpaceshipSimulationState {
-  return {
-    ...state,
-    turretTargetAngle: null,
-    shieldTargetAngle: null,
-    headingTargetAngle: null,
-    shieldActive: false,
-    queuedFire: false,
-    queuedMgFire: false,
-    inputs: {
-      pilot:
-        state.inputs.pilot === null
-          ? null
-          : { ...state.inputs.pilot, vector: { x: 0, y: 0 }, mgFiring: false },
-      gunner:
-        state.inputs.gunner === null
-          ? null
-          : { ...state.inputs.gunner, vector: { x: 0, y: 0 }, firing: false },
-      shield:
-        state.inputs.shield === null
-          ? null
-          : { ...state.inputs.shield, vector: { x: 0, y: 0 }, active: false }
-    }
-  };
 }

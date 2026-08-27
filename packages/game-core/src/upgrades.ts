@@ -1,6 +1,5 @@
 import {
   type CombatStateFields,
-  type GameplayRole,
   type TeamUpgradeOffer,
   type UpgradeCard,
   type UpgradeVoteCommand,
@@ -8,6 +7,7 @@ import {
 } from "./combatTypes.ts";
 import { OFFER_DOMAIN, ROLES, TEAM_UPGRADE_PRICE } from "./combatConstants.ts";
 import { deriveDomainSeed, nextUint32 } from "./rng.ts";
+import { UPGRADE_CATALOGUE, UPGRADE_IDS_BY_ROLE } from "./upgradeCatalogue.ts";
 
 export function createTeamUpgradeOffer(
   runSeed: number,
@@ -17,26 +17,13 @@ export function createTeamUpgradeOffer(
   readonly rngState: number;
 } {
   let rngState = deriveDomainSeed(runSeed, waveNumber, OFFER_DOMAIN);
-  const pools: Readonly<Record<GameplayRole, readonly Omit<UpgradeCard, "role" | "price">[]>> = {
-    pilot: [
-      { upgradeId: "pilot_speed", label: "Maximum speed +10%", value: 0.1 },
-      { upgradeId: "pilot_acceleration", label: "Acceleration +12%", value: 0.12 },
-      { upgradeId: "pilot_hull", label: "Hull +25 and repair 25", value: 25 }
-    ],
-    gunner: [
-      { upgradeId: "gunner_damage", label: "Damage +15%", value: 0.15 },
-      { upgradeId: "gunner_cooldown", label: "Cooldown -10%", value: 0.1 },
-      { upgradeId: "gunner_projectile_speed", label: "Projectile speed +12%", value: 0.12 }
-    ],
-    shield: [
-      { upgradeId: "shield_capacity", label: "Capacity +20", value: 20 },
-      { upgradeId: "shield_recharge", label: "Recharge +15%", value: 0.15 },
-      { upgradeId: "shield_arc", label: "Arc width +10 degrees", value: Math.PI / 18 }
-    ]
-  };
   const cards: UpgradeCard[] = [];
   for (const role of ROLES) {
-    const roleCards = [...pools[role]];
+    const roleCards = UPGRADE_IDS_BY_ROLE[role].map((upgradeId) => ({
+      upgradeId,
+      label: UPGRADE_CATALOGUE[upgradeId].label,
+      value: UPGRADE_CATALOGUE[upgradeId].value
+    }));
     for (let index = roleCards.length - 1; index > 0; index -= 1) {
       const [next, random] = nextUint32(rngState);
       rngState = next;
