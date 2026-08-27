@@ -12,7 +12,8 @@ import {
   drawEnemyBody,
   drawEnemyHealthBar,
   drawSpaceshipHull,
-  resolveEnemyVisual
+  resolveEnemyVisual,
+  turretMountPoint
 } from "./SpaceshipRuntime.js";
 
 interface FillRectCall {
@@ -267,3 +268,29 @@ vi.mock("phaser", () => ({
     Scale: { NONE: 0, CENTER_BOTH: 0 }
   }
 }));
+
+describe("turretMountPoint", () => {
+  const ship = { x: 1000, y: 500, radius: 50 };
+
+  it("keeps a centreline weapon on the ship", () => {
+    expect(turretMountPoint(ship, 0, null)).toEqual({ x: 1000, y: 500 });
+    expect(turretMountPoint(ship, 1.2, { mountX: 0, mountY: 0 })).toEqual({ x: 1000, y: 500 });
+  });
+
+  it("measures the mount in hull radii from the centre", () => {
+    const mounted = turretMountPoint(ship, 0, { mountX: 1, mountY: -0.5 });
+    expect(mounted.x).toBeCloseTo(1050);
+    expect(mounted.y).toBeCloseTo(475);
+  });
+
+  it("turns the mount with the hull, so a wing gun stays on its wing", () => {
+    // Half a turn puts the same hardpoint on the opposite side of the world,
+    // which is the whole point: the mount belongs to the hull, not the world.
+    const nosed = turretMountPoint(ship, 0, { mountX: 0, mountY: -1 });
+    const reversed = turretMountPoint(ship, Math.PI, { mountX: 0, mountY: -1 });
+
+    expect(nosed.y).toBeCloseTo(450);
+    expect(reversed.y).toBeCloseTo(550);
+    expect(reversed.x).toBeCloseTo(1000);
+  });
+});

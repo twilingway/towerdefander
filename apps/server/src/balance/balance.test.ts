@@ -620,7 +620,14 @@ describe("version 1 migration", () => {
           name: "Operator",
           tuning: {
             ...defaults,
-            turretVisual: { shape: "weapon-gatling", modelScale: 1.4, pivotX: 0, pivotY: -0.3 },
+            turretVisual: {
+              shape: "weapon-gatling",
+              modelScale: 1.4,
+              mountX: 0.4,
+              mountY: 0,
+              pivotX: 0,
+              pivotY: -0.3
+            },
             projectileVisual: { shape: "missile-torpedo", modelScale: 0.8 },
             mgProjectileVisual: { shape: "missile-needle", modelScale: 0.5 }
           }
@@ -636,6 +643,8 @@ describe("version 1 migration", () => {
     const config = store.getActiveSimulationConfig();
     expect(config.turretVisual?.shape).toBe("weapon-gatling");
     expect(config.turretVisual?.pivotY).toBe(-0.3);
+    // The mount is a separate offset: it says where on the hull the gun sits.
+    expect(config.turretVisual?.mountX).toBe(0.4);
     // The two barrels keep separate looks, which is the point: a burst has to
     // read as two weapons rather than one.
     expect(config.projectileVisual?.shape).toBe("missile-torpedo");
@@ -701,6 +710,9 @@ describe("version 1 migration", () => {
     expect(turret?.modelScale).toBe(1.4);
     expect(turret?.pivotX).toBe(0);
     expect(turret?.pivotY).toBe(0);
+    // Same for the mount, which arrived at the same time.
+    expect(turret?.mountX).toBe(0);
+    expect(turret?.mountY).toBe(0);
   });
 
   it("keeps a campaign when a saved profile predates a new profile knob", async () => {

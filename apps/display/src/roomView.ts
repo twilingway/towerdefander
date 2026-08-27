@@ -161,6 +161,8 @@ interface NetworkGameState {
     spaceshipVisualScale?: number;
     turretVisualShape?: string;
     turretVisualScale?: number;
+    turretMountX?: number;
+    turretMountY?: number;
     turretPivotX?: number;
     turretPivotY?: number;
     shieldRadius?: number;
@@ -296,6 +298,8 @@ export function toDisplayRoomView(
                 : {
                     shape: display.turretVisualShape,
                     modelScale: display.turretVisualScale ?? 1,
+                    mountX: display.turretMountX ?? 0,
+                    mountY: display.turretMountY ?? 0,
                     pivotX: display.turretPivotX ?? 0,
                     pivotY: display.turretPivotY ?? 0
                   },

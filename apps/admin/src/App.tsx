@@ -1560,6 +1560,8 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
                       : {
                           shape,
                           modelScale: tuning.turretVisual?.modelScale ?? 1,
+                          mountX: tuning.turretVisual?.mountX ?? 0,
+                          mountY: tuning.turretVisual?.mountY ?? 0,
                           pivotX: tuning.turretVisual?.pivotX ?? 0,
                           pivotY: tuning.turretVisual?.pivotY ?? 0
                         }
@@ -1576,6 +1578,28 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
                   const current = tuning.turretVisual;
                   if (current === null) return;
                   patch({ turretVisual: { ...current, modelScale } });
+                }}
+              />
+              <NumberField
+                caption="Крепление X"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.turretVisual?.mountX ?? 0}
+                onChange={(mountX) => {
+                  const current = tuning.turretVisual;
+                  if (current === null) return;
+                  patch({ turretVisual: { ...current, mountX } });
+                }}
+              />
+              <NumberField
+                caption="Крепление Y"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.turretVisual?.mountY ?? 0}
+                onChange={(mountY) => {
+                  const current = tuning.turretVisual;
+                  if (current === null) return;
+                  patch({ turretVisual: { ...current, mountY } });
                 }}
               />
               <NumberField
@@ -1602,10 +1626,11 @@ function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
               />
             </div>
             <p className="screen__hint">
-              Рисуется поверх корпуса и поворачивается вместе с орудием. Ассеты нарисованы вокруг
-              своего начала координат, а оно редко совпадает с креплением — смещение двигает
-              картинку в долях радиуса корпуса, пока крепление не сядет на центр корабля. Проверяйте
-              по превью.
+              Два разных сдвига, оба в долях радиуса корпуса. Крепление — где оружие стоит на
+              корабле: оно едет вместе с корпусом, поэтому пушку можно вынести на крыло. Смещение
+              подгоняет сам рисунок вокруг этого крепления: ассеты нарисованы вокруг своего начала
+              координат, а оно редко совпадает с казёнником. Ноль у обоих — как было раньше, по
+              центру. В превью точка показывает крепление.
             </p>
             <AssetPicker
               label="Снаряд пушки"

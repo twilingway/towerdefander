@@ -7,9 +7,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 14 as const;
+export const BALANCE_FILE_VERSION = 15 as const;
 /** File versions the store still knows how to migrate forward. */
-export const LEGACY_BALANCE_FILE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] as const;
+export const LEGACY_BALANCE_FILE_VERSIONS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
@@ -70,11 +72,18 @@ export const entityVisualSchema = z
 export type EntityVisual = z.infer<typeof entityVisualSchema>;
 
 /**
- * The gun on the hull, with a nudge for where it turns about. Catalogue assets
- * are drawn around their own origin, which is rarely the mount: the railgun's
- * breech sits well off it, so without this the gun swings around a point beside
- * itself. Measured in hull radii, positive x right and positive y down, and it
- * moves the picture — slide it until the mount sits on the ship's centre.
+ * The gun on the hull. Two offsets, both in hull radii with positive x right
+ * and positive y down, answering different questions.
+ *
+ * The mount is where on the ship the weapon is bolted, measured from the
+ * centre. It belongs to the hull, so it turns with the hull and stays on the
+ * wing it was put on. Zero keeps the weapon on the centreline, which is where
+ * everything sat before this existed.
+ *
+ * The pivot then nudges the drawing about that mount. Catalogue assets are
+ * drawn around their own origin, which is rarely the breech — the railgun's
+ * sits well off it — so without this the gun swings around a point beside
+ * itself. It belongs to the weapon, so it turns with the weapon.
  */
 export const PIVOT_LIMIT = 2;
 const pivotOffset = z.number().min(-PIVOT_LIMIT).max(PIVOT_LIMIT);
@@ -82,6 +91,8 @@ export const turretVisualSchema = z
   .object({
     shape: visualAssetIdSchema,
     modelScale: modelScaleSchema,
+    mountX: pivotOffset,
+    mountY: pivotOffset,
     pivotX: pivotOffset,
     pivotY: pivotOffset
   })

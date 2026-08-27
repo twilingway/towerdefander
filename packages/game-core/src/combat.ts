@@ -104,7 +104,15 @@ export type EnemySpawnPolicy = "standard" | "boss";
  */
 /** The hull gun, which also records where it turns about. */
 export type TurretVisual =
-  (EntityVisual & { readonly pivotX: number; readonly pivotY: number }) | null;
+  | (EntityVisual & {
+      /** Where on the hull it is bolted, from the centre; turns with the hull. */
+      readonly mountX: number;
+      readonly mountY: number;
+      /** Nudge of the drawing about that mount; turns with the weapon. */
+      readonly pivotX: number;
+      readonly pivotY: number;
+    })
+  | null;
 
 export interface EntityVisual {
   readonly shape: string;

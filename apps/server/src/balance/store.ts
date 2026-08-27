@@ -274,7 +274,7 @@ const PLAYER_SHIP_FIELDS = [
  */
 function migrateTurretVisual(saved: unknown): unknown {
   if (!isRecord(saved)) return saved ?? null;
-  return { pivotX: 0, pivotY: 0, ...saved };
+  return { mountX: 0, mountY: 0, pivotX: 0, pivotY: 0, ...saved };
 }
 
 function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {

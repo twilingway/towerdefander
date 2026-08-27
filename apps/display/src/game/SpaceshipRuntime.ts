@@ -138,7 +138,12 @@ class SpaceshipScene extends Phaser.Scene {
         .setPosition(spaceshipPosition.x, spaceshipPosition.y)
         .setRotation(spaceshipHeading);
     }
-    this.turret.setPosition(spaceshipPosition.x, spaceshipPosition.y);
+    const mount = turretMountPoint(
+      { ...spaceshipPosition, radius: this.snapshot.spaceship.radius },
+      spaceshipHeading,
+      this.snapshot.turretVisual
+    );
+    this.turret.setPosition(mount.x, mount.y);
     this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
     this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
     this.drawShield();
@@ -284,7 +289,12 @@ class SpaceshipScene extends Phaser.Scene {
         .setPosition(snapshot.spaceship.x, snapshot.spaceship.y)
         .setRotation(snapshot.spaceship.heading);
     }
-    this.turret.setPosition(snapshot.spaceship.x, snapshot.spaceship.y);
+    const snappedMount = turretMountPoint(
+      snapshot.spaceship,
+      snapshot.spaceship.heading,
+      snapshot.turretVisual
+    );
+    this.turret.setPosition(snappedMount.x, snappedMount.y);
     this.turret.setRotation(snapshot.turretAngle);
     this.visualShieldAngle = snapshot.shield.angle;
     const transitions = createSnappedVisualTransitions(snapshot, now);
@@ -510,6 +520,27 @@ type TurretObject = Phaser.GameObjects.Components.Transform &
  * asset is drawn centred on the ship, since that is where the mount is; without
  * one the old bar keeps its off-centre pivot so it still reads as a barrel.
  */
+/**
+ * Where the weapon is bolted, in world space. The mount is written in the
+ * hull's frame, so it has to turn with the hull: a gun put on the left wing
+ * stays on the left wing however the ship is pointing.
+ */
+export function turretMountPoint(
+  ship: { readonly x: number; readonly y: number; readonly radius: number },
+  heading: number,
+  visual: { readonly mountX: number; readonly mountY: number } | null
+): { x: number; y: number } {
+  if (visual === null) return { x: ship.x, y: ship.y };
+  const offsetX = visual.mountX * ship.radius;
+  const offsetY = visual.mountY * ship.radius;
+  const cos = Math.cos(heading);
+  const sin = Math.sin(heading);
+  return {
+    x: ship.x + offsetX * cos - offsetY * sin,
+    y: ship.y + offsetX * sin + offsetY * cos
+  };
+}
+
 function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): TurretObject {
   const visual = snapshot.turretVisual;
   if (visual === null) {
@@ -529,8 +560,9 @@ function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): Turre
     visual.pivotX * snapshot.spaceship.radius,
     visual.pivotY * snapshot.spaceship.radius
   );
+  const mount = turretMountPoint(snapshot.spaceship, snapshot.spaceship.heading, visual);
   return scene.add
-    .container(snapshot.spaceship.x, snapshot.spaceship.y, [gun])
+    .container(mount.x, mount.y, [gun])
     .setDepth(12)
     .setRotation(snapshot.turretAngle);
 }
