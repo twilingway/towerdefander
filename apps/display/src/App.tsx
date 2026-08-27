@@ -3,7 +3,6 @@ import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
-  CREW_ROLES,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
   ROOM_TYPE,
@@ -11,9 +10,7 @@ import {
   roomClosingSchema,
   serverLatencyProbeSchema,
   serverMessage,
-  type CrewRole,
-  type DisplayRoomView,
-  type EncounterPhase
+  type DisplayRoomView
 } from "@spaceship-defender/protocol";
 import {
   createDefaultGameServerUrl,
@@ -25,10 +22,13 @@ import {
   roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
-import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CombatRadar } from "./CombatRadar.js";
+import { CrewLatency } from "./components/CrewLatency/index.js";
+import { LobbyLayout } from "./components/LobbyLayout/index.js";
+import { encounterLabel } from "./model/labels.js";
+import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
@@ -191,29 +191,12 @@ export function DisplayApp() {
 
   if ((activeStatus !== "connected" && activeStatus !== "reconnecting") || view === undefined) {
     return (
-      <main className="display-shell display-shell--centered">
-        <section className="hero-card">
-          <p className="eyebrow">Общий экран</p>
-          <h1>SpaceShip Defender</h1>
-          <p>Три игрока управляют одним космическим кораблём: движение, орудия и щит.</p>
-          {error.length > 0 && <p className="error-message">{error}</p>}
-          <button
-            type="button"
-            onClick={() => void createRoom()}
-            disabled={status === "connecting"}
-          >
-            {status === "connecting" ? "Создаём комнату…" : "Создать комнату"}
-          </button>
-        </section>
-        {visibleDemo ? (
-          <VisibleDemoOverlay
-            connectionStatus={status}
-            phase="lobby"
-            waveNumber={undefined}
-            snapshotTick={undefined}
-          />
-        ) : null}
-      </main>
+      <CreateRoomScreen
+        status={status}
+        error={error}
+        visibleDemo={visibleDemo}
+        onCreate={() => void createRoom()}
+      />
     );
   }
 
@@ -260,43 +243,7 @@ export function DisplayApp() {
       </header>
       {error.length > 0 && <p className="error-message">{error}</p>}
 
-      <section className={`lobby-layout ${view.game === null ? "" : "lobby-layout--battle"}`}>
-        <div className="join-card">
-          <QRCodeSVG value={joinUrl} size={180} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
-          <div>
-            <h2>Подключите три контроллера</h2>
-            <p>Первый игрок — pilot, второй — gunner, третий — shield.</p>
-            <a href={joinUrl}>{joinUrl}</a>
-          </div>
-        </div>
-        <div className="players-card">
-          <h2>Экипаж · {view.players.length}/3</h2>
-          <div className="player-list">
-            {CREW_ROLES.map((role) => {
-              const player = view.players.find((candidate) => candidate.role === role);
-              return (
-                <div
-                  className={`player-slot ${player === undefined ? "player-slot--empty" : ""}`}
-                  key={role}
-                >
-                  <span>
-                    <strong>{roleLabel(role)}</strong>
-                    <small>{player?.playerName ?? "ожидаем игрока…"}</small>
-                    <small>
-                      Пинг {formatLatency(player?.connected === true ? player.latencyMs : null)}
-                    </small>
-                  </span>
-                  <span className={player?.ready === true ? "ready" : "waiting"}>
-                    {player === undefined
-                      ? "свободно"
-                      : `${player.connected ? "в сети" : "переподключается"} · ${player.ready ? "готов" : "не готов"}`}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+      <LobbyLayout view={view} joinUrl={joinUrl} />
 
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
@@ -389,26 +336,7 @@ export function DisplayApp() {
               onClose={() => void handleCloseRoom()}
             />
           )}
-          <aside className="crew-latency-overlay" aria-label="Пинг участников до сервера">
-            <strong>Пинг до сервера</strong>
-            <span className="latency-row">
-              Экран → сервер {formatLatency(view.displayLatencyMs)}
-            </span>
-            {CREW_ROLES.map((role) => {
-              const player = view.players.find((candidate) => candidate.role === role);
-              return (
-                <span className="latency-row" key={role}>
-                  {latencyRoleLabel(role)}{" "}
-                  {formatLatency(player?.connected === true ? player.latencyMs : null)}
-                </span>
-              );
-            })}
-            <span>
-              Модификаторы: P ×{view.game.roleModifiers.pilot.speedMultiplier.toFixed(2)} · G ×
-              {view.game.roleModifiers.gunner.damageMultiplier.toFixed(2)} · S +
-              {Math.round(view.game.roleModifiers.shield.capacityBonus)}
-            </span>
-          </aside>
+          <CrewLatency view={view} game={view.game} />
         </section>
       )}
       {visibleDemo ? (
@@ -457,15 +385,6 @@ export function PreviewControls({
   );
 }
 
-function encounterLabel(phase: EncounterPhase): string {
-  return phase === "combat" ? "бой" : phase === "intermission" ? "передышка" : "результат";
-}
-
-function latencyRoleLabel(role: CrewRole): string {
-  return role === "shield" ? "Щит" : roleLabel(role);
-}
-
-/** The server refuses a create by throwing a coded error; these two are expected in play. */
 function createFailureMessage(reason: unknown): string {
   if (!(reason instanceof Error)) return "Не удалось создать комнату.";
   if (reason.message === ROOM_REFUSED_AT_CAPACITY) {
