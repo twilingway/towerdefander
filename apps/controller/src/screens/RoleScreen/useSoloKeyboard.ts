@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 
 import {
   SOLO_CANNON_FIRE_KEY,
+  SOLO_HELM_KEYS,
   SOLO_KEYS,
   SOLO_MG_FIRE_KEY,
-  SOLO_THROTTLE_KEY,
   advanceHeadingDrive,
   getTurretKeyboardVector
 } from "../../soloKeyboard.js";
@@ -47,9 +47,10 @@ export function useSoloKeyboard({
       if (!SOLO_KEYS.includes(event.code)) return;
       event.preventDefault();
       if (event.repeat) return;
-      // The hull answers the nose, so a burn always starts along it instead of
-      // resuming a course the player can no longer see.
-      if (event.code === SOLO_THROTTLE_KEY && !keys.has(SOLO_THROTTLE_KEY)) {
+      // The first helm key after a pause picks the course up from the nose, so
+      // the hull never snaps back to a bearing the player has since left with
+      // the stick.
+      if (SOLO_HELM_KEYS.includes(event.code) && !SOLO_HELM_KEYS.some((key) => keys.has(key))) {
         headingReference.current = authoritativeHeadingReference.current;
       }
       keys.add(event.code);

@@ -5,6 +5,7 @@ import {
   SOLO_THROTTLE_KEY,
   SOLO_TURN_LEFT_KEY,
   SOLO_TURN_RIGHT_KEY,
+  SOLO_ROTATE_IN_PLACE_THROTTLE,
   SOLO_TURN_RATE_RADIANS_PER_SECOND,
   advanceHeadingDrive,
   getTurretKeyboardVector
@@ -24,19 +25,34 @@ describe("solo keyboard drive", () => {
     expect(left.heading).toBeLessThan(0);
   });
 
-  it("refuses to turn without throttle and keeps the course", () => {
-    const drive = advanceHeadingDrive(1.2, new Set([SOLO_TURN_RIGHT_KEY]), 0.5);
+  it("spins the hull without the engine on a token amount of thrust", () => {
+    const drive = advanceHeadingDrive(0, new Set([SOLO_TURN_RIGHT_KEY]), 0.5);
 
-    expect(drive.heading).toBe(1.2);
-    expect(drive.vector).toEqual({ x: 0, y: 0 });
+    expect(drive.heading).toBeCloseTo(SOLO_TURN_RATE_RADIANS_PER_SECOND * 0.5, 10);
+    const thrust = Math.hypot(drive.vector.x, drive.vector.y);
+    expect(thrust).toBeCloseTo(SOLO_ROTATE_IN_PLACE_THROTTLE, 10);
+    // The nudge must stay non-zero: the core reads the course from the vector
+    // direction and ignores a strictly zero one.
+    expect(thrust).toBeGreaterThan(0);
+    expect(Math.atan2(drive.vector.y, drive.vector.x)).toBeCloseTo(drive.heading, 10);
   });
 
-  it("brakes on the brake key even with the throttle down", () => {
+  it("keeps turning while the brake is held", () => {
     const drive = advanceHeadingDrive(
       1.2,
       new Set([SOLO_THROTTLE_KEY, SOLO_BRAKE_KEY, SOLO_TURN_RIGHT_KEY]),
       0.5
     );
+
+    expect(drive.heading).toBeGreaterThan(1.2);
+    expect(Math.hypot(drive.vector.x, drive.vector.y)).toBeCloseTo(
+      SOLO_ROTATE_IN_PLACE_THROTTLE,
+      10
+    );
+  });
+
+  it("stands still with no helm key at all", () => {
+    const drive = advanceHeadingDrive(1.2, new Set(["ArrowRight"]), 0.5);
 
     expect(drive.heading).toBe(1.2);
     expect(drive.vector).toEqual({ x: 0, y: 0 });
