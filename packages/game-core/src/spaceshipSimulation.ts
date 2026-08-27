@@ -18,6 +18,20 @@ export interface Vector2 {
   readonly y: number;
 }
 
+/** One of the four nebula textures the display ships with. */
+export type NebulaPreset = "blue" | "gold" | "purple" | "green";
+
+/** Parallax space background; presentation only, like `cameraViewWidth`. */
+export interface BackgroundTuning {
+  /** Multiplier of the camera-driven layer shift; zero keeps only the idle drift. */
+  readonly parallaxStrength: number;
+  /** Idle drift speed in texture pixels per second at full strength. */
+  readonly driftSpeed: number;
+  /** Opacity of both nebula layers; stars and dust keep their own fixed alpha. */
+  readonly nebulaAlpha: number;
+  readonly nebulaPreset: NebulaPreset;
+}
+
 export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly fixedStepMs: number;
   readonly worldWidth: number;
@@ -28,6 +42,11 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    * preset the way enemy visuals do.
    */
   readonly cameraViewWidth: number;
+  /**
+   * Presentation only, like `cameraViewWidth`: the parallax space background the
+   * display draws under the arena. The simulation never reads it.
+   */
+  readonly background: BackgroundTuning;
   /**
    * Presentation only, like `cameraViewWidth`: the silhouette the display draws
    * for the player hull. The simulation never reads it.
@@ -156,6 +175,7 @@ const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   worldWidth: 4400,
   worldHeight: 4400,
   cameraViewWidth: 2200,
+  background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   spaceshipVisual: null,
   arenaRadius: 2200,
   spaceshipSpeedPerSecond: 320,

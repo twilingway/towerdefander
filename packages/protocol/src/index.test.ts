@@ -135,6 +135,12 @@ function displayRoom(): DisplayRoomView {
     game: {
       ...controller.game,
       cameraViewWidth: 1600,
+      background: {
+        parallaxStrength: 1,
+        driftSpeed: 1,
+        nebulaAlpha: 0.72,
+        nebulaPreset: "blue"
+      },
       enemyCatalogue: [],
       asteroidVisual: null,
       spaceshipVisual: null,
@@ -243,48 +249,48 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v24 handshake and messages", () => {
-  it("publishes the fixed crew and v24", () => {
-    expect(PROTOCOL_VERSION).toBe(24);
+describe("protocol v25 handshake and messages", () => {
+  it("publishes the fixed crew and v25", () => {
+    expect(PROTOCOL_VERSION).toBe(25);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v24 create/join and rejects v23 and unknown fields", () => {
+  it("accepts v25 create/join and rejects v24 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 24 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 25 }).success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 23 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 24 }).success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 24,
+        protocolVersion: 25,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 23,
+        protocolVersion: 24,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 24,
+        protocolVersion: 25,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v24 and the active run", () => {
+  it("keeps continuous role messages strict on v25 and the active run", () => {
     const envelope = {
-      protocolVersion: 24,
+      protocolVersion: 25,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -360,7 +366,7 @@ describe("protocol v24 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 23,
+        protocolVersion: 24,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -370,9 +376,9 @@ describe("protocol v24 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v24 pilot input", () => {
+  it("requires the machine gun trigger on v25 pilot input", () => {
     const envelope = {
-      protocolVersion: 24,
+      protocolVersion: 25,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -388,11 +394,11 @@ describe("protocol v24 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 24, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 25, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 23, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 24, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -435,7 +441,7 @@ describe("protocol v24 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 24,
+    protocolVersion: 25,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -524,7 +530,7 @@ describe("shared team upgrade projection", () => {
   });
 });
 
-describe("strict v24 room projections", () => {
+describe("strict v25 room projections", () => {
   it("accepts valid combat display and compact controller views", () => {
     expect(controllerRoomViewSchema.safeParse(controllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(displayRoom()).success).toBe(true);
@@ -866,21 +872,21 @@ describe("strict v24 room projections", () => {
   });
 });
 
-describe("v24 latency diagnostics", () => {
+describe("v25 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 24, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 25, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 24,
+        protocolVersion: 25,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 24,
+        protocolVersion: 25,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -888,13 +894,13 @@ describe("v24 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 23,
+        protocolVersion: 24,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 23, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 24, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

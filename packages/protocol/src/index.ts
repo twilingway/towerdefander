@@ -8,13 +8,14 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 import {
+  backgroundTuningSchema,
   cameraViewWidthSchema,
   entityVisualSchema,
   turretVisualSchema,
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 24 as const;
+export const PROTOCOL_VERSION = 25 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
@@ -581,6 +582,8 @@ export const displayGameSnapshotSchema = z
     ...gameShape,
     /** Narrowest slice of the world the display frames; height follows as 9/16. */
     cameraViewWidth: cameraViewWidthSchema,
+    /** Parallax space background for this run; fixed at run start like the silhouettes. */
+    background: backgroundTuningSchema,
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
     /** Look of the ambient hazard for this run; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,

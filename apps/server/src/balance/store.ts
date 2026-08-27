@@ -314,6 +314,14 @@ function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknow
   };
 }
 
+/**
+ * Fills the background section field by field so a document saved before the
+ * parallax existed gains defaults instead of failing the strict schema.
+ */
+function migrateBackground(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+  return { ...defaults.background, ...readRecord(tuning, "background") };
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -323,6 +331,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
     tuning: {
       ...migratePlayerShip(tuning, defaults),
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
+      background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
       enemyArchetypes: Object.fromEntries(
@@ -386,6 +395,7 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
     cameraViewWidth: config.cameraViewWidth,
+    background: config.background,
     autopilot: DEFAULT_AUTOPILOT,
     spaceshipVisual: config.spaceshipVisual,
     spaceshipMaxHp: config.spaceshipMaxHp,

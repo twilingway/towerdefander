@@ -144,6 +144,35 @@ export function getResponsiveViewport(
   return { zoom, width: safeWidth / zoom, height: safeHeight / zoom };
 }
 
+export interface BackgroundLayerMotion {
+  /** Fraction of camera scroll the layer follows, per axis (demo values; may be negative). */
+  readonly factorX: number;
+  readonly factorY: number;
+  /** Idle drift in texture pixels per second at driftSpeed multiplier 1. */
+  readonly driftX: number;
+  readonly driftY: number;
+}
+
+/**
+ * Tile offset for a screen-fixed parallax layer (scrollFactor 0). The scroll term is the
+ * fraction of camera movement the layer follows, scaled by the admin's parallax strength;
+ * the drift term keeps the background alive while idle and ignores both zoom and strength.
+ * No extra zoom factor: for a scroll-factor-0 sprite texture offsets are world units that the
+ * camera already scales on screen, so this keeps the depth ratio at any camera distance.
+ */
+export function backgroundTileOffset(
+  layer: BackgroundLayerMotion,
+  scrollX: number,
+  scrollY: number,
+  parallaxStrength: number,
+  driftSeconds: number
+): { readonly x: number; readonly y: number } {
+  return {
+    x: scrollX * layer.factorX * parallaxStrength + driftSeconds * layer.driftX,
+    y: scrollY * layer.factorY * parallaxStrength + driftSeconds * layer.driftY
+  };
+}
+
 export function getShieldVisualStyle(active: boolean): ShieldVisualStyle {
   return active
     ? { lineWidth: 11, color: 0x65baff, alpha: 0.85, dash: null, crescentThickness: 11 }

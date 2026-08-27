@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ASTEROID_SPAWN_KIND,
   AUTOPILOT_LEVELS,
+  BACKGROUND_DRIFT_SPEED_MAX,
+  BACKGROUND_PARALLAX_STRENGTH_MAX,
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
+  NEBULA_PRESETS,
   PIVOT_LIMIT,
   MAX_ENEMY_WEAPONS,
   SPAWN_SECTORS,
@@ -19,6 +22,7 @@ import {
   type EnemyArchetype,
   type EnemyWeaponTuning,
   type EntityVisual,
+  type NebulaPreset,
   type SpawnKind,
   type SpawnSector,
   type WaveDefinition,
@@ -2212,6 +2216,69 @@ function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
         боя, допустимый диапазон — от {CAMERA_VIEW_WIDTH_MIN} до {CAMERA_VIEW_WIDTH_MAX}.
       </p>
 
+      <h3 className="card__subtitle">Космический фон</h3>
+      <div className="card__grid">
+        <NumberField
+          caption="Параллакс от камеры"
+          min={0}
+          step={0.05}
+          value={tuning.background.parallaxStrength}
+          onChange={(parallaxStrength) => {
+            onChange({
+              ...tuning,
+              background: clampBackground(tuning.background, { parallaxStrength })
+            });
+          }}
+        />
+        <NumberField
+          caption="Дрейф фона, px/с"
+          min={0}
+          step={0.1}
+          value={tuning.background.driftSpeed}
+          onChange={(driftSpeed) => {
+            onChange({ ...tuning, background: clampBackground(tuning.background, { driftSpeed }) });
+          }}
+        />
+        <NumberField
+          caption="Небулы: непрозрачность"
+          min={0}
+          step={0.05}
+          value={tuning.background.nebulaAlpha}
+          onChange={(nebulaAlpha) => {
+            onChange({
+              ...tuning,
+              background: clampBackground(tuning.background, { nebulaAlpha })
+            });
+          }}
+        />
+        <label className="field">
+          <span className="field__caption">Небулы</span>
+          <select
+            className="field__input"
+            value={tuning.background.nebulaPreset}
+            onChange={(event) => {
+              onChange({
+                ...tuning,
+                background: clampBackground(tuning.background, {
+                  nebulaPreset: event.target.value as NebulaPreset
+                })
+              });
+            }}
+          >
+            {NEBULA_PRESETS.map((preset) => (
+              <option key={preset} value={preset}>
+                {NEBULA_PRESET_LABELS[preset]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="screen__hint">
+        Звёзды, пыль и небулы рисует дисплей под ареной: слои сдвигаются от движения камеры на
+        величину параллакса и медленно дрейфуют сами по себе. Применяется со следующего запуска боя;
+        симуляция эти значения не читает.
+      </p>
+
       <h3 className="card__subtitle">Лимиты сущностей (только чтение)</h3>
       <ul className="caps">
         {ENTITY_CAPS.map(([caption, value]) => (
@@ -2254,6 +2321,29 @@ function rangeHint(
 
 function clampCameraViewWidth(value: number): number {
   return Math.min(CAMERA_VIEW_WIDTH_MAX, Math.max(CAMERA_VIEW_WIDTH_MIN, Math.round(value)));
+}
+
+const NEBULA_PRESET_LABELS: Record<NebulaPreset, string> = {
+  blue: "синяя",
+  gold: "золотая",
+  purple: "фиолетовая",
+  green: "зелёная"
+};
+
+function clampBackground(
+  background: BalanceTuning["background"],
+  patch: Partial<BalanceTuning["background"]>
+): BalanceTuning["background"] {
+  const next = { ...background, ...patch };
+  return {
+    parallaxStrength: Math.min(
+      BACKGROUND_PARALLAX_STRENGTH_MAX,
+      Math.max(0, next.parallaxStrength)
+    ),
+    driftSpeed: Math.min(BACKGROUND_DRIFT_SPEED_MAX, Math.max(0, next.driftSpeed)),
+    nebulaAlpha: Math.min(1, Math.max(0, next.nebulaAlpha)),
+    nebulaPreset: next.nebulaPreset
+  };
 }
 
 interface PresetsScreenProps {

@@ -699,6 +699,10 @@ export class SpaceshipDefenderRoom extends Room<{
     target.worldHeight = this.gameConfig.worldHeight;
     target.arenaRadius = this.gameConfig.arenaRadius;
     target.display.cameraViewWidth = this.gameConfig.cameraViewWidth;
+    target.display.backgroundParallaxStrength = this.gameConfig.background.parallaxStrength;
+    target.display.backgroundDriftSpeed = this.gameConfig.background.driftSpeed;
+    target.display.backgroundNebulaAlpha = this.gameConfig.background.nebulaAlpha;
+    target.display.backgroundNebulaPreset = this.gameConfig.background.nebulaPreset;
     target.spaceship.x = game.spaceship.x;
     target.spaceship.y = game.spaceship.y;
     target.spaceship.velocityX = game.spaceship.velocity.x;

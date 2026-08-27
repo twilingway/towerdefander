@@ -251,6 +251,24 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(setInterval).toHaveBeenCalledTimes(1);
   });
 
+  it("publishes the preset's parallax background on the display state at run start", () => {
+    const room = createRoom();
+    const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+      joinController(room, index)
+    );
+    ready(room, controllerAt(controllers, 0));
+    ready(room, controllerAt(controllers, 1));
+    ready(room, controllerAt(controllers, 2));
+
+    const background = internals(room).gameConfig.background;
+    expect(room.state.game.display).toMatchObject({
+      backgroundParallaxStrength: background.parallaxStrength,
+      backgroundDriftSpeed: background.driftSpeed,
+      backgroundNebulaAlpha: background.nebulaAlpha,
+      backgroundNebulaPreset: background.nebulaPreset
+    });
+  });
+
   it("keeps every decorative landmark fully inside the circular arena", () => {
     const { room } = startGame();
     const obstacles = [...room.state.game.display.obstacles];

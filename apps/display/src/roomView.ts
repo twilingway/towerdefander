@@ -1,5 +1,6 @@
 import {
   CREW_ROLES,
+  NEBULA_PRESETS,
   displayRoomViewSchema,
   type AsteroidOrigin,
   type CrewRole,
@@ -7,6 +8,7 @@ import {
   type DisplayRoomView,
   type EnemyKind,
   type EncounterPhase,
+  type NebulaPreset,
   type ProjectileKind,
   type PublicSpaceshipView,
   type PublicUpgradeVote,
@@ -155,6 +157,10 @@ interface NetworkGameState {
   teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
     cameraViewWidth: number;
+    backgroundParallaxStrength?: number;
+    backgroundDriftSpeed?: number;
+    backgroundNebulaAlpha?: number;
+    backgroundNebulaPreset?: string;
     asteroidVisualShape?: string;
     asteroidVisualScale?: number;
     spaceshipVisualShape?: string;
@@ -284,6 +290,12 @@ export function toDisplayRoomView(
                   }
             ),
             cameraViewWidth: display.cameraViewWidth,
+            background: {
+              parallaxStrength: display.backgroundParallaxStrength ?? 1,
+              driftSpeed: display.backgroundDriftSpeed ?? 1,
+              nebulaAlpha: display.backgroundNebulaAlpha ?? 0.72,
+              nebulaPreset: toNebulaPreset(display.backgroundNebulaPreset)
+            },
             asteroidVisual: toEntityVisual(
               display.asteroidVisualShape,
               display.asteroidVisualScale
@@ -398,6 +410,14 @@ function normalizeProjectileSource(
 ): "cannon" | "machineGun" | undefined {
   if (source === "cannon" || source === "machineGun") return source;
   return undefined;
+}
+
+/** A preset the display does not ship with falls back to the blue nebula. */
+function toNebulaPreset(preset: string | undefined): NebulaPreset {
+  if (preset !== undefined && (NEBULA_PRESETS as readonly string[]).includes(preset)) {
+    return preset as NebulaPreset;
+  }
+  return "blue";
 }
 
 function toPublicLatency(latencyMs: number | undefined): number | null {

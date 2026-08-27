@@ -177,6 +177,7 @@ function tuning(): BalanceTuning {
     shieldAngularBrakingPerSecondSquared: 5.1,
     missileInterceptScoreReward: 5,
     cameraViewWidth: 1600,
+    background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
     autopilot: {
       level: "veteran",
       profiles: {

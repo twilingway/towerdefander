@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   AUTOPILOT_LEVELS,
+  BACKGROUND_DRIFT_SPEED_MAX,
+  BACKGROUND_PARALLAX_STRENGTH_MAX,
   BALANCE_FILE_VERSION,
   BUILTIN_ENEMY_KINDS,
   CAMERA_VIEW_WIDTH_MAX,
@@ -176,6 +178,12 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     shieldAngularAccelerationPerSecondSquared: 3.4,
     shieldAngularBrakingPerSecondSquared: 5.1,
     cameraViewWidth: 1600,
+    background: {
+      parallaxStrength: 1,
+      driftSpeed: 1,
+      nebulaAlpha: 0.72,
+      nebulaPreset: "blue"
+    },
     autopilot: {
       level: "veteran",
       profiles: {
@@ -210,6 +218,30 @@ describe("balance tuning schema", () => {
     expect(
       balanceTuningSchema.safeParse({ ...tuning(), cameraViewWidth: CAMERA_VIEW_WIDTH_MAX + 1 })
         .success
+    ).toBe(false);
+  });
+
+  it("keeps the background parallax inside its demo-tuned bounds", () => {
+    const background = (overrides: Partial<BalanceTuning["background"]>) =>
+      balanceTuningSchema.safeParse({
+        ...tuning(),
+        background: { ...tuning().background, ...overrides }
+      }).success;
+
+    expect(background({})).toBe(true);
+    expect(background({ parallaxStrength: BACKGROUND_PARALLAX_STRENGTH_MAX })).toBe(true);
+    expect(background({ parallaxStrength: BACKGROUND_PARALLAX_STRENGTH_MAX + 0.1 })).toBe(false);
+    expect(background({ parallaxStrength: -0.1 })).toBe(false);
+    expect(background({ driftSpeed: BACKGROUND_DRIFT_SPEED_MAX })).toBe(true);
+    expect(background({ driftSpeed: BACKGROUND_DRIFT_SPEED_MAX + 0.1 })).toBe(false);
+    expect(background({ nebulaAlpha: 0 })).toBe(true);
+    expect(background({ nebulaAlpha: 1.1 })).toBe(false);
+    expect(background({ nebulaPreset: "gold" })).toBe(true);
+    expect(
+      balanceTuningSchema.safeParse({
+        ...tuning(),
+        background: { ...tuning().background, nebulaPreset: "magenta" }
+      }).success
     ).toBe(false);
   });
 

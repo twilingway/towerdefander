@@ -79,6 +79,10 @@ describe("display room view", () => {
         credits: 6,
         display: {
           cameraViewWidth: 1600,
+          backgroundParallaxStrength: 0.8,
+          backgroundDriftSpeed: 2,
+          backgroundNebulaAlpha: 0.5,
+          backgroundNebulaPreset: "gold",
           spaceshipVisualShape: "ship-lancer",
           spaceshipVisualScale: 1.25,
           shieldRadius: 140,
@@ -182,6 +186,12 @@ describe("display room view", () => {
     expect(view?.game?.encounter.defeatReason).toBeNull();
     expect(view?.game?.encounter.waveSecondsRemaining).toBe(1188);
     expect(view?.runNumber).toBe(2);
+    expect(view?.game?.background).toEqual({
+      parallaxStrength: 0.8,
+      driftSpeed: 2,
+      nebulaAlpha: 0.5,
+      nebulaPreset: "gold"
+    });
     expect(view?.game?.arenaRadius).toBe(2200);
     expect(view?.game?.spaceship.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);

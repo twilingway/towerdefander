@@ -14,6 +14,7 @@ import type {
 import Phaser from "phaser";
 
 import {
+  backgroundTileOffset,
   createAngleTransition,
   createPointTransition,
   createSnappedVisualTransitions,
@@ -35,6 +36,16 @@ import {
   type PointTransition
 } from "./spaceshipViewModel.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
+import {
+  BACKGROUND_LAYERS,
+  BACKGROUND_LAYER_DEPTH,
+  BACKGROUND_TEXTURE_KEYS,
+  backgroundLayerAlpha,
+  backgroundTextureKey,
+  isNebulaLayer,
+  type BackgroundBlendMode,
+  type BackgroundLayerConfig
+} from "./spaceBackground.js";
 
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
@@ -43,6 +54,13 @@ const OUTSIDE_SPACE_COLOR = 0x02070d;
 /** Drawn when a preset picks no hull of its own. */
 const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
 const ARENA_SPACE_COLOR = 0x07171f;
+/** The parallax background shows through the arena disc. */
+const ARENA_FILL_ALPHA = 0.5;
+
+interface BackgroundLayerState {
+  readonly sprite: Phaser.GameObjects.TileSprite;
+  readonly config: BackgroundLayerConfig;
+}
 
 type CombatEntity =
   | (PublicEnemyView & { readonly visualKind: "enemy" })
@@ -71,6 +89,10 @@ class SpaceshipScene extends Phaser.Scene {
   private shieldTransition: AngleTransition;
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
+  private readonly backgroundLayers: BackgroundLayerState[] = [];
+  private parallaxStrength = 1;
+  /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
+  private backgroundDriftSeconds = 0;
   private viewportWidth = BASE_VIEWPORT_WIDTH;
   private viewportHeight = BASE_VIEWPORT_HEIGHT;
   private rendererWidth = BASE_VIEWPORT_WIDTH;
@@ -91,6 +113,13 @@ class SpaceshipScene extends Phaser.Scene {
     this.shieldTransition = createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, 0);
   }
 
+  preload(): void {
+    // All six PNGs up front so a nebula preset switch is an instant setTexture.
+    for (const key of BACKGROUND_TEXTURE_KEYS) {
+      this.load.image(key, `textures/${key.replace(/^bg-/, "")}.png`);
+    }
+  }
+
   create(): void {
     this.configureViewport(this.scale.gameSize.width, this.scale.gameSize.height);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -99,6 +128,7 @@ class SpaceshipScene extends Phaser.Scene {
     });
     this.focusCamera(this.snapshot.spaceship);
     this.drawArena();
+    this.createBackground(this.snapshot.background);
     this.drawDecorations();
 
     this.spaceshipBody = this.add.graphics().setDepth(10);
@@ -124,7 +154,8 @@ class SpaceshipScene extends Phaser.Scene {
     this.reconcileCombatVisuals(now, true);
   }
 
-  override update(): void {
+  override update(_time: number, deltaMs: number): void {
+    this.updateBackground(deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
     const now = performance.now();
@@ -160,7 +191,11 @@ class SpaceshipScene extends Phaser.Scene {
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
+    const previousBackground = this.snapshot.background;
     this.snapshot = snapshot;
+    if (hasBackgroundChanged(previousBackground, snapshot.background)) {
+      this.applyBackgroundSettings(snapshot.background);
+    }
     const shouldSnap = this.snapshotReset.consumeForSnapshot();
     if (!this.sys.isActive()) return;
     // The framed slice comes from the balance preset, so a new run - or a
@@ -204,7 +239,7 @@ class SpaceshipScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
 
     const graphics = this.add.graphics().setDepth(0);
-    graphics.fillStyle(ARENA_SPACE_COLOR, 1);
+    graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
     graphics.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
     graphics.lineStyle(2, 0x163746, 0.75);
     for (const segment of getCircularGridSegments(
@@ -245,6 +280,60 @@ class SpaceshipScene extends Phaser.Scene {
           24
         );
       }
+    }
+  }
+
+  /**
+   * Screen-fixed parallax layers: each TileSprite sits at scrollFactor 0 with its origin on the
+   * world corner, so it always covers the viewport regardless of camera scroll or zoom. Per frame
+   * its tile position is shifted by a fraction of the camera scroll (parallax) plus an accumulated
+   * idle drift; factors and drifts are carried over one-to-one from the demo.
+   */
+  private createBackground(background: DisplayGameSnapshot["background"]): void {
+    for (const config of BACKGROUND_LAYERS) {
+      const sprite = this.add
+        .tileSprite(
+          0,
+          0,
+          this.viewportWidth,
+          this.viewportHeight,
+          backgroundTextureKey(config.kind, background.nebulaPreset)
+        )
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setDepth(BACKGROUND_LAYER_DEPTH[config.kind])
+        .setTileScale(config.tileScale);
+      sprite.setBlendMode(backgroundBlendMode(config.blendMode));
+      sprite.alpha = backgroundLayerAlpha(config.kind, background.nebulaAlpha);
+      this.backgroundLayers.push({ sprite, config });
+    }
+  }
+
+  private applyBackgroundSettings(background: DisplayGameSnapshot["background"]): void {
+    for (const layer of this.backgroundLayers) {
+      if (!isNebulaLayer(layer.config.kind)) continue;
+      layer.sprite.setTexture(backgroundTextureKey(layer.config.kind, background.nebulaPreset));
+      layer.sprite.alpha = backgroundLayerAlpha(layer.config.kind, background.nebulaAlpha);
+    }
+    this.parallaxStrength = background.parallaxStrength;
+  }
+
+  private updateBackground(deltaMs: number): void {
+    if (this.backgroundLayers.length === 0) return;
+    const scrollX = this.cameras.main.scrollX;
+    const scrollY = this.cameras.main.scrollY;
+    // Drift speed comes from the snapshot so a preset change retunes it live.
+    this.backgroundDriftSeconds += (deltaMs / 1000) * this.snapshot.background.driftSpeed;
+    for (const layer of this.backgroundLayers) {
+      const offset = backgroundTileOffset(
+        layer.config,
+        scrollX,
+        scrollY,
+        this.parallaxStrength,
+        this.backgroundDriftSeconds
+      );
+      layer.sprite.tilePositionX = modPositive(offset.x, layer.sprite.frame.source.width);
+      layer.sprite.tilePositionY = modPositive(offset.y, layer.sprite.frame.source.height);
     }
   }
 
@@ -331,6 +420,10 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.worldWidth + this.cameraOverscan * 2,
       this.snapshot.worldHeight + this.cameraOverscan * 2
     );
+    // Scroll-factor-0 layers cover the viewport window in world units; keep them in sync.
+    for (const layer of this.backgroundLayers) {
+      layer.sprite.setSize(this.viewportWidth, this.viewportHeight);
+    }
     this.focusCamera(this.spaceshipBody ?? this.snapshot.spaceship);
   }
 
@@ -444,6 +537,32 @@ class SpaceshipScene extends Phaser.Scene {
     }
     return { object: container, healthBar };
   }
+}
+
+type BackgroundSettings = DisplayGameSnapshot["background"];
+
+function hasBackgroundChanged(previous: BackgroundSettings, next: BackgroundSettings): boolean {
+  return (
+    previous.parallaxStrength !== next.parallaxStrength ||
+    previous.driftSpeed !== next.driftSpeed ||
+    previous.nebulaAlpha !== next.nebulaAlpha ||
+    previous.nebulaPreset !== next.nebulaPreset
+  );
+}
+
+function backgroundBlendMode(mode: BackgroundBlendMode): Phaser.BlendModes {
+  switch (mode) {
+    case "screen":
+      return Phaser.BlendModes.SCREEN;
+    case "add":
+      return Phaser.BlendModes.ADD;
+    default:
+      return Phaser.BlendModes.NORMAL;
+  }
+}
+
+function modPositive(value: number, size: number): number {
+  return ((value % size) + size) % size;
 }
 
 function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {

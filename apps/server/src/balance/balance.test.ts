@@ -555,6 +555,57 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
+  it("gives a version 15 document the parallax background defaults", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 15 had no background section at all: the display drew a flat color.
+    const legacyTuning: Partial<BalanceTuning> = { ...defaults };
+    delete legacyTuning.background;
+    const document = {
+      version: 15,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+    expect(store.getActiveTuning().background).toEqual(defaults.background);
+
+    // The rest of the preset keeps playing with exactly the numbers it had.
+    const config = store.getActiveSimulationConfig();
+    expect(config.cameraViewWidth).toBe(defaults.cameraViewWidth);
+    expect(config.spaceshipSpeedPerSecond).toBe(defaults.spaceshipSpeedPerSecond);
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("persists tuned parallax background values to disk", async () => {
+    const filePath = await temporaryPresetPath();
+    const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
+    const file = tunedPresetsFile(10);
+    const preset = file.presets[0];
+    if (preset === undefined) throw new Error("fixture must contain a preset");
+    const background = {
+      parallaxStrength: 1.6,
+      driftSpeed: 2,
+      nebulaAlpha: 0.4,
+      nebulaPreset: "gold" as const
+    };
+    await store.save({
+      ...file,
+      presets: [{ ...preset, tuning: { ...preset.tuning, background } }]
+    });
+
+    expect(store.getActiveTuning().background).toEqual(background);
+    const persisted = JSON.parse(await readFile(filePath, "utf8")) as BalancePresetsFile;
+    expect(persisted.presets[0]?.tuning.background).toEqual(background);
+  });
+
   it("gives a version 10 preset the agility its enemies never had", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();

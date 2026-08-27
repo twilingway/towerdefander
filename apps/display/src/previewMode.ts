@@ -56,6 +56,12 @@ const PREVIEW_WORLD = {
   worldWidth: 4400,
   worldHeight: 4400,
   cameraViewWidth: PREVIEW_CAMERA_VIEW_WIDTH,
+  background: {
+    parallaxStrength: 1,
+    driftSpeed: 1,
+    nebulaAlpha: 0.72,
+    nebulaPreset: "blue" as const
+  },
   arenaRadius: 2200,
   spaceship: {
     x: 2200,

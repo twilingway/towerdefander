@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 15 as const;
+export const BALANCE_FILE_VERSION = 16 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -39,6 +39,30 @@ export const cameraViewWidthSchema = z
   .number()
   .min(CAMERA_VIEW_WIDTH_MIN)
   .max(CAMERA_VIEW_WIDTH_MAX);
+
+/**
+ * Parallax space background of the display. Presentation-only, like
+ * `cameraViewWidth`: the simulation never reads it, the scene does. Ranges match
+ * the reference demo so tuned values carry over as-is.
+ */
+export const NEBULA_PRESETS = ["blue", "gold", "purple", "green"] as const;
+export const nebulaPresetSchema = z.enum(NEBULA_PRESETS);
+export type NebulaPreset = z.infer<typeof nebulaPresetSchema>;
+
+export const BACKGROUND_PARALLAX_STRENGTH_MAX = 1.6;
+export const BACKGROUND_DRIFT_SPEED_MAX = 3;
+export const backgroundTuningSchema = z
+  .object({
+    /** Multiplier of the camera-driven layer shift; zero keeps only the idle drift. */
+    parallaxStrength: z.number().min(0).max(BACKGROUND_PARALLAX_STRENGTH_MAX),
+    /** Idle drift speed in texture pixels per second at full strength. */
+    driftSpeed: z.number().min(0).max(BACKGROUND_DRIFT_SPEED_MAX),
+    /** Opacity of both nebula layers; stars and dust keep their own fixed alpha. */
+    nebulaAlpha: z.number().min(0).max(1),
+    nebulaPreset: nebulaPresetSchema
+  })
+  .strict();
+export type BackgroundTuning = z.infer<typeof backgroundTuningSchema>;
 export const enemyArchetypeIdSchema = z
   .string()
   .min(1)
@@ -298,6 +322,8 @@ export const balanceTuningSchema = z
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
     cameraViewWidth: cameraViewWidthSchema,
+    /** Parallax space background; the simulation never reads this section. */
+    background: backgroundTuningSchema,
     /** Demo autopilot skill levels; the simulation never reads this section. */
     autopilot: autopilotTuningSchema,
 

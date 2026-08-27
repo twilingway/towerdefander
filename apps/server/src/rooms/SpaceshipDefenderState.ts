@@ -196,6 +196,11 @@ export class EnemyVisualState extends Schema {
 
 export class SpaceshipDisplayState extends Schema {
   @type("float32") cameraViewWidth = 2200;
+  /** Parallax space background for this run; fixed at run start like the silhouettes. */
+  @type("float32") backgroundParallaxStrength = 1;
+  @type("float32") backgroundDriftSpeed = 1;
+  @type("float32") backgroundNebulaAlpha = 0.72;
+  @type("string") backgroundNebulaPreset = "blue";
   /** Empty means the display draws its own rock for the ambient hazard. */
   @type("string") asteroidVisualShape = "";
   @type("float32") asteroidVisualScale = 1;

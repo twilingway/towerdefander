@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  backgroundTileOffset,
   createSnappedVisualTransitions,
   getBoundedCameraScroll,
   getCameraOverscan,
@@ -52,6 +53,34 @@ describe("spaceship view model", () => {
     expect(framed.zoom).toBeCloseTo(0.6);
     expect(framed.width).toBeCloseTo(3200);
     expect(framed.height).toBeCloseTo(1800);
+  });
+
+  describe("background tile offset", () => {
+    const nebulaB = { factorX: -0.095, factorY: 0.075, driftX: -7, driftY: 3.2 };
+
+    it("scales the camera term with parallax strength and keeps per-axis factors independent", () => {
+      expect(backgroundTileOffset(nebulaB, 1000, 400, 1, 0)).toEqual({ x: -95, y: 30 });
+      expect(backgroundTileOffset(nebulaB, 1000, 400, 0.5, 0)).toEqual({ x: -47.5, y: 15 });
+    });
+
+    it("lets zero parallax strength kill only the camera term while drift keeps living", () => {
+      const offset = backgroundTileOffset(nebulaB, 1000, 400, 0, 3);
+      expect(offset.x).toBeCloseTo(-21);
+      expect(offset.y).toBeCloseTo(9.6);
+    });
+
+    it("accumulates drift with elapsed time at the tuned speed without parallax scaling", () => {
+      // driftSeconds = elapsedSeconds * driftSpeed: 40s at speed 1.5.
+      const offset = backgroundTileOffset(nebulaB, 0, 0, 2, 60);
+      expect(offset.x).toBe(-420);
+      expect(offset.y).toBe(192);
+    });
+
+    it("moves nebula B against the camera on X while following it on Y", () => {
+      const offset = backgroundTileOffset(nebulaB, 500, 500, 1, 0);
+      expect(offset.x).toBeLessThan(0);
+      expect(offset.y).toBeGreaterThan(0);
+    });
   });
 
   it("converts a centered world view into Phaser renderer-space scroll", () => {

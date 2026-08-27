@@ -103,6 +103,7 @@ const testGame = {
   elapsedMs: 50,
   worldWidth: 4400,
   cameraViewWidth: 1600,
+  background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   worldHeight: 4400,
   arenaRadius: 2200,
   spaceship: {
