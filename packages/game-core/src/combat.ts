@@ -103,7 +103,8 @@ export type EnemySpawnPolicy = "standard" | "boss";
  * the display falls back on its own when a preset names one it cannot draw.
  */
 /** The hull gun, which also records where it turns about. */
-export type TurretVisual = (EntityVisual & { readonly pivotX: number; readonly pivotY: number }) | null;
+export type TurretVisual =
+  (EntityVisual & { readonly pivotX: number; readonly pivotY: number }) | null;
 
 export interface EntityVisual {
   readonly shape: string;

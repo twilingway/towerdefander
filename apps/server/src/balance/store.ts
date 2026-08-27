@@ -278,14 +278,13 @@ function migrateTurretVisual(saved: unknown): unknown {
 }
 
 function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
-  const migrated: LegacyRecord = {
-    ...tuning,
-    spaceshipVisual: tuning.spaceshipVisual ?? null,
-    turretVisual: migrateTurretVisual(tuning.turretVisual)
-  };
+  const migrated: LegacyRecord = { ...tuning, spaceshipVisual: tuning.spaceshipVisual ?? null };
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }
+  // After the flat pass, which would otherwise put the saved gun back exactly
+  // as it was found — pivot and all — and undo the fill below.
+  migrated.turretVisual = migrateTurretVisual(migrated.turretVisual);
   return migrated;
 }
 
