@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { roleLabel } from "@spaceship-defender/client-shared";
 import type {
   CrewRole,
+  CrewSize,
   EncounterPhase,
   PublicMachineGunView,
   PublicShieldView,
@@ -8,14 +10,24 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import { VirtualStick } from "../../VirtualStick.js";
+import { readLocalStorage } from "../../model/browser.js";
 import type { ControlState } from "../../model/control.js";
+import {
+  DEFAULT_SOLO_LAYOUT,
+  readSoloLayout,
+  saveSoloLayout,
+  type SoloLayout
+} from "../../soloLayout.js";
 import { GunnerPanel } from "./GunnerPanel.js";
 import { PilotPanel } from "./PilotPanel.js";
 import { ShieldPanel } from "./ShieldPanel.js";
+import { SoloPanel } from "./SoloPanel.js";
 import { useRoleControls } from "./useRoleControls.js";
 
 interface RoleScreenProps {
   readonly role: CrewRole;
+  readonly crewSize: CrewSize;
+  readonly heading: number | undefined;
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
@@ -28,6 +40,8 @@ interface RoleScreenProps {
 
 export function RoleScreen({
   role,
+  crewSize,
+  heading,
   shield,
   cannon,
   machineGun,
@@ -37,6 +51,10 @@ export function RoleScreen({
   hidden,
   onSend
 }: RoleScreenProps) {
+  const [soloLayout, setSoloLayout] = useState<SoloLayout>(() => {
+    const storage = readLocalStorage();
+    return storage === undefined ? DEFAULT_SOLO_LAYOUT : readSoloLayout(storage);
+  });
   const {
     controlsEnabled,
     updateAim,
@@ -54,6 +72,29 @@ export function RoleScreen({
     generation,
     onSend
   });
+
+  if (crewSize === 1) {
+    return (
+      <div className="role-control role-control--solo" data-role={role} hidden={hidden}>
+        <p className="phase-copy">Ведите корабль и наводите турель; щит держит автопилот</p>
+        <SoloPanel
+          cannon={cannon}
+          machineGun={machineGun}
+          heading={heading}
+          encounterPhase={encounterPhase}
+          connectionDisabled={connectionDisabled}
+          generation={generation}
+          layout={soloLayout}
+          onLayoutChange={(next) => {
+            setSoloLayout(next);
+            const storage = readLocalStorage();
+            if (storage !== undefined) saveSoloLayout(storage, next);
+          }}
+          onSend={onSend}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="role-control" data-role={role} hidden={hidden}>

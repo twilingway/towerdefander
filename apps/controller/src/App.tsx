@@ -255,7 +255,13 @@ export function ControllerApp() {
     requestImmersiveMode();
   }
 
-  function sendControl(sequence: number, control: ControlState): void {
+  function sendControl(
+    sequence: number,
+    control: ControlState,
+    // A solo player drives two streams from one connection, so the panel names
+    // the channel instead of the room deriving it from the seated role.
+    channel: CrewRole = currentPlayer?.role ?? "pilot"
+  ): void {
     const room = roomReference.current;
     if (room === undefined || view === undefined || currentPlayer === undefined) return;
     const envelope = {
@@ -265,13 +271,13 @@ export function ControllerApp() {
       runNumber: view.runNumber,
       sequence
     } as const;
-    if (currentPlayer.role === "pilot") {
+    if (channel === "pilot") {
       room.send(clientMessage.pilotInput, {
         ...envelope,
         vector: control.vector,
         mgFiring: control.mgFiring
       });
-    } else if (currentPlayer.role === "gunner") {
+    } else if (channel === "gunner") {
       room.send(clientMessage.gunnerInput, {
         ...envelope,
         aim: control.vector,
@@ -440,6 +446,8 @@ export function ControllerApp() {
               )}
             <RoleScreen
               role={currentPlayer.role}
+              crewSize={activeView.crewSize}
+              heading={activeView.game?.spaceship.heading}
               shield={activeView.game?.shield}
               cannon={activeView.game?.cannon}
               machineGun={activeView.game?.machineGun}

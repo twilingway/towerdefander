@@ -1,6 +1,6 @@
 import { QRCodeSVG } from "qrcode.react";
 import { formatLatency, roleLabel } from "@spaceship-defender/client-shared";
-import { CREW_ROLES, type DisplayRoomView } from "@spaceship-defender/protocol";
+import { CREW_ROLES, type CrewSize, type DisplayRoomView } from "@spaceship-defender/protocol";
 
 interface LobbyLayoutProps {
   readonly view: DisplayRoomView;
@@ -9,20 +9,24 @@ interface LobbyLayoutProps {
 
 /** The join QR code and the crew roster, side by side above the stage. */
 export function LobbyLayout({ view, joinUrl }: LobbyLayoutProps) {
+  const seats = CREW_ROLES.slice(0, view.crewSize);
+  const autopilotRoles = CREW_ROLES.slice(view.crewSize);
   return (
     <section className={`lobby-layout ${view.game === null ? "" : "lobby-layout--battle"}`}>
       <div className="join-card">
         <QRCodeSVG value={joinUrl} size={180} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
         <div>
-          <h2>Подключите три контроллера</h2>
-          <p>Первый игрок — pilot, второй — gunner, третий — shield.</p>
+          <h2>{joinHeading(view.crewSize)}</h2>
+          <p>{joinHint(view.crewSize)}</p>
           <a href={joinUrl}>{joinUrl}</a>
         </div>
       </div>
       <div className="players-card">
-        <h2>Экипаж · {view.players.length}/3</h2>
+        <h2>
+          Экипаж · {view.players.length}/{view.crewSize}
+        </h2>
         <div className="player-list">
-          {CREW_ROLES.map((role) => {
+          {seats.map((role) => {
             const player = view.players.find((candidate) => candidate.role === role);
             return (
               <div
@@ -45,7 +49,26 @@ export function LobbyLayout({ view, joinUrl }: LobbyLayoutProps) {
             );
           })}
         </div>
+        {autopilotRoles.length > 0 && (
+          <p className="autopilot-note">
+            Под автопилотом: {autopilotRoles.map((role) => roleLabel(role)).join(", ")}
+          </p>
+        )}
       </div>
     </section>
   );
+}
+
+function joinHeading(crewSize: CrewSize): string {
+  return crewSize === 1
+    ? "Подключите контроллер"
+    : `Подключите ${crewSize === 2 ? "два" : "три"} контроллера`;
+}
+
+function joinHint(crewSize: CrewSize): string {
+  return crewSize === 1
+    ? "Один игрок ведёт корабль и турель, щитом управляет автопилот."
+    : crewSize === 2
+      ? "Первый игрок — pilot, второй — gunner; щитом управляет автопилот."
+      : "Первый игрок — pilot, второй — gunner, третий — shield.";
 }

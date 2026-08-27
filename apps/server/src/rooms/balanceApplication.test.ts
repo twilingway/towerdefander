@@ -26,7 +26,7 @@ function client(sessionId: string): Client {
 function startedRoom(): Room {
   const room = new SpaceshipDefenderRoom();
   room.roomId = "ROOM123";
-  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
   const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) => {
     const controller = client(`player-${String(index + 1)}`);
     room.onJoin(controller, {

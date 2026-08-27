@@ -55,6 +55,7 @@ import { DECORATIVE_OBSTACLES } from "./decorations.js";
 import { createRunSeed } from "./runSeed.js";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
+import { nextShieldIntent } from "./shieldAutopilot.js";
 import { projectGameState } from "./stateProjection.js";
 import {
   upgradeErrorMessage,
@@ -168,7 +169,8 @@ export class SpaceshipDefenderRoom extends Room<{
     if (this.hasProtocolMismatch(unsafeOptions)) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "protocol_mismatch");
     }
-    if (!displayCreateOptionsSchema.safeParse(unsafeOptions).success) {
+    const options = displayCreateOptionsSchema.safeParse(unsafeOptions);
+    if (!options.success) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_message");
     }
     // Every room in this process shares one event loop, so accepting a room past
@@ -182,6 +184,7 @@ export class SpaceshipDefenderRoom extends Room<{
       throw new ServerError(ErrorCode.APPLICATION_ERROR, ROOM_REFUSED_AT_CAPACITY);
     }
     this.state.roomId = this.roomId;
+    this.state.crewSize = options.data.crewSize;
     const now = Date.now();
     this.createdAtMs = now;
     this.statusChangedAtMs = now;
@@ -212,7 +215,7 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
 
-    if (this.state.players.size >= PLAYER_CAPACITY) {
+    if (this.state.players.size >= this.state.crewSize) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "room_full");
     }
     const role = this.findAvailableRole();
@@ -344,7 +347,7 @@ export class SpaceshipDefenderRoom extends Room<{
       client,
       unsafePayload,
       gunnerInputCommandSchema,
-      "gunner",
+      this.inputOwner("gunner"),
       clientMessage.gunnerInput
     );
     if (command === undefined || this.gameState === undefined) {
@@ -464,6 +467,7 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     const previousEncounterPhase = this.gameState.encounterPhase;
     const projectionWasResult = this.state.game.encounter.phase === "result";
+    this.gameState = this.applyShieldAutopilot(this.gameState);
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
       this.clearWaveDeadline();
@@ -556,7 +560,7 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private tryStartRun(): void {
     const canStart = this.state.phase === "lobby" || this.gameState?.encounterPhase === "result";
-    if (!canStart || this.state.players.size !== PLAYER_CAPACITY || this.disposing) {
+    if (!canStart || this.state.players.size !== this.state.crewSize || this.disposing) {
       return;
     }
     const players = [...this.state.players.values()];
@@ -707,7 +711,22 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private findAvailableRole(): CrewRole | undefined {
     const occupied = new Set([...this.state.players.values()].map((player) => player.role));
-    return CREW_ROLES.find((role) => !occupied.has(role));
+    return this.crewRoles().find((role) => !occupied.has(role));
+  }
+
+  /** The roles this room has seats for; a smaller crew keeps the CREW_ROLES order. */
+  private crewRoles(): readonly CrewRole[] {
+    return CREW_ROLES.slice(0, this.state.crewSize);
+  }
+
+  /**
+   * Who owns an input in this room. A solo player flies and mans the turret, so
+   * the gunner stream belongs to the pilot; every other crew keeps one role per
+   * input. An input nobody owns keeps its own role and therefore never matches
+   * a seated player.
+   */
+  private inputOwner(role: CrewRole): CrewRole {
+    return role === "gunner" && this.state.crewSize === 1 ? "pilot" : role;
   }
 
   private removeController(playerId: string): void {
@@ -720,6 +739,17 @@ export class SpaceshipDefenderRoom extends Room<{
       this.lifecycle.set("controllers_expired", Date.now() + zeroControllerTtlSeconds * 1_000);
     }
     this.queueMetadataUpdate();
+  }
+
+  /**
+   * A crew without a shield operator still needs the sector up, so the room
+   * feeds the same trusted intent a player would have sent.
+   */
+  private applyShieldAutopilot(game: SpaceshipSimulationState): SpaceshipSimulationState {
+    if (this.crewRoles().includes("shield") || this.gameState?.encounterPhase !== "combat") {
+      return game;
+    }
+    return applyShieldInput(game, nextShieldIntent(game, this.gameConfig));
   }
 
   private startSimulation(): void {

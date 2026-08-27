@@ -234,7 +234,8 @@ async function openRoom(index) {
   const endpoint = servers[index % servers.length].endpoint;
   const display = await new Client(endpoint).create(ROOM_TYPE, {
     role: "display",
-    protocolVersion: PROTOCOL_VERSION
+    protocolVersion: PROTOCOL_VERSION,
+    crewSize: 3
   });
   attachLatencyResponder(display);
   attachErrorCollector(display);

@@ -1,0 +1,162 @@
+import type {
+  EncounterPhase,
+  PublicMachineGunView,
+  PublicWeaponHeatView
+} from "@spaceship-defender/protocol";
+
+import { ActionZone } from "../../ActionZone.js";
+import { VirtualStick } from "../../VirtualStick.js";
+import { Meter } from "../../components/Meter/index.js";
+import type { ControlState } from "../../model/control.js";
+import {
+  DEFAULT_SOLO_LAYOUT,
+  SOLO_LAYOUTS,
+  soloLayoutLabel,
+  type SoloLayout
+} from "../../soloLayout.js";
+import { useRoleControls } from "./useRoleControls.js";
+import { useSoloKeyboard } from "./useSoloKeyboard.js";
+
+interface SoloPanelProps {
+  readonly cannon: PublicWeaponHeatView | undefined;
+  readonly machineGun: PublicMachineGunView | undefined;
+  /** Authoritative hull heading; the keyboard burns along it. */
+  readonly heading: number | undefined;
+  readonly encounterPhase: EncounterPhase | undefined;
+  readonly connectionDisabled: boolean;
+  readonly generation: string;
+  readonly layout: SoloLayout;
+  readonly onLayoutChange: (layout: SoloLayout) => void;
+  readonly onSend: (sequence: number, control: ControlState, channel: "pilot" | "gunner") => void;
+}
+
+/**
+ * One player flying and manning the turret: two sticks and two triggers on a
+ * single panel. Each half drives its own control stream, so the room sees the
+ * same `pilot:input` and `gunner:input` a two-player crew would send.
+ */
+export function SoloPanel({
+  cannon,
+  machineGun,
+  heading,
+  encounterPhase,
+  connectionDisabled,
+  generation,
+  layout,
+  onLayoutChange,
+  onSend
+}: SoloPanelProps) {
+  const pilot = useRoleControls({
+    role: "pilot",
+    shield: undefined,
+    encounterPhase,
+    connectionDisabled,
+    generation,
+    onSend: (sequence, control) => {
+      onSend(sequence, control, "pilot");
+    }
+  });
+  const gunner = useRoleControls({
+    role: "gunner",
+    shield: undefined,
+    encounterPhase,
+    connectionDisabled,
+    generation,
+    // The pilot half answers WASD and Space; a second listener would fire both
+    // barrels from one key.
+    keyboard: false,
+    onSend: (sequence, control) => {
+      onSend(sequence, control, "gunner");
+    }
+  });
+  const controlsEnabled = pilot.controlsEnabled;
+  useSoloKeyboard({ controlsEnabled, heading, pilot, gunner });
+
+  return (
+    <div className={`solo-panel solo-panel--${layout}`} data-testid="solo-panel">
+      <div className="solo-fire solo-fire--pilot">
+        <ActionZone
+          label={machineGun?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ИЗ НОСА"}
+          testId="mg-fire-button"
+          className={`hold-action--pilot${machineGun?.overheated ? " is-overheated" : ""}`}
+          disabled={!controlsEnabled}
+          mode="hold"
+          resetKey={generation}
+          onBegin={pilot.beginFire}
+          onEnd={pilot.endFire}
+          onCancel={pilot.cancelFire}
+        />
+      </div>
+      <div className="solo-fire solo-fire--gunner">
+        <ActionZone
+          label={cannon?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ТУРЕЛИ"}
+          testId="fire-button"
+          className={`hold-action--gunner${cannon?.overheated ? " is-overheated" : ""}`}
+          disabled={!controlsEnabled}
+          mode="hold"
+          resetKey={generation}
+          onBegin={gunner.beginFire}
+          onEnd={gunner.endFire}
+          onCancel={gunner.cancelFire}
+        />
+      </div>
+      <div className="solo-stick solo-stick--pilot">
+        <VirtualStick
+          label="Направление: курс и тяга"
+          onChange={pilot.updateAim}
+          onRelease={pilot.releaseAim}
+          onCancel={pilot.cancelAim}
+          enabled={controlsEnabled}
+          resetKey={generation}
+        />
+      </div>
+      <div className="solo-stick solo-stick--gunner">
+        <VirtualStick
+          label="Направление: турель"
+          onChange={gunner.updateAim}
+          onRelease={gunner.releaseAim}
+          onCancel={gunner.cancelAim}
+          enabled={controlsEnabled}
+          resetKey={generation}
+        />
+      </div>
+      <div className="solo-readout">
+        {machineGun !== undefined && (
+          <div className="control-readout" data-testid="solo-mg-heat">
+            <Meter
+              className="shield-energy mg-heat"
+              label="Нагрев носового пулемёта"
+              value={machineGun.heat}
+              capacity={machineGun.capacity}
+            />
+          </div>
+        )}
+        {cannon !== undefined && (
+          <div className="control-readout" data-testid="solo-cannon-heat">
+            <Meter
+              className="shield-energy mg-heat"
+              label="Нагрев орудия наводчика"
+              value={cannon.heat}
+              capacity={cannon.capacity}
+            />
+          </div>
+        )}
+        <button
+          type="button"
+          className="solo-layout-toggle"
+          data-testid="solo-layout-toggle"
+          onClick={() => {
+            onLayoutChange(nextLayout(layout));
+          }}
+        >
+          {soloLayoutLabel(nextLayout(layout))}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function nextLayout(layout: SoloLayout): SoloLayout {
+  const index = SOLO_LAYOUTS.indexOf(layout);
+  return SOLO_LAYOUTS[(index + 1) % SOLO_LAYOUTS.length] ?? DEFAULT_SOLO_LAYOUT;
+}

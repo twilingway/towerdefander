@@ -15,9 +15,11 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 26 as const;
+export const PROTOCOL_VERSION = 27 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
+/** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
+export const CREW_SIZES = [1, 2, 3] as const;
 export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
 export const ENCOUNTER_PHASES = ["combat", "intermission", "result"] as const;
 export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
@@ -62,6 +64,8 @@ export const UPGRADE_IDS = [
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
 export const crewRoleSchema = z.enum(CREW_ROLES);
+export const crewSizeSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+export type CrewSize = z.infer<typeof crewSizeSchema>;
 export type CrewRole = z.infer<typeof crewRoleSchema>;
 export const roomPhaseSchema = z.enum(["lobby", "active"]);
 export type RoomPhase = z.infer<typeof roomPhaseSchema>;
@@ -610,6 +614,7 @@ export type DisplayGameSnapshot = z.infer<typeof displayGameSnapshotSchema>;
 interface RoomProjection {
   phase: RoomPhase;
   runNumber: number;
+  crewSize: CrewSize;
   players: PublicPlayerView[];
   game: ControllerGameSnapshot | DisplayGameSnapshot | null;
   assignedRole?: CrewRole;
@@ -625,6 +630,8 @@ function refineRoom(room: RoomProjection, context: z.RefinementCtx): void {
     playerIds.add(player.playerId);
     roles.add(player.role);
   });
+  if (room.players.length > room.crewSize)
+    issue(context, ["players"], "A room holds no more players than its crew size.");
   if (room.phase === "lobby") {
     if (room.runNumber !== 0) issue(context, ["runNumber"], "Lobby requires run number zero.");
     if (room.game !== null) issue(context, ["game"], "Lobby requires a null game.");
@@ -641,6 +648,7 @@ const roomShape = {
   runNumber: runNumberSchema,
   displayConnected: z.boolean(),
   displayLatencyMs: latencyMsSchema,
+  crewSize: crewSizeSchema,
   players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
 } satisfies z.ZodRawShape;
 export const controllerRoomViewSchema = z
@@ -659,11 +667,26 @@ export const displayRoomViewSchema = z
 export type DisplayRoomView = z.infer<typeof displayRoomViewSchema>;
 
 export const displayCreateOptionsSchema = z
-  .object({ role: z.literal("display"), protocolVersion: z.literal(PROTOCOL_VERSION) })
+  .object({
+    role: z.literal("display"),
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    crewSize: crewSizeSchema
+  })
   .strict();
 export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
-export const displayJoinOptionsSchema = displayCreateOptionsSchema;
-export type DisplayJoinOptions = DisplayCreateOptions;
+/**
+ * A display rejoins a room whose crew size is already fixed, and Colyseus
+ * replays the create options on that first join, so the seat count is accepted
+ * but ignored here.
+ */
+export const displayJoinOptionsSchema = z
+  .object({
+    role: z.literal("display"),
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    crewSize: crewSizeSchema.optional()
+  })
+  .strict();
+export type DisplayJoinOptions = z.infer<typeof displayJoinOptionsSchema>;
 export const controllerJoinOptionsSchema = z
   .object({
     role: z.literal("controller"),
@@ -672,7 +695,7 @@ export const controllerJoinOptionsSchema = z
   })
   .strict();
 export type ControllerJoinOptions = z.infer<typeof controllerJoinOptionsSchema>;
-export const joinOptionsSchema = z.union([displayCreateOptionsSchema, controllerJoinOptionsSchema]);
+export const joinOptionsSchema = z.union([displayJoinOptionsSchema, controllerJoinOptionsSchema]);
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
 
 export const commandEnvelopeSchema = z

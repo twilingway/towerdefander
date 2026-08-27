@@ -17,6 +17,7 @@ describe("controller room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 2,
+      crewSize: 3,
       displayConnected: true,
       displayLatencyMs: -1,
       players: collection([
@@ -114,6 +115,7 @@ describe("controller room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 1,
+      crewSize: 3,
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([
@@ -238,6 +240,7 @@ describe("controller room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 3,
+      crewSize: 3,
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([

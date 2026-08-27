@@ -81,6 +81,7 @@ export function createPreviewRoomView(role: CrewRole, phase: PreviewPhase): Cont
     roomId: "PREVIEW",
     phase: phase === "lobby" ? "lobby" : "active",
     runNumber: phase === "lobby" ? 0 : 1,
+    crewSize: 3,
     displayConnected: true,
     displayLatencyMs: 18,
     players,

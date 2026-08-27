@@ -10,6 +10,7 @@ import {
   roomClosingSchema,
   serverLatencyProbeSchema,
   serverMessage,
+  type CrewSize,
   type DisplayRoomView
 } from "@spaceship-defender/protocol";
 import {
@@ -100,14 +101,15 @@ export function DisplayApp() {
     []
   );
 
-  async function createRoom(): Promise<void> {
+  async function createRoom(crewSize: CrewSize): Promise<void> {
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
     try {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
         role: "display",
-        protocolVersion: PROTOCOL_VERSION
+        protocolVersion: PROTOCOL_VERSION,
+        crewSize
       });
       roomReference.current = room;
       room.onStateChange((state) => {
@@ -195,7 +197,7 @@ export function DisplayApp() {
         status={status}
         error={error}
         visibleDemo={visibleDemo}
-        onCreate={() => void createRoom()}
+        onCreate={(crewSize) => void createRoom(crewSize)}
       />
     );
   }

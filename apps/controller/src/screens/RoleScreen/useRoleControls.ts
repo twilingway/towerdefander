@@ -16,6 +16,11 @@ interface RoleControlsOptions {
   readonly encounterPhase: EncounterPhase | undefined;
   readonly connectionDisabled: boolean;
   readonly generation: string;
+  /**
+   * Whether this instance owns the keyboard. The solo panel runs two instances
+   * at once, and only one of them may answer WASD and Space.
+   */
+  readonly keyboard?: boolean;
   readonly onSend: (sequence: number, control: ControlState) => void;
 }
 
@@ -41,6 +46,7 @@ export function useRoleControls({
   encounterPhase,
   connectionDisabled,
   generation,
+  keyboard = true,
   onSend
 }: RoleControlsOptions): RoleControls {
   const controlReference = useRef<ControlState>(NEUTRAL_CONTROL);
@@ -154,11 +160,13 @@ export function useRoleControls({
     const keys = new Set<string>();
     const scheduler = schedulerReference.current;
     const timer = window.setInterval(() => scheduler?.flush(performance.now()), 25);
+    const listensToKeys = keyboard;
     function applyKeys(): void {
       const vector = getKeyboardVector(keys);
       update({ vector });
     }
     function onKeyDown(event: KeyboardEvent): void {
+      if (!listensToKeys) return;
       if (
         [
           "KeyW",
@@ -189,6 +197,7 @@ export function useRoleControls({
       }
     }
     function onKeyUp(event: KeyboardEvent): void {
+      if (!listensToKeys) return;
       if (event.code === "Space" && role === "shield") return;
       keys.delete(event.code);
       if (event.code === "Space" && (role === "gunner" || role === "pilot")) endFire();
@@ -219,7 +228,7 @@ export function useRoleControls({
       window.removeEventListener("blur", neutralize);
       document.removeEventListener("visibilitychange", neutralize);
     };
-  }, [role]);
+  }, [role, keyboard]);
 
   const controlsEnabled = !connectionDisabled && encounterPhase === "combat";
   useLayoutEffect(() => {

@@ -56,7 +56,8 @@ try {
   await waitForServer();
   display = await new Client(endpoint).create(ROOM_TYPE, {
     role: "display",
-    protocolVersion
+    protocolVersion,
+    crewSize: 3
   });
   attachLatencyResponder(display);
   pilot = await joinController(display.roomId, "Pilot");

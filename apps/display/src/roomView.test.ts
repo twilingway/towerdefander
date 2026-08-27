@@ -12,6 +12,7 @@ describe("display room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 2,
+      crewSize: 3,
       displayConnected: true,
       displayLatencyMs: 18,
       players: collection([

@@ -194,6 +194,7 @@ export interface NetworkRoomState {
   roomId?: string;
   phase?: DisplayRoomView["phase"];
   runNumber?: number;
+  crewSize?: number;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -209,6 +210,7 @@ export function toDisplayRoomView(
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
     typeof state.runNumber !== "number" ||
+    typeof state.crewSize !== "number" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -232,6 +234,7 @@ export function toDisplayRoomView(
     roomId: state.roomId,
     phase: state.phase,
     runNumber: state.runNumber,
+    crewSize: state.crewSize,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,

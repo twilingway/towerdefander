@@ -2,6 +2,7 @@ import {
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  type CrewSize,
   roomClosingSchema,
   serverLatencyProbeSchema,
   serverErrorSchema,
@@ -34,10 +35,10 @@ function createClient(sessionId: string): TestClient {
   return { client: { sessionId, send } as unknown as Client, send };
 }
 
-function createRoom(): SpaceshipDefenderRoom {
+function createRoom(crewSize: CrewSize = 3): SpaceshipDefenderRoom {
   const room = new SpaceshipDefenderRoom();
   room.roomId = "ROOM123";
-  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize });
   return room;
 }
 
@@ -134,6 +135,35 @@ function internals(room: SpaceshipDefenderRoom): RoomInternals {
   return room as unknown as RoomInternals;
 }
 
+/** Drops one hostile bullet a stone's throw from the hull, closing head-on. */
+function aimBulletAtHull(room: SpaceshipDefenderRoom): void {
+  const runtime = internals(room);
+  const game = runtime.gameState;
+  if (game === undefined) throw new Error("Expected an active game.");
+  const x = game.spaceship.x + 300;
+  const y = game.spaceship.y;
+  runtime.gameState = {
+    ...game,
+    hostileProjectiles: [
+      {
+        id: "bullet-test",
+        spawnSequence: 1,
+        spawnedTick: game.clock.tick,
+        previousX: x,
+        previousY: y,
+        x,
+        y,
+        velocity: { x: -720, y: 0 },
+        radius: 6,
+        damage: 10,
+        shieldHitCost: 10,
+        lifetimeTicks: 100,
+        visual: null
+      }
+    ]
+  };
+}
+
 function forceIntermission(room: SpaceshipDefenderRoom): void {
   const runtime = internals(room);
   const game = runtime.gameState;
@@ -190,7 +220,12 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     const room = new SpaceshipDefenderRoom();
     room.roomId = "ROOM123";
     expect(() => {
-      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, capacity: 3 });
+      room.onCreate({
+        role: "display",
+        protocolVersion: PROTOCOL_VERSION,
+        crewSize: 3,
+        capacity: 3
+      });
     }).toThrow("invalid_message");
     const stateBeforeMismatch = {
       roomId: room.state.roomId,
@@ -253,6 +288,81 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.game.display.obstacles).toHaveLength(9);
     expect(room.maxMessagesPerSecond).toBe(25);
     expect(setInterval).toHaveBeenCalledTimes(1);
+  });
+
+  it("seats a solo crew on the pilot and starts on one ready", () => {
+    const room = createRoom(1);
+    const solo = joinController(room, 0);
+    expect([...room.state.players.values()].map((player) => player.role)).toEqual(["pilot"]);
+
+    expect(() => joinController(room, 1)).toThrow("room_full");
+
+    ready(room, solo);
+    expect(room.state.phase).toBe("active");
+    expect(room.state.hasGame).toBe(true);
+  });
+
+  it("seats a duo on pilot and gunner and waits for both", () => {
+    const room = createRoom(2);
+    const pilot = joinController(room, 0);
+    const gunner = joinController(room, 1);
+    expect([...room.state.players.values()].map((player) => player.role)).toEqual([
+      "pilot",
+      "gunner"
+    ]);
+
+    expect(() => joinController(room, 2)).toThrow("room_full");
+
+    ready(room, pilot);
+    expect(room.state.phase).toBe("lobby");
+    ready(room, gunner);
+    expect(room.state.phase).toBe("active");
+  });
+
+  it("lets the solo pilot drive the turret and keeps the full crew separate", () => {
+    const soloRoom = createRoom(1);
+    const solo = joinController(soloRoom, 0);
+    ready(soloRoom, solo);
+    soloRoom.handleGunnerInput(solo.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: soloRoom.roomId,
+      playerId: solo.client.sessionId,
+      runNumber: soloRoom.state.runNumber,
+      sequence: 1,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+    soloRoom.advanceGameStep();
+    expect(countErrors(solo, "role_mismatch")).toBe(0);
+    expect(soloRoom.state.game.turretAngle).toBeGreaterThan(0);
+
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    room.handleGunnerInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
+      sequence: 1,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+    room.advanceGameStep();
+    expect(countErrors(pilot, "role_mismatch")).toBe(1);
+    expect(room.state.game.turretAngle).toBe(0);
+  });
+
+  it("runs the shield itself only when no player holds that seat", () => {
+    const soloRoom = createRoom(1);
+    ready(soloRoom, joinController(soloRoom, 0));
+    aimBulletAtHull(soloRoom);
+    soloRoom.advanceGameStep();
+    expect(soloRoom.state.game.shield.active).toBe(true);
+
+    const { room } = startGame();
+    aimBulletAtHull(room);
+    room.advanceGameStep();
+    expect(room.state.game.shield.active).toBe(false);
   });
 
   it("publishes the preset's parallax background on the display state at run start", () => {
@@ -1552,7 +1662,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
       const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
       const broadcast = vi.spyOn(room, "broadcast");
-      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
       internals(room).lifecycle.set(reason, 30_010);
       const callback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       if (callback === undefined) throw new Error("Expected lifecycle callback.");
@@ -1575,7 +1685,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       const room = new SpaceshipDefenderRoom();
       room.roomId = "ROOM123";
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
-      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
       const staleCallback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       const runtime = internals(room);
       runtime.lifecycle.set("result_expired", 20_100);
@@ -1613,7 +1723,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       .spyOn(room, "setMetadata")
       .mockImplementationOnce(() => firstWrite)
       .mockResolvedValue(undefined);
-    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
     joinDisplay(room);
     joinController(room, 0);
     joinController(room, 1);
@@ -1654,7 +1764,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
     vi.spyOn(room, "setMetadata").mockImplementation(() => {
       throw new Error("driver unavailable");
     });
-    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
     const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
       joinController(room, index)
     );

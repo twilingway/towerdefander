@@ -142,7 +142,7 @@ function createClient(sessionId: string): TestClient {
 function startGame(): { readonly room: SpaceshipDefenderRoom; readonly controllers: TestClient[] } {
   const room = new SpaceshipDefenderRoom();
   room.roomId = "PERF196";
-  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
   const display = createClient("display");
   room.onJoin(display.client, { role: "display", protocolVersion: PROTOCOL_VERSION });
   const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) => {

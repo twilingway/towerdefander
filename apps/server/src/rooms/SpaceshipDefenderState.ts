@@ -248,6 +248,7 @@ export class SpaceshipDefenderState extends Schema {
   @type("string") roomId = "";
   @type("string") phase: RoomPhase = "lobby";
   @type("uint32") runNumber = 0;
+  @type("uint8") crewSize = 3;
   @type("boolean") displayConnected = false;
   @type("int32") displayLatencyMs = -1;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
