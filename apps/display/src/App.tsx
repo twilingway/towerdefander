@@ -507,11 +507,14 @@ function readStringEnvironment(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-/** The server refuses a create by throwing a coded error; only this one is expected in play. */
+/** The server refuses a create by throwing a coded error; these two are expected in play. */
 function createFailureMessage(reason: unknown): string {
   if (!(reason instanceof Error)) return "Не удалось создать комнату.";
   if (reason.message === ROOM_REFUSED_AT_CAPACITY) {
     return "Сервер занят: свободных комнат нет. Попробуйте через минуту.";
+  }
+  if (reason.message === "protocol_mismatch") {
+    return "Версия игры устарела. Обновите страницу.";
   }
   return reason.message;
 }

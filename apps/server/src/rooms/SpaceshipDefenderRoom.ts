@@ -222,11 +222,14 @@ export class SpaceshipDefenderRoom extends Room<{
   };
 
   override onCreate(unsafeOptions: unknown): void {
+    // Matchmaking forwards the message only for codes it recognises; anything
+    // else reaches the client as a bare "Internal Server Error", and the join
+    // screens match on this text to name the reason for the player.
     if (this.hasProtocolMismatch(unsafeOptions)) {
-      throw new ServerError(4000, "protocol_mismatch");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "protocol_mismatch");
     }
     if (!displayCreateOptionsSchema.safeParse(unsafeOptions).success) {
-      throw new ServerError(4000, "invalid_message");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_message");
     }
     // Every room in this process shares one event loop, so accepting a room past
     // the ceiling slows the tick of every room already running, not just the
@@ -251,12 +254,12 @@ export class SpaceshipDefenderRoom extends Room<{
 
   override onJoin(client: Client, unsafeOptions: unknown): void {
     if (this.disposing) {
-      throw new ServerError(4001, "invalid_phase");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_phase");
     }
     const result = joinOptionsSchema.safeParse(unsafeOptions);
     if (!result.success) {
       throw new ServerError(
-        4000,
+        ErrorCode.APPLICATION_ERROR,
         this.hasProtocolMismatch(unsafeOptions) ? "protocol_mismatch" : "invalid_message"
       );
     }
@@ -271,11 +274,11 @@ export class SpaceshipDefenderRoom extends Room<{
     }
 
     if (this.state.players.size >= PLAYER_CAPACITY) {
-      throw new ServerError(4001, "room_full");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "room_full");
     }
     const role = this.findAvailableRole();
     if (role === undefined) {
-      throw new ServerError(4001, "room_full");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "room_full");
     }
 
     client.view = new StateView();
@@ -838,7 +841,7 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private joinDisplay(client: Client): void {
     if (this.displaySessionId !== undefined) {
-      throw new ServerError(4001, "display_already_connected");
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "display_already_connected");
     }
     client.view = new StateView();
     client.view.add(this.state.game, 1);
