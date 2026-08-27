@@ -49,6 +49,7 @@ export function createWorstCaseCombatFixture(
       kind: index % 3 === 0 ? "missileCarrier" : "gunship",
       heading: 0.2,
       angularVelocity: 0,
+      orbitSign: 1,
       hp: 10_000,
       maxHp: 10_000,
       weaponCooldownTicks: [10_000]

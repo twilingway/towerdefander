@@ -7,7 +7,8 @@ import {
 import {
   constrainMovingCircleToArena,
   isWithinCircularEnvelope,
-  type ArenaCircle
+  type ArenaCircle,
+  type ConstrainedMovingCircle
 } from "./arenaGeometry.ts";
 
 export type EncounterPhase = "combat" | "intermission" | "result";
@@ -251,6 +252,12 @@ export interface CombatEnemyState extends MovingEntity {
   readonly heading: number;
   /** Spin the hull still carries. Internal: the display only gets `heading`. */
   readonly angularVelocity: number;
+  /**
+   * Which way round the ship this enemy circles, `1` or `-1`. Chosen at spawn
+   * and reversed only when the arena wall leaves the current side no room.
+   * Internal: it never reaches a snapshot.
+   */
+  readonly orbitSign: number;
   readonly hp: number;
   readonly maxHp: number;
   /** One entry per archetype weapon, in the archetype's order. */
@@ -374,6 +381,13 @@ const UINT32_MAX = 0xffff_ffff;
 const ENEMY_RANGE_BAND = 120;
 /** Share of its speed an enemy spends circling once it is on station. */
 const ENEMY_ORBIT_SHARE = 0.35;
+/**
+ * Share of the legal radius past which the wall starts steering the enemy. The
+ * autopilot flips its own orbit at the same fraction.
+ */
+const ENEMY_RIM_START = 0.8;
+/** Post-clamp speed below this share of the archetype speed counts as pinned. */
+const ENEMY_STALL_SPEED_FRACTION = 0.05;
 const SPAWN_DOMAIN = 0x5350_4157;
 const OFFER_DOMAIN = 0x4f46_4652;
 const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
@@ -1310,21 +1324,49 @@ function moveEnemy(
   // since circling widens the range it pushed the ship straight back across the
   // line — a limit cycle that read as an enemy twitching on the spot.
   const radial = clamp((distance - preferred) / ENEMY_RANGE_BAND, -1, 1);
-  const orbitSign = enemy.spawnSequence % 2 === 0 ? 1 : -1;
-  const orbit = orbitSign * ENEMY_ORBIT_SHARE * (1 - Math.abs(radial));
-  const velocity = {
-    x: ((deltaX / distance) * radial - (deltaY / distance) * orbit) * speed,
-    y: ((deltaY / distance) * radial + (deltaX / distance) * orbit) * speed
-  };
-  const constrained = constrainMovingCircleToArena(
-    {
-      x: enemy.x + velocity.x * secondsPerStep,
-      y: enemy.y + velocity.y * secondsPerStep,
-      radius: enemy.radius,
-      velocity
-    },
-    arenaFromConfig(config)
+  // Backing away at the rim is a move the arena deletes whole: the outward
+  // component is the entire vector, so the enemy used to stand still against
+  // the wall for as long as the ship stayed inside its comfort ring. Fade the
+  // retreat as the wall closes in and hand the freed speed to the circling
+  // term, so a cornered enemy slides along the rim instead of pressing into it.
+  const arena = arenaFromConfig(config);
+  const legalRadius = Math.max(1, arena.radius - enemy.radius);
+  const rimShare = clamp(
+    (Math.hypot(enemy.x - arena.centerX, enemy.y - arena.centerY) / legalRadius - ENEMY_RIM_START) /
+      (1 - ENEMY_RIM_START),
+    0,
+    1
   );
+  const closing = radial < 0 ? radial * (1 - rimShare) : radial;
+  const orbit = (ENEMY_ORBIT_SHARE + (1 - ENEMY_ORBIT_SHARE) * rimShare) * (1 - Math.abs(closing));
+  const courseFor = (sign: number): ConstrainedMovingCircle => {
+    const velocity = {
+      x: ((deltaX / distance) * closing - (deltaY / distance) * orbit * sign) * speed,
+      y: ((deltaY / distance) * closing + (deltaX / distance) * orbit * sign) * speed
+    };
+    return constrainMovingCircleToArena(
+      {
+        x: enemy.x + velocity.x * secondsPerStep,
+        y: enemy.y + velocity.y * secondsPerStep,
+        radius: enemy.radius,
+        velocity
+      },
+      arena
+    );
+  };
+  // The wall can eat only one of the two circling directions, because it takes
+  // the outward component and the reversed course points the other way. So a
+  // pinned enemy reverses once and is free, rather than being nudged forever.
+  let orbitSign = enemy.orbitSign;
+  let constrained = courseFor(orbitSign);
+  const constrainedSpeed = Math.hypot(constrained.velocity.x, constrained.velocity.y);
+  if (constrainedSpeed < speed * ENEMY_STALL_SPEED_FRACTION) {
+    const reversed = courseFor(-orbitSign);
+    if (Math.hypot(reversed.velocity.x, reversed.velocity.y) > constrainedSpeed) {
+      orbitSign = -orbitSign;
+      constrained = reversed;
+    }
+  }
   const stalled = constrained.velocity.x === 0 && constrained.velocity.y === 0;
   const traverse = advanceAngularTraverse(
     {
@@ -1350,6 +1392,7 @@ function moveEnemy(
     velocity: constrained.velocity,
     heading: traverse.angle,
     angularVelocity: traverse.angularVelocity,
+    orbitSign,
     weaponCooldownTicks: enemy.weaponCooldownTicks.map((ticks) => Math.max(0, ticks - 1))
   };
 }
@@ -1554,6 +1597,7 @@ function spawnEntity(
       velocity: { x: 0, y: 0 },
       heading: 0,
       angularVelocity: 0,
+      orbitSign: spawnSequence % 2 === 0 ? 1 : -1,
       radius: entityRadius,
       spawnedTick: tick,
       hp,

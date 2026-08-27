@@ -50,11 +50,115 @@ function quietEnemy(
     spawnedTick: 0,
     heading: 0,
     angularVelocity: 0,
+    orbitSign: 1,
     hp: 1_000_000,
     maxHp: 1_000_000,
     weaponCooldownTicks: [1_000_000],
     ...overrides
   };
+}
+
+const RIM_PIN_STEPS = 300;
+/** Ticks the arena may eat before the enemy is expected to have freed itself. */
+const RIM_PIN_MOTIONLESS_LIMIT = 1;
+
+/** Share of the archetype speed a cornered enemy is expected to keep on average. */
+const RIM_PIN_SPEED_SHARE = 0.25;
+/** Share of the archetype speed below which the arena counts as having pinned it. */
+const RIM_PIN_STALL_SHARE = 0.05;
+
+interface RimPinRun {
+  readonly pathLength: number;
+  readonly angleTravelled: number;
+  readonly longestMotionlessRun: number;
+  readonly slowestSpeed: number;
+}
+
+/**
+ * Parks an enemy against the arena wall with the spaceship inside its preferred
+ * range and reports how much ground the enemy actually covered. Returns null
+ * when the requested spaceship placement would sit outside the legal circle.
+ */
+function runRimPinnedEnemy(
+  config: SpaceshipSimulationConfig,
+  kind: string,
+  spawnSequence: number,
+  shipBearing: number,
+  shipSeparation: number
+): RimPinRun | null {
+  const archetype = getEnemyArchetype(config, kind);
+  const centerX = config.worldWidth / 2;
+  const centerY = config.worldHeight / 2;
+  const enemyX = centerX + config.arenaRadius - archetype.radius;
+  const enemyY = centerY;
+  const shipX = enemyX + Math.cos(shipBearing) * shipSeparation;
+  const shipY = enemyY + Math.sin(shipBearing) * shipSeparation;
+  if (Math.hypot(shipX - centerX, shipY - centerY) > config.arenaRadius - config.spaceshipRadius) {
+    return null;
+  }
+
+  let state: SpaceshipSimulationState = {
+    ...createSpaceshipSimulationState(config, 73),
+    pendingSpawns: [],
+    spaceship: { x: shipX, y: shipY, previousX: shipX, previousY: shipY, velocity: { x: 0, y: 0 } },
+    enemies: [
+      quietEnemy(config, {
+        kind,
+        spawnSequence,
+        orbitSign: spawnSequence % 2 === 0 ? 1 : -1,
+        radius: archetype.radius,
+        x: enemyX,
+        previousX: enemyX,
+        y: enemyY,
+        previousY: enemyY
+      })
+    ]
+  };
+
+  let pathLength = 0;
+  let angleTravelled = 0;
+  let motionlessRun = 0;
+  let longestMotionlessRun = 0;
+  let slowestSpeed = Number.POSITIVE_INFINITY;
+  let previousX = enemyX;
+  let previousY = enemyY;
+  let previousAngle = Math.atan2(enemyY - centerY, enemyX - centerX);
+
+  for (let step = 0; step < RIM_PIN_STEPS; step += 1) {
+    state = advanceSpaceshipSimulation(state, config);
+    const enemy = state.enemies[0];
+    expect(enemy).toBeDefined();
+    if (enemy === undefined) break;
+    expect(Math.hypot(enemy.x - centerX, enemy.y - centerY) + enemy.radius).toBeLessThanOrEqual(
+      config.arenaRadius + 1e-9
+    );
+
+    const moved = Math.hypot(enemy.x - previousX, enemy.y - previousY);
+    pathLength += moved;
+    motionlessRun = moved < 1e-9 ? motionlessRun + 1 : 0;
+    longestMotionlessRun = Math.max(longestMotionlessRun, motionlessRun);
+    slowestSpeed = Math.min(slowestSpeed, Math.hypot(enemy.velocity.x, enemy.velocity.y));
+    const angle = Math.atan2(enemy.y - centerY, enemy.x - centerX);
+    angleTravelled += Math.abs(((angle - previousAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    previousAngle = angle;
+    previousX = enemy.x;
+    previousY = enemy.y;
+  }
+
+  return { pathLength, angleTravelled, longestMotionlessRun, slowestSpeed };
+}
+
+/** Ground a cornered enemy has to cover over the whole run to count as mobile. */
+function rimPinDistanceFloor(config: SpaceshipSimulationConfig, kind: string): number {
+  const seconds = (RIM_PIN_STEPS * config.fixedStepMs) / 1000;
+  return getEnemyArchetype(config, kind).speedPerSecond * seconds * RIM_PIN_SPEED_SHARE;
+}
+
+function quietArenaConfig(): SpaceshipSimulationConfig {
+  return createSpaceshipSimulationConfig({
+    ambientAsteroidIntervalMinTicks: 100_000,
+    ambientAsteroidIntervalMaxTicks: 100_000
+  });
 }
 
 function ambientAsteroid(
@@ -185,6 +289,92 @@ describe("circular combat spawning and movement", () => {
       ).toBeLessThanOrEqual(config.arenaRadius + 1e-9);
     }
     expect(state.enemies).toHaveLength(1);
+  });
+
+  it("keeps a wall-pinned enemy sliding along the rim instead of freezing", () => {
+    const config = quietArenaConfig();
+    const archetype = getEnemyArchetype(config, "gunship");
+    // The ship parks well inside the preferred range, so the enemy backs off
+    // straight into the wall — the geometry that used to stop it dead.
+    const run = runRimPinnedEnemy(
+      config,
+      "gunship",
+      100,
+      Math.PI,
+      archetype.preferredDistance - 200
+    );
+
+    expect(run).not.toBeNull();
+    if (run === null) return;
+    expect(run.longestMotionlessRun).toBeLessThanOrEqual(RIM_PIN_MOTIONLESS_LIMIT);
+    expect(run.slowestSpeed).toBeGreaterThan(archetype.speedPerSecond * RIM_PIN_STALL_SHARE);
+    expect(run.pathLength).toBeGreaterThan(rimPinDistanceFloor(config, "gunship"));
+    expect(run.angleTravelled).toBeGreaterThan(Math.PI / 8);
+  });
+
+  it("frees a pinned enemy from every ship placement the arena allows", () => {
+    const config = quietArenaConfig();
+    let covered = 0;
+
+    for (const kind of ["gunship", "boss"]) {
+      const archetype = getEnemyArchetype(config, kind);
+      for (const spawnSequence of [100, 101]) {
+        for (const bearingQuarters of [2, 3, 4, 5, 6]) {
+          for (const separationShare of [0.3, 0.6, 0.9]) {
+            const run = runRimPinnedEnemy(
+              config,
+              kind,
+              spawnSequence,
+              (Math.PI * bearingQuarters) / 4,
+              archetype.preferredDistance * separationShare
+            );
+            if (run === null) continue;
+            covered += 1;
+            expect(run.longestMotionlessRun).toBeLessThanOrEqual(RIM_PIN_MOTIONLESS_LIMIT);
+            expect(run.slowestSpeed).toBeGreaterThan(
+              archetype.speedPerSecond * RIM_PIN_STALL_SHARE
+            );
+            expect(run.pathLength).toBeGreaterThan(rimPinDistanceFloor(config, kind));
+          }
+        }
+      }
+    }
+
+    expect(covered).toBeGreaterThan(20);
+  });
+
+  it("leaves the course unchanged away from the rim", () => {
+    const config = quietArenaConfig();
+    const centerX = config.worldWidth / 2;
+    const centerY = config.worldHeight / 2;
+    const enemyX = centerX + 900;
+    let state: SpaceshipSimulationState = {
+      ...createSpaceshipSimulationState(config, 73),
+      pendingSpawns: [],
+      spaceship: {
+        x: centerX,
+        y: centerY,
+        previousX: centerX,
+        previousY: centerY,
+        velocity: { x: 0, y: 0 }
+      },
+      enemies: [quietEnemy(config, { x: enemyX, previousX: enemyX })]
+    };
+
+    for (let step = 0; step < 60; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+      const enemy = state.enemies[0];
+      expect(enemy).toBeDefined();
+      if (enemy === undefined) break;
+      // Well inside the band where the wall has no say over the blend.
+      expect(Math.hypot(enemy.x - centerX, enemy.y - centerY)).toBeLessThan(
+        (config.arenaRadius - enemy.radius) * 0.8
+      );
+    }
+
+    // Golden values recorded from the blend before the rim rule was added.
+    expect(state.enemies[0]?.x).toBeCloseTo(2853.9148503025867, 6);
+    expect(state.enemies[0]?.y).toBeCloseTo(2129.5418583681662, 6);
   });
 });
 
