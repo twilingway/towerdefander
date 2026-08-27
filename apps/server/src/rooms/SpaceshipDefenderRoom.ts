@@ -9,19 +9,9 @@ import {
   createCleanSpaceshipRun,
   createSpaceshipSimulationConfig,
   failWaveByTimeout,
-  type AsteroidState as CoreAsteroidState,
-  type CombatEnemyState,
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState,
-  type HomingMissileState as CoreHomingMissileState,
-  type EntityVisual,
-  type HostileProjectileState,
-  type ProjectileState as CoreProjectileState,
-  type RoleModifiers,
-  voteForTeamUpgrade,
-  type TeamUpgradeOffer,
-  type TeamUpgradeSelection,
-  type TeamUpgradeVote
+  voteForTeamUpgrade
 } from "@spaceship-defender/game-core";
 import {
   CREW_ROLES,
@@ -43,27 +33,34 @@ import {
   type PilotInputCommand,
   type RoomClosingReason,
   type ServerErrorCode,
-  type ShieldInputCommand,
-  type UpgradeVoteCommand
+  type ShieldInputCommand
 } from "@spaceship-defender/protocol";
 import { StateView } from "@colyseus/schema";
 import { CloseCode, ErrorCode, Room, ServerError, matchMaker, type Client } from "colyseus";
-import { randomInt, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { getBalanceStore } from "../balance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
+import { DECORATIVE_OBSTACLES } from "./decorations.js";
 import {
-  AsteroidState,
-  EnemyState,
-  HomingMissileState,
+  compareLifecycleDeadlines,
+  type LifecycleDeadline,
+  type LifecycleDeadlineReason
+} from "./lifecycleDeadline.js";
+import { createRunSeed } from "./runSeed.js";
+import { median } from "./statistics.js";
+import { projectGameState } from "./stateProjection.js";
+import {
+  upgradeErrorMessage,
+  upgradeFingerprint,
+  type UpgradeJournalEntry
+} from "./upgradeJournal.js";
+import {
   EnemyVisualState,
   ObstacleState,
   PlayerState,
-  ProjectileState,
-  SpaceshipDefenderState,
-  UpgradeCardState,
-  UpgradeVoteState
+  SpaceshipDefenderState
 } from "./SpaceshipDefenderState.js";
 
 type ConnectionRole = "display" | "controller";
@@ -86,25 +83,11 @@ interface OutstandingLatencyProbe {
   readonly timeout: RoomTimer;
 }
 
-interface UpgradeJournalEntry {
-  readonly actionId: string;
-  readonly fingerprint: string;
-  readonly outcome: "accepted" | "invalid_phase" | "action_not_available" | "stale_action";
-}
-
-type LifecycleDeadlineReason = Exclude<RoomClosingReason, "display_left">;
-
-interface LifecycleDeadline {
-  readonly reason: LifecycleDeadlineReason;
-  readonly expiresAtMs: number;
-}
-
 const LATENCY_PROBE_INTERVAL_MS = 2_000;
 const LATENCY_PROBE_TIMEOUT_MS = 5_000;
 const MAX_LATENCY_SAMPLE_MS = 5_000;
 const MAX_LATENCY_SAMPLES = 5;
 const MAX_UPGRADE_JOURNAL_ENTRIES = 32;
-const UINT32_EXCLUSIVE_MAX = 0x1_0000_0000;
 
 const {
   reconnectionGraceSeconds,
@@ -117,53 +100,6 @@ const {
 } = readServerConfig();
 
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
-
-const DECORATIVE_OBSTACLES = [
-  { obstacleId: "island-northwest", kind: "circle" as const, x: 760, y: 760, radius: 105 },
-  {
-    obstacleId: "ruins-north",
-    kind: "rectangle" as const,
-    x: 2200,
-    y: 390,
-    width: 250,
-    height: 120
-  },
-  {
-    obstacleId: "cloud-northeast",
-    kind: "rectangle" as const,
-    x: 3650,
-    y: 850,
-    width: 330,
-    height: 150
-  },
-  { obstacleId: "island-west", kind: "circle" as const, x: 850, y: 1740, radius: 135 },
-  {
-    obstacleId: "ruins-center-west",
-    kind: "rectangle" as const,
-    x: 1980,
-    y: 1420,
-    width: 220,
-    height: 180
-  },
-  { obstacleId: "island-center-east", kind: "circle" as const, x: 2820, y: 1840, radius: 90 },
-  { obstacleId: "island-southwest", kind: "circle" as const, x: 900, y: 2700, radius: 120 },
-  {
-    obstacleId: "cloud-southeast",
-    kind: "rectangle" as const,
-    x: 4040,
-    y: 2600,
-    width: 300,
-    height: 140
-  },
-  {
-    obstacleId: "ruins-south",
-    kind: "rectangle" as const,
-    x: 2500,
-    y: 2760,
-    width: 240,
-    height: 170
-  }
-] as const;
 
 export class SpaceshipDefenderRoom extends Room<{
   state: SpaceshipDefenderState;
@@ -708,104 +644,7 @@ export class SpaceshipDefenderRoom extends Room<{
     if (game === undefined) {
       return;
     }
-    const target = this.state.game;
-    target.tick = game.clock.tick;
-    target.elapsedMs = game.clock.elapsedMs;
-    target.worldWidth = this.gameConfig.worldWidth;
-    target.worldHeight = this.gameConfig.worldHeight;
-    target.arenaRadius = this.gameConfig.arenaRadius;
-    target.display.cameraViewWidth = this.gameConfig.cameraViewWidth;
-    target.display.backgroundParallaxStrength = this.gameConfig.background.parallaxStrength;
-    target.display.backgroundDriftSpeed = this.gameConfig.background.driftSpeed;
-    target.display.backgroundNebulaAlpha = this.gameConfig.background.nebulaAlpha;
-    target.display.backgroundNebulaPreset = this.gameConfig.background.nebulaPreset;
-    target.spaceship.x = game.spaceship.x;
-    target.spaceship.y = game.spaceship.y;
-    target.spaceship.velocityX = game.spaceship.velocity.x;
-    target.spaceship.velocityY = game.spaceship.velocity.y;
-    target.spaceship.radius = this.gameConfig.spaceshipRadius;
-    target.spaceship.hp = game.spaceshipHp;
-    target.spaceship.maxHp = game.spaceshipMaxHp;
-    target.spaceship.heading = game.spaceshipHeading;
-    target.turretAngle = game.turretAngle;
-    target.shield.angle = game.shieldAngle;
-    target.shield.active = game.shieldActive;
-    target.shield.energy = game.shieldEnergy;
-    target.shield.capacity =
-      this.gameConfig.shieldCapacity + game.roleModifiers.shield.capacityBonus;
-    target.shield.arcHalfAngle =
-      Math.min(
-        Math.PI * 2,
-        this.gameConfig.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus
-      ) / 2;
-    target.cannon.heat = game.cannonHeat;
-    target.cannon.capacity = this.gameConfig.cannonHeatCapacity;
-    target.cannon.overheated = game.cannonOverheated;
-    target.machineGun.heat = game.mgHeat;
-    target.machineGun.capacity = this.gameConfig.mgHeatCapacity;
-    target.machineGun.overheated = game.mgOverheated;
-    target.encounter.phase = game.encounterPhase;
-    target.encounter.hasOutcome = game.outcome !== null;
-    target.encounter.outcome = game.outcome ?? "defeat";
-    target.encounter.hasDefeatReason = game.defeatReason !== null;
-    target.encounter.defeatReason = game.defeatReason ?? "spaceship_destroyed";
-    target.encounter.waveNumber = game.waveNumber;
-    target.encounter.encounterTick = game.encounterTick;
-    target.encounter.phaseTicksRemaining =
-      game.encounterPhase === "intermission"
-        ? Math.max(0, this.gameConfig.intermissionTicks - game.encounterTick)
-        : 0;
-    target.encounter.waveSecondsRemaining =
-      game.encounterPhase === "combat" && this.waveDeadlineAtMs !== undefined
-        ? Math.max(1, Math.ceil((this.waveDeadlineAtMs - Date.now()) / 1_000))
-        : 0;
-    target.encounter.score = game.score;
-    target.credits = game.credits;
-    syncRoleModifiers(target.roleModifiers, game.roleModifiers);
-
-    reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
-    reconcileKeyed(
-      target.display.asteroids,
-      game.asteroids,
-      () => new AsteroidState(),
-      syncAsteroid
-    );
-    reconcileKeyed(
-      target.display.friendlyProjectiles,
-      game.projectiles,
-      () => new ProjectileState(),
-      (state, projectile) => {
-        // Each barrel gets its own look, so a burst reads as two weapons.
-        syncProjectile(
-          state,
-          projectile,
-          "friendly",
-          projectile.source === "machineGun"
-            ? this.gameConfig.mgProjectileVisual
-            : this.gameConfig.projectileVisual
-        );
-      }
-    );
-    reconcileKeyed(
-      target.display.hostileProjectiles,
-      game.hostileProjectiles,
-      () => new ProjectileState(),
-      (state, projectile) => {
-        syncProjectile(state, projectile, "hostile");
-      }
-    );
-    reconcileKeyed(
-      target.display.homingMissiles,
-      game.homingMissiles,
-      () => new HomingMissileState(),
-      syncHomingMissile
-    );
-    syncTeamUpgrade(
-      target.teamUpgrade,
-      game.teamUpgradeOffer,
-      game.teamUpgradeVotes,
-      game.teamUpgradeSelection
-    );
+    projectGameState(this.state.game, game, this.gameConfig, this.waveDeadlineAtMs);
   }
 
   private neutralizeRole(playerId: string): void {
@@ -1145,198 +984,5 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private sendError(client: Client, code: ServerErrorCode, message: string): void {
     client.send(serverMessage.error, { code, message });
-  }
-}
-
-function median(values: readonly number[]): number {
-  const ordered = [...values].sort((left, right) => left - right);
-  const middle = Math.floor(ordered.length / 2);
-  const upper = ordered[middle];
-  if (upper === undefined) return -1;
-  if (ordered.length % 2 === 1) return upper;
-  const lower = ordered[middle - 1];
-  return lower === undefined ? upper : Math.round((lower + upper) / 2);
-}
-
-function compareLifecycleDeadlines(left: LifecycleDeadline, right: LifecycleDeadline): number {
-  if (left.expiresAtMs !== right.expiresAtMs) return left.expiresAtMs - right.expiresAtMs;
-  return lifecycleReasonPriority(left.reason) - lifecycleReasonPriority(right.reason);
-}
-
-function lifecycleReasonPriority(reason: LifecycleDeadlineReason): number {
-  if (reason === "display_reconnect_expired") return 0;
-  if (reason === "room_lifetime_expired") return 1;
-  if (reason === "lobby_expired" || reason === "result_expired") return 2;
-  return 3;
-}
-
-function createRunSeed(excluded?: number): number {
-  let seed = randomInt(1, UINT32_EXCLUSIVE_MAX);
-  while (seed === excluded) seed = randomInt(1, UINT32_EXCLUSIVE_MAX);
-  return seed;
-}
-
-function upgradeFingerprint(command: UpgradeVoteCommand): string {
-  return [
-    command.protocolVersion,
-    command.roomId,
-    command.playerId,
-    command.runNumber,
-    command.waveNumber,
-    command.offerId,
-    command.upgradeId,
-    command.revision
-  ].join("\u001f");
-}
-
-function upgradeErrorMessage(outcome: Exclude<UpgradeJournalEntry["outcome"], "accepted">): string {
-  if (outcome === "invalid_phase") return "Upgrade vote requires an intermission.";
-  if (outcome === "stale_action") return "A newer vote revision already exists for this role.";
-  return "Upgrade offer is no longer available.";
-}
-
-interface KeyedSchemaCollection<T> {
-  get(key: string): T | undefined;
-  set(key: string, value: T): unknown;
-  delete(key: string): boolean;
-  keys(): IterableIterator<string>;
-}
-
-function reconcileKeyed<TCore extends { readonly id: string }, TState>(
-  target: KeyedSchemaCollection<TState>,
-  source: readonly TCore[],
-  create: () => TState,
-  update: (target: TState, source: TCore) => void
-): void {
-  const liveIds = new Set(source.map(({ id }) => id));
-  for (const entityId of [...target.keys()]) {
-    if (!liveIds.has(entityId)) target.delete(entityId);
-  }
-  for (const entity of source) {
-    let state = target.get(entity.id);
-    if (state === undefined) {
-      state = create();
-      target.set(entity.id, state);
-    }
-    update(state, entity);
-  }
-}
-
-function syncRoleModifiers(
-  target: SpaceshipDefenderState["game"]["roleModifiers"],
-  source: RoleModifiers
-) {
-  target.pilot.speedMultiplier = source.pilot.speedMultiplier;
-  target.pilot.accelerationMultiplier = source.pilot.accelerationMultiplier;
-  target.pilot.maxHpBonus = source.pilot.maxHpBonus;
-  target.gunner.damageMultiplier = source.gunner.damageMultiplier;
-  target.gunner.cooldownMultiplier = source.gunner.cooldownMultiplier;
-  target.gunner.projectileSpeedMultiplier = source.gunner.projectileSpeedMultiplier;
-  target.shield.capacityBonus = source.shield.capacityBonus;
-  target.shield.rechargeMultiplier = source.shield.rechargeMultiplier;
-  target.shield.arcWidthBonus = source.shield.arcWidthBonus;
-}
-
-function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
-  target.entityId = source.id;
-  target.spawnSequence = source.spawnSequence;
-  target.kind = source.kind;
-  target.x = source.x;
-  target.y = source.y;
-  target.velocityX = source.velocity.x;
-  target.velocityY = source.velocity.y;
-  target.radius = source.radius;
-  target.heading = source.heading;
-  target.hp = source.hp;
-  target.maxHp = source.maxHp;
-}
-
-function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
-  target.entityId = source.id;
-  target.origin = source.origin;
-  target.spawnSequence = source.spawnSequence;
-  target.x = source.x;
-  target.y = source.y;
-  target.velocityX = source.velocity.x;
-  target.velocityY = source.velocity.y;
-  target.radius = source.radius;
-  target.hp = source.hp;
-  target.maxHp = source.maxHp;
-}
-
-function syncProjectile(
-  target: ProjectileState,
-  source: CoreProjectileState | HostileProjectileState,
-  kind: "friendly" | "hostile",
-  friendlyVisual: EntityVisual | null = null
-): void {
-  target.entityId = source.id;
-  target.spawnSequence = source.spawnSequence;
-  target.kind = kind;
-  target.x = source.x;
-  target.y = source.y;
-  target.velocityX = source.velocity.x;
-  target.velocityY = source.velocity.y;
-  target.radius = source.radius;
-  target.source = kind === "friendly" ? (source as CoreProjectileState).source : "";
-  // Set once at spawn: the value never changes, so it costs nothing per tick.
-  const visual = kind === "hostile" ? (source as HostileProjectileState).visual : friendlyVisual;
-  target.visualShape = visual?.shape ?? "";
-  target.visualScale = visual?.modelScale ?? 1;
-}
-
-function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissileState): void {
-  target.entityId = source.id;
-  target.spawnSequence = source.spawnSequence;
-  target.x = source.x;
-  target.y = source.y;
-  target.velocityX = source.velocity.x;
-  target.velocityY = source.velocity.y;
-  target.radius = source.radius;
-  target.heading = source.heading;
-  target.visualShape = source.visual?.shape ?? "";
-  target.visualScale = source.visual?.modelScale ?? 1;
-}
-
-function syncTeamUpgrade(
-  target: SpaceshipDefenderState["game"]["teamUpgrade"],
-  offer: TeamUpgradeOffer | null,
-  votes: Readonly<Record<CrewRole, TeamUpgradeVote | null>>,
-  selection: TeamUpgradeSelection | null
-): void {
-  target.hasOffer = offer !== null;
-  if (offer !== null) {
-    target.offer.offerId = offer.offerId;
-    target.offer.waveNumber = offer.waveNumber;
-    for (const [index, source] of offer.cards.entries()) {
-      while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
-      const card = target.offer.cards.at(index);
-      card.upgradeId = source.upgradeId;
-      card.role = source.role;
-      card.label = source.label;
-      card.value = source.value;
-      card.price = source.price;
-    }
-    while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();
-  } else {
-    target.offer.cards.clear();
-  }
-  target.votes.clear();
-  for (const role of CREW_ROLES) {
-    const source = votes[role];
-    if (source === null) continue;
-    const vote = new UpgradeVoteState();
-    vote.role = source.role;
-    vote.upgradeId = source.upgradeId;
-    vote.revision = source.revision;
-    target.votes.set(role, vote);
-  }
-  target.hasSelection = selection !== null;
-  if (selection !== null) {
-    target.selection.offerId = selection.offerId;
-    target.selection.upgradeId = selection.upgradeId;
-    target.selection.role = selection.role;
-    target.selection.waveNumber = selection.waveNumber;
-    target.selection.price = selection.price;
   }
 }
