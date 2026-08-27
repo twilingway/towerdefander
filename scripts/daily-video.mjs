@@ -1,6 +1,5 @@
-import { execFile, execFileSync, spawn } from "node:child_process";
-import { access, cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { execFileSync, spawn } from "node:child_process";
+import { access, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,21 +11,32 @@ const captures = join(output, "captures");
 const status = [];
 
 await mkdir(captures, { recursive: true });
+const revision = revisionFor(date);
 await run(
   process.execPath,
-  [join(root, "scripts", "create-daily-video-research.mjs"), "--date", date, "--overwrite"],
+  [
+    join(root, "scripts", "create-daily-video-research.mjs"),
+    "--date",
+    date,
+    "--overwrite",
+    ...(revision === undefined ? [] : ["--revision", revision])
+  ],
   root
 );
 
 const commits = commitsFor(date);
-const revision = revisionFor(date);
 const changedPaths = commits.flatMap((commit) => pathsFor(commit.hash));
 const claims = claimsFor(commits);
 const narration = narrationFor(date, claims);
 await writeFile(join(output, "shorts-script.md"), renderScript(date, claims, narration), "utf8");
 
 let uiCaptures = [];
-if (uiUrl !== undefined) {
+if (revision !== undefined) {
+  uiCaptures = await captureHistoricalUi(revision, changedPaths).catch((error) => {
+    status.push(`- UI-кадры исторической ревизии не сняты: ${error.message}`);
+    return [];
+  });
+} else if (uiUrl !== undefined) {
   uiCaptures = await captureUi(changedPaths, uiUrl).catch((error) => {
     status.push(`- UI-кадры не сняты: ${error.message}`);
     return [];
@@ -51,11 +61,25 @@ if (gameplayPath !== undefined) {
   status.push("- Геймплей пропущен флагом `--no-demo`.");
 }
 
+let rawGameplayPath;
+if (gameplayPath !== undefined) {
+  try {
+    rawGameplayPath = join(output, "gameplay-raw.mp4");
+    await renderRawGameplay(gameplayPath, rawGameplayPath);
+    status.push(
+      "- Сохранён чистый клип для ручного монтажа: gameplay-raw.mp4 (без звука и текста)."
+    );
+  } catch (error) {
+    status.push(`- Чистый клип не собран: ${error.message}`);
+  }
+}
+
 await writeFile(join(captures, "voice.txt"), narration, "utf8");
+await writeFile(join(captures, "voice.ssml"), renderSsml(narration), "utf8");
 const voicePath = join(captures, "voice.wav");
 let voiceDuration;
 try {
-  await createVoice(join(captures, "voice.txt"), voicePath);
+  await createVoice(join(captures, "voice.ssml"), voicePath);
   voiceDuration = await mediaDuration(voicePath);
 } catch (error) {
   status.push(`- Озвучка не создана: ${error.message}`);
@@ -76,9 +100,15 @@ if (gameplayPath !== undefined && voiceDuration !== undefined) {
       duration
     );
     const metadata = await mediaMetadata(draftPath);
-    if (metadata.width !== 1080 || metadata.height !== 1920 || metadata.fps !== 30) {
+    if (
+      metadata.width !== 1080 ||
+      metadata.height !== 1920 ||
+      metadata.fps !== 30 ||
+      metadata.duration < 35 ||
+      metadata.duration > 45
+    ) {
       throw new Error(
-        `ffprobe returned ${metadata.width}x${metadata.height} at ${metadata.fps} fps.`
+        `ffprobe returned ${metadata.width}x${metadata.height} at ${metadata.fps} fps for ${metadata.duration.toFixed(1)} seconds.`
       );
     }
     status.push(
@@ -96,7 +126,7 @@ if (gameplayPath !== undefined && voiceDuration !== undefined) {
 
 await writeFile(
   join(output, "shot-list.md"),
-  renderShotList(date, claims, uiCaptures, gameplayPath, draftPath),
+  renderShotList(date, claims, uiCaptures, gameplayPath, rawGameplayPath, draftPath),
   "utf8"
 );
 await writeFile(join(output, "status.md"), renderStatus(date, revision, status), "utf8");
@@ -109,7 +139,8 @@ const manifest = {
     script: "shorts-script.md",
     shotList: "shot-list.md",
     status: "status.md",
-    draft: draftPath === undefined ? undefined : "draft.mp4"
+    draft: draftPath === undefined ? undefined : "draft.mp4",
+    rawGameplay: rawGameplayPath === undefined ? undefined : "gameplay-raw.mp4"
   },
   ui: uiCaptures.map(({ id, title, path }) => ({
     id,
@@ -152,16 +183,14 @@ async function copyExplicitGameplay(value) {
   }
   await access(source);
   const target = join(captures, "gameplay.webm");
-  await cp(source, target);
+  if (source !== target) await cp(source, target);
   return target;
 }
 
 function validDate(value) {
-  return (
-    typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}$/u.test(value) &&
-    !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
-  );
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function safeDayDirectory(day) {
@@ -216,16 +245,78 @@ function pathsFor(hash) {
 
 function claimsFor(commits) {
   if (commits.length === 0) return ["За эту дату в Git нет подтверждённых изменений."];
-  return commits.slice(0, 4).map((commit) => `${commit.shortHash}: ${commit.subject}`);
+  return commits.slice(0, 4).map((commit) => summarizeCommit(commit.subject));
+}
+
+function summarizeCommit(subject) {
+  const known = new Map([
+    ["feat: оружие в центре", "Перенёс оружие в центр корпуса, чтобы корабль выглядел собраннее."],
+    [
+      "feat(display): give the player's guns a look of their own",
+      "Сделал пушки игрока визуально отличимыми."
+    ],
+    [
+      "fix(server): stop a new setting from erasing a saved preset",
+      "Исправил сохранение баланса: новые настройки не стирают сохранённый пресет."
+    ],
+    [
+      "feat(core): give the gunner cannon a heat limit",
+      "Добавил нагрев пушке стрелка: теперь нельзя стрелять без паузы."
+    ],
+    [
+      "feat(server): measure the bot headless for balance work",
+      "Добавил быстрый прогон бота для проверки баланса без браузера."
+    ],
+    [
+      "fix(demo): aim the bot at where the turret will be",
+      "Улучшил прицеливание демонстрационного бота."
+    ],
+    [
+      "feat(display): show asteroids on the radar and in the HUD",
+      "Добавил астероиды на радар и в игровой интерфейс."
+    ],
+    [
+      "fix(demo): make the autopilot hunt instead of parking",
+      "Автопилот теперь ищет цель, а не стоит без дела."
+    ],
+    [
+      "feat(demo): grade the autopilot into three skill levels",
+      "Добавил три уровня мастерства автопилота для проверки баланса."
+    ]
+  ]);
+  if (known.has(subject)) return known.get(subject);
+  if (subject.startsWith("fix(")) return "Исправил ошибку, которая мешала стабильной работе игры.";
+  if (subject.startsWith("feat(display)")) return "Улучшил то, как игра выглядит на общем экране.";
+  if (subject.startsWith("feat(core)")) return "Доработал важное боевое правило.";
+  if (subject.startsWith("feat(server)")) return "Улучшил серверную часть и проверку игры.";
+  if (subject.startsWith("docs") || subject.startsWith("docs("))
+    return "Зафиксировал план и правила следующего улучшения.";
+  return "Сделал подтверждённую техническую доработку игры.";
 }
 
 function narrationFor(day, claims) {
   return [
     `День разработки SpaceShip Defender за ${day}.`,
     "Показываю только то, что подтверждено коммитами.",
-    ...claims.map((claim, index) => `Изменение ${index + 1}: ${claim}.`),
+    ...claims.map((claim) => claim),
     "Дальше проверю это в живом бою и соберу следующий отчёт."
   ].join(" ");
+}
+
+function renderSsml(narration) {
+  const escaped = narration
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("SpaceShip Defender", "Спэ́йсшип Дифэ́ндер")
+    .replaceAll("в бою", "в бо́ю")
+    .replaceAll("соберу", "соберу́");
+  const phrases = escaped
+    .split(/(?<=[.!?])\s+/u)
+    .filter(Boolean)
+    .map((phrase) => `<prosody rate="-8%" pitch="-2st">${phrase}</prosody><break time="350ms"/>`)
+    .join("");
+  return `<?xml version="1.0" encoding="utf-8"?><speak version="1.0" xml:lang="ru-RU">${phrases}</speak>`;
 }
 
 function renderScript(day, claims, narration) {
@@ -239,6 +330,13 @@ async function captureUi(changed, baseUrl) {
   const selected = catalog.filter((entry) =>
     entry.sources.some((source) => changed.includes(source))
   );
+  const catalogSources = new Set(catalog.flatMap((entry) => entry.sources));
+  const missing = [
+    ...new Set(changed.filter(isUiSource).filter((path) => !catalogSources.has(path)))
+  ];
+  if (missing.length > 0) {
+    status.push(`- Пропущен UI-кадр: нет записи каталога для ${missing.join(", ")}.`);
+  }
   if (selected.length === 0) {
     status.push("- Изменённых записей каталога UI нет; UI-кадры не требуются.");
     return [];
@@ -249,20 +347,107 @@ async function captureUi(changed, baseUrl) {
     const results = [];
     for (const entry of selected) {
       const context = await browser.newContext({ viewport: entry.viewport });
-      const page = await context.newPage();
-      await page.goto(baseUrl, { waitUntil: "networkidle" });
-      await page.waitForSelector(entry.readySelector, { timeout: 8_000 });
-      await page.getByTestId(entry.activateTestId).click();
-      await page.getByTestId(entry.panelTestId).waitFor({ state: "visible" });
-      const path = join(captures, `ui-${entry.id}.png`);
-      await page.screenshot({ path, fullPage: true });
-      results.push({ id: entry.id, title: entry.title, path });
-      await context.close();
+      try {
+        const page = await context.newPage();
+        await page.goto(captureUrl(entry.url, baseUrl), { waitUntil: "networkidle" });
+        const tab = page.getByTestId(entry.activateTestId);
+        if (await tab.count()) {
+          await page.waitForSelector(entry.readySelector, { timeout: 8_000 });
+          await tab.click();
+          await page.getByTestId(entry.panelTestId).waitFor({ state: "visible" });
+        } else {
+          const historicalTabs = page.locator("nav.tabs button");
+          if ((await historicalTabs.count()) <= entry.tabIndex) {
+            throw new Error("Эта вкладка ещё отсутствовала в выбранной ревизии.");
+          }
+          await historicalTabs.nth(entry.tabIndex).click();
+          await page.waitForFunction(
+            (tabIndex) =>
+              document
+                .querySelectorAll("nav.tabs button")
+                .item(tabIndex)
+                ?.classList.contains("tabs__tab--active") === true,
+            entry.tabIndex
+          );
+        }
+        const path = join(captures, `ui-${entry.id}.png`);
+        await page.screenshot({ path, fullPage: true });
+        results.push({ id: entry.id, title: entry.title, path });
+      } catch (error) {
+        status.push(`- UI-кадр ${entry.id} не снят: ${error.message}`);
+      } finally {
+        await context.close();
+      }
     }
     status.push(`- Снято UI-кадров: ${results.length}.`);
     return results;
   } finally {
     await browser.close();
+  }
+}
+
+function isUiSource(path) {
+  return /^apps\/(admin|controller|display)\/src\/.*\.(?:tsx|ts|css)$/u.test(path);
+}
+
+function captureUrl(catalogUrl, overrideUrl) {
+  const target = new URL(catalogUrl);
+  const override = new URL(overrideUrl);
+  target.protocol = override.protocol;
+  target.host = override.host;
+  return target.toString();
+}
+
+async function captureHistoricalUi(revision, changed) {
+  if (!changed.some((path) => path.startsWith("apps/admin/src/"))) {
+    status.push("- Админка за эту дату не менялась; исторический UI-кадр не требуется.");
+    return [];
+  }
+  const worktreeRoot = resolve(root, ".daily-worktrees");
+  const worktree = resolve(worktreeRoot, `${date}-admin-${process.pid}`);
+  const serverPort = 38_000 + (process.pid % 1_000) * 2;
+  const adminPort = serverPort + 1;
+  let server;
+  let admin;
+  if (!worktree.startsWith(`${worktreeRoot}${sep}`))
+    throw new Error("Unsafe historical admin worktree path.");
+  await mkdir(worktreeRoot, { recursive: true });
+  await run("git", ["worktree", "add", "--detach", worktree, revision], root);
+  try {
+    await runPackage(["install", "--offline", "--frozen-lockfile"], worktree);
+    await runPackage(["--filter", "@spaceship-defender/server", "build"], worktree);
+    server = startBackgroundProcess(process.execPath, ["apps/server/dist/index.js"], worktree, {
+      HOST: "127.0.0.1",
+      PORT: String(serverPort),
+      GRACEFUL_SHUTDOWN: "false"
+    });
+    admin = startBackgroundProcess(
+      process.execPath,
+      [
+        "apps/admin/node_modules/vite/bin/vite.js",
+        "apps/admin",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(adminPort),
+        "--strictPort"
+      ],
+      worktree,
+      { ADMIN_API_TARGET: `http://127.0.0.1:${String(serverPort)}` }
+    );
+    await Promise.all([
+      waitForUrl(`http://127.0.0.1:${String(serverPort)}/health`, server),
+      waitForUrl(`http://127.0.0.1:${String(adminPort)}`, admin)
+    ]);
+    const results = await captureUi(changed, `http://127.0.0.1:${String(adminPort)}`);
+    status.push(`- Снято исторических UI-кадров админки: ${results.length}.`);
+    return results;
+  } finally {
+    await Promise.all([stopBackgroundProcess(admin), stopBackgroundProcess(server)]);
+    await run("git", ["worktree", "remove", "--force", worktree], root).catch(() => undefined);
+    await rm(worktree, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(
+      () => undefined
+    );
   }
 }
 
@@ -316,7 +501,7 @@ function runPackage(args, cwd, env) {
   return run("cmd.exe", ["/d", "/s", "/c", command], cwd, env);
 }
 
-async function createVoice(textPath, outputPath) {
+async function createVoice(ssmlPath, outputPath) {
   if (process.platform !== "win32")
     throw new Error("Локальный SAPI-голос доступен только в Windows.");
   await run(
@@ -327,10 +512,35 @@ async function createVoice(textPath, outputPath) {
       "Bypass",
       "-File",
       join(root, "scripts", "daily-tts.ps1"),
-      "-TextPath",
-      textPath,
+      "-SsmlPath",
+      ssmlPath,
       "-OutputPath",
       outputPath
+    ],
+    root,
+    undefined,
+    true
+  );
+}
+
+async function renderRawGameplay(source, target) {
+  const ffmpeg = await findFfmpeg("ffmpeg.exe", "ffmpeg");
+  await run(
+    ffmpeg,
+    [
+      "-y",
+      "-i",
+      source,
+      "-map",
+      "0:v:0",
+      "-an",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      target
     ],
     root
   );
@@ -372,6 +582,8 @@ async function renderDraft(gameplay, ui, voice, ass, target, duration) {
     "[video]",
     "-map",
     `${voiceInput}:a`,
+    "-af",
+    "apad",
     "-t",
     String(duration),
     "-r",
@@ -489,7 +701,7 @@ async function mediaMetadata(path) {
   };
 }
 
-function renderShotList(day, claims, ui, gameplay, draft) {
+function renderShotList(day, claims, ui, gameplay, rawGameplay, draft) {
   return (
     `# Список кадров — ${day}\n\n| Время | Кадр | Источник |\n| --- | --- | --- |\n| 0–4 с | Хук и дата | ` +
     "`shorts-script.md`" +
@@ -517,6 +729,41 @@ async function updateIndex(manifest) {
   });
   entries.sort((left, right) => right.date.localeCompare(left.date));
   await writeFile(path, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+}
+
+function startBackgroundProcess(command, args, cwd, env) {
+  return spawn(command, args, {
+    cwd,
+    env: { ...process.env, ...env },
+    stdio: "ignore",
+    windowsHide: true
+  });
+}
+
+async function waitForUrl(url, owner) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
+    if (owner.exitCode !== null) throw new Error(`Service exited before ${url} was ready.`);
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // The owned local service is still starting.
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+  }
+  throw new Error(`Timed out waiting for ${url}.`);
+}
+
+async function stopBackgroundProcess(child) {
+  if (child === undefined || child.exitCode !== null) return;
+  child.kill();
+  await Promise.race([
+    new Promise((resolvePromise) => child.once("exit", resolvePromise)),
+    new Promise((resolvePromise) => setTimeout(resolvePromise, 2_000))
+  ]);
+  if (child.exitCode === null && child.pid !== undefined && process.platform === "win32") {
+    await run("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], root).catch(() => undefined);
+  }
 }
 
 function run(command, args, cwd, env, captureOutput = false) {

@@ -22,9 +22,12 @@
       записей.
 - [x] 4.2 Добавить локальную SAPI-озвучку, ASS-титры и FFmpeg draft MP4 1080×1920/30 fps.
 - [x] 4.3 Добавить локальный HTTP-ежедневник с календарём, Markdown, UI-кадрами и draft video.
+- [x] 4.4 Добавить чистый `gameplay-raw.mp4` без аудио/текста и SSML-озвучку только мужским русским
+      Windows-голосом с честным fallback при его отсутствии.
+- [x] 4.5 Снимать изменённые вкладки балансовой админки из detached worktree выбранного дня.
 
 ## 5. Проверка
 
 - [x] 5.1 Проверить Node-синтаксис, UI-каталог, SAPI WAV, PNG/WebM capture, ffprobe MP4, HTTP smoke,
       typecheck и skill validator.
-- [x] 5.2 Выполнить `pnpm check`, `pnpm spec:validate` и `git diff --check`.
+- [ ] 5.2 Выполнить `pnpm check`, `pnpm spec:validate` и `git diff --check`.

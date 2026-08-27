@@ -12,9 +12,9 @@ main {
   margin: 0 auto;
   padding: 28px;
 }
-nav {
-  display: flex;
-  flex-wrap: wrap;
+#days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
   margin: 20px 0;
 }
@@ -50,11 +50,7 @@ article {
   background: #101a2d;
   border-radius: 10px;
 }
-pre {
-  white-space: pre-wrap;
-  font:
-    14px/1.5 ui-monospace,
-    Consolas,
-    monospace;
-  margin: 0;
+article p,
+article li {
+  line-height: 1.5;
 }

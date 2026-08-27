@@ -9,6 +9,8 @@ export default tseslint.config(
       "**/node_modules/**",
       "eslint.config.js",
       "scripts/**",
+      ".daily-worktrees/**",
+      "tools/daily-video-dashboard/**",
       "apps/controller/scripts/**",
       "apps/server/scripts/**",
       "apps/display/android/**"

@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const { date, overwrite } = parseArguments(process.argv.slice(2));
+const { date, overwrite, revision } = parseArguments(process.argv.slice(2));
 const outputDirectory = outputFor(date);
 const outputPath = join(outputDirectory, "research.md");
 
@@ -18,7 +18,7 @@ if (!overwrite) {
 }
 
 const commits = commitsOn(date).map((commit) => ({ ...commit, paths: pathsFor(commit.hash) }));
-const changes = await readChanges(commits);
+const changes = await readChanges(commits, revision);
 await mkdir(outputDirectory, { recursive: true });
 await writeFile(outputPath, render({ date, commits, changes }), "utf8");
 console.log(`Daily video research saved to ${relative(repositoryRoot, outputPath)}`);
@@ -26,6 +26,7 @@ console.log(`Daily video research saved to ${relative(repositoryRoot, outputPath
 function parseArguments(arguments_) {
   let date;
   let overwrite = false;
+  let revision;
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
     if (argument === "--date") {
@@ -33,12 +34,18 @@ function parseArguments(arguments_) {
       index += 1;
     } else if (argument === "--overwrite") {
       overwrite = true;
+    } else if (argument === "--revision") {
+      revision = arguments_[index + 1];
+      index += 1;
     } else {
       throw new Error(`Unknown argument: ${argument}. Usage: --date YYYY-MM-DD [--overwrite]`);
     }
   }
   if (!validDate(date)) throw new Error("A valid --date YYYY-MM-DD is required.");
-  return { date, overwrite };
+  if (revision !== undefined && !/^[0-9a-f]{7,64}$/iu.test(revision)) {
+    throw new Error("--revision must be a Git commit hash.");
+  }
+  return { date, overwrite, revision };
 }
 
 function validDate(date) {
@@ -85,7 +92,7 @@ function pathsFor(hash) {
     .filter(Boolean);
 }
 
-async function readChanges(commits) {
+async function readChanges(commits, revision) {
   const changeNames = new Set();
   for (const commit of commits) {
     for (const path of commit.paths) {
@@ -93,20 +100,24 @@ async function readChanges(commits) {
       if (match !== null) changeNames.add(match[1]);
     }
   }
-  return await Promise.all(
-    [...changeNames].sort().map(async (name) => ({
-      name,
-      proposal: await optionalText(join(repositoryRoot, "openspec", "changes", name, "proposal.md"))
-    }))
-  );
+  return [...changeNames].sort().map((name) => ({
+    name,
+    proposal:
+      revision === undefined
+        ? optionalGitText("HEAD", `openspec/changes/${name}/proposal.md`)
+        : optionalGitText(revision, `openspec/changes/${name}/proposal.md`)
+  }));
 }
 
-async function optionalText(path) {
+function optionalGitText(revision, path) {
   try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if (error?.code === "ENOENT") return undefined;
-    throw error;
+    return execFileSync("git", ["show", `${revision}:${path}`], {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+  } catch {
+    return undefined;
   }
 }
 

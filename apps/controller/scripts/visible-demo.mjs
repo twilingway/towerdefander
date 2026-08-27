@@ -338,9 +338,8 @@ async function launchHeadlessBrowser() {
 function optionalDailyArtifactDirectory(value, variableName) {
   if (value === undefined || value.length === 0) return undefined;
   const target = resolve(value);
-  const segments = target.split(/[\\/]+/u).map((segment) => segment.toLowerCase());
-  const artifactsIndex = segments.lastIndexOf("artifacts");
-  if (artifactsIndex < 0 || segments[artifactsIndex + 1] !== "daily-videos") {
+  const dailyArtifactsRoot = resolve(process.cwd(), "artifacts", "daily-videos");
+  if (!target.startsWith(`${dailyArtifactsRoot}${sep}`)) {
     throw new Error(`${variableName} must be inside artifacts/daily-videos.`);
   }
   return target;

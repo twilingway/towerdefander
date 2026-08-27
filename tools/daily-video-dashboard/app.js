@@ -32,6 +32,15 @@ async function show(entry) {
   const heading = document.createElement("h2");
   heading.textContent = entry.date;
   report.append(heading);
+  if (manifest.files.rawGameplay) {
+    const rawHeading = document.createElement("h3");
+    rawHeading.textContent = "Чистый клип для монтажа";
+    const rawVideo = document.createElement("video");
+    rawVideo.src = `${base}/${manifest.files.rawGameplay}`;
+    rawVideo.controls = true;
+    rawVideo.preload = "metadata";
+    report.append(rawHeading, rawVideo);
+  }
   if (manifest.files.draft) {
     const video = document.createElement("video");
     video.src = `${base}/${manifest.files.draft}`;
@@ -54,9 +63,37 @@ async function show(entry) {
     const article = document.createElement("article");
     const title = document.createElement("h3");
     title.textContent = name;
-    const pre = document.createElement("pre");
-    pre.textContent = text;
-    article.append(title, pre);
+    article.append(title, renderMarkdown(text));
     report.append(article);
   }
+}
+
+function renderMarkdown(text) {
+  const fragment = document.createDocumentFragment();
+  let list;
+  for (const line of text.split("\n")) {
+    const heading = /^(#{1,3})\s+(.+)$/u.exec(line);
+    if (heading !== null) {
+      list = undefined;
+      const node = document.createElement(`h${String(heading[1].length + 2)}`);
+      node.textContent = heading[2];
+      fragment.append(node);
+      continue;
+    }
+    if (line.startsWith("- ")) {
+      list ??= document.createElement("ul");
+      if (!list.isConnected) fragment.append(list);
+      const item = document.createElement("li");
+      item.textContent = line.slice(2);
+      list.append(item);
+      continue;
+    }
+    list = undefined;
+    if (line.trim().length > 0) {
+      const paragraph = document.createElement("p");
+      paragraph.textContent = line;
+      fragment.append(paragraph);
+    }
+  }
+  return fragment;
 }

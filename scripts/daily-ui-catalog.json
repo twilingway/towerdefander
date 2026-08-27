@@ -7,6 +7,8 @@
     "readySelector": "[data-testid='admin-tab-waves']",
     "activateTestId": "admin-tab-waves",
     "panelTestId": "admin-panel-waves",
+    "tabLabel": "Волны",
+    "tabIndex": 0,
     "sources": ["apps/admin/src/App.tsx", "apps/admin/src/styles.css"]
   },
   {
@@ -17,6 +19,8 @@
     "readySelector": "[data-testid='admin-tab-autopilot']",
     "activateTestId": "admin-tab-autopilot",
     "panelTestId": "admin-panel-autopilot",
+    "tabLabel": "Автопилот",
+    "tabIndex": 3,
     "sources": ["apps/admin/src/App.tsx", "apps/admin/src/styles.css"]
   },
   {
@@ -27,6 +31,8 @@
     "readySelector": "[data-testid='admin-tab-director']",
     "activateTestId": "admin-tab-director",
     "panelTestId": "admin-panel-director",
+    "tabLabel": "Директор",
+    "tabIndex": 4,
     "sources": ["apps/admin/src/App.tsx", "apps/admin/src/styles.css"]
   }
 ]
