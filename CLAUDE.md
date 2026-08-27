@@ -98,7 +98,7 @@ Simulation tests step explicitly rather than waiting on timers.
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
-they carry their own `BALANCE_FILE_VERSION` (currently 7) with migrations in
+they carry their own `BALANCE_FILE_VERSION` (currently 16) with migrations in
 `apps/server/src/balance/store.ts`, and a balance-only change bumps that file version instead of the
 protocol.
 
