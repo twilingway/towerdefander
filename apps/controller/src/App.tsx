@@ -1,8 +1,6 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
-  CREW_ROLES,
   PROTOCOL_VERSION,
-  TEAM_UPGRADE_PRICE,
   clientMessage,
   roomClosingSchema,
   serverLatencyProbeSchema,
@@ -10,35 +8,18 @@ import {
   serverMessage,
   type ControllerRoomView,
   type CrewRole,
-  type DefeatReason,
-  type EncounterPhase,
-  type PublicTeamUpgradeView,
-  type PublicMachineGunView,
-  type PublicWeaponHeatView,
-  type PublicShieldView,
-  type PublicPlayerView,
-  type TerminalOutcome,
   type UpgradeId
 } from "@spaceship-defender/protocol";
 import {
   createDefaultGameServerUrl,
   formatLatency,
   isPreviewMode,
-  PreviewPhaseButtons,
-  PreviewShell,
   readStringEnvironment,
   roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  getFireReleaseDelay,
-  getKeyboardVector,
-  getNextShieldDesiredActive,
-  LatestInputScheduler,
-  type ControlVector
-} from "./controlInput.js";
 import {
   createScreenWakeLock,
   enterImmersiveMode,
@@ -50,8 +31,7 @@ import {
   clearReconnectionSession,
   leaveControllerRoom,
   readReconnectionSession,
-  saveReconnectionSession,
-  type SessionStorage
+  saveReconnectionSession
 } from "./reconnectionSession.js";
 import {
   findCurrentPlayer,
@@ -59,27 +39,20 @@ import {
   toControllerRoomView,
   type NetworkRoomState
 } from "./roomView.js";
-import { VirtualStick } from "./VirtualStick.js";
-import { keepVoteIntent, nextVoteRevision, type VoteIntent } from "./voteIntent.js";
-import { ActionZone } from "./ActionZone.js";
+import { JoinScreen } from "./screens/JoinScreen/index.js";
+import { LobbyScreen } from "./screens/LobbyScreen/index.js";
+import { RoleScreen } from "./screens/RoleScreen/index.js";
+import type { ControlState } from "./model/control.js";
+import { PreviewControls } from "./components/PreviewControls/index.js";
+import { RunResultPanel } from "./components/RunResultPanel/index.js";
+import { TeamUpgradePanel } from "./components/TeamUpgradePanel/index.js";
+import { readBrowserSearch, readSessionStorage } from "./model/browser.js";
+import { toJoinError, toServerError } from "./model/errors.js";
+import { playCardPhaseModifier, shellPhaseModifier } from "./model/shellClass.js";
 
 type ControllerRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "join" | "joining" | "connected" | "reconnecting" | "disconnected";
 
-interface ControlState {
-  readonly vector: ControlVector;
-  readonly firing: boolean;
-  readonly active: boolean;
-  readonly mgFiring: boolean;
-}
-
-const NEUTRAL_CONTROL: ControlState = {
-  vector: { x: 0, y: 0 },
-  firing: false,
-  active: false,
-  mgFiring: false
-};
-const AIM_RELEASE_DELAY_MS = 60;
 const gameServerUrl = readStringEnvironment(
   import.meta.env.VITE_GAME_SERVER_URL,
   createDefaultGameServerUrl()
@@ -360,44 +333,17 @@ export function ControllerApp() {
     (status === "join" || status === "joining" || status === "disconnected")
   ) {
     return (
-      <main className="controller-shell">
-        <form
-          className="card"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void joinRoom();
-          }}
-        >
-          <p className="eyebrow">Контроллер экипажа</p>
-          <span className="latency-indicator">До сервера —</span>
-          <h1>SpaceShip Defender</h1>
-          <label>
-            Код комнаты
-            <input
-              name="roomCode"
-              value={roomCode}
-              onChange={(event) => {
-                setRoomCode(event.target.value);
-              }}
-            />
-          </label>
-          <label>
-            Имя
-            <input
-              name="playerName"
-              maxLength={24}
-              value={playerName}
-              onChange={(event) => {
-                setPlayerName(event.target.value);
-              }}
-            />
-          </label>
-          {error.length > 0 && <p className="error-message">{error}</p>}
-          <button type="submit" disabled={status === "joining"}>
-            {status === "joining" ? "Подключаемся…" : "Подключиться"}
-          </button>
-        </form>
-      </main>
+      <JoinScreen
+        roomCode={roomCode}
+        playerName={playerName}
+        error={error}
+        joining={status === "joining"}
+        onRoomCodeChange={setRoomCode}
+        onPlayerNameChange={setPlayerName}
+        onSubmit={() => {
+          void joinRoom();
+        }}
+      />
     );
   }
 
@@ -457,28 +403,12 @@ export function ControllerApp() {
         {error.length > 0 && <p className="error-message">{error}</p>}
 
         {activeView?.phase === "lobby" ? (
-          <>
-            <div className="controller-roster">
-              {CREW_ROLES.map((role) => {
-                const player = activeView.players.find((candidate) => candidate.role === role);
-                return (
-                  <span key={role}>
-                    {roleLabel(role)} · {player?.playerName ?? "свободно"}{" "}
-                    {player?.ready === true ? "✓" : ""} ·{" "}
-                    {formatLatency(player?.connected === true ? player.latencyMs : null)}
-                  </span>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              className="ready-button"
-              onClick={sendReady}
-              disabled={currentPlayer?.ready === true || activeStatus === "reconnecting"}
-            >
-              {currentPlayer?.ready === true ? "Готов — ждём экипаж" : "Я готов"}
-            </button>
-          </>
+          <LobbyScreen
+            view={activeView}
+            currentPlayer={currentPlayer}
+            reconnecting={activeStatus === "reconnecting"}
+            onReady={sendReady}
+          />
         ) : activeView === undefined || currentPlayer === undefined ? (
           <p>Ожидаем подтверждение роли…</p>
         ) : (
@@ -508,7 +438,7 @@ export function ControllerApp() {
                   onRematch={sendReady}
                 />
               )}
-            <RoleControlPanel
+            <RoleScreen
               role={currentPlayer.role}
               shield={activeView.game?.shield}
               cannon={activeView.game?.cannon}
@@ -535,213 +465,6 @@ export function ControllerApp() {
  * Combat and the result screen both take the whole viewport, so the shell drops
  * its centering and lets the card stretch.
  */
-function shellPhaseModifier(phase: EncounterPhase | undefined): string {
-  if (phase === "combat") return " controller-shell--combat";
-  return phase === "result" ? " controller-shell--result" : "";
-}
-
-function playCardPhaseModifier(phase: EncounterPhase | undefined): string {
-  if (phase === "combat") return " play-card--combat";
-  if (phase === "intermission") return " play-card--intermission";
-  return phase === "result" ? " play-card--result" : "";
-}
-
-export function TeamUpgradePanel({
-  role,
-  teamUpgrade,
-  credits,
-  phaseTicksRemaining,
-  reconnecting,
-  connectionEpoch,
-  errorEpoch,
-  onVote
-}: {
-  readonly role: CrewRole;
-  readonly teamUpgrade: PublicTeamUpgradeView;
-  readonly credits: number;
-  readonly phaseTicksRemaining: number;
-  readonly reconnecting: boolean;
-  readonly connectionEpoch: number;
-  readonly errorEpoch: number;
-  readonly onVote: (upgradeId: UpgradeId, revision: number, actionId: string) => void;
-}) {
-  const pendingReference = useRef<VoteIntent | undefined>(undefined);
-  const sentRevisionReference = useRef(0);
-  const voteReference = useRef(onVote);
-  voteReference.current = onVote;
-  const [pendingUpgradeId, setPendingUpgradeId] = useState<UpgradeId>();
-  const offer = teamUpgrade.offer;
-  const offerId = offer?.offerId;
-  const ownVote = teamUpgrade.votes[role];
-  const ownRevision = ownVote?.revision ?? 0;
-  const ownUpgradeId = ownVote?.upgradeId;
-
-  useEffect(() => {
-    const pending = pendingReference.current;
-    if (pending !== undefined && pending.offerId === offerId && !reconnecting) {
-      voteReference.current(pending.upgradeId, pending.revision, pending.actionId);
-    }
-  }, [connectionEpoch, offerId, reconnecting]);
-
-  useEffect(() => {
-    const kept = keepVoteIntent(pendingReference.current, {
-      offerId,
-      acceptedRevision: ownRevision
-    });
-    pendingReference.current = kept;
-    if (kept === undefined) setPendingUpgradeId(undefined);
-  }, [offerId, ownRevision]);
-
-  useEffect(() => {
-    // Every offer restarts the authoritative revision sequence for this role.
-    sentRevisionReference.current = 0;
-  }, [offerId]);
-
-  useEffect(() => {
-    // A rejected vote never reaches the projection, so a server error is the
-    // only signal that this one is not on its way any more. Errors the ballot
-    // did not cause land here too, which costs nothing but a cleared label.
-    if (errorEpoch === 0) return;
-    pendingReference.current = undefined;
-    setPendingUpgradeId(undefined);
-  }, [errorEpoch]);
-
-  if (offer === null) {
-    return (
-      <div className="upgrade-panel" role="status">
-        <h2>Подготавливаем улучшения…</h2>
-        <p>Выбор появится после синхронизации с сервером.</p>
-      </div>
-    );
-  }
-
-  // The protocol pins one price for every card; reading it from a card would
-  // report 0 for an empty offer and hide the insufficient-credits warning.
-  const price = TEAM_UPGRADE_PRICE;
-  return (
-    <div className="upgrade-panel">
-      <p className="eyebrow">Передышка · {(phaseTicksRemaining / 20).toFixed(1)} с</p>
-      <h2>Общее улучшение экипажа</h2>
-      <p className="upgrade-balance">
-        Кредиты экипажа: <strong>{credits}</strong> · цена {price}
-      </p>
-      {credits < price && (
-        <p className="upgrade-warning">Кредитов не хватает — улучшение не купится.</p>
-      )}
-      <div className="upgrade-grid" aria-label="Карточки командного голосования">
-        {offer.cards.map((card) => {
-          const voters = CREW_ROLES.filter(
-            (crewRole) => teamUpgrade.votes[crewRole]?.upgradeId === card.upgradeId
-          );
-          const chosen = ownUpgradeId === card.upgradeId;
-          const pending = pendingUpgradeId === card.upgradeId;
-          return (
-            <button
-              type="button"
-              className={`upgrade-card ${chosen ? "upgrade-card--selected" : ""}`}
-              key={card.upgradeId}
-              data-upgrade-id={card.upgradeId}
-              data-price={card.price}
-              aria-pressed={chosen}
-              /* A vote in flight never locks the ballot: a lost or rejected
-                 command must not cost the crew its remaining seconds. */
-              disabled={reconnecting}
-              onClick={() => {
-                const actionId = createActionId();
-                const revision = nextVoteRevision(ownRevision, sentRevisionReference.current);
-                sentRevisionReference.current = revision;
-                pendingReference.current = {
-                  offerId: offer.offerId,
-                  upgradeId: card.upgradeId,
-                  revision,
-                  actionId
-                };
-                setPendingUpgradeId(card.upgradeId);
-                onVote(card.upgradeId, revision, actionId);
-              }}
-            >
-              <strong>{card.label}</strong>
-              <small>{roleLabel(card.role)}</small>
-              <small>
-                {pending
-                  ? "Отправляем голос…"
-                  : voters.length === 0
-                    ? "Голосов нет"
-                    : `Голоса: ${voters.map((crewRole) => roleLabel(crewRole)).join(", ")}`}
-              </small>
-            </button>
-          );
-        })}
-      </div>
-      <p className="upgrade-hint">
-        Побеждает карточка с большинством голосов, при равенстве — первая по порядку ролей. Голос
-        можно менять до конца передышки.
-      </p>
-    </div>
-  );
-}
-
-export function RunResultPanel({
-  outcome,
-  defeatReason,
-  waveNumber,
-  score,
-  players,
-  currentPlayer,
-  reconnecting,
-  onRematch
-}: {
-  readonly outcome: TerminalOutcome;
-  readonly defeatReason: DefeatReason | null;
-  readonly waveNumber: number;
-  readonly score: number;
-  readonly players: readonly PublicPlayerView[];
-  readonly currentPlayer: PublicPlayerView;
-  readonly reconnecting: boolean;
-  readonly onRematch: () => void;
-}) {
-  const readyCount = players.filter((player) => player.ready).length;
-  const victory = outcome === "victory";
-  return (
-    <div className={`result-panel result-panel--${outcome}`} role="status">
-      <p className="eyebrow">Забег завершён</p>
-      <h2>
-        {victory
-          ? "Победа экипажа"
-          : defeatReason === "wave_timeout"
-            ? "Время волны истекло"
-            : "Корабль уничтожен"}
-      </h2>
-      <strong>Волна {waveNumber}</strong>
-      <span>Счёт: {score}</span>
-      <span className="rematch-readiness">Готовы к новому бою: {readyCount} / 3</span>
-      <button type="button" disabled={currentPlayer.ready || reconnecting} onClick={onRematch}>
-        {currentPlayer.ready ? "Готов — ждём экипаж" : "Играть ещё"}
-      </button>
-      <small>Новый бой начнётся в этой же комнате, когда будут готовы все три роли.</small>
-    </div>
-  );
-}
-
-export function createActionId(): string {
-  const host: { readonly randomUUID?: () => string } = globalThis.crypto;
-  const randomUUID = host.randomUUID;
-  if (randomUUID !== undefined) return randomUUID.call(globalThis.crypto);
-
-  // `randomUUID` is secure-context only, and players reach the controller over
-  // plain http on a LAN address, where `getRandomValues` is all that is left.
-  // The server validates `actionId` as a UUID, so the v4 layout is mandatory.
-  const bytes = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)));
-  const hex = bytes
-    .map((byte, index) => {
-      if (index === 6) return ((byte & 0x0f) | 0x40).toString(16).padStart(2, "0");
-      if (index === 8) return ((byte & 0x3f) | 0x80).toString(16).padStart(2, "0");
-      return byte.toString(16).padStart(2, "0");
-    })
-    .join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
 /**
  * Fire-and-forget by design: a fullscreen prompt must never delay the command
  * the player actually tapped for, and a refusal is not a connection error.
@@ -749,401 +472,6 @@ export function createActionId(): string {
 function requestImmersiveMode(): void {
   const host = readImmersiveHost();
   if (host !== undefined) void enterImmersiveMode(host);
-}
-
-export function PreviewControls({
-  role,
-  phase,
-  onRoleChange,
-  onPhaseChange
-}: {
-  readonly role: CrewRole;
-  readonly phase: PreviewPhase;
-  readonly onRoleChange: (role: CrewRole) => void;
-  readonly onPhaseChange: (phase: PreviewPhase) => void;
-}) {
-  return (
-    <PreviewShell>
-      <div className="preview-controls__group">
-        {CREW_ROLES.map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            aria-pressed={candidate === role}
-            onClick={() => {
-              onRoleChange(candidate);
-            }}
-          >
-            {roleLabel(candidate)}
-          </button>
-        ))}
-      </div>
-      <div className="preview-controls__group">
-        <PreviewPhaseButtons phase={phase} onPhaseChange={onPhaseChange} />
-      </div>
-    </PreviewShell>
-  );
-}
-
-function RoleControlPanel({
-  role,
-  shield,
-  cannon,
-  machineGun,
-  encounterPhase,
-  connectionDisabled,
-  generation,
-  hidden,
-  onSend
-}: {
-  readonly role: CrewRole;
-  readonly cannon: PublicWeaponHeatView | undefined;
-  readonly machineGun: PublicMachineGunView | undefined;
-  readonly shield: PublicShieldView | undefined;
-  readonly encounterPhase: EncounterPhase | undefined;
-  readonly connectionDisabled: boolean;
-  readonly generation: string;
-  readonly hidden: boolean;
-  readonly onSend: (sequence: number, control: ControlState) => void;
-}) {
-  const controlReference = useRef<ControlState>(NEUTRAL_CONTROL);
-  const firePressedAtReference = useRef<number | undefined>(undefined);
-  const fireReleaseTimerReference = useRef<number | undefined>(undefined);
-  const aimReleaseTimerReference = useRef<number | undefined>(undefined);
-  const shieldSnapshotReference = useRef(shield);
-  const shieldDesiredActiveReference = useRef(shield?.active ?? false);
-  const previousShieldActiveReference = useRef(shield?.active ?? false);
-  shieldSnapshotReference.current = shield;
-  const sendReference = useRef(onSend);
-  sendReference.current = onSend;
-  const schedulerReference = useRef<LatestInputScheduler<ControlState> | undefined>(undefined);
-  const schedulerGenerationReference = useRef(generation);
-  schedulerReference.current ??= new LatestInputScheduler(
-    NEUTRAL_CONTROL,
-    ({ sequence, value }) => {
-      sendReference.current(sequence, value);
-    }
-  );
-
-  function update(patch: Partial<ControlState>): void {
-    const next = { ...controlReference.current, ...patch };
-    controlReference.current = next;
-    schedulerReference.current?.update(next, performance.now());
-  }
-
-  function clearFireReleaseTimer(): void {
-    if (fireReleaseTimerReference.current !== undefined) {
-      window.clearTimeout(fireReleaseTimerReference.current);
-      fireReleaseTimerReference.current = undefined;
-    }
-  }
-
-  function clearAimReleaseTimer(): void {
-    if (aimReleaseTimerReference.current !== undefined) {
-      window.clearTimeout(aimReleaseTimerReference.current);
-      aimReleaseTimerReference.current = undefined;
-    }
-  }
-
-  function updateAim(vector: ControlVector): void {
-    clearAimReleaseTimer();
-    update({ vector });
-  }
-
-  function releaseAim(): void {
-    clearAimReleaseTimer();
-    if (role === "pilot") {
-      update({ vector: NEUTRAL_CONTROL.vector });
-      return;
-    }
-    aimReleaseTimerReference.current = window.setTimeout(() => {
-      aimReleaseTimerReference.current = undefined;
-      update({ vector: NEUTRAL_CONTROL.vector });
-    }, AIM_RELEASE_DELAY_MS);
-  }
-
-  function cancelAim(): void {
-    clearAimReleaseTimer();
-    update({ vector: NEUTRAL_CONTROL.vector });
-  }
-
-  function setFireDesired(desired: boolean): void {
-    if (role === "pilot") {
-      update({ mgFiring: desired });
-    } else {
-      update({ firing: desired });
-    }
-  }
-
-  function beginFire(): void {
-    clearFireReleaseTimer();
-    firePressedAtReference.current = performance.now();
-    setFireDesired(true);
-  }
-
-  function endFire(): void {
-    const pressedAt = firePressedAtReference.current;
-    firePressedAtReference.current = undefined;
-    const remainingMs = getFireReleaseDelay(pressedAt, performance.now());
-    clearFireReleaseTimer();
-    if (remainingMs === 0) {
-      setFireDesired(false);
-      return;
-    }
-    fireReleaseTimerReference.current = window.setTimeout(() => {
-      fireReleaseTimerReference.current = undefined;
-      setFireDesired(false);
-    }, remainingMs);
-  }
-
-  function cancelFire(): void {
-    firePressedAtReference.current = undefined;
-    clearFireReleaseTimer();
-    setFireDesired(false);
-  }
-
-  function toggleShield(): void {
-    if (role !== "shield") return;
-    const next = getNextShieldDesiredActive(
-      shieldDesiredActiveReference.current,
-      shieldSnapshotReference.current?.energy ?? 0
-    );
-    if (next === shieldDesiredActiveReference.current) return;
-    shieldDesiredActiveReference.current = next;
-    update({ active: next });
-  }
-
-  useEffect(() => {
-    const keys = new Set<string>();
-    const scheduler = schedulerReference.current;
-    const timer = window.setInterval(() => scheduler?.flush(performance.now()), 25);
-    function applyKeys(): void {
-      const vector = getKeyboardVector(keys);
-      update({ vector });
-    }
-    function onKeyDown(event: KeyboardEvent): void {
-      if (
-        [
-          "KeyW",
-          "KeyA",
-          "KeyS",
-          "KeyD",
-          "ArrowUp",
-          "ArrowDown",
-          "ArrowLeft",
-          "ArrowRight",
-          "Space"
-        ].includes(event.code)
-      ) {
-        event.preventDefault();
-        if (event.code === "Space" && role === "shield") {
-          if (!event.repeat) toggleShield();
-          return;
-        }
-        if (
-          event.code === "Space" &&
-          (role === "gunner" || role === "pilot") &&
-          !keys.has("Space")
-        ) {
-          beginFire();
-        }
-        keys.add(event.code);
-        applyKeys();
-      }
-    }
-    function onKeyUp(event: KeyboardEvent): void {
-      if (event.code === "Space" && role === "shield") return;
-      keys.delete(event.code);
-      if (event.code === "Space" && (role === "gunner" || role === "pilot")) endFire();
-      applyKeys();
-    }
-    function neutralize(): void {
-      keys.clear();
-      clearAimReleaseTimer();
-      cancelFire();
-      update({
-        vector: NEUTRAL_CONTROL.vector,
-        active: role === "shield" ? controlReference.current.active : false
-      });
-    }
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", neutralize);
-    document.addEventListener("visibilitychange", neutralize);
-    return () => {
-      controlReference.current = NEUTRAL_CONTROL;
-      clearAimReleaseTimer();
-      clearFireReleaseTimer();
-      scheduler?.update(NEUTRAL_CONTROL, performance.now());
-      scheduler?.flush(performance.now() + 50);
-      window.clearInterval(timer);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", neutralize);
-      document.removeEventListener("visibilitychange", neutralize);
-    };
-  }, [role]);
-
-  const controlsEnabled = !connectionDisabled && encounterPhase === "combat";
-  useLayoutEffect(() => {
-    const scheduler = schedulerReference.current;
-    controlReference.current = NEUTRAL_CONTROL;
-    shieldDesiredActiveReference.current = false;
-    clearAimReleaseTimer();
-    clearFireReleaseTimer();
-    const now = performance.now();
-    if (schedulerGenerationReference.current !== generation) {
-      schedulerGenerationReference.current = generation;
-      scheduler?.resetGeneration(NEUTRAL_CONTROL, now, controlsEnabled);
-    } else if (controlsEnabled) {
-      scheduler?.resumeWith(NEUTRAL_CONTROL, now);
-    } else {
-      scheduler?.setEnabled(false);
-    }
-  }, [controlsEnabled, generation]);
-
-  useEffect(() => {
-    const previousActive = previousShieldActiveReference.current;
-    const active = shield?.active ?? false;
-    previousShieldActiveReference.current = active;
-    if (role === "shield" && previousActive && !active && shield?.energy === 0) {
-      shieldDesiredActiveReference.current = false;
-      update({ active: false });
-    }
-  }, [role, shield?.active, shield?.energy]);
-
-  return (
-    <div className="role-control" data-role={role} hidden={hidden}>
-      <p className="phase-copy">{roleHelp(role)}</p>
-      <VirtualStick
-        label={`Направление: ${roleLabel(role)}`}
-        onChange={updateAim}
-        onRelease={releaseAim}
-        onCancel={cancelAim}
-        enabled={controlsEnabled}
-        resetKey={generation}
-      />
-      {role === "pilot" && (
-        <>
-          <ActionZone
-            label={machineGun?.overheated ? "ПЕРЕГРЕВ" : "ОГОНЬ ИЗ НОСА"}
-            testId="mg-fire-button"
-            className={`hold-action--pilot${machineGun?.overheated ? " is-overheated" : ""}`}
-            disabled={!controlsEnabled}
-            mode="hold"
-            resetKey={generation}
-            onBegin={beginFire}
-            onEnd={endFire}
-            onCancel={cancelFire}
-          />
-          {machineGun !== undefined && (
-            <div className="control-readout">
-              <div className="shield-energy mg-heat" aria-label="Нагрев носового пулемёта">
-                <span
-                  style={{ width: `${String((machineGun.heat / machineGun.capacity) * 100)}%` }}
-                />
-              </div>
-              <strong>
-                Нагрев {Math.round(machineGun.heat)} / {Math.round(machineGun.capacity)}
-              </strong>
-            </div>
-          )}
-        </>
-      )}
-      {role === "gunner" && (
-        <>
-          <ActionZone
-            label={cannon?.overheated ? "ПЕРЕГРЕВ" : "УДЕРЖИВАТЬ ОГОНЬ"}
-            testId="fire-button"
-            className={`hold-action--gunner${cannon?.overheated ? " is-overheated" : ""}`}
-            disabled={!controlsEnabled}
-            mode="hold"
-            resetKey={generation}
-            onBegin={beginFire}
-            onEnd={endFire}
-            onCancel={cancelFire}
-          />
-          {cannon !== undefined && (
-            <div className="control-readout" data-testid="cannon-heat">
-              <div className="shield-energy mg-heat" aria-label="Нагрев орудия наводчика">
-                <span style={{ width: `${String((cannon.heat / cannon.capacity) * 100)}%` }} />
-              </div>
-              <strong>
-                Нагрев {Math.round(cannon.heat)} / {Math.round(cannon.capacity)}
-              </strong>
-            </div>
-          )}
-        </>
-      )}
-      {role === "shield" && shield !== undefined && (
-        <>
-          <ActionZone
-            label={
-              shield.active
-                ? "ВЫКЛЮЧИТЬ ЩИТ"
-                : shield.energy <= 0
-                  ? "ЩИТ ВОССТАНАВЛИВАЕТСЯ"
-                  : "ВКЛЮЧИТЬ ЩИТ"
-            }
-            testId="shield-button"
-            className="hold-action--shield"
-            disabled={!controlsEnabled || (!shield.active && shield.energy <= 0)}
-            mode="toggle"
-            active={shield.active}
-            resetKey={generation}
-            onToggle={toggleShield}
-          />
-          <div className="control-readout">
-            <div className="shield-energy" aria-label="Энергия щита">
-              <span style={{ width: `${String((shield.energy / shield.capacity) * 100)}%` }} />
-            </div>
-            <strong>
-              Энергия {Math.round(shield.energy)} / {Math.round(shield.capacity)}
-            </strong>
-          </div>
-        </>
-      )}
-      <small>
-        Desktop:{" "}
-        {role === "pilot" ? "WASD или стрелки, Space — огонь из носа" : "мышь/стрелки + Space"}
-      </small>
-    </div>
-  );
-}
-
-function roleHelp(role: CrewRole): string {
-  return role === "pilot"
-    ? "Ведите корабль через космическое поле"
-    : role === "gunner"
-      ? "Направляйте пушку и удерживайте огонь"
-      : "Направляйте и удерживайте защитный сектор";
-}
-
-export function toServerError(code: string, fallback: string): string {
-  if (code === "invalid_phase") return "Действие недоступно до начала полёта.";
-  if (code === "role_mismatch") return "Эта команда недоступна вашей роли.";
-  if (code === "identity_mismatch") return "Сервер не подтвердил игровую сессию.";
-  if (code === "protocol_mismatch") return "Версия игры устарела. Обновите страницу.";
-  if (code === "action_conflict") return "Команда улучшения конфликтует с предыдущей.";
-  if (code === "action_not_available") return "Это предложение улучшения уже недоступно.";
-  if (code === "stale_action") return "Ваш голос уже обновлён более новой командой.";
-  if (code === "stale_run") return "Команда относилась к завершённому бою и не была применена.";
-  return fallback;
-}
-
-function toJoinError(reason: unknown): string {
-  if (!(reason instanceof Error)) return "Не удалось подключиться к комнате.";
-  if (reason.message.includes("room_full")) return "Все три роли уже заняты.";
-  if (reason.message.includes("not found")) return "Комната не найдена. Проверьте код.";
-  return reason.message;
-}
-
-function readBrowserSearch(): string {
-  return typeof window === "undefined" ? "" : window.location.search;
-}
-
-function readSessionStorage(): SessionStorage | undefined {
-  return typeof window === "undefined" ? undefined : window.sessionStorage;
 }
 
 function persistReconnectionSession(room: ControllerRoom, playerName: string): void {
