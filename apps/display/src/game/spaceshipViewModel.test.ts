@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   backgroundTileOffset,
   createSnappedVisualTransitions,
+  getBackgroundCoverRect,
   getBoundedCameraScroll,
   getCameraOverscan,
   getCircularGridSegments,
@@ -53,6 +54,46 @@ describe("spaceship view model", () => {
     expect(framed.zoom).toBeCloseTo(0.6);
     expect(framed.width).toBeCloseTo(3200);
     expect(framed.height).toBeCloseTo(1800);
+  });
+
+  describe("background cover rect", () => {
+    const framedViewport = (rendererWidth: number, rendererHeight: number) =>
+      getResponsiveViewport(rendererWidth, rendererHeight, 2400, 2400 * (9 / 16));
+    /** How Phaser puts a scroll-factor-0 world coordinate on screen: zoom around the camera origin. */
+    const project = (world: number, rendererSize: number, zoom: number): number =>
+      (rendererSize / 2) * (1 - zoom) + zoom * world;
+
+    it.each([
+      [1920, 1080],
+      [1366, 768],
+      [1278, 600],
+      [2560, 1080]
+    ])("covers the whole renderer at %ix%i", (rendererWidth, rendererHeight) => {
+      const { zoom } = framedViewport(rendererWidth, rendererHeight);
+      const cover = getBackgroundCoverRect(rendererWidth, rendererHeight, zoom);
+
+      expect(project(cover.x, rendererWidth, zoom)).toBeLessThanOrEqual(0);
+      expect(project(cover.y, rendererHeight, zoom)).toBeLessThanOrEqual(0);
+      expect(project(cover.x + cover.width, rendererWidth, zoom)).toBeGreaterThanOrEqual(
+        rendererWidth
+      );
+      expect(project(cover.y + cover.height, rendererHeight, zoom)).toBeGreaterThanOrEqual(
+        rendererHeight
+      );
+    });
+
+    it("pulls the layer off the world origin, which zoom below 1 leaves short of the screen", () => {
+      const { zoom } = framedViewport(1278, 600);
+
+      expect(zoom).toBeLessThan(1);
+      // The old placement: origin at world 0 lands well inside the viewport, hence the bare strip.
+      expect(project(0, 1278, zoom)).toBeGreaterThan(100);
+      expect(getBackgroundCoverRect(1278, 600, zoom).x).toBeLessThan(0);
+    });
+
+    it("falls back to zoom 1 instead of exploding on a degenerate zoom", () => {
+      expect(getBackgroundCoverRect(1600, 900, 0)).toEqual(getBackgroundCoverRect(1600, 900, 1));
+    });
   });
 
   describe("background tile offset", () => {

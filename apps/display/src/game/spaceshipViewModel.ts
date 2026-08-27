@@ -144,6 +144,38 @@ export function getResponsiveViewport(
   return { zoom, width: safeWidth / zoom, height: safeHeight / zoom };
 }
 
+/** Screen pixels of slack kept past every renderer edge, so rounding never bares the void. */
+export const BACKGROUND_COVER_MARGIN_PX = 64;
+
+export interface BackgroundCoverRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * World rectangle for a screen-fixed background layer (scrollFactor 0) that has to cover the
+ * whole renderer. Zoom still applies to such a sprite, around the camera origin:
+ * `screen = half * (1 - zoom) + zoom * world`. A layer pinned to the world origin therefore
+ * lands `half * (1 - zoom)` off the screen corner and leaves a bare strip on one side at every
+ * zoom but 1 — the strip is widest when the tuned camera width forces zoom well under 1.
+ */
+export function getBackgroundCoverRect(
+  rendererWidth: number,
+  rendererHeight: number,
+  zoom: number,
+  marginPx = BACKGROUND_COVER_MARGIN_PX
+): BackgroundCoverRect {
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return {
+    x: rendererWidth / 2 - (rendererWidth / 2 + marginPx) / safeZoom,
+    y: rendererHeight / 2 - (rendererHeight / 2 + marginPx) / safeZoom,
+    width: (rendererWidth + marginPx * 2) / safeZoom,
+    height: (rendererHeight + marginPx * 2) / safeZoom
+  };
+}
+
 export interface BackgroundLayerMotion {
   /** Fraction of camera scroll the layer follows, per axis (demo values; may be negative). */
   readonly factorX: number;

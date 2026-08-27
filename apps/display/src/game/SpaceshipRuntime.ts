@@ -18,6 +18,7 @@ import {
   createAngleTransition,
   createPointTransition,
   createSnappedVisualTransitions,
+  getBackgroundCoverRect,
   getCameraOverscan,
   getCircularGridSegments,
   getPhaserCameraScroll,
@@ -32,6 +33,7 @@ import {
   reconcileStableIds,
   SnapshotResetLatch,
   type AngleTransition,
+  type BackgroundCoverRect,
   type Point,
   type PointTransition
 } from "./spaceshipViewModel.js";
@@ -95,6 +97,11 @@ class SpaceshipScene extends Phaser.Scene {
   private backgroundDriftSeconds = 0;
   private viewportWidth = BASE_VIEWPORT_WIDTH;
   private viewportHeight = BASE_VIEWPORT_HEIGHT;
+  private backgroundCover: BackgroundCoverRect = getBackgroundCoverRect(
+    BASE_VIEWPORT_WIDTH,
+    BASE_VIEWPORT_HEIGHT,
+    1
+  );
   private rendererWidth = BASE_VIEWPORT_WIDTH;
   private rendererHeight = BASE_VIEWPORT_HEIGHT;
   private cameraOverscan = 0;
@@ -293,10 +300,10 @@ class SpaceshipScene extends Phaser.Scene {
     for (const config of BACKGROUND_LAYERS) {
       const sprite = this.add
         .tileSprite(
-          0,
-          0,
-          this.viewportWidth,
-          this.viewportHeight,
+          this.backgroundCover.x,
+          this.backgroundCover.y,
+          this.backgroundCover.width,
+          this.backgroundCover.height,
           backgroundTextureKey(config.kind, background.nebulaPreset)
         )
         .setOrigin(0)
@@ -420,9 +427,13 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.worldWidth + this.cameraOverscan * 2,
       this.snapshot.worldHeight + this.cameraOverscan * 2
     );
-    // Scroll-factor-0 layers cover the viewport window in world units; keep them in sync.
+    // Scroll-factor-0 layers still get zoomed around the camera origin, so their world rect is
+    // not the viewport window; keep both size and position in sync with it.
+    this.backgroundCover = getBackgroundCoverRect(actualWidth, actualHeight, viewport.zoom);
     for (const layer of this.backgroundLayers) {
-      layer.sprite.setSize(this.viewportWidth, this.viewportHeight);
+      layer.sprite
+        .setPosition(this.backgroundCover.x, this.backgroundCover.y)
+        .setSize(this.backgroundCover.width, this.backgroundCover.height);
     }
     this.focusCamera(this.spaceshipBody ?? this.snapshot.spaceship);
   }
