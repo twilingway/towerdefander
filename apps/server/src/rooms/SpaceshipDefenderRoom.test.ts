@@ -302,6 +302,12 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.hasGame).toBe(true);
   });
 
+  it("raises the message ceiling for the two streams a solo player owns", () => {
+    expect(createRoom(1).maxMessagesPerSecond).toBe(50);
+    expect(createRoom(2).maxMessagesPerSecond).toBe(25);
+    expect(createRoom(3).maxMessagesPerSecond).toBe(25);
+  });
+
   it("seats a duo on pilot and gunner and waits for both", () => {
     const room = createRoom(2);
     const pilot = joinController(room, 0);

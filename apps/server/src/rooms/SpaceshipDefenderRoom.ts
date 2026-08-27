@@ -93,12 +93,22 @@ const {
 
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
 
+/**
+ * One continuous stream is capped at 20 messages per second on the client, so a
+ * crew of one — who drives the ship and the turret from a single connection —
+ * legitimately sends twice that. Colyseus force-closes a client that crosses
+ * this ceiling, so the limit follows the number of streams a seat can own,
+ * plus room for ready, votes and latency pongs.
+ */
+const CREW_MESSAGE_CEILING = 25;
+const SOLO_MESSAGE_CEILING = 50;
+
 export class SpaceshipDefenderRoom extends Room<{
   state: SpaceshipDefenderState;
   metadata: RoomStatsMetadata;
 }> {
   override maxClients = PLAYER_CAPACITY + 2;
-  override maxMessagesPerSecond = 25;
+  override maxMessagesPerSecond = CREW_MESSAGE_CEILING;
   override state = new SpaceshipDefenderState();
 
   private readonly connectionRoles = new Map<string, ConnectionRole>();
@@ -185,6 +195,8 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     this.state.roomId = this.roomId;
     this.state.crewSize = options.data.crewSize;
+    this.maxMessagesPerSecond =
+      options.data.crewSize === 1 ? SOLO_MESSAGE_CEILING : CREW_MESSAGE_CEILING;
     const now = Date.now();
     this.createdAtMs = now;
     this.statusChangedAtMs = now;

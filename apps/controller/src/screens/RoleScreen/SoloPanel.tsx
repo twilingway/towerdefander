@@ -145,11 +145,15 @@ export function SoloPanel({
           type="button"
           className="solo-layout-toggle"
           data-testid="solo-layout-toggle"
+          // The label names where the triggers are right now; tapping moves
+          // them, so a player who lost track can read the panel instead of
+          // guessing which half of the pair they are looking at.
+          title={`Переключить на: ${soloLayoutLabel(nextLayout(layout))}`}
           onClick={() => {
             onLayoutChange(nextLayout(layout));
           }}
         >
-          {soloLayoutLabel(nextLayout(layout))}
+          {soloLayoutLabel(layout)}
         </button>
       </div>
     </div>

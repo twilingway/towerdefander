@@ -43,8 +43,10 @@ describe("SoloPanel", () => {
     expect(html).toContain('data-testid="fire-button"');
   });
 
-  it("offers the other layout on the toggle", () => {
-    expect(markup("stacked")).toContain("Кнопки по верхнему краю");
-    expect(markup("triggers")).toContain("Кнопки над стиками");
+  it("names the current layout on the toggle and the other one in its title", () => {
+    expect(markup("stacked")).toContain(">Кнопки над стиками<");
+    expect(markup("stacked")).toContain("Переключить на: Кнопки по верхнему краю");
+    expect(markup("triggers")).toContain(">Кнопки по верхнему краю<");
+    expect(markup("triggers")).toContain("Переключить на: Кнопки над стиками");
   });
 });
