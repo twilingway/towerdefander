@@ -5,6 +5,7 @@ import {
   CAMERA_VIEW_WIDTH_MIN,
   CREW_ROLES,
   PROTOCOL_VERSION,
+  ROOM_REFUSED_AT_CAPACITY,
   ROOM_TYPE,
   clientMessage,
   roomClosingSchema,
@@ -149,7 +150,7 @@ export function DisplayApp() {
       });
     } catch (reason) {
       setStatus("error");
-      setError(reason instanceof Error ? reason.message : "Не удалось создать комнату.");
+      setError(createFailureMessage(reason));
     }
   }
 
@@ -504,6 +505,15 @@ function latencyRoleLabel(role: CrewRole): string {
 
 function readStringEnvironment(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+/** The server refuses a create by throwing a coded error; only this one is expected in play. */
+function createFailureMessage(reason: unknown): string {
+  if (!(reason instanceof Error)) return "Не удалось создать комнату.";
+  if (reason.message === ROOM_REFUSED_AT_CAPACITY) {
+    return "Сервер занят: свободных комнат нет. Попробуйте через минуту.";
+  }
+  return reason.message;
 }
 
 function createDefaultGameServerUrl(): string {

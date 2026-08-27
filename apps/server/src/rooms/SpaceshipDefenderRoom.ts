@@ -27,6 +27,7 @@ import {
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  ROOM_REFUSED_AT_CAPACITY,
   clientMessage,
   clientLatencyPongSchema,
   displayCreateOptionsSchema,
@@ -46,7 +47,7 @@ import {
   type UpgradeVoteCommand
 } from "@spaceship-defender/protocol";
 import { StateView } from "@colyseus/schema";
-import { CloseCode, Room, ServerError, type Client } from "colyseus";
+import { CloseCode, ErrorCode, Room, ServerError, matchMaker, type Client } from "colyseus";
 import { randomInt, randomUUID } from "node:crypto";
 
 import { getBalanceStore } from "../balance/index.js";
@@ -111,8 +112,10 @@ const {
   resultTtlSeconds,
   zeroControllerTtlSeconds,
   waveTtlSeconds,
-  absoluteTtlSeconds
+  absoluteTtlSeconds,
+  maxConcurrentRooms
 } = readServerConfig();
+
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
 
 const DECORATIVE_OBSTACLES = [
@@ -224,6 +227,16 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     if (!displayCreateOptionsSchema.safeParse(unsafeOptions).success) {
       throw new ServerError(4000, "invalid_message");
+    }
+    // Every room in this process shares one event loop, so accepting a room past
+    // the ceiling slows the tick of every room already running, not just the
+    // newcomer. Refuse instead, and let the operator scale out. The count comes
+    // from the matchmaker rather than a parallel tally, which cannot drift. It
+    // does not yet include the room being created, so the comparison is `>=`.
+    // Matchmaking only forwards the message for codes it knows; anything else
+    // reaches the client as a bare "Internal Server Error".
+    if (matchMaker.stats.local.roomCount >= maxConcurrentRooms) {
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, ROOM_REFUSED_AT_CAPACITY);
     }
     this.state.roomId = this.roomId;
     const now = Date.now();

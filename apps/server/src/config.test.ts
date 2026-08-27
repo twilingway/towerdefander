@@ -17,6 +17,7 @@ describe("readServerConfig", () => {
       zeroControllerTtlSeconds: 300,
       waveTtlSeconds: 1200,
       absoluteTtlSeconds: 43_200,
+      maxConcurrentRooms: 30,
       statsPassword: undefined,
       balancePassword: undefined,
       gracefullyShutdown: true
@@ -35,6 +36,7 @@ describe("readServerConfig", () => {
       zeroControllerTtlSeconds: 300,
       waveTtlSeconds: 1200,
       absoluteTtlSeconds: 43_200,
+      maxConcurrentRooms: 30,
       statsPassword: undefined,
       balancePassword: undefined,
       gracefullyShutdown: true
@@ -101,6 +103,20 @@ describe("readServerConfig", () => {
   ])("rejects invalid %s=%s", (name, value) => {
     expect(() => readServerConfig({ [name]: value })).toThrow(`${name} must be an integer`);
   });
+
+  it("defaults the concurrent room limit and accepts an explicit one", () => {
+    expect(readServerConfig({})).toMatchObject({ maxConcurrentRooms: 30 });
+    expect(readServerConfig({ ROOM_MAX_CONCURRENT: "12" })).toMatchObject({
+      maxConcurrentRooms: 12
+    });
+  });
+
+  it.each([["0"], ["1.5"], ["abc"], ["10001"]])(
+    "rejects ROOM_MAX_CONCURRENT value %s",
+    (value: string) => {
+      expect(() => readServerConfig({ ROOM_MAX_CONCURRENT: value })).toThrow();
+    }
+  );
 
   it("preserves a non-empty statistics password exactly", () => {
     expect(readServerConfig({ ROOM_STATS_PASSWORD: " secret with spaces " }).statsPassword).toBe(

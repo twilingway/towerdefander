@@ -731,6 +731,13 @@ export type RoomClosingReason = z.infer<typeof roomClosingReasonSchema>;
 export const roomClosingSchema = z.object({ reason: roomClosingReasonSchema }).strict();
 export type RoomClosing = z.infer<typeof roomClosingSchema>;
 
+/**
+ * Message a create is refused with when the process already hosts its limit of
+ * rooms. It travels as the text of a matchmaking error rather than a
+ * `server:error` payload, because the room never comes into existence.
+ */
+export const ROOM_REFUSED_AT_CAPACITY = "server_at_capacity" as const;
+
 export const clientMessage = {
   ready: "controller:ready",
   pilotInput: "pilot:input",

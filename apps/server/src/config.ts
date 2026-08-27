@@ -9,6 +9,7 @@ export interface ServerConfig {
   zeroControllerTtlSeconds: number;
   waveTtlSeconds: number;
   absoluteTtlSeconds: number;
+  maxConcurrentRooms: number;
   statsPassword: string | undefined;
   balancePassword: string | undefined;
   balancePresetPath: string;
@@ -18,10 +19,38 @@ export interface ServerConfig {
 const MAX_PHASE_TTL_SECONDS = 86_400;
 const MAX_ABSOLUTE_TTL_SECONDS = 604_800;
 const MAX_STATS_PASSWORD_BYTES = 256;
+const MAX_CONCURRENT_ROOMS_LIMIT = 10_000;
+/**
+ * Rooms one process will host at once. Measured ceiling on the reference
+ * machine is about 40 rooms on late waves before the tick falls behind, and a
+ * process that accepts the next room past its ceiling degrades every room it
+ * already hosts, so the default leaves headroom.
+ */
+const DEFAULT_MAX_CONCURRENT_ROOMS = 30;
 // Resolved against this package, not the working directory: `pnpm dev` starts
 // the server from apps/server while the visible demo starts it from the repo
 // root, and both must read the same presets.
 const DEFAULT_BALANCE_PRESET_PATH = fileURLToPath(new URL("../data/balance.json", import.meta.url));
+
+function readPositiveInteger(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+  fallback: number,
+  maximum: number
+): number {
+  const configuredValue = environment[name]?.trim();
+  const rawValue =
+    configuredValue === undefined || configuredValue.length === 0
+      ? String(fallback)
+      : configuredValue;
+  const value = Number(rawValue);
+
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    throw new Error(`${name} must be an integer between 1 and ${String(maximum)}.`);
+  }
+
+  return value;
+}
 
 function readIntegerSeconds(
   environment: NodeJS.ProcessEnv,
@@ -87,6 +116,12 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     12 * 60 * 60,
     MAX_ABSOLUTE_TTL_SECONDS
   );
+  const maxConcurrentRooms = readPositiveInteger(
+    environment,
+    "ROOM_MAX_CONCURRENT",
+    DEFAULT_MAX_CONCURRENT_ROOMS,
+    MAX_CONCURRENT_ROOMS_LIMIT
+  );
   const statsPassword =
     rawStatsPassword === undefined || rawStatsPassword.length === 0 ? undefined : rawStatsPassword;
   const balancePassword =
@@ -137,6 +172,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     zeroControllerTtlSeconds,
     waveTtlSeconds,
     absoluteTtlSeconds,
+    maxConcurrentRooms,
     statsPassword,
     balancePassword,
     balancePresetPath,
