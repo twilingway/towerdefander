@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "0.17.43",
+    "@spaceship-defender/client-shared": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",
     "react": "19.2.8",
     "react-dom": "19.2.8"

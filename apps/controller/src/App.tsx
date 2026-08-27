@@ -20,6 +20,16 @@ import {
   type TerminalOutcome,
   type UpgradeId
 } from "@spaceship-defender/protocol";
+import {
+  createDefaultGameServerUrl,
+  formatLatency,
+  isPreviewMode,
+  PreviewPhaseButtons,
+  PreviewShell,
+  readStringEnvironment,
+  roleLabel,
+  type PreviewPhase
+} from "@spaceship-defender/client-shared";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -35,13 +45,7 @@ import {
   readImmersiveHost,
   type ScreenWakeLock
 } from "./immersiveMode.js";
-import {
-  createPreviewRoomView,
-  isPreviewMode,
-  previewPlayerId,
-  PREVIEW_PHASES,
-  type PreviewPhase
-} from "./previewMode.js";
+import { createPreviewRoomView, previewPlayerId } from "./previewMode.js";
 import {
   clearReconnectionSession,
   leaveControllerRoom,
@@ -542,10 +546,6 @@ function playCardPhaseModifier(phase: EncounterPhase | undefined): string {
   return phase === "result" ? " play-card--result" : "";
 }
 
-function formatLatency(latencyMs: number | null | undefined): string {
-  return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
-}
-
 export function TeamUpgradePanel({
   role,
   teamUpgrade,
@@ -762,64 +762,27 @@ export function PreviewControls({
   readonly onRoleChange: (role: CrewRole) => void;
   readonly onPhaseChange: (phase: PreviewPhase) => void;
 }) {
-  const [open, setOpen] = useState(true);
   return (
-    <div
-      className={`preview-controls${open ? "" : " preview-controls--collapsed"}`}
-      data-testid="preview-controls"
-    >
-      <button
-        type="button"
-        className="preview-controls__toggle"
-        aria-expanded={open}
-        aria-label={open ? "Свернуть панель превью" : "Развернуть панель превью"}
-        onClick={() => {
-          setOpen((value) => !value);
-        }}
-      >
-        {open ? "×" : "⚙"}
-      </button>
-      {open && (
-        <>
-          <span className="eyebrow">Превью верстки</span>
-          <div className="preview-controls__group">
-            {CREW_ROLES.map((candidate) => (
-              <button
-                key={candidate}
-                type="button"
-                aria-pressed={candidate === role}
-                onClick={() => {
-                  onRoleChange(candidate);
-                }}
-              >
-                {roleLabel(candidate)}
-              </button>
-            ))}
-          </div>
-          <div className="preview-controls__group">
-            {PREVIEW_PHASES.map((candidate) => (
-              <button
-                key={candidate}
-                type="button"
-                aria-pressed={candidate === phase}
-                onClick={() => {
-                  onPhaseChange(candidate);
-                }}
-              >
-                {previewPhaseLabel(candidate)}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <PreviewShell>
+      <div className="preview-controls__group">
+        {CREW_ROLES.map((candidate) => (
+          <button
+            key={candidate}
+            type="button"
+            aria-pressed={candidate === role}
+            onClick={() => {
+              onRoleChange(candidate);
+            }}
+          >
+            {roleLabel(candidate)}
+          </button>
+        ))}
+      </div>
+      <div className="preview-controls__group">
+        <PreviewPhaseButtons phase={phase} onPhaseChange={onPhaseChange} />
+      </div>
+    </PreviewShell>
   );
-}
-
-function previewPhaseLabel(phase: PreviewPhase): string {
-  if (phase === "lobby") return "Лобби";
-  if (phase === "combat") return "Бой";
-  return phase === "intermission" ? "Передышка" : "Итог";
 }
 
 function RoleControlPanel({
@@ -1148,10 +1111,6 @@ function RoleControlPanel({
   );
 }
 
-function roleLabel(role: CrewRole): string {
-  return role === "pilot" ? "Пилот" : role === "gunner" ? "Наводчик" : "Оператор щита";
-}
-
 function roleHelp(role: CrewRole): string {
   return role === "pilot"
     ? "Ведите корабль через космическое поле"
@@ -1179,17 +1138,8 @@ function toJoinError(reason: unknown): string {
   return reason.message;
 }
 
-function readStringEnvironment(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
-}
-
 function readBrowserSearch(): string {
   return typeof window === "undefined" ? "" : window.location.search;
-}
-
-function createDefaultGameServerUrl(): string {
-  if (typeof window === "undefined") return "ws://localhost:2567";
-  return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:2567`;
 }
 
 function readSessionStorage(): SessionStorage | undefined {

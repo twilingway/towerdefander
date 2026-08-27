@@ -1,10 +1,9 @@
+import { roleLabel } from "@spaceship-defender/client-shared";
 import {
   CREW_ROLES,
   TEAM_UPGRADE_PRICE,
   type PublicTeamUpgradeView
 } from "@spaceship-defender/protocol";
-
-import { roleLabel } from "./roleLabel.js";
 
 interface TeamUpgradeOverlayProps {
   readonly teamUpgrade: PublicTeamUpgradeView;

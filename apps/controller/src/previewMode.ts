@@ -1,3 +1,4 @@
+import type { PreviewPhase } from "@spaceship-defender/client-shared";
 import type {
   ControllerGameSnapshot,
   ControllerRoomView,
@@ -10,19 +11,6 @@ import type {
  * room, so every screen can be opened without a server. Fixtures mirror what
  * `toControllerRoomView` produces and are parsed by the protocol schema in tests.
  */
-
-export type PreviewPhase = "lobby" | "combat" | "intermission" | "result";
-
-export const PREVIEW_PHASES: readonly PreviewPhase[] = [
-  "lobby",
-  "combat",
-  "intermission",
-  "result"
-];
-
-export function isPreviewMode(search: string, development: boolean): boolean {
-  return development && new URLSearchParams(search).get("preview") === "1";
-}
 
 export function previewPlayerId(role: CrewRole): string {
   return `preview-${role}`;

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "0.17.43",
+    "@spaceship-defender/client-shared": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",
     "phaser": "4.2.1",
     "qrcode.react": "4.2.0",

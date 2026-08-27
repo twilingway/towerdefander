@@ -1,3 +1,4 @@
+import type { PreviewPhase } from "@spaceship-defender/client-shared";
 import type { DisplayGameSnapshot, DisplayRoomView } from "@spaceship-defender/protocol";
 
 /**
@@ -6,19 +7,6 @@ import type { DisplayGameSnapshot, DisplayRoomView } from "@spaceship-defender/p
  * Fixtures mirror `toDisplayRoomView` output and are parsed by the protocol
  * schema in tests.
  */
-
-export type PreviewPhase = "lobby" | "combat" | "intermission" | "result";
-
-export const PREVIEW_PHASES: readonly PreviewPhase[] = [
-  "lobby",
-  "combat",
-  "intermission",
-  "result"
-];
-
-export function isPreviewMode(search: string, development: boolean): boolean {
-  return development && new URLSearchParams(search).get("preview") === "1";
-}
 
 /** Frame the fixtures start at; the preview slider overrides it per render. */
 export const PREVIEW_CAMERA_VIEW_WIDTH = 2200;

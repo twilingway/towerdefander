@@ -15,6 +15,16 @@ import {
   type DisplayRoomView,
   type EncounterPhase
 } from "@spaceship-defender/protocol";
+import {
+  createDefaultGameServerUrl,
+  formatLatency,
+  isPreviewMode,
+  PreviewPhaseButtons,
+  PreviewShell,
+  readStringEnvironment,
+  roleLabel,
+  type PreviewPhase
+} from "@spaceship-defender/client-shared";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -31,15 +41,8 @@ import {
   confirmDisplayRoomClose,
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
-import {
-  createPreviewRoomView,
-  isPreviewMode,
-  PREVIEW_CAMERA_VIEW_WIDTH,
-  PREVIEW_PHASES,
-  type PreviewPhase
-} from "./previewMode.js";
+import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
-import { roleLabel } from "./roleLabel.js";
 import { isVisibleDemoMode } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -431,68 +434,27 @@ export function PreviewControls({
   readonly cameraViewWidth: number;
   readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
 }) {
-  const [open, setOpen] = useState(true);
   return (
-    <div
-      className={`preview-controls${open ? "" : " preview-controls--collapsed"}`}
-      data-testid="preview-controls"
-    >
-      <button
-        type="button"
-        className="preview-controls__toggle"
-        aria-expanded={open}
-        aria-label={open ? "Свернуть панель превью" : "Развернуть панель превью"}
-        onClick={() => {
-          setOpen((value) => !value);
-        }}
-      >
-        {open ? "×" : "⚙"}
-      </button>
-      {open && (
-        <>
-          <span className="eyebrow">Превью верстки</span>
-          {PREVIEW_PHASES.map((candidate) => (
-            <button
-              key={candidate}
-              type="button"
-              aria-pressed={candidate === phase}
-              onClick={() => {
-                onPhaseChange(candidate);
-              }}
-            >
-              {previewPhaseLabel(candidate)}
-            </button>
-          ))}
-          <label className="preview-controls__camera">
-            <span>
-              Кадр камеры {cameraViewWidth} × {Math.round(cameraViewWidth * CAMERA_VIEW_ASPECT)}
-            </span>
-            <input
-              type="range"
-              min={CAMERA_VIEW_WIDTH_MIN}
-              max={CAMERA_VIEW_WIDTH_MAX}
-              step={50}
-              value={cameraViewWidth}
-              data-testid="preview-camera-view-width"
-              onChange={(event) => {
-                onCameraViewWidthChange(Number(event.target.value));
-              }}
-            />
-          </label>
-        </>
-      )}
-    </div>
+    <PreviewShell>
+      <PreviewPhaseButtons phase={phase} onPhaseChange={onPhaseChange} />
+      <label className="preview-controls__camera">
+        <span>
+          Кадр камеры {cameraViewWidth} × {Math.round(cameraViewWidth * CAMERA_VIEW_ASPECT)}
+        </span>
+        <input
+          type="range"
+          min={CAMERA_VIEW_WIDTH_MIN}
+          max={CAMERA_VIEW_WIDTH_MAX}
+          step={50}
+          value={cameraViewWidth}
+          data-testid="preview-camera-view-width"
+          onChange={(event) => {
+            onCameraViewWidthChange(Number(event.target.value));
+          }}
+        />
+      </label>
+    </PreviewShell>
   );
-}
-
-function previewPhaseLabel(phase: PreviewPhase): string {
-  if (phase === "lobby") return "Лобби";
-  if (phase === "combat") return "Бой";
-  return phase === "intermission" ? "Передышка" : "Итог";
-}
-
-function formatLatency(latencyMs: number | null | undefined): string {
-  return latencyMs === null || latencyMs === undefined ? "—" : `${String(latencyMs)} мс`;
 }
 
 function encounterLabel(phase: EncounterPhase): string {
@@ -501,10 +463,6 @@ function encounterLabel(phase: EncounterPhase): string {
 
 function latencyRoleLabel(role: CrewRole): string {
   return role === "shield" ? "Щит" : roleLabel(role);
-}
-
-function readStringEnvironment(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
 /** The server refuses a create by throwing a coded error; these two are expected in play. */
@@ -517,11 +475,6 @@ function createFailureMessage(reason: unknown): string {
     return "Версия игры устарела. Обновите страницу.";
   }
   return reason.message;
-}
-
-function createDefaultGameServerUrl(): string {
-  if (typeof window === "undefined") return "ws://localhost:2567";
-  return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:2567`;
 }
 
 function createDefaultControllerUrl(): string {
