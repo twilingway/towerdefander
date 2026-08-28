@@ -68,8 +68,9 @@ const PREVIEW_WORLD = {
 } as const;
 
 const PREVIEW_HELM = {
+  scheme: "tank",
   headingLeadRadians: 0.5,
-  stopCounterRadians: 0.12,
+  stopDampening: 1,
   rotateInPlaceThrottle: 0.02
 } as const;
 

@@ -11,11 +11,12 @@ import {
   backgroundTuningSchema,
   cameraViewWidthSchema,
   entityVisualSchema,
+  helmSchemeSchema,
   turretVisualSchema,
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 28 as const;
+export const PROTOCOL_VERSION = 29 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -573,8 +574,9 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
  */
 export const publicHelmViewSchema = z
   .object({
+    scheme: helmSchemeSchema,
     headingLeadRadians: finite.positive(),
-    stopCounterRadians: finite.nonnegative(),
+    stopDampening: finite.positive(),
     rotateInPlaceThrottle: finite.positive()
   })
   .strict();

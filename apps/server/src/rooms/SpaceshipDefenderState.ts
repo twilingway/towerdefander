@@ -5,6 +5,7 @@ import type {
   DefeatReason,
   EncounterPhase,
   EnemyKind,
+  HelmScheme,
   RoomPhase,
   TerminalOutcome,
   UpgradeId
@@ -39,8 +40,10 @@ export class MachineGunState extends Schema {
 
 /** Keyboard helm feel from the active preset; the controller drives with it. */
 export class HelmState extends Schema {
+  // Fixed for the run, like the silhouettes: sent once, never per tick.
+  @type("string") scheme: HelmScheme = "tank";
   @type("float32") headingLeadRadians = 0.5;
-  @type("float32") stopCounterRadians = 0.12;
+  @type("float32") stopDampening = 1;
   @type("float32") rotateInPlaceThrottle = 0.02;
 }
 

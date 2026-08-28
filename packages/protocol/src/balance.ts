@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 17 as const;
+export const BALANCE_FILE_VERSION = 18 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -295,12 +295,26 @@ export type AutopilotProfile = z.infer<typeof autopilotProfileSchema>;
  * the pilot vector and ignores a strictly zero one. Presentation-only, like
  * `autopilot`: the simulation never reads this section.
  */
+export const HELM_SCHEMES = ["tank", "absolute"] as const;
+export const helmSchemeSchema = z.enum(HELM_SCHEMES);
+export type HelmScheme = z.infer<typeof helmSchemeSchema>;
+
 export const helmTuningSchema = z
   .object({
+    /**
+     * `tank` turns the hull with the turn keys and burns along the nose;
+     * `absolute` sends the direction the keys point, the way a twin-stick
+     * shooter does.
+     */
+    scheme: helmSchemeSchema,
     /** How far ahead of the nose the requested course sits while turning. */
     headingLeadRadians: z.number().min(0.05).max(1.5),
-    /** How far behind the nose the release aims, to cancel the lag. */
-    stopCounterRadians: z.number().min(0).max(0.6),
+    /**
+     * Multiplies the predicted stopping angle when a turn key comes up. 1 aims
+     * exactly where the hull would coast to a halt; below 1 stops it short and
+     * can rock it back, above 1 lets it drift a little further.
+     */
+    stopDampening: z.number().min(0.5).max(1.5),
     /** Share of full thrust a turn without the engine rides on. */
     rotateInPlaceThrottle: z.number().min(0.005).max(0.2)
   })

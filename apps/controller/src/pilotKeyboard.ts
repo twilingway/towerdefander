@@ -40,19 +40,30 @@ export const ROTATE_IN_PLACE_THROTTLE = 0.02;
 export const HEADING_LEAD_RADIANS = 0.5;
 
 /**
- * Ticks of "aim at the nose you already have" sent when a turn key comes up. A
- * zero vector keeps the previous target, so without this the hull would coast
- * the whole lead angle after every turn; pointing the request at the current
- * nose is what actually brakes the spin.
+ * Ticks of braking request sent when a turn key comes up. A zero vector keeps
+ * the previous target, so without this the hull would coast the whole lead
+ * angle after every turn.
  */
 export const HELM_STOP_TICKS = 5;
 
 /**
- * How far *behind* the last seen nose the braking request points. The client
- * only ever sees a course that is a network hop old, so aiming at it exactly
- * lets the hull drift on; a small counter-angle cancels that lag.
+ * Matches `headingAngularBrakingPerSecondSquared` in the simulation config. The
+ * client cannot depend on game-core, so the braking rate is mirrored here to
+ * predict where a spin comes to rest.
  */
-export const HELM_STOP_COUNTER_RADIANS = 0.12;
+export const HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED = (13 * Math.PI) / 5;
+
+/**
+ * Where the hull will stop on its own, in radians from where it is now, given
+ * how fast it is turning. Aiming the release exactly here is what removes both
+ * the coast past the target and the swing back to it.
+ */
+export function coastToStopRadians(
+  angularVelocity: number,
+  braking = HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED
+): number {
+  return (Math.sign(angularVelocity) * angularVelocity * angularVelocity) / (2 * braking);
+}
 
 export interface HeadingDrive {
   /** The course being asked for, in radians. */
@@ -71,22 +82,33 @@ export function advanceHeadingDrive(
   heading: number,
   keys: ReadonlySet<string>,
   options: {
-    /** Direction of the turn being braked: -1, 0 or 1. */
-    readonly stopping?: -1 | 0 | 1;
+    /** True while a released turn is still being braked. */
+    readonly stopping?: boolean;
+    /** Where the hull would coast to a halt, in radians from the nose. */
+    readonly coastRadians?: number;
     /** Feel from the active preset; the built-ins stand in until it arrives. */
     readonly tuning?: HelmTuning | undefined;
   } = {}
 ): HeadingDrive {
-  const { stopping = 0, tuning } = options;
+  const { stopping = false, coastRadians = 0, tuning } = options;
   const lead = tuning?.headingLeadRadians ?? HEADING_LEAD_RADIANS;
-  const counter = tuning?.stopCounterRadians ?? HELM_STOP_COUNTER_RADIANS;
+  const dampening = tuning?.stopDampening ?? 1;
   const nudge = tuning?.rotateInPlaceThrottle ?? ROTATE_IN_PLACE_THROTTLE;
   const throttling = keys.has(THROTTLE_KEY) && !keys.has(BRAKE_KEY);
   const turn = Number(keys.has(TURN_RIGHT_KEY)) - Number(keys.has(TURN_LEFT_KEY));
-  if (turn === 0 && !throttling && stopping === 0) {
+
+  if (tuning?.scheme === "absolute") {
+    // The twin-stick shape: the keys name a direction in the world and the hull
+    // follows it, so there is no course to carry and nothing to brake.
+    return { heading, vector: getKeyboardVector(keys) };
+  }
+
+  if (turn === 0 && !throttling && !stopping) {
     return { heading, vector: { x: 0, y: 0 } };
   }
-  const target = turn === 0 ? heading - stopping * counter : heading + turn * lead;
+  // Braking aims at the resting point rather than at the nose: aiming short
+  // rocks the hull back, aiming at a stale course lets it drift on.
+  const target = turn === 0 ? heading + coastRadians * dampening : heading + turn * lead;
   const thrust = throttling ? 1 : nudge;
   return {
     heading: target,

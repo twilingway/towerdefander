@@ -5,6 +5,7 @@ import {
   type CrewRole,
   type DefeatReason,
   type EncounterPhase,
+  type HelmScheme,
   type PublicPlayerView,
   type PublicSpaceshipView,
   type PublicUpgradeVote,
@@ -83,8 +84,9 @@ interface NetworkGameState {
     overheated: boolean;
   };
   helm?: {
+    scheme: HelmScheme;
     headingLeadRadians: number;
-    stopCounterRadians: number;
+    stopDampening: number;
     rotateInPlaceThrottle: number;
   };
   encounter: {

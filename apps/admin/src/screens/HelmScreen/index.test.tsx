@@ -14,8 +14,9 @@ describe("HelmScreen", () => {
     const markup = renderToStaticMarkup(
       <HelmScreen
         tuning={tuning({
+          scheme: "tank",
           headingLeadRadians: Math.PI / 6,
-          stopCounterRadians: Math.PI / 18,
+          stopDampening: 1,
           rotateInPlaceThrottle: 0.02
         })}
         onChange={vi.fn()}
@@ -23,16 +24,18 @@ describe("HelmScreen", () => {
     );
 
     expect(markup).toContain("Опережение курса");
+    expect(markup).toContain("Танковый руль");
     expect(markup).toContain('value="30"');
-    expect(markup).toContain('value="10"');
+    expect(markup).toContain('value="1"');
     expect(markup).toContain('value="2"');
   });
 
   it("patches only the field that changed", () => {
     const onChange = vi.fn();
     const helm: HelmTuning = {
+      scheme: "tank",
       headingLeadRadians: 0.5,
-      stopCounterRadians: 0.12,
+      stopDampening: 1,
       rotateInPlaceThrottle: 0.02
     };
     const screen = HelmScreen({ tuning: tuning(helm), onChange });

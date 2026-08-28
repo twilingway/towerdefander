@@ -766,7 +766,7 @@ describe("version 1 migration", () => {
     expect(turret?.mountY).toBe(0);
   });
 
-  it("keeps a campaign when a preset predates the helm section", async () => {
+  it("keeps a campaign when a preset predates the current helm section", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     const tuning: Record<string, unknown> = {
@@ -791,11 +791,16 @@ describe("version 1 migration", () => {
         ]
       }
     };
-    delete tuning.helm;
+    // Version 17 carried the retired counter angle, and a leftover key fails the
+    // strict schema just as loudly as a missing one.
+    const legacyHelm: Record<string, unknown> = { ...defaults.helm, stopCounterRadians: 0.12 };
+    delete legacyHelm.stopDampening;
+    delete legacyHelm.scheme;
+    tuning.helm = legacyHelm;
     await writeFile(
       filePath,
       JSON.stringify({
-        version: 16,
+        version: 17,
         activePresetId: "operator",
         presets: [{ id: "operator", name: "Operator", tuning }]
       }),
@@ -808,6 +813,7 @@ describe("version 1 migration", () => {
     expect(warn).not.toHaveBeenCalled();
     expect(store.getActiveTuning().waveCampaign.waves).toHaveLength(1);
     expect(store.getActiveTuning().helm).toEqual(defaults.helm);
+    expect(store.getActiveTuning().helm.scheme).toBe("tank");
   });
 
   it("keeps a campaign when a saved profile predates a new profile knob", async () => {

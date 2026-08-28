@@ -1,6 +1,21 @@
-import type { BalanceTuning, HelmTuning } from "@spaceship-defender/protocol";
+import {
+  HELM_SCHEMES,
+  type BalanceTuning,
+  type HelmScheme,
+  type HelmTuning
+} from "@spaceship-defender/protocol";
 
-import { DegreesField, PercentField } from "../../components/fields.js";
+import { DegreesField, NumberField, PercentField } from "../../components/fields.js";
+
+const SCHEME_LABELS: Record<HelmScheme, string> = {
+  tank: "Танковый руль",
+  absolute: "Абсолютное направление"
+};
+
+const SCHEME_HINTS: Record<HelmScheme, string> = {
+  tank: "A и D вращают корпус, W даёт тягу вдоль носа. Нос сам и есть прицел пулемёта.",
+  absolute: "Клавиши задают направление в мире, корабль идёт туда, а нос доворачивает следом."
+};
 
 interface HelmScreenProps {
   readonly tuning: BalanceTuning;
@@ -37,10 +52,11 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
             догоняет цель тем быстрее, чем она дальше, поэтому этот угол и задаёт скорость
             разворота: больше — резвее, но и выбег после отпускания длиннее
           </dd>
-          <dt>Встречное торможение</dt>
+          <dt>Демпфирование остановки</dt>
           <dd>
-            насколько запрос уходит за нос назад в момент отпускания клавиши. Гасит выбег от сетевой
-            задержки; слишком большое значение дёрнет корпус в обратную сторону
+            множитель к предсказанной точке, где вращение встанет само. 1 — корпус останавливается
+            там, куда его довели; меньше — тормозит раньше и слегка качается назад; больше — уезжает
+            чуть дальше
           </dd>
           <dt>Тяга разворота на месте</dt>
           <dd>
@@ -51,6 +67,22 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
       </details>
 
       <div className="grid">
+        <label className="field">
+          <span className="field__caption">Схема</span>
+          <select
+            className="field__input"
+            value={tuning.helm.scheme}
+            onChange={(event) => {
+              patch({ scheme: event.target.value as HelmScheme });
+            }}
+          >
+            {HELM_SCHEMES.map((scheme) => (
+              <option key={scheme} value={scheme}>
+                {SCHEME_LABELS[scheme]}
+              </option>
+            ))}
+          </select>
+        </label>
         <DegreesField
           caption="Опережение курса"
           radians={tuning.helm.headingLeadRadians}
@@ -58,11 +90,13 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
             patch({ headingLeadRadians });
           }}
         />
-        <DegreesField
-          caption="Встречное торможение"
-          radians={tuning.helm.stopCounterRadians}
-          onChange={(stopCounterRadians) => {
-            patch({ stopCounterRadians });
+        <NumberField
+          caption="Демпфирование остановки"
+          value={tuning.helm.stopDampening}
+          step={0.05}
+          min={0.5}
+          onChange={(stopDampening) => {
+            patch({ stopDampening });
           }}
         />
         <PercentField
@@ -73,6 +107,8 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
           }}
         />
       </div>
+
+      <p className="screen__hint">{SCHEME_HINTS[tuning.helm.scheme]}</p>
     </section>
   );
 }

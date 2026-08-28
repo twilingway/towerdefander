@@ -241,6 +241,19 @@ function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknow
 }
 
 /**
+ * Fills the helm section field by field and drops the retired counter angle: a
+ * leftover key would fail the strict schema and take the operator's waves with
+ * it, exactly the way one autopilot knob once did.
+ */
+function migrateHelm(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+  const saved: LegacyRecord = { ...readRecord(tuning, "helm") };
+  // Version 17 named this the counter angle; the release now aims at the
+  // predicted resting point instead, so the old key has no home.
+  delete saved.stopCounterRadians;
+  return { ...defaults.helm, ...saved };
+}
+
+/**
  * Fills the background section field by field so a document saved before the
  * parallax existed gains defaults instead of failing the strict schema.
  */
@@ -262,7 +275,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       // Field by field, like the background: a preset saved before a helm knob
       // existed must gain it, not fail the strict schema and take the
       // operator's waves down with it.
-      helm: { ...defaults.helm, ...readRecord(tuning, "helm") },
+      helm: migrateHelm(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [

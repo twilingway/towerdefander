@@ -31,8 +31,9 @@ const DEFAULT_PRESET_ID = "default";
  * enough that turning in place drifts a handful of units per second.
  */
 const DEFAULT_HELM: HelmTuning = {
+  scheme: "tank",
   headingLeadRadians: 0.5,
-  stopCounterRadians: 0.12,
+  stopDampening: 1,
   rotateInPlaceThrottle: 0.02
 };
 

@@ -6,9 +6,10 @@ import {
   PILOT_KEYS,
   TURRET_FIRE_KEY,
   advanceHeadingDrive,
+  coastToStopRadians,
   getTurretKeyboardVector,
-  turnDirection,
-  toHelmKeys
+  toHelmKeys,
+  turnDirection
 } from "../../pilotKeyboard.js";
 import type { HelmTuning } from "@spaceship-defender/protocol";
 
@@ -47,7 +48,21 @@ export function usePilotKeyboard({
   gunner
 }: PilotKeyboardOptions): void {
   const authoritativeHeadingReference = useRef(heading ?? 0);
-  authoritativeHeadingReference.current = heading ?? authoritativeHeadingReference.current;
+  const angularVelocityReference = useRef(0);
+  const headingSampleReference = useRef({ heading: heading ?? 0, atMs: 0 });
+  if (heading !== undefined && heading !== authoritativeHeadingReference.current) {
+    // How fast the hull is actually turning, measured from the authoritative
+    // course: the client needs it to know where a released spin will stop.
+    const now = performance.now();
+    const sample = headingSampleReference.current;
+    const elapsedSeconds = (now - sample.atMs) / 1000;
+    if (elapsedSeconds > 0 && elapsedSeconds < 0.5) {
+      const delta = shortestAngle(heading - sample.heading);
+      angularVelocityReference.current = delta / elapsedSeconds;
+    }
+    headingSampleReference.current = { heading, atMs: now };
+    authoritativeHeadingReference.current = heading;
+  }
   const tuningReference = useRef(tuning);
   tuningReference.current = tuning;
   const controlsReference = useRef({ pilot, gunner });
@@ -85,20 +100,18 @@ export function usePilotKeyboard({
     }
 
     let stopTicks = 0;
-    let stoppingTurn: -1 | 0 | 1 = 0;
     const timer = window.setInterval(() => {
       if (!enabledReference.current) return;
       const helm = ownsTurret ? keys : toHelmKeys(keys);
-      const turn = turnDirection(helm);
-      if (turn !== 0) {
+      if (turnDirection(helm) !== 0) {
         stopTicks = HELM_STOP_TICKS;
-        stoppingTurn = turn;
       } else if (stopTicks > 0) {
         stopTicks -= 1;
       }
       if (keys.size === 0 && stopTicks === 0) return;
       const drive = advanceHeadingDrive(authoritativeHeadingReference.current, helm, {
-        stopping: stopTicks > 0 ? stoppingTurn : 0,
+        stopping: stopTicks > 0,
+        coastRadians: coastToStopRadians(angularVelocityReference.current),
         tuning: tuningReference.current
       });
       controlsReference.current.pilot.updateAim(drive.vector);
@@ -117,4 +130,9 @@ export function usePilotKeyboard({
       document.removeEventListener("visibilitychange", neutralize);
     };
   }, [active, ownsTurret]);
+}
+
+/** Shortest signed distance between two angles, so a wrap does not read huge. */
+function shortestAngle(delta: number): number {
+  return ((delta + Math.PI) % (2 * Math.PI)) - Math.PI;
 }

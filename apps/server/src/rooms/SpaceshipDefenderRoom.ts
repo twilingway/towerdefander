@@ -586,8 +586,9 @@ export class SpaceshipDefenderRoom extends Room<{
     // The helm is input feel, not physics, so it rides beside the config rather
     // than inside it — and like the config, a run keeps what it started with.
     const helm = balance.getActiveTuning().helm;
+    this.state.game.helm.scheme = helm.scheme;
     this.state.game.helm.headingLeadRadians = helm.headingLeadRadians;
-    this.state.game.helm.stopCounterRadians = helm.stopCounterRadians;
+    this.state.game.helm.stopDampening = helm.stopDampening;
     this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
     this.gameState = createCleanSpaceshipRun(this.gameConfig, createRunSeed(previousSeed));
     this.state.runNumber += 1;

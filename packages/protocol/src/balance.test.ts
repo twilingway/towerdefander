@@ -184,7 +184,12 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       nebulaAlpha: 0.72,
       nebulaPreset: "blue"
     },
-    helm: { headingLeadRadians: 0.5, stopCounterRadians: 0.12, rotateInPlaceThrottle: 0.02 },
+    helm: {
+      scheme: "tank",
+      headingLeadRadians: 0.5,
+      stopDampening: 1,
+      rotateInPlaceThrottle: 0.02
+    },
     autopilot: {
       level: "veteran",
       profiles: {
