@@ -1,11 +1,5 @@
 import { getKeyboardVector, type ControlVector } from "./controlInput.js";
 
-/**
- * Matches `headingMaxAngularSpeedPerSecond` in the simulation config, so the
- * requested course never runs ahead of the hull the server is actually turning.
- */
-export const TURN_RATE_RADIANS_PER_SECOND = (13 * Math.PI) / 15;
-
 export const THROTTLE_KEY = "KeyW";
 export const BRAKE_KEY = "KeyS";
 export const TURN_LEFT_KEY = "KeyA";
@@ -34,41 +28,71 @@ export const PILOT_KEYS: readonly string[] = [
  */
 export const ROTATE_IN_PLACE_THROTTLE = 0.02;
 
+/**
+ * How far ahead of the nose the requested course sits while a turn key is held.
+ * The hull chases a target at `sqrt(2 * braking * delta)`, so this angle alone
+ * sets the turn rate: about 2.6 rad/s here, near the hull ceiling of 2.7. A
+ * course carried on the client instead would run away from the hull and leave
+ * it swinging long after the player let go.
+ */
+export const HEADING_LEAD_RADIANS = 0.5;
+
+/**
+ * Ticks of "aim at the nose you already have" sent when a turn key comes up. A
+ * zero vector keeps the previous target, so without this the hull would coast
+ * the whole lead angle after every turn; pointing the request at the current
+ * nose is what actually brakes the spin.
+ */
+export const HELM_STOP_TICKS = 5;
+
+/**
+ * How far *behind* the last seen nose the braking request points. The client
+ * only ever sees a course that is a network hop old, so aiming at it exactly
+ * lets the hull drift on; a small counter-angle cancels that lag.
+ */
+export const HELM_STOP_COUNTER_RADIANS = 0.12;
+
 export interface HeadingDrive {
-  /** The course the player is asking for, in radians. */
+  /** The course being asked for, in radians. */
   readonly heading: number;
   /** What goes on the wire: full thrust, a turning nudge, or a dead stop. */
   readonly vector: ControlVector;
 }
 
 /**
- * One tick of the solo keyboard drive, shaped like a tank: the turn keys spin
- * the hull whether or not the engine is on. Standing still is not literally
- * still — the course the core follows is the direction of the pilot vector, so
- * turning in place rides on a token amount of thrust.
+ * One tick of the keyboard helm, shaped like a tank: the turn keys spin the
+ * hull whether or not the engine is on, and the request is always anchored to
+ * the authoritative nose, so releasing a key stops the turn instead of letting
+ * a stale course drag the hull onwards.
  */
 export function advanceHeadingDrive(
   heading: number,
   keys: ReadonlySet<string>,
-  elapsedSeconds: number,
-  turnRate = TURN_RATE_RADIANS_PER_SECOND
+  options: {
+    /** Direction of the turn being braked: -1, 0 or 1. */
+    readonly stopping?: -1 | 0 | 1;
+    readonly lead?: number;
+  } = {}
 ): HeadingDrive {
+  const { stopping = 0, lead = HEADING_LEAD_RADIANS } = options;
   const throttling = keys.has(THROTTLE_KEY) && !keys.has(BRAKE_KEY);
   const turn = Number(keys.has(TURN_RIGHT_KEY)) - Number(keys.has(TURN_LEFT_KEY));
-  const next = heading + turn * turnRate * Math.max(0, elapsedSeconds);
-  if (throttling) {
-    return { heading: next, vector: { x: Math.cos(next), y: Math.sin(next) } };
+  if (turn === 0 && !throttling && stopping === 0) {
+    return { heading, vector: { x: 0, y: 0 } };
   }
-  if (turn === 0) {
-    return { heading: next, vector: { x: 0, y: 0 } };
-  }
+  const target =
+    turn === 0 ? heading - stopping * HELM_STOP_COUNTER_RADIANS : heading + turn * lead;
+  const thrust = throttling ? 1 : ROTATE_IN_PLACE_THROTTLE;
   return {
-    heading: next,
-    vector: {
-      x: Math.cos(next) * ROTATE_IN_PLACE_THROTTLE,
-      y: Math.sin(next) * ROTATE_IN_PLACE_THROTTLE
-    }
+    heading: target,
+    vector: { x: Math.cos(target) * thrust, y: Math.sin(target) * thrust }
   };
+}
+
+/** Which way the helm is turning right now: -1, 0 or 1. */
+export function turnDirection(keys: ReadonlySet<string>): -1 | 0 | 1 {
+  if (keys.has(TURN_RIGHT_KEY) === keys.has(TURN_LEFT_KEY)) return 0;
+  return keys.has(TURN_RIGHT_KEY) ? 1 : -1;
 }
 
 /**

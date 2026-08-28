@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 
 import {
+  HELM_STOP_TICKS,
   MG_FIRE_KEY,
-  PILOT_HELM_KEYS,
   PILOT_KEYS,
   TURRET_FIRE_KEY,
   advanceHeadingDrive,
   getTurretKeyboardVector,
+  turnDirection,
   toHelmKeys
 } from "../../pilotKeyboard.js";
 import type { RoleControls } from "./useRoleControls.js";
@@ -40,7 +41,6 @@ export function usePilotKeyboard({
   pilot,
   gunner
 }: PilotKeyboardOptions): void {
-  const headingReference = useRef(0);
   const authoritativeHeadingReference = useRef(heading ?? 0);
   authoritativeHeadingReference.current = heading ?? authoritativeHeadingReference.current;
   const controlsReference = useRef({ pilot, gunner });
@@ -53,21 +53,11 @@ export function usePilotKeyboard({
     if (!active) return;
     const keys = new Set<string>();
     // Without a turret half the arrows steer, so they reseat the course too.
-    const helmKeys = ownsTurret
-      ? PILOT_HELM_KEYS
-      : [...PILOT_HELM_KEYS, "ArrowUp", "ArrowLeft", "ArrowRight"];
-    let lastTickMs = performance.now();
 
     function onKeyDown(event: KeyboardEvent): void {
       if (!PILOT_KEYS.includes(event.code)) return;
       event.preventDefault();
       if (event.repeat) return;
-      // The first helm key after a pause picks the course up from the nose, so
-      // the hull never snaps back to a bearing the player has since left with
-      // the stick.
-      if (helmKeys.includes(event.code) && !helmKeys.some((key) => keys.has(key))) {
-        headingReference.current = authoritativeHeadingReference.current;
-      }
       keys.add(event.code);
       if (event.code === MG_FIRE_KEY) controlsReference.current.pilot.beginFire();
       if (event.code === TURRET_FIRE_KEY) controlsReference.current.gunner?.beginFire();
@@ -87,14 +77,22 @@ export function usePilotKeyboard({
       controlsReference.current.pilot.updateAim({ x: 0, y: 0 });
     }
 
+    let stopTicks = 0;
+    let stoppingTurn: -1 | 0 | 1 = 0;
     const timer = window.setInterval(() => {
-      const now = performance.now();
-      const elapsedSeconds = (now - lastTickMs) / 1000;
-      lastTickMs = now;
-      if (!enabledReference.current || keys.size === 0) return;
+      if (!enabledReference.current) return;
       const helm = ownsTurret ? keys : toHelmKeys(keys);
-      const drive = advanceHeadingDrive(headingReference.current, helm, elapsedSeconds);
-      headingReference.current = drive.heading;
+      const turn = turnDirection(helm);
+      if (turn !== 0) {
+        stopTicks = HELM_STOP_TICKS;
+        stoppingTurn = turn;
+      } else if (stopTicks > 0) {
+        stopTicks -= 1;
+      }
+      if (keys.size === 0 && stopTicks === 0) return;
+      const drive = advanceHeadingDrive(authoritativeHeadingReference.current, helm, {
+        stopping: stopTicks > 0 ? stoppingTurn : 0
+      });
       controlsReference.current.pilot.updateAim(drive.vector);
       controlsReference.current.gunner?.updateAim(getTurretKeyboardVector(keys));
     }, TICK_MS);
