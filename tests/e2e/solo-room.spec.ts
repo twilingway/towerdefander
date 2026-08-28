@@ -1,0 +1,107 @@
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page
+} from "@playwright/test";
+
+const testHost = process.env.E2E_HOST?.trim() ?? "127.0.0.1";
+const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
+const controllerUrl = process.env.E2E_CONTROLLER_URL ?? `http://${testHost}:5174`;
+
+const soloControllerContext = {
+  viewport: { width: 844, height: 390 },
+  hasTouch: true,
+  isMobile: true
+} as const;
+
+test("one player flies and aims from a single panel", async ({ browser }) => {
+  test.setTimeout(60_000);
+  const contexts: BrowserContext[] = [];
+  try {
+    const displayContext = await browser.newContext();
+    contexts.push(displayContext);
+    const display = await displayContext.newPage();
+    await display.goto(displayUrl);
+    await display.getByRole("button", { name: "1 игрок" }).click();
+    await display.getByRole("button", { name: "Создать комнату" }).click();
+    await expect(display.getByRole("heading", { name: "Подключите контроллер" })).toBeVisible();
+    const roomCode = (await display.locator(".room-code").textContent())?.trim();
+    if (!roomCode) throw new Error("Display did not publish a room code.");
+
+    const solo = await joinSolo(browser, contexts, roomCode);
+    await expect(solo.locator('[data-testid="solo-panel"]')).toBeVisible();
+    await expect(solo.locator('[data-testid="virtual-stick"]')).toHaveCount(2);
+
+    const world = display.getByTestId("spaceship-world");
+    // Turning must work with the engine off, the way a tank turns in place.
+    const restingHeading = await readNumber(world, "data-spaceship-heading");
+    // A tank keeps turning for as long as the key is down; absolute steering
+    // would settle on one bearing and stop, so both halves of the hold matter.
+    await solo.keyboard.down("KeyD");
+    await solo.waitForTimeout(700);
+    const midTurnHeading = await readNumber(world, "data-spaceship-heading");
+    await solo.waitForTimeout(700);
+    const turnedHeading = await readNumber(world, "data-spaceship-heading");
+    await solo.keyboard.up("KeyD");
+    await solo.waitForTimeout(150);
+    expect(shortestDelta(midTurnHeading, restingHeading)).toBeGreaterThan(0.5);
+    expect(shortestDelta(turnedHeading, midTurnHeading)).toBeGreaterThan(0.5);
+
+    // Thrust follows the nose, so the ship leaves along the course it now holds.
+    const startX = await readNumber(world, "data-spaceship-x");
+    const startY = await readNumber(world, "data-spaceship-y");
+    await hold(solo, "KeyW", 1500);
+    const movedX = (await readNumber(world, "data-spaceship-x")) - startX;
+    const movedY = (await readNumber(world, "data-spaceship-y")) - startY;
+    expect(Math.hypot(movedX, movedY)).toBeGreaterThan(120);
+    expect(shortestDelta(Math.atan2(movedY, movedX), turnedHeading)).toBeLessThan(0.6);
+
+    // The arrows drive the second stream from the same connection.
+    const restingTurret = await readNumber(world, "data-turret-angle");
+    await hold(solo, "ArrowDown", 1500);
+    expect(
+      shortestDelta(await readNumber(world, "data-turret-angle"), restingTurret)
+    ).toBeGreaterThan(0.3);
+
+    await expect(solo.locator(".connection")).toHaveText("В сети");
+  } finally {
+    for (const context of contexts) await context.close();
+  }
+});
+
+async function joinSolo(
+  browser: Browser,
+  contexts: BrowserContext[],
+  roomCode: string
+): Promise<Page> {
+  const context = await browser.newContext(soloControllerContext);
+  contexts.push(context);
+  const page = await context.newPage();
+  await page.goto(`${controllerUrl}/?room=${encodeURIComponent(roomCode)}`);
+  await page.getByLabel("Имя").fill("Соло");
+  await page.getByRole("button", { name: "Подключиться" }).click();
+  await expect(page.locator(".connection")).toHaveText("В сети");
+  await page.getByRole("button", { name: "Готов" }).click();
+  return page;
+}
+
+async function hold(page: Page, key: string, milliseconds: number): Promise<void> {
+  await page.keyboard.down(key);
+  await page.waitForTimeout(milliseconds);
+  await page.keyboard.up(key);
+  await page.waitForTimeout(150);
+}
+
+async function readNumber(world: Locator, attribute: string): Promise<number> {
+  const value = await world.getAttribute(attribute);
+  return Number(value);
+}
+
+/** Absolute angular distance, so a wrap past π does not read as a huge jump. */
+function shortestDelta(left: number, right: number): number {
+  const delta = Math.abs(((left - right + Math.PI) % (2 * Math.PI)) - Math.PI);
+  return delta;
+}

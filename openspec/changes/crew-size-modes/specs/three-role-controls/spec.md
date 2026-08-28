@@ -56,15 +56,17 @@ SHALL сохраняться между заходами на этом устр�
 - **WHEN** соло-игрок выбрал раскладку с триггерами по верхнему краю и вернулся в комнату позже
 - **THEN** панель открывается в выбранной раскладке
 
-### Requirement: Соло-панель водит корабль с клавиатуры газом и доворотом
+### Requirement: Клавиатура пилота водит корабль как танк
 
-При размере экипажа 1 клавиатура SHALL вести корабль как танк, а не как абсолютное направление:
-удержание газа SHALL отправлять вектор полной длины по текущему желаемому курсу, а клавиши доворота
-SHALL вращать корпус непрерывно и независимо от газа. Вращение без газа SHALL идти с той же угловой
-скоростью и SHALL NOT разгонять корабль заметно. Когда не нажата ни одна клавиша управления курсом,
-панель SHALL отправлять нулевой вектор, поэтому корабль тормозит и сохраняет курс. Space SHALL
-держать спуск носового пулемёта, стрелки SHALL задавать bearing турели, а собственная клавиша SHALL
-держать спуск орудия наводчика. Ни одна клавиша SHALL NOT управлять двумя системами сразу.
+Клавиатура пилота SHALL вести корабль как танк, а не как абсолютное направление, при любом размере
+экипажа: удержание газа SHALL отправлять вектор полной длины по текущему желаемому курсу, а клавиши
+доворота SHALL вращать корпус непрерывно и независимо от газа. Вращение без газа SHALL идти с той же
+угловой скоростью и SHALL NOT разгонять корабль заметно. Когда не нажата ни одна клавиша управления
+курсом, панель SHALL отправлять нулевой вектор, поэтому корабль тормозит и сохраняет курс. Space
+SHALL держать спуск носового пулемёта. При размере экипажа 1 стрелки SHALL задавать bearing турели,
+а собственная клавиша SHALL держать её спуск; в остальных экипажах стрелки SHALL дублировать руль,
+чтобы клавиатура не была строго худшим устройством. Ни одна клавиша SHALL NOT управлять двумя
+системами сразу.
 
 #### Scenario: Газ с доворотом
 
@@ -91,7 +93,102 @@ SHALL вращать корпус непрерывно и независимо �
 - **WHEN** соло-игрок удерживает стрелку
 - **THEN** турель доворачивает к её направлению, а корабль курс не меняет
 
+#### Scenario: Стрелки у пилота полного экипажа
+
+- **WHEN** pilot в комнате на двоих или троих удерживает стрелку вверх или вбок
+- **THEN** она работает как газ или доворот, потому что турель ведёт другой игрок
+
 ## MODIFIED Requirements
+
+### Requirement: Pilot поддерживает keyboard и touch stick
+
+Controller SHALL отправлять leading vector немедленно, если после прошлого send прошло не менее 50
+ms; более частые changes SHALL coalesce latest value к следующему 50 ms slot. Heartbeat SHALL
+отправляться через 100 ms только если после прошлого send не было нового packet, поэтому continuous
+поток не превышает 20 messages/s. Pilot SHALL вести корабль с клавиатуры как танк: клавиша газа даёт
+тягу вдоль носа, а клавиши доворота вращают корпус независимо от газа. Captured virtual stick SHALL
+по-прежнему задавать movement vector напрямую. Pilot SHALL иметь второй hold-контрол спуска носового
+пулемёта: pointerdown внутри правой fire-зоны либо non-repeat keydown Space SHALL установить
+`mgFiring=true`, а pointerup/pointercancel/lost capture либо keyup Space SHALL отправить
+`mgFiring=false`; на панели пилота Space является hold-спуском, а не toggle. Gunner и shield SHALL
+менять aim только после pointerdown внутри собственного virtual stick и во время drag; captured
+stick или keyboard direction SHALL задавать absolute target bearing, а magnitude SHALL NOT
+масштабировать angular speed. Touch tap внутри stick SHALL отправить ненулевой bearing до neutral,
+после чего core SHALL завершить latched traverse. Обычный mousemove над panel SHALL ничего не
+менять. Keyboard arrows SHALL оставаться desktop fallback. Gunner Fire SHALL быть hold-кнопкой.
+Shield button и Space на панели shield SHALL переключать absolute active один раз на non-repeat
+click/keydown; pointerup SHALL NOT выключать shield. Blur/visibilitychange SHALL нейтрализовать
+pilot movement, pilot mgFiring и gunner fire, но SHALL NOT подменять ручное shield ON/OFF состояние.
+Controller SHALL NOT locally ease или predict trusted angle.
+
+#### Scenario: Pilot держит газ и доворот
+
+- **WHEN** pilot удерживает газ и клавишу доворота
+- **THEN** controller отправляет вектор полной длины по новому курсу, а корпус продолжает
+  разворачиваться, пока клавиша нажата
+
+#### Scenario: Pilot двигает touch stick
+
+- **WHEN** pilot удерживает captured pointer внутри stick
+- **THEN** controller отправляет нормализованный movement vector и после release отправляет neutral
+
+#### Scenario: Touch tap задаёт aim
+
+- **WHEN** gunner либо shield касается точки внутри stick и отпускает pointer
+- **THEN** ненулевой absolute bearing отправляется до neutral, а core завершает плавный traverse к
+  target
+
+#### Scenario: Shield button отпущен
+
+- **WHEN** operator переключает shield OFF→ON и отпускает pointer
+- **THEN** UI сохраняет ON, публикует `aria-pressed=true` и не отправляет автоматический OFF
+
+#### Scenario: Shield полностью разрядился
+
+- **WHEN** authoritative snapshot меняет shield active true→false при energy=0
+- **THEN** controller один раз синхронизирует local desired state в OFF и отправляет accepted
+  `active=false`, после чего следующий ручной tap при energy>0 отправляет новый ON
+
+#### Scenario: Shield переключён клавишей
+
+- **WHEN** operator нажимает Space с keyboard repeat events
+- **THEN** active меняется ровно один раз до следующего физического keydown после keyup
+
+#### Scenario: Pointermove приходит чаще server limit
+
+- **WHEN** stick получает много pointermove за 50 ms
+- **THEN** controller отправляет не более одного leading packet и один coalesced latest packet после
+  slot
+
+#### Scenario: Управление отпущено
+
+- **WHEN** pilot отпускает keyboard либо pointer, а gunner отпускает Fire
+- **THEN** ближайший разрешённый packet содержит neutral movement либо `firing=false` без локального
+  изменения trusted angle
+
+#### Scenario: Release произошёл внутри занятого slot
+
+- **WHEN** pilot movement release происходит раньше 50 ms после прошлого send
+- **THEN** pending movement value заменяется neutral и следующий packet не содержит устаревший
+  active input; aim tap и короткий Fire сохраняют отдельный pulse-first порядок своих scenarios
+
+#### Scenario: Pilot держит спуск пулемёта
+
+- **WHEN** pilot удерживает pointer внутри правой fire-зоны либо Space во время combat
+- **THEN** controller отправляет `mgFiring=true` в ближайшем разрешённом slot и heartbeat'ах, а
+  после release ближайший packet содержит `mgFiring=false`
+
+#### Scenario: Короткий тап по спуску
+
+- **WHEN** pilot нажимает и отпускает fire-зону раньше следующего разрешённого send slot
+- **THEN** controller сохраняет rising edge, отправляет `mgFiring=true` в ближайшем slot и только
+  затем `mgFiring=false`, не превышая 20 messages/s
+
+#### Scenario: Панель пилота потеряла фокус
+
+- **WHEN** blur либо visibilitychange происходит при удержанных movement и спуске пулемёта
+- **THEN** controller нейтрализует movement vector и mgFiring, а после возврата фокуса управление
+  начинается с neutral state без автоматического огня
 
 ### Requirement: Role ограничивает допустимые intents
 

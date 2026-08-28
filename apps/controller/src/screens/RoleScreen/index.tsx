@@ -22,6 +22,7 @@ import { GunnerPanel } from "./GunnerPanel.js";
 import { PilotPanel } from "./PilotPanel.js";
 import { ShieldPanel } from "./ShieldPanel.js";
 import { SoloPanel } from "./SoloPanel.js";
+import { usePilotKeyboard } from "./usePilotKeyboard.js";
 import { useRoleControls } from "./useRoleControls.js";
 
 interface RoleScreenProps {
@@ -55,6 +56,17 @@ export function RoleScreen({
     const storage = readLocalStorage();
     return storage === undefined ? DEFAULT_SOLO_LAYOUT : readSoloLayout(storage);
   });
+  const controls = useRoleControls({
+    role,
+    shield,
+    encounterPhase,
+    connectionDisabled,
+    generation,
+    // The helm reads WASD as tank steering, so the role hook must not also read
+    // it as an absolute bearing; gunner and shield keep their own keys.
+    keyboard: role !== "pilot",
+    onSend
+  });
   const {
     controlsEnabled,
     updateAim,
@@ -64,13 +76,14 @@ export function RoleScreen({
     endFire,
     cancelFire,
     toggleShield
-  } = useRoleControls({
-    role,
-    shield,
-    encounterPhase,
-    connectionDisabled,
-    generation,
-    onSend
+  } = controls;
+  // The helm belongs to the pilot seat in every crew size; the solo panel runs
+  // its own instance because it also owns the turret.
+  usePilotKeyboard({
+    active: role === "pilot" && crewSize > 1,
+    controlsEnabled,
+    heading,
+    pilot: controls
   });
 
   if (crewSize === 1) {

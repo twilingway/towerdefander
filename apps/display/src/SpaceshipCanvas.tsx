@@ -110,6 +110,7 @@ export function SpaceshipCanvas({
       data-spaceship-y={game.spaceship.y}
       data-spaceship-radius={game.spaceship.radius}
       data-spaceship-velocity-x={game.spaceship.velocityX}
+      data-spaceship-heading={game.spaceship.heading}
       data-spaceship-hp={game.spaceship.hp}
       data-spaceship-max-hp={game.spaceship.maxHp}
       data-score={game.encounter.score}

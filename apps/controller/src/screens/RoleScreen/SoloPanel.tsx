@@ -15,7 +15,7 @@ import {
   type SoloLayout
 } from "../../soloLayout.js";
 import { useRoleControls } from "./useRoleControls.js";
-import { useSoloKeyboard } from "./useSoloKeyboard.js";
+import { usePilotKeyboard } from "./usePilotKeyboard.js";
 
 interface SoloPanelProps {
   readonly cannon: PublicWeaponHeatView | undefined;
@@ -52,6 +52,10 @@ export function SoloPanel({
     encounterPhase,
     connectionDisabled,
     generation,
+    // Both halves stay off the keyboard: usePilotKeyboard owns every key here,
+    // and a second listener would fight it for the same control state — the
+    // role hook reads WASD as an absolute bearing, this panel as tank steering.
+    keyboard: false,
     onSend: (sequence, control) => {
       onSend(sequence, control, "pilot");
     }
@@ -62,15 +66,13 @@ export function SoloPanel({
     encounterPhase,
     connectionDisabled,
     generation,
-    // The pilot half answers WASD and Space; a second listener would fire both
-    // barrels from one key.
     keyboard: false,
     onSend: (sequence, control) => {
       onSend(sequence, control, "gunner");
     }
   });
   const controlsEnabled = pilot.controlsEnabled;
-  useSoloKeyboard({ controlsEnabled, heading, pilot, gunner });
+  usePilotKeyboard({ controlsEnabled, heading, pilot, gunner });
 
   return (
     <div className={`solo-panel solo-panel--${layout}`} data-testid="solo-panel">
