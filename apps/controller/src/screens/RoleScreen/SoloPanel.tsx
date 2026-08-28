@@ -1,5 +1,6 @@
 import type {
   EncounterPhase,
+  HelmTuning,
   PublicMachineGunView,
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
@@ -22,6 +23,7 @@ interface SoloPanelProps {
   readonly machineGun: PublicMachineGunView | undefined;
   /** Authoritative hull heading; the keyboard burns along it. */
   readonly heading: number | undefined;
+  readonly helm: HelmTuning | undefined;
   readonly encounterPhase: EncounterPhase | undefined;
   readonly connectionDisabled: boolean;
   readonly generation: string;
@@ -39,6 +41,7 @@ export function SoloPanel({
   cannon,
   machineGun,
   heading,
+  helm,
   encounterPhase,
   connectionDisabled,
   generation,
@@ -72,7 +75,7 @@ export function SoloPanel({
     }
   });
   const controlsEnabled = pilot.controlsEnabled;
-  usePilotKeyboard({ controlsEnabled, heading, pilot, gunner });
+  usePilotKeyboard({ controlsEnabled, heading, tuning: helm, pilot, gunner });
 
   return (
     <div className={`solo-panel solo-panel--${layout}`} data-testid="solo-panel">

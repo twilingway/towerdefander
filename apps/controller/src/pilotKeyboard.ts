@@ -1,3 +1,5 @@
+import type { HelmTuning } from "@spaceship-defender/protocol";
+
 import { getKeyboardVector, type ControlVector } from "./controlInput.js";
 
 export const THROTTLE_KEY = "KeyW";
@@ -71,18 +73,21 @@ export function advanceHeadingDrive(
   options: {
     /** Direction of the turn being braked: -1, 0 or 1. */
     readonly stopping?: -1 | 0 | 1;
-    readonly lead?: number;
+    /** Feel from the active preset; the built-ins stand in until it arrives. */
+    readonly tuning?: HelmTuning | undefined;
   } = {}
 ): HeadingDrive {
-  const { stopping = 0, lead = HEADING_LEAD_RADIANS } = options;
+  const { stopping = 0, tuning } = options;
+  const lead = tuning?.headingLeadRadians ?? HEADING_LEAD_RADIANS;
+  const counter = tuning?.stopCounterRadians ?? HELM_STOP_COUNTER_RADIANS;
+  const nudge = tuning?.rotateInPlaceThrottle ?? ROTATE_IN_PLACE_THROTTLE;
   const throttling = keys.has(THROTTLE_KEY) && !keys.has(BRAKE_KEY);
   const turn = Number(keys.has(TURN_RIGHT_KEY)) - Number(keys.has(TURN_LEFT_KEY));
   if (turn === 0 && !throttling && stopping === 0) {
     return { heading, vector: { x: 0, y: 0 } };
   }
-  const target =
-    turn === 0 ? heading - stopping * HELM_STOP_COUNTER_RADIANS : heading + turn * lead;
-  const thrust = throttling ? 1 : ROTATE_IN_PLACE_THROTTLE;
+  const target = turn === 0 ? heading - stopping * counter : heading + turn * lead;
+  const thrust = throttling ? 1 : nudge;
   return {
     heading: target,
     vector: { x: Math.cos(target) * thrust, y: Math.sin(target) * thrust }

@@ -82,6 +82,11 @@ interface NetworkGameState {
     capacity: number;
     overheated: boolean;
   };
+  helm?: {
+    headingLeadRadians: number;
+    stopCounterRadians: number;
+    rotateInPlaceThrottle: number;
+  };
   encounter: {
     phase: EncounterPhase;
     hasOutcome?: boolean;
@@ -193,7 +198,8 @@ export function toControllerRoomView(
               shield: { ...game.roleModifiers.shield }
             },
             credits: game.credits,
-            teamUpgrade: toTeamUpgradeView(game.teamUpgrade)
+            teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
+            helm: game.helm
           }
         : null
   });

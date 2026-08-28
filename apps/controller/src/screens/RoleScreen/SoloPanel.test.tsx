@@ -11,6 +11,7 @@ function markup(layout: "stacked" | "triggers"): string {
       cannon={heat}
       machineGun={heat}
       heading={0}
+      helm={undefined}
       encounterPhase="combat"
       connectionDisabled={false}
       generation="run-1"

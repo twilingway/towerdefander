@@ -448,6 +448,7 @@ export function ControllerApp() {
               role={currentPlayer.role}
               crewSize={activeView.crewSize}
               heading={activeView.game?.spaceship.heading}
+              helm={activeView.game?.helm}
               shield={activeView.game?.shield}
               cannon={activeView.game?.cannon}
               machineGun={activeView.game?.machineGun}

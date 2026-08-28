@@ -4,6 +4,7 @@ import type {
   CrewRole,
   CrewSize,
   EncounterPhase,
+  HelmTuning,
   PublicMachineGunView,
   PublicShieldView,
   PublicWeaponHeatView
@@ -29,6 +30,7 @@ interface RoleScreenProps {
   readonly role: CrewRole;
   readonly crewSize: CrewSize;
   readonly heading: number | undefined;
+  readonly helm: HelmTuning | undefined;
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
@@ -43,6 +45,7 @@ export function RoleScreen({
   role,
   crewSize,
   heading,
+  helm,
   shield,
   cannon,
   machineGun,
@@ -83,6 +86,7 @@ export function RoleScreen({
     active: role === "pilot" && crewSize > 1,
     controlsEnabled,
     heading,
+    tuning: helm,
     pilot: controls
   });
 
@@ -94,6 +98,7 @@ export function RoleScreen({
           cannon={cannon}
           machineGun={machineGun}
           heading={heading}
+          helm={helm}
           encounterPhase={encounterPhase}
           connectionDisabled={connectionDisabled}
           generation={generation}

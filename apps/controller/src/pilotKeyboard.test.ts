@@ -93,6 +93,21 @@ describe("pilot keyboard drive", () => {
     expect(Math.hypot(drive.vector.x, drive.vector.y)).toBeCloseTo(1, 10);
   });
 
+  it("follows the preset over the built-in feel", () => {
+    const tuning = {
+      headingLeadRadians: 0.9,
+      stopCounterRadians: 0.3,
+      rotateInPlaceThrottle: 0.05
+    };
+
+    const turning = advanceHeadingDrive(0, new Set([TURN_RIGHT_KEY]), { tuning });
+    expect(turning.heading).toBeCloseTo(0.9, 10);
+    expect(Math.hypot(turning.vector.x, turning.vector.y)).toBeCloseTo(0.05, 10);
+
+    const braking = advanceHeadingDrive(1, new Set(), { stopping: 1, tuning });
+    expect(braking.heading).toBeCloseTo(0.7, 10);
+  });
+
   it("reads the turret bearing from the arrows alone", () => {
     expect(getTurretKeyboardVector(new Set(["ArrowRight"]))).toEqual({ x: 1, y: 0 });
     expect(getTurretKeyboardVector(new Set([THROTTLE_KEY, TURN_RIGHT_KEY]))).toEqual({

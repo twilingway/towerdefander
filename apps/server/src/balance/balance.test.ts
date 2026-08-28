@@ -766,6 +766,50 @@ describe("version 1 migration", () => {
     expect(turret?.mountY).toBe(0);
   });
 
+  it("keeps a campaign when a preset predates the helm section", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const tuning: Record<string, unknown> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 2,
+                spawnIntervalTicks: 40,
+                sectors: [],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    delete tuning.helm;
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 16,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getActiveTuning().waveCampaign.waves).toHaveLength(1);
+    expect(store.getActiveTuning().helm).toEqual(defaults.helm);
+  });
+
   it("keeps a campaign when a saved profile predates a new profile knob", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();

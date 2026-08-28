@@ -581,7 +581,14 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     const previousSeed = this.gameState?.runSeed;
     // A run keeps the balance it started with; console edits land on the next run.
-    this.gameConfig = getBalanceStore().getActiveSimulationConfig();
+    const balance = getBalanceStore();
+    this.gameConfig = balance.getActiveSimulationConfig();
+    // The helm is input feel, not physics, so it rides beside the config rather
+    // than inside it — and like the config, a run keeps what it started with.
+    const helm = balance.getActiveTuning().helm;
+    this.state.game.helm.headingLeadRadians = helm.headingLeadRadians;
+    this.state.game.helm.stopCounterRadians = helm.stopCounterRadians;
+    this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
     this.gameState = createCleanSpaceshipRun(this.gameConfig, createRunSeed(previousSeed));
     this.state.runNumber += 1;
     this.state.phase = "active";

@@ -178,6 +178,7 @@ function tuning(): BalanceTuning {
     missileInterceptScoreReward: 5,
     cameraViewWidth: 1600,
     background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
+    helm: { headingLeadRadians: 0.5, stopCounterRadians: 0.12, rotateInPlaceThrottle: 0.02 },
     autopilot: {
       level: "veteran",
       profiles: {

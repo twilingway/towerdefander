@@ -37,6 +37,13 @@ export class MachineGunState extends Schema {
   @type("boolean") overheated = false;
 }
 
+/** Keyboard helm feel from the active preset; the controller drives with it. */
+export class HelmState extends Schema {
+  @type("float32") headingLeadRadians = 0.5;
+  @type("float32") stopCounterRadians = 0.12;
+  @type("float32") rotateInPlaceThrottle = 0.02;
+}
+
 export class ShieldState extends Schema {
   @type("float32") angle = 0;
   @type("boolean") active = false;
@@ -239,6 +246,7 @@ export class SpaceshipGameState extends Schema {
   @type(RoleModifiersState) roleModifiers = new RoleModifiersState();
   @type("uint32") credits = 0;
   @type(TeamUpgradeState) teamUpgrade = new TeamUpgradeState();
+  @type(HelmState) helm = new HelmState();
   @view(1)
   @type(SpaceshipDisplayState)
   display = new SpaceshipDisplayState();

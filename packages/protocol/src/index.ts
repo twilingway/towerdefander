@@ -15,7 +15,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 27 as const;
+export const PROTOCOL_VERSION = 28 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -567,7 +567,23 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
   }
 }
 
-export const controllerGameSnapshotSchema = z.object(gameShape).strict().superRefine(refineWorld);
+/**
+ * Feel of the keyboard helm, straight from the active preset. Only the
+ * controller drives with it, so the display never carries these three.
+ */
+export const publicHelmViewSchema = z
+  .object({
+    headingLeadRadians: finite.positive(),
+    stopCounterRadians: finite.nonnegative(),
+    rotateInPlaceThrottle: finite.positive()
+  })
+  .strict();
+export type PublicHelmView = z.infer<typeof publicHelmViewSchema>;
+
+export const controllerGameSnapshotSchema = z
+  .object({ ...gameShape, helm: publicHelmViewSchema })
+  .strict()
+  .superRefine(refineWorld);
 export type ControllerGameSnapshot = z.infer<typeof controllerGameSnapshotSchema>;
 /** Per-run enemy catalogue: the display draws silhouettes from data, not from code. */
 export const publicEnemyCatalogueEntrySchema = z

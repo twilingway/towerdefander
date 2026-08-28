@@ -20,6 +20,7 @@ import { CloseCode, type Client } from "colyseus";
 import { describe, expect, it, vi } from "vitest";
 
 import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
+import { getBalanceStore } from "../balance/index.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
@@ -300,6 +301,14 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     ready(room, solo);
     expect(room.state.phase).toBe("active");
     expect(room.state.hasGame).toBe(true);
+  });
+
+  it("publishes the preset helm to the controller snapshot", () => {
+    const { room } = startGame();
+
+    expect(room.state.game.helm.headingLeadRadians).toBeGreaterThan(0);
+    expect(room.state.game.helm.rotateInPlaceThrottle).toBeGreaterThan(0);
+    expect(room.state.game.helm).toMatchObject(getBalanceStore().getActiveTuning().helm);
   });
 
   it("raises the message ceiling for the two streams a solo player owns", () => {

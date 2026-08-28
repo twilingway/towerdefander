@@ -259,6 +259,10 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),
+      // Field by field, like the background: a preset saved before a helm knob
+      // existed must gain it, not fail the strict schema and take the
+      // operator's waves down with it.
+      helm: { ...defaults.helm, ...readRecord(tuning, "helm") },
       asteroidVisual: tuning.asteroidVisual ?? null,
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [

@@ -10,9 +10,13 @@ import {
   turnDirection,
   toHelmKeys
 } from "../../pilotKeyboard.js";
+import type { HelmTuning } from "@spaceship-defender/protocol";
+
 import type { RoleControls } from "./useRoleControls.js";
 
 interface PilotKeyboardOptions {
+  /** Helm feel from the active preset, or undefined before the run starts. */
+  readonly tuning?: HelmTuning | undefined;
   /** False for a seat that is not flying, so the helm keys stay unbound. */
   readonly active?: boolean;
   readonly controlsEnabled: boolean;
@@ -36,6 +40,7 @@ const TICK_MS = 25;
  */
 export function usePilotKeyboard({
   active = true,
+  tuning,
   controlsEnabled,
   heading,
   pilot,
@@ -43,6 +48,8 @@ export function usePilotKeyboard({
 }: PilotKeyboardOptions): void {
   const authoritativeHeadingReference = useRef(heading ?? 0);
   authoritativeHeadingReference.current = heading ?? authoritativeHeadingReference.current;
+  const tuningReference = useRef(tuning);
+  tuningReference.current = tuning;
   const controlsReference = useRef({ pilot, gunner });
   controlsReference.current = { pilot, gunner };
   const ownsTurret = gunner !== undefined;
@@ -91,7 +98,8 @@ export function usePilotKeyboard({
       }
       if (keys.size === 0 && stopTicks === 0) return;
       const drive = advanceHeadingDrive(authoritativeHeadingReference.current, helm, {
-        stopping: stopTicks > 0 ? stoppingTurn : 0
+        stopping: stopTicks > 0 ? stoppingTurn : 0,
+        tuning: tuningReference.current
       });
       controlsReference.current.pilot.updateAim(drive.vector);
       controlsReference.current.gunner?.updateAim(getTurretKeyboardVector(keys));

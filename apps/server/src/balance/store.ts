@@ -6,6 +6,7 @@ import {
   balancePresetsFileSchema,
   balanceTuningSchema,
   type AutopilotTuning,
+  type HelmTuning,
   type BalancePreset,
   type BalancePresetsFile,
   type BalanceTuning
@@ -24,6 +25,17 @@ const DEFAULT_PRESET_ID = "default";
  * has a baseline to compare against; `ace` is the ceiling of what the policy
  * can do. Nothing here reaches the simulation.
  */
+/**
+ * Ships the helm the keyboard was tuned to in the browser: about 2.3 rad/s of
+ * spin, roughly 0.16 rad of coast after the key comes up, and a nudge small
+ * enough that turning in place drifts a handful of units per second.
+ */
+const DEFAULT_HELM: HelmTuning = {
+  headingLeadRadians: 0.5,
+  stopCounterRadians: 0.12,
+  rotateInPlaceThrottle: 0.02
+};
+
 const DEFAULT_AUTOPILOT: AutopilotTuning = {
   level: "veteran",
   profiles: {
@@ -111,6 +123,7 @@ export function createDefaultTuning(): BalanceTuning {
     cameraViewWidth: config.cameraViewWidth,
     background: config.background,
     autopilot: DEFAULT_AUTOPILOT,
+    helm: DEFAULT_HELM,
     spaceshipVisual: config.spaceshipVisual,
     spaceshipMaxHp: config.spaceshipMaxHp,
     spaceshipRadius: config.spaceshipRadius,
@@ -168,9 +181,11 @@ export function assertTuningIsPlayable(tuning: BalanceTuning): void {
 }
 
 export function toSimulationConfig(tuning: BalanceTuning): SpaceshipSimulationConfig {
-  // The autopilot section drives the demo harness, never the simulation.
+  // The autopilot section drives the demo harness and the helm section drives
+  // the controller's keyboard; neither reaches the simulation.
   const simulation: Partial<BalanceTuning> = { ...tuning };
   delete simulation.autopilot;
+  delete simulation.helm;
   return createSpaceshipSimulationConfig(simulation);
 }
 

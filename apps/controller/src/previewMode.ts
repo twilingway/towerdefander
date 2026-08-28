@@ -67,6 +67,12 @@ const PREVIEW_WORLD = {
   }
 } as const;
 
+const PREVIEW_HELM = {
+  headingLeadRadians: 0.5,
+  stopCounterRadians: 0.12,
+  rotateInPlaceThrottle: 0.02
+} as const;
+
 const EMPTY_TEAM_UPGRADE = {
   offer: null,
   votes: { pilot: null, gunner: null, shield: null },
@@ -108,6 +114,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         score: 320
       },
       credits: 6,
+      helm: PREVIEW_HELM,
       teamUpgrade: EMPTY_TEAM_UPGRADE
     };
   }
@@ -128,6 +135,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         score: 320
       },
       credits: 6,
+      helm: PREVIEW_HELM,
       teamUpgrade: {
         offer: {
           offerId: "preview-offer-w3",
@@ -182,6 +190,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
       score: 610
     },
     credits: 11,
+    helm: PREVIEW_HELM,
     teamUpgrade: EMPTY_TEAM_UPGRADE
   };
 }

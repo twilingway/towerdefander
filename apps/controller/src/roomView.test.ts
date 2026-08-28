@@ -82,6 +82,7 @@ describe("controller room view", () => {
           gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
           shield: { capacityBonus: 25, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
+        helm: { headingLeadRadians: 0.5, stopCounterRadians: 0.12, rotateInPlaceThrottle: 0.02 },
         credits: 4
       }
     };
@@ -171,6 +172,7 @@ describe("controller room view", () => {
           shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
         credits: 7,
+        helm: { headingLeadRadians: 0.5, stopCounterRadians: 0.12, rotateInPlaceThrottle: 0.02 },
         teamUpgrade: {
           hasOffer: true,
           offer: {
@@ -297,6 +299,7 @@ describe("controller room view", () => {
           gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
           shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
+        helm: { headingLeadRadians: 0.5, stopCounterRadians: 0.12, rotateInPlaceThrottle: 0.02 },
         credits: 12
       }
     };

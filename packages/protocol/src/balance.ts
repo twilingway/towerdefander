@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 16 as const;
+export const BALANCE_FILE_VERSION = 17 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -287,6 +287,26 @@ export const autopilotProfileSchema = z
   .strict();
 export type AutopilotProfile = z.infer<typeof autopilotProfileSchema>;
 
+/**
+ * Feel of the keyboard helm. The lead angle alone sets the turn rate, because
+ * the hull chases a target at `sqrt(2 * braking * delta)`; the counter angle is
+ * how hard the release brakes against network lag; the nudge is the thrust a
+ * turn in place rides on, since the core reads the course from the direction of
+ * the pilot vector and ignores a strictly zero one. Presentation-only, like
+ * `autopilot`: the simulation never reads this section.
+ */
+export const helmTuningSchema = z
+  .object({
+    /** How far ahead of the nose the requested course sits while turning. */
+    headingLeadRadians: z.number().min(0.05).max(1.5),
+    /** How far behind the nose the release aims, to cancel the lag. */
+    stopCounterRadians: z.number().min(0).max(0.6),
+    /** Share of full thrust a turn without the engine rides on. */
+    rotateInPlaceThrottle: z.number().min(0.005).max(0.2)
+  })
+  .strict();
+export type HelmTuning = z.infer<typeof helmTuningSchema>;
+
 export const autopilotTuningSchema = z
   .object({
     level: autopilotLevelSchema,
@@ -326,6 +346,8 @@ export const balanceTuningSchema = z
     background: backgroundTuningSchema,
     /** Demo autopilot skill levels; the simulation never reads this section. */
     autopilot: autopilotTuningSchema,
+    /** Keyboard helm feel; the simulation never reads this section either. */
+    helm: helmTuningSchema,
 
     // --- Player ship: hull and movement ---
     /** Look of the player hull; null keeps the display's own default silhouette. */
