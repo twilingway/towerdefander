@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { NumberField, SecondsField } from "../../components/fields.js";
+import { AngularRateField, NumberField, SecondsField } from "../../components/fields.js";
 
 interface CannonSectionProps {
   readonly tuning: BalanceTuning;
@@ -48,30 +48,27 @@ export function CannonSection({ tuning, patch }: CannonSectionProps) {
             patch({ projectileLifetimeMs: Math.max(1, Math.round(projectileLifetimeMs)) });
           }}
         />
-        <NumberField
-          caption="Поворот турели, рад/с"
-          step={0.05}
-          value={tuning.turretMaxAngularSpeedPerSecond}
+        <AngularRateField
+          caption="Поворот турели, °/с"
+          radians={tuning.turretMaxAngularSpeedPerSecond}
           onChange={(turretMaxAngularSpeedPerSecond) => {
-            patch({ turretMaxAngularSpeedPerSecond: turretMaxAngularSpeedPerSecond });
+            patch({ turretMaxAngularSpeedPerSecond });
           }}
         />
-        <NumberField
-          caption="Разгон турели, рад/с²"
-          step={0.05}
-          value={tuning.turretAngularAccelerationPerSecondSquared}
+        <AngularRateField
+          caption="Разгон турели, °/с²"
+          step={10}
+          radians={tuning.turretAngularAccelerationPerSecondSquared}
           onChange={(turretAngularAccelerationPerSecondSquared) => {
-            patch({
-              turretAngularAccelerationPerSecondSquared: turretAngularAccelerationPerSecondSquared
-            });
+            patch({ turretAngularAccelerationPerSecondSquared });
           }}
         />
-        <NumberField
-          caption="Торможение турели, рад/с²"
-          step={0.05}
-          value={tuning.turretAngularBrakingPerSecondSquared}
+        <AngularRateField
+          caption="Торможение турели, °/с²"
+          step={10}
+          radians={tuning.turretAngularBrakingPerSecondSquared}
           onChange={(turretAngularBrakingPerSecondSquared) => {
-            patch({ turretAngularBrakingPerSecondSquared: turretAngularBrakingPerSecondSquared });
+            patch({ turretAngularBrakingPerSecondSquared });
           }}
         />
         <NumberField

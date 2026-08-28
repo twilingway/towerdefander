@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { NumberField } from "../../components/fields.js";
+import { AngularRateField, NumberField } from "../../components/fields.js";
 
 interface HullSectionProps {
   readonly tuning: BalanceTuning;
@@ -50,41 +50,30 @@ export function HullSection({ tuning, patch }: HullSectionProps) {
             patch({ spaceshipBrakingPerSecondSquared: spaceshipBrakingPerSecondSquared });
           }}
         />
-        {/* Degrees rather than radians: an operator judges a turn in degrees per
-            second, and 180 reads as "half a turn a second" at a glance. */}
-        <NumberField
+        <AngularRateField
           caption="Поворот носа, °/с"
-          step={5}
-          value={toDegrees(tuning.headingMaxAngularSpeedPerSecond)}
-          onChange={(degrees) => {
-            patch({ headingMaxAngularSpeedPerSecond: toRadians(degrees) });
+          radians={tuning.headingMaxAngularSpeedPerSecond}
+          onChange={(headingMaxAngularSpeedPerSecond) => {
+            patch({ headingMaxAngularSpeedPerSecond });
           }}
         />
-        <NumberField
+        <AngularRateField
           caption="Разгон поворота, °/с²"
           step={50}
-          value={toDegrees(tuning.headingAngularAccelerationPerSecondSquared)}
-          onChange={(degrees) => {
-            patch({ headingAngularAccelerationPerSecondSquared: toRadians(degrees) });
+          radians={tuning.headingAngularAccelerationPerSecondSquared}
+          onChange={(headingAngularAccelerationPerSecondSquared) => {
+            patch({ headingAngularAccelerationPerSecondSquared });
           }}
         />
-        <NumberField
+        <AngularRateField
           caption="Торможение поворота, °/с²"
           step={50}
-          value={toDegrees(tuning.headingAngularBrakingPerSecondSquared)}
-          onChange={(degrees) => {
-            patch({ headingAngularBrakingPerSecondSquared: toRadians(degrees) });
+          radians={tuning.headingAngularBrakingPerSecondSquared}
+          onChange={(headingAngularBrakingPerSecondSquared) => {
+            patch({ headingAngularBrakingPerSecondSquared });
           }}
         />
       </div>
     </>
   );
-}
-
-function toDegrees(radians: number): number {
-  return Math.round((radians * 180) / Math.PI);
-}
-
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
 }

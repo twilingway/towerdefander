@@ -165,6 +165,38 @@ export function DegreesField({ caption, radians, onChange }: DegreesFieldProps) 
   );
 }
 
+interface AngularRateFieldProps {
+  readonly caption: string;
+  readonly radians: number;
+  /** Step in degrees; a rate needs a coarser one than an acceleration. */
+  readonly step?: number;
+  readonly onChange: (radians: number) => void;
+}
+
+/**
+ * Angular rates and accelerations, in degrees the way the rest of the console
+ * shows angles. The preset keeps radians because the simulation does its maths
+ * in them; nothing outside this file should have to convert.
+ */
+export function AngularRateField({ caption, radians, step = 5, onChange }: AngularRateFieldProps) {
+  return (
+    <label className="field">
+      <span className="field__caption">{caption}</span>
+      <input
+        className="field__input"
+        type="number"
+        step={step}
+        min={1}
+        value={Math.round((radians * 180) / Math.PI)}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (Number.isFinite(next)) onChange((next * Math.PI) / 180);
+        }}
+      />
+    </label>
+  );
+}
+
 interface PercentFieldProps {
   readonly caption: string;
   readonly fraction: number;

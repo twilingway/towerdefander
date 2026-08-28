@@ -6,7 +6,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
-import { NumberField, SecondsField } from "../../components/fields.js";
+import { AngularRateField, NumberField, SecondsField } from "../../components/fields.js";
 import { rangeHint, scaleEntityVisual } from "../../model/tuning.js";
 
 interface WeaponEditorProps {
@@ -140,18 +140,16 @@ export function WeaponEditor({
                 });
               }}
             />
-            <NumberField
-              caption="Разброс залпа, рад"
-              step={0.05}
-              value={weapon.burstSpreadRadians}
+            <AngularRateField
+              caption="Разброс залпа, °"
+              radians={weapon.burstSpreadRadians}
               onChange={(burstSpreadRadians) => {
                 patchWeapon(kind, weaponIndex, { burstSpreadRadians });
               }}
             />
-            <NumberField
-              caption="Поворот ракеты, рад/с"
-              step={0.05}
-              value={weapon.turnRatePerSecond}
+            <AngularRateField
+              caption="Поворот ракеты, °/с"
+              radians={weapon.turnRatePerSecond}
               onChange={(turnRatePerSecond) => {
                 patchWeapon(kind, weaponIndex, { turnRatePerSecond });
               }}
