@@ -14,8 +14,10 @@ import type {
 import Phaser from "phaser";
 
 import {
+  advancePlayback,
   backgroundTileOffset,
   createAngleTransition,
+  createPlaybackClock,
   createPointTransition,
   createSnappedVisualTransitions,
   getBackgroundCoverRect,
@@ -23,17 +25,19 @@ import {
   getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
+  getSegmentAlpha,
   getShieldArcRange,
   getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
-  getTimelineAlpha,
   interpolateAngle,
   interpolatePoint,
+  observePlaybackTick,
   reconcileStableIds,
   SnapshotResetLatch,
   type AngleTransition,
   type BackgroundCoverRect,
+  type PlaybackClock,
   type Point,
   type PointTransition
 } from "./spaceshipViewModel.js";
@@ -51,7 +55,6 @@ import {
 
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
-const SNAPSHOT_TRANSITION_MS = 50;
 const OUTSIDE_SPACE_COLOR = 0x02070d;
 /** Drawn when a preset picks no hull of its own. */
 const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
@@ -89,6 +92,9 @@ class SpaceshipScene extends Phaser.Scene {
   private headingTransition: AngleTransition;
   private turretTransition: AngleTransition;
   private shieldTransition: AngleTransition;
+  private playback: PlaybackClock;
+  /** Arrival of the last snapshot that carried a new tick, for pace measuring. */
+  private lastSnapshotAt: number | undefined;
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
   private readonly backgroundLayers: BackgroundLayerState[] = [];
@@ -110,14 +116,32 @@ class SpaceshipScene extends Phaser.Scene {
     super("spaceship");
     this.snapshot = snapshot;
     this.visualShieldAngle = snapshot.shield.angle;
-    this.spaceshipTransition = createPointTransition(snapshot.spaceship, snapshot.spaceship, 0);
+    const tick = snapshot.tick;
+    this.playback = createPlaybackClock(tick);
+    this.spaceshipTransition = createPointTransition(
+      snapshot.spaceship,
+      snapshot.spaceship,
+      tick,
+      tick
+    );
     this.headingTransition = createAngleTransition(
       snapshot.spaceship.heading,
       snapshot.spaceship.heading,
-      0
+      tick,
+      tick
     );
-    this.turretTransition = createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, 0);
-    this.shieldTransition = createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, 0);
+    this.turretTransition = createAngleTransition(
+      snapshot.turretAngle,
+      snapshot.turretAngle,
+      tick,
+      tick
+    );
+    this.shieldTransition = createAngleTransition(
+      snapshot.shield.angle,
+      snapshot.shield.angle,
+      tick,
+      tick
+    );
   }
 
   preload(): void {
@@ -155,19 +179,20 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret = createTurret(this, this.snapshot);
     this.shield = this.add.graphics().setDepth(14);
     this.shieldGlow = attachShieldGlow(this.shield);
-    const now = performance.now();
-    this.snapToSnapshot(this.snapshot, now);
+    const tick = this.snapshot.tick;
+    this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
-    this.reconcileCombatVisuals(now, true);
+    this.reconcileCombatVisuals(tick, tick, true);
   }
 
   override update(_time: number, deltaMs: number): void {
     this.updateBackground(deltaMs);
+    this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
-    const now = performance.now();
-    const spaceshipPosition = interpolateTransition(this.spaceshipTransition, now);
-    const spaceshipHeading = interpolateAngleTransition(this.headingTransition, now);
+    const playbackTick = this.playback.tick;
+    const spaceshipPosition = interpolateTransition(this.spaceshipTransition, playbackTick);
+    const spaceshipHeading = interpolateAngleTransition(this.headingTransition, playbackTick);
     this.spaceshipBody
       .setPosition(spaceshipPosition.x, spaceshipPosition.y)
       .setRotation(spaceshipHeading);
@@ -182,15 +207,15 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.turretVisual
     );
     this.turret.setPosition(mount.x, mount.y);
-    this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
-    this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
+    this.turret.rotation = interpolateAngleTransition(this.turretTransition, playbackTick);
+    this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, playbackTick);
     this.drawShield();
     this.focusCamera(spaceshipPosition);
 
     for (const visual of this.combatVisuals.values()) {
-      const position = interpolateTransition(visual.position, now);
+      const position = interpolateTransition(visual.position, playbackTick);
       visual.object.setPosition(position.x, position.y);
-      visual.object.rotation = interpolateAngleTransition(visual.angle, now);
+      visual.object.rotation = interpolateAngleTransition(visual.angle, playbackTick);
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }
@@ -199,6 +224,7 @@ class SpaceshipScene extends Phaser.Scene {
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
     const previousBackground = this.snapshot.background;
+    const previousTick = this.snapshot.tick;
     this.snapshot = snapshot;
     if (hasBackgroundChanged(previousBackground, snapshot.background)) {
       this.applyBackgroundSettings(snapshot.background);
@@ -210,28 +236,51 @@ class SpaceshipScene extends Phaser.Scene {
     if (snapshot.cameraViewWidth !== framedWidth) {
       this.configureViewport(this.rendererWidth, this.rendererHeight);
     }
-    const now = performance.now();
     if (shouldSnap || this.spaceshipBody === undefined || this.turret === undefined) {
-      this.snapToSnapshot(snapshot, now);
-    } else {
-      this.spaceshipTransition = createPointTransition(this.spaceshipBody, snapshot.spaceship, now);
-      this.headingTransition = createAngleTransition(
-        this.noseMarker?.rotation ?? snapshot.spaceship.heading,
-        snapshot.spaceship.heading,
-        now
-      );
-      this.turretTransition = createAngleTransition(
-        this.turret.rotation,
-        snapshot.turretAngle,
-        now
-      );
-      this.shieldTransition = createAngleTransition(
-        this.visualShieldAngle,
-        snapshot.shield.angle,
-        now
-      );
+      this.snapToSnapshot(snapshot, snapshot.tick);
+      // The measured pace survives a hydration: the room did not change its
+      // rate just because this client lost the thread of it.
+      this.playback = createPlaybackClock(snapshot.tick, this.playback.msPerTick);
+      this.lastSnapshotAt = performance.now();
+      this.reconcileCombatVisuals(snapshot.tick, snapshot.tick, true);
+      return;
     }
-    this.reconcileCombatVisuals(now, shouldSnap);
+    // A patch with no new tick - telemetry, an offer, a reframed camera -
+    // carries no movement, so restarting a segment on it would only nudge the
+    // world sideways.
+    if (snapshot.tick === previousTick) return;
+    const arrivedAt = performance.now();
+    const gapMs = this.lastSnapshotAt === undefined ? 0 : arrivedAt - this.lastSnapshotAt;
+    this.lastSnapshotAt = arrivedAt;
+    this.playback = observePlaybackTick(this.playback, snapshot.tick, gapMs);
+    // A segment runs authoritative sample to authoritative sample, so the
+    // previous target is the new origin - not wherever the visual happens to
+    // sit mid-playback, which would shorten every move by the lag.
+    this.spaceshipTransition = createPointTransition(
+      this.spaceshipTransition.to,
+      snapshot.spaceship,
+      previousTick,
+      snapshot.tick
+    );
+    this.headingTransition = createAngleTransition(
+      this.headingTransition.to,
+      snapshot.spaceship.heading,
+      previousTick,
+      snapshot.tick
+    );
+    this.turretTransition = createAngleTransition(
+      this.turretTransition.to,
+      snapshot.turretAngle,
+      previousTick,
+      snapshot.tick
+    );
+    this.shieldTransition = createAngleTransition(
+      this.shieldTransition.to,
+      snapshot.shield.angle,
+      previousTick,
+      snapshot.tick
+    );
+    this.reconcileCombatVisuals(previousTick, snapshot.tick, false);
   }
 
   prepareHydration(): void {
@@ -377,7 +426,7 @@ class SpaceshipScene extends Phaser.Scene {
     if (this.shieldGlow !== undefined) this.shieldGlow.active = this.snapshot.shield.active;
   }
 
-  private snapToSnapshot(snapshot: DisplayGameSnapshot, now: number): void {
+  private snapToSnapshot(snapshot: DisplayGameSnapshot, tick: number): void {
     if (this.spaceshipBody === undefined || this.turret === undefined) return;
     this.spaceshipBody.setPosition(snapshot.spaceship.x, snapshot.spaceship.y);
     if (this.noseMarker !== undefined) {
@@ -393,12 +442,13 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret.setPosition(snappedMount.x, snappedMount.y);
     this.turret.setRotation(snapshot.turretAngle);
     this.visualShieldAngle = snapshot.shield.angle;
-    const transitions = createSnappedVisualTransitions(snapshot, now);
+    const transitions = createSnappedVisualTransitions(snapshot, tick);
     this.spaceshipTransition = transitions.spaceship;
     this.headingTransition = createAngleTransition(
       snapshot.spaceship.heading,
       snapshot.spaceship.heading,
-      now
+      tick,
+      tick
     );
     this.turretTransition = transitions.turret;
     this.shieldTransition = transitions.shield;
@@ -452,7 +502,7 @@ class SpaceshipScene extends Phaser.Scene {
     this.cameras.main.setScroll(scroll.x, scroll.y);
   }
 
-  private reconcileCombatVisuals(now: number, snap: boolean): void {
+  private reconcileCombatVisuals(fromTick: number, toTick: number, snap: boolean): void {
     const incoming = collectCombatEntities(this.snapshot);
     const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
     const plan = reconcileStableIds(this.combatVisuals.keys(), incomingById.keys());
@@ -472,15 +522,17 @@ class SpaceshipScene extends Phaser.Scene {
         this.combatVisuals.set(entityId, {
           object: created.object,
           healthBar: created.healthBar,
-          position: createPointTransition(entity, entity, now),
-          angle: createAngleTransition(heading, heading, now)
+          // An entity appears already formed at the newest tick; there is no
+          // earlier authoritative sample to walk it out of.
+          position: createPointTransition(entity, entity, toTick, toTick),
+          angle: createAngleTransition(heading, heading, toTick, toTick)
         });
       } else {
-        const fromPoint = snap ? entity : visual.object;
-        const fromHeading = snap ? heading : visual.object.rotation;
+        const fromPoint = snap ? entity : visual.position.to;
+        const fromHeading = snap ? heading : visual.angle.to;
         if (snap) visual.object.setPosition(entity.x, entity.y).setRotation(heading);
-        visual.position = createPointTransition(fromPoint, entity, now);
-        visual.angle = createAngleTransition(fromHeading, heading, now);
+        visual.position = createPointTransition(fromPoint, entity, fromTick, toTick);
+        visual.angle = createAngleTransition(fromHeading, heading, fromTick, toTick);
         if (visual.healthBar !== undefined && entity.visualKind === "enemy") {
           drawEnemyHealthBar(visual.healthBar, entity);
         }
@@ -753,19 +805,19 @@ function getEntityHeading(entity: CombatEntity): number {
   return Math.atan2(entity.velocityY, entity.velocityX);
 }
 
-function interpolateTransition(transition: PointTransition, now: number): Point {
+function interpolateTransition(transition: PointTransition, playbackTick: number): Point {
   return interpolatePoint(
     transition.from,
     transition.to,
-    getTimelineAlpha(now - transition.startedAt, SNAPSHOT_TRANSITION_MS)
+    getSegmentAlpha(transition.fromTick, transition.toTick, playbackTick)
   );
 }
 
-function interpolateAngleTransition(transition: AngleTransition, now: number): number {
+function interpolateAngleTransition(transition: AngleTransition, playbackTick: number): number {
   return interpolateAngle(
     transition.from,
     transition.to,
-    getTimelineAlpha(now - transition.startedAt, SNAPSHOT_TRANSITION_MS)
+    getSegmentAlpha(transition.fromTick, transition.toTick, playbackTick)
   );
 }
 

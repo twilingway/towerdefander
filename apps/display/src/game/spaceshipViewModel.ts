@@ -3,16 +3,23 @@ export interface Point {
   readonly y: number;
 }
 
+/**
+ * A segment between two authoritative samples, addressed in gameplay ticks
+ * rather than in arrival milliseconds: the server decides when a tick exists,
+ * the display only decides how fast it plays them back.
+ */
 export interface PointTransition {
   readonly from: Point;
   readonly to: Point;
-  readonly startedAt: number;
+  readonly fromTick: number;
+  readonly toTick: number;
 }
 
 export interface AngleTransition {
   readonly from: number;
   readonly to: number;
-  readonly startedAt: number;
+  readonly fromTick: number;
+  readonly toTick: number;
 }
 
 export interface VisualSnapshot {
@@ -331,29 +338,114 @@ export class SnapshotResetLatch {
 
 export function createSnappedVisualTransitions(
   snapshot: VisualSnapshot,
-  startedAt: number
+  tick: number
 ): VisualTransitions {
   return {
-    spaceship: createPointTransition(snapshot.spaceship, snapshot.spaceship, startedAt),
-    turret: createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, startedAt),
-    shield: createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, startedAt)
+    spaceship: createPointTransition(snapshot.spaceship, snapshot.spaceship, tick, tick),
+    turret: createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, tick, tick),
+    shield: createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, tick, tick)
   };
 }
 
-export function createPointTransition(from: Point, to: Point, startedAt: number): PointTransition {
+export function createPointTransition(
+  from: Point,
+  to: Point,
+  fromTick: number,
+  toTick: number
+): PointTransition {
   return {
     from: { x: from.x, y: from.y },
     to: { x: to.x, y: to.y },
-    startedAt
+    fromTick,
+    toTick
   };
 }
 
 export function createAngleTransition(
   from: number,
   to: number,
-  startedAt: number
+  fromTick: number,
+  toTick: number
 ): AngleTransition {
-  return { from, to, startedAt };
+  return { from, to, fromTick, toTick };
+}
+
+/**
+ * Playback of authoritative ticks. The server owns when a tick exists; the
+ * display owns how fast it walks through them - and it cannot walk at the
+ * nominal 50 ms per tick, because nothing guarantees the room emits them that
+ * often. So the pace is measured from what actually arrives, and playback runs
+ * a fixed lag behind the newest tick; that lag is what keeps a late patch from
+ * showing up as a stall.
+ */
+export interface PlaybackClock {
+  /** Where playback sits, in authoritative ticks; fractional between them. */
+  readonly tick: number;
+  /** Newest authoritative tick received. */
+  readonly latestTick: number;
+  /** Measured real milliseconds per authoritative tick. */
+  readonly msPerTick: number;
+}
+
+/** Stands in until the first pair of snapshots has been timed. */
+export const NOMINAL_MS_PER_TICK = 50;
+const MIN_MS_PER_TICK = 20;
+const MAX_MS_PER_TICK = 250;
+/** How far behind the newest tick playback aims to stay. */
+export const PLAYBACK_LAG_TICKS = 1.5;
+/** Past this drift, correcting by rate is hopeless and playback jumps instead. */
+export const PLAYBACK_RESYNC_TICKS = 6;
+/** Weight of the newest measurement in the pace estimate. */
+const PACE_SMOOTHING = 0.2;
+/** Share of the drift taken back per tick of playback. */
+const DRIFT_CORRECTION = 0.25;
+const MIN_PLAYBACK_RATE = 0.85;
+const MAX_PLAYBACK_RATE = 1.15;
+
+export function createPlaybackClock(tick: number, msPerTick = NOMINAL_MS_PER_TICK): PlaybackClock {
+  return { tick, latestTick: tick, msPerTick: clamp(msPerTick, MIN_MS_PER_TICK, MAX_MS_PER_TICK) };
+}
+
+/**
+ * Folds one arrival into the pace estimate: `arrivalGapMs` is real time since
+ * the previous snapshot, `tick` is its authoritative tick. A patch that carried
+ * several ticks therefore lowers the per-tick pace instead of raising it.
+ */
+export function observePlaybackTick(
+  clock: PlaybackClock,
+  tick: number,
+  arrivalGapMs: number
+): PlaybackClock {
+  const ticks = tick - clock.latestTick;
+  // A tick that moved backwards is a different run, not a late patch. Without
+  // re-anchoring, playback would sit at the old newest tick and never move
+  // again, because nothing would ever raise it.
+  if (ticks < 0) return createPlaybackClock(tick, clock.msPerTick);
+  if (ticks === 0) return clock;
+  if (!Number.isFinite(arrivalGapMs) || arrivalGapMs <= 0) return { ...clock, latestTick: tick };
+  const measured = clamp(arrivalGapMs / ticks, MIN_MS_PER_TICK, MAX_MS_PER_TICK);
+  return {
+    tick: clock.tick,
+    latestTick: tick,
+    msPerTick: clock.msPerTick + (measured - clock.msPerTick) * PACE_SMOOTHING
+  };
+}
+
+/**
+ * Advances playback by one rendered frame. Drift is taken back by bending the
+ * rate rather than by moving the position, so a correction never reads as a
+ * jump; only a hopeless gap resyncs outright.
+ */
+export function advancePlayback(clock: PlaybackClock, deltaMs: number): PlaybackClock {
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) return clock;
+  const target = clock.latestTick - PLAYBACK_LAG_TICKS;
+  const drift = target - clock.tick;
+  if (Math.abs(drift) > PLAYBACK_RESYNC_TICKS) return { ...clock, tick: target };
+  const rate = clamp(1 + drift * DRIFT_CORRECTION, MIN_PLAYBACK_RATE, MAX_PLAYBACK_RATE);
+  const advanced = clock.tick + (deltaMs / clock.msPerTick) * rate;
+  // Never render past the newest sample: there is nothing to interpolate
+  // towards there, so the picture would have to guess.
+  return { ...clock, tick: Math.min(advanced, clock.latestTick) };
 }
 
 export function getBoundedCameraScroll(
@@ -378,9 +470,16 @@ export function interpolatePoint(current: Point, target: Point, amount: number):
   };
 }
 
-export function getTimelineAlpha(elapsedMs: number, durationMs = 50): number {
-  if (!Number.isFinite(elapsedMs) || !Number.isFinite(durationMs) || durationMs <= 0) return 1;
-  return clamp(elapsedMs / durationMs, 0, 1);
+/**
+ * Where playback sits inside one authoritative segment. A segment that spans
+ * several ticks - a patch that carried more than one step - is played as one
+ * longer move rather than as a jump, because the span comes from the ticks
+ * themselves instead of from a fixed window.
+ */
+export function getSegmentAlpha(fromTick: number, toTick: number, playbackTick: number): number {
+  const span = toTick - fromTick;
+  if (!Number.isFinite(span) || !Number.isFinite(playbackTick) || span <= 0) return 1;
+  return clamp((playbackTick - fromTick) / span, 0, 1);
 }
 
 export function interpolateAngle(current: number, target: number, amount: number): number {

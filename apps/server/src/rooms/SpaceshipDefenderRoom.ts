@@ -102,6 +102,20 @@ const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
  */
 const CREW_MESSAGE_CEILING = 25;
 const SOLO_MESSAGE_CEILING = 50;
+/**
+ * How often the room wakes to spend elapsed real time in whole fixed steps.
+ * Asking for the step itself does not work: a host timer quantised to 15.625 ms
+ * turns a 50 ms interval into 62.5 ms, and the whole game then runs at four
+ * fifths speed with nothing in the code to show for it. Waking far more often
+ * than the step leaves the pace to the accumulator instead of to the timer.
+ */
+const SIMULATION_WAKE_MS = 10;
+/**
+ * Steps a single wake-up may run. A long stall - GC, a heavy encode, a laptop
+ * coming back from sleep - is dropped rather than replayed: catching up costs
+ * exactly the time the room does not have.
+ */
+const MAX_CATCHUP_STEPS = 4;
 
 export class SpaceshipDefenderRoom extends Room<{
   state: SpaceshipDefenderState;
@@ -130,7 +144,8 @@ export class SpaceshipDefenderRoom extends Room<{
   private displaySessionId: string | undefined;
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
   private gameState: SpaceshipSimulationState | undefined;
-  private simulationTimer: RoomTimer | undefined;
+  /** Real time received from the loop that no whole fixed step has claimed yet. */
+  private stepAccumulatorMs = 0;
   private readonly lifecycle = new LifecycleSchedule({
     schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
     now: () => Date.now(),
@@ -776,14 +791,30 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private startSimulation(): void {
     this.stopSimulation();
-    this.simulationTimer = this.clock.setInterval(() => {
-      this.advanceGameStep();
-    }, this.gameConfig.fixedStepMs);
+    this.setSimulationInterval((deltaMs) => {
+      this.advanceElapsedTime(deltaMs);
+    }, SIMULATION_WAKE_MS);
   }
 
   private stopSimulation(): void {
-    this.simulationTimer?.clear();
-    this.simulationTimer = undefined;
+    this.setSimulationInterval(undefined);
+    this.stepAccumulatorMs = 0;
+  }
+
+  /**
+   * Spends elapsed real time in whole fixed steps, so game time tracks the wall
+   * clock rather than the number of times the host timer happened to fire.
+   */
+  advanceElapsedTime(deltaMs: number): void {
+    const stepMs = this.gameConfig.fixedStepMs;
+    this.stepAccumulatorMs = Math.min(
+      this.stepAccumulatorMs + Math.max(0, deltaMs),
+      stepMs * MAX_CATCHUP_STEPS
+    );
+    while (this.stepAccumulatorMs >= stepMs) {
+      this.stepAccumulatorMs -= stepMs;
+      this.advanceGameStep();
+    }
   }
 
   private armWaveDeadline(now = Date.now()): void {

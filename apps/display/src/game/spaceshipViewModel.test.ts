@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  advancePlayback,
   backgroundTileOffset,
+  createPlaybackClock,
+  createPointTransition,
   createSnappedVisualTransitions,
   getBackgroundCoverRect,
   getBoundedCameraScroll,
@@ -9,13 +12,14 @@ import {
   getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
+  getSegmentAlpha,
   getShieldArcRange,
   getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
-  getTimelineAlpha,
   interpolateAngle,
   interpolatePoint,
+  observePlaybackTick,
   reconcileStableIds,
   SnapshotResetLatch
 } from "./spaceshipViewModel.js";
@@ -329,24 +333,81 @@ describe("spaceship view model", () => {
   });
 
   it("uses elapsed time rather than frame count", () => {
-    const trace = (framesPerSecond: number) =>
-      Array.from({ length: Math.round(framesPerSecond * 0.05) + 1 }, (_, index) => {
-        const elapsedMs = Math.min((index * 1000) / framesPerSecond, 50);
-        return interpolatePoint({ x: 0, y: 0 }, { x: 100, y: 40 }, getTimelineAlpha(elapsedMs, 50));
+    const trace = (framesPerSecond: number) => {
+      const frameMs = 1000 / framesPerSecond;
+      let clock = createPlaybackClock(0);
+      clock = observePlaybackTick(clock, 4, 200);
+      return Array.from({ length: Math.round(framesPerSecond * 0.05) }, () => {
+        clock = advancePlayback(clock, frameMs);
+        return interpolatePoint(
+          { x: 0, y: 0 },
+          { x: 100, y: 40 },
+          getSegmentAlpha(0, 4, clock.tick)
+        );
       });
+    };
     const sixtyHzTrace = trace(60);
     const oneTwentyHzTrace = trace(120);
 
     for (let index = 0; index < sixtyHzTrace.length; index += 1) {
       const sixtyHzPoint = sixtyHzTrace[index];
-      const oneTwentyHzPoint = oneTwentyHzTrace[index * 2];
+      const oneTwentyHzPoint = oneTwentyHzTrace[index * 2 + 1];
       if (sixtyHzPoint === undefined || oneTwentyHzPoint === undefined) {
         throw new Error("Expected matching 60 Hz and 120 Hz samples.");
       }
       expect(oneTwentyHzPoint.x).toBeCloseTo(sixtyHzPoint.x, 8);
       expect(oneTwentyHzPoint.y).toBeCloseTo(sixtyHzPoint.y, 8);
     }
-    expect(sixtyHzTrace.at(-1)).toEqual({ x: 100, y: 40 });
+  });
+
+  it("keeps playing when snapshots arrive slower than the nominal tick", () => {
+    const frameMs = 1000 / 60;
+    const snapshotMs = 62;
+    let clock = createPlaybackClock(0);
+    let latestTick = 0;
+    let nextSnapshotAt = snapshotMs;
+    let elapsedMs = 0;
+    let previousTick = -1;
+    const stalledFrames: number[] = [];
+
+    for (let frame = 0; frame < 240; frame += 1) {
+      elapsedMs += frameMs;
+      while (elapsedMs >= nextSnapshotAt) {
+        latestTick += 1;
+        clock = observePlaybackTick(clock, latestTick, snapshotMs);
+        nextSnapshotAt += snapshotMs;
+      }
+      clock = advancePlayback(clock, frameMs);
+      // The first second is the pace estimate settling; after that a stall
+      // would be the freeze this playback exists to remove.
+      if (frame > 60 && clock.tick === previousTick) stalledFrames.push(frame);
+      previousTick = clock.tick;
+    }
+
+    expect(stalledFrames).toEqual([]);
+    expect(clock.msPerTick).toBeCloseTo(snapshotMs, 1);
+    expect(latestTick - clock.tick).toBeLessThan(3);
+  });
+
+  it("re-anchors on a tick that moved backwards instead of freezing", () => {
+    let clock = createPlaybackClock(0);
+    clock = observePlaybackTick(clock, 400, 50);
+    clock = advancePlayback(clock, 16);
+
+    // A fresh run restarts the tick counter; playback has to follow it down.
+    clock = observePlaybackTick(clock, 3, 50);
+
+    expect(clock.latestTick).toBe(3);
+    expect(clock.tick).toBe(3);
+  });
+
+  it("walks through a patch that carried more than one tick", () => {
+    const segment = createPointTransition({ x: 0, y: 0 }, { x: 100, y: 0 }, 10, 12);
+
+    expect(getSegmentAlpha(segment.fromTick, segment.toTick, 11)).toBeCloseTo(0.5, 8);
+    expect(getSegmentAlpha(segment.fromTick, segment.toTick, 12)).toBe(1);
+    // A segment with no span at all - a snap - is simply finished.
+    expect(getSegmentAlpha(10, 10, 10)).toBe(1);
   });
 
   it("snaps delayed scene creation and hydration to the latest snapshot", () => {
@@ -360,10 +421,11 @@ describe("spaceship view model", () => {
     expect(transitions.spaceship).toEqual({
       from: latest.spaceship,
       to: latest.spaceship,
-      startedAt: 375
+      fromTick: 375,
+      toTick: 375
     });
-    expect(transitions.turret).toEqual({ from: 1.2, to: 1.2, startedAt: 375 });
-    expect(transitions.shield).toEqual({ from: -0.8, to: -0.8, startedAt: 375 });
+    expect(transitions.turret).toEqual({ from: 1.2, to: 1.2, fromTick: 375, toTick: 375 });
+    expect(transitions.shield).toEqual({ from: -0.8, to: -0.8, fromTick: 375, toTick: 375 });
   });
 
   it("preserves a hydration reset through delayed scene creation until the next snapshot", () => {
@@ -405,8 +467,8 @@ describe("spaceship view model", () => {
     const to = -Math.PI * 0.88;
     const trace = (framesPerSecond: number) =>
       Array.from({ length: Math.round(framesPerSecond * 0.05) + 1 }, (_, index) => {
-        const elapsedMs = Math.min((index * 1000) / framesPerSecond, 50);
-        return interpolateAngle(from, to, getTimelineAlpha(elapsedMs, 50));
+        const playbackTick = Math.min((index * 1000) / framesPerSecond / 50, 1);
+        return interpolateAngle(from, to, getSegmentAlpha(0, 1, playbackTick));
       });
     const sixtyHzTrace = trace(60);
     const oneTwentyHzTrace = trace(120);

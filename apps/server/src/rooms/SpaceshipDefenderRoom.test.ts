@@ -17,7 +17,7 @@ import {
 } from "@spaceship-defender/game-core";
 import { Decoder, Encoder, type StateView } from "@colyseus/schema";
 import { CloseCode, type Client } from "colyseus";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { getBalanceStore } from "../balance/index.js";
@@ -36,10 +36,25 @@ function createClient(sessionId: string): TestClient {
   return { client: { sessionId, send } as unknown as Client, send };
 }
 
+/**
+ * The simulation loop is a real host timer, so a room left running keeps
+ * ticking its clock after the test that made it and fires lifecycle deadlines
+ * into a torn-down fixture. Every room built here is therefore stopped.
+ */
+const openRooms: SpaceshipDefenderRoom[] = [];
+
+afterEach(() => {
+  for (const room of openRooms.splice(0)) {
+    room.setSimulationInterval(undefined);
+    room.clock.clear();
+  }
+});
+
 function createRoom(crewSize: CrewSize = 3): SpaceshipDefenderRoom {
   const room = new SpaceshipDefenderRoom();
   room.roomId = "ROOM123";
   room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize });
+  openRooms.push(room);
   return room;
 }
 
@@ -79,6 +94,15 @@ function startGame(room = createRoom()): {
     ready(room, controller);
   });
   return { room, controllers };
+}
+
+/** Delays of the calls that armed the loop; a stop passes no callback at all. */
+function armedLoops(spy: {
+  mock: { calls: readonly (readonly unknown[])[] };
+}): (number | undefined)[] {
+  return spy.mock.calls
+    .filter((call) => call[0] !== undefined)
+    .map((call) => call[1] as number | undefined);
 }
 
 function controllerAt(controllers: readonly TestClient[], index: number): TestClient {
@@ -266,7 +290,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
 
   it("assigns canonical roles and starts only when all three are ready", () => {
     const room = createRoom();
-    const setInterval = vi.spyOn(room.clock, "setInterval");
+    const setSimulationInterval = vi.spyOn(room, "setSimulationInterval");
     const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
       joinController(room, index)
     );
@@ -288,7 +312,28 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.game.shield).toMatchObject({ energy: 100, capacity: 100 });
     expect(room.state.game.display.obstacles).toHaveLength(9);
     expect(room.maxMessagesPerSecond).toBe(25);
-    expect(setInterval).toHaveBeenCalledTimes(1);
+    // Stopping passes no callback, so only the armed calls count.
+    expect(armedLoops(setSimulationInterval)).toEqual([10]);
+  });
+
+  it("spends real time in whole steps instead of one step per wake-up", () => {
+    const { room } = startGame();
+    const before = room.state.game.tick;
+
+    // A host timer quantised above the step - 62.5 ms where 50 was asked for -
+    // must still produce twenty steps per second, not sixteen.
+    for (let index = 0; index < 16; index += 1) room.advanceElapsedTime(62.5);
+
+    expect(room.state.game.tick - before).toBe(20);
+  });
+
+  it("drops a long stall instead of replaying it as a burst", () => {
+    const { room } = startGame();
+    const before = room.state.game.tick;
+
+    room.advanceElapsedTime(2_000);
+
+    expect(room.state.game.tick - before).toBe(4);
   });
 
   it("seats a solo crew on the pilot and starts on one ready", () => {
@@ -1531,7 +1576,7 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
 
   it("starts one clean run while preserving identities and roles", () => {
     const { room, controllers } = startGame();
-    const setInterval = vi.spyOn(room.clock, "setInterval");
+    const setSimulationInterval = vi.spyOn(room, "setSimulationInterval");
     const pilot = controllerAt(controllers, 0);
     room.handlePilotInput(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1582,7 +1627,8 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
     expect(room.state.game.teamUpgrade.votes).toHaveLength(0);
     expect(internals(room).sequenceWatermarks.get(pilot.client.sessionId)?.size).toBe(0);
     expect(internals(room).upgradeJournals.size).toBe(0);
-    expect(setInterval).toHaveBeenCalledTimes(1);
+    // The rematch arms the loop exactly once, whatever it stopped on the way.
+    expect(armedLoops(setSimulationInterval)).toEqual([10]);
   });
 
   it("preserves terminal readiness over reconnect and starts after the crew returns", async () => {
