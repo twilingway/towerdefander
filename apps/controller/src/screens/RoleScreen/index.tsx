@@ -4,7 +4,7 @@ import type {
   CrewRole,
   CrewSize,
   EncounterPhase,
-  HelmTuning,
+  PublicHelmView,
   PublicMachineGunView,
   PublicShieldView,
   PublicWeaponHeatView
@@ -30,7 +30,7 @@ interface RoleScreenProps {
   readonly role: CrewRole;
   readonly crewSize: CrewSize;
   readonly heading: number | undefined;
-  readonly helm: HelmTuning | undefined;
+  readonly helm: PublicHelmView | undefined;
   readonly latencyMs: number | undefined;
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;

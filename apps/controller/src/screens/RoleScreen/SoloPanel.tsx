@@ -1,6 +1,6 @@
 import type {
   EncounterPhase,
-  HelmTuning,
+  PublicHelmView,
   PublicMachineGunView,
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
@@ -23,7 +23,7 @@ interface SoloPanelProps {
   readonly machineGun: PublicMachineGunView | undefined;
   /** Authoritative hull heading; the keyboard burns along it. */
   readonly heading: number | undefined;
-  readonly helm: HelmTuning | undefined;
+  readonly helm: PublicHelmView | undefined;
   readonly latencyMs: number | undefined;
   readonly encounterPhase: EncounterPhase | undefined;
   readonly connectionDisabled: boolean;

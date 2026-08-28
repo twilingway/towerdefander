@@ -1,4 +1,4 @@
-import type { HelmTuning } from "@spaceship-defender/protocol";
+import type { PublicHelmView } from "@spaceship-defender/protocol";
 
 import { getKeyboardVector, type ControlVector } from "./controlInput.js";
 
@@ -47,11 +47,11 @@ export const HEADING_LEAD_RADIANS = 0.5;
 export const HELM_STOP_TICKS = 5;
 
 /**
- * Matches `headingAngularBrakingPerSecondSquared` in the simulation config. The
- * client cannot depend on game-core, so the braking rate is mirrored here to
- * predict where a spin comes to rest.
+ * Only a fallback for the tick before the run publishes its own braking rate;
+ * the real one rides on the helm view, because a prediction against the wrong
+ * rate overshoots and swings the hull back.
  */
-export const HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED = (13 * Math.PI) / 5;
+export const HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED = 50;
 
 /**
  * Where the hull will stop on its own, in radians from where it is now, given
@@ -68,7 +68,8 @@ export function coastToStopRadians(
   latencySeconds = 0,
   braking = HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED
 ): number {
-  const stopping = (angularVelocity * angularVelocity) / (2 * braking);
+  const rate = braking > 0 ? braking : HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED;
+  const stopping = (angularVelocity * angularVelocity) / (2 * rate);
   return Math.sign(angularVelocity) * (stopping + Math.abs(angularVelocity) * latencySeconds);
 }
 
@@ -94,7 +95,7 @@ export function advanceHeadingDrive(
     /** Where the hull would coast to a halt, in radians from the nose. */
     readonly coastRadians?: number;
     /** Feel from the active preset; the built-ins stand in until it arrives. */
-    readonly tuning?: HelmTuning | undefined;
+    readonly tuning?: PublicHelmView | undefined;
   } = {}
 ): HeadingDrive {
   const { stopping = false, coastRadians = 0, tuning } = options;

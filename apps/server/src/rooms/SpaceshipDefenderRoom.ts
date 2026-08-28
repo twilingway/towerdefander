@@ -590,6 +590,8 @@ export class SpaceshipDefenderRoom extends Room<{
     this.state.game.helm.headingLeadRadians = helm.headingLeadRadians;
     this.state.game.helm.stopDampening = helm.stopDampening;
     this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
+    this.state.game.helm.hullAngularBrakingPerSecondSquared =
+      this.gameConfig.headingAngularBrakingPerSecondSquared;
     this.gameState = createCleanSpaceshipRun(this.gameConfig, createRunSeed(previousSeed));
     this.state.runNumber += 1;
     this.state.phase = "active";

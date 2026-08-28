@@ -86,7 +86,8 @@ describe("controller room view", () => {
           scheme: "tank",
           headingLeadRadians: 0.5,
           stopDampening: 1,
-          rotateInPlaceThrottle: 0.02
+          rotateInPlaceThrottle: 0.02,
+          hullAngularBrakingPerSecondSquared: 50
         },
         credits: 4
       }
@@ -181,7 +182,8 @@ describe("controller room view", () => {
           scheme: "tank",
           headingLeadRadians: 0.5,
           stopDampening: 1,
-          rotateInPlaceThrottle: 0.02
+          rotateInPlaceThrottle: 0.02,
+          hullAngularBrakingPerSecondSquared: 50
         },
         teamUpgrade: {
           hasOffer: true,
@@ -313,7 +315,8 @@ describe("controller room view", () => {
           scheme: "tank",
           headingLeadRadians: 0.5,
           stopDampening: 1,
-          rotateInPlaceThrottle: 0.02
+          rotateInPlaceThrottle: 0.02,
+          hullAngularBrakingPerSecondSquared: 50
         },
         credits: 12
       }

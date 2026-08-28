@@ -11,7 +11,7 @@ import {
   toHelmKeys,
   turnDirection
 } from "../../pilotKeyboard.js";
-import type { HelmTuning } from "@spaceship-defender/protocol";
+import type { PublicHelmView } from "@spaceship-defender/protocol";
 
 import type { RoleControls } from "./useRoleControls.js";
 
@@ -22,7 +22,7 @@ interface PilotKeyboardOptions {
   /** Server-measured round trip, so the stop prediction can allow for it. */
   readonly latencyMs?: number | undefined;
   /** Helm feel from the active preset, or undefined before the run starts. */
-  readonly tuning?: HelmTuning | undefined;
+  readonly tuning?: PublicHelmView | undefined;
   /** False for a seat that is not flying, so the helm keys stay unbound. */
   readonly active?: boolean;
   readonly controlsEnabled: boolean;
@@ -122,7 +122,10 @@ export function usePilotKeyboard({
           nose +
           coastToStopRadians(
             angularVelocityReference.current,
-            STEP_SECONDS + Math.max(0, latencyReference.current ?? 0) / 1000
+            STEP_SECONDS + Math.max(0, latencyReference.current ?? 0) / 1000,
+            // The run's own braking rate: predicting against a different one
+            // overshoots the target and swings the hull back to it.
+            tuningReference.current?.hullAngularBrakingPerSecondSquared
           );
       } else if (stopTicks > 0) {
         stopTicks -= 1;

@@ -88,6 +88,7 @@ interface NetworkGameState {
     headingLeadRadians: number;
     stopDampening: number;
     rotateInPlaceThrottle: number;
+    hullAngularBrakingPerSecondSquared: number;
   };
   encounter: {
     phase: EncounterPhase;

@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 29 as const;
+export const PROTOCOL_VERSION = 30 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -577,7 +577,13 @@ export const publicHelmViewSchema = z
     scheme: helmSchemeSchema,
     headingLeadRadians: finite.positive(),
     stopDampening: finite.positive(),
-    rotateInPlaceThrottle: finite.positive()
+    rotateInPlaceThrottle: finite.positive(),
+    /**
+     * How hard the hull brakes its spin, straight from the run's config. The
+     * helm predicts where a released turn comes to rest, and a guess that does
+     * not match the hull overshoots and swings back.
+     */
+    hullAngularBrakingPerSecondSquared: finite.positive()
   })
   .strict();
 export type PublicHelmView = z.infer<typeof publicHelmViewSchema>;

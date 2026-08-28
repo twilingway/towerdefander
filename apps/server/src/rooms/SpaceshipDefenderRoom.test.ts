@@ -309,6 +309,11 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.game.helm.headingLeadRadians).toBeGreaterThan(0);
     expect(room.state.game.helm.rotateInPlaceThrottle).toBeGreaterThan(0);
     expect(room.state.game.helm).toMatchObject(getBalanceStore().getActiveTuning().helm);
+    // The helm predicts where a spin rests, so it needs the run's own braking.
+    expect(room.state.game.helm.hullAngularBrakingPerSecondSquared).toBeCloseTo(
+      getBalanceStore().getActiveSimulationConfig().headingAngularBrakingPerSecondSquared,
+      6
+    );
   });
 
   it("raises the message ceiling for the two streams a solo player owns", () => {

@@ -114,7 +114,8 @@ describe("pilot keyboard drive", () => {
       scheme: "tank",
       headingLeadRadians: 0.9,
       stopDampening: 0.5,
-      rotateInPlaceThrottle: 0.05
+      rotateInPlaceThrottle: 0.05,
+      hullAngularBrakingPerSecondSquared: 50
     } as const;
 
     const turning = advanceHeadingDrive(0, new Set([TURN_RIGHT_KEY]), { tuning });
@@ -134,7 +135,8 @@ describe("pilot keyboard drive", () => {
       scheme: "absolute",
       headingLeadRadians: 0.9,
       stopDampening: 1,
-      rotateInPlaceThrottle: 0.05
+      rotateInPlaceThrottle: 0.05,
+      hullAngularBrakingPerSecondSquared: 50
     } as const;
 
     const drive = advanceHeadingDrive(2.5, new Set([THROTTLE_KEY, TURN_RIGHT_KEY]), { tuning });

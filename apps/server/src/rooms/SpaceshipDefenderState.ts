@@ -45,6 +45,8 @@ export class HelmState extends Schema {
   @type("float32") headingLeadRadians = 0.5;
   @type("float32") stopDampening = 1;
   @type("float32") rotateInPlaceThrottle = 0.02;
+  /** Mirrors the run's hull braking so the helm predicts against the real one. */
+  @type("float32") hullAngularBrakingPerSecondSquared = 50;
 }
 
 export class ShieldState extends Schema {

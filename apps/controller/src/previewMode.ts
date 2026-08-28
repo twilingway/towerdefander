@@ -71,7 +71,8 @@ const PREVIEW_HELM = {
   scheme: "tank",
   headingLeadRadians: 0.5,
   stopDampening: 1,
-  rotateInPlaceThrottle: 0.02
+  rotateInPlaceThrottle: 0.02,
+  hullAngularBrakingPerSecondSquared: 50
 } as const;
 
 const EMPTY_TEAM_UPGRADE = {
