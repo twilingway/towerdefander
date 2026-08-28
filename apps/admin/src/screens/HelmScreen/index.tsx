@@ -84,14 +84,14 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
           </select>
         </label>
         <DegreesField
-          caption="Опережение курса"
+          caption="Опережение курса, °"
           radians={tuning.helm.headingLeadRadians}
           onChange={(headingLeadRadians) => {
             patch({ headingLeadRadians });
           }}
         />
         <NumberField
-          caption="Демпфирование остановки"
+          caption="Демпфирование остановки, ×"
           value={tuning.helm.stopDampening}
           step={0.05}
           min={0.5}
@@ -100,7 +100,7 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
           }}
         />
         <PercentField
-          caption="Тяга разворота на месте"
+          caption="Тяга разворота на месте, %"
           fraction={tuning.helm.rotateInPlaceThrottle}
           onChange={(rotateInPlaceThrottle) => {
             patch({ rotateInPlaceThrottle });

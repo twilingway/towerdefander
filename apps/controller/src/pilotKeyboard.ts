@@ -60,9 +60,16 @@ export const HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED = (13 * Math.PI) / 5;
  */
 export function coastToStopRadians(
   angularVelocity: number,
+  /**
+   * Seconds the request needs to reach the hull: one authoritative step plus
+   * the measured round trip. The hull keeps turning across that window, so the
+   * prediction has to include it or the spin stops short of where it lands.
+   */
+  latencySeconds = 0,
   braking = HULL_ANGULAR_BRAKING_PER_SECOND_SQUARED
 ): number {
-  return (Math.sign(angularVelocity) * angularVelocity * angularVelocity) / (2 * braking);
+  const stopping = (angularVelocity * angularVelocity) / (2 * braking);
+  return Math.sign(angularVelocity) * (stopping + Math.abs(angularVelocity) * latencySeconds);
 }
 
 export interface HeadingDrive {

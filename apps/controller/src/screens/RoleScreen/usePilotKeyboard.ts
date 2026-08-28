@@ -15,7 +15,12 @@ import type { HelmTuning } from "@spaceship-defender/protocol";
 
 import type { RoleControls } from "./useRoleControls.js";
 
+/** One authoritative step; the request cannot land sooner than the next one. */
+const STEP_SECONDS = 0.05;
+
 interface PilotKeyboardOptions {
+  /** Server-measured round trip, so the stop prediction can allow for it. */
+  readonly latencyMs?: number | undefined;
   /** Helm feel from the active preset, or undefined before the run starts. */
   readonly tuning?: HelmTuning | undefined;
   /** False for a seat that is not flying, so the helm keys stay unbound. */
@@ -41,6 +46,7 @@ const TICK_MS = 25;
  */
 export function usePilotKeyboard({
   active = true,
+  latencyMs,
   tuning,
   controlsEnabled,
   heading,
@@ -65,6 +71,8 @@ export function usePilotKeyboard({
   }
   const tuningReference = useRef(tuning);
   tuningReference.current = tuning;
+  const latencyReference = useRef(latencyMs);
+  latencyReference.current = latencyMs;
   const controlsReference = useRef({ pilot, gunner });
   controlsReference.current = { pilot, gunner };
   const ownsTurret = gunner !== undefined;
@@ -100,18 +108,29 @@ export function usePilotKeyboard({
     }
 
     let stopTicks = 0;
+    let stopHeading = 0;
     const timer = window.setInterval(() => {
       if (!enabledReference.current) return;
       const helm = ownsTurret ? keys : toHelmKeys(keys);
+      const nose = authoritativeHeadingReference.current;
       if (turnDirection(helm) !== 0) {
         stopTicks = HELM_STOP_TICKS;
+        // Fixed the moment the key comes up, then held: recomputing it from the
+        // nose every tick keeps the target ahead of the hull and the spin feeds
+        // itself instead of stopping.
+        stopHeading =
+          nose +
+          coastToStopRadians(
+            angularVelocityReference.current,
+            STEP_SECONDS + Math.max(0, latencyReference.current ?? 0) / 1000
+          );
       } else if (stopTicks > 0) {
         stopTicks -= 1;
       }
       if (keys.size === 0 && stopTicks === 0) return;
-      const drive = advanceHeadingDrive(authoritativeHeadingReference.current, helm, {
+      const drive = advanceHeadingDrive(nose, helm, {
         stopping: stopTicks > 0,
-        coastRadians: coastToStopRadians(angularVelocityReference.current),
+        coastRadians: stopHeading - nose,
         tuning: tuningReference.current
       });
       controlsReference.current.pilot.updateAim(drive.vector);

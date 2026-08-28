@@ -32,7 +32,11 @@ const DEFAULT_PRESET_ID = "default";
  */
 const DEFAULT_HELM: HelmTuning = {
   scheme: "tank",
-  headingLeadRadians: 0.5,
+  // Wide enough that the request stays ahead of the nose across a network
+  // round trip — a lead shorter than the angle the hull covers between updates
+  // lands behind it and brakes the spin. The coast is short anyway, because the
+  // release aims at the predicted stopping point.
+  headingLeadRadians: 0.45,
   stopDampening: 1,
   rotateInPlaceThrottle: 0.02
 };

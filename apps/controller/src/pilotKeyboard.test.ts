@@ -1,22 +1,3 @@
-it("brakes toward where the spin would come to rest", () => {
-  const coastRadians = coastToStopRadians(1.8);
-  const drive = advanceHeadingDrive(1.2, new Set(), { stopping: true, coastRadians });
-
-  // Aiming exactly at the resting point is what removes both the drift past
-  // the target and the swing back to it.
-  expect(coastRadians).toBeGreaterThan(0);
-  expect(drive.heading).toBeCloseTo(1.2 + coastRadians, 10);
-  expect(bearing(drive.vector)).toBeCloseTo(drive.heading, 10);
-  expect(Math.hypot(drive.vector.x, drive.vector.y)).toBeCloseTo(ROTATE_IN_PLACE_THROTTLE, 10);
-});
-
-it("predicts a resting point that follows the direction of the spin", () => {
-  expect(coastToStopRadians(-1.8)).toBeCloseTo(-coastToStopRadians(1.8), 12);
-  expect(coastToStopRadians(0)).toBe(0);
-  // Twice the speed needs four times the room, because braking is constant.
-  expect(coastToStopRadians(2)).toBeCloseTo(4 * coastToStopRadians(1), 12);
-});
-
 import { describe, expect, it } from "vitest";
 
 import {
@@ -38,6 +19,25 @@ function bearing(vector: { x: number; y: number }): number {
 }
 
 describe("pilot keyboard drive", () => {
+  it("brakes toward where the spin would come to rest", () => {
+    const coastRadians = coastToStopRadians(1.8);
+    const drive = advanceHeadingDrive(1.2, new Set(), { stopping: true, coastRadians });
+
+    // Aiming exactly at the resting point is what removes both the drift past
+    // the target and the swing back to it.
+    expect(coastRadians).toBeGreaterThan(0);
+    expect(drive.heading).toBeCloseTo(1.2 + coastRadians, 10);
+    expect(bearing(drive.vector)).toBeCloseTo(drive.heading, 10);
+    expect(Math.hypot(drive.vector.x, drive.vector.y)).toBeCloseTo(ROTATE_IN_PLACE_THROTTLE, 10);
+  });
+
+  it("predicts a resting point that follows the direction of the spin", () => {
+    expect(coastToStopRadians(-1.8)).toBeCloseTo(-coastToStopRadians(1.8), 12);
+    expect(coastToStopRadians(0)).toBe(0);
+    // Twice the speed needs four times the room, because braking is constant.
+    expect(coastToStopRadians(2)).toBeCloseTo(4 * coastToStopRadians(1), 12);
+  });
+
   it("burns along the nose when only the throttle is held", () => {
     const drive = advanceHeadingDrive(0.8, new Set([THROTTLE_KEY]));
 
@@ -54,6 +54,15 @@ describe("pilot keyboard drive", () => {
 
     expect(first.heading).toBeCloseTo(HEADING_LEAD_RADIANS, 10);
     expect(second.heading).toBeCloseTo(0.1 + HEADING_LEAD_RADIANS, 10);
+  });
+
+  it("adds the angle the hull covers while the request is in flight", () => {
+    const still = coastToStopRadians(2);
+    const withLag = coastToStopRadians(2, 0.1);
+
+    // A tenth of a second at two radians a second is another fifth of a radian.
+    expect(withLag - still).toBeCloseTo(0.2, 10);
+    expect(coastToStopRadians(-2, 0.1)).toBeCloseTo(-withLag, 10);
   });
 
   it("leads the other way on the other key", () => {

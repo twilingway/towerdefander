@@ -31,6 +31,7 @@ interface RoleScreenProps {
   readonly crewSize: CrewSize;
   readonly heading: number | undefined;
   readonly helm: HelmTuning | undefined;
+  readonly latencyMs: number | undefined;
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
@@ -46,6 +47,7 @@ export function RoleScreen({
   crewSize,
   heading,
   helm,
+  latencyMs,
   shield,
   cannon,
   machineGun,
@@ -86,6 +88,7 @@ export function RoleScreen({
     active: role === "pilot" && crewSize > 1,
     controlsEnabled,
     heading,
+    latencyMs,
     tuning: helm,
     pilot: controls
   });
@@ -99,6 +102,7 @@ export function RoleScreen({
           machineGun={machineGun}
           heading={heading}
           helm={helm}
+          latencyMs={latencyMs}
           encounterPhase={encounterPhase}
           connectionDisabled={connectionDisabled}
           generation={generation}

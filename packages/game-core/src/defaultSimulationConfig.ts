@@ -26,9 +26,11 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
   shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
   shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8,
-  headingMaxAngularSpeedPerSecond: (13 * Math.PI) / 15,
-  headingAngularAccelerationPerSecondSquared: (26 * Math.PI) / 15,
-  headingAngularBrakingPerSecondSquared: (13 * Math.PI) / 5,
+  // Half a turn a second, started and stopped almost instantly: the hull has no
+  // visible flywheel, so angular inertia reads as input lag rather than weight.
+  headingMaxAngularSpeedPerSecond: Math.PI,
+  headingAngularAccelerationPerSecondSquared: 50,
+  headingAngularBrakingPerSecondSquared: 50,
   mgFireCooldownTicks: 2,
   mgDamage: 8,
   mgProjectileSpeedPerSecond: 900,
