@@ -72,12 +72,59 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       bossWaveInterval: 5
     }
   },
+  /**
+   * Neutral against the enemy that predated the profiles: `rookie` carries the
+   * old orbit share and range band, so a catalogue set to it plays the way it
+   * always did. The levels above it are where the difficulty actually lives.
+   */
+  enemySkill: {
+    offset: 0,
+    profiles: {
+      rookie: {
+        reactionTicks: 10,
+        aimJitterRadians: 0.1,
+        leadFactor: 0,
+        orbitShare: 0.35,
+        rangeBandUnits: 120,
+        separationWeight: 0,
+        flankSpread: 0,
+        evadeHorizonTicks: 0,
+        retreatHpFraction: 0,
+        retreatStandoffFactor: 1
+      },
+      veteran: {
+        reactionTicks: 4,
+        aimJitterRadians: 0.04,
+        leadFactor: 0.6,
+        orbitShare: 0.5,
+        rangeBandUnits: 200,
+        separationWeight: 0.4,
+        flankSpread: 0.5,
+        evadeHorizonTicks: 0,
+        retreatHpFraction: 0.25,
+        retreatStandoffFactor: 1.4
+      },
+      ace: {
+        reactionTicks: 1,
+        aimJitterRadians: 0,
+        leadFactor: 1,
+        orbitShare: 0.6,
+        rangeBandUnits: 280,
+        separationWeight: 0.7,
+        flankSpread: 1,
+        evadeHorizonTicks: 14,
+        retreatHpFraction: 0.35,
+        retreatStandoffFactor: 1.6
+      }
+    }
+  },
   enemyArchetypes: {
     gunship: {
       hp: 50,
       radius: 28,
       speedPerSecond: 150,
       preferredDistance: 650,
+      combatSkill: "rookie",
       turnRatePerSecond: (2 * Math.PI) / 3,
       turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 3),
       turnBrakingPerSecondSquared: 3 * ((2 * Math.PI) / 3),
@@ -114,6 +161,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 38,
       speedPerSecond: 95,
       preferredDistance: 900,
+      combatSkill: "rookie",
       turnRatePerSecond: Math.PI / 2,
       turnAccelerationPerSecondSquared: 2 * (Math.PI / 2),
       turnBrakingPerSecondSquared: 3 * (Math.PI / 2),
@@ -150,6 +198,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 30,
       speedPerSecond: 70,
       preferredDistance: 1400,
+      combatSkill: "rookie",
       turnRatePerSecond: (2 * Math.PI) / 5,
       turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 5),
       turnBrakingPerSecondSquared: 3 * ((2 * Math.PI) / 5),
@@ -186,6 +235,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 18,
       speedPerSecond: 260,
       preferredDistance: 320,
+      combatSkill: "rookie",
       turnRatePerSecond: (4 * Math.PI) / 3,
       turnAccelerationPerSecondSquared: 2 * ((4 * Math.PI) / 3),
       turnBrakingPerSecondSquared: 3 * ((4 * Math.PI) / 3),
@@ -222,6 +272,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       radius: 90,
       speedPerSecond: 60,
       preferredDistance: 700,
+      combatSkill: "rookie",
       turnRatePerSecond: Math.PI / 4,
       turnAccelerationPerSecondSquared: 2 * (Math.PI / 4),
       turnBrakingPerSecondSquared: 3 * (Math.PI / 4),

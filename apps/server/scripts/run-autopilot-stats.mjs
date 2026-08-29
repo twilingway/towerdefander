@@ -252,13 +252,33 @@ function summarise(values) {
   };
 }
 
+/**
+ * The operator's file is read raw here, without the server's migration, so an
+ * archetype saved before a setting existed arrives short of it and the config
+ * factory rejects the whole catalogue. Layer each saved archetype over the
+ * built-in one of the same id — read-only, nothing is written back — so a
+ * measurement never fails on a field the operator has simply never seen.
+ */
+function backfillArchetypes(saved) {
+  if (saved === undefined) return undefined;
+  const builtin = createSpaceshipSimulationConfig().enemyArchetypes;
+  const fallback = builtin.gunship;
+  return Object.fromEntries(
+    Object.entries(saved).map(([kind, archetype]) => [
+      kind,
+      { ...(builtin[kind] ?? fallback), ...archetype }
+    ])
+  );
+}
+
 async function readTuning(presetPath) {
   if (presetPath === undefined) return undefined;
   const document = JSON.parse(await readFile(presetPath, "utf8"));
   const active = document.presets?.find(({ id }) => id === document.activePresetId);
   const tuning = active?.tuning ?? document.presets?.[0]?.tuning;
   if (tuning === undefined) throw new Error(`No preset with a tuning in ${presetPath}`);
-  return tuning;
+  const enemyArchetypes = backfillArchetypes(tuning.enemyArchetypes);
+  return enemyArchetypes === undefined ? tuning : { ...tuning, enemyArchetypes };
 }
 
 async function main() {

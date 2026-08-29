@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 20 as const;
+export const BALANCE_FILE_VERSION = 21 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -158,6 +158,65 @@ export const enemyWeaponTuningSchema = z
   .strict();
 export type EnemyWeaponTuning = z.infer<typeof enemyWeaponTuningSchema>;
 
+/**
+ * How well an enemy plays, as opposed to what it is. One algorithm reads the
+ * profile, so levels differ by numbers and never by branches — an operator can
+ * put two of them side by side and compare.
+ */
+export const ENEMY_SKILL_LEVELS = ["rookie", "veteran", "ace"] as const;
+export const enemySkillLevelSchema = z.enum(ENEMY_SKILL_LEVELS);
+export type EnemySkillLevel = z.infer<typeof enemySkillLevelSchema>;
+
+export const enemySkillProfileSchema = z
+  .object({
+    // --- Perception and aim ---
+    /** Ticks between refreshes of the remembered ship position and velocity. */
+    reactionTicks: z.number().int().min(0).max(40),
+    /** Seeded spread on the barrel, in radians. */
+    aimJitterRadians: z.number().min(0).max(0.6),
+    /** 0 fires where the ship is, 1 where it is going to be. */
+    leadFactor: z.number().min(0).max(1),
+
+    // --- Manoeuvre ---
+    /** Share of the speed budget spent circling rather than closing. */
+    orbitShare: z.number().min(0).max(1),
+    /** Width of the band over which closing blends into circling. */
+    rangeBandUnits: z.number().min(20).max(1200),
+    /** Weight of the push away from neighbours that crowd in too close. */
+    separationWeight: z.number().min(0).max(1),
+    /** How far the swarm spreads around the ship instead of massing on one side. */
+    flankSpread: z.number().min(0).max(1),
+    /** Ticks ahead an incoming friendly shot is dodged; 0 never dodges. */
+    evadeHorizonTicks: z.number().int().min(0).max(40),
+
+    // --- Discipline ---
+    /** HP fraction below which the enemy backs off; 0 never retreats. */
+    retreatHpFraction: z.number().min(0).max(1),
+    /** Multiplier on the fighting distance while retreating. */
+    retreatStandoffFactor: z.number().min(1).max(4)
+  })
+  .strict();
+export type EnemySkillProfile = z.infer<typeof enemySkillProfileSchema>;
+
+export const enemySkillTuningSchema = z
+  .object({
+    /**
+     * Whole-step difficulty shift applied to every archetype at once, so the
+     * spread the operator laid out across the catalogue survives it. A future
+     * in-game control overrides this on the run's own config.
+     */
+    offset: z.number().int().min(-2).max(2),
+    profiles: z
+      .object({
+        rookie: enemySkillProfileSchema,
+        veteran: enemySkillProfileSchema,
+        ace: enemySkillProfileSchema
+      })
+      .strict()
+  })
+  .strict();
+export type EnemySkillTuning = z.infer<typeof enemySkillTuningSchema>;
+
 export const enemyArchetypeSchema = z
   .object({
     hp: positiveFinite,
@@ -172,6 +231,8 @@ export const enemyArchetypeSchema = z
     turnRatePerSecond: positiveFinite,
     turnAccelerationPerSecondSquared: positiveFinite,
     turnBrakingPerSecondSquared: positiveFinite,
+    /** Which profile this archetype plays at, before the global offset. */
+    combatSkill: enemySkillLevelSchema,
     weapons: z.array(enemyWeaponTuningSchema).min(1).max(MAX_ENEMY_WEAPONS).readonly(),
     visual: enemyVisualSchema,
     label: z.string().min(1).max(48),
@@ -372,6 +433,8 @@ export const balanceTuningSchema = z
     background: backgroundTuningSchema,
     /** Demo autopilot skill levels; the simulation never reads this section. */
     autopilot: autopilotTuningSchema,
+    /** Enemy skill profiles. Unlike the autopilot, the simulation does read these. */
+    enemySkill: enemySkillTuningSchema,
     /** Keyboard helm feel; the simulation never reads this section either. */
     helm: helmTuningSchema,
 

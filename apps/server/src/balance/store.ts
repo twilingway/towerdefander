@@ -129,6 +129,7 @@ export function createDefaultTuning(): BalanceTuning {
     cameraViewWidth: config.cameraViewWidth,
     background: config.background,
     autopilot: DEFAULT_AUTOPILOT,
+    enemySkill: config.enemySkill,
     helm: DEFAULT_HELM,
     spaceshipVisual: config.spaceshipVisual,
     spaceshipMaxHp: config.spaceshipMaxHp,

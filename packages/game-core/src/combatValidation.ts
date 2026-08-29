@@ -1,4 +1,5 @@
 import {
+  ENEMY_SKILL_LEVELS,
   SPAWN_SECTORS,
   type CombatConfig,
   type EnemyArchetype,
@@ -107,6 +108,63 @@ export function validateCombatConfig(config: CombatConfig): void {
   if (config.caps.dynamicEntities > typedCapTotal) {
     throw new RangeError("dynamicEntities cap cannot exceed the sum of typed caps");
   }
+  validateEnemySkill(config);
+}
+
+/**
+ * Every knob is bounded, because a profile arrives from an operator's preset
+ * and the behaviour pass divides by the range band and normalises by the
+ * weights. An unbounded value there is a NaN in the enemy's course.
+ */
+function validateEnemySkill(config: CombatConfig): void {
+  const { offset, profiles } = config.enemySkill;
+  if (!Number.isSafeInteger(offset) || offset < -2 || offset > 2) {
+    throw new RangeError("enemySkill.offset must be a whole step between -2 and 2");
+  }
+  for (const level of ENEMY_SKILL_LEVELS) {
+    const profile = profiles[level];
+    const wholeTicks: readonly (readonly [string, number])[] = [
+      ["reactionTicks", profile.reactionTicks],
+      ["evadeHorizonTicks", profile.evadeHorizonTicks]
+    ];
+    for (const [name, value] of wholeTicks) {
+      if (!Number.isSafeInteger(value) || value < 0 || value > 40) {
+        throw new RangeError(`enemySkill.${level}.${name} must be 0 to 40 whole ticks`);
+      }
+    }
+    const unitFractions: readonly (readonly [string, number])[] = [
+      ["leadFactor", profile.leadFactor],
+      ["orbitShare", profile.orbitShare],
+      ["separationWeight", profile.separationWeight],
+      ["flankSpread", profile.flankSpread],
+      ["retreatHpFraction", profile.retreatHpFraction]
+    ];
+    for (const [name, value] of unitFractions) {
+      if (!Number.isFinite(value) || value < 0 || value > 1) {
+        throw new RangeError(`enemySkill.${level}.${name} must be a fraction between 0 and 1`);
+      }
+    }
+    if (!Number.isFinite(profile.aimJitterRadians) || profile.aimJitterRadians < 0) {
+      throw new RangeError(`enemySkill.${level}.aimJitterRadians must not be negative`);
+    }
+    if (profile.aimJitterRadians > 0.6) {
+      throw new RangeError(`enemySkill.${level}.aimJitterRadians must not exceed 0.6`);
+    }
+    if (
+      !Number.isFinite(profile.rangeBandUnits) ||
+      profile.rangeBandUnits < 20 ||
+      profile.rangeBandUnits > 1200
+    ) {
+      throw new RangeError(`enemySkill.${level}.rangeBandUnits must be 20 to 1200 units`);
+    }
+    if (
+      !Number.isFinite(profile.retreatStandoffFactor) ||
+      profile.retreatStandoffFactor < 1 ||
+      profile.retreatStandoffFactor > 4
+    ) {
+      throw new RangeError(`enemySkill.${level}.retreatStandoffFactor must be 1 to 4`);
+    }
+  }
 }
 
 /** Config validation guarantees the id resolves; this keeps the hot path honest. */
@@ -145,6 +203,9 @@ export function validateEnemyArchetypes(config: CombatConfig): void {
       archetype.visual.modelScale > 4
     ) {
       throw new RangeError(`${kind}.visual.modelScale must be between 0.2 and 4`);
+    }
+    if (!ENEMY_SKILL_LEVELS.includes(archetype.combatSkill)) {
+      throw new RangeError(`${kind}.combatSkill must name a known skill level`);
     }
     if (archetype.label.length === 0) {
       throw new RangeError(`${kind}.label must not be empty`);

@@ -41,6 +41,9 @@ export type {
   EncounterPhase,
   EnemyArchetype,
   EnemyKind,
+  EnemySkillLevel,
+  EnemySkillProfile,
+  EnemySkillTuning,
   EnemySpawnPolicy,
   EnemyVisual,
   EnemyWeaponKind,
@@ -72,7 +75,8 @@ export type {
   WaveDifficulty,
   WaveSpawnEntry
 } from "./combatTypes.ts";
-export { ASTEROID_SPAWN_KIND, SPAWN_SECTORS } from "./combatTypes.ts";
+export { ASTEROID_SPAWN_KIND, ENEMY_SKILL_LEVELS, SPAWN_SECTORS } from "./combatTypes.ts";
+export { resolveEnemySkill } from "./enemySkill.ts";
 export { TEAM_UPGRADE_PRICE } from "./combatConstants.ts";
 export { getEnemyArchetype, validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 export { deriveDomainSeed, nextUint32 } from "./rng.ts";

@@ -116,6 +116,46 @@ export interface EnemyVisual extends EntityVisual {
   readonly showHealthBar: boolean;
 }
 
+/**
+ * How well an enemy plays, as opposed to what it is. One algorithm reads the
+ * profile, so the levels differ by numbers rather than by branches and can be
+ * compared against each other and against the enemy that predated them.
+ */
+export const ENEMY_SKILL_LEVELS = ["rookie", "veteran", "ace"] as const;
+export type EnemySkillLevel = (typeof ENEMY_SKILL_LEVELS)[number];
+
+export interface EnemySkillProfile {
+  /** Ticks between refreshes of the remembered ship position and velocity. */
+  readonly reactionTicks: number;
+  /** Seeded spread on the barrel, in radians. */
+  readonly aimJitterRadians: number;
+  /** 0 fires where the ship is, 1 where it is going to be. */
+  readonly leadFactor: number;
+  /** Share of the speed budget spent circling rather than closing. */
+  readonly orbitShare: number;
+  /** Width of the band over which closing blends into circling. */
+  readonly rangeBandUnits: number;
+  /** Weight of the push away from neighbours that crowd in too close. */
+  readonly separationWeight: number;
+  /** How far the swarm spreads around the ship instead of massing on one side. */
+  readonly flankSpread: number;
+  /** Ticks ahead an incoming friendly shot is dodged; 0 never dodges. */
+  readonly evadeHorizonTicks: number;
+  /** HP fraction below which the enemy backs off; 0 never retreats. */
+  readonly retreatHpFraction: number;
+  /** Multiplier on the fighting distance while retreating. */
+  readonly retreatStandoffFactor: number;
+}
+
+export interface EnemySkillTuning {
+  /**
+   * Whole-step difficulty shift applied to every archetype at once, so the
+   * spread the operator laid out across the catalogue survives it.
+   */
+  readonly offset: number;
+  readonly profiles: Readonly<Record<EnemySkillLevel, EnemySkillProfile>>;
+}
+
 export interface EnemyArchetype {
   readonly hp: number;
   readonly radius: number;
@@ -129,6 +169,8 @@ export interface EnemyArchetype {
   readonly turnRatePerSecond: number;
   readonly turnAccelerationPerSecondSquared: number;
   readonly turnBrakingPerSecondSquared: number;
+  /** Which skill profile this archetype plays at, before the global offset. */
+  readonly combatSkill: EnemySkillLevel;
   /** At least one; each barrel keeps its own cooldown. */
   readonly weapons: readonly EnemyWeaponTuning[];
   readonly visual: EnemyVisual;
@@ -157,6 +199,7 @@ export interface CombatConfig {
   readonly intermissionTicks: number;
   readonly waveCampaign: WaveCampaign;
   readonly enemyArchetypes: Readonly<Record<EnemyKind, EnemyArchetype>>;
+  readonly enemySkill: EnemySkillTuning;
 
   readonly asteroidHp: number;
   readonly asteroidRadius: number;

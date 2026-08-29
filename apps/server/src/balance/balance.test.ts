@@ -427,6 +427,66 @@ describe("version 1 migration", () => {
     expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
   });
 
+  it("gives a version 20 document enemy skill without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    // A profile saved before a knob existed: the level must gain the missing
+    // field, not be carried over whole and fail the strict schema.
+    const partialVeteran: Record<string, unknown> = {
+      ...createDefaultTuning().enemySkill.profiles.veteran,
+      leadFactor: 0.9
+    };
+    delete partialVeteran.flankSpread;
+    tuning.enemySkill = { profiles: { veteran: partialVeteran } };
+    tuning.enemyArchetypes = Object.fromEntries(
+      Object.entries(createDefaultTuning().enemyArchetypes).map(([kind, archetype]) => {
+        const legacy: Record<string, unknown> = { ...archetype };
+        delete legacy.combatSkill;
+        return [kind, legacy];
+      })
+    );
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 20,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    expect(saved?.enemyArchetypes.gunship?.combatSkill).toBe("rookie");
+    expect(saved?.enemySkill.offset).toBe(0);
+    // Kept what the operator set, gained only what was missing.
+    expect(saved?.enemySkill.profiles.veteran.leadFactor).toBe(0.9);
+    expect(saved?.enemySkill.profiles.veteran.flankSpread).toBe(0.5);
+    expect(saved?.enemySkill.profiles.ace.leadFactor).toBe(1);
+    // The point of the test: the operator's campaign survived the new fields.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
   it("derives the world from an operator's larger arena", async () => {
     const filePath = await temporaryPresetPath();
     const tuning = { ...createDefaultTuning(), arenaRadius: 4400 };

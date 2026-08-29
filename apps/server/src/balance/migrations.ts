@@ -6,6 +6,7 @@
 
 import {
   AUTOPILOT_LEVELS,
+  ENEMY_SKILL_LEVELS,
   BALANCE_FILE_VERSION,
   FALLBACK_VISUAL_ASSET_ID,
   LEGACY_BALANCE_FILE_VERSIONS,
@@ -66,6 +67,11 @@ const LEGACY_SHAPE_ASSETS: Readonly<Record<string, string>> = {
 
 /** The gunship's agility: the middle of the built-in range, used as a fallback. */
 const DEFAULT_ENEMY_TURN_RATE = (2 * Math.PI) / 3;
+/**
+ * The level whose knobs reproduce the enemy that predated the profiles, so a
+ * catalogue written before this setting existed plays exactly as it did.
+ */
+const DEFAULT_ENEMY_COMBAT_SKILL = "rookie";
 
 /** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
 const TICK_SECONDS = 0.05;
@@ -131,6 +137,7 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
       archetype.turnBrakingPerSecondSquared ??
       known?.turnBrakingPerSecondSquared ??
       DEFAULT_ENEMY_TURN_RATE * 3,
+    combatSkill: archetype.combatSkill ?? known?.combatSkill ?? DEFAULT_ENEMY_COMBAT_SKILL,
     weapons: Array.isArray(weapons) ? weapons.map(migrateWeapon) : weapons,
     visual:
       visual === undefined
@@ -244,6 +251,31 @@ function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknow
 }
 
 /**
+ * Field by field inside each level, never a saved level carried over whole: a
+ * profile written before a knob existed has to gain it, and carrying the level
+ * over whole is exactly what once failed the strict schema and took an
+ * operator's wave table down with it.
+ */
+function migrateEnemySkill(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+  const enemySkill = readRecord(tuning, "enemySkill");
+  const profiles = readRecord(enemySkill, "profiles");
+  return {
+    offset: enemySkill.offset ?? defaults.enemySkill.offset,
+    profiles: Object.fromEntries(
+      ENEMY_SKILL_LEVELS.map((level) => {
+        const saved = profiles[level];
+        return [
+          level,
+          isRecord(saved)
+            ? { ...defaults.enemySkill.profiles[level], ...saved }
+            : defaults.enemySkill.profiles[level]
+        ];
+      })
+    )
+  };
+}
+
+/**
  * Fills the helm section field by field and drops the retired counter angle: a
  * leftover key would fail the strict schema and take the operator's waves with
  * it, exactly the way one autopilot knob once did.
@@ -276,6 +308,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),
+      enemySkill: migrateEnemySkill(tuning, defaults),
       // Field by field, like the background: a preset saved before a helm knob
       // existed must gain it, not fail the strict schema and take the
       // operator's waves down with it.

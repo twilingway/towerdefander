@@ -33,6 +33,7 @@ export function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           turnRatePerSecond: (2 * Math.PI) / 3,
           turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
           turnBrakingPerSecondSquared: 2 * Math.PI,
+          combatSkill: "veteran",
           weapons: [
             {
               kind: "bullet",

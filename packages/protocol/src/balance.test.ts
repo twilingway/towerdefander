@@ -17,7 +17,8 @@ import {
   type AutopilotProfile,
   type AutopilotTuning,
   type BalanceTuning,
-  type EnemyArchetype
+  type EnemyArchetype,
+  type EnemySkillProfile
 } from "./index.js";
 
 function autopilotProfile(overrides: Partial<AutopilotProfile> = {}): AutopilotProfile {
@@ -53,6 +54,22 @@ function autopilotTuning(level: AutopilotLevel = "veteran"): AutopilotTuning {
   };
 }
 
+function enemySkillProfile(overrides: Partial<EnemySkillProfile> = {}): EnemySkillProfile {
+  return {
+    reactionTicks: 4,
+    aimJitterRadians: 0.04,
+    leadFactor: 0.6,
+    orbitShare: 0.5,
+    rangeBandUnits: 200,
+    separationWeight: 0.4,
+    flankSpread: 0.5,
+    evadeHorizonTicks: 0,
+    retreatHpFraction: 0.25,
+    retreatStandoffFactor: 1.4,
+    ...overrides
+  };
+}
+
 function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
   return {
     hp: 50,
@@ -62,6 +79,7 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
     turnRatePerSecond: (2 * Math.PI) / 3,
     turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
     turnBrakingPerSecondSquared: 2 * Math.PI,
+    combatSkill: "rookie",
     weapons: [
       {
         kind: "bullet",
@@ -202,6 +220,14 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
         rookie: autopilotProfile(),
         veteran: autopilotProfile(),
         ace: autopilotProfile()
+      }
+    },
+    enemySkill: {
+      offset: 0,
+      profiles: {
+        rookie: enemySkillProfile(),
+        veteran: enemySkillProfile(),
+        ace: enemySkillProfile()
       }
     },
     ...overrides

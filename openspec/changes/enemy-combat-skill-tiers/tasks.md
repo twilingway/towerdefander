@@ -2,31 +2,31 @@
 
 ## 1. Схема и миграция (делается первой, иначе теряются пресеты)
 
-- [ ] 1.1 Поднять `BALANCE_FILE_VERSION` 15 → 16 и добавить 15 в `LEGACY_BALANCE_FILE_VERSIONS`
+- [x] 1.1 Поднять `BALANCE_FILE_VERSION` 20 → 21 и добавить 20 в `LEGACY_BALANCE_FILE_VERSIONS`
       (`packages/protocol/src/balance.ts`). Проверка:
       `pnpm --filter @spaceship-defender/protocol     test` до добавления полей — существующие тесты
       версии зелёные.
-- [ ] 1.2 Завести `enemySkillLevelSchema`, `enemySkillProfileSchema` (десять ручек, у каждой
+- [x] 1.2 Завести `enemySkillLevelSchema`, `enemySkillProfileSchema` (десять ручек, у каждой
       min/max) и `enemySkillTuningSchema` (`offset` −2..+2 целый плюс три профиля), включить в
       `balanceTuningSchema`. Схемы `.strict()`, как соседние.
-- [ ] 1.3 Добавить `combatSkill` в `enemyArchetypeSchema` и обновить фикстуру архетипа в
+- [x] 1.3 Добавить `combatSkill` в `enemyArchetypeSchema` и обновить фикстуру архетипа в
       `packages/protocol/src/balance.test.ts`.
-- [ ] 1.4 Дополнить `migrateArchetype` в `apps/server/src/balance/store.ts` заполнением
+- [x] 1.4 Дополнить `migrateArchetype` в `apps/server/src/balance/store.ts` заполнением
       `combatSkill` по цепочке `сохранённое ?? дефолт этого id ?? константа`.
-- [ ] 1.5 Написать `migrateEnemySkill` по образцу `migrateAutopilot`: слияние **по полям внутри
+- [x] 1.5 Написать `migrateEnemySkill` по образцу `migrateAutopilot`: слияние **по полям внутри
       каждого уровня**, отсутствующий уровень берётся из дефолтов целиком.
-- [ ] 1.6 Регрессия в `apps/server/src/balance/balance.test.ts` по образцу теста про устаревший
-      профиль автопилота: документ версии 15 с ручной кампанией грузится, кампания цела, `warn` не
+- [x] 1.6 Регрессия в `apps/server/src/balance/balance.test.ts` по образцу теста про устаревший
+      профиль автопилота: документ версии 20 с ручной кампанией грузится, кампания цела, `warn` не
       вызывался. Проверка: тест падает, если убрать 1.5.
 
 ## 2. Профиль в ядре
 
-- [ ] 2.1 Отзеркалить типы профиля в `packages/game-core/src/combat.ts`, добавить
+- [x] 2.1 Отзеркалить типы профиля в `packages/game-core/src/combat.ts`, добавить
       `CombatConfig.enemySkill` и проверки диапазонов в `validateCombatConfig` рядом с остальными.
-- [ ] 2.2 Задать дефолтные профили и `combatSkill` пяти встроенным архетипам в
+- [x] 2.2 Задать дефолтные профили и `combatSkill` пяти встроенным архетипам в
       `packages/game-core/src/spaceshipSimulation.ts`; нейтральные значения ручек обязаны
       воспроизводить сегодняшнее поведение.
-- [ ] 2.3 Написать `resolveEnemySkill(level, offset)` — насыщающее разрешение уровня, чистая
+- [x] 2.3 Написать `resolveEnemySkill(level, offset)` — насыщающее разрешение уровня, чистая
       функция. Проверка: юнит-тест на сдвиг за оба края списка.
 - [ ] 2.4 Завести врагу внутренние поля: запомненная позиция и скорость корабля с тиком снимка,
       состояние потока разброса. На провод не идут; заполнить их при спавне и во всех литералах
