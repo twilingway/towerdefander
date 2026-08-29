@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 19 as const;
+export const BALANCE_FILE_VERSION = 20 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -135,6 +135,8 @@ export type TurretVisual = z.infer<typeof turretVisualSchema>;
 const positiveFinite = z.number().positive();
 const nonNegativeFinite = z.number().nonnegative();
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+/** Zero is legal for the shield timings: it restores the old instant toggle. */
+const nonNegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
 export const enemyWeaponTuningSchema = z
   .object({
@@ -423,6 +425,14 @@ export const balanceTuningSchema = z
     shieldCapacity: positiveFinite,
     shieldDrainPerSecond: positiveFinite,
     shieldRechargePerSecond: positiveFinite,
+    /**
+     * Ticks the shield spends coming up, holding, and cooling. They are what
+     * stop it being free to flick; zero on all three brings back the instant
+     * toggle it had before.
+     */
+    shieldEngageTicks: nonNegativeInteger,
+    shieldMinimumUpTicks: nonNegativeInteger,
+    shieldCooldownTicks: nonNegativeInteger,
     shieldRadius: positiveFinite,
     shieldArcRadians: positiveFinite.max(Math.PI * 2),
     shieldMaxAngularSpeedPerSecond: positiveFinite,

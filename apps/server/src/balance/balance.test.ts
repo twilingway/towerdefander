@@ -383,6 +383,50 @@ describe("version 1 migration", () => {
     expect(config.worldHeight).toBe(4400);
   });
 
+  it("gives a version 19 document the shield timings without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    delete tuning.shieldEngageTicks;
+    delete tuning.shieldMinimumUpTicks;
+    delete tuning.shieldCooldownTicks;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 19,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().presets[0]?.tuning.shieldEngageTicks).toBe(20);
+    expect(store.getState().presets[0]?.tuning.shieldMinimumUpTicks).toBe(40);
+    expect(store.getState().presets[0]?.tuning.shieldCooldownTicks).toBe(20);
+    // The point of the test: the operator's campaign survived the new fields.
+    expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
+  });
+
   it("derives the world from an operator's larger arena", async () => {
     const filePath = await temporaryPresetPath();
     const tuning = { ...createDefaultTuning(), arenaRadius: 4400 };

@@ -12,6 +12,11 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
   return (
     <>
       <h3 className="card__subtitle">Щит</h3>
+      <p className="screen__hint">
+        Такт симуляции — 20 в секунду, так что 20 тиков это секунда. На подъёме щит ещё не защищает
+        и не тратит энергию; минимум работы нельзя оборвать раньше срока, а остывание не пускает
+        включить его снова. Три нуля возвращают мгновенное переключение.
+      </p>
       <div className="card__grid">
         <NumberField
           caption="Ёмкость"
@@ -32,6 +37,27 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
           value={tuning.shieldRechargePerSecond}
           onChange={(shieldRechargePerSecond) => {
             patch({ shieldRechargePerSecond: shieldRechargePerSecond });
+          }}
+        />
+        <NumberField
+          caption="Подъём, тиков"
+          value={tuning.shieldEngageTicks}
+          onChange={(shieldEngageTicks) => {
+            patch({ shieldEngageTicks: Math.max(0, Math.round(shieldEngageTicks)) });
+          }}
+        />
+        <NumberField
+          caption="Минимум работы, тиков"
+          value={tuning.shieldMinimumUpTicks}
+          onChange={(shieldMinimumUpTicks) => {
+            patch({ shieldMinimumUpTicks: Math.max(0, Math.round(shieldMinimumUpTicks)) });
+          }}
+        />
+        <NumberField
+          caption="Остывание, тиков"
+          value={tuning.shieldCooldownTicks}
+          onChange={(shieldCooldownTicks) => {
+            patch({ shieldCooldownTicks: Math.max(0, Math.round(shieldCooldownTicks)) });
           }}
         />
         <NumberField
