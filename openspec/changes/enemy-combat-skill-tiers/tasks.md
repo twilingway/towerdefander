@@ -68,7 +68,7 @@
 
 ## 6. Проверка
 
-- [ ] 6.1 `pnpm check` и `pnpm spec:validate`.
-- [ ] 6.2 `pnpm benchmark:combat` — p95 чистого шага остаётся в бюджете 2 ms при 196 сущностях.
+- [x] 6.1 `pnpm check` и `pnpm spec:validate`.
+- [x] 6.2 `pnpm benchmark:combat` — p95 чистого шага остаётся в бюджете 2 ms при 196 сущностях.
 - [ ] 6.3 Приёмка глазами: `pnpm demo:visible` — рой не слипается в точку, стрелки берут упреждение,
       подранки отходят.
