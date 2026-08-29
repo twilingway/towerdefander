@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARENA_CUSHION_BAND,
+  applyArenaCushion,
   constrainMovingCircleToArena,
   isCircleContainedInArena,
   isWithinCircularEnvelope,
@@ -37,6 +39,51 @@ describe("circular arena geometry", () => {
     );
 
     expect(constrained).toMatchObject({ x: 190, y: 100, velocity: { x: -25, y: 8 } });
+  });
+
+  it("leaves a hull outside the elastic band alone", () => {
+    // Legal radius here is 90, so the band starts well outside this point.
+    const velocity = { x: 40, y: 0 };
+    const outside = applyArenaCushion({ x: 100, y: 100, radius: 10, velocity }, arena, 0.05, 20);
+
+    expect(outside).toEqual(velocity);
+  });
+
+  it("pushes back harder the deeper and the faster the hull came in", () => {
+    const shallow = applyArenaCushion(
+      { x: 180, y: 100, radius: 10, velocity: { x: 40, y: 0 } },
+      arena,
+      0.05
+    );
+    const deep = applyArenaCushion(
+      { x: 188, y: 100, radius: 10, velocity: { x: 40, y: 0 } },
+      arena,
+      0.05
+    );
+    const faster = applyArenaCushion(
+      { x: 180, y: 100, radius: 10, velocity: { x: 90, y: 0 } },
+      arena,
+      0.05
+    );
+
+    // Every one of them is slowed, and depth and entry speed each add to it.
+    expect(shallow.x).toBeLessThan(40);
+    expect(deep.x).toBeLessThan(shallow.x);
+    expect(90 - faster.x).toBeGreaterThan(40 - shallow.x);
+    // Only the outward axis is touched.
+    expect(shallow.y).toBe(0);
+  });
+
+  it("leaves a hull heading back inward to its own devices", () => {
+    const inward = applyArenaCushion(
+      { x: 185, y: 100, radius: 10, velocity: { x: -40, y: 0 } },
+      arena,
+      0.05
+    );
+
+    // The spring still pulls in, but nothing is added for outward speed there.
+    expect(inward.x).toBeLessThan(-40);
+    expect(ARENA_CUSHION_BAND).toBeGreaterThan(0);
   });
 
   it("does not invent a normal for a circle at the exact center", () => {

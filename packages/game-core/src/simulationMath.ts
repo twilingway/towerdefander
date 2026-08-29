@@ -1,4 +1,8 @@
-import { constrainMovingCircleToArena, isWithinCircularEnvelope } from "./arenaGeometry.ts";
+import {
+  applyArenaCushion,
+  constrainMovingCircleToArena,
+  isWithinCircularEnvelope
+} from "./arenaGeometry.ts";
 import {
   type ProjectileState,
   type SpaceshipKinematics,
@@ -168,20 +172,28 @@ export function moveSpaceshipWithinWorld(
   secondsPerStep: number,
   config: SpaceshipSimulationConfig
 ): SpaceshipKinematics {
-  const candidateX = spaceship.x + velocity.x * secondsPerStep;
-  const candidateY = spaceship.y + velocity.y * secondsPerStep;
+  const arena = {
+    centerX: config.worldWidth / 2,
+    centerY: config.worldHeight / 2,
+    radius: config.arenaRadius
+  };
+  // The rim pushes back before it holds, so the hull spends its outward speed
+  // across several steps instead of losing all of it against the circle in one.
+  const cushioned = applyArenaCushion(
+    { x: spaceship.x, y: spaceship.y, radius: config.spaceshipRadius, velocity },
+    arena,
+    secondsPerStep
+  );
+  const candidateX = spaceship.x + cushioned.x * secondsPerStep;
+  const candidateY = spaceship.y + cushioned.y * secondsPerStep;
   const constrained = constrainMovingCircleToArena(
     {
       x: candidateX,
       y: candidateY,
       radius: config.spaceshipRadius,
-      velocity
+      velocity: cushioned
     },
-    {
-      centerX: config.worldWidth / 2,
-      centerY: config.worldHeight / 2,
-      radius: config.arenaRadius
-    }
+    arena
   );
 
   return {

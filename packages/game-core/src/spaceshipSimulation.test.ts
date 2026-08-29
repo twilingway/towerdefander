@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARENA_CUSHION_BAND,
   advanceSpaceshipSimulation,
   applyGunnerInput,
   applyPilotInput,
@@ -1357,6 +1358,45 @@ describe("arena geometry", () => {
     });
 
     expect(config.worldWidth).toBe(2400);
+  });
+});
+
+describe("elastic rim", () => {
+  it("turns a full-throttle run around inside the band, never on the circle", () => {
+    const config = createSpaceshipSimulationConfig();
+    const legalRadius = config.arenaRadius - config.spaceshipRadius;
+    const center = config.worldWidth / 2;
+    let state = createSpaceshipSimulationState(config, 5);
+    let furthest = 0;
+
+    // Long enough to cross half the arena at full thrust and meet the rim.
+    for (let step = 0; step < 400; step += 1) {
+      state = holdHelm(state, config, { turn: 0, thrust: 1 }, 1);
+      furthest = Math.max(
+        furthest,
+        Math.hypot(state.spaceship.x - center, state.spaceship.y - center)
+      );
+    }
+
+    // Without the band the hull parks exactly on the legal circle, which is the
+    // single zero step that stops the whole picture.
+    expect(furthest).toBeLessThan(legalRadius);
+    expect(furthest).toBeGreaterThan(legalRadius - ARENA_CUSHION_BAND);
+
+    // Holding the throttle into the rubber settles against it rather than
+    // stopping on the circle: the spring and the engine balance out.
+    const distanceHeld = Math.hypot(state.spaceship.x - center, state.spaceship.y - center);
+    const outward =
+      ((state.spaceship.x - center) * state.spaceship.velocity.x +
+        (state.spaceship.y - center) * state.spaceship.velocity.y) /
+      distanceHeld;
+    expect(Math.abs(outward)).toBeLessThan(1);
+
+    // Let go and the band gives the hull back: that is the rubber, not a wall.
+    const released = holdHelm(state, config, { turn: 0, thrust: 0 }, 20);
+    expect(Math.hypot(released.spaceship.x - center, released.spaceship.y - center)).toBeLessThan(
+      distanceHeld
+    );
   });
 });
 
