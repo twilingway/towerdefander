@@ -55,8 +55,6 @@ describe("display room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
-          phase: "down",
-          rearmRequired: false,
           active: false,
           energy: 75,
           capacity: 100
@@ -90,6 +88,8 @@ describe("display room view", () => {
           spaceshipVisualShape: "ship-lancer",
           spaceshipVisualScale: 1.25,
           shieldRadius: 140,
+          shieldPhase: "raising",
+          shieldRearmRequired: false,
           enemyCatalogue: [],
           obstacles: collection([
             {
@@ -201,6 +201,8 @@ describe("display room view", () => {
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
     expect(view?.game?.shieldRadius).toBe(140);
+    // Display-gated, so it has to survive the trip through the display branch.
+    expect(view?.game?.shieldPhase).toBe("raising");
     expect(view?.game?.spaceshipVisual).toEqual({ shape: "ship-lancer", modelScale: 1.25 });
     expect(view?.displayLatencyMs).toBe(18);
     expect(view?.game?.credits).toBe(6);

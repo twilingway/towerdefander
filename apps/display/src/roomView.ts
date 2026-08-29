@@ -123,8 +123,6 @@ interface NetworkGameState {
     active: boolean;
     energy: number;
     capacity: number;
-    phase: ShieldPhase;
-    rearmRequired: boolean;
   };
   cannon: {
     heat: number;
@@ -176,6 +174,8 @@ interface NetworkGameState {
     turretPivotX?: number;
     turretPivotY?: number;
     shieldRadius?: number;
+    shieldPhase?: ShieldPhase;
+    shieldRearmRequired?: boolean;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
@@ -251,19 +251,11 @@ export function toDisplayRoomView(
             worldHeight: game.worldHeight,
             arenaRadius: game.arenaRadius,
             rimBandWidth: game.rimBandWidth,
-            shieldPhase: game.shield.phase,
-            shieldRearmRequired: game.shield.rearmRequired,
+            shieldPhase: display.shieldPhase ?? "down",
+            shieldRearmRequired: display.shieldRearmRequired ?? false,
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
-            // Picked rather than spread: the shield now carries phase fields the
-            // strict view does not accept, and they ride at the game root.
-            shield: {
-              angle: game.shield.angle,
-              arcHalfAngle: game.shield.arcHalfAngle,
-              active: game.shield.active,
-              energy: game.shield.energy,
-              capacity: game.shield.capacity
-            },
+            shield: { ...game.shield },
             cannon: { ...game.cannon },
             machineGun: { ...game.machineGun },
             encounter: {

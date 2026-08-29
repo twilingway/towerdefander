@@ -54,9 +54,6 @@ export class HelmState extends Schema {
 export class ShieldState extends Schema {
   @type("float32") angle = 0;
   @type("boolean") active = false;
-  /** Changes a handful of times per run, so a string costs nothing here. */
-  @type("string") phase: ShieldPhase = "down";
-  @type("boolean") rearmRequired = false;
   @type("float32") energy = 0;
   @type("float32") capacity = 0;
   @type("float32") arcHalfAngle = Math.PI / 4;
@@ -232,6 +229,13 @@ export class SpaceshipDisplayState extends Schema {
   @type("float32") turretPivotY = 0;
   /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
   @type("float32") shieldRadius = 104;
+  /**
+   * Why the shield is or is not protecting. Display-gated: the operator panel
+   * keeps its own wording, and the controller view is strict about its keys.
+   * A string is affordable here because it changes a few times per run.
+   */
+  @type("string") shieldPhase: ShieldPhase = "down";
+  @type("boolean") shieldRearmRequired = false;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
