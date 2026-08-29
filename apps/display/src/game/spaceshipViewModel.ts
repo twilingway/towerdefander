@@ -29,9 +29,9 @@ export interface VisualSnapshot {
 }
 
 export interface VisualTransitions {
-  readonly spaceship: PointTransition;
-  readonly turret: AngleTransition;
-  readonly shield: AngleTransition;
+  readonly spaceship: PointTrack;
+  readonly turret: AngleTrack;
+  readonly shield: AngleTrack;
 }
 
 export interface ResponsiveViewport {
@@ -341,10 +341,69 @@ export function createSnappedVisualTransitions(
   tick: number
 ): VisualTransitions {
   return {
-    spaceship: createPointTransition(snapshot.spaceship, snapshot.spaceship, tick, tick),
-    turret: createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, tick, tick),
-    shield: createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, tick, tick)
+    spaceship: createPointTrack(snapshot.spaceship, tick),
+    turret: createAngleTrack(snapshot.turretAngle, tick),
+    shield: createAngleTrack(snapshot.shield.angle, tick)
   };
+}
+
+/**
+ * Two contiguous segments rather than one. Playback runs behind the newest
+ * tick, and a patch that carried several ticks shortens the segment that
+ * follows it, so a single segment leaves playback with nothing to draw and the
+ * picture stands still. Keeping the displaced segment covers those excursions.
+ */
+export interface PointTrack {
+  readonly previous: PointTransition;
+  readonly current: PointTransition;
+}
+
+export interface AngleTrack {
+  readonly previous: AngleTransition;
+  readonly current: AngleTransition;
+}
+
+export function createPointTrack(value: Point, tick: number): PointTrack {
+  const segment = createPointTransition(value, value, tick, tick);
+  return { previous: segment, current: segment };
+}
+
+export function createAngleTrack(value: number, tick: number): AngleTrack {
+  const segment = createAngleTransition(value, value, tick, tick);
+  return { previous: segment, current: segment };
+}
+
+/** Adds the newest authoritative sample, displacing the oldest segment. */
+export function extendPointTrack(track: PointTrack, to: Point, toTick: number): PointTrack {
+  return {
+    previous: track.current,
+    current: createPointTransition(track.current.to, to, track.current.toTick, toTick)
+  };
+}
+
+export function extendAngleTrack(track: AngleTrack, to: number, toTick: number): AngleTrack {
+  return {
+    previous: track.current,
+    current: createAngleTransition(track.current.to, to, track.current.toTick, toTick)
+  };
+}
+
+export function samplePointTrack(track: PointTrack, playbackTick: number): Point {
+  const segment = playbackTick < track.current.fromTick ? track.previous : track.current;
+  return interpolatePoint(
+    segment.from,
+    segment.to,
+    getSegmentAlpha(segment.fromTick, segment.toTick, playbackTick)
+  );
+}
+
+export function sampleAngleTrack(track: AngleTrack, playbackTick: number): number {
+  const segment = playbackTick < track.current.fromTick ? track.previous : track.current;
+  return interpolateAngle(
+    segment.from,
+    segment.to,
+    getSegmentAlpha(segment.fromTick, segment.toTick, playbackTick)
+  );
 }
 
 export function createPointTransition(
@@ -385,14 +444,21 @@ export interface PlaybackClock {
   readonly latestTick: number;
   /** Measured real milliseconds per authoritative tick. */
   readonly msPerTick: number;
+  /** Smoothed arrival gap and ticks per arrival, kept apart on purpose. */
+  readonly gapEmaMs: number;
+  readonly tickEma: number;
 }
 
 /** Stands in until the first pair of snapshots has been timed. */
 export const NOMINAL_MS_PER_TICK = 50;
 const MIN_MS_PER_TICK = 20;
 const MAX_MS_PER_TICK = 250;
-/** How far behind the newest tick playback aims to stay. */
-export const PLAYBACK_LAG_TICKS = 1.5;
+/**
+ * How far behind the newest tick playback aims to stay. One tick of slack
+ * absorbs an arrival that runs late without ever leaving what the two kept
+ * segments cover, so nothing has to be drawn twice while waiting.
+ */
+export const PLAYBACK_LAG_TICKS = 1;
 /** Past this drift, correcting by rate is hopeless and playback jumps instead. */
 export const PLAYBACK_RESYNC_TICKS = 6;
 /** Weight of the newest measurement in the pace estimate. */
@@ -403,7 +469,8 @@ const MIN_PLAYBACK_RATE = 0.85;
 const MAX_PLAYBACK_RATE = 1.15;
 
 export function createPlaybackClock(tick: number, msPerTick = NOMINAL_MS_PER_TICK): PlaybackClock {
-  return { tick, latestTick: tick, msPerTick: clamp(msPerTick, MIN_MS_PER_TICK, MAX_MS_PER_TICK) };
+  const pace = clamp(msPerTick, MIN_MS_PER_TICK, MAX_MS_PER_TICK);
+  return { tick, latestTick: tick, msPerTick: pace, gapEmaMs: pace, tickEma: 1 };
 }
 
 /**
@@ -423,11 +490,17 @@ export function observePlaybackTick(
   if (ticks < 0) return createPlaybackClock(tick, clock.msPerTick);
   if (ticks === 0) return clock;
   if (!Number.isFinite(arrivalGapMs) || arrivalGapMs <= 0) return { ...clock, latestTick: tick };
-  const measured = clamp(arrivalGapMs / ticks, MIN_MS_PER_TICK, MAX_MS_PER_TICK);
+  // Gap and tick count are smoothed apart and divided at the end. Smoothing the
+  // ratio instead would average 62 ms and 31 ms across single- and double-tick
+  // patches and land on 54 ms per tick where the room really runs 50.
+  const gapEmaMs = clock.gapEmaMs + (arrivalGapMs - clock.gapEmaMs) * PACE_SMOOTHING;
+  const tickEma = clock.tickEma + (ticks - clock.tickEma) * PACE_SMOOTHING;
   return {
     tick: clock.tick,
     latestTick: tick,
-    msPerTick: clock.msPerTick + (measured - clock.msPerTick) * PACE_SMOOTHING
+    msPerTick: clamp(gapEmaMs / tickEma, MIN_MS_PER_TICK, MAX_MS_PER_TICK),
+    gapEmaMs,
+    tickEma
   };
 }
 

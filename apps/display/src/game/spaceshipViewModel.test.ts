@@ -4,6 +4,7 @@ import {
   advancePlayback,
   backgroundTileOffset,
   createPlaybackClock,
+  createPointTrack,
   createPointTransition,
   createSnappedVisualTransitions,
   getBackgroundCoverRect,
@@ -17,10 +18,12 @@ import {
   getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
+  extendPointTrack,
   interpolateAngle,
   interpolatePoint,
   observePlaybackTick,
   reconcileStableIds,
+  samplePointTrack,
   SnapshotResetLatch
 } from "./spaceshipViewModel.js";
 
@@ -389,6 +392,42 @@ describe("spaceship view model", () => {
     expect(latestTick - clock.tick).toBeLessThan(3);
   });
 
+  it("keeps the drawn point moving, not just the playback clock", () => {
+    // The runtime holds one segment: previous authoritative sample to newest.
+    // Playback therefore has to stay inside it - lag it past the segment start
+    // and every frame draws the same point until the next patch lands, which
+    // reads as a frozen picture however fast the renderer runs.
+    const frameMs = 1000 / 165;
+    const snapshotMs = 62.5;
+    const positionAt = (tick: number) => ({ x: tick * 10, y: 0 });
+    let clock = createPlaybackClock(0);
+    let track = createPointTrack(positionAt(0), 0);
+    let latestTick = 0;
+    let elapsedMs = 0;
+    let nextSnapshotAt = snapshotMs;
+    let previousX = -1;
+    let frozenFrames = 0;
+
+    for (let frame = 0; frame < 1200; frame += 1) {
+      elapsedMs += frameMs;
+      while (elapsedMs >= nextSnapshotAt) {
+        // A 20 Hz room behind a 16 Hz patch timer: three singles, then a double.
+        const carried = latestTick % 4 === 3 ? 2 : 1;
+        const nextTick = latestTick + carried;
+        track = extendPointTrack(track, positionAt(nextTick), nextTick);
+        latestTick = nextTick;
+        clock = observePlaybackTick(clock, nextTick, snapshotMs);
+        nextSnapshotAt += snapshotMs;
+      }
+      clock = advancePlayback(clock, frameMs);
+      const drawn = samplePointTrack(track, clock.tick);
+      if (frame > 165 && drawn.x <= previousX) frozenFrames += 1;
+      previousX = drawn.x;
+    }
+
+    expect(frozenFrames).toBe(0);
+  });
+
   it("re-anchors on a tick that moved backwards instead of freezing", () => {
     let clock = createPlaybackClock(0);
     clock = observePlaybackTick(clock, 400, 50);
@@ -418,14 +457,15 @@ describe("spaceship view model", () => {
     };
     const transitions = createSnappedVisualTransitions(latest, 375);
 
-    expect(transitions.spaceship).toEqual({
+    const snapped = { fromTick: 375, toTick: 375 };
+    expect(transitions.spaceship.current).toEqual({
       from: latest.spaceship,
       to: latest.spaceship,
-      fromTick: 375,
-      toTick: 375
+      ...snapped
     });
-    expect(transitions.turret).toEqual({ from: 1.2, to: 1.2, fromTick: 375, toTick: 375 });
-    expect(transitions.shield).toEqual({ from: -0.8, to: -0.8, fromTick: 375, toTick: 375 });
+    expect(transitions.spaceship.previous).toEqual(transitions.spaceship.current);
+    expect(transitions.turret.current).toEqual({ from: 1.2, to: 1.2, ...snapped });
+    expect(transitions.shield.current).toEqual({ from: -0.8, to: -0.8, ...snapped });
   });
 
   it("preserves a hydration reset through delayed scene creation until the next snapshot", () => {
