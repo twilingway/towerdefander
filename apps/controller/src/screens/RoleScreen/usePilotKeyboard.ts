@@ -133,7 +133,11 @@ export function usePilotKeyboard({
       if (keys.size === 0 && stopTicks === 0) return;
       const drive = advanceHeadingDrive(nose, helm, {
         stopping: stopTicks > 0,
-        coastRadians: stopHeading - nose,
+        // Only a live stop carries a coast. Outside one, `stopHeading` is
+        // either untouched or frozen at the last stop, and feeding it in made
+        // the throttle alone steer: `nose + (0 - nose)` asks for world angle
+        // zero before the first turn, and for the last stop heading after it.
+        coastRadians: stopTicks > 0 ? stopHeading - nose : 0,
         tuning: tuningReference.current
       });
       controlsReference.current.pilot.updateAim(drive.vector);
