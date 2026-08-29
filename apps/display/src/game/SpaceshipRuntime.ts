@@ -22,8 +22,9 @@ import {
   createSnappedVisualTransitions,
   extendAngleTrack,
   extendPointTrack,
+  getArenaRingRadii,
+  getArenaSpokes,
   getBackgroundCoverRect,
-  getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
@@ -260,14 +261,16 @@ class SpaceshipScene extends Phaser.Scene {
     const graphics = this.add.graphics().setDepth(0);
     graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
     graphics.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
+    // Rings and spokes rather than a square grid: on a round arena what a pilot
+    // reads off the floor is the distance to the rim and the bearing, and a
+    // square mesh states neither.
     graphics.lineStyle(2, 0x163746, 0.75);
-    for (const segment of getCircularGridSegments(
-      centerX,
-      centerY,
-      this.snapshot.arenaRadius,
-      100
-    )) {
-      graphics.lineBetween(segment.from.x, segment.from.y, segment.to.x, segment.to.y);
+    for (const radius of getArenaRingRadii(this.snapshot.arenaRadius)) {
+      graphics.strokeCircle(centerX, centerY, radius);
+    }
+    graphics.lineStyle(2, 0x14303d, 0.5);
+    for (const spoke of getArenaSpokes(centerX, centerY, this.snapshot.arenaRadius)) {
+      graphics.lineBetween(spoke.from.x, spoke.from.y, spoke.to.x, spoke.to.y);
     }
 
     const border = this.add.graphics().setDepth(3);

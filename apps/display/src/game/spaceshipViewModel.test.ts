@@ -7,8 +7,9 @@ import {
   createPointTrack,
   createPointTransition,
   createSnappedVisualTransitions,
+  getArenaRingRadii,
+  getArenaSpokes,
   getBackgroundCoverRect,
-  getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getSegmentAlpha,
@@ -26,16 +27,27 @@ import {
 } from "./spaceshipViewModel.js";
 
 describe("spaceship view model", () => {
-  it("clips grid segments analytically to the circular arena", () => {
-    const segments = getCircularGridSegments(200, 200, 100, 50);
+  it("spaces the distance rings inside the arena, leaving the rim to the border", () => {
+    expect(getArenaRingRadii(2200)).toEqual([550, 1100, 1650]);
+    // The count is fixed, so a larger arena reads the same instead of denser.
+    expect(getArenaRingRadii(4400)).toHaveLength(3);
+    expect(getArenaRingRadii(4400).at(-1)).toBeLessThan(4400);
+    expect(getArenaRingRadii(0)).toEqual([]);
+  });
 
-    expect(segments.length).toBeGreaterThan(0);
-    for (const segment of segments) {
-      for (const point of [segment.from, segment.to]) {
-        expect(Math.hypot(point.x - 200, point.y - 200)).toBeCloseTo(100);
-      }
+  it("runs the spokes from a centre clearing out to the rim", () => {
+    const spokes = getArenaSpokes(2200, 2200, 2200);
+
+    expect(spokes).toHaveLength(16);
+    for (const spoke of spokes) {
+      const inner = Math.hypot(spoke.from.x - 2200, spoke.from.y - 2200);
+      const outer = Math.hypot(spoke.to.x - 2200, spoke.to.y - 2200);
+      expect(inner).toBeCloseTo(2200 * 0.06, 6);
+      expect(outer).toBeCloseTo(2200, 6);
     }
-    expect(segments).toContainEqual({ from: { x: 200, y: 100 }, to: { x: 200, y: 300 } });
+    // The first spoke points along +X, and they go all the way round.
+    expect(spokes[0]?.to.y).toBeCloseTo(2200, 6);
+    expect(getArenaSpokes(2200, 2200, 0)).toEqual([]);
   });
 
   it("preserves at least the distant 1600 by 900 logical view across screen shapes", () => {

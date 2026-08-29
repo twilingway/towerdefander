@@ -64,41 +64,40 @@ export interface GridSegment {
   readonly to: Point;
 }
 
-export function getCircularGridSegments(
+/**
+ * Distance rings inside the arena, evenly spaced and leaving the rim to the
+ * border stroke. The count is fixed and the spacing follows the radius, so a
+ * larger arena reads the same rather than turning into a denser field.
+ */
+export function getArenaRingRadii(arenaRadius: number, count = 3): readonly number[] {
+  if (!Number.isFinite(arenaRadius) || arenaRadius <= 0) return [];
+  const rings = Math.max(0, Math.trunc(count));
+  return Array.from({ length: rings }, (_, index) => (arenaRadius * (index + 1)) / (rings + 1));
+}
+
+/**
+ * Radial spokes from a clearing at the centre out to the rim. The clearing
+ * keeps sixteen lines from converging into a blot where the ship starts.
+ */
+export function getArenaSpokes(
   centerX: number,
   centerY: number,
-  radius: number,
-  spacing: number
+  arenaRadius: number,
+  count = 16,
+  innerFraction = 0.06
 ): readonly GridSegment[] {
-  if (
-    !Number.isFinite(centerX) ||
-    !Number.isFinite(centerY) ||
-    !Number.isFinite(radius) ||
-    radius <= 0 ||
-    !Number.isFinite(spacing) ||
-    spacing <= 0
-  ) {
-    return [];
-  }
-
-  const segments: GridSegment[] = [];
-  const firstX = Math.ceil((centerX - radius) / spacing) * spacing;
-  const firstY = Math.ceil((centerY - radius) / spacing) * spacing;
-  for (let x = firstX; x <= centerX + radius; x += spacing) {
-    const halfHeight = Math.sqrt(Math.max(0, radius * radius - (x - centerX) ** 2));
-    segments.push({
-      from: { x, y: centerY - halfHeight },
-      to: { x, y: centerY + halfHeight }
-    });
-  }
-  for (let y = firstY; y <= centerY + radius; y += spacing) {
-    const halfWidth = Math.sqrt(Math.max(0, radius * radius - (y - centerY) ** 2));
-    segments.push({
-      from: { x: centerX - halfWidth, y },
-      to: { x: centerX + halfWidth, y }
-    });
-  }
-  return segments;
+  if (!Number.isFinite(arenaRadius) || arenaRadius <= 0) return [];
+  const spokes = Math.max(0, Math.trunc(count));
+  const inner = arenaRadius * clamp(innerFraction, 0, 1);
+  return Array.from({ length: spokes }, (_, index) => {
+    const angle = (index / spokes) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      from: { x: centerX + cos * inner, y: centerY + sin * inner },
+      to: { x: centerX + cos * arenaRadius, y: centerY + sin * arenaRadius }
+    };
+  });
 }
 
 export function getShieldArcRange(
