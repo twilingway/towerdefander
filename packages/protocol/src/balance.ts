@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 18 as const;
+export const BALANCE_FILE_VERSION = 19 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -39,6 +39,14 @@ export const cameraViewWidthSchema = z
   .number()
   .min(CAMERA_VIEW_WIDTH_MIN)
   .max(CAMERA_VIEW_WIDTH_MAX);
+
+/**
+ * Half the side of the square world, and the only geometry knob: the world is
+ * derived from it, so the circle cannot drift out of the square it is drawn in.
+ */
+export const ARENA_RADIUS_MIN = 1100;
+export const ARENA_RADIUS_MAX = 8800;
+export const arenaRadiusSchema = z.number().min(ARENA_RADIUS_MIN).max(ARENA_RADIUS_MAX);
 
 /**
  * Parallax space background of the display. Presentation-only, like
@@ -355,6 +363,8 @@ export const balanceTuningSchema = z
     /** Look of the ambient hazard; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
+    /** The world size follows this; see `arenaRadiusSchema`. */
+    arenaRadius: arenaRadiusSchema,
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background; the simulation never reads this section. */
     background: backgroundTuningSchema,

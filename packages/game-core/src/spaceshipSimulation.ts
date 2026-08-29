@@ -213,9 +213,24 @@ export {
 export function createSpaceshipSimulationConfig(
   overrides: Partial<SpaceshipSimulationConfig> = {}
 ): SpaceshipSimulationConfig {
-  const config = { ...defaultSpaceshipSimulationConfig, ...overrides };
+  const config = { ...defaultSpaceshipSimulationConfig, ...overrides, ...derivedWorld(overrides) };
   validateSpaceshipSimulationConfig(config);
   return config;
+}
+
+/**
+ * The square world is a consequence of the arena radius, not a second setting.
+ * A radius that arrives from a preset would otherwise sit inside the default
+ * world and fail validation, and every caller that builds a config would have
+ * to remember the relation. An explicitly given world still wins, so a caller
+ * may state both.
+ */
+function derivedWorld(
+  overrides: Partial<SpaceshipSimulationConfig>
+): Partial<SpaceshipSimulationConfig> {
+  if (overrides.arenaRadius === undefined) return {};
+  if (overrides.worldWidth !== undefined || overrides.worldHeight !== undefined) return {};
+  return { worldWidth: overrides.arenaRadius * 2, worldHeight: overrides.arenaRadius * 2 };
 }
 
 export function normalizeVector(vector: Vector2): Vector2 {

@@ -125,6 +125,7 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidCreditReward: config.asteroidCreditReward,
     asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
+    arenaRadius: config.arenaRadius,
     cameraViewWidth: config.cameraViewWidth,
     background: config.background,
     autopilot: DEFAULT_AUTOPILOT,
@@ -191,6 +192,8 @@ export function toSimulationConfig(tuning: BalanceTuning): SpaceshipSimulationCo
   const simulation: Partial<BalanceTuning> = { ...tuning };
   delete simulation.autopilot;
   delete simulation.helm;
+  // The world follows the arena radius inside the factory, so every caller that
+  // builds a config from a preset gets the same geometry.
   return createSpaceshipSimulationConfig(simulation);
 }
 

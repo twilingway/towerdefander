@@ -269,6 +269,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
     ...preset,
     tuning: {
       ...migratePlayerShip(tuning, defaults),
+      arenaRadius: tuning.arenaRadius ?? defaults.arenaRadius,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),

@@ -1338,6 +1338,28 @@ describe("gunner cannon heat", () => {
   });
 });
 
+describe("arena geometry", () => {
+  it("derives the square world from a radius that came from a preset", () => {
+    // Without the derivation this throws: the radius would sit inside the
+    // default world and validation rejects a circle that is not inscribed.
+    const config = createSpaceshipSimulationConfig({ arenaRadius: 4400 });
+
+    expect(config.arenaRadius).toBe(4400);
+    expect(config.worldWidth).toBe(8800);
+    expect(config.worldHeight).toBe(8800);
+  });
+
+  it("keeps a world the caller states for itself", () => {
+    const config = createSpaceshipSimulationConfig({
+      arenaRadius: 1200,
+      worldWidth: 2400,
+      worldHeight: 2400
+    });
+
+    expect(config.worldWidth).toBe(2400);
+  });
+});
+
 describe("tank helm", () => {
   it("spins while a turn is asked for and then stays where it stopped", () => {
     const config = createSpaceshipSimulationConfig();

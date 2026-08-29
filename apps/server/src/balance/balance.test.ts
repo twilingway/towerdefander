@@ -336,6 +336,74 @@ describe("version 1 migration", () => {
     expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2200);
   });
 
+  it("gives a version 18 document the default arena without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    delete tuning.arenaRadius;
+    // The operator's own campaign: the point of the test is that adding a field
+    // does not take this down with it.
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 3,
+            spawnIntervalTicks: 40,
+            sectors: ["N"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 18,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+    expect(store.getState().presets[0]?.tuning.arenaRadius).toBe(2200);
+    expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
+    // The world is derived, so the circle stays inscribed by construction.
+    const config = store.getActiveSimulationConfig();
+    expect(config.arenaRadius).toBe(2200);
+    expect(config.worldWidth).toBe(4400);
+    expect(config.worldHeight).toBe(4400);
+  });
+
+  it("derives the world from an operator's larger arena", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning = { ...createDefaultTuning(), arenaRadius: 4400 };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: BALANCE_FILE_VERSION,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
+    await store.load();
+
+    const config = store.getActiveSimulationConfig();
+    expect(config.arenaRadius).toBe(4400);
+    expect(config.worldWidth).toBe(8800);
+    expect(config.worldHeight).toBe(8800);
+  });
+
   it("gives a version 6 weapon most of its own reach as a firing range", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();

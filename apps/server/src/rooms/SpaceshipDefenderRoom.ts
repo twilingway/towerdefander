@@ -51,7 +51,7 @@ import { randomUUID } from "node:crypto";
 import { getBalanceStore } from "../balance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
-import { DECORATIVE_OBSTACLES } from "./decorations.js";
+import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
 import { createRunSeed } from "./runSeed.js";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
@@ -658,15 +658,16 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private initializeDecorations(): void {
     this.state.game.display.obstacles.clear();
+    const scale = this.gameConfig.worldWidth / DECORATION_REFERENCE_WORLD;
     for (const obstacle of DECORATIVE_OBSTACLES) {
       const state = new ObstacleState();
       state.obstacleId = obstacle.obstacleId;
       state.kind = obstacle.kind;
-      state.x = obstacle.x;
-      state.y = obstacle.y;
-      state.width = "width" in obstacle ? obstacle.width : 0;
-      state.height = "height" in obstacle ? obstacle.height : 0;
-      state.radius = "radius" in obstacle ? obstacle.radius : 0;
+      state.x = obstacle.x * scale;
+      state.y = obstacle.y * scale;
+      state.width = "width" in obstacle ? obstacle.width * scale : 0;
+      state.height = "height" in obstacle ? obstacle.height * scale : 0;
+      state.radius = "radius" in obstacle ? obstacle.radius * scale : 0;
       state.rotation = 0;
       this.state.game.display.obstacles.push(state);
     }

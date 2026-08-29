@@ -6,6 +6,8 @@ import {
   BACKGROUND_PARALLAX_STRENGTH_MAX,
   BALANCE_FILE_VERSION,
   BUILTIN_ENEMY_KINDS,
+  ARENA_RADIUS_MAX,
+  ARENA_RADIUS_MIN,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
   autopilotProfileSchema,
@@ -177,6 +179,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     shieldMaxAngularSpeedPerSecond: 1.7,
     shieldAngularAccelerationPerSecondSquared: 3.4,
     shieldAngularBrakingPerSecondSquared: 5.1,
+    arenaRadius: 2200,
     cameraViewWidth: 1600,
     background: {
       parallaxStrength: 1,
@@ -224,6 +227,16 @@ describe("balance tuning schema", () => {
     expect(
       balanceTuningSchema.safeParse({ ...tuning(), cameraViewWidth: CAMERA_VIEW_WIDTH_MAX + 1 })
         .success
+    ).toBe(false);
+  });
+
+  it("keeps the arena radius inside its playable bounds", () => {
+    expect(balanceTuningSchema.safeParse(tuning({ arenaRadius: 4400 })).success).toBe(true);
+    expect(
+      balanceTuningSchema.safeParse({ ...tuning(), arenaRadius: ARENA_RADIUS_MIN - 1 }).success
+    ).toBe(false);
+    expect(
+      balanceTuningSchema.safeParse({ ...tuning(), arenaRadius: ARENA_RADIUS_MAX + 1 }).success
     ).toBe(false);
   });
 
