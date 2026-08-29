@@ -316,6 +316,38 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(armedLoops(setSimulationInterval)).toEqual([10]);
   });
 
+  it("hands the tank helm intent to the core and drops the remembered bearing", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber
+    };
+
+    // A stick command first, so there is a bearing for the spin to drop.
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 1,
+      vector: { x: 0, y: 1 },
+      mgFiring: false
+    });
+    expect(internals(room).gameState?.headingTargetAngle).not.toBeNull();
+
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 2,
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      turn: -1,
+      thrust: 1
+    });
+
+    expect(internals(room).gameState?.inputs.pilot).toMatchObject({ turn: -1, thrust: 1 });
+    expect(internals(room).gameState?.headingTargetAngle).toBeNull();
+  });
+
   it("spends real time in whole steps instead of one step per wake-up", () => {
     const { room } = startGame();
     const before = room.state.game.tick;

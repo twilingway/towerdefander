@@ -275,7 +275,10 @@ export function ControllerApp() {
       room.send(clientMessage.pilotInput, {
         ...envelope,
         vector: control.vector,
-        mgFiring: control.mgFiring
+        mgFiring: control.mgFiring,
+        // Only the tank helm carries an intent; a stick command stays exactly
+        // the shape it has always been.
+        ...(control.turn === null ? {} : { turn: control.turn, thrust: control.thrust ?? 0 })
       });
     } else if (channel === "gunner") {
       room.send(clientMessage.gunnerInput, {
@@ -447,9 +450,7 @@ export function ControllerApp() {
             <RoleScreen
               role={currentPlayer.role}
               crewSize={activeView.crewSize}
-              heading={activeView.game?.spaceship.heading}
               helm={activeView.game?.helm}
-              latencyMs={currentPlayer.latencyMs ?? undefined}
               shield={activeView.game?.shield}
               cannon={activeView.game?.cannon}
               machineGun={activeView.game?.machineGun}

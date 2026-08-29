@@ -12,16 +12,28 @@ export function applyPilotInput(
 ): SpaceshipSimulationState {
   assertReceivedTick(state, input.receivedTick);
   const vector = normalizeVector(input.vector);
+  const turn = input.turn ?? null;
   const isRisingMgEdge = input.mgFiring && state.inputs.pilot?.mgFiring !== true;
   return {
     ...state,
     queuedMgFire: state.queuedMgFire || isRisingMgEdge,
-    headingTargetAngle: isZeroVector(vector)
-      ? state.headingTargetAngle
-      : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
+    // A spin names no bearing, so the remembered one is dropped rather than
+    // left behind for the hull to be pulled back to.
+    headingTargetAngle:
+      turn !== null
+        ? null
+        : isZeroVector(vector)
+          ? state.headingTargetAngle
+          : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
     inputs: {
       ...state.inputs,
-      pilot: { vector, mgFiring: input.mgFiring, receivedTick: input.receivedTick }
+      pilot: {
+        vector,
+        mgFiring: input.mgFiring,
+        receivedTick: input.receivedTick,
+        turn,
+        thrust: input.thrust ?? null
+      }
     }
   };
 }

@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 30 as const;
+export const PROTOCOL_VERSION = 31 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -738,7 +738,19 @@ export type ContinuousInputEnvelope = z.infer<typeof continuousInputEnvelopeSche
 export const readyCommandSchema = commandEnvelopeSchema;
 export type ReadyCommand = CommandEnvelope;
 export const pilotInputCommandSchema = continuousInputEnvelopeSchema
-  .extend({ vector: vector2Schema, mgFiring: z.boolean() })
+  .extend({
+    vector: vector2Schema,
+    mgFiring: z.boolean(),
+    /**
+     * Tank helm: the sign of the requested spin, and thrust along the nose.
+     * A bearing cannot express "keep turning" - the client would have to name
+     * an angle, and the only angle it knows is a nose that is a patch and a
+     * round trip old, which is what made a released turn swing back. Absent
+     * from a stick or absolute-scheme command, which still send a bearing.
+     */
+    turn: finite.min(-1).max(1).optional(),
+    thrust: finite.min(-1).max(1).optional()
+  })
   .strict();
 export type PilotInputCommand = z.infer<typeof pilotInputCommandSchema>;
 export const gunnerInputCommandSchema = continuousInputEnvelopeSchema

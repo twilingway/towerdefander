@@ -54,6 +54,26 @@ function holdPilot(
   return current;
 }
 
+function holdHelm(
+  state: SpaceshipSimulationState,
+  config: SpaceshipSimulationConfig,
+  intent: { turn: number; thrust: number },
+  steps: number
+) {
+  let current = state;
+  for (let step = 0; step < steps; step += 1) {
+    current = applyPilotInput(current, {
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      receivedTick: current.clock.tick,
+      turn: intent.turn,
+      thrust: intent.thrust
+    });
+    current = advanceSpaceshipSimulation(current, config);
+  }
+  return current;
+}
+
 describe("spaceship configuration", () => {
   it("creates the explicit smooth-flight defaults deterministically", () => {
     const config = createSpaceshipSimulationConfig();
@@ -1315,5 +1335,88 @@ describe("gunner cannon heat", () => {
 
     for (let index = 0; index < 6; index += 1) state = holdTrigger(state, config, false);
     expect(state.cannonHeat).toBeLessThan(hot);
+  });
+});
+
+describe("tank helm", () => {
+  it("spins while a turn is asked for and then stays where it stopped", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 1);
+
+    const spinning = holdHelm(state, config, { turn: 1, thrust: 0 }, 8);
+    expect(spinning.headingAngularVelocity).toBeGreaterThan(0);
+    expect(spinning.headingTargetAngle).toBeNull();
+
+    const stopped = holdHelm(spinning, config, { turn: 0, thrust: 0 }, 20);
+    expect(stopped.headingAngularVelocity).toBe(0);
+
+    // Stopping means staying. A remembered bearing would pull the nose back
+    // here, which is exactly the swing this helm exists to lose.
+    const settled = holdHelm(stopped, config, { turn: 0, thrust: 0 }, 20);
+    expect(settled.spaceshipHeading).toBe(stopped.spaceshipHeading);
+  });
+
+  it("drops a bearing the stick named instead of snapping back to it", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 2);
+
+    const aimed = applyPilotInput(state, {
+      vector: { x: 0, y: 1 },
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    expect(aimed.headingTargetAngle).not.toBeNull();
+
+    const spinning = applyPilotInput(aimed, {
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      receivedTick: aimed.clock.tick,
+      turn: -1,
+      thrust: 0
+    });
+    expect(spinning.headingTargetAngle).toBeNull();
+  });
+
+  it("burns along the nose and backs up along it without turning", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 3);
+    const turned = holdHelm(state, config, { turn: 1, thrust: 0 }, 10);
+    const resting = holdHelm(turned, config, { turn: 0, thrust: 0 }, 20);
+    const heading = resting.spaceshipHeading;
+
+    const forward = holdHelm(resting, config, { turn: 0, thrust: 1 }, 10);
+    expect(Math.hypot(forward.spaceship.velocity.x, forward.spaceship.velocity.y)).toBeGreaterThan(
+      0
+    );
+    expect(
+      Math.abs(
+        shortestAngleDelta(
+          Math.atan2(forward.spaceship.velocity.y, forward.spaceship.velocity.x),
+          heading
+        )
+      )
+    ).toBeLessThan(0.01);
+    expect(forward.spaceshipHeading).toBe(heading);
+
+    const back = holdHelm(resting, config, { turn: 0, thrust: -1 }, 10);
+    expect(
+      Math.abs(
+        shortestAngleDelta(
+          Math.atan2(back.spaceship.velocity.y, back.spaceship.velocity.x),
+          canonicalizeAngle(heading + Math.PI)
+        )
+      )
+    ).toBeLessThan(0.01);
+    expect(back.spaceshipHeading).toBe(heading);
+  });
+
+  it("leaves a command without a turn intent driving the bearing as before", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 4);
+
+    const steered = holdPilot(state, config, { x: 0, y: 1 }, 12);
+
+    expect(steered.headingTargetAngle).toBeCloseTo(Math.PI / 2, 10);
+    expect(steered.spaceshipHeading).toBeGreaterThan(0);
   });
 });

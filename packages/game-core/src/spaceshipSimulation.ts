@@ -15,6 +15,7 @@ import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 import {
   ZERO,
+  advanceAngularRate,
   advanceAngularTraverse,
   assertFiniteVector,
   clamp,
@@ -113,6 +114,13 @@ export interface TrustedPilotInput {
   readonly vector: Vector2;
   readonly mgFiring: boolean;
   readonly receivedTick: number;
+  /**
+   * Tank helm: the requested spin in `[-1, 1]`, and thrust along the nose in
+   * the same range. Absent from a stick or absolute-scheme command, which
+   * names a bearing through `vector` instead.
+   */
+  readonly turn?: number | null;
+  readonly thrust?: number | null;
 }
 
 export interface TrustedGunnerInput {
@@ -184,6 +192,7 @@ export interface SpaceshipSimulationState extends CombatStateFields {
 
 export { validateSpaceshipSimulationConfig } from "./simulationValidation.ts";
 export {
+  advanceAngularRate,
   advanceAngularTraverse,
   canonicalizeAngle,
   moveScalarTowards,
@@ -242,11 +251,16 @@ export function advanceSpaceshipSimulation(
   const gunnerFresh = isFresh(clock.tick, state.inputs.gunner, config.inputTimeoutTicks);
   const shieldFresh = isFresh(clock.tick, state.inputs.shield, config.inputTimeoutTicks);
   const pilotVector = pilotFresh && state.inputs.pilot !== null ? state.inputs.pilot.vector : ZERO;
+  // The tank helm asks for a spin and a push along the nose; a stick still
+  // asks for a bearing. Only a fresh input counts, so a dropped pilot coasts
+  // to a stop instead of spinning on.
+  const pilotTurn = pilotFresh ? (state.inputs.pilot?.turn ?? null) : null;
+  const pilotThrust = pilotTurn === null ? null : (state.inputs.pilot?.thrust ?? 0);
   const inputs = {
     pilot:
       pilotFresh || state.inputs.pilot === null
         ? state.inputs.pilot
-        : { ...state.inputs.pilot, vector: ZERO, mgFiring: false },
+        : { ...state.inputs.pilot, vector: ZERO, mgFiring: false, turn: null, thrust: null },
     gunner:
       gunnerFresh || state.inputs.gunner === null
         ? state.inputs.gunner
@@ -254,22 +268,31 @@ export function advanceSpaceshipSimulation(
     shield: state.inputs.shield
   };
   const secondsPerStep = config.fixedStepMs / 1000;
-  const targetVelocity = {
-    x: pilotVector.x * config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier,
-    y: pilotVector.y * config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier
-  };
-  const velocityDelta =
-    pilotVector.x === 0 && pilotVector.y === 0
-      ? config.spaceshipBrakingPerSecondSquared * secondsPerStep
-      : config.spaceshipAccelerationPerSecondSquared *
-        state.roleModifiers.pilot.accelerationMultiplier *
-        secondsPerStep;
+  const pilotSpeed = config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier;
+  // With a turn intent the push runs along the nose, so reverse is the same
+  // burn with a negative sign and it never turns the hull.
+  const targetVelocity =
+    pilotThrust === null
+      ? { x: pilotVector.x * pilotSpeed, y: pilotVector.y * pilotSpeed }
+      : {
+          x: Math.cos(state.spaceshipHeading) * pilotSpeed * pilotThrust,
+          y: Math.sin(state.spaceshipHeading) * pilotSpeed * pilotThrust
+        };
+  const coasting =
+    pilotThrust === null ? pilotVector.x === 0 && pilotVector.y === 0 : pilotThrust === 0;
+  const velocityDelta = coasting
+    ? config.spaceshipBrakingPerSecondSquared * secondsPerStep
+    : config.spaceshipAccelerationPerSecondSquared *
+      state.roleModifiers.pilot.accelerationMultiplier *
+      secondsPerStep;
   const nextVelocity = moveVectorTowards(state.spaceship.velocity, targetVelocity, velocityDelta);
   const spaceship = moveSpaceshipWithinWorld(state.spaceship, nextVelocity, secondsPerStep, config);
 
   const turretTargetAngle = gunnerFresh ? state.turretTargetAngle : null;
   const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
-  const headingTargetAngle = pilotFresh ? state.headingTargetAngle : null;
+  // A spin remembers no bearing: keeping one would pull the hull back to it
+  // the moment the key comes up, which is the swing this helm exists to lose.
+  const headingTargetAngle = pilotTurn === null && pilotFresh ? state.headingTargetAngle : null;
   const turretTraverse = advanceAngularTraverse(
     {
       angle: state.turretAngle,
@@ -296,19 +319,27 @@ export function advanceSpaceshipSimulation(
       secondsPerStep
     }
   );
-  const headingTraverse = advanceAngularTraverse(
-    {
-      angle: state.spaceshipHeading,
-      targetAngle: headingTargetAngle,
-      angularVelocity: state.headingAngularVelocity
-    },
-    {
-      maxAngularSpeed: config.headingMaxAngularSpeedPerSecond,
-      angularAcceleration: config.headingAngularAccelerationPerSecondSquared,
-      angularBraking: config.headingAngularBrakingPerSecondSquared,
-      secondsPerStep
-    }
-  );
+  const headingConfig = {
+    maxAngularSpeed: config.headingMaxAngularSpeedPerSecond,
+    angularAcceleration: config.headingAngularAccelerationPerSecondSquared,
+    angularBraking: config.headingAngularBrakingPerSecondSquared,
+    secondsPerStep
+  };
+  const headingTraverse =
+    pilotTurn === null
+      ? advanceAngularTraverse(
+          {
+            angle: state.spaceshipHeading,
+            targetAngle: headingTargetAngle,
+            angularVelocity: state.headingAngularVelocity
+          },
+          headingConfig
+        )
+      : advanceAngularRate(
+          { angle: state.spaceshipHeading, angularVelocity: state.headingAngularVelocity },
+          pilotTurn,
+          headingConfig
+        );
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
   const shieldWasActive = shieldDesiredActive && shieldCanActivate;

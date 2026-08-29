@@ -1,33 +1,24 @@
 import { useEffect, useRef } from "react";
 
+import { getKeyboardVector } from "../../controlInput.js";
 import {
-  HELM_STOP_TICKS,
   MG_FIRE_KEY,
   PILOT_KEYS,
   TURRET_FIRE_KEY,
-  advanceHeadingDrive,
-  coastToStopRadians,
+  getHelmIntent,
   getTurretKeyboardVector,
-  toHelmKeys,
-  turnDirection
+  toHelmKeys
 } from "../../pilotKeyboard.js";
 import type { PublicHelmView } from "@spaceship-defender/protocol";
 
 import type { RoleControls } from "./useRoleControls.js";
 
-/** One authoritative step; the request cannot land sooner than the next one. */
-const STEP_SECONDS = 0.05;
-
 interface PilotKeyboardOptions {
-  /** Server-measured round trip, so the stop prediction can allow for it. */
-  readonly latencyMs?: number | undefined;
   /** Helm feel from the active preset, or undefined before the run starts. */
   readonly tuning?: PublicHelmView | undefined;
   /** False for a seat that is not flying, so the helm keys stay unbound. */
   readonly active?: boolean;
   readonly controlsEnabled: boolean;
-  /** The authoritative hull heading, so a fresh burn starts where the nose is. */
-  readonly heading: number | undefined;
   readonly pilot: RoleControls;
   /**
    * The turret half, present only when one player owns both systems. Without it
@@ -46,33 +37,13 @@ const TICK_MS = 25;
  */
 export function usePilotKeyboard({
   active = true,
-  latencyMs,
   tuning,
   controlsEnabled,
-  heading,
   pilot,
   gunner
 }: PilotKeyboardOptions): void {
-  const authoritativeHeadingReference = useRef(heading ?? 0);
-  const angularVelocityReference = useRef(0);
-  const headingSampleReference = useRef({ heading: heading ?? 0, atMs: 0 });
-  if (heading !== undefined && heading !== authoritativeHeadingReference.current) {
-    // How fast the hull is actually turning, measured from the authoritative
-    // course: the client needs it to know where a released spin will stop.
-    const now = performance.now();
-    const sample = headingSampleReference.current;
-    const elapsedSeconds = (now - sample.atMs) / 1000;
-    if (elapsedSeconds > 0 && elapsedSeconds < 0.5) {
-      const delta = shortestAngle(heading - sample.heading);
-      angularVelocityReference.current = delta / elapsedSeconds;
-    }
-    headingSampleReference.current = { heading, atMs: now };
-    authoritativeHeadingReference.current = heading;
-  }
   const tuningReference = useRef(tuning);
   tuningReference.current = tuning;
-  const latencyReference = useRef(latencyMs);
-  latencyReference.current = latencyMs;
   const controlsReference = useRef({ pilot, gunner });
   controlsReference.current = { pilot, gunner };
   const ownsTurret = gunner !== undefined;
@@ -82,7 +53,7 @@ export function usePilotKeyboard({
   useEffect(() => {
     if (!active) return;
     const keys = new Set<string>();
-    // Without a turret half the arrows steer, so they reseat the course too.
+    // Without a turret half the arrows double as helm keys.
 
     function onKeyDown(event: KeyboardEvent): void {
       if (!PILOT_KEYS.includes(event.code)) return;
@@ -107,40 +78,26 @@ export function usePilotKeyboard({
       controlsReference.current.pilot.updateAim({ x: 0, y: 0 });
     }
 
-    let stopTicks = 0;
-    let stopHeading = 0;
+    let wasIdle = true;
     const timer = window.setInterval(() => {
       if (!enabledReference.current) return;
       const helm = ownsTurret ? keys : toHelmKeys(keys);
-      const nose = authoritativeHeadingReference.current;
-      if (turnDirection(helm) !== 0) {
-        stopTicks = HELM_STOP_TICKS;
-        // Fixed the moment the key comes up, then held: recomputing it from the
-        // nose every tick keeps the target ahead of the hull and the spin feeds
-        // itself instead of stopping.
-        stopHeading =
-          nose +
-          coastToStopRadians(
-            angularVelocityReference.current,
-            STEP_SECONDS + Math.max(0, latencyReference.current ?? 0) / 1000,
-            // The run's own braking rate: predicting against a different one
-            // overshoots the target and swings the hull back to it.
-            tuningReference.current?.hullAngularBrakingPerSecondSquared
-          );
-      } else if (stopTicks > 0) {
-        stopTicks -= 1;
+      if (tuningReference.current?.scheme === "absolute") {
+        // The twin-stick shape still names a bearing in the world, so it keeps
+        // the old drive; only the tank helm moved to a spin.
+        if (keys.size === 0 && wasIdle) return;
+        wasIdle = keys.size === 0;
+        controlsReference.current.pilot.updateAim(getKeyboardVector(helm));
+        controlsReference.current.gunner?.updateAim(getTurretKeyboardVector(keys));
+        return;
       }
-      if (keys.size === 0 && stopTicks === 0) return;
-      const drive = advanceHeadingDrive(nose, helm, {
-        stopping: stopTicks > 0,
-        // Only a live stop carries a coast. Outside one, `stopHeading` is
-        // either untouched or frozen at the last stop, and feeding it in made
-        // the throttle alone steer: `nose + (0 - nose)` asks for world angle
-        // zero before the first turn, and for the last stop heading after it.
-        coastRadians: stopTicks > 0 ? stopHeading - nose : 0,
-        tuning: tuningReference.current
-      });
-      controlsReference.current.pilot.updateAim(drive.vector);
+      const intent = getHelmIntent(helm);
+      const idle = keys.size === 0 && intent.turn === 0 && intent.thrust === 0;
+      // The first idle tick still goes out - that one is the request to stop -
+      // and after it the seat falls quiet until something is pressed again.
+      if (idle && wasIdle) return;
+      wasIdle = idle;
+      controlsReference.current.pilot.updateHelm(intent);
       controlsReference.current.gunner?.updateAim(getTurretKeyboardVector(keys));
     }, TICK_MS);
 
@@ -156,9 +113,4 @@ export function usePilotKeyboard({
       document.removeEventListener("visibilitychange", neutralize);
     };
   }, [active, ownsTurret]);
-}
-
-/** Shortest signed distance between two angles, so a wrap does not read huge. */
-function shortestAngle(delta: number): number {
-  return ((delta + Math.PI) % (2 * Math.PI)) - Math.PI;
 }

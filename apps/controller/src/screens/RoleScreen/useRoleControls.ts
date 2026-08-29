@@ -27,6 +27,8 @@ interface RoleControlsOptions {
 export interface RoleControls {
   readonly controlsEnabled: boolean;
   readonly updateAim: (vector: ControlVector) => void;
+  /** Tank helm: ask for a spin and a push along the nose, not for a bearing. */
+  readonly updateHelm: (intent: { readonly turn: number; readonly thrust: number }) => void;
   readonly releaseAim: () => void;
   readonly cancelAim: () => void;
   readonly beginFire: () => void;
@@ -90,7 +92,14 @@ export function useRoleControls({
 
   function updateAim(vector: ControlVector): void {
     clearAimReleaseTimer();
-    update({ vector });
+    // Naming a bearing drops any spin intent, so a blur or a stick grab cannot
+    // leave the hull turning on the last rate it was given.
+    update({ vector, turn: null, thrust: null });
+  }
+
+  function updateHelm(intent: { readonly turn: number; readonly thrust: number }): void {
+    clearAimReleaseTimer();
+    update({ vector: NEUTRAL_CONTROL.vector, turn: intent.turn, thrust: intent.thrust });
   }
 
   function releaseAim(): void {
@@ -261,6 +270,7 @@ export function useRoleControls({
   return {
     controlsEnabled,
     updateAim,
+    updateHelm,
     releaseAim,
     cancelAim,
     beginFire,

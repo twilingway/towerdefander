@@ -127,6 +127,41 @@ export function advanceAngularTraverse(
   };
 }
 
+/**
+ * Rate control for the hull: the pilot asks for a spin, not for a bearing.
+ * Nothing here remembers a target angle, and that is the point - a released
+ * turn decays to a stop wherever it stops, instead of being pulled back to
+ * the last angle anybody named.
+ */
+export function advanceAngularRate(
+  state: { readonly angle: number; readonly angularVelocity: number },
+  turn: number,
+  config: AngularTraverseConfig
+): AngularTraverseState {
+  const desiredVelocity = clampToUnit(turn) * config.maxAngularSpeed;
+  const accelerating =
+    desiredVelocity !== 0 &&
+    (state.angularVelocity === 0 ||
+      (Math.sign(state.angularVelocity) === Math.sign(desiredVelocity) &&
+        Math.abs(desiredVelocity) > Math.abs(state.angularVelocity)));
+  const velocityRate = accelerating ? config.angularAcceleration : config.angularBraking;
+  const angularVelocity = moveScalarTowards(
+    state.angularVelocity,
+    desiredVelocity,
+    velocityRate * config.secondsPerStep
+  );
+  return {
+    angle: canonicalizeAngle(state.angle + angularVelocity * config.secondsPerStep),
+    targetAngle: null,
+    angularVelocity
+  };
+}
+
+function clampToUnit(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-1, Math.min(1, value));
+}
+
 export function moveSpaceshipWithinWorld(
   spaceship: SpaceshipKinematics,
   velocity: Vector2,

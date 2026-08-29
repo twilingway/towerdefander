@@ -29,9 +29,7 @@ import { useRoleControls } from "./useRoleControls.js";
 interface RoleScreenProps {
   readonly role: CrewRole;
   readonly crewSize: CrewSize;
-  readonly heading: number | undefined;
   readonly helm: PublicHelmView | undefined;
-  readonly latencyMs: number | undefined;
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
@@ -45,9 +43,7 @@ interface RoleScreenProps {
 export function RoleScreen({
   role,
   crewSize,
-  heading,
   helm,
-  latencyMs,
   shield,
   cannon,
   machineGun,
@@ -87,8 +83,6 @@ export function RoleScreen({
   usePilotKeyboard({
     active: role === "pilot" && crewSize > 1,
     controlsEnabled,
-    heading,
-    latencyMs,
     tuning: helm,
     pilot: controls
   });
@@ -100,9 +94,7 @@ export function RoleScreen({
         <SoloPanel
           cannon={cannon}
           machineGun={machineGun}
-          heading={heading}
           helm={helm}
-          latencyMs={latencyMs}
           encounterPhase={encounterPhase}
           connectionDisabled={connectionDisabled}
           generation={generation}

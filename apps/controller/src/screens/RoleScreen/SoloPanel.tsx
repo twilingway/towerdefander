@@ -22,9 +22,7 @@ interface SoloPanelProps {
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   /** Authoritative hull heading; the keyboard burns along it. */
-  readonly heading: number | undefined;
   readonly helm: PublicHelmView | undefined;
-  readonly latencyMs: number | undefined;
   readonly encounterPhase: EncounterPhase | undefined;
   readonly connectionDisabled: boolean;
   readonly generation: string;
@@ -41,9 +39,7 @@ interface SoloPanelProps {
 export function SoloPanel({
   cannon,
   machineGun,
-  heading,
   helm,
-  latencyMs,
   encounterPhase,
   connectionDisabled,
   generation,
@@ -77,7 +73,7 @@ export function SoloPanel({
     }
   });
   const controlsEnabled = pilot.controlsEnabled;
-  usePilotKeyboard({ controlsEnabled, heading, latencyMs, tuning: helm, pilot, gunner });
+  usePilotKeyboard({ controlsEnabled, tuning: helm, pilot, gunner });
 
   return (
     <div className={`solo-panel solo-panel--${layout}`} data-testid="solo-panel">

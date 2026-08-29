@@ -95,12 +95,26 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     const startX = Number(
       await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x")
     );
-    await pilot.keyboard.down("KeyD");
+    // The throttle is what moves the ship, and it burns along the nose, which
+    // starts out pointing at +X.
+    await pilot.keyboard.down("KeyW");
     await expect
       .poll(async () =>
         Number(await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x"))
       )
       .toBeGreaterThan(startX);
+    await pilot.keyboard.up("KeyW");
+    // A turn key spins the hull where it stands: the course moves and the ship
+    // no longer creeps, because turning stopped costing thrust.
+    const headingBeforeTurn = Number(
+      await display.getByTestId("spaceship-world").getAttribute("data-spaceship-heading")
+    );
+    await pilot.keyboard.down("KeyD");
+    await expect
+      .poll(async () =>
+        Number(await display.getByTestId("spaceship-world").getAttribute("data-spaceship-heading"))
+      )
+      .not.toBe(headingBeforeTurn);
     await pilot.keyboard.up("KeyD");
     await assertSpaceshipInsideCircularArena(display.getByTestId("spaceship-world"));
 

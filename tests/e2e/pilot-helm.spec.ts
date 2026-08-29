@@ -35,7 +35,10 @@ test("a seated pilot steers the hull like a tank", async ({ browser }) => {
     await pilot.waitForTimeout(700);
     const turnedHeading = await readNumber(world, "data-spaceship-heading");
     await pilot.keyboard.up("KeyA");
-    await pilot.waitForTimeout(150);
+    // The spin still has its braking distance to run; the settled course is the
+    // one the burn below must leave alone.
+    await pilot.waitForTimeout(600);
+    const settledHeading = await readNumber(world, "data-spaceship-heading");
     expect(shortestDelta(midTurnHeading, restingHeading)).toBeGreaterThan(0.5);
     expect(shortestDelta(turnedHeading, midTurnHeading)).toBeGreaterThan(0.5);
 
@@ -45,7 +48,27 @@ test("a seated pilot steers the hull like a tank", async ({ browser }) => {
     const movedX = (await readNumber(world, "data-spaceship-x")) - startX;
     const movedY = (await readNumber(world, "data-spaceship-y")) - startY;
     expect(Math.hypot(movedX, movedY)).toBeGreaterThan(120);
-    expect(shortestDelta(Math.atan2(movedY, movedX), turnedHeading)).toBeLessThan(0.6);
+    expect(shortestDelta(Math.atan2(movedY, movedX), settledHeading)).toBeLessThan(0.6);
+    // The throttle pushes along the nose and names no bearing at all, so a burn
+    // on its own leaves the course exactly where the spin settled.
+    const headingAfterBurn = await readNumber(world, "data-spaceship-heading");
+    expect(shortestDelta(headingAfterBurn, settledHeading)).toBeLessThan(0.05);
+
+    // Reverse is the same burn with the sign flipped: it backs along the nose
+    // and does not turn the hull either. Long enough to outrun the braking of
+    // the speed the forward burn built up.
+    const reverseStartX = await readNumber(world, "data-spaceship-x");
+    const reverseStartY = await readNumber(world, "data-spaceship-y");
+    await hold(pilot, "KeyS", 2000);
+    const backedX = (await readNumber(world, "data-spaceship-x")) - reverseStartX;
+    const backedY = (await readNumber(world, "data-spaceship-y")) - reverseStartY;
+    expect(Math.hypot(backedX, backedY)).toBeGreaterThan(60);
+    expect(shortestDelta(Math.atan2(backedY, backedX), headingAfterBurn)).toBeGreaterThan(
+      Math.PI / 2
+    );
+    expect(
+      shortestDelta(await readNumber(world, "data-spaceship-heading"), headingAfterBurn)
+    ).toBeLessThan(0.05);
   } finally {
     for (const context of contexts) await context.close();
   }

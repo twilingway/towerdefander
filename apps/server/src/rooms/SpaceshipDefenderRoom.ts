@@ -365,7 +365,10 @@ export class SpaceshipDefenderRoom extends Room<{
     this.gameState = applyPilotInput(this.gameState, {
       vector: command.vector,
       mgFiring: command.mgFiring,
-      receivedTick: this.gameState.clock.tick
+      receivedTick: this.gameState.clock.tick,
+      // Absent from a stick command, which names a bearing instead.
+      turn: command.turn ?? null,
+      thrust: command.thrust ?? null
     });
   }
 

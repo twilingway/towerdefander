@@ -10,9 +10,7 @@ function markup(layout: "stacked" | "triggers"): string {
     <SoloPanel
       cannon={heat}
       machineGun={heat}
-      heading={0}
       helm={undefined}
-      latencyMs={undefined}
       encounterPhase="combat"
       connectionDisabled={false}
       generation="run-1"
