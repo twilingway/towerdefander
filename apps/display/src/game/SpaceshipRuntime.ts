@@ -23,7 +23,6 @@ import {
   extendAngleTrack,
   extendPointTrack,
   getBackgroundCoverRect,
-  getCameraOverscan,
   getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
@@ -111,7 +110,6 @@ class SpaceshipScene extends Phaser.Scene {
   );
   private rendererWidth = BASE_VIEWPORT_WIDTH;
   private rendererHeight = BASE_VIEWPORT_HEIGHT;
-  private cameraOverscan = 0;
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("spaceship");
@@ -429,14 +427,7 @@ class SpaceshipScene extends Phaser.Scene {
     this.rendererHeight = actualHeight;
     this.viewportWidth = viewport.width;
     this.viewportHeight = viewport.height;
-    this.cameraOverscan = getCameraOverscan(this.snapshot.spaceship.radius, viewport.zoom);
     this.cameras.main.setZoom(viewport.zoom);
-    this.cameras.main.setBounds(
-      -this.cameraOverscan,
-      -this.cameraOverscan,
-      this.snapshot.worldWidth + this.cameraOverscan * 2,
-      this.snapshot.worldHeight + this.cameraOverscan * 2
-    );
     // Scroll-factor-0 layers still get zoomed around the camera origin, so their world rect is
     // not the viewport window; keep both size and position in sync with it.
     this.backgroundCover = getBackgroundCoverRect(actualWidth, actualHeight, viewport.zoom);
@@ -451,13 +442,8 @@ class SpaceshipScene extends Phaser.Scene {
   private focusCamera(focus: Point): void {
     const scroll = getPhaserCameraScroll({
       focus,
-      worldWidth: this.snapshot.worldWidth,
-      worldHeight: this.snapshot.worldHeight,
       rendererWidth: this.rendererWidth,
-      rendererHeight: this.rendererHeight,
-      viewportWidth: this.viewportWidth,
-      viewportHeight: this.viewportHeight,
-      overscan: this.cameraOverscan
+      rendererHeight: this.rendererHeight
     });
     this.cameras.main.setScroll(scroll.x, scroll.y);
   }

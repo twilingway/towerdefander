@@ -130,13 +130,8 @@ export function reconcileStableIds(
 
 export interface CameraScrollInput {
   readonly focus: Point;
-  readonly worldWidth: number;
-  readonly worldHeight: number;
   readonly rendererWidth: number;
   readonly rendererHeight: number;
-  readonly viewportWidth: number;
-  readonly viewportHeight: number;
-  readonly overscan: number;
 }
 
 export function getResponsiveViewport(
@@ -297,28 +292,16 @@ export function getShieldDashSegments(
   return segments;
 }
 
-export function getCameraOverscan(
-  spaceshipRadius: number,
-  zoom: number,
-  safeScreenMargin = 160,
-  visualExtension = 42
-): number {
-  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  return spaceshipRadius + visualExtension + safeScreenMargin / safeZoom;
-}
-
+/**
+ * Phaser centres the view on `scroll + camera size / 2`, in unzoomed pixels,
+ * so centring on the ship is just that offset. Nothing clamps it to the world:
+ * a camera that stops at the rim leaves the snapshot pace visible on the ship
+ * itself, while a camera that keeps moving carries it along unseen.
+ */
 export function getPhaserCameraScroll(input: CameraScrollInput): Point {
-  const worldView = getBoundedCameraScroll(
-    input.focus,
-    input.worldWidth,
-    input.worldHeight,
-    input.viewportWidth,
-    input.viewportHeight,
-    input.overscan
-  );
   return {
-    x: worldView.x - (input.rendererWidth - input.viewportWidth) / 2,
-    y: worldView.y - (input.rendererHeight - input.viewportHeight) / 2
+    x: input.focus.x - input.rendererWidth / 2,
+    y: input.focus.y - input.rendererHeight / 2
   };
 }
 
@@ -521,20 +504,6 @@ export function advancePlayback(clock: PlaybackClock, deltaMs: number): Playback
   return { ...clock, tick: Math.min(advanced, clock.latestTick) };
 }
 
-export function getBoundedCameraScroll(
-  focus: Point,
-  worldWidth: number,
-  worldHeight: number,
-  viewportWidth: number,
-  viewportHeight: number,
-  overscan = 0
-): Point {
-  return {
-    x: getBoundedAxisScroll(focus.x, worldWidth, viewportWidth, overscan),
-    y: getBoundedAxisScroll(focus.y, worldHeight, viewportHeight, overscan)
-  };
-}
-
 export function interpolatePoint(current: Point, target: Point, amount: number): Point {
   const safeAmount = clamp(amount, 0, 1);
   return {
@@ -568,17 +537,4 @@ export function interpolateAngle(current: number, target: number, amount: number
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
-}
-
-function getBoundedAxisScroll(
-  focus: number,
-  worldSize: number,
-  viewportSize: number,
-  overscan: number
-): number {
-  const safeOverscan = Math.max(0, overscan);
-  const minimum = safeOverscan === 0 ? 0 : -safeOverscan;
-  const maximum = worldSize + safeOverscan - viewportSize;
-  if (maximum < minimum) return (minimum + maximum) / 2;
-  return clamp(focus - viewportSize / 2, minimum, maximum);
 }

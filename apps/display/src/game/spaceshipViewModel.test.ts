@@ -8,8 +8,6 @@ import {
   createPointTransition,
   createSnappedVisualTransitions,
   getBackgroundCoverRect,
-  getBoundedCameraScroll,
-  getCameraOverscan,
   getCircularGridSegments,
   getPhaserCameraScroll,
   getResponsiveViewport,
@@ -38,13 +36,6 @@ describe("spaceship view model", () => {
       }
     }
     expect(segments).toContainEqual({ from: { x: 200, y: 100 }, to: { x: 200, y: 300 } });
-  });
-
-  it("centers the camera on the circular arena midpoint", () => {
-    expect(getBoundedCameraScroll({ x: 2200, y: 2200 }, 4400, 4400, 1600, 900)).toEqual({
-      x: 1400,
-      y: 1750
-    });
   });
 
   it("preserves at least the distant 1600 by 900 logical view across screen shapes", () => {
@@ -135,13 +126,8 @@ describe("spaceship view model", () => {
     expect(
       getPhaserCameraScroll({
         focus: { x: 2200, y: 2200 },
-        worldWidth: 4400,
-        worldHeight: 4400,
         rendererWidth: 1920,
-        rendererHeight: 1080,
-        viewportWidth: 1600,
-        viewportHeight: 900,
-        overscan: 0
+        rendererHeight: 1080
       })
     ).toEqual({ x: 1240, y: 1660 });
   });
@@ -151,13 +137,12 @@ describe("spaceship view model", () => {
     [1366, 768],
     [1024, 768]
   ])(
-    "keeps cardinal and diagonal rim positions inside the safe edge at %ix%i",
+    "keeps the ship centred at cardinal and diagonal rim positions at %ix%i",
     (rendererWidth, rendererHeight) => {
       const viewport = getResponsiveViewport(rendererWidth, rendererHeight);
       const zoom = viewport.zoom;
       const radius = 52;
       const visualExtension = 42;
-      const overscan = getCameraOverscan(radius, zoom);
       const center = 2200;
       const legalRadius = 2200 - radius;
       const diagonalOffset = legalRadius / Math.sqrt(2);
@@ -171,14 +156,16 @@ describe("spaceship view model", () => {
       ];
 
       for (const focus of rimPositions) {
-        const worldView = getBoundedCameraScroll(
-          focus,
-          4400,
-          4400,
-          viewport.width,
-          viewport.height,
-          overscan
-        );
+        const scroll = getPhaserCameraScroll({ focus, rendererWidth, rendererHeight });
+        // Phaser zooms around the camera midpoint, so the visible world rect
+        // sits half the difference in from the raw scroll.
+        const worldView = {
+          x: scroll.x + (rendererWidth - viewport.width) / 2,
+          y: scroll.y + (rendererHeight - viewport.height) / 2
+        };
+        // Nothing clamps any more: the rim looks exactly like the middle.
+        expect(worldView.x + viewport.width / 2).toBeCloseTo(focus.x, 10);
+        expect(worldView.y + viewport.height / 2).toBeCloseTo(focus.y, 10);
         const visualLeft = (focus.x - radius - visualExtension - worldView.x) * zoom;
         const visualRight =
           (worldView.x + viewport.width - (focus.x + radius + visualExtension)) * zoom;
@@ -190,13 +177,6 @@ describe("spaceship view model", () => {
       }
     }
   );
-
-  it("centers an expanded world that is smaller than the visible viewport", () => {
-    expect(getBoundedCameraScroll({ x: 50, y: 50 }, 100, 100, 500, 300, 25)).toEqual({
-      x: -200,
-      y: -100
-    });
-  });
 
   it("uses distinct active and inactive shield styles", () => {
     expect(getShieldVisualStyle(true)).toEqual({
