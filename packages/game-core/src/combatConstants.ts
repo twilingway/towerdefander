@@ -20,5 +20,6 @@ export const ENEMY_STALL_SPEED_FRACTION = 0.05;
 export const SPAWN_DOMAIN = 0x5350_4157;
 export const OFFER_DOMAIN = 0x4f46_4652;
 export const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
+export const AIM_DOMAIN = 0x414d_5f41;
 export const MAX_PUBLIC_TRANSIENT_PADDING = 256;
 export const TEAM_UPGRADE_PRICE = 5 as const;

@@ -269,6 +269,20 @@ export interface TeamUpgradeSelection {
   readonly price: 5;
 }
 
+/**
+ * What an enemy believes about the ship, refreshed every `reactionTicks` and
+ * carried forward on its own velocity in between. Internal: it never reaches a
+ * snapshot, because the client sees only where the enemy ended up.
+ */
+export interface EnemyPerception {
+  /** Tick the snapshot was taken at; -1 means the enemy has never looked. */
+  readonly tick: number;
+  readonly x: number;
+  readonly y: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+}
+
 export interface CombatEnemyState extends MovingEntity {
   readonly kind: EnemyKind;
   readonly heading: number;
@@ -284,6 +298,12 @@ export interface CombatEnemyState extends MovingEntity {
   readonly maxHp: number;
   /** One entry per archetype weapon, in the archetype's order. */
   readonly weaponCooldownTicks: readonly number[];
+  readonly perception: EnemyPerception;
+  /**
+   * Seeded stream the aim spread draws from, advanced only on a tick this
+   * enemy actually fires. Internal: it never reaches a snapshot.
+   */
+  readonly aimRngState: number;
 }
 
 export interface AsteroidState extends MovingEntity {

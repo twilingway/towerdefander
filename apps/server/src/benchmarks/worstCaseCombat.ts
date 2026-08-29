@@ -50,6 +50,8 @@ export function createWorstCaseCombatFixture(
       heading: 0.2,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       hp: 10_000,
       maxHp: 10_000,
       weaponCooldownTicks: [10_000]
