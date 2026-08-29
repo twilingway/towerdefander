@@ -4,6 +4,7 @@ import type { BalancePresetsFile, BalanceTuning } from "@spaceship-defender/prot
 import { AutopilotScreen } from "./AutopilotScreen/index.js";
 import { DirectorScreen } from "./DirectorScreen/index.js";
 import { EnemiesScreen } from "./EnemiesScreen/index.js";
+import { EnemySkillScreen } from "./EnemySkillScreen/index.js";
 import { HelmScreen } from "./HelmScreen/index.js";
 import { PlayerScreen } from "./PlayerScreen/index.js";
 import { PresetsScreen } from "./PresetsScreen/index.js";
@@ -12,6 +13,7 @@ import { WavesScreen } from "./WavesScreen/index.js";
 export const TABS = [
   "waves",
   "enemies",
+  "enemySkill",
   "player",
   "helm",
   "autopilot",
@@ -23,6 +25,7 @@ export type Tab = (typeof TABS)[number];
 export const TAB_LABELS: Record<Tab, string> = {
   waves: "Волны",
   enemies: "Враги",
+  enemySkill: "ИИ врага",
   player: "Игрок",
   helm: "Управление",
   autopilot: "Автопилот",
@@ -47,6 +50,9 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
   waves: ({ tuning, onTuningChange }) => <WavesScreen tuning={tuning} onChange={onTuningChange} />,
   enemies: ({ tuning, onTuningChange }) => (
     <EnemiesScreen tuning={tuning} onChange={onTuningChange} />
+  ),
+  enemySkill: ({ tuning, onTuningChange }) => (
+    <EnemySkillScreen tuning={tuning} onChange={onTuningChange} />
   ),
   player: ({ tuning, onTuningChange }) => (
     <PlayerScreen tuning={tuning} onChange={onTuningChange} />
