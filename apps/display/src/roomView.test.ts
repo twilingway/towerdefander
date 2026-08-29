@@ -55,6 +55,8 @@ describe("display room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          phase: "down",
+          rearmRequired: false,
           active: false,
           energy: 75,
           capacity: 100

@@ -13,6 +13,8 @@ const baseGame: DisplayGameSnapshot = {
   worldHeight: 4_400,
   arenaRadius: 2_200,
   rimBandWidth: 260,
+  shieldPhase: "down",
+  shieldRearmRequired: false,
   spaceship: {
     x: 2_200,
     y: 2_200,

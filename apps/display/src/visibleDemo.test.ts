@@ -224,6 +224,8 @@ function worldGame(overrides: Record<string, unknown> = {}) {
     cameraViewWidth: 1600,
     arenaRadius: 2200,
     rimBandWidth: 260,
+    shieldPhase: "down",
+    shieldRearmRequired: false,
     worldWidth: 4400,
     worldHeight: 4400,
     shieldRadius: 104,

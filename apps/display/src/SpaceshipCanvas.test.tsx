@@ -107,6 +107,8 @@ const testGame = {
   worldHeight: 4400,
   arenaRadius: 2200,
   rimBandWidth: 260,
+  shieldPhase: "down",
+  shieldRearmRequired: false,
   spaceship: {
     x: 100,
     y: 100,

@@ -1,3 +1,5 @@
+import type { ShieldPhase } from "@spaceship-defender/protocol";
+
 export interface RadarPoint {
   readonly x: number;
   readonly y: number;
@@ -48,4 +50,24 @@ export function getCurrentWaveUpgrade<TSelection extends { readonly waveNumber: 
   waveNumber: number
 ): TSelection | null {
   return selection !== null && selection.waveNumber + 1 === waveNumber ? selection : null;
+}
+
+/**
+ * What the shield is doing, in the words the crew needs. The phase alone does
+ * not explain a shield that is down: after a full drain it also has to be
+ * re-armed, and both of those read as a dead button unless they are said out
+ * loud. Raising is the one that matters most - a shield that is on its way up
+ * looks broken to anyone who just pressed the key.
+ */
+export function getShieldStatusLabel(
+  phase: ShieldPhase,
+  rearmRequired: boolean,
+  energy: number
+): string {
+  if (phase === "up") return "АКТИВЕН";
+  if (phase === "raising") return "ПОДНИМАЕТСЯ";
+  if (phase === "cooling") return "ОСТЫВАЕТ";
+  if (rearmRequired) return "НУЖЕН ПЕРЕВЗВОД";
+  if (energy <= 0) return "РАЗРЯЖЕН";
+  return "выключен";
 }

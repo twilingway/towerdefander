@@ -8,6 +8,7 @@ import type {
   EnemyKind,
   HelmScheme,
   RoomPhase,
+  ShieldPhase,
   TerminalOutcome,
   UpgradeId
 } from "@spaceship-defender/protocol";
@@ -53,6 +54,9 @@ export class HelmState extends Schema {
 export class ShieldState extends Schema {
   @type("float32") angle = 0;
   @type("boolean") active = false;
+  /** Changes a handful of times per run, so a string costs nothing here. */
+  @type("string") phase: ShieldPhase = "down";
+  @type("boolean") rearmRequired = false;
   @type("float32") energy = 0;
   @type("float32") capacity = 0;
   @type("float32") arcHalfAngle = Math.PI / 4;

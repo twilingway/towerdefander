@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 32 as const;
+export const PROTOCOL_VERSION = 33 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -140,6 +140,11 @@ export const publicSpaceshipViewSchema = z
     if (value.hp > value.maxHp) issue(context, ["hp"], "Spaceship HP must not exceed max HP.");
   });
 export type PublicSpaceshipView = z.infer<typeof publicSpaceshipViewSchema>;
+
+/** Down, coming up, holding, cooling. Only `up` protects. */
+export const SHIELD_PHASES = ["down", "raising", "up", "cooling"] as const;
+export const shieldPhaseSchema = z.enum(SHIELD_PHASES);
+export type ShieldPhase = z.infer<typeof shieldPhaseSchema>;
 
 export const publicShieldViewSchema = z
   .object({
@@ -610,6 +615,12 @@ export const displayGameSnapshotSchema = z
     ...gameShape,
     /** Width of the elastic rim band, measured inward from `arenaRadius`. */
     rimBandWidth: finite.nonnegative(),
+    /**
+     * Why the shield is or is not protecting. Display-only: the shared screen
+     * explains the cycle, and the operator's panel is left for later.
+     */
+    shieldPhase: shieldPhaseSchema,
+    shieldRearmRequired: z.boolean(),
     /** Narrowest slice of the world the display frames; height follows as 9/16. */
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background for this run; fixed at run start like the silhouettes. */

@@ -12,6 +12,7 @@ import {
   type ProjectileKind,
   type PublicSpaceshipView,
   type PublicUpgradeVote,
+  type ShieldPhase,
   type TerminalOutcome,
   type UpgradeId
 } from "@spaceship-defender/protocol";
@@ -122,6 +123,8 @@ interface NetworkGameState {
     active: boolean;
     energy: number;
     capacity: number;
+    phase: ShieldPhase;
+    rearmRequired: boolean;
   };
   cannon: {
     heat: number;
@@ -248,9 +251,19 @@ export function toDisplayRoomView(
             worldHeight: game.worldHeight,
             arenaRadius: game.arenaRadius,
             rimBandWidth: game.rimBandWidth,
+            shieldPhase: game.shield.phase,
+            shieldRearmRequired: game.shield.rearmRequired,
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
-            shield: { ...game.shield },
+            // Picked rather than spread: the shield now carries phase fields the
+            // strict view does not accept, and they ride at the game root.
+            shield: {
+              angle: game.shield.angle,
+              arcHalfAngle: game.shield.arcHalfAngle,
+              active: game.shield.active,
+              energy: game.shield.energy,
+              capacity: game.shield.capacity
+            },
             cannon: { ...game.cannon },
             machineGun: { ...game.machineGun },
             encounter: {

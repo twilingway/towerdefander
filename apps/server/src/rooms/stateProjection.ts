@@ -60,6 +60,8 @@ export function projectGameState(
   target.turretAngle = game.turretAngle;
   target.shield.angle = game.shieldAngle;
   target.shield.active = game.shieldActive;
+  target.shield.phase = game.shieldPhase;
+  target.shield.rearmRequired = game.shieldRearmRequired;
   target.shield.energy = game.shieldEnergy;
   target.shield.capacity = config.shieldCapacity + game.roleModifiers.shield.capacityBonus;
   target.shield.arcHalfAngle =

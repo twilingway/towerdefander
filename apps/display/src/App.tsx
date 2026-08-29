@@ -30,7 +30,7 @@ import { CrewLatency } from "./components/CrewLatency/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
-import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
+import { getCurrentWaveUpgrade, getShieldStatusLabel } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
@@ -274,7 +274,13 @@ export function DisplayApp() {
             </div>
             <div>
               <span>Щит</span>
-              <strong>{view.game.shield.active ? "АКТИВЕН" : "выключен"}</strong>
+              <strong data-testid="hud-shield-status">
+                {getShieldStatusLabel(
+                  view.game.shieldPhase,
+                  view.game.shieldRearmRequired,
+                  view.game.shield.energy
+                )}
+              </strong>
               <div className="hud-energy" aria-label="Энергия щита">
                 <i
                   style={{
