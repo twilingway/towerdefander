@@ -1,3 +1,4 @@
+import { ARENA_CUSHION_BAND } from "@spaceship-defender/game-core";
 import type {
   AsteroidState as CoreAsteroidState,
   CombatEnemyState,
@@ -42,6 +43,7 @@ export function projectGameState(
   target.worldWidth = config.worldWidth;
   target.worldHeight = config.worldHeight;
   target.arenaRadius = config.arenaRadius;
+  target.rimBandWidth = ARENA_CUSHION_BAND;
   target.display.cameraViewWidth = config.cameraViewWidth;
   target.display.backgroundParallaxStrength = config.background.parallaxStrength;
   target.display.backgroundDriftSpeed = config.background.driftSpeed;

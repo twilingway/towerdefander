@@ -106,6 +106,7 @@ const testGame = {
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   worldHeight: 4400,
   arenaRadius: 2200,
+  rimBandWidth: 260,
   spaceship: {
     x: 100,
     y: 100,

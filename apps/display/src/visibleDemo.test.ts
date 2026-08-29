@@ -223,6 +223,7 @@ function worldGame(overrides: Record<string, unknown> = {}) {
     tick: 42,
     cameraViewWidth: 1600,
     arenaRadius: 2200,
+    rimBandWidth: 260,
     worldWidth: 4400,
     worldHeight: 4400,
     shieldRadius: 104,

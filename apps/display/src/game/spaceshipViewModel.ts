@@ -64,6 +64,24 @@ export interface GridSegment {
   readonly to: Point;
 }
 
+export interface RimBandStroke {
+  /** Circle the stroke is centred on, so it covers [arena - width, arena]. */
+  readonly radius: number;
+  readonly thickness: number;
+}
+
+/**
+ * The elastic band drawn as one thick stroked circle rather than two fills:
+ * a stroke of width `w` centred on `arenaRadius - w / 2` covers exactly the
+ * ring the simulation slows a hull in. Null means there is no band to show.
+ */
+export function getRimBandStroke(arenaRadius: number, bandWidth: number): RimBandStroke | null {
+  if (!Number.isFinite(arenaRadius) || !Number.isFinite(bandWidth)) return null;
+  if (arenaRadius <= 0 || bandWidth <= 0) return null;
+  const thickness = Math.min(bandWidth, arenaRadius);
+  return { radius: arenaRadius - thickness / 2, thickness };
+}
+
 /**
  * Distance rings inside the arena, evenly spaced and leaving the rim to the
  * border stroke. The count is fixed and the spacing follows the radius, so a

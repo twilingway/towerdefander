@@ -8,6 +8,7 @@ import {
   createPointTransition,
   createSnappedVisualTransitions,
   getArenaRingRadii,
+  getRimBandStroke,
   getArenaSpokes,
   getBackgroundCoverRect,
   getPhaserCameraScroll,
@@ -27,6 +28,21 @@ import {
 } from "./spaceshipViewModel.js";
 
 describe("spaceship view model", () => {
+  it("strokes the rim band as the ring the simulation slows a hull in", () => {
+    const band = getRimBandStroke(2200, 260);
+
+    // A stroke of width 260 centred on 2070 covers exactly 1940 to 2200, which
+    // is the band measured inward from the arena radius.
+    expect(band).toEqual({ radius: 2070, thickness: 260 });
+    expect((band?.radius ?? 0) - (band?.thickness ?? 0) / 2).toBe(1940);
+    expect((band?.radius ?? 0) + (band?.thickness ?? 0) / 2).toBe(2200);
+
+    expect(getRimBandStroke(2200, 0)).toBeNull();
+    expect(getRimBandStroke(0, 260)).toBeNull();
+    // A band wider than the arena fills it rather than reaching outside.
+    expect(getRimBandStroke(200, 900)).toEqual({ radius: 100, thickness: 200 });
+  });
+
   it("spaces the distance rings inside the arena, leaving the rim to the border", () => {
     expect(getArenaRingRadii(2200)).toEqual([550, 1100, 1650]);
     // The count is fixed, so a larger arena reads the same instead of denser.

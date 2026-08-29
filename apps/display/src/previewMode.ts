@@ -51,6 +51,7 @@ const PREVIEW_WORLD = {
     nebulaPreset: "blue" as const
   },
   arenaRadius: 2200,
+  rimBandWidth: 260,
   spaceship: {
     x: 2200,
     y: 2200,

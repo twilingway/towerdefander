@@ -113,6 +113,7 @@ interface NetworkGameState {
   worldWidth: number;
   worldHeight: number;
   arenaRadius: number;
+  rimBandWidth: number;
   spaceship: PublicSpaceshipView;
   turretAngle: number;
   shield: {
@@ -246,6 +247,7 @@ export function toDisplayRoomView(
             worldWidth: game.worldWidth,
             worldHeight: game.worldHeight,
             arenaRadius: game.arenaRadius,
+            rimBandWidth: game.rimBandWidth,
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },

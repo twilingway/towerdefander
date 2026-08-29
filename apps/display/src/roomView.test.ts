@@ -40,6 +40,7 @@ describe("display room view", () => {
         worldWidth: 4400,
         worldHeight: 4400,
         arenaRadius: 2200,
+        rimBandWidth: 260,
         spaceship: {
           x: 2200,
           y: 2200,

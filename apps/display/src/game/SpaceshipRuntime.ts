@@ -24,6 +24,7 @@ import {
   extendPointTrack,
   getArenaRingRadii,
   getArenaSpokes,
+  getRimBandStroke,
   getBackgroundCoverRect,
   getPhaserCameraScroll,
   getResponsiveViewport,
@@ -60,6 +61,9 @@ const OUTSIDE_SPACE_COLOR = 0x02070d;
 /** Drawn when a preset picks no hull of its own. */
 const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
 const ARENA_SPACE_COLOR = 0x07171f;
+/** The elastic rim band: visible enough to read as ground, not as an object. */
+const RIM_BAND_COLOR = 0xf2c14e;
+const RIM_BAND_ALPHA = 0.12;
 /** The parallax background shows through the arena disc. */
 const ARENA_FILL_ALPHA = 0.5;
 
@@ -261,6 +265,13 @@ class SpaceshipScene extends Phaser.Scene {
     const graphics = this.add.graphics().setDepth(0);
     graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
     graphics.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
+    // The band the rim slows a hull in, under the rings so those stay readable.
+    const band = getRimBandStroke(this.snapshot.arenaRadius, this.snapshot.rimBandWidth);
+    if (band !== null) {
+      graphics.lineStyle(band.thickness, RIM_BAND_COLOR, RIM_BAND_ALPHA);
+      graphics.strokeCircle(centerX, centerY, band.radius);
+    }
+
     // Rings and spokes rather than a square grid: on a round arena what a pilot
     // reads off the floor is the distance to the rim and the bearing, and a
     // square mesh states neither.

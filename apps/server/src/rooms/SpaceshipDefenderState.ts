@@ -1,3 +1,4 @@
+import { ARENA_CUSHION_BAND } from "@spaceship-defender/game-core";
 import { ArraySchema, MapSchema, Schema, type, view } from "@colyseus/schema";
 import type {
   AsteroidOrigin,
@@ -242,6 +243,7 @@ export class SpaceshipGameState extends Schema {
   @type("uint16") worldWidth = 4400;
   @type("uint16") worldHeight = 4400;
   @type("uint16") arenaRadius = 2200;
+  @type("uint16") rimBandWidth = ARENA_CUSHION_BAND;
   @type(SpaceshipState) spaceship = new SpaceshipState();
   @type("float32") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();

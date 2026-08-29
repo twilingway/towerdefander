@@ -12,6 +12,7 @@ const baseGame: DisplayGameSnapshot = {
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   worldHeight: 4_400,
   arenaRadius: 2_200,
+  rimBandWidth: 260,
   spaceship: {
     x: 2_200,
     y: 2_200,

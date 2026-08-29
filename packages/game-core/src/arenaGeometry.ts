@@ -46,8 +46,10 @@ export function isCircleContainedInArena(
 }
 
 /**
- * How far inside the legal circle the rim stays soft. Wide enough that a hull
- * at full speed sheds it inside the band rather than against the hard edge.
+ * How far inside the arena the rim stays soft, measured from `arena.radius` so
+ * that the ring the simulation uses is the ring the display draws. Wide enough
+ * that a hull at full speed sheds its speed inside the band rather than
+ * against the hard edge.
  */
 export const ARENA_CUSHION_BAND = 260;
 /** Inward pull per unit of depth into the band, in units per second squared. */
@@ -79,7 +81,7 @@ export function applyArenaCushion(
   const deltaX = circle.x - arena.centerX;
   const deltaY = circle.y - arena.centerY;
   const distance = Math.hypot(deltaX, deltaY);
-  const depth = distance - (legalRadius - band);
+  const depth = distance - (arena.radius - band);
   // Outside the band, or exactly at the centre where there is no normal.
   if (depth <= 0 || distance === 0) return circle.velocity;
 
