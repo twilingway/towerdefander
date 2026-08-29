@@ -105,6 +105,12 @@ function armedLoops(spy: {
     .map((call) => call[1] as number | undefined);
 }
 
+/** Steps the room until the shield has served its engage window and is up. */
+function raiseShield(room: SpaceshipDefenderRoom): void {
+  const ticks = internals(room).gameConfig.shieldEngageTicks + 1;
+  for (let index = 0; index < ticks; index += 1) room.advanceGameStep();
+}
+
 function controllerAt(controllers: readonly TestClient[], index: number): TestClient {
   const controller = controllers[index];
   if (controller === undefined) throw new Error(`Missing controller at index ${String(index)}.`);
@@ -453,7 +459,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     const soloRoom = createRoom(1);
     ready(soloRoom, joinController(soloRoom, 0));
     aimBulletAtHull(soloRoom);
-    soloRoom.advanceGameStep();
+    raiseShield(soloRoom);
     expect(soloRoom.state.game.shield.active).toBe(true);
 
     const { room } = startGame();
@@ -745,7 +751,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: -1, y: 0 },
       active: true
     });
-    room.advanceGameStep();
+    raiseShield(room);
     expect(room.state.game.shield.active).toBe(true);
     expect(room.state.game.shield.energy).toBe(99);
     expect(room.state.game.shield.angle).toBeGreaterThan(0);
@@ -878,7 +884,8 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     room.handleShieldInput(shield.client, input);
     room.handleShieldInput(shield.client, input);
     expect(room.state.game.shield.energy).toBe(100);
-    room.advanceGameStep();
+    // Coming up spends nothing; the drain starts with the hold.
+    raiseShield(room);
     expect(room.state.game.shield.energy).toBe(99);
     room.advanceGameStep();
     expect(room.state.game.shield.energy).toBe(98);
@@ -899,7 +906,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 1, y: 0 },
       active: true
     });
-    for (let index = 0; index < 100; index += 1) room.advanceGameStep();
+    for (let index = 0; index < 120; index += 1) room.advanceGameStep();
     expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
 
     room.handleShieldInput(shield.client, {
@@ -923,8 +930,12 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 1, y: 0 },
       active: true
     });
-    room.advanceGameStep();
-    expect(room.state.game.shield).toMatchObject({ active: true, energy: 9 });
+    // It recharges through the engage window and comes back up. The exact
+    // figure is not asserted: a wave bullet may graze the shield during the
+    // run, and that has nothing to do with the re-arm being tested here.
+    raiseShield(room);
+    expect(room.state.game.shield.active).toBe(true);
+    expect(room.state.game.shield.energy).toBeGreaterThan(10);
   });
 
   it("clears a queued gunner click on disconnect and reconnect", async () => {
@@ -1014,7 +1025,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 1, y: 0 },
       active: true
     });
-    room.advanceGameStep();
+    raiseShield(room);
     expect(room.state.game.shield.active).toBe(true);
     vi.spyOn(room, "allowReconnection").mockResolvedValue(shield.client);
     await room.onLeave(shield.client, 1006);

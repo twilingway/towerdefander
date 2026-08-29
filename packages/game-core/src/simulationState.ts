@@ -37,6 +37,8 @@ export function createCleanSpaceshipRun(
     shieldTargetAngle: null,
     shieldAngularVelocity: 0,
     shieldActive: false,
+    shieldPhase: "down",
+    shieldPhaseTicks: 0,
     shieldEnergy: config.shieldCapacity,
     shieldRearmRequired: false,
     spaceshipHeading: 0,

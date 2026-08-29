@@ -119,6 +119,10 @@ export function cancelShieldControl(state: SpaceshipSimulationState): SpaceshipS
     shieldTargetAngle: null,
     shieldActive: false,
     shieldRearmRequired: false,
+    // The phase has to go down with the flag, or the next step reads the stale
+    // phase and puts the shield straight back up.
+    shieldPhase: "down",
+    shieldPhaseTicks: 0,
     inputs: {
       ...state.inputs,
       shield:

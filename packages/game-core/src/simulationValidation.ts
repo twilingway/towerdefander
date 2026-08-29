@@ -16,6 +16,20 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     }
   }
 
+  // Zero is a legal setting for these: it means the shield keeps the instant
+  // toggle it had before the phases existed.
+  const nonNegativeSafeIntegers: readonly (readonly [string, number])[] = [
+    ["shieldEngageTicks", config.shieldEngageTicks],
+    ["shieldMinimumUpTicks", config.shieldMinimumUpTicks],
+    ["shieldCooldownTicks", config.shieldCooldownTicks]
+  ];
+
+  for (const [name, value] of nonNegativeSafeIntegers) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new RangeError(`${name} must be a non-negative safe integer`);
+    }
+  }
+
   const positiveFiniteNumbers: readonly (readonly [string, number])[] = [
     ["worldWidth", config.worldWidth],
     ["worldHeight", config.worldHeight],

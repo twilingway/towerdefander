@@ -776,9 +776,17 @@ describe("shield simulation", () => {
     expect(state.shieldAngle).toBeCloseTo((117 * Math.PI) / 3200);
     expect(state.shieldTargetAngle).toBeNull();
     expect(state.shieldAngularVelocity).toBeCloseTo((13 * Math.PI) / 240);
-    expect(state.shieldActive).toBe(true);
+    // Six ticks in the shield is still coming up, so it neither blocks nor
+    // spends yet; what survives the stale input is the request itself.
+    expect(state.shieldPhase).toBe("raising");
+    expect(state.shieldActive).toBe(false);
     expect(state.inputs.shield?.active).toBe(true);
-    expect(state.shieldEnergy).toBe(94);
+    expect(state.shieldEnergy).toBe(100);
+
+    // And it does come up on its own once the engage window is served.
+    const raised = advance(state, config, config.shieldEngageTicks);
+    expect(raised.shieldPhase).toBe("up");
+    expect(raised.shieldActive).toBe(true);
   });
 
   it("accelerates faster than the turret and traverses while inactive and recharging", () => {
@@ -841,11 +849,14 @@ describe("shield simulation", () => {
 
   it("trusted shield disconnect turns it off and cancels target without changing energy", () => {
     const config = createSpaceshipSimulationConfig();
-    let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
-      vector: { x: 0, y: -1 },
-      active: true,
-      receivedTick: 0
-    });
+    let state = applyShieldInput(
+      { ...createSpaceshipSimulationState(config, 1), shieldEnergy: 90 },
+      {
+        vector: { x: 0, y: -1 },
+        active: true,
+        receivedTick: 0
+      }
+    );
     state = advance(state, config, 2);
     const energyAtDisconnect = state.shieldEnergy;
     const velocityAtDisconnect = state.shieldAngularVelocity;
@@ -862,14 +873,16 @@ describe("shield simulation", () => {
     expect(state.shieldEnergy).toBe(energyAtDisconnect + 0.5);
   });
 
-  it("drains a full shield in five seconds and requires re-arming", () => {
+  it("drains a full shield in five seconds of holding and requires re-arming", () => {
     const config = createSpaceshipSimulationConfig();
     let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: 1 },
       active: true,
       receivedTick: 0
     });
-    state = advance(state, config, 100);
+    // The engage window comes first and spends nothing, so a full drain now
+    // takes it plus the same five seconds of holding.
+    state = advance(state, config, config.shieldEngageTicks + 100);
 
     expect(state.shieldEnergy).toBe(0);
     expect(state.shieldActive).toBe(false);
@@ -913,10 +926,12 @@ describe("shield simulation", () => {
       active: true,
       receivedTick: 0
     });
-    state = advance(state, config, 100);
+    state = advance(state, config, config.shieldEngageTicks + 100);
     state = advance(state, config, 4);
     expect(state.shieldEnergy).toBe(2);
     expect(state.shieldActive).toBe(false);
+    // Draining put the shield into its cooldown, which the re-arm must outlast.
+    expect(state.shieldPhase).toBe("cooling");
 
     state = applyShieldInput(state, {
       vector: { x: 0, y: -1 },
@@ -927,14 +942,23 @@ describe("shield simulation", () => {
     expect(state.shieldRearmRequired).toBe(false);
     expect(state.shieldActive).toBe(false);
 
+    // The accepted false clears the latch, but the cooldown the drain started
+    // still has to run before a new request is worth anything.
+    const depletedEnergy = state.shieldEnergy;
+    state = advance(state, config, config.shieldCooldownTicks);
+    expect(state.shieldPhase).toBe("down");
+
     state = applyShieldInput(state, {
       vector: { x: 0, y: -1 },
       active: true,
       receivedTick: state.clock.tick
     });
-    state = advanceSpaceshipSimulation(state, config);
+    state = advance(state, config, config.shieldEngageTicks + 1);
+    expect(state.shieldPhase).toBe("up");
     expect(state.shieldActive).toBe(true);
-    expect(state.shieldEnergy).toBe(1.5);
+    // It recharged through the wait rather than coming back on the fumes it
+    // died with.
+    expect(state.shieldEnergy).toBeGreaterThan(depletedEnergy);
   });
 
   it("does not arm a true intent accepted while energy is still empty", () => {
@@ -1358,6 +1382,84 @@ describe("arena geometry", () => {
     });
 
     expect(config.worldWidth).toBe(2400);
+  });
+});
+
+describe("shield timing", () => {
+  const raise = (config: SpaceshipSimulationConfig, state: SpaceshipSimulationState) =>
+    advance(
+      applyShieldInput(state, {
+        vector: { x: 0, y: 1 },
+        active: true,
+        receivedTick: state.clock.tick
+      }),
+      config,
+      config.shieldEngageTicks + 1
+    );
+
+  it("holds the shield up for its minimum even when the operator lets go at once", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = raise(config, createSpaceshipSimulationState(config, 1));
+    expect(state.shieldPhase).toBe("up");
+
+    // The flick an autopilot makes for free: on and straight back off.
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, config.shieldMinimumUpTicks - 1);
+    expect(state.shieldActive).toBe(true);
+
+    state = advance(state, config, 2);
+    expect(state.shieldPhase).toBe("cooling");
+    expect(state.shieldActive).toBe(false);
+  });
+
+  it("ignores a request made while the shield is cooling", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = raise(config, createSpaceshipSimulationState(config, 1));
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, config.shieldMinimumUpTicks + 1);
+    expect(state.shieldPhase).toBe("cooling");
+
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: true,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, config.shieldCooldownTicks - 2);
+    expect(state.shieldPhase).toBe("cooling");
+    expect(state.shieldActive).toBe(false);
+  });
+
+  it("keeps the instant toggle when every duration is zero", () => {
+    const config = createSpaceshipSimulationConfig({
+      shieldEngageTicks: 0,
+      shieldMinimumUpTicks: 0,
+      shieldCooldownTicks: 0
+    });
+    let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
+      vector: { x: 0, y: 1 },
+      active: true,
+      receivedTick: 0
+    });
+
+    state = advanceSpaceshipSimulation(state, config);
+    expect(state.shieldActive).toBe(true);
+
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = advanceSpaceshipSimulation(state, config);
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldPhase).toBe("down");
   });
 });
 

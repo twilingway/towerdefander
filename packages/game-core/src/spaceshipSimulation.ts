@@ -77,6 +77,15 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly shieldCapacity: number;
   readonly shieldDrainPerSecond: number;
   readonly shieldRechargePerSecond: number;
+  /**
+   * Ticks the shield spends coming up, holding, and cooling down. They are what
+   * stop the shield from being free to flick: an autopilot with nothing to lose
+   * otherwise semaphores it every tick. Zero on all three restores the old
+   * instant toggle.
+   */
+  readonly shieldEngageTicks: number;
+  readonly shieldMinimumUpTicks: number;
+  readonly shieldCooldownTicks: number;
   readonly turretMaxAngularSpeedPerSecond: number;
   readonly turretAngularAccelerationPerSecondSquared: number;
   readonly turretAngularBrakingPerSecondSquared: number;
@@ -109,6 +118,9 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
 }
 
 export type FriendlyWeaponSource = "cannon" | "machineGun";
+
+/** Down, coming up, holding, or cooling off. Only `up` blocks damage. */
+export type ShieldPhase = "down" | "raising" | "up" | "cooling";
 
 export interface TrustedPilotInput {
   readonly vector: Vector2;
@@ -170,6 +182,9 @@ export interface SpaceshipSimulationState extends CombatStateFields {
   readonly shieldActive: boolean;
   readonly shieldEnergy: number;
   readonly shieldRearmRequired: boolean;
+  /** Where the shield is in its cycle, and how long it has been there. */
+  readonly shieldPhase: ShieldPhase;
+  readonly shieldPhaseTicks: number;
   readonly spaceshipHeading: number;
   readonly headingTargetAngle: number | null;
   readonly headingAngularVelocity: number;
@@ -357,9 +372,35 @@ export function advanceSpaceshipSimulation(
         );
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
-  const shieldWasActive = shieldDesiredActive && shieldCanActivate;
+  // Sequential rather than switched, so that zero-length phases cascade inside
+  // one tick and the old instant toggle survives as a tuning value.
+  let shieldPhase = state.shieldPhase;
+  let shieldPhaseTicks = state.shieldPhaseTicks + 1;
+  if (shieldPhase === "down" && shieldDesiredActive && shieldCanActivate) {
+    shieldPhase = "raising";
+    shieldPhaseTicks = 0;
+  }
+  if (shieldPhase === "raising" && shieldPhaseTicks >= config.shieldEngageTicks) {
+    shieldPhase = "up";
+    shieldPhaseTicks = 0;
+  }
+  // The hold is what the operator cannot cut short; letting go earlier is
+  // remembered by the request, not by the phase.
+  if (
+    shieldPhase === "up" &&
+    !shieldDesiredActive &&
+    shieldPhaseTicks >= config.shieldMinimumUpTicks
+  ) {
+    shieldPhase = "cooling";
+    shieldPhaseTicks = 0;
+  }
+  if (shieldPhase === "cooling" && shieldPhaseTicks >= config.shieldCooldownTicks) {
+    shieldPhase = "down";
+    shieldPhaseTicks = 0;
+  }
+  const shieldHolding = shieldPhase === "up";
   const shieldCapacity = config.shieldCapacity + state.roleModifiers.shield.capacityBonus;
-  const shieldEnergy = shieldWasActive
+  const shieldEnergy = shieldHolding
     ? clamp(state.shieldEnergy - config.shieldDrainPerSecond * secondsPerStep, 0, shieldCapacity)
     : clamp(
         state.shieldEnergy +
@@ -369,8 +410,13 @@ export function advanceSpaceshipSimulation(
         0,
         shieldCapacity
       );
-  const shieldDepleted = shieldWasActive && shieldEnergy === 0;
-  const shieldActive = shieldWasActive && !shieldDepleted;
+  const shieldDepleted = shieldHolding && shieldEnergy === 0;
+  // A drained shield drops whatever the hold says: the cooldown starts here.
+  if (shieldDepleted) {
+    shieldPhase = "cooling";
+    shieldPhaseTicks = 0;
+  }
+  const shieldActive = shieldHolding && !shieldDepleted;
   const shieldRearmRequired = state.shieldRearmRequired || shieldDepleted;
   const movedProjectiles = moveProjectiles(state.projectiles, config);
   const projectiles = [...movedProjectiles];
@@ -486,6 +532,8 @@ export function advanceSpaceshipSimulation(
     shieldActive,
     shieldEnergy,
     shieldRearmRequired,
+    shieldPhase,
+    shieldPhaseTicks,
     spaceshipHeading: headingTraverse.angle,
     headingTargetAngle,
     headingAngularVelocity: headingTraverse.angularVelocity,
