@@ -8,6 +8,7 @@ import { EnemySkillScreen } from "./EnemySkillScreen/index.js";
 import { HelmScreen } from "./HelmScreen/index.js";
 import { PlayerScreen } from "./PlayerScreen/index.js";
 import { PresetsScreen } from "./PresetsScreen/index.js";
+import { StatsScreen } from "./StatsScreen/index.js";
 import { WavesScreen } from "./WavesScreen/index.js";
 
 export const TABS = [
@@ -18,6 +19,7 @@ export const TABS = [
   "helm",
   "autopilot",
   "director",
+  "stats",
   "presets"
 ] as const;
 export type Tab = (typeof TABS)[number];
@@ -30,12 +32,15 @@ export const TAB_LABELS: Record<Tab, string> = {
   helm: "Управление",
   autopilot: "Автопилот",
   director: "Директор",
+  stats: "Статистика",
   presets: "Пресеты"
 };
 
 /** Everything a tab may need; each entry below takes only its own slice. */
 export interface ScreenContext {
   readonly document: BalancePresetsFile;
+  /** The console's own credentials; the statistics tab calls the server itself. */
+  readonly password: string;
   readonly tuning: BalanceTuning;
   readonly onTuningChange: (tuning: BalanceTuning) => void;
   readonly onDocumentChange: (document: BalancePresetsFile) => void;
@@ -64,6 +69,7 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
   director: ({ tuning, onTuningChange }) => (
     <DirectorScreen tuning={tuning} onChange={onTuningChange} />
   ),
+  stats: ({ document, password }) => <StatsScreen document={document} password={password} />,
   presets: ({ document, onDocumentChange, onImportError }) => (
     <PresetsScreen document={document} onChange={onDocumentChange} onImportError={onImportError} />
   )
