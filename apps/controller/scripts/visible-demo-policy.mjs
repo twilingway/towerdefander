@@ -110,6 +110,17 @@ const RIM_FRACTION = 0.8;
 const FIRE_MEMORY_MS = 8_000;
 /** Close enough to the guessed source to call the guess spent. */
 const FIRE_SOURCE_ARRIVAL = 200;
+/**
+ * How far off course the pilot will go for salvage while a fight is still on.
+ * About two seconds of cruise: far enough to take what fell in the fight the
+ * crew is already in, short enough not to leave it.
+ */
+const SALVAGE_DETOUR_UNITS = 700;
+/**
+ * Share of a drop's value that must actually land for the detour to be worth
+ * it. A repair is not worth a course change for the last few points of hull.
+ */
+const SALVAGE_WORTH_SHARE = 0.5;
 /** Inside this fraction of the arena the search sweeps instead of closing in. */
 const SEARCH_CENTRE_FRACTION = 0.35;
 /** Share of the frame's short side the stand-off ring may occupy. */
@@ -809,11 +820,18 @@ export function huntVector(world, memory, nowMs) {
  * to their source; with the screen truly empty it heads for the middle of the
  * arena and sweeps there, which is where the frame covers the most ground.
  */
-/** The closest drop on screen, with a stable tie-break like every other pick. */
-function nearestLoot(world) {
+/**
+ * The closest drop worth breaking off for, with a stable tie-break like every
+ * other pick. A repair on a full hull returns nothing and a cell on a full
+ * battery the same, so neither is worth a course change; inside the collection
+ * window the wave is already won and everything on the field is taken.
+ */
+function chooseSalvage(world) {
+  const windowOpen = (world.salvageWindowSeconds ?? 0) > 0;
   let nearest;
   for (const drop of world.loot ?? []) {
     const distance = distanceBetween(world.ship, drop);
+    if (!windowOpen && (distance > SALVAGE_DETOUR_UNITS || !worthTaking(world, drop))) continue;
     const closer =
       nearest === undefined ||
       distance < nearest.distance ||
@@ -821,6 +839,15 @@ function nearestLoot(world) {
     if (closer) nearest = { distance, drop };
   }
   return nearest?.drop;
+}
+
+/** Whether the drop would return most of what it carries. */
+function worthTaking(world, drop) {
+  const missing =
+    drop.kind === "repair"
+      ? world.ship.maxHp - world.ship.hp
+      : world.shield.capacity - world.shield.energy;
+  return missing >= drop.amount * SALVAGE_WORTH_SHARE;
 }
 
 function searchVector(world, memory) {
@@ -1018,13 +1045,11 @@ function planPilotCourse(world, profile, memory, options) {
   // across targets that are worth the burst.
   if (escape !== undefined) return { vector: escape, mgFiring };
 
-  // A wave that is already won holds open for a few seconds while salvage sits
-  // on the field, and salvage is the only hull a crew ever wins back inside a
-  // run. Only inside that window, and only for what the camera frames: mid-wave
-  // the shooters outside the frame are what kill the crew, and leaving the hunt
-  // for a drop costs more hull than the drop returns.
-  const drop =
-    target === undefined && (world.salvageWindowSeconds ?? 0) > 0 ? nearestLoot(world) : undefined;
+  // Salvage is the only hull a crew wins back inside a run, so it outranks the
+  // hunt whenever it actually returns something. Mid-fight the detour is capped
+  // and the drop has to be worth taking; once the wave is won the window is all
+  // the time there is, so everything on the field counts.
+  const drop = chooseSalvage(world);
   if (drop !== undefined) {
     return {
       vector: normalize({ x: drop.x - world.ship.x, y: drop.y - world.ship.y }),

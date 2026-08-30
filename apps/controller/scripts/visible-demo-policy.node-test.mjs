@@ -1162,3 +1162,67 @@ test("the lead solution waits out the swing as well as the flight", () => {
 
   assert.ok(far.y > near.y);
 });
+
+function repairAt(x, y, amount = 35) {
+  return {
+    entityId: "salvage-1",
+    spawnSequence: 40,
+    x,
+    y,
+    velocityX: 0,
+    velocityY: 0,
+    radius: 18,
+    kind: "repair",
+    amount
+  };
+}
+
+/** How far the requested course points at the drop, as a cosine. */
+function aimAtDrop(plan, from, drop) {
+  const toDrop = normalize({ x: drop.x - from.x, y: drop.y - from.y });
+  return plan.vector.x * toDrop.x + plan.vector.y * toDrop.y;
+}
+
+test("the pilot leaves the fight for a repair it can actually use", () => {
+  // The bug this covers: salvage fell while the hull was hurt and the bot flew
+  // past it, because it only collected after the wave was already won.
+  const hurt = world({
+    ship: { ...world().ship, hp: 300 },
+    enemies: [enemyAt("gunship-near", 1, 2600, 2200)],
+    loot: [repairAt(2200, 2500)]
+  });
+  const plan = planPilot(hurt, ACE, createAutopilotMemory());
+  assert.ok(aimAtDrop(plan, hurt.ship, hurt.loot[0]) > 0.9, "the course points at the repair");
+});
+
+test("a repair the hull has no room for is not worth a course change", () => {
+  const full = world({
+    enemies: [enemyAt("gunship-near", 1, 2600, 2200)],
+    loot: [repairAt(2200, 2500)]
+  });
+  const plan = planPilot(full, ACE, createAutopilotMemory());
+  assert.ok(aimAtDrop(plan, full.ship, full.loot[0]) < 0.9, "the course stays on the enemy");
+});
+
+test("the detour is capped while the fight is on and lifted once it is won", () => {
+  const far = repairAt(2200, 2200 + 900);
+  const fighting = world({
+    ship: { ...world().ship, hp: 200 },
+    enemies: [enemyAt("gunship-near", 1, 2600, 2200)],
+    loot: [far]
+  });
+  assert.ok(
+    aimAtDrop(planPilot(fighting, ACE, createAutopilotMemory()), fighting.ship, far) < 0.9,
+    "too far to leave a fight for"
+  );
+
+  const won = world({
+    ship: { ...world().ship, hp: 200 },
+    loot: [far],
+    salvageWindowSeconds: 12
+  });
+  assert.ok(
+    aimAtDrop(planPilot(won, ACE, createAutopilotMemory()), won.ship, far) > 0.9,
+    "inside the window there is nothing else to do with the time"
+  );
+});

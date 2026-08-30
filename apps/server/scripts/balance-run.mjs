@@ -88,7 +88,7 @@ export function buildWorld(state, config, sampledAtMs) {
     arenaRadius: config.arenaRadius,
     worldWidth: config.worldWidth,
     worldHeight: config.worldHeight,
-    shieldRadius: config.shieldRadius,
+    shieldRadius: state.ship.shieldRadius,
     turretAngle: state.turretAngle,
     ship: {
       x: state.spaceship.x,
@@ -96,7 +96,7 @@ export function buildWorld(state, config, sampledAtMs) {
       heading: state.spaceshipHeading,
       velocityX: state.spaceship.velocity.x,
       velocityY: state.spaceship.velocity.y,
-      radius: config.spaceshipRadius,
+      radius: state.ship.spaceshipRadius,
       hp: state.spaceshipHp,
       maxHp: state.ship.spaceshipMaxHp
     },
@@ -104,17 +104,17 @@ export function buildWorld(state, config, sampledAtMs) {
       angle: state.shieldAngle,
       active: state.shieldActive,
       energy: state.shieldEnergy,
-      capacity: config.shieldCapacity,
-      arcHalfAngle: config.shieldArcRadians / 2
+      capacity: state.ship.shieldCapacity,
+      arcHalfAngle: state.ship.shieldArcRadians / 2
     },
     cannon: {
       heat: state.cannonHeat,
-      capacity: config.cannonHeatCapacity,
+      capacity: state.ship.cannonHeatCapacity,
       overheated: state.cannonOverheated
     },
     machineGun: {
       heat: state.mgHeat,
-      capacity: config.mgHeatCapacity,
+      capacity: state.ship.mgHeatCapacity,
       overheated: state.mgOverheated
     },
     enemies: framed(state.enemies).map((enemy) => ({
@@ -214,7 +214,6 @@ export function playRun(config, options) {
       state = castUpgradeVotes(state, {
         crewSize,
         level,
-        shieldCapacity: config.shieldCapacity,
         waveSeconds
       });
     }
