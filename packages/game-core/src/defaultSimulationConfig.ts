@@ -24,7 +24,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   shieldEngageTicks: 20,
   shieldMinimumUpTicks: 40,
   shieldCooldownTicks: 20,
-  shieldRearmEnergyFraction: 0.25,
+  shieldRearmEnergy: 25,
   turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
   turretAngularAccelerationPerSecondSquared: (13 * Math.PI) / 15,
   turretAngularBrakingPerSecondSquared: (13 * Math.PI) / 10,

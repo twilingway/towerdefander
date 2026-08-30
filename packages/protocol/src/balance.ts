@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 23 as const;
+export const BALANCE_FILE_VERSION = 24 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -498,8 +498,8 @@ export const balanceTuningSchema = z
     shieldEngageTicks: nonNegativeInteger,
     shieldMinimumUpTicks: nonNegativeInteger,
     shieldCooldownTicks: nonNegativeInteger,
-    /** Share of the battery a drained shield wins back before it holds again. */
-    shieldRearmEnergyFraction: z.number().gt(0).max(1),
+    /** Energy a drained shield wins back before it holds again. */
+    shieldRearmEnergy: positiveFinite,
     shieldRadius: positiveFinite,
     shieldArcRadians: positiveFinite.max(Math.PI * 2),
     shieldMaxAngularSpeedPerSecond: positiveFinite,

@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { AngularRateField, NumberField, PercentField } from "../../components/fields.js";
+import { AngularRateField, NumberField } from "../../components/fields.js";
 
 interface ShieldSectionProps {
   readonly tuning: BalanceTuning;
@@ -60,13 +60,11 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
             patch({ shieldCooldownTicks: Math.max(0, Math.round(shieldCooldownTicks)) });
           }}
         />
-        <PercentField
-          caption="Порог перевзвода, % заряда"
-          fraction={tuning.shieldRearmEnergyFraction}
-          onChange={(shieldRearmEnergyFraction) => {
-            patch({
-              shieldRearmEnergyFraction: Math.min(1, Math.max(0.01, shieldRearmEnergyFraction))
-            });
+        <NumberField
+          caption="Порог перевзвода, энергии"
+          value={tuning.shieldRearmEnergy}
+          onChange={(shieldRearmEnergy) => {
+            patch({ shieldRearmEnergy: Math.max(1, shieldRearmEnergy) });
           }}
         />
         <NumberField

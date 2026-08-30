@@ -197,7 +197,7 @@ const PLAYER_SHIP_FIELDS = [
   "shieldEngageTicks",
   "shieldMinimumUpTicks",
   "shieldCooldownTicks",
-  "shieldRearmEnergyFraction",
+  "shieldRearmEnergy",
   "shieldRadius",
   "shieldArcRadians",
   "shieldMaxAngularSpeedPerSecond",
@@ -217,6 +217,10 @@ function migrateTurretVisual(saved: unknown): unknown {
 
 function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
   const migrated: LegacyRecord = { ...tuning, spaceshipVisual: tuning.spaceshipVisual ?? null };
+  // Version 23 stated the re-arm mark as a share of the battery, which made an
+  // upgrade to the battery lengthen the wait. A leftover key would fail the
+  // strict schema and take the operator's waves with it.
+  delete migrated.shieldRearmEnergyFraction;
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }

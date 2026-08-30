@@ -528,10 +528,14 @@ describe("version 1 migration", () => {
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });
 
-  it("gives a version 22 document the re-arm threshold without touching its waves", async () => {
+  it("retires the fractional re-arm mark without touching an operator's waves", async () => {
     const filePath = await temporaryPresetPath();
     const tuning: Record<string, unknown> = { ...createDefaultTuning() };
-    delete tuning.shieldRearmEnergyFraction;
+    // Version 23 stated it as a share of the battery, so an upgrade to the
+    // battery lengthened the wait. The retired key has to go, or the strict
+    // schema rejects the document and the campaign goes with it.
+    delete tuning.shieldRearmEnergy;
+    tuning.shieldRearmEnergyFraction = 0.25;
     const waves = [
       {
         entries: [
@@ -552,7 +556,7 @@ describe("version 1 migration", () => {
     await writeFile(
       filePath,
       JSON.stringify({
-        version: 22,
+        version: 23,
         activePresetId: "operator",
         presets: [{ id: "operator", name: "Operator", tuning }]
       }),
@@ -564,7 +568,8 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     const saved = store.getState().presets[0]?.tuning;
-    expect(saved?.shieldRearmEnergyFraction).toBe(0.25);
+    expect(saved?.shieldRearmEnergy).toBe(25);
+    expect(saved).not.toHaveProperty("shieldRearmEnergyFraction");
     // The point of the test: the operator's campaign survived the new field.
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });

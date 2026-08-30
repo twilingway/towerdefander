@@ -936,7 +936,7 @@ describe("shield simulation", () => {
 
     // No release and no second press: the old rule left an operator holding a
     // shield that refused for ever with nothing saying why.
-    const mark = config.shieldCapacity * config.shieldRearmEnergyFraction;
+    const mark = config.shieldRearmEnergy;
     while (state.shieldEnergy < mark) state = advanceSpaceshipSimulation(state, config);
     expect(state.shieldRearmRequired).toBe(false);
     expect(state.shieldEnergy).toBeGreaterThanOrEqual(mark);
@@ -950,7 +950,7 @@ describe("shield simulation", () => {
       shieldRearmRequired: true
     };
 
-    const mark = config.shieldCapacity * config.shieldRearmEnergyFraction;
+    const mark = config.shieldRearmEnergy;
     while (state.shieldEnergy < mark) {
       state = applyShieldInput(state, {
         vector: { x: 1, y: 0 },
