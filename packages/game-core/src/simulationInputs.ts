@@ -71,7 +71,7 @@ export function applyShieldInput(
   const vector = normalizeVector(input.vector);
   return {
     ...state,
-    shieldRearmRequired: input.active && (state.shieldRearmRequired || state.shieldEnergy <= 0),
+
     shieldTargetAngle: isZeroVector(vector)
       ? state.shieldTargetAngle
       : canonicalizeAngle(Math.atan2(vector.y, vector.x)),

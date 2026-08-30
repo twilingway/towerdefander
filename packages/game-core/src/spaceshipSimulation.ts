@@ -93,6 +93,14 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly shieldEngageTicks: number;
   readonly shieldMinimumUpTicks: number;
   readonly shieldCooldownTicks: number;
+  /**
+   * Share of the battery a drained shield has to win back before it will hold
+   * again. It re-arms itself at that mark rather than waiting to be released
+   * and pressed: an operator who kept the button down through a depletion was
+   * left holding a shield that silently refused, with nothing on the panel
+   * saying why.
+   */
+  readonly shieldRearmEnergyFraction: number;
   readonly turretMaxAngularSpeedPerSecond: number;
   readonly turretAngularAccelerationPerSecondSquared: number;
   readonly turretAngularBrakingPerSecondSquared: number;
@@ -429,7 +437,11 @@ export function advanceSpaceshipSimulation(
     shieldPhaseTicks = 0;
   }
   const shieldActive = shieldHolding && !shieldDepleted;
-  const shieldRearmRequired = state.shieldRearmRequired || shieldDepleted;
+  // Locked out by the battery, not by the button: draining to nothing sets it,
+  // and winning back the mark clears it with no further input.
+  const shieldRearmRequired = shieldDepleted
+    ? true
+    : state.shieldRearmRequired && shieldEnergy < shieldCapacity * config.shieldRearmEnergyFraction;
   const movedProjectiles = moveProjectiles(state.projectiles, config);
   const projectiles = [...movedProjectiles];
   let nextProjectileSequence = state.nextProjectileSequence;

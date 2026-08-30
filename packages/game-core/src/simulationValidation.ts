@@ -30,6 +30,16 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     }
   }
 
+  // Zero would re-arm a drained shield the instant it starts charging, which is
+  // the behaviour the lockout exists to replace; one demands a full battery.
+  if (
+    !Number.isFinite(config.shieldRearmEnergyFraction) ||
+    config.shieldRearmEnergyFraction <= 0 ||
+    config.shieldRearmEnergyFraction > 1
+  ) {
+    throw new RangeError("shieldRearmEnergyFraction must be greater than 0 and at most 1");
+  }
+
   const positiveFiniteNumbers: readonly (readonly [string, number])[] = [
     ["worldWidth", config.worldWidth],
     ["worldHeight", config.worldHeight],

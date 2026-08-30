@@ -196,6 +196,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     shieldEngageTicks: 20,
     shieldMinimumUpTicks: 40,
     shieldCooldownTicks: 20,
+    shieldRearmEnergyFraction: 0.25,
     shieldRadius: 104,
     shieldArcRadians: Math.PI / 2,
     shieldMaxAngularSpeedPerSecond: 1.7,

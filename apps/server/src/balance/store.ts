@@ -170,6 +170,7 @@ export function createDefaultTuning(): BalanceTuning {
     shieldEngageTicks: config.shieldEngageTicks,
     shieldMinimumUpTicks: config.shieldMinimumUpTicks,
     shieldCooldownTicks: config.shieldCooldownTicks,
+    shieldRearmEnergyFraction: config.shieldRearmEnergyFraction,
     shieldRadius: config.shieldRadius,
     shieldArcRadians: config.shieldArcRadians,
     shieldMaxAngularSpeedPerSecond: config.shieldMaxAngularSpeedPerSecond,

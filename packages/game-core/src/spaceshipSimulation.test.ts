@@ -919,7 +919,7 @@ describe("shield simulation", () => {
     expect(advance(state, config, 10).shieldEnergy).toBe(100);
   });
 
-  it("requires an accepted false then a new true after depletion", () => {
+  it("re-arms itself once the battery wins back the mark", () => {
     const config = createSpaceshipSimulationConfig();
     let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: -1 },
@@ -930,64 +930,39 @@ describe("shield simulation", () => {
     state = advance(state, config, 4);
     expect(state.shieldEnergy).toBe(2);
     expect(state.shieldActive).toBe(false);
-    // Draining put the shield into its cooldown, which the re-arm must outlast.
+    // Draining put the shield into its cooldown and locked it out.
     expect(state.shieldPhase).toBe("cooling");
+    expect(state.shieldRearmRequired).toBe(true);
 
-    state = applyShieldInput(state, {
-      vector: { x: 0, y: -1 },
-      active: false,
-      receivedTick: state.clock.tick
-    });
-    state = advanceSpaceshipSimulation(state, config);
+    // No release and no second press: the old rule left an operator holding a
+    // shield that refused for ever with nothing saying why.
+    const mark = config.shieldCapacity * config.shieldRearmEnergyFraction;
+    while (state.shieldEnergy < mark) state = advanceSpaceshipSimulation(state, config);
     expect(state.shieldRearmRequired).toBe(false);
-    expect(state.shieldActive).toBe(false);
-
-    // The accepted false clears the latch, but the cooldown the drain started
-    // still has to run before a new request is worth anything.
-    const depletedEnergy = state.shieldEnergy;
-    state = advance(state, config, config.shieldCooldownTicks);
-    expect(state.shieldPhase).toBe("down");
-
-    state = applyShieldInput(state, {
-      vector: { x: 0, y: -1 },
-      active: true,
-      receivedTick: state.clock.tick
-    });
-    state = advance(state, config, config.shieldEngageTicks + 1);
-    expect(state.shieldPhase).toBe("up");
-    expect(state.shieldActive).toBe(true);
-    // It recharged through the wait rather than coming back on the fumes it
-    // died with.
-    expect(state.shieldEnergy).toBeGreaterThan(depletedEnergy);
+    expect(state.shieldEnergy).toBeGreaterThanOrEqual(mark);
   });
 
-  it("does not arm a true intent accepted while energy is still empty", () => {
+  it("refuses to hold until the mark, however hard the button is pressed", () => {
     const config = createSpaceshipSimulationConfig();
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       shieldEnergy: 0,
-      shieldRearmRequired: true,
-      inputs: {
-        ...createSpaceshipSimulationState(config, 1).inputs,
-        shield: { vector: { x: 1, y: 0 }, active: true, receivedTick: 0 }
-      }
+      shieldRearmRequired: true
     };
 
-    state = applyShieldInput(state, {
-      vector: { x: 1, y: 0 },
-      active: false,
-      receivedTick: 0
-    });
-    state = applyShieldInput(state, {
-      vector: { x: 1, y: 0 },
-      active: true,
-      receivedTick: 0
-    });
-    state = advance(state, config, 10);
-
-    expect(state.shieldEnergy).toBe(5);
-    expect(state.shieldActive).toBe(false);
-    expect(state.shieldRearmRequired).toBe(true);
+    const mark = config.shieldCapacity * config.shieldRearmEnergyFraction;
+    while (state.shieldEnergy < mark) {
+      state = applyShieldInput(state, {
+        vector: { x: 1, y: 0 },
+        active: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      if (state.shieldEnergy < mark) expect(state.shieldActive).toBe(false);
+    }
+    // And the moment it has the charge, the same held request is honoured.
+    state = advance(state, config, config.shieldEngageTicks + 1);
+    expect(state.shieldActive).toBe(true);
   });
 });
 

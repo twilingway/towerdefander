@@ -197,6 +197,7 @@ const PLAYER_SHIP_FIELDS = [
   "shieldEngageTicks",
   "shieldMinimumUpTicks",
   "shieldCooldownTicks",
+  "shieldRearmEnergyFraction",
   "shieldRadius",
   "shieldArcRadians",
   "shieldMaxAngularSpeedPerSecond",

@@ -891,7 +891,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     expect(room.state.game.shield.energy).toBe(98);
   });
 
-  it("publishes depletion, recharge and a fresh manual re-arm", () => {
+  it("publishes depletion and re-arms itself once the battery is back", () => {
     const { room, controllers } = startGame();
     const shield = controllerAt(controllers, 2);
     const envelope = {
@@ -908,32 +908,14 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     });
     for (let index = 0; index < 120; index += 1) room.advanceGameStep();
     expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
+    expect(room.state.game.display.shieldRearmRequired).toBe(true);
 
-    room.handleShieldInput(shield.client, {
-      ...envelope,
-      sequence: 2,
-      aim: { x: 1, y: 0 },
-      active: true
-    });
-    for (let index = 0; index < 20; index += 1) room.advanceGameStep();
-    expect(room.state.game.shield).toMatchObject({ active: false, energy: 10 });
-
-    room.handleShieldInput(shield.client, {
-      ...envelope,
-      sequence: 3,
-      aim: { x: 1, y: 0 },
-      active: false
-    });
-    room.handleShieldInput(shield.client, {
-      ...envelope,
-      sequence: 4,
-      aim: { x: 1, y: 0 },
-      active: true
-    });
-    // It recharges through the engage window and comes back up. The exact
-    // figure is not asserted: a wave bullet may graze the shield during the
-    // run, and that has nothing to do with the re-arm being tested here.
-    raiseShield(room);
+    // The button is never released and never pressed again: the old rule left
+    // an operator holding a shield that refused for ever with nothing on the
+    // panel saying why. A quarter of the battery at ten a second is two and a
+    // half seconds, and the engage window follows it.
+    for (let index = 0; index < 80; index += 1) room.advanceGameStep();
+    expect(room.state.game.display.shieldRearmRequired).toBe(false);
     expect(room.state.game.shield.active).toBe(true);
     expect(room.state.game.shield.energy).toBeGreaterThan(10);
   });
