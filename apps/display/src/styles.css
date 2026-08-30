@@ -527,6 +527,18 @@ p {
   color: #ff796e;
 }
 
+.wave-countdown--salvage {
+  border-color: rgb(126 255 173 / 75%);
+  color: #cdffe0;
+  box-shadow:
+    inset 0 0 1.6rem rgb(96 255 158 / 16%),
+    0 0 1.4rem rgb(96 255 158 / 22%);
+}
+
+.wave-countdown--salvage strong {
+  color: #7effad;
+}
+
 .display-wave-countdown {
   position: absolute;
   z-index: 25;

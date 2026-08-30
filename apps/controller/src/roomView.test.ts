@@ -76,6 +76,7 @@ describe("controller room view", () => {
           encounterTick: 14,
           phaseTicksRemaining: 0,
           waveSecondsRemaining: 1186,
+          lootWindowSecondsRemaining: 0,
           score: 120
         },
         roleModifiers: {
@@ -174,6 +175,7 @@ describe("controller room view", () => {
           encounterTick: 40,
           phaseTicksRemaining: 200,
           waveSecondsRemaining: 0,
+          lootWindowSecondsRemaining: 0,
           score: 100
         },
         roleModifiers: {
@@ -309,6 +311,7 @@ describe("controller room view", () => {
           encounterTick: 400,
           phaseTicksRemaining: 0,
           waveSecondsRemaining: 0,
+          lootWindowSecondsRemaining: 0,
           score: 900
         },
         roleModifiers: {

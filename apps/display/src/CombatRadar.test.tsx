@@ -43,6 +43,7 @@ const baseGame: DisplayGameSnapshot = {
     encounterTick: 1,
     phaseTicksRemaining: 0,
     waveSecondsRemaining: 1200,
+    lootWindowSecondsRemaining: 0,
     score: 0
   },
   roleModifiers: {

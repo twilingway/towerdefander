@@ -72,6 +72,7 @@ describe("display room view", () => {
           encounterTick: 12,
           phaseTicksRemaining: 0,
           waveSecondsRemaining: 1188,
+          lootWindowSecondsRemaining: 0,
           score: 240
         },
         roleModifiers: {

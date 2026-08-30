@@ -120,6 +120,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         encounterTick: 240,
         phaseTicksRemaining: 0,
         waveSecondsRemaining: 47,
+        lootWindowSecondsRemaining: 0,
         score: 320
       },
       credits: 6,
@@ -148,6 +149,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         encounterTick: 260,
         phaseTicksRemaining: 180,
         waveSecondsRemaining: 0,
+        lootWindowSecondsRemaining: 0,
         score: 320
       },
       credits: 6,
@@ -210,6 +212,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
       encounterTick: 520,
       phaseTicksRemaining: 0,
       waveSecondsRemaining: 0,
+      lootWindowSecondsRemaining: 0,
       score: 610
     },
     credits: 11,

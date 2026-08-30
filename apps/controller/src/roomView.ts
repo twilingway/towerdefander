@@ -101,6 +101,7 @@ interface NetworkGameState {
     encounterTick: number;
     phaseTicksRemaining: number;
     waveSecondsRemaining: number;
+    lootWindowSecondsRemaining: number;
     score: number;
   };
   roleModifiers: {
@@ -194,6 +195,7 @@ export function toControllerRoomView(
               encounterTick: game.encounter.encounterTick,
               phaseTicksRemaining: game.encounter.phaseTicksRemaining,
               waveSecondsRemaining: game.encounter.waveSecondsRemaining,
+              lootWindowSecondsRemaining: game.encounter.lootWindowSecondsRemaining,
               score: game.encounter.score
             },
             roleModifiers: {

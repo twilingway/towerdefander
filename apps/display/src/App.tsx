@@ -36,6 +36,7 @@ import { WeaponHeat } from "./WeaponHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
+import { SalvageCountdown } from "./SalvageCountdown.js";
 import { WaveCountdown } from "./WaveCountdown.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import {
@@ -329,12 +330,15 @@ export function DisplayApp() {
             connectionEpoch={connectionEpoch}
             visibleDemo={visibleDemo}
           />
-          {view.game.encounter.phase === "combat" && (
-            <WaveCountdown
-              className="display-wave-countdown"
-              secondsRemaining={view.game.encounter.waveSecondsRemaining}
-            />
-          )}
+          {view.game.encounter.phase === "combat" &&
+            (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
+              <SalvageCountdown secondsRemaining={view.game.encounter.lootWindowSecondsRemaining} />
+            ) : (
+              <WaveCountdown
+                className="display-wave-countdown"
+                secondsRemaining={view.game.encounter.waveSecondsRemaining}
+              />
+            ))}
           <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
             <TeamUpgradeOverlay
