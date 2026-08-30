@@ -100,6 +100,16 @@ const HELM_REVERSE_RADIANS = (3 * Math.PI) / 4;
 const HELM_REVERSE_MARGIN = 0.35;
 /** Fraction of the arena radius past which the orbit turns back inward. */
 const RIM_FRACTION = 0.8;
+/**
+ * How long the bot keeps going after a shooter it never saw. Several archetypes
+ * out-range the camera frame, and a shot crosses that frame in under a second,
+ * so without a memory the only evidence of the sniper is gone before the pilot
+ * can act on it — which is how the bot ended up sweeping the middle of the
+ * arena farming rocks while it was being shot at.
+ */
+const FIRE_MEMORY_MS = 8_000;
+/** Close enough to the guessed source to call the guess spent. */
+const FIRE_SOURCE_ARRIVAL = 200;
 /** Inside this fraction of the arena the search sweeps instead of closing in. */
 const SEARCH_CENTRE_FRACTION = 0.35;
 /** Share of the frame's short side the stand-off ring may occupy. */
@@ -166,6 +176,9 @@ export function createAutopilotMemory(seed = 1) {
     closing: false,
     closingTargetId: undefined,
     reversing: false,
+    // Where the last shot the bot could see appears to have come from.
+    firedFrom: undefined,
+    firedFromAtMs: 0,
     holding: false,
     holdingTargetId: undefined,
     shieldActive: false
@@ -620,7 +633,7 @@ function escapeVector(world, profile) {
  * launches from beyond it too, so their shots are the only evidence of them
  * the bot ever gets. Walking one back points at whatever fired it.
  */
-export function huntVector(world) {
+export function huntVector(world, memory, nowMs) {
   let nearest;
   for (const shot of [...world.bullets, ...world.missiles]) {
     if (Math.hypot(shot.velocityX, shot.velocityY) <= Number.EPSILON) continue;
@@ -628,7 +641,32 @@ export function huntVector(world) {
     if (nearest !== undefined && distance >= nearest.distance) continue;
     nearest = { distance, bearing: Math.atan2(-shot.velocityY, -shot.velocityX) };
   }
-  return nearest === undefined ? undefined : bearingVector(nearest.bearing);
+
+  if (nearest !== undefined) {
+    // A point rather than a bearing, so the guess stays geometrically true as
+    // the ship moves. One frame out is where an out-ranging archetype sits.
+    memory.firedFrom = {
+      x: world.ship.x + Math.cos(nearest.bearing) * world.cameraViewWidth,
+      y: world.ship.y + Math.sin(nearest.bearing) * world.cameraViewWidth
+    };
+    memory.firedFromAtMs = nowMs;
+    return bearingVector(nearest.bearing);
+  }
+
+  if (memory.firedFrom === undefined) return undefined;
+  const toSource = {
+    x: memory.firedFrom.x - world.ship.x,
+    y: memory.firedFrom.y - world.ship.y
+  };
+  // Spent when it goes stale or when the bot gets there and finds nothing.
+  if (
+    nowMs - memory.firedFromAtMs > FIRE_MEMORY_MS ||
+    Math.hypot(toSource.x, toSource.y) < FIRE_SOURCE_ARRIVAL
+  ) {
+    memory.firedFrom = undefined;
+    return undefined;
+  }
+  return normalize(toSource);
 }
 
 /**
@@ -822,7 +860,7 @@ function planPilotCourse(world, profile, memory, options) {
   // the turret keeps servicing the rock while the pilot goes after them.
   const role = ranked.find(({ entity }) => entity.entityId === target?.entityId)?.role;
   if (role !== "enemy" && role !== "missile") {
-    return { vector: huntVector(world) ?? searchVector(world, memory), mgFiring };
+    return { vector: huntVector(world, memory, nowMs) ?? searchVector(world, memory), mgFiring };
   }
 
   // Holding a ring around a target the turret cannot track is the stalemate:

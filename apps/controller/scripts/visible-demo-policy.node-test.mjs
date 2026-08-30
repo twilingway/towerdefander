@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createAutopilotMemory,
   helmIntent,
+  huntVector,
   directAim,
   bearingRate,
   commitTarget,
@@ -314,6 +315,40 @@ test("the shield rides the predicted contact instead of the energy meter", () =>
   assert.equal(planShield(quiet, ACE, createAutopilotMemory()).active, false);
   // The old policy keeps the shield up on a full battery with nothing incoming.
   assert.equal(planShield(quiet, ROOKIE, createAutopilotMemory()).active, true);
+});
+
+test("the bot keeps going after a shooter it never saw", () => {
+  const memory = createAutopilotMemory();
+  // A round crossing right to left: its source lies off to the right, beyond
+  // what the frame shows.
+  const underFire = world({
+    bullets: [entity("shot", 1, { x: 2600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const answering = huntVector(underFire, memory, 1_000);
+  assert.ok(answering !== undefined && answering.x > 0.9);
+
+  // The round is gone a tick later, and without a memory this is where the bot
+  // gave up and went back to sweeping the middle of the arena.
+  const quiet = world();
+  const still = huntVector(quiet, memory, 1_400);
+  assert.ok(still !== undefined && still.x > 0.9);
+
+  // It does not chase forever: a guess nothing confirmed goes stale.
+  assert.equal(huntVector(quiet, memory, 1_000 + 9_000), undefined);
+  assert.equal(huntVector(quiet, memory, 1_000 + 9_100), undefined);
+});
+
+test("the guess is spent once the bot arrives and finds nothing", () => {
+  const memory = createAutopilotMemory();
+  const underFire = world({
+    bullets: [entity("shot", 1, { x: 2600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  huntVector(underFire, memory, 1_000);
+  const source = memory.firedFrom;
+  assert.ok(source !== undefined);
+
+  const arrived = world({ ship: { ...world().ship, x: source.x, y: source.y } });
+  assert.equal(huntVector(arrived, memory, 1_200), undefined);
 });
 
 test("the shield covers the shot before the rock", () => {
