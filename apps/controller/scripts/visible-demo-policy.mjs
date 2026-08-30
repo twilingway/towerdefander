@@ -144,6 +144,23 @@ const COSTLY_THREAT_WEIGHT = THREAT_WEIGHTS.bullet;
  * arc simply tracks the nearest contact.
  */
 const SHIELD_PRIORITY_SECONDS = 1;
+/**
+ * How far ahead a homing missile is flown to find where it will arrive, and at
+ * what step. A straight line is the wrong question to ask of a missile that
+ * turns: this preset's boss fires its burst wide of the ship, so at launch the
+ * line says the missile never arrives at all, and the arc learns about it only
+ * once it has curved back in — by which time it is seconds too late. Six
+ * seconds is a fifth of a stock missile's life; a tenth-of-a-second step is
+ * twice the simulation's own and costs sixty cheap iterations per missile.
+ */
+const MISSILE_FORECAST_SECONDS = 6;
+const MISSILE_FORECAST_STEP = 0.1;
+/**
+ * How stale a guessed firing position may be before the arc stops facing it.
+ * Shorter than the pilot's memory of the same guess, because the arc has to
+ * commit its facing to one bearing and a stale one is worse than none.
+ */
+const SHIELD_SOURCE_MEMORY_MS = 3_000;
 
 const ZERO_VECTOR = { x: 0, y: 0 };
 
@@ -252,6 +269,24 @@ function steerMissile(missile, ship, seconds) {
     velocityX: Math.cos(turned) * speed,
     velocityY: Math.sin(turned) * speed
   };
+}
+
+/**
+ * Where a homing missile will cross the shield ring, found by flying it rather
+ * than by intersecting its current course. The ship is held still for the
+ * forecast: it is the missile that does the chasing, and a guess that also
+ * predicted the helm would need the pilot's plan, which is decided after this.
+ */
+function forecastMissileContact(ship, reach, missile) {
+  const range = reach + missile.radius;
+  let flown = missile;
+  for (let step = 0; step * MISSILE_FORECAST_STEP <= MISSILE_FORECAST_SECONDS; step += 1) {
+    if (Math.hypot(flown.x - ship.x, flown.y - ship.y) <= range) {
+      return { seconds: step * MISSILE_FORECAST_STEP, arrival: flown };
+    }
+    flown = advanceEntity(steerMissile(flown, ship, MISSILE_FORECAST_STEP), MISSILE_FORECAST_STEP);
+  }
+  return undefined;
 }
 
 /**
@@ -465,21 +500,34 @@ export function aimBearing(world, target, projectileSpeed, profile, memory) {
  */
 export function nextShieldContact(world) {
   const contacts = [];
-  const threats = [
-    ...world.missiles.map((entity) => ({ entity, weight: THREAT_WEIGHTS.missile })),
+  const bearingOf = (arrival) => Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x);
+
+  // Missiles are flown rather than extended, because they steer; the rest hold
+  // a course, so intersecting it is exact and costs nothing.
+  for (const entity of world.missiles) {
+    const forecast = forecastMissileContact(world.ship, world.shieldRadius, entity);
+    if (forecast === undefined) continue;
+    contacts.push({
+      entity,
+      weight: THREAT_WEIGHTS.missile,
+      seconds: forecast.seconds,
+      bearing: bearingOf(forecast.arrival)
+    });
+  }
+
+  const straight = [
     ...world.bullets.map((entity) => ({ entity, weight: THREAT_WEIGHTS.bullet })),
     ...world.asteroids.map((entity) => ({ entity, weight: THREAT_WEIGHTS.asteroid }))
   ];
 
-  for (const { entity, weight } of threats) {
+  for (const { entity, weight } of straight) {
     const seconds = timeToContact(world.ship, world.shieldRadius, entity);
     if (seconds === undefined) continue;
-    const arrival = advanceEntity(entity, seconds);
     contacts.push({
       entity,
       weight,
       seconds,
-      bearing: Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x)
+      bearing: bearingOf(advanceEntity(entity, seconds))
     });
   }
   if (contacts.length === 0) return undefined;
@@ -511,10 +559,40 @@ function shieldAlreadyCovers(world, bearing) {
   return Math.abs(shortestAngleDelta(world.shield.angle, bearing)) <= world.shield.arcHalfAngle;
 }
 
+/**
+ * Where fire is expected from while none of it exists yet. The arc crosses the
+ * hull at about 1.7 rad/s, so a half turn costs the better part of two seconds
+ * — longer than a bullet takes to cross the whole camera frame. Pointed only at
+ * what is already flying, the arc arrives after the hit; pointed at whoever is
+ * about to fire, it is already there when the round appears. The nearest enemy
+ * is the guess, and with the frame empty it is the position the pilot walked
+ * the last shots back to, which is where an out-ranging sniper sits.
+ */
+function expectedThreatBearing(world, memory) {
+  let nearest;
+  for (const enemy of world.enemies) {
+    const distance = distanceBetween(world.ship, enemy);
+    if (nearest === undefined || distance < nearest.distance) nearest = { enemy, distance };
+  }
+  if (nearest !== undefined) {
+    return Math.atan2(nearest.enemy.y - world.ship.y, nearest.enemy.x - world.ship.x);
+  }
+
+  const source = memory.firedFrom;
+  if (source === undefined || world.sampledAtMs - memory.firedFromAtMs > SHIELD_SOURCE_MEMORY_MS) {
+    return undefined;
+  }
+  return Math.atan2(source.y - world.ship.y, source.x - world.ship.x);
+}
+
 export function planShield(world, profile, memory) {
   const contact = nextShieldContact(world);
-  const aim =
-    contact === undefined ? bearingVector(world.shield.angle) : bearingVector(contact.bearing);
+  // Facing is decided ahead of the threat; raising is still the operator's
+  // number from the console. The arc may sit on an enemy for a whole magazine
+  // without the shield ever coming up, and that is the intended shape: turning
+  // costs nothing, holding costs the battery.
+  const expected = contact === undefined ? expectedThreatBearing(world, memory) : contact.bearing;
+  const aim = bearingVector(expected ?? world.shield.angle);
 
   if (!profile.threatAwareShield) {
     memory.shieldActive = nextShieldActive(memory.shieldActive, world.shield.energy);

@@ -14,6 +14,7 @@ import {
   extrapolateWorld,
   interceptAim,
   nextShieldActive,
+  nextShieldContact,
   pilotVector,
   planGunner,
   planPilot,
@@ -369,6 +370,76 @@ test("the shield covers the shot before the rock", () => {
     bullets: [entity("shot", 2, { x: 5000, y: 2200, velocityX: -900, radius: 7 })]
   });
   assert.ok(planShield(distantShot, ACE, createAutopilotMemory()).aim.y < -0.9);
+});
+
+test("the arc reads a missile that has not turned in yet", () => {
+  // Launched away from the ship, which is what this catalogue's boss does: the
+  // burst leaves wide of the target and curves back. Its current line never
+  // reaches the ship, so a straight-line reading says there is nothing there.
+  const launched = world({
+    shield: {
+      angle: Math.PI,
+      active: false,
+      energy: 100,
+      capacity: 100,
+      arcHalfAngle: Math.PI / 4
+    },
+    missiles: [entity("missile", 1, { x: 2600, y: 2200, velocityX: 240, heading: 0 })]
+  });
+  assert.equal(
+    timeToContact(launched.ship, launched.shieldRadius, launched.missiles[0]),
+    undefined
+  );
+
+  const contact = nextShieldContact(launched);
+  assert.ok(contact !== undefined, "flying the missile finds the arrival its line hides");
+  assert.ok(contact.seconds > 0);
+
+  // The arc leaves the bearing it was parked on and faces where the missile
+  // will come back from, rather than holding while the line says nothing.
+  const facing = planShield(launched, ACE, createAutopilotMemory());
+  assert.ok(facing.aim.x > 0.5);
+});
+
+test("the arc faces the shooter before the shot exists", () => {
+  // Nothing in the air, one enemy on the beam. The arc crosses the hull slower
+  // than a round crosses the frame, so waiting for the round means arriving
+  // after it.
+  const watched = world({
+    shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    enemies: [enemyAt("shooter", 1, 2200, 1400)]
+  });
+  const early = planShield(watched, ACE, createAutopilotMemory());
+  assert.ok(early.aim.y < -0.9, "the sector faces the enemy");
+  assert.equal(early.active, false, "facing is free, holding is not");
+
+  // With the frame empty the guess is where the pilot walked the last shots
+  // back to — the one case where the threat is something nobody can see.
+  const memory = createAutopilotMemory();
+  huntVector(
+    world({ bullets: [entity("shot", 1, { x: 2600, y: 2200, velocityX: -900, radius: 7 })] }),
+    memory,
+    1_000
+  );
+  const remembered = planShield(world(), ACE, memory);
+  assert.ok(remembered.aim.x > 0.9);
+  assert.equal(remembered.active, false);
+
+  // A guess nobody confirmed stops being worth a facing: the arc holds where it
+  // is instead of committing to a position that may no longer have anything on
+  // it. Parked off the guessed bearing, so holding and facing differ.
+  const parked = {
+    ...world(),
+    sampledAtMs: 1_000 + 4_000,
+    shield: {
+      angle: Math.PI / 2,
+      active: false,
+      energy: 100,
+      capacity: 100,
+      arcHalfAngle: Math.PI / 4
+    }
+  };
+  assert.ok(planShield(parked, ACE, memory).aim.y > 0.9);
 });
 
 test("a drained shield is told to drop so the rearm latch clears", () => {
