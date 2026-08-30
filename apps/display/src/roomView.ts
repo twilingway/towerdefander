@@ -64,6 +64,15 @@ interface NetworkAsteroidState extends NetworkCombatEntityState {
   origin: AsteroidOrigin;
 }
 
+interface NetworkLaserBeamState {
+  entityId: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  source: "cannon" | "machineGun";
+}
+
 interface NetworkLootDropState extends NetworkCombatEntityState {
   kind: LootKind;
   amount: number;
@@ -180,6 +189,7 @@ interface NetworkGameState {
     asteroids: ValueCollection<NetworkAsteroidState>;
     purchasedUpgrades: readonly string[];
     lootDrops: ValueCollection<NetworkLootDropState>;
+    laserBeams: ValueCollection<NetworkLaserBeamState>;
     friendlyProjectiles: ValueCollection<NetworkProjectileState>;
     hostileProjectiles: ValueCollection<NetworkProjectileState>;
     homingMissiles: ValueCollection<NetworkHomingMissileState>;
@@ -332,6 +342,7 @@ export function toDisplayRoomView(
             asteroids: toSpawnOrder(display.asteroids),
             purchasedUpgrades: [...display.purchasedUpgrades],
             lootDrops: toSpawnOrder(display.lootDrops),
+            laserBeams: [...display.laserBeams.values()].map((beam) => ({ ...beam })),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
             hostileProjectiles: toSpawnOrder(display.hostileProjectiles).map(toPublicProjectile),
             homingMissiles: toSpawnOrder(display.homingMissiles).map(toPublicHomingMissile)

@@ -77,6 +77,7 @@ const EMPTY_WORLD_ENTITIES = {
   enemyShips: [],
   asteroids: [],
   lootDrops: [],
+  laserBeams: [],
   friendlyProjectiles: [],
   hostileProjectiles: [],
   homingMissiles: []
@@ -166,6 +167,7 @@ function createPreviewGame(
         }
       ],
       lootDrops: [],
+      laserBeams: [],
       asteroids: [
         {
           entityId: "preview-asteroid-1",

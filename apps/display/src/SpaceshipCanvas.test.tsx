@@ -155,6 +155,7 @@ const testGame = {
   obstacles: [],
   enemyShips: [],
   lootDrops: [],
+  laserBeams: [],
   asteroids: [
     {
       entityId: "asteroid-near",

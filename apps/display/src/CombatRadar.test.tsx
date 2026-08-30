@@ -75,6 +75,7 @@ const baseGame: DisplayGameSnapshot = {
     }
   ],
   lootDrops: [],
+  laserBeams: [],
   asteroids: [
     {
       origin: "wave",

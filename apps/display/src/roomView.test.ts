@@ -79,6 +79,7 @@ describe("display room view", () => {
         display: {
           cameraViewWidth: 1600,
           purchasedUpgrades: [],
+          laserBeams: [],
           backgroundParallaxStrength: 0.8,
           backgroundDriftSpeed: 2,
           backgroundNebulaAlpha: 0.5,

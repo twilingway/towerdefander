@@ -93,6 +93,7 @@ class SpaceshipScene extends Phaser.Scene {
   private noseMarker: Phaser.GameObjects.Graphics | undefined;
   private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
+  private beams: Phaser.GameObjects.Graphics | undefined;
   private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
@@ -165,6 +166,9 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret = createTurret(this, this.snapshot);
     this.shield = this.add.graphics().setDepth(14);
     this.shieldGlow = attachShieldGlow(this.shield);
+    // Above the arena, below the shield: a pulse is over before it can hide
+    // anything that matters.
+    this.beams = this.add.graphics().setDepth(13);
     const tick = this.snapshot.tick;
     this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
@@ -196,6 +200,7 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret.rotation = sampleAngleTrack(this.turretTrack, playbackTick);
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     this.drawShield();
+    this.drawLaserBeams();
     this.focusCamera(spaceshipPosition);
 
     for (const visual of this.combatVisuals.values()) {
@@ -369,6 +374,26 @@ class SpaceshipScene extends Phaser.Scene {
       );
       layer.sprite.tilePositionX = modPositive(offset.x, layer.sprite.frame.source.width);
       layer.sprite.tilePositionY = modPositive(offset.y, layer.sprite.frame.source.height);
+    }
+  }
+
+  /**
+   * Laser pulses, drawn straight from the authoritative endpoints. They are not
+   * entities and have no track to interpolate: the server says a beam existed
+   * for these two ticks, and the display shows exactly that.
+   */
+  private drawLaserBeams(): void {
+    if (this.beams === undefined) return;
+    this.beams.clear();
+    for (const beam of this.snapshot.laserBeams) {
+      const style = beam.source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
+      this.beams.lineStyle(style.width, style.color, style.alpha);
+      this.beams.beginPath();
+      this.beams.moveTo(beam.fromX, beam.fromY);
+      this.beams.lineTo(beam.toX, beam.toY);
+      this.beams.strokePath();
+      this.beams.fillStyle(style.color, style.alpha);
+      this.beams.fillCircle(beam.fromX, beam.fromY, style.width);
     }
   }
 
@@ -670,6 +695,10 @@ const SHIELD_GLOW_DISTANCE = 24;
  * game object never gets a filter list. The arc still has to be drawn, so the
  * glow is treated as an enhancement that may simply be unavailable.
  */
+/** Turret and nose beams read apart the way their projectiles already do. */
+const LASER_CANNON_STYLE = { width: 3, color: 0x7ef0ff, alpha: 0.9 } as const;
+const LASER_NOSE_STYLE = { width: 2, color: 0xffd783, alpha: 0.85 } as const;
+
 function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.Glow | undefined {
   shield.enableFilters();
   const filters = shield.filters;
