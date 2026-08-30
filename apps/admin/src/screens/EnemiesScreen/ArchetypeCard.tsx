@@ -10,7 +10,7 @@ import {
 
 import { AssetPicker } from "../../AssetPicker.js";
 import { EnemyPreview } from "../../EnemyPreview.js";
-import { DegreesField, NumberField } from "../../components/fields.js";
+import { DegreesField, NumberField, PercentField } from "../../components/fields.js";
 import { ENEMY_SKILL_LEVEL_LABELS } from "../../model/enemySkillLabels.js";
 import { nextArchetypeId, usageOf } from "./catalogue.js";
 import { WeaponEditor } from "./WeaponEditor.js";
@@ -307,6 +307,13 @@ export function ArchetypeCard({ kind, archetype, tuning, onChange }: ArchetypeCa
           value={archetype.creditReward}
           onChange={(creditReward) => {
             patchArchetype(kind, { creditReward });
+          }}
+        />
+        <PercentField
+          caption="Шанс лута"
+          fraction={archetype.lootChance}
+          onChange={(lootChance) => {
+            patchArchetype(kind, { lootChance });
           }}
         />
       </div>

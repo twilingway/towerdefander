@@ -4,6 +4,7 @@ import { AppearanceCard } from "./AppearanceCard.js";
 import { CannonSection } from "./CannonSection.js";
 import { HullSection } from "./HullSection.js";
 import { MachineGunSection } from "./MachineGunSection.js";
+import { SalvageSection } from "./SalvageSection.js";
 import { ShieldSection } from "./ShieldSection.js";
 
 interface PlayerScreenProps {
@@ -67,6 +68,7 @@ export function PlayerScreen({ tuning, onChange }: PlayerScreenProps) {
         <CannonSection tuning={tuning} patch={patch} />
         <MachineGunSection tuning={tuning} patch={patch} />
         <ShieldSection tuning={tuning} patch={patch} />
+        <SalvageSection tuning={tuning} patch={patch} />
       </article>
     </section>
   );

@@ -60,7 +60,8 @@ export function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           spawnCost: 2,
           unlockWave: 1,
           scoreReward: 20,
-          creditReward: 2
+          creditReward: 2,
+          lootChance: 0.2
         }
       }
     });

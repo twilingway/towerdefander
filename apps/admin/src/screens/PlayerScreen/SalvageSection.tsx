@@ -1,0 +1,82 @@
+import { type BalanceTuning } from "@spaceship-defender/protocol";
+
+import { DelayField, NumberField } from "../../components/fields.js";
+
+interface SalvageSectionProps {
+  readonly tuning: BalanceTuning;
+  readonly patch: (values: Partial<BalanceTuning>) => void;
+}
+
+/** Лут: единственный способ вернуть корпус внутри прогона. */
+export function SalvageSection({ tuning, patch }: SalvageSectionProps) {
+  return (
+    <>
+      <h3 className="card__subtitle">Лут и ремонт</h3>
+      <p className="screen__hint">
+        Шанс дропа задаётся на карточке врага, потому что перехватчиков на волне восемь, а босс
+        один; одна вероятность им не подходит. Босс роняет ремонт всегда и своего номинала. Здесь —
+        что именно даёт подобранное и насколько трудно до него долететь. Все числа подбираются
+        прогонами на вкладке «Статистика», а не на глаз: слишком мало — ничего не изменится, слишком
+        много — исчезнет смертность.
+      </p>
+      <div className="card__grid">
+        <NumberField
+          caption="Ремонт корпуса"
+          value={tuning.lootRepairAmount}
+          onChange={(lootRepairAmount) => {
+            patch({ lootRepairAmount });
+          }}
+        />
+        <NumberField
+          caption="Энергия щита"
+          value={tuning.lootShieldAmount}
+          onChange={(lootShieldAmount) => {
+            patch({ lootShieldAmount });
+          }}
+        />
+        <NumberField
+          caption="Ремонт с босса"
+          value={tuning.lootBossRepairAmount}
+          onChange={(lootBossRepairAmount) => {
+            patch({ lootBossRepairAmount });
+          }}
+        />
+        <DelayField
+          caption="Время жизни"
+          ticks={tuning.lootLifetimeTicks}
+          onChange={(lootLifetimeTicks) => {
+            patch({ lootLifetimeTicks });
+          }}
+        />
+        <NumberField
+          caption="Радиус магнита"
+          value={tuning.lootMagnetRadius}
+          onChange={(lootMagnetRadius) => {
+            patch({ lootMagnetRadius });
+          }}
+        />
+        <NumberField
+          caption="Ускорение к кораблю"
+          value={tuning.lootMagnetAccelerationPerSecondSquared}
+          onChange={(lootMagnetAccelerationPerSecondSquared) => {
+            patch({ lootMagnetAccelerationPerSecondSquared });
+          }}
+        />
+        <NumberField
+          caption="Размер лута"
+          value={tuning.lootDropRadius}
+          onChange={(lootDropRadius) => {
+            patch({ lootDropRadius });
+          }}
+        />
+        <NumberField
+          caption="Затухание дрейфа"
+          value={tuning.lootDriftDampingPerSecond}
+          onChange={(lootDriftDampingPerSecond) => {
+            patch({ lootDriftDampingPerSecond });
+          }}
+        />
+      </div>
+    </>
+  );
+}
