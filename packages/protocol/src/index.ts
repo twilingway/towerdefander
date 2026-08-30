@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 36 as const;
+export const PROTOCOL_VERSION = 37 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -27,6 +27,11 @@ export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
 export const DEFEAT_REASONS = ["spaceship_destroyed", "wave_timeout"] as const;
 export const WAVE_TTL_SECONDS = 20 * 60;
 export const MAX_WAVE_TTL_SECONDS = 24 * 60 * 60;
+/**
+ * Ceiling for the salvage window a won wave stays open for. The window itself
+ * is a preset knob; this only keeps an absurd value off the wire.
+ */
+export const MAX_LOOT_WINDOW_SECONDS = 120 as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
 export const ROOM_CLOSING_REASONS = [
   "display_left",
@@ -221,6 +226,8 @@ export const publicEncounterViewSchema = z
     encounterTick: safeNonnegativeInteger,
     phaseTicksRemaining: z.number().int().min(0).max(INTERMISSION_DURATION_TICKS),
     waveSecondsRemaining: z.number().int().min(0).max(MAX_WAVE_TTL_SECONDS),
+    /** Seconds left to collect salvage from a wave that is already won. */
+    lootWindowSecondsRemaining: z.number().int().min(0).max(MAX_LOOT_WINDOW_SECONDS),
     score: safeNonnegativeInteger
   })
   .strict()
@@ -233,6 +240,8 @@ export const publicEncounterViewSchema = z
       issue(context, ["waveSecondsRemaining"], "Combat requires a positive wave countdown.");
     if (value.phase !== "combat" && value.waveSecondsRemaining !== 0)
       issue(context, ["waveSecondsRemaining"], "Only combat may publish a wave countdown.");
+    if (value.phase !== "combat" && value.lootWindowSecondsRemaining !== 0)
+      issue(context, ["lootWindowSecondsRemaining"], "Only combat may publish a salvage window.");
     if ((value.phase === "result") !== (value.outcome !== null))
       issue(context, ["outcome"], "Only a terminal result requires an outcome.");
     if ((value.outcome === "defeat") !== (value.defeatReason !== null))

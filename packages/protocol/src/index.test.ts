@@ -119,6 +119,7 @@ function controllerRoom(): ControllerRoomView {
         encounterTick: 10,
         phaseTicksRemaining: 0,
         waveSecondsRemaining: WAVE_TTL_SECONDS,
+        lootWindowSecondsRemaining: 0,
         score: 100
       },
       roleModifiers: roleModifiers(),
@@ -277,6 +278,7 @@ function intermissionController(): ControllerRoomView {
     encounterTick: 40,
     phaseTicksRemaining: INTERMISSION_DURATION_TICKS,
     waveSecondsRemaining: 0,
+    lootWindowSecondsRemaining: 0,
     score: 500
   };
   room.game.shield.active = false;
@@ -285,40 +287,40 @@ function intermissionController(): ControllerRoomView {
 }
 
 describe("protocol v33 handshake and messages", () => {
-  it("publishes the fixed crew and v36", () => {
-    expect(PROTOCOL_VERSION).toBe(36);
+  it("publishes the fixed crew and v37", () => {
+    expect(PROTOCOL_VERSION).toBe(37);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v36 create/join and rejects v35 and unknown fields", () => {
+  it("accepts v37 create/join and rejects v36 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 36, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 37, crewSize: 3 })
         .success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 35, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 36, crewSize: 3 })
         .success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 36,
+        protocolVersion: 37,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 35,
+        protocolVersion: 36,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 36,
+        protocolVersion: 37,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -350,9 +352,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v36 and the active run", () => {
+  it("keeps continuous role messages strict on v37 and the active run", () => {
     const envelope = {
-      protocolVersion: 36,
+      protocolVersion: 37,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -428,7 +430,7 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 35,
+        protocolVersion: 36,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -438,9 +440,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v36 pilot input", () => {
+  it("requires the machine gun trigger on v37 pilot input", () => {
     const envelope = {
-      protocolVersion: 36,
+      protocolVersion: 37,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -457,7 +459,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("carries an optional turn intent on pilot input", () => {
     const envelope = {
-      protocolVersion: 36,
+      protocolVersion: 37,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -479,11 +481,11 @@ describe("protocol v33 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 36, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 37, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 35, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 36, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -526,7 +528,7 @@ describe("protocol v33 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 36,
+    protocolVersion: 37,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -905,6 +907,7 @@ describe("strict v33 room projections", () => {
         encounterTick: 1,
         phaseTicksRemaining: 10,
         waveSecondsRemaining: WAVE_TTL_SECONDS,
+        lootWindowSecondsRemaining: 0,
         score: 0
       }).success
     ).toBe(false);
@@ -992,18 +995,18 @@ describe("strict v33 room projections", () => {
 describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 36, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 37, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 36,
+        protocolVersion: 37,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 36,
+        protocolVersion: 37,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -1011,13 +1014,13 @@ describe("v33 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 35,
+        protocolVersion: 36,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 35, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 36, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

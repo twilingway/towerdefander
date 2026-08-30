@@ -164,6 +164,8 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     lootMagnetRadius: 260,
     lootMagnetAccelerationPerSecondSquared: 900,
     lootDriftDampingPerSecond: 1.6,
+    lootWindowTicks: 300,
+    lootBossWindowTicks: 600,
     projectileVisual: null,
     turretVisual: null,
     mgProjectileVisual: null,

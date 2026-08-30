@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 25 as const;
+export const BALANCE_FILE_VERSION = 26 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -442,6 +442,12 @@ export const balanceTuningSchema = z
     lootMagnetAccelerationPerSecondSquared: positiveFinite,
     /** How fast the dead enemy's inherited motion bleeds off the drop. */
     lootDriftDampingPerSecond: nonNegativeFinite,
+    /**
+     * How long a cleared wave stays open while salvage is still on the field,
+     * and the longer window a boss wave gets for its own repair.
+     */
+    lootWindowTicks: positiveInteger,
+    lootBossWindowTicks: positiveInteger,
     /** Look of the ambient hazard; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
