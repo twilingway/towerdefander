@@ -144,6 +144,43 @@ function enemyAt(entityId, spawnSequence, x, y, overrides = {}) {
   });
 }
 
+test("a manoeuvre is held until its band is properly left", () => {
+  // The stand-off ring is 360 units here (the camera frame clamps it), so the
+  // entry band ends at 414 and the release band at 437. The second sample is a
+  // tick later, because the pilot re-reads a target only once per tick.
+  const onStation = world({ enemies: [enemyAt("target", 1, 2_600, 2_200)] });
+  const justOutside = world({
+    sampledAtMs: 1_050,
+    enemies: [enemyAt("target", 1, 2_620, 2_200)]
+  });
+
+  // Judged from scratch, twenty units past the edge is a different manoeuvre:
+  // the pilot leaves the ring and orbits.
+  const fresh = planPilot(justOutside, ACE, createAutopilotMemory());
+  assert.ok(Math.hypot(fresh.vector.x, fresh.vector.y) > 0.5);
+
+  // Held: a pilot already on station stays on station, so the requested course
+  // stops swinging across the target every other tick on the band edge.
+  const memory = createAutopilotMemory();
+  const settled = planPilot(onStation, ACE, memory);
+  assert.equal(Math.hypot(settled.vector.x, settled.vector.y), 0);
+  const held = planPilot(justOutside, ACE, memory);
+  assert.equal(Math.hypot(held.vector.x, held.vector.y), 0);
+});
+
+test("the held manoeuvre belongs to the target it was chosen for", () => {
+  const memory = createAutopilotMemory();
+  planPilot(world({ enemies: [enemyAt("first", 1, 2_600, 2_200)] }), ACE, memory);
+  // A different target is judged on its own geometry, not on the verdict the
+  // previous one earned.
+  const other = planPilot(
+    world({ sampledAtMs: 1_050, enemies: [enemyAt("second", 2, 2_620, 2_200)] }),
+    ACE,
+    memory
+  );
+  assert.ok(Math.hypot(other.vector.x, other.vector.y) > 0.5);
+});
+
 test("the nose gun holds fire until the target enters the cone", () => {
   // Dead ahead: both levels shoot.
   const ahead = world({ enemies: [enemyAt("ahead", 1, 2900, 2200)] });

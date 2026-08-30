@@ -69,6 +69,14 @@ const MISSILE_TURN_RATE_PER_SECOND = Math.PI / 2;
 const MAX_EXTRAPOLATION_SECONDS = 0.2;
 /** Fraction of the stand-off distance treated as "on station". */
 const STANDOFF_BAND = 0.15;
+/**
+ * How far a band has to be left before the manoeuvre it gates is abandoned.
+ * A predicate that flips on its own threshold makes the pilot alternate
+ * between two near-opposite courses every other tick: measured over three
+ * runs of the veteran bot, the orbit/close pair alone reversed the requested
+ * course by more than 1.5 rad 192 times, and the stand-off pair 66 more.
+ */
+const BAND_RELEASE = 0.7;
 /** Fraction of the arena radius past which the orbit turns back inward. */
 const RIM_FRACTION = 0.8;
 /** Inside this fraction of the arena the search sweeps instead of closing in. */
@@ -119,6 +127,11 @@ export function createAutopilotMemory(seed = 1) {
     committedAtMs: 0,
     decidedAtMs: undefined,
     orbitSign: 1,
+    // Which manoeuvre is being held, and for which target it was chosen.
+    closing: false,
+    closingTargetId: undefined,
+    holding: false,
+    holdingTargetId: undefined,
     shieldActive: false
   };
 }
@@ -623,9 +636,32 @@ export function bearingRate(world, target) {
  * the target on a constant bearing, which drives the sweep to nothing and hands
  * the fight to the hull — it turns twice as fast as the turret does.
  */
-function traverseLosing(world, target, options) {
+function traverseLosing(world, target, options, memory) {
   const rate = options.turretRate ?? TURRET_RATE_PER_SECOND;
-  return Math.abs(bearingRate(world, target)) > rate * TRAVERSE_MARGIN;
+  const sweep = Math.abs(bearingRate(world, target));
+  const enter = rate * TRAVERSE_MARGIN;
+  // Held per target: the geometry that made the call belongs to that target,
+  // so a new one is judged from scratch rather than inheriting the verdict.
+  const held = memory.closingTargetId === target.entityId && memory.closing === true;
+  const closing = sweep > enter * (held ? BAND_RELEASE : 1);
+  memory.closingTargetId = target.entityId;
+  memory.closing = closing;
+  return closing;
+}
+
+/**
+ * On station means inside the stand-off band, and once on station it takes a
+ * wider excursion to be off it again. Same reason as `traverseLosing`: without
+ * the widening, holding and orbiting trade places on the band edge and the
+ * requested course swings across the target every other tick.
+ */
+function onStation(distance, standoff, target, memory) {
+  const band = standoff * STANDOFF_BAND;
+  const held = memory.holdingTargetId === target.entityId && memory.holding === true;
+  const holding = Math.abs(distance - standoff) <= (held ? band / BAND_RELEASE : band);
+  memory.holdingTargetId = target.entityId;
+  memory.holding = holding;
+  return holding;
 }
 
 function orbitVector(world, target, profile, memory, distance) {
@@ -706,13 +742,13 @@ export function planPilot(world, profile, memory, options = {}) {
 
   // Holding a ring around a target the turret cannot track is the stalemate:
   // close on the intercept point instead and let the nose gun finish it.
-  if (traverseLosing(world, target, options)) {
+  if (traverseLosing(world, target, options, memory)) {
     return { vector: bearingVector(bearing), mgFiring };
   }
 
   const distance = distanceBetween(world.ship, target);
   const standoff = effectiveStandoff(world, profile);
-  if (Math.abs(distance - standoff) <= standoff * STANDOFF_BAND) {
+  if (onStation(distance, standoff, target, memory)) {
     return { vector: onAxis ? ZERO_VECTOR : bearingVector(bearing), mgFiring };
   }
   return { vector: orbitVector(world, target, profile, memory, distance), mgFiring };
