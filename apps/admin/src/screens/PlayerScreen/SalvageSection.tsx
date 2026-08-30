@@ -17,7 +17,8 @@ export function SalvageSection({ tuning, patch }: SalvageSectionProps) {
         один; одна вероятность им не подходит. Босс роняет ремонт всегда и своего номинала. Здесь —
         что именно даёт подобранное и насколько трудно до него долететь. Все числа подбираются
         прогонами на вкладке «Статистика», а не на глаз: слишком мало — ничего не изменится, слишком
-        много — исчезнет смертность.
+        много — исчезнет смертность. Окно сбора держит уже выигранную волну открытой, пока лут ещё
+        на поле: без него последний дроп пропадал бы в передышке, где корабль не летает.
       </p>
       <div className="card__grid">
         <NumberField
@@ -46,6 +47,20 @@ export function SalvageSection({ tuning, patch }: SalvageSectionProps) {
           ticks={tuning.lootLifetimeTicks}
           onChange={(lootLifetimeTicks) => {
             patch({ lootLifetimeTicks });
+          }}
+        />
+        <DelayField
+          caption="Окно сбора"
+          ticks={tuning.lootWindowTicks}
+          onChange={(lootWindowTicks) => {
+            patch({ lootWindowTicks });
+          }}
+        />
+        <DelayField
+          caption="Окно сбора, босс"
+          ticks={tuning.lootBossWindowTicks}
+          onChange={(lootBossWindowTicks) => {
+            patch({ lootBossWindowTicks });
           }}
         />
         <NumberField
