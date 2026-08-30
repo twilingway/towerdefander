@@ -12,6 +12,7 @@ import {
 } from "./combatTypes.ts";
 import {
   AMBIENT_ASTEROID_DOMAIN,
+  LOOT_DOMAIN,
   OFFER_DOMAIN,
   ROLES,
   TEAM_UPGRADE_PRICE
@@ -21,6 +22,7 @@ import { validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 import { createWavePlan } from "./waveDirector.ts";
 import { createTeamUpgradeOffer } from "./upgrades.ts";
 import { addRunStats, createRunStats } from "./runStats.ts";
+import { advanceLootDrops, sweepLootDrops } from "./loot.ts";
 import { UPGRADE_CATALOGUE } from "./upgradeCatalogue.ts";
 import { moveAndSpawnThreats } from "./threats.ts";
 import { scheduleAmbientAsteroid } from "./spawning.ts";
@@ -56,6 +58,8 @@ export type {
   GunnerModifiers,
   HomingMissileState,
   HostileProjectileState,
+  LootDropState,
+  LootKind,
   PendingSpawn,
   PilotModifiers,
   RoleModifiers,
@@ -114,6 +118,7 @@ export function createInitialCombatState(
     spawnRngState: rngState,
     offerRngState: deriveDomainSeed(runSeed, startWave, OFFER_DOMAIN),
     ambientAsteroidRngState: ambientSchedule.rngState,
+    lootRngState: deriveDomainSeed(runSeed, startWave, LOOT_DOMAIN),
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     spaceshipHp: config.spaceshipMaxHp,
     spaceshipMaxHp: config.spaceshipMaxHp,
@@ -130,6 +135,7 @@ export function createInitialCombatState(
     pendingSpawns: plan,
     enemies: [],
     asteroids: [],
+    lootDrops: [],
     hostileProjectiles: [],
     homingMissiles: [],
     roleModifiers: {
@@ -155,6 +161,20 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
 
   const secondsPerStep = config.fixedStepMs / 1000;
   let next = moveAndSpawnThreats(state, config, secondsPerStep);
+  // Salvage moves and is caught before this tick's kills drop more, so a drop
+  // spends its first tick where the enemy died instead of jumping.
+  const salvage = advanceLootDrops(
+    next,
+    config,
+    secondsPerStep,
+    config.shieldCapacity + next.roleModifiers.shield.capacityBonus
+  );
+  next = {
+    ...next,
+    lootDrops: salvage.lootDrops,
+    spaceshipHp: salvage.spaceshipHp,
+    shieldEnergy: salvage.shieldEnergy
+  };
   next = resolveFriendlyHits(next, config);
   next = resolveSpaceshipThreats(next, config);
   next = removeExpiredAndOutOfBounds(next, config);
@@ -173,8 +193,17 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
     next.asteroids.every(({ origin }) => origin === "ambient")
   ) {
     const offerResult = createTeamUpgradeOffer(next.runSeed, next.waveNumber);
+    const swept = sweepLootDrops(
+      next.lootDrops,
+      next.spaceshipHp,
+      next.spaceshipMaxHp,
+      next.shieldEnergy,
+      config.shieldCapacity + next.roleModifiers.shield.capacityBonus
+    );
     return {
       ...pickCombatResult(next),
+      spaceshipHp: swept.spaceshipHp,
+      shieldEnergy: swept.shieldEnergy,
       encounterPhase: "intermission",
       outcome: null,
       defeatReason: null,
@@ -185,6 +214,7 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
       teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
       teamUpgradeSelection: null,
       asteroids: [],
+      lootDrops: [],
       hostileProjectiles: [],
       homingMissiles: [],
       projectiles: [],
@@ -229,6 +259,7 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
     waveNumber,
     spawnRngState: wave.rngState,
     ambientAsteroidRngState: ambientSchedule.rngState,
+    lootRngState: deriveDomainSeed(selected.runSeed, waveNumber, LOOT_DOMAIN),
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     pendingSpawns: wave.plan,
     nextWaveSpawnTick: 0,
@@ -292,6 +323,7 @@ function applyUpgrade<TState extends CombatStateFields>(
 export function dynamicEntityCount(state: {
   readonly enemies: readonly unknown[];
   readonly asteroids: readonly unknown[];
+  readonly lootDrops: readonly unknown[];
   readonly hostileProjectiles: readonly unknown[];
   readonly homingMissiles: readonly unknown[];
   readonly projectiles: readonly unknown[];
@@ -299,6 +331,7 @@ export function dynamicEntityCount(state: {
   return (
     state.enemies.length +
     state.asteroids.length +
+    state.lootDrops.length +
     state.hostileProjectiles.length +
     state.homingMissiles.length +
     state.projectiles.length
@@ -311,6 +344,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     spawnRngState: state.spawnRngState,
     offerRngState: state.offerRngState,
     ambientAsteroidRngState: state.ambientAsteroidRngState,
+    lootRngState: state.lootRngState,
     ambientAsteroidSpawnDueTick: state.ambientAsteroidSpawnDueTick,
     spaceshipHp: state.spaceshipHp,
     spaceshipMaxHp: state.spaceshipMaxHp,
@@ -327,6 +361,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     pendingSpawns: state.pendingSpawns,
     enemies: state.enemies,
     asteroids: state.asteroids,
+    lootDrops: state.lootDrops,
     hostileProjectiles: state.hostileProjectiles,
     homingMissiles: state.homingMissiles,
     roleModifiers: state.roleModifiers,

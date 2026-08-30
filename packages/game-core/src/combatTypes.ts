@@ -33,6 +33,7 @@ export type UpgradeId =
 export interface CombatCaps {
   readonly enemyShips: number;
   readonly asteroids: number;
+  readonly lootDrops: number;
   readonly hostileProjectiles: number;
   readonly homingMissiles: number;
   readonly friendlyProjectiles: number;
@@ -187,6 +188,8 @@ export interface EnemyArchetype {
   readonly unlockWave: number;
   readonly scoreReward: number;
   readonly creditReward: number;
+  /** Probability in [0, 1] that killing this archetype leaves salvage behind. */
+  readonly lootChance: number;
 }
 
 export interface CombatConfig {
@@ -197,6 +200,7 @@ export interface CombatConfig {
   readonly spaceshipMaxHp: number;
   readonly shieldRadius: number;
   readonly shieldArcRadians: number;
+  readonly shieldCapacity: number;
   readonly asteroidShieldHitCost: number;
   readonly asteroidDamage: number;
   readonly friendlyProjectileDamage: number;
@@ -215,6 +219,22 @@ export interface CombatConfig {
   readonly asteroidSpawnCost: number;
   readonly asteroidScoreReward: number;
   readonly asteroidCreditReward: number;
+  /** Hull points one repair drop returns, and shield energy one cell returns. */
+  readonly lootRepairAmount: number;
+  readonly lootShieldAmount: number;
+  /** A boss always leaves this instead: the reward for taking a boss wave. */
+  readonly lootBossRepairAmount: number;
+  readonly lootLifetimeTicks: number;
+  readonly lootDropRadius: number;
+  /** Inside this distance a drop stops drifting and comes to the ship. */
+  readonly lootMagnetRadius: number;
+  readonly lootMagnetAccelerationPerSecondSquared: number;
+  /**
+   * How fast inherited speed bleeds off. A drop keeps the dead enemy's motion
+   * so it reads as wreckage, but an interceptor's salvage must not sail across
+   * the whole arena before anyone can reach it.
+   */
+  readonly lootDriftDampingPerSecond: number;
   /** Look of the ambient hazard; null keeps the display's own rock. */
   readonly asteroidVisual: EntityVisual | null;
   readonly missileInterceptScoreReward: number;
@@ -320,6 +340,20 @@ export interface AsteroidState extends MovingEntity {
   readonly damage: number;
 }
 
+/** What a drop restores. Both are clamped by the ship's current maximum. */
+export type LootKind = "repair" | "shieldCell";
+
+/**
+ * Salvage left by a destroyed enemy. Lives like an asteroid — drifts, ages,
+ * leaves the arena — but exists to be caught rather than avoided: inside the
+ * magnet radius it accelerates at the ship, and touching the hull spends it.
+ */
+export interface LootDropState extends MovingEntity {
+  readonly kind: LootKind;
+  readonly amount: number;
+  readonly lifetimeTicks: number;
+}
+
 export interface HostileProjectileState extends MovingEntity {
   readonly damage: number;
   readonly shieldHitCost: number;
@@ -351,6 +385,8 @@ export interface CombatStateFields {
   readonly spawnRngState: number;
   readonly offerRngState: number;
   readonly ambientAsteroidRngState: number;
+  /** Drop rolls for the current wave, derived fresh from the run seed and wave. */
+  readonly lootRngState: number;
   readonly ambientAsteroidSpawnDueTick: number | null;
   readonly spaceshipHp: number;
   readonly spaceshipMaxHp: number;
@@ -372,6 +408,7 @@ export interface CombatStateFields {
   readonly pendingSpawns: readonly PendingSpawn[];
   readonly enemies: readonly CombatEnemyState[];
   readonly asteroids: readonly AsteroidState[];
+  readonly lootDrops: readonly LootDropState[];
   readonly hostileProjectiles: readonly HostileProjectileState[];
   readonly homingMissiles: readonly HomingMissileState[];
   readonly roleModifiers: RoleModifiers;

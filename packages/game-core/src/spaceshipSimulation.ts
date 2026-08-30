@@ -83,7 +83,6 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly projectileLifetimeMs: number;
   readonly projectileRadius: number;
   readonly fireCooldownTicks: number;
-  readonly shieldCapacity: number;
   readonly shieldDrainPerSecond: number;
   readonly shieldRechargePerSecond: number;
   /**

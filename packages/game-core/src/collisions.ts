@@ -15,6 +15,7 @@ import {
 } from "./spatialGrid.ts";
 import { archetypeOf } from "./combatValidation.ts";
 import { addRunStats } from "./runStats.ts";
+import { rollLootDrop } from "./loot.ts";
 import { isWithinCircularEnvelope } from "./arenaGeometry.ts";
 import { shortestAngleDelta } from "./spaceshipSimulation.ts";
 export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): CombatStepState {
@@ -56,6 +57,23 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
   let damageDealtByMachineGun = 0;
   let asteroidsDestroyed = 0;
   let creditsEarned = 0;
+  // Salvage is rolled here because this is the only place an enemy dies, and
+  // the roll has to see which archetype it was.
+  const lootDrops = [...state.lootDrops];
+  let lootRngState = state.lootRngState;
+  let nextSpawnSequence = state.nextSpawnSequence;
+  // Counted here rather than through `dynamicEntityCount`, which lives in
+  // `combat.ts` and already imports this file.
+  const dynamicBase =
+    state.enemies.length +
+    state.asteroids.length +
+    state.lootDrops.length +
+    state.hostileProjectiles.length +
+    state.homingMissiles.length +
+    state.projectiles.length;
+  const lootRoom = () =>
+    lootDrops.length < config.caps.lootDrops &&
+    dynamicBase + (lootDrops.length - state.lootDrops.length) < config.caps.dynamicEntities;
   for (const candidate of candidates) {
     if (removedProjectiles.has(candidate.sourceId) || removedTargets.has(candidate.targetId))
       continue;
@@ -98,6 +116,20 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
         score += archetype.scoreReward;
         credits += archetype.creditReward;
         creditsEarned += archetype.creditReward;
+        if (lootRoom()) {
+          const rolled = rollLootDrop(
+            enemy,
+            config,
+            lootRngState,
+            nextSpawnSequence,
+            state.clock.tick
+          );
+          lootRngState = rolled.rngState;
+          if (rolled.drop !== null) {
+            lootDrops.push(rolled.drop);
+            nextSpawnSequence += 1;
+          }
+        }
       } else {
         score += config.asteroidScoreReward;
         asteroidsDestroyed += 1;
@@ -113,6 +145,9 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
     ...state,
     score,
     credits,
+    lootDrops,
+    lootRngState,
+    nextSpawnSequence,
     runStats: addRunStats(state.runStats, {
       hitsByCannon,
       hitsByMachineGun,

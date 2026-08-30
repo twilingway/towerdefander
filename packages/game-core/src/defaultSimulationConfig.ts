@@ -156,7 +156,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       spawnCost: 2,
       unlockWave: 1,
       scoreReward: 25,
-      creditReward: 2
+      creditReward: 2,
+      lootChance: 0.22
     },
     missileCarrier: {
       hp: 110,
@@ -193,7 +194,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       spawnCost: 4,
       unlockWave: 3,
       scoreReward: 25,
-      creditReward: 4
+      creditReward: 4,
+      lootChance: 0.3
     },
     sniper: {
       hp: 70,
@@ -230,7 +232,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       spawnCost: 3,
       unlockWave: 5,
       scoreReward: 30,
-      creditReward: 3
+      creditReward: 3,
+      lootChance: 0.25
     },
     interceptor: {
       hp: 22,
@@ -267,7 +270,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       spawnCost: 1,
       unlockWave: 1,
       scoreReward: 12,
-      creditReward: 1
+      creditReward: 1,
+      lootChance: 0.15
     },
     boss: {
       hp: 900,
@@ -304,7 +308,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       spawnCost: 20,
       unlockWave: 10,
       scoreReward: 250,
-      creditReward: 30
+      creditReward: 30,
+      lootChance: 1
     }
   },
   asteroidHp: 65,
@@ -314,6 +319,17 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   asteroidSpawnCost: 1,
   asteroidScoreReward: 10,
   asteroidCreditReward: 1,
+  // Salvage: the only hull a crew wins back inside a run. Every number here is
+  // a guess until a batch says otherwise; the chance per archetype is what
+  // actually decides whether runs get longer.
+  lootRepairAmount: 35,
+  lootShieldAmount: 30,
+  lootBossRepairAmount: 200,
+  lootLifetimeTicks: 300,
+  lootDropRadius: 18,
+  lootMagnetRadius: 260,
+  lootMagnetAccelerationPerSecondSquared: 900,
+  lootDriftDampingPerSecond: 1.6,
   asteroidVisual: null,
   missileInterceptScoreReward: 5,
   worldPadding: 256,
@@ -321,9 +337,10 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   caps: {
     enemyShips: 40,
     asteroids: 16,
+    lootDrops: 12,
     hostileProjectiles: 96,
     homingMissiles: 12,
     friendlyProjectiles: 32,
-    dynamicEntities: 196
+    dynamicEntities: 208
   }
 };

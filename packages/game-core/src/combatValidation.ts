@@ -27,11 +27,13 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["waveCampaign.director.budgetCap", config.waveCampaign.director.budgetCap],
     ["asteroidLifetimeTicks", config.asteroidLifetimeTicks],
     ["asteroidSpawnCost", config.asteroidSpawnCost],
+    ["lootLifetimeTicks", config.lootLifetimeTicks],
     ["caps.enemyShips", config.caps.enemyShips],
     ["caps.asteroids", config.caps.asteroids],
     ["caps.hostileProjectiles", config.caps.hostileProjectiles],
     ["caps.homingMissiles", config.caps.homingMissiles],
     ["caps.friendlyProjectiles", config.caps.friendlyProjectiles],
+    ["caps.lootDrops", config.caps.lootDrops],
     ["caps.dynamicEntities", config.caps.dynamicEntities]
   ];
   for (const [name, value] of positiveIntegers) {
@@ -57,6 +59,13 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["asteroidHp", config.asteroidHp],
     ["asteroidRadius", config.asteroidRadius],
     ["asteroidSpeedPerSecond", config.asteroidSpeedPerSecond],
+    ["shieldCapacity", config.shieldCapacity],
+    ["lootRepairAmount", config.lootRepairAmount],
+    ["lootShieldAmount", config.lootShieldAmount],
+    ["lootBossRepairAmount", config.lootBossRepairAmount],
+    ["lootDropRadius", config.lootDropRadius],
+    ["lootMagnetRadius", config.lootMagnetRadius],
+    ["lootMagnetAccelerationPerSecondSquared", config.lootMagnetAccelerationPerSecondSquared],
     ["worldPadding", config.worldPadding],
     ["spatialCellSize", config.spatialCellSize]
   ];
@@ -66,6 +75,7 @@ export function validateCombatConfig(config: CombatConfig): void {
     }
   }
   const nonNegativeFinite: readonly (readonly [string, number])[] = [
+    ["lootDriftDampingPerSecond", config.lootDriftDampingPerSecond],
     ["asteroidScoreReward", config.asteroidScoreReward],
     ["asteroidCreditReward", config.asteroidCreditReward],
     ["missileInterceptScoreReward", config.missileInterceptScoreReward]
@@ -104,7 +114,8 @@ export function validateCombatConfig(config: CombatConfig): void {
     config.caps.asteroids +
     config.caps.hostileProjectiles +
     config.caps.homingMissiles +
-    config.caps.friendlyProjectiles;
+    config.caps.friendlyProjectiles +
+    config.caps.lootDrops;
   if (config.caps.dynamicEntities > typedCapTotal) {
     throw new RangeError("dynamicEntities cap cannot exceed the sum of typed caps");
   }
@@ -261,6 +272,13 @@ export function validateEnemyArchetypes(config: CombatConfig): void {
       if (!Number.isFinite(value) || value < 0) {
         throw new RangeError(`${kind}.${name} must be a non-negative finite number`);
       }
+    }
+    if (
+      !Number.isFinite(archetype.lootChance) ||
+      archetype.lootChance < 0 ||
+      archetype.lootChance > 1
+    ) {
+      throw new RangeError(`${kind}.lootChance must be a probability between 0 and 1`);
     }
     for (const [index, weapon] of archetype.weapons.entries()) {
       if (weapon.burstSpreadRadians > Math.PI * 2) {
