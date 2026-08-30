@@ -6,6 +6,7 @@ import {
 import type {
   DisplayGameSnapshot,
   PublicAsteroidView,
+  PublicLootDropView,
   PublicEnemyCatalogueEntry,
   PublicEnemyView,
   PublicHomingMissileView,
@@ -75,6 +76,7 @@ interface BackgroundLayerState {
 type CombatEntity =
   | (PublicEnemyView & { readonly visualKind: "enemy" })
   | (PublicAsteroidView & { readonly visualKind: "asteroid" })
+  | (PublicLootDropView & { readonly visualKind: "loot" })
   | (PublicProjectileView & { readonly visualKind: "projectile" })
   | (PublicHomingMissileView & { readonly visualKind: "missile" });
 
@@ -535,6 +537,38 @@ class SpaceshipScene extends Phaser.Scene {
         );
         container.add([rock, crater]);
       }
+    } else if (entity.visualKind === "loot") {
+      // Salvage has to read at a glance from across the arena: a bright ring
+      // the hull colour of what it gives back, with a cross for repair and a
+      // bar for a shield cell, so the pilot decides without reading a label.
+      const repair = entity.kind === "repair";
+      const tint = repair ? 0x7ef2a4 : 0x7ec8f2;
+      const halo = this.add.circle(0, 0, entity.radius * 1.6, tint, 0.18);
+      const shell = this.add.circle(0, 0, entity.radius, 0x0d1b24, 0.9).setStrokeStyle(3, tint, 1);
+      const mark = this.add.graphics();
+      mark.fillStyle(tint, 1);
+      if (repair) {
+        mark.fillRect(
+          -entity.radius * 0.55,
+          -entity.radius * 0.18,
+          entity.radius * 1.1,
+          entity.radius * 0.36
+        );
+        mark.fillRect(
+          -entity.radius * 0.18,
+          -entity.radius * 0.55,
+          entity.radius * 0.36,
+          entity.radius * 1.1
+        );
+      } else {
+        mark.fillRect(
+          -entity.radius * 0.5,
+          -entity.radius * 0.3,
+          entity.radius,
+          entity.radius * 0.6
+        );
+      }
+      container.add([halo, shell, mark]);
     } else if (entity.visual !== null) {
       const shot = this.add.graphics();
       drawCatalogAssetById(shot, entity.visual.shape, entity.radius * entity.visual.modelScale);
@@ -595,6 +629,7 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
   return [
     ...snapshot.enemyShips.map((entity) => ({ ...entity, visualKind: "enemy" as const })),
     ...snapshot.asteroids.map((entity) => ({ ...entity, visualKind: "asteroid" as const })),
+    ...snapshot.lootDrops.map((entity) => ({ ...entity, visualKind: "loot" as const })),
     ...snapshot.friendlyProjectiles.map((entity) => ({
       ...entity,
       visualKind: "projectile" as const
@@ -760,7 +795,10 @@ function getProjectileStyle(entity: PublicProjectileView): { fill: number; strok
 }
 
 function getEntityDepth(entity: CombatEntity): number {
-  return entity.visualKind === "asteroid" ? 5 : entity.visualKind === "enemy" ? 7 : 11;
+  if (entity.visualKind === "asteroid") return 5;
+  // Above the rocks so it is never lost behind one, below the ships.
+  if (entity.visualKind === "loot") return 6;
+  return entity.visualKind === "enemy" ? 7 : 11;
 }
 
 function getEntityHeading(entity: CombatEntity): number {

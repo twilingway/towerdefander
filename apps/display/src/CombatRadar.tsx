@@ -26,6 +26,7 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
       data-testid="combat-radar"
       data-enemy-count={game.enemyShips.length}
       data-asteroid-count={game.asteroids.length}
+      data-loot-count={game.lootDrops.length}
       aria-label="Мини-карта арены по центру снизу"
     >
       <span className="combat-radar__title">РАДАР</span>
@@ -78,6 +79,27 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
                 cy={point.y}
                 r={2.4}
                 key={asteroid.entityId}
+              />
+            );
+          })}
+          {game.lootDrops.map((drop) => {
+            const point = projectWorldToRadar(
+              drop.x,
+              drop.y,
+              game.worldWidth,
+              game.worldHeight,
+              projection
+            );
+            // A diamond rather than a dot: salvage must not be mistaken for a
+            // rock at a glance, and the pilot reads the radar, not the label.
+            const size = 3.2;
+            return (
+              <polygon
+                className="combat-radar__loot"
+                data-entity-id={drop.entityId}
+                data-loot-kind={drop.kind}
+                points={`${String(point.x)},${String(point.y - size)} ${String(point.x + size)},${String(point.y)} ${String(point.x)},${String(point.y + size)} ${String(point.x - size)},${String(point.y)}`}
+                key={drop.entityId}
               />
             );
           })}

@@ -595,6 +595,16 @@ p {
   fill: rgb(196 206 222 / 90%);
 }
 
+/* Salvage is the one marker the pilot chases rather than avoids, so it is the
+   only green thing on the radar and it keeps its own shape. */
+.combat-radar__loot {
+  fill: rgb(126 242 164 / 90%);
+}
+
+.combat-radar__loot[data-loot-kind="shieldCell"] {
+  fill: rgb(126 200 242 / 90%);
+}
+
 .combat-radar__enemy {
   fill: #ff625e;
   stroke: #ffd0ca;

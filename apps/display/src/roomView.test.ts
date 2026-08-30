@@ -131,6 +131,7 @@ describe("display room view", () => {
             }
           ]),
           asteroids: collection([]),
+          lootDrops: collection([]),
           friendlyProjectiles: collection([
             {
               entityId: "projectile-0",

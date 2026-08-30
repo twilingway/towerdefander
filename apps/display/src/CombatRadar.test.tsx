@@ -77,6 +77,7 @@ const baseGame: DisplayGameSnapshot = {
       maxHp: 80
     }
   ],
+  lootDrops: [],
   asteroids: [
     {
       origin: "wave",

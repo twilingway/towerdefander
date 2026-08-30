@@ -3,6 +3,7 @@ import {
   NEBULA_PRESETS,
   displayRoomViewSchema,
   type AsteroidOrigin,
+  type LootKind,
   type CrewRole,
   type DefeatReason,
   type DisplayRoomView,
@@ -61,6 +62,11 @@ interface NetworkAsteroidState extends NetworkCombatEntityState {
   hp: number;
   maxHp: number;
   origin: AsteroidOrigin;
+}
+
+interface NetworkLootDropState extends NetworkCombatEntityState {
+  kind: LootKind;
+  amount: number;
 }
 
 interface NetworkProjectileState extends NetworkCombatEntityState {
@@ -180,6 +186,7 @@ interface NetworkGameState {
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;
+    lootDrops: ValueCollection<NetworkLootDropState>;
     friendlyProjectiles: ValueCollection<NetworkProjectileState>;
     hostileProjectiles: ValueCollection<NetworkProjectileState>;
     homingMissiles: ValueCollection<NetworkHomingMissileState>;
@@ -334,6 +341,7 @@ export function toDisplayRoomView(
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),
+            lootDrops: toSpawnOrder(display.lootDrops),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
             hostileProjectiles: toSpawnOrder(display.hostileProjectiles).map(toPublicProjectile),
             homingMissiles: toSpawnOrder(display.homingMissiles).map(toPublicHomingMissile)
