@@ -498,13 +498,9 @@ function makeVoteCommand(room, offer, upgradeId, revision) {
   };
 }
 
+/** What the crew has bought: the published proof that a purchase landed. */
 function pilotModifierSnapshot() {
-  const value = display.state.game.roleModifiers.pilot;
-  return {
-    speedMultiplier: value.speedMultiplier,
-    accelerationMultiplier: value.accelerationMultiplier,
-    maxHpBonus: value.maxHpBonus
-  };
+  return [...display.state.game.display.purchasedUpgrades];
 }
 
 function world() {

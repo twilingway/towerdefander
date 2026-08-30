@@ -104,15 +104,6 @@ interface NetworkGameState {
     lootWindowSecondsRemaining: number;
     score: number;
   };
-  roleModifiers: {
-    pilot: { speedMultiplier: number; accelerationMultiplier: number; maxHpBonus: number };
-    gunner: {
-      damageMultiplier: number;
-      cooldownMultiplier: number;
-      projectileSpeedMultiplier: number;
-    };
-    shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
-  };
   credits: number;
   teamUpgrade?: NetworkTeamUpgradeState;
 }
@@ -197,11 +188,6 @@ export function toControllerRoomView(
               waveSecondsRemaining: game.encounter.waveSecondsRemaining,
               lootWindowSecondsRemaining: game.encounter.lootWindowSecondsRemaining,
               score: game.encounter.score
-            },
-            roleModifiers: {
-              pilot: { ...game.roleModifiers.pilot },
-              gunner: { ...game.roleModifiers.gunner },
-              shield: { ...game.roleModifiers.shield }
             },
             credits: game.credits,
             teamUpgrade: toTeamUpgradeView(game.teamUpgrade),

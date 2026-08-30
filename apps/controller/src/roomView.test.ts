@@ -79,11 +79,6 @@ describe("controller room view", () => {
           lootWindowSecondsRemaining: 0,
           score: 120
         },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1.1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 25, rechargeMultiplier: 1, arcWidthBonus: 0 }
-        },
         helm: {
           scheme: "tank",
           headingLeadRadians: 0.5,
@@ -177,11 +172,6 @@ describe("controller room view", () => {
           waveSecondsRemaining: 0,
           lootWindowSecondsRemaining: 0,
           score: 100
-        },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
         credits: 7,
         helm: {
@@ -313,11 +303,6 @@ describe("controller room view", () => {
           waveSecondsRemaining: 0,
           lootWindowSecondsRemaining: 0,
           score: 900
-        },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
         helm: {
           scheme: "tank",

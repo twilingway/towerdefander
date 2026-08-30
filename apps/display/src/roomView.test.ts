@@ -75,14 +75,10 @@ describe("display room view", () => {
           lootWindowSecondsRemaining: 0,
           score: 240
         },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
-        },
         credits: 6,
         display: {
           cameraViewWidth: 1600,
+          purchasedUpgrades: [],
           backgroundParallaxStrength: 0.8,
           backgroundDriftSpeed: 2,
           backgroundNebulaAlpha: 0.5,

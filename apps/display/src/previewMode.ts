@@ -53,6 +53,7 @@ const PREVIEW_WORLD = {
   arenaRadius: 2200,
   rimBandWidth: 260,
   shieldPhase: "down",
+  purchasedUpgrades: [],
   spaceship: {
     x: 2200,
     y: 2200,
@@ -64,11 +65,6 @@ const PREVIEW_WORLD = {
     heading: Math.PI / 4
   },
   turretAngle: Math.PI / 3,
-  roleModifiers: {
-    pilot: { speedMultiplier: 1.1, accelerationMultiplier: 1, maxHpBonus: 0 },
-    gunner: { damageMultiplier: 1.15, cooldownMultiplier: 0.9, projectileSpeedMultiplier: 1 },
-    shield: { capacityBonus: 20, rechargeMultiplier: 1, arcWidthBonus: 0 }
-  },
   enemyCatalogue: [],
   asteroidVisual: null,
   spaceshipVisual: null,
@@ -116,6 +112,7 @@ function createPreviewGame(
     return {
       ...PREVIEW_WORLD,
       shieldPhase: "down",
+      purchasedUpgrades: [],
       cameraViewWidth,
       shield: {
         angle: Math.PI / 2,
@@ -254,6 +251,7 @@ function createPreviewGame(
       ...PREVIEW_WORLD,
       ...EMPTY_WORLD_ENTITIES,
       shieldPhase: "down",
+      purchasedUpgrades: [],
       cameraViewWidth,
       shield: {
         angle: 0,
@@ -318,6 +316,7 @@ function createPreviewGame(
     ...PREVIEW_WORLD,
     ...EMPTY_WORLD_ENTITIES,
     shieldPhase: "down",
+    purchasedUpgrades: [],
     cameraViewWidth,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
     shield: {

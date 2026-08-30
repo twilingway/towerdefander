@@ -154,15 +154,6 @@ interface NetworkGameState {
     lootWindowSecondsRemaining: number;
     score: number;
   };
-  roleModifiers: {
-    pilot: { speedMultiplier: number; accelerationMultiplier: number; maxHpBonus: number };
-    gunner: {
-      damageMultiplier: number;
-      cooldownMultiplier: number;
-      projectileSpeedMultiplier: number;
-    };
-    shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
-  };
   credits: number;
   teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
@@ -187,6 +178,7 @@ interface NetworkGameState {
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;
+    purchasedUpgrades: readonly string[];
     lootDrops: ValueCollection<NetworkLootDropState>;
     friendlyProjectiles: ValueCollection<NetworkProjectileState>;
     hostileProjectiles: ValueCollection<NetworkProjectileState>;
@@ -282,11 +274,6 @@ export function toDisplayRoomView(
               lootWindowSecondsRemaining: game.encounter.lootWindowSecondsRemaining,
               score: game.encounter.score
             },
-            roleModifiers: {
-              pilot: { ...game.roleModifiers.pilot },
-              gunner: { ...game.roleModifiers.gunner },
-              shield: { ...game.roleModifiers.shield }
-            },
             credits: game.credits,
             teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
@@ -343,6 +330,7 @@ export function toDisplayRoomView(
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),
+            purchasedUpgrades: [...display.purchasedUpgrades],
             lootDrops: toSpawnOrder(display.lootDrops),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
             hostileProjectiles: toSpawnOrder(display.hostileProjectiles).map(toPublicProjectile),

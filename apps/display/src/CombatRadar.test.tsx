@@ -14,6 +14,7 @@ const baseGame: DisplayGameSnapshot = {
   arenaRadius: 2_200,
   rimBandWidth: 260,
   shieldPhase: "down",
+  purchasedUpgrades: [],
   spaceship: {
     x: 2_200,
     y: 2_200,
@@ -45,11 +46,6 @@ const baseGame: DisplayGameSnapshot = {
     waveSecondsRemaining: 1200,
     lootWindowSecondsRemaining: 0,
     score: 0
-  },
-  roleModifiers: {
-    pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-    gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-    shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
   },
   credits: 0,
   teamUpgrade: {

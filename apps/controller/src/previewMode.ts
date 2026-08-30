@@ -59,12 +59,7 @@ const PREVIEW_WORLD = {
     maxHp: 1000,
     heading: Math.PI / 4
   },
-  turretAngle: Math.PI / 3,
-  roleModifiers: {
-    pilot: { speedMultiplier: 1.1, accelerationMultiplier: 1, maxHpBonus: 0 },
-    gunner: { damageMultiplier: 1.15, cooldownMultiplier: 0.9, projectileSpeedMultiplier: 1 },
-    shield: { capacityBonus: 20, rechargeMultiplier: 1, arcWidthBonus: 0 }
-  }
+  turretAngle: Math.PI / 3
 } as const;
 
 const PREVIEW_HELM = {
