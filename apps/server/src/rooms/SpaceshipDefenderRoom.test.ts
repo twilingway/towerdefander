@@ -1323,25 +1323,17 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     const actionId = "11111111-1111-4111-8111-111111111111";
 
     voteUpgrade(room, pilot, "pilot", actionId);
-    const modifiers = {
-      speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
-      accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
-      maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
-    };
-    expect(modifiers).toEqual({
-      speedMultiplier: 1,
-      accelerationMultiplier: 1,
-      maxHpBonus: 0
-    });
+    const purchased = [...room.state.game.display.purchasedUpgrades];
+    expect(purchased).toEqual([]);
     expect(room.state.game.teamUpgrade.votes.get("pilot")).toMatchObject({ revision: 1 });
 
     voteUpgrade(room, pilot, "pilot", actionId);
-    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+    expect([...room.state.game.display.purchasedUpgrades]).toEqual(purchased);
     expect(countErrors(pilot, "stale_action")).toBe(0);
 
     voteUpgrade(room, pilot, "pilot", actionId, 1);
     expect(countErrors(pilot, "action_conflict")).toBe(1);
-    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+    expect([...room.state.game.display.purchasedUpgrades]).toEqual(purchased);
   });
 
   it("rejects a legacy upgrade vote before journal or world mutation", () => {
@@ -1353,11 +1345,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       throw new Error("Expected pilot offer.");
     const card = upgrade.offer.cards.at(0);
     const gameBefore = internals(room).gameState;
-    const modifiersBefore = {
-      speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
-      accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
-      maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
-    };
+    const purchasedBefore = [...room.state.game.display.purchasedUpgrades];
 
     room.handleUpgradeVote(pilot.client, {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
@@ -1374,7 +1362,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     expect(countErrors(pilot, "protocol_mismatch")).toBe(1);
     expect(internals(room).upgradeJournals.has(pilot.client.sessionId)).toBe(false);
     expect(internals(room).gameState).toBe(gameBefore);
-    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiersBefore);
+    expect([...room.state.game.display.purchasedUpgrades]).toEqual(purchasedBefore);
     expect(room.state.game.teamUpgrade.votes.get("pilot")).toBeUndefined();
   });
 
@@ -1442,21 +1430,21 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
 
     expect(countErrors(pilot, "role_mismatch")).toBe(0);
     expect(room.state.game.teamUpgrade.votes.get("pilot")?.upgradeId).toBe(card.upgradeId);
-    expect(room.state.game.roleModifiers.gunner.damageMultiplier).toBe(1);
+    expect([...room.state.game.display.purchasedUpgrades]).toEqual([]);
   });
 
-  it("keeps an accepted journal across reconnect and role modifiers across replacement", async () => {
+  it("keeps an accepted journal across reconnect and ship stats across replacement", async () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
     forceIntermission(room);
     const actionId = "33333333-3333-4333-8333-333333333333";
     voteUpgrade(room, pilot, "pilot", actionId);
-    const speed = room.state.game.roleModifiers.pilot.speedMultiplier;
+    const shipBefore = { ...internals(room).gameState?.ship };
 
     const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(pilot.client);
     await room.onLeave(pilot.client, 1006);
     voteUpgrade(room, pilot, "pilot", actionId);
-    expect(room.state.game.roleModifiers.pilot.speedMultiplier).toBe(speed);
+    expect({ ...internals(room).gameState?.ship }).toEqual(shipBefore);
 
     const gunner = controllerAt(controllers, 1);
     voteUpgrade(room, gunner, "gunner", "44444444-4444-4444-8444-444444444444", 1);

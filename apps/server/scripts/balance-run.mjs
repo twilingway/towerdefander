@@ -98,7 +98,7 @@ export function buildWorld(state, config, sampledAtMs) {
       velocityY: state.spaceship.velocity.y,
       radius: config.spaceshipRadius,
       hp: state.spaceshipHp,
-      maxHp: state.spaceshipMaxHp
+      maxHp: state.ship.spaceshipMaxHp
     },
     shield: {
       angle: state.shieldAngle,

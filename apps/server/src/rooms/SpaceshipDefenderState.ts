@@ -76,30 +76,6 @@ export class EncounterState extends Schema {
   @type("uint32") score = 0;
 }
 
-export class PilotModifiersState extends Schema {
-  @type("float32") speedMultiplier = 1;
-  @type("float32") accelerationMultiplier = 1;
-  @type("float32") maxHpBonus = 0;
-}
-
-export class GunnerModifiersState extends Schema {
-  @type("float32") damageMultiplier = 1;
-  @type("float32") cooldownMultiplier = 1;
-  @type("float32") projectileSpeedMultiplier = 1;
-}
-
-export class ShieldModifiersState extends Schema {
-  @type("float32") capacityBonus = 0;
-  @type("float32") rechargeMultiplier = 1;
-  @type("float32") arcWidthBonus = 0;
-}
-
-export class RoleModifiersState extends Schema {
-  @type(PilotModifiersState) pilot = new PilotModifiersState();
-  @type(GunnerModifiersState) gunner = new GunnerModifiersState();
-  @type(ShieldModifiersState) shield = new ShieldModifiersState();
-}
-
 export class UpgradeCardState extends Schema {
   @type("string") upgradeId: UpgradeId = "pilot_speed";
   @type("string") role: CrewRole = "pilot";
@@ -250,6 +226,11 @@ export class SpaceshipDisplayState extends Schema {
   /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
   @type("float32") shieldRadius = 104;
   /**
+   * What the crew has bought, in purchase order. Display-only and changed once
+   * a wave: the ship's own numbers are derived from it and never travel.
+   */
+  @type(["string"]) purchasedUpgrades = new ArraySchema<string>();
+  /**
    * Why the shield is or is not protecting. Display-gated: the operator panel
    * keeps its own wording, and the controller view is strict about its keys.
    * A string is affordable here because it changes a few times per run.
@@ -278,7 +259,6 @@ export class SpaceshipGameState extends Schema {
   @type(MachineGunState) cannon = new MachineGunState();
   @type(MachineGunState) machineGun = new MachineGunState();
   @type(EncounterState) encounter = new EncounterState();
-  @type(RoleModifiersState) roleModifiers = new RoleModifiersState();
   @type("uint32") credits = 0;
   @type(TeamUpgradeState) teamUpgrade = new TeamUpgradeState();
   @type(HelmState) helm = new HelmState();

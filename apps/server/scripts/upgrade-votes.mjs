@@ -19,9 +19,9 @@ export function castUpgradeVotes(state, context) {
     level: context.level,
     ship: {
       hp: state.spaceshipHp,
-      maxHp: state.spaceshipMaxHp,
+      maxHp: state.ship.spaceshipMaxHp,
       shieldEnergy: state.shieldEnergy,
-      shieldCapacity: context.shieldCapacity + state.roleModifiers.shield.capacityBonus,
+      shieldCapacity: state.ship.shieldCapacity,
       waveSeconds: context.waveSeconds
     }
   });

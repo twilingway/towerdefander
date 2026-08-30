@@ -41,7 +41,7 @@ export function nextShieldIntent(
 ): TrustedShieldInput {
   const reach = config.shieldRadius;
   const nearest = findNearestThreat(state, reach);
-  const capacity = config.shieldCapacity + state.roleModifiers.shield.capacityBonus;
+  const capacity = state.ship.shieldCapacity;
   const hasEnergy = state.shieldEnergy >= capacity * MIN_ACTIVATION_ENERGY_FRACTION;
   const active = nearest !== undefined && hasEnergy;
   return {

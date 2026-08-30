@@ -7,7 +7,6 @@ import type {
   HostileProjectileState,
   LootDropState as CoreLootDropState,
   ProjectileState as CoreProjectileState,
-  RoleModifiers,
   SpaceshipSimulationConfig,
   SpaceshipSimulationState,
   TeamUpgradeOffer,
@@ -57,21 +56,22 @@ export function projectGameState(
   target.spaceship.velocityY = game.spaceship.velocity.y;
   target.spaceship.radius = config.spaceshipRadius;
   target.spaceship.hp = game.spaceshipHp;
-  target.spaceship.maxHp = game.spaceshipMaxHp;
+  target.spaceship.maxHp = game.ship.spaceshipMaxHp;
   target.spaceship.heading = game.spaceshipHeading;
   target.turretAngle = game.turretAngle;
   target.shield.angle = game.shieldAngle;
   target.shield.active = game.shieldActive;
   target.shield.rearmRequired = game.shieldRearmRequired;
   target.shield.energy = game.shieldEnergy;
-  target.shield.capacity = config.shieldCapacity + game.roleModifiers.shield.capacityBonus;
-  target.shield.arcHalfAngle =
-    Math.min(Math.PI * 2, config.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus) / 2;
+  target.shield.capacity = game.ship.shieldCapacity;
+  // Already held at a full circle by the stat rule, and the same number the
+  // collision test uses, so the drawn arc is the blocking arc.
+  target.shield.arcHalfAngle = game.ship.shieldArcRadians / 2;
   target.cannon.heat = game.cannonHeat;
-  target.cannon.capacity = config.cannonHeatCapacity;
+  target.cannon.capacity = game.ship.cannonHeatCapacity;
   target.cannon.overheated = game.cannonOverheated;
   target.machineGun.heat = game.mgHeat;
-  target.machineGun.capacity = config.mgHeatCapacity;
+  target.machineGun.capacity = game.ship.mgHeatCapacity;
   target.machineGun.overheated = game.mgOverheated;
   target.encounter.phase = game.encounterPhase;
   target.encounter.hasOutcome = game.outcome !== null;
@@ -94,9 +94,14 @@ export function projectGameState(
       : 0;
   target.encounter.score = game.score;
   target.credits = game.credits;
-  syncRoleModifiers(target.roleModifiers, game.roleModifiers);
 
   target.display.shieldPhase = game.shieldPhase;
+  // Grows by one entry a wave at most, so a rewrite costs nothing and the
+  // display never has to diff it.
+  if (target.display.purchasedUpgrades.length !== game.purchasedUpgrades.length) {
+    target.display.purchasedUpgrades.splice(0, target.display.purchasedUpgrades.length);
+    target.display.purchasedUpgrades.push(...game.purchasedUpgrades);
+  }
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
   reconcileKeyed(target.display.lootDrops, game.lootDrops, () => new LootDropState(), syncLootDrop);
@@ -161,21 +166,6 @@ function reconcileKeyed<TCore extends { readonly id: string }, TState>(
     }
     update(state, entity);
   }
-}
-
-function syncRoleModifiers(
-  target: SpaceshipDefenderState["game"]["roleModifiers"],
-  source: RoleModifiers
-) {
-  target.pilot.speedMultiplier = source.pilot.speedMultiplier;
-  target.pilot.accelerationMultiplier = source.pilot.accelerationMultiplier;
-  target.pilot.maxHpBonus = source.pilot.maxHpBonus;
-  target.gunner.damageMultiplier = source.gunner.damageMultiplier;
-  target.gunner.cooldownMultiplier = source.gunner.cooldownMultiplier;
-  target.gunner.projectileSpeedMultiplier = source.gunner.projectileSpeedMultiplier;
-  target.shield.capacityBonus = source.shield.capacityBonus;
-  target.shield.rechargeMultiplier = source.shield.rechargeMultiplier;
-  target.shield.arcWidthBonus = source.shield.arcWidthBonus;
 }
 
 function syncEnemy(target: EnemyState, source: CombatEnemyState): void {

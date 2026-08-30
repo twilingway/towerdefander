@@ -74,7 +74,7 @@ export function createRunObserver(config) {
       bossKills: 0,
       hpStart: state.spaceshipHp,
       hpEnd: state.spaceshipHp,
-      maxHpStart: state.spaceshipMaxHp,
+      maxHpStart: state.ship.spaceshipMaxHp,
       creditsStart: state.credits,
       creditsEnd: state.credits,
       scoreStart: state.score,
