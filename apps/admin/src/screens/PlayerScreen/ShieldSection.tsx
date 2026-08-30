@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { AngularRateField, NumberField } from "../../components/fields.js";
+import { AngularRateField, DelayField, NumberField } from "../../components/fields.js";
 
 interface ShieldSectionProps {
   readonly tuning: BalanceTuning;
@@ -39,11 +39,11 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
             patch({ shieldRechargePerSecond: shieldRechargePerSecond });
           }}
         />
-        <NumberField
-          caption="Подъём, тиков"
-          value={tuning.shieldEngageTicks}
+        <DelayField
+          caption="Подъём, с"
+          ticks={tuning.shieldEngageTicks}
           onChange={(shieldEngageTicks) => {
-            patch({ shieldEngageTicks: Math.max(0, Math.round(shieldEngageTicks)) });
+            patch({ shieldEngageTicks });
           }}
         />
         <NumberField
