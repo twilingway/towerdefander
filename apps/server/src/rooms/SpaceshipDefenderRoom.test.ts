@@ -908,14 +908,14 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     });
     for (let index = 0; index < 120; index += 1) room.advanceGameStep();
     expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
-    expect(room.state.game.display.shieldRearmRequired).toBe(true);
+    expect(room.state.game.shield.rearmRequired).toBe(true);
 
     // The button is never released and never pressed again: the old rule left
     // an operator holding a shield that refused for ever with nothing on the
     // panel saying why. A quarter of the battery at ten a second is two and a
     // half seconds, and the engage window follows it.
     for (let index = 0; index < 80; index += 1) room.advanceGameStep();
-    expect(room.state.game.display.shieldRearmRequired).toBe(false);
+    expect(room.state.game.shield.rearmRequired).toBe(false);
     expect(room.state.game.shield.active).toBe(true);
     expect(room.state.game.shield.energy).toBeGreaterThan(10);
   });

@@ -54,6 +54,8 @@ export class HelmState extends Schema {
 export class ShieldState extends Schema {
   @type("float32") angle = 0;
   @type("boolean") active = false;
+  /** Shared, not display-gated: the operator's button is dead while it is set. */
+  @type("boolean") rearmRequired = false;
   @type("float32") energy = 0;
   @type("float32") capacity = 0;
   @type("float32") arcHalfAngle = Math.PI / 4;
@@ -235,7 +237,6 @@ export class SpaceshipDisplayState extends Schema {
    * A string is affordable here because it changes a few times per run.
    */
   @type("string") shieldPhase: ShieldPhase = "down";
-  @type("boolean") shieldRearmRequired = false;
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();

@@ -108,7 +108,6 @@ const testGame = {
   arenaRadius: 2200,
   rimBandWidth: 260,
   shieldPhase: "down",
-  shieldRearmRequired: false,
   spaceship: {
     x: 100,
     y: 100,
@@ -120,7 +119,14 @@ const testGame = {
     heading: Math.PI / 4
   },
   turretAngle: 0,
-  shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: 0.72 },
+  shield: {
+    angle: 0,
+    rearmRequired: false,
+    active: false,
+    energy: 100,
+    capacity: 100,
+    arcHalfAngle: 0.72
+  },
   cannon: { heat: 0, capacity: 100, overheated: false },
   machineGun: { heat: 0, capacity: 100, overheated: false },
   encounter: {

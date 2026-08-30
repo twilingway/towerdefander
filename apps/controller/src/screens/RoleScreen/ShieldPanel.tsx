@@ -11,19 +11,23 @@ interface ShieldPanelProps {
 }
 
 export function ShieldPanel({ shield, controlsEnabled, generation, onToggle }: ShieldPanelProps) {
+  // Drained, and locked until the battery wins back its mark. The button is
+  // dead for that whole stretch, so it has to say why rather than ignore a
+  // press: a shield that silently refuses is the complaint this replaced.
+  const locked = !shield.active && shield.rearmRequired;
   return (
     <>
       <ActionZone
         label={
           shield.active
             ? "ВЫКЛЮЧИТЬ ЩИТ"
-            : shield.energy <= 0
+            : locked || shield.energy <= 0
               ? "ЩИТ ВОССТАНАВЛИВАЕТСЯ"
               : "ВКЛЮЧИТЬ ЩИТ"
         }
         testId="shield-button"
         className="hold-action--shield"
-        disabled={!controlsEnabled || (!shield.active && shield.energy <= 0)}
+        disabled={!controlsEnabled || locked || (!shield.active && shield.energy <= 0)}
         mode="toggle"
         active={shield.active}
         resetKey={generation}

@@ -14,7 +14,6 @@ const baseGame: DisplayGameSnapshot = {
   arenaRadius: 2_200,
   rimBandWidth: 260,
   shieldPhase: "down",
-  shieldRearmRequired: false,
   spaceship: {
     x: 2_200,
     y: 2_200,
@@ -26,7 +25,14 @@ const baseGame: DisplayGameSnapshot = {
     heading: 0
   },
   turretAngle: 0,
-  shield: { angle: 0, arcHalfAngle: 0.72, active: false, energy: 100, capacity: 100 },
+  shield: {
+    angle: 0,
+    arcHalfAngle: 0.72,
+    rearmRequired: false,
+    active: false,
+    energy: 100,
+    capacity: 100
+  },
   cannon: { heat: 0, capacity: 100, overheated: false },
   machineGun: { heat: 0, capacity: 100, overheated: false },
   encounter: {

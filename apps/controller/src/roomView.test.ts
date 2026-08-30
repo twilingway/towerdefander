@@ -59,6 +59,7 @@ describe("controller room view", () => {
         shield: {
           angle: Math.PI,
           arcHalfAngle: 0.8,
+          rearmRequired: false,
           active: true,
           energy: 64,
           capacity: 100
@@ -99,6 +100,8 @@ describe("controller room view", () => {
       angle: Math.PI,
       arcHalfAngle: 0.8,
       active: true,
+      // The panel needs the lockout to know when its button is dead.
+      rearmRequired: false,
       energy: 64,
       capacity: 100
     });
@@ -156,6 +159,7 @@ describe("controller room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          rearmRequired: false,
           active: false,
           energy: 100,
           capacity: 100
@@ -288,6 +292,7 @@ describe("controller room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          rearmRequired: false,
           active: false,
           energy: 0,
           capacity: 100

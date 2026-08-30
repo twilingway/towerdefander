@@ -60,6 +60,7 @@ export function projectGameState(
   target.turretAngle = game.turretAngle;
   target.shield.angle = game.shieldAngle;
   target.shield.active = game.shieldActive;
+  target.shield.rearmRequired = game.shieldRearmRequired;
   target.shield.energy = game.shieldEnergy;
   target.shield.capacity = config.shieldCapacity + game.roleModifiers.shield.capacityBonus;
   target.shield.arcHalfAngle =
@@ -90,7 +91,6 @@ export function projectGameState(
   syncRoleModifiers(target.roleModifiers, game.roleModifiers);
 
   target.display.shieldPhase = game.shieldPhase;
-  target.display.shieldRearmRequired = game.shieldRearmRequired;
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
   reconcileKeyed(

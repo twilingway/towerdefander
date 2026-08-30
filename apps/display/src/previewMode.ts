@@ -53,7 +53,6 @@ const PREVIEW_WORLD = {
   arenaRadius: 2200,
   rimBandWidth: 260,
   shieldPhase: "down",
-  shieldRearmRequired: false,
   spaceship: {
     x: 2200,
     y: 2200,
@@ -116,9 +115,15 @@ function createPreviewGame(
     return {
       ...PREVIEW_WORLD,
       shieldPhase: "down",
-      shieldRearmRequired: false,
       cameraViewWidth,
-      shield: { angle: Math.PI / 2, arcHalfAngle: 0.8, active: true, energy: 64, capacity: 120 },
+      shield: {
+        angle: Math.PI / 2,
+        arcHalfAngle: 0.8,
+        rearmRequired: false,
+        active: true,
+        energy: 64,
+        capacity: 120
+      },
       cannon: { heat: 62, capacity: 100, overheated: false },
       machineGun: { heat: 46, capacity: 100, overheated: false },
       encounter: {
@@ -246,9 +251,15 @@ function createPreviewGame(
       ...PREVIEW_WORLD,
       ...EMPTY_WORLD_ENTITIES,
       shieldPhase: "down",
-      shieldRearmRequired: false,
       cameraViewWidth,
-      shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 120, capacity: 120 },
+      shield: {
+        angle: 0,
+        arcHalfAngle: 0.8,
+        rearmRequired: false,
+        active: false,
+        energy: 120,
+        capacity: 120
+      },
       cannon: { heat: 0, capacity: 100, overheated: false },
       machineGun: { heat: 0, capacity: 100, overheated: false },
       encounter: {
@@ -303,10 +314,16 @@ function createPreviewGame(
     ...PREVIEW_WORLD,
     ...EMPTY_WORLD_ENTITIES,
     shieldPhase: "down",
-    shieldRearmRequired: false,
     cameraViewWidth,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
-    shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 0, capacity: 120 },
+    shield: {
+      angle: 0,
+      arcHalfAngle: 0.8,
+      rearmRequired: false,
+      active: false,
+      energy: 0,
+      capacity: 120
+    },
     cannon: { heat: 100, capacity: 100, overheated: true },
     machineGun: { heat: 100, capacity: 100, overheated: true },
     encounter: {

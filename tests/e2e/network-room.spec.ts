@@ -201,11 +201,13 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     await expect(world).toHaveAttribute("data-shield-active", "false", { timeout: 7000 });
     const depletedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
     expect(depletedShieldEnergy).toBeLessThan(20);
-    await expect
-      .poll(async () => Number(await world.getAttribute("data-shield-energy")), { timeout: 3000 })
-      .toBeGreaterThan(Math.max(10, depletedShieldEnergy));
+    // A drained shield is locked out until the battery wins back its mark, and
+    // the button is dead for that whole stretch. Waiting for it to come alive
+    // is the precondition; polling the energy only guessed at it, and the guess
+    // is what made this spec flake.
+    await expect(shield.getByTestId("shield-button")).toBeEnabled({ timeout: 10_000 });
     await shield.getByTestId("shield-button").click();
-    await expect(world).toHaveAttribute("data-shield-active", "true");
+    await expect(world).toHaveAttribute("data-shield-active", "true", { timeout: 5_000 });
     const drainedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
     await shield.getByTestId("shield-button").click();
     await expect(world).toHaveAttribute("data-shield-active", "false");

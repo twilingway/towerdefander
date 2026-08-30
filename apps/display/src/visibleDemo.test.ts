@@ -243,7 +243,6 @@ function worldGame(overrides: Record<string, unknown> = {}) {
     arenaRadius: 2200,
     rimBandWidth: 260,
     shieldPhase: "down",
-    shieldRearmRequired: false,
     worldWidth: 4400,
     worldHeight: 4400,
     shieldRadius: 104,
@@ -258,7 +257,14 @@ function worldGame(overrides: Record<string, unknown> = {}) {
       hp: 400,
       maxHp: 500
     },
-    shield: { angle: 0.1, active: false, energy: 80, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    shield: {
+      angle: 0.1,
+      rearmRequired: false,
+      active: false,
+      energy: 80,
+      capacity: 100,
+      arcHalfAngle: Math.PI / 4
+    },
     cannon: { heat: 12, capacity: 100, overheated: false },
     machineGun: { heat: 12, capacity: 100, overheated: false },
     encounter: { phase: "combat" as const, waveNumber: 3 },

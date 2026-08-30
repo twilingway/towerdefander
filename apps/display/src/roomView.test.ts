@@ -55,6 +55,7 @@ describe("display room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          rearmRequired: false,
           active: false,
           energy: 75,
           capacity: 100
@@ -89,7 +90,6 @@ describe("display room view", () => {
           spaceshipVisualScale: 1.25,
           shieldRadius: 140,
           shieldPhase: "raising",
-          shieldRearmRequired: false,
           enemyCatalogue: [],
           obstacles: collection([
             {

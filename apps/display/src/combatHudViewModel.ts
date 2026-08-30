@@ -67,7 +67,7 @@ export function getShieldStatusLabel(
   if (phase === "up") return "АКТИВЕН";
   if (phase === "raising") return "ПОДНИМАЕТСЯ";
   if (phase === "cooling") return "ОСТЫВАЕТ";
-  if (rearmRequired) return "НУЖЕН ПЕРЕВЗВОД";
+  if (rearmRequired) return "НАБИРАЕТ ЗАРЯД";
   if (energy <= 0) return "РАЗРЯЖЕН";
   return "выключен";
 }

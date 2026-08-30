@@ -121,6 +121,7 @@ interface NetworkGameState {
     angle: number;
     arcHalfAngle: number;
     active: boolean;
+    rearmRequired: boolean;
     energy: number;
     capacity: number;
   };
@@ -175,7 +176,6 @@ interface NetworkGameState {
     turretPivotY?: number;
     shieldRadius?: number;
     shieldPhase?: ShieldPhase;
-    shieldRearmRequired?: boolean;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
@@ -252,7 +252,6 @@ export function toDisplayRoomView(
             arenaRadius: game.arenaRadius,
             rimBandWidth: game.rimBandWidth,
             shieldPhase: display.shieldPhase ?? "down",
-            shieldRearmRequired: display.shieldRearmRequired ?? false,
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },

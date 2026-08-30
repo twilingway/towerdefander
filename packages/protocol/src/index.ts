@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 34 as const;
+export const PROTOCOL_VERSION = 35 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -173,6 +173,13 @@ export const publicShieldViewSchema = z
   .object({
     angle: finite,
     active: z.boolean(),
+    /**
+     * Drained, and locked out until the battery wins back its mark. The
+     * operator's panel needs it as much as the shared screen does: the button
+     * is dead while it is set, and a dead button with no reason is what the
+     * old manual re-arm felt like.
+     */
+    rearmRequired: z.boolean(),
     energy: finite.nonnegative(),
     capacity: finite.nonnegative(),
     arcHalfAngle: finite.positive().max(Math.PI)
@@ -641,10 +648,9 @@ export const displayGameSnapshotSchema = z
     rimBandWidth: finite.nonnegative(),
     /**
      * Why the shield is or is not protecting. Display-only: the shared screen
-     * explains the cycle, and the operator's panel is left for later.
+     * spells the cycle out, while the panel needs no more than the lock.
      */
     shieldPhase: shieldPhaseSchema,
-    shieldRearmRequired: z.boolean(),
     /** Narrowest slice of the world the display frames; height follows as 9/16. */
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background for this run; fixed at run start like the silhouettes. */

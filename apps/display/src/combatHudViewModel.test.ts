@@ -60,7 +60,7 @@ describe("shield status label", () => {
   });
 
   it("explains a shield that is down rather than calling it off", () => {
-    expect(getShieldStatusLabel("down", true, 30)).toBe("НУЖЕН ПЕРЕВЗВОД");
+    expect(getShieldStatusLabel("down", true, 30)).toBe("НАБИРАЕТ ЗАРЯД");
     expect(getShieldStatusLabel("down", false, 0)).toBe("РАЗРЯЖЕН");
     expect(getShieldStatusLabel("down", false, 80)).toBe("выключен");
   });

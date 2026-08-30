@@ -70,6 +70,7 @@ interface NetworkGameState {
     angle: number;
     arcHalfAngle: number;
     active: boolean;
+    rearmRequired: boolean;
     energy: number;
     capacity: number;
   };

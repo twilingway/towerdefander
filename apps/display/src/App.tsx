@@ -289,7 +289,7 @@ export function DisplayApp() {
               <strong data-testid="hud-shield-status">
                 {getShieldStatusLabel(
                   view.game.shieldPhase,
-                  view.game.shieldRearmRequired,
+                  view.game.shield.rearmRequired,
                   view.game.shield.energy
                 )}
               </strong>
