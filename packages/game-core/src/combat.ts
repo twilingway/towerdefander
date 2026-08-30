@@ -86,19 +86,31 @@ export { UPGRADE_CATALOGUE, type UpgradeDefinition } from "./upgradeCatalogue.ts
 export { createWavePlan, getWaveDifficulty } from "./waveDirector.ts";
 export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./spatialGrid.ts";
 
-export function createInitialCombatState(config: CombatConfig, runSeed: number): CombatStateFields {
+/**
+ * `startWave` exists for testing a late wave without playing the ones before
+ * it. The run is otherwise clean — no credits and no upgrades — so a crew
+ * dropped straight onto wave five is weaker than one that fought its way there.
+ */
+export function createInitialCombatState(
+  config: CombatConfig,
+  runSeed: number,
+  startWave = 1
+): CombatStateFields {
   validateCombatConfig(config);
   validateRunSeed(runSeed);
-  const { plan, rngState } = createWavePlan(config, runSeed, 1);
+  if (!Number.isSafeInteger(startWave) || startWave < 1) {
+    throw new RangeError("startWave must be a positive safe integer");
+  }
+  const { plan, rngState } = createWavePlan(config, runSeed, startWave);
   const ambientSchedule = scheduleAmbientAsteroid(
-    deriveDomainSeed(runSeed, 1, AMBIENT_ASTEROID_DOMAIN),
+    deriveDomainSeed(runSeed, startWave, AMBIENT_ASTEROID_DOMAIN),
     0,
     config
   );
   return {
     runSeed,
     spawnRngState: rngState,
-    offerRngState: deriveDomainSeed(runSeed, 1, OFFER_DOMAIN),
+    offerRngState: deriveDomainSeed(runSeed, startWave, OFFER_DOMAIN),
     ambientAsteroidRngState: ambientSchedule.rngState,
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     spaceshipHp: config.spaceshipMaxHp,
@@ -106,7 +118,7 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     encounterPhase: "combat",
     outcome: null,
     defeatReason: null,
-    waveNumber: 1,
+    waveNumber: startWave,
     encounterTick: 0,
     stalemateTicks: 0,
     score: 0,

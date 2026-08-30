@@ -385,6 +385,38 @@ describe("circular combat spawning and movement", () => {
   });
 });
 
+describe("starting on a later wave", () => {
+  const config = createSpaceshipSimulationConfig();
+
+  it("opens on the wave asked for, with its own difficulty and plan", () => {
+    const late = createSpaceshipSimulationState(config, 17, 5);
+    expect(late.waveNumber).toBe(5);
+    expect(late.pendingSpawns.length).toBeGreaterThan(0);
+    // Wave five is a boss wave in the built-in campaign, and its budget is the
+    // director's for that wave rather than the opening one.
+    const first = createSpaceshipSimulationState(config, 17, 1);
+    expect(late.pendingSpawns).not.toEqual(first.pendingSpawns);
+  });
+
+  it("still opens a clean run: no credits and no upgrades bought on the way", () => {
+    const late = createSpaceshipSimulationState(config, 17, 5);
+    expect(late.credits).toBe(0);
+    expect(late.teamUpgradeSelection).toBeNull();
+    expect(late.spaceshipHp).toBe(late.spaceshipMaxHp);
+  });
+
+  it("refuses a wave that is not a positive whole number", () => {
+    expect(() => createSpaceshipSimulationState(config, 17, 0)).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationState(config, 17, 1.5)).toThrow(RangeError);
+  });
+
+  it("replays the same way twice", () => {
+    expect(createSpaceshipSimulationState(config, 17, 5).pendingSpawns).toEqual(
+      createSpaceshipSimulationState(config, 17, 5).pendingSpawns
+    );
+  });
+});
+
 describe("a fight that produces nothing closes itself", () => {
   const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
   const centerX = config.worldWidth / 2;

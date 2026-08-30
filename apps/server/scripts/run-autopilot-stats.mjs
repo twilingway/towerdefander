@@ -10,7 +10,8 @@
  * Usage:
  *   node apps/server/scripts/run-autopilot-stats.mjs [--runs 20] [--level ace]
  *                                        [--seed 1] [--intermission 1]
- *                                        [--max-waves 40] [--preset path.json]
+ *                                        [--max-waves 40] [--start-wave 5]
+ *                                        [--preset path.json]
  */
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
@@ -46,6 +47,7 @@ const { values } = parseArgs({
     seed: { type: "string", default: "1" },
     intermission: { type: "string" },
     "max-waves": { type: "string" },
+    "start-wave": { type: "string" },
     preset: { type: "string" },
     json: { type: "boolean", default: false }
   }
@@ -178,7 +180,7 @@ function castUpgradeVotes(state) {
   return current;
 }
 
-function playRun(config, seed, level, profile, maxWaves) {
+function playRun(config, seed, level, profile, maxWaves, startWave) {
   const memory = createAutopilotMemory(seed);
   const options = {
     archetypes: config.enemyArchetypes,
@@ -187,7 +189,9 @@ function playRun(config, seed, level, profile, maxWaves) {
     turretRate: config.turretMaxAngularSpeedPerSecond
   };
 
-  let state = createSpaceshipSimulationState(config, seed);
+  // A late start is a clean run on that wave: no credits, no upgrades, so the
+  // crew is weaker than one that fought its way there.
+  let state = createSpaceshipSimulationState(config, seed, startWave);
   let peakWave = state.waveNumber;
 
   while (state.outcome === null && state.clock.tick < MAX_RUN_TICKS) {
@@ -290,6 +294,8 @@ async function main() {
     values["max-waves"] === undefined
       ? DEFAULT_MAX_WAVES
       : positiveInteger(values["max-waves"], "--max-waves");
+  const startWave =
+    values["start-wave"] === undefined ? 1 : positiveInteger(values["start-wave"], "--start-wave");
 
   const tuning = await readTuning(values.preset);
   const overrides = { ...tuning };
@@ -314,12 +320,13 @@ async function main() {
 
   const results = [];
   for (let index = 0; index < runs; index += 1) {
-    results.push(playRun(config, firstSeed + index, values.level, profile, maxWaves));
+    results.push(playRun(config, firstSeed + index, values.level, profile, maxWaves, startWave));
   }
 
   const report = {
     harness: "spaceship-defender-autopilot-stats",
     level: values.level,
+    startWave,
     runs,
     intermissionSeconds: Number(((config.intermissionTicks * TICK_MS) / 1000).toFixed(2)),
     wave: summarise(results.map(({ wave }) => wave)),
