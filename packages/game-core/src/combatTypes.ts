@@ -1,4 +1,5 @@
 import { type CollisionCandidate, type MovingEntity } from "./spatialGrid.ts";
+import { type CombatRunStats } from "./runStats.ts";
 
 export type { CollisionCandidate, MovingEntity };
 
@@ -6,6 +7,12 @@ export type EncounterPhase = "combat" | "intermission" | "result";
 export type TerminalOutcome = "defeat" | "victory";
 export type DefeatReason = "spaceship_destroyed" | "wave_timeout";
 export type GameplayRole = "pilot" | "gunner" | "shield";
+/**
+ * Which barrel fired. Declared here rather than next to the weapon step because
+ * the collision resolver needs it to attribute a hit, and `combatTypes` is the
+ * module both sides already depend on.
+ */
+export type FriendlyWeaponSource = "cannon" | "machineGun";
 /** Catalogue id, not a fixed enum: operators add archetypes from the console. */
 export type EnemyKind = string;
 export const ASTEROID_SPAWN_KIND = "asteroid" as const;
@@ -371,10 +378,13 @@ export interface CombatStateFields {
   readonly teamUpgradeOffer: TeamUpgradeOffer | null;
   readonly teamUpgradeVotes: TeamUpgradeVotes;
   readonly teamUpgradeSelection: TeamUpgradeSelection | null;
+  /** Measurement only. Never projected into the room schema, never on the wire. */
+  readonly runStats: CombatRunStats;
 }
 
 export interface FriendlyProjectileLike extends MovingEntity {
   readonly damage: number;
+  readonly source: FriendlyWeaponSource;
 }
 
 export interface CombatStepState extends CombatStateFields {

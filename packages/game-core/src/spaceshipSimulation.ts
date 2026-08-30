@@ -2,6 +2,7 @@ import {
   type CombatConfig,
   type CombatStateFields,
   type EntityVisual,
+  type FriendlyWeaponSource,
   type TurretVisual
 } from "./combatTypes.ts";
 import { assertCombatResultInvariant, dynamicEntityCount } from "./combat.ts";
@@ -12,6 +13,7 @@ import {
   neutralizeCombatControls
 } from "./simulationCombatBridge.ts";
 import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
+import { addRunStats } from "./runStats.ts";
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 import {
   ZERO,
@@ -134,7 +136,7 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly mgRearmThreshold: number;
 }
 
-export type FriendlyWeaponSource = "cannon" | "machineGun";
+export type { FriendlyWeaponSource } from "./combatTypes.ts";
 
 /** Down, coming up, holding, or cooling off. Only `up` blocks damage. */
 export type ShieldPhase = "down" | "raising" | "up" | "cooling";
@@ -573,7 +575,13 @@ export function advanceSpaceshipSimulation(
     mgHeat,
     mgOverheated,
     queuedMgFire,
-    lastMgFiredTick
+    lastMgFiredTick,
+    // Counted here rather than by watching the projectile list, because a
+    // point-blank shot is created and resolved inside the same step.
+    runStats: addRunStats(state.runStats, {
+      shotsByCannon: cannonShot.projectile === null ? 0 : 1,
+      shotsByMachineGun: mgShot.projectile === null ? 0 : 1
+    })
   };
   return advanceCombatInSpaceshipSimulation(baseState, config);
 }

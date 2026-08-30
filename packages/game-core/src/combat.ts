@@ -20,6 +20,7 @@ import { deriveDomainSeed } from "./rng.ts";
 import { validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 import { createWavePlan } from "./waveDirector.ts";
 import { createTeamUpgradeOffer } from "./upgrades.ts";
+import { addRunStats, createRunStats } from "./runStats.ts";
 import { UPGRADE_CATALOGUE } from "./upgradeCatalogue.ts";
 import { moveAndSpawnThreats } from "./threats.ts";
 import { scheduleAmbientAsteroid } from "./spawning.ts";
@@ -83,6 +84,7 @@ export { getEnemyArchetype, validateCombatConfig, validateRunSeed } from "./comb
 export { deriveDomainSeed, nextUint32 } from "./rng.ts";
 export { createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
 export { UPGRADE_CATALOGUE, type UpgradeDefinition } from "./upgradeCatalogue.ts";
+export { createRunStats, damageTaken, type CombatRunStats, type ThreatClass } from "./runStats.ts";
 export { createWavePlan, getWaveDifficulty } from "./waveDirector.ts";
 export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./spatialGrid.ts";
 
@@ -137,7 +139,8 @@ export function createInitialCombatState(
     },
     teamUpgradeOffer: null,
     teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
-    teamUpgradeSelection: null
+    teamUpgradeSelection: null,
+    runStats: createRunStats()
   };
 }
 
@@ -275,6 +278,7 @@ function applyUpgrade<TState extends CombatStateFields>(
     spaceshipMaxHp,
     roleModifiers,
     credits: state.credits - TEAM_UPGRADE_PRICE,
+    runStats: addRunStats(state.runStats, { creditsSpent: TEAM_UPGRADE_PRICE }),
     teamUpgradeSelection: {
       offerId,
       waveNumber,
@@ -329,6 +333,9 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     teamUpgradeOffer: state.teamUpgradeOffer,
     teamUpgradeVotes: state.teamUpgradeVotes,
     teamUpgradeSelection: state.teamUpgradeSelection,
+    // This whitelist silently drops anything it does not name, so a counter
+    // missing here reads zero forever without failing a single existing test.
+    runStats: state.runStats,
     shieldActive: state.shieldActive,
     shieldEnergy: state.shieldEnergy,
     shieldRearmRequired: state.shieldRearmRequired,

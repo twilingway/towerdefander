@@ -14,6 +14,7 @@ import {
   type MovingEntity
 } from "./spatialGrid.ts";
 import { archetypeOf } from "./combatValidation.ts";
+import { addRunStats } from "./runStats.ts";
 import { isWithinCircularEnvelope } from "./arenaGeometry.ts";
 import { shortestAngleDelta } from "./spaceshipSimulation.ts";
 export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig): CombatStepState {
@@ -47,23 +48,48 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
   const damage = new Map<string, number>();
   let score = state.score;
   let credits = state.credits;
+  // Accumulated in locals and folded once at the end, the way score and credits
+  // already are, so a busy tick pays one allocation instead of one per hit.
+  let hitsByCannon = 0;
+  let hitsByMachineGun = 0;
+  let damageDealtByCannon = 0;
+  let damageDealtByMachineGun = 0;
+  let asteroidsDestroyed = 0;
+  let creditsEarned = 0;
   for (const candidate of candidates) {
     if (removedProjectiles.has(candidate.sourceId) || removedTargets.has(candidate.targetId))
       continue;
     const projectile = state.projectiles.find(({ id }) => id === candidate.sourceId);
     if (projectile === undefined) continue;
     removedProjectiles.add(candidate.sourceId);
+    const fromCannon = projectile.source === "cannon";
     if (candidate.targetKind === "missile") {
       removedTargets.add(candidate.targetId);
       score += config.missileInterceptScoreReward;
+      // An intercept is a hit even though a missile has no health to spend.
+      if (fromCannon) hitsByCannon += 1;
+      else hitsByMachineGun += 1;
       continue;
     }
     const existingDamage = damage.get(candidate.targetId) ?? 0;
-    damage.set(candidate.targetId, existingDamage + projectile.damage);
     const target =
       candidate.targetKind === "enemy"
         ? state.enemies.find(({ id }) => id === candidate.targetId)
         : state.asteroids.find(({ id }) => id === candidate.targetId);
+    // Overkill on the killing shot is not health that ever existed, so the
+    // counter takes what was left rather than what the shot carried.
+    const applied =
+      target === undefined
+        ? projectile.damage
+        : Math.max(0, Math.min(projectile.damage, target.hp - existingDamage));
+    if (fromCannon) {
+      hitsByCannon += 1;
+      damageDealtByCannon += applied;
+    } else {
+      hitsByMachineGun += 1;
+      damageDealtByMachineGun += applied;
+    }
+    damage.set(candidate.targetId, existingDamage + projectile.damage);
     if (target !== undefined && existingDamage + projectile.damage >= target.hp) {
       removedTargets.add(candidate.targetId);
       if (candidate.targetKind === "enemy") {
@@ -71,10 +97,15 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
         const archetype = archetypeOf(config, enemy.kind);
         score += archetype.scoreReward;
         credits += archetype.creditReward;
+        creditsEarned += archetype.creditReward;
       } else {
         score += config.asteroidScoreReward;
+        asteroidsDestroyed += 1;
         const asteroid = target as AsteroidState;
-        if (asteroid.origin === "wave") credits += config.asteroidCreditReward;
+        if (asteroid.origin === "wave") {
+          credits += config.asteroidCreditReward;
+          creditsEarned += config.asteroidCreditReward;
+        }
       }
     }
   }
@@ -82,6 +113,14 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
     ...state,
     score,
     credits,
+    runStats: addRunStats(state.runStats, {
+      hitsByCannon,
+      hitsByMachineGun,
+      damageDealtByCannon,
+      damageDealtByMachineGun,
+      asteroidsDestroyed,
+      creditsEarned
+    }),
     projectiles: state.projectiles.filter(({ id }) => !removedProjectiles.has(id)),
     enemies: state.enemies
       .filter(({ id }) => !removedTargets.has(id))
@@ -171,6 +210,14 @@ export function resolveSpaceshipThreats(
   let spaceshipHp = state.spaceshipHp;
   let score = state.score;
   let credits = state.credits;
+  let damageTakenFromBullets = 0;
+  let damageTakenFromMissiles = 0;
+  let damageTakenFromAsteroids = 0;
+  let shieldBlocks = 0;
+  let shieldEnergySpentOnBlocks = 0;
+  let shieldOverdrawnHits = 0;
+  let asteroidsDestroyed = 0;
+  let creditsEarned = 0;
   for (const candidate of candidates) {
     if (removed.has(candidate.sourceId)) continue;
     if (candidate.shieldHit && shieldActive) {
@@ -178,27 +225,40 @@ export function resolveSpaceshipThreats(
       if (shieldEnergy >= cost) {
         shieldEnergy -= cost;
         removed.add(candidate.sourceId);
+        shieldBlocks += 1;
+        shieldEnergySpentOnBlocks += cost;
         if (candidate.kind === "missile") score += config.missileInterceptScoreReward;
         if (candidate.kind === "asteroid") {
           score += config.asteroidScoreReward;
+          asteroidsDestroyed += 1;
           const asteroid = state.asteroids.find(({ id }) => id === candidate.sourceId);
-          if (asteroid?.origin === "wave") credits += config.asteroidCreditReward;
+          if (asteroid?.origin === "wave") {
+            credits += config.asteroidCreditReward;
+            creditsEarned += config.asteroidCreditReward;
+          }
         }
         if (shieldEnergy === 0) {
           shieldActive = false;
           shieldRearmRequired = true;
         }
       } else {
+        // The sector was up but could not pay, so it drops and the same threat
+        // lands its full hull damage on the next candidate for this id.
         shieldEnergy = 0;
         shieldActive = false;
         shieldRearmRequired = true;
+        shieldOverdrawnHits += 1;
       }
       continue;
     }
     if (!candidate.shieldHit) {
       const threat = threats.find(({ id }) => id === candidate.sourceId);
       if (threat !== undefined) {
+        const applied = Math.min(threat.damage, spaceshipHp);
         spaceshipHp = Math.max(0, spaceshipHp - threat.damage);
+        if (candidate.kind === "bullet") damageTakenFromBullets += applied;
+        else if (candidate.kind === "missile") damageTakenFromMissiles += applied;
+        else damageTakenFromAsteroids += applied;
         removed.add(candidate.sourceId);
       }
     }
@@ -208,6 +268,16 @@ export function resolveSpaceshipThreats(
     spaceshipHp,
     score,
     credits,
+    runStats: addRunStats(state.runStats, {
+      damageTakenFromBullets,
+      damageTakenFromMissiles,
+      damageTakenFromAsteroids,
+      shieldBlocks,
+      shieldEnergySpentOnBlocks,
+      shieldOverdrawnHits,
+      asteroidsDestroyed,
+      creditsEarned
+    }),
     shieldEnergy,
     shieldActive,
     shieldRearmRequired,
