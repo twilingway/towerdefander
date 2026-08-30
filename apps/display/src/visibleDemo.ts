@@ -4,6 +4,7 @@ import type {
   PublicEncounterView,
   PublicEnemyView,
   PublicHomingMissileView,
+  PublicLootDropView,
   PublicMachineGunView,
   PublicProjectileView,
   PublicShieldView,
@@ -220,6 +221,12 @@ export interface VisibleDemoRock extends VisibleDemoEntity {
   readonly maxHp: number;
 }
 
+/** Salvage left by a kill: the only hull the bot can win back inside a run. */
+export interface VisibleDemoLoot extends VisibleDemoEntity {
+  readonly kind: string;
+  readonly amount: number;
+}
+
 /**
  * Everything the autopilot is allowed to know: the ship's own systems plus the
  * entities a viewer can actually see on the same screen. Nothing outside the
@@ -231,6 +238,8 @@ export interface VisibleDemoWorld {
   readonly tick: number;
   readonly phase: string;
   readonly waveNumber: number;
+  /** Seconds left of the window a won wave stays open for, zero outside it. */
+  readonly salvageWindowSeconds: number;
   readonly cameraViewWidth: number;
   readonly arenaRadius: number;
   readonly worldWidth: number;
@@ -268,9 +277,11 @@ export interface VisibleDemoWorld {
   readonly missiles: readonly VisibleDemoMissile[];
   readonly bullets: readonly VisibleDemoEntity[];
   readonly asteroids: readonly VisibleDemoRock[];
+  readonly loot: readonly VisibleDemoLoot[];
 }
 
 interface VisibleDemoWorldGame extends VisibleDemoThreatGame {
+  readonly lootDrops: readonly PublicLootDropView[];
   readonly tick: number;
   readonly arenaRadius: number;
   readonly worldWidth: number;
@@ -281,7 +292,10 @@ interface VisibleDemoWorldGame extends VisibleDemoThreatGame {
   readonly shield: PublicShieldView;
   readonly cannon: PublicMachineGunView;
   readonly machineGun: PublicMachineGunView;
-  readonly encounter: Pick<PublicEncounterView, "phase" | "waveNumber">;
+  readonly encounter: Pick<
+    PublicEncounterView,
+    "phase" | "waveNumber" | "lootWindowSecondsRemaining"
+  >;
 }
 
 function toDemoEntity(entity: VisibleDemoEntity): VisibleDemoEntity {
@@ -308,6 +322,7 @@ export function buildVisibleDemoWorld(
     tick: game.tick,
     phase: game.encounter.phase,
     waveNumber: game.encounter.waveNumber,
+    salvageWindowSeconds: game.encounter.lootWindowSecondsRemaining,
     cameraViewWidth: game.cameraViewWidth,
     arenaRadius: game.arenaRadius,
     worldWidth: game.worldWidth,
@@ -357,6 +372,11 @@ export function buildVisibleDemoWorld(
       ...toDemoEntity(asteroid),
       hp: asteroid.hp,
       maxHp: asteroid.maxHp
+    })),
+    loot: framed(game.lootDrops).map((drop) => ({
+      ...toDemoEntity(drop),
+      kind: drop.kind,
+      amount: drop.amount
     }))
   };
 }

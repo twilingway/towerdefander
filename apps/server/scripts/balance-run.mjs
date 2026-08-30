@@ -83,6 +83,7 @@ export function buildWorld(state, config, sampledAtMs) {
     tick: state.clock.tick,
     phase: state.encounterPhase,
     waveNumber: state.waveNumber,
+    salvageWindowSeconds: Math.ceil((state.lootWindowTicksRemaining * TICK_MS) / 1000),
     cameraViewWidth: config.cameraViewWidth,
     arenaRadius: config.arenaRadius,
     worldWidth: config.worldWidth,
@@ -133,6 +134,11 @@ export function buildWorld(state, config, sampledAtMs) {
       origin: rock.origin,
       hp: rock.hp,
       maxHp: rock.maxHp
+    })),
+    loot: framed(state.lootDrops).map((drop) => ({
+      ...toEntity(drop),
+      kind: drop.kind,
+      amount: drop.amount
     }))
   };
 }

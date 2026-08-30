@@ -169,6 +169,10 @@ function missile(entityId: string, spawnSequence: number, x: number, y: number) 
   return { ...moving(entityId, spawnSequence, x, y), heading: 0, visual: null };
 }
 
+function loot(entityId: string, spawnSequence: number, x: number, y: number) {
+  return { ...moving(entityId, spawnSequence, x, y), kind: "repair" as const, amount: 35 };
+}
+
 describe("visible demo world picture", () => {
   it("keeps every framed entity with the fields the bot needs", () => {
     const world = buildVisibleDemoWorld(worldGame(), 1_700);
@@ -190,6 +194,20 @@ describe("visible demo world picture", () => {
     expect(world.missiles[0]).toMatchObject({ entityId: "missile-near", heading: 0 });
     expect(world.bullets[0]).toMatchObject({ entityId: "bullet-near" });
     expect(world.asteroids[0]).toMatchObject({ entityId: "rock-near", maxHp: 10 });
+  });
+
+  it("shows the bot the salvage on screen and nothing beyond the frame", () => {
+    // Without this the bot cannot see the only hull it wins back inside a run,
+    // and every batch under-measures healing.
+    const world = buildVisibleDemoWorld(
+      worldGame({
+        lootDrops: [loot("salvage-near", 5, 2_260, 2_200), loot("salvage-far", 6, 2_200, 4_000)]
+      }),
+      1_700
+    );
+
+    expect(world.loot.map(({ entityId }) => entityId)).toEqual(["salvage-near"]);
+    expect(world.loot[0]).toMatchObject({ kind: "repair", amount: 35, radius: 10 });
   });
 
   it("drops every entity the camera never frames", () => {
@@ -267,11 +285,12 @@ function worldGame(overrides: Record<string, unknown> = {}) {
     },
     cannon: { heat: 12, capacity: 100, overheated: false },
     machineGun: { heat: 12, capacity: 100, overheated: false },
-    encounter: { phase: "combat" as const, waveNumber: 3 },
+    encounter: { phase: "combat" as const, waveNumber: 3, lootWindowSecondsRemaining: 0 },
     enemyShips: [enemy("enemy-near", 1, 2_300, 2_200)],
     homingMissiles: [missile("missile-near", 2, 2_250, 2_200)],
     hostileProjectiles: [projectile("bullet-near", 3, 2_180, 2_200)],
     asteroids: [asteroid("rock-near", 4, 2_120, 2_200)],
+    lootDrops: [],
     ...overrides
   };
 }

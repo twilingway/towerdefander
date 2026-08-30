@@ -809,6 +809,20 @@ export function huntVector(world, memory, nowMs) {
  * to their source; with the screen truly empty it heads for the middle of the
  * arena and sweeps there, which is where the frame covers the most ground.
  */
+/** The closest drop on screen, with a stable tie-break like every other pick. */
+function nearestLoot(world) {
+  let nearest;
+  for (const drop of world.loot ?? []) {
+    const distance = distanceBetween(world.ship, drop);
+    const closer =
+      nearest === undefined ||
+      distance < nearest.distance ||
+      (distance === nearest.distance && compareEntities(drop, nearest.drop) < 0);
+    if (closer) nearest = { distance, drop };
+  }
+  return nearest?.drop;
+}
+
 function searchVector(world, memory) {
   const inwardX = world.worldWidth / 2 - world.ship.x;
   const inwardY = world.worldHeight / 2 - world.ship.y;
@@ -1003,6 +1017,21 @@ function planPilotCourse(world, profile, memory, options) {
   // question of where the nose already points, and a long evasion swings it
   // across targets that are worth the burst.
   if (escape !== undefined) return { vector: escape, mgFiring };
+
+  // A wave that is already won holds open for a few seconds while salvage sits
+  // on the field, and salvage is the only hull a crew ever wins back inside a
+  // run. Only inside that window, and only for what the camera frames: mid-wave
+  // the shooters outside the frame are what kill the crew, and leaving the hunt
+  // for a drop costs more hull than the drop returns.
+  const drop =
+    target === undefined && (world.salvageWindowSeconds ?? 0) > 0 ? nearestLoot(world) : undefined;
+  if (drop !== undefined) {
+    return {
+      vector: normalize({ x: drop.x - world.ship.x, y: drop.y - world.ship.y }),
+      mgFiring,
+      crossing: true
+    };
+  }
 
   // Without the orbit skill the pilot keeps the old circular patrol.
   if (!profile.orbit) return { vector: pilotVector(nowMs), mgFiring };
