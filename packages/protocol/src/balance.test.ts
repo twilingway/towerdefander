@@ -107,6 +107,7 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
     unlockWave: 1,
     scoreReward: 25,
     creditReward: 2,
+    lootChance: 0.2,
     ...overrides
   };
 }
@@ -155,6 +156,14 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
+    lootRepairAmount: 35,
+    lootShieldAmount: 30,
+    lootBossRepairAmount: 200,
+    lootLifetimeTicks: 300,
+    lootDropRadius: 18,
+    lootMagnetRadius: 260,
+    lootMagnetAccelerationPerSecondSquared: 900,
+    lootDriftDampingPerSecond: 1.6,
     projectileVisual: null,
     turretVisual: null,
     mgProjectileVisual: null,

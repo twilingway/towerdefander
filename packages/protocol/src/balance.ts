@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 24 as const;
+export const BALANCE_FILE_VERSION = 25 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -240,7 +240,13 @@ export const enemyArchetypeSchema = z
     spawnCost: positiveFinite,
     unlockWave: positiveInteger,
     scoreReward: nonNegativeFinite,
-    creditReward: nonNegativeFinite
+    creditReward: nonNegativeFinite,
+    /**
+     * Chance this archetype leaves salvage behind. Per archetype rather than
+     * global because an interceptor arrives eight at a time and a boss once:
+     * one probability cannot serve both.
+     */
+    lootChance: z.number().min(0).max(1)
   })
   .strict();
 export type EnemyArchetype = z.infer<typeof enemyArchetypeSchema>;
@@ -423,6 +429,19 @@ export const balanceTuningSchema = z
     asteroidSpawnCost: positiveInteger,
     asteroidScoreReward: nonNegativeFinite,
     asteroidCreditReward: nonNegativeFinite,
+
+    // --- Salvage: the only hull a crew wins back inside a run ---
+    lootRepairAmount: positiveFinite,
+    lootShieldAmount: positiveFinite,
+    /** A boss always leaves this instead of rolling; the reward for a boss wave. */
+    lootBossRepairAmount: positiveFinite,
+    lootLifetimeTicks: positiveInteger,
+    lootDropRadius: positiveFinite,
+    /** Inside this distance salvage stops drifting and comes to the ship. */
+    lootMagnetRadius: positiveFinite,
+    lootMagnetAccelerationPerSecondSquared: positiveFinite,
+    /** How fast the dead enemy's inherited motion bleeds off the drop. */
+    lootDriftDampingPerSecond: nonNegativeFinite,
     /** Look of the ambient hazard; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,

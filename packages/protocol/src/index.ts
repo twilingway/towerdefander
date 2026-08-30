@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 35 as const;
+export const PROTOCOL_VERSION = 36 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -43,10 +43,11 @@ export const TEAM_UPGRADE_PRICE = 5 as const;
 export const COMBAT_ENTITY_CAPS = {
   enemyShips: 40,
   asteroids: 16,
+  lootDrops: 12,
   hostileProjectiles: 96,
   homingMissiles: 12,
   friendlyProjectiles: 32,
-  dynamicEntities: 196
+  dynamicEntities: 208
 } as const;
 
 export const PILOT_UPGRADE_IDS = ["pilot_speed", "pilot_acceleration", "pilot_hull"] as const;
@@ -95,6 +96,10 @@ export type ProjectileKind = z.infer<typeof projectileKindSchema>;
 export const ASTEROID_ORIGINS = ["wave", "ambient"] as const;
 export const asteroidOriginSchema = z.enum(ASTEROID_ORIGINS);
 export type AsteroidOrigin = z.infer<typeof asteroidOriginSchema>;
+/** What a salvage drop gives back when the hull touches it. */
+export const LOOT_KINDS = ["repair", "shieldCell"] as const;
+export const lootKindSchema = z.enum(LOOT_KINDS);
+export type LootKind = z.infer<typeof lootKindSchema>;
 export const PROJECTILE_SOURCES = ["cannon", "machineGun"] as const;
 export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
 export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
@@ -407,6 +412,14 @@ export const publicAsteroidViewSchema = z
     if (value.hp > value.maxHp) issue(context, ["hp"], "Asteroid HP must not exceed max HP.");
   });
 export type PublicAsteroidView = z.infer<typeof publicAsteroidViewSchema>;
+export const publicLootDropViewSchema = z
+  .object({
+    ...entityShape,
+    kind: lootKindSchema,
+    amount: finite.positive()
+  })
+  .strict();
+export type PublicLootDropView = z.infer<typeof publicLootDropViewSchema>;
 export const publicProjectileViewSchema = z
   .object({
     ...entityShape,
@@ -666,6 +679,7 @@ export const displayGameSnapshotSchema = z
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
+    lootDrops: z.array(publicLootDropViewSchema).max(COMBAT_ENTITY_CAPS.lootDrops),
     friendlyProjectiles: z
       .array(publicProjectileViewSchema)
       .max(COMBAT_ENTITY_CAPS.friendlyProjectiles),
