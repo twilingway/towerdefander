@@ -72,6 +72,19 @@ const DEFAULT_ENEMY_TURN_RATE = (2 * Math.PI) / 3;
  * catalogue written before this setting existed plays exactly as it did.
  */
 const DEFAULT_ENEMY_COMBAT_SKILL = "rookie";
+/** What an operator's own archetype inherits when salvage arrives. */
+const DEFAULT_LOOT_CHANCE = 0.22;
+/** Every salvage knob, so the migration cannot forget one silently. */
+const LOOT_FIELDS = [
+  "lootRepairAmount",
+  "lootShieldAmount",
+  "lootBossRepairAmount",
+  "lootLifetimeTicks",
+  "lootDropRadius",
+  "lootMagnetRadius",
+  "lootMagnetAccelerationPerSecondSquared",
+  "lootDriftDampingPerSecond"
+] as const satisfies readonly (keyof BalanceTuning)[];
 
 /** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
 const TICK_SECONDS = 0.05;
@@ -147,7 +160,10 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
             showHealthBar: false
           })
         : migrateVisual(visual),
-    label: archetype.label ?? known?.label ?? kind
+    label: archetype.label ?? known?.label ?? kind,
+    // Version 24 and earlier had no salvage at all. A built-in archetype gets
+    // its own drop chance back; an operator's own inherits the gunship's.
+    lootChance: archetype.lootChance ?? known?.lootChance ?? DEFAULT_LOOT_CHANCE
   };
   delete migrated.weapon;
   return migrated;
@@ -302,6 +318,14 @@ function migrateBackground(tuning: LegacyRecord, defaults: BalanceTuning): unkno
   return { ...defaults.background, ...readRecord(tuning, "background") };
 }
 
+/**
+ * Salvage arrived in version 25. Merged field by field off the defaults rather
+ * than carried over whole, which is what once cost an operator their wave table.
+ */
+function migrateLoot(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  return Object.fromEntries(LOOT_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]]));
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -320,6 +344,10 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       // operator's waves down with it.
       helm: migrateHelm(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
+      // Field by field, like the helm: a preset saved before salvage existed
+      // must gain every knob, not fail the strict schema and take the
+      // operator's waves down with it.
+      ...migrateLoot(tuning, defaults),
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
           kind,

@@ -30,7 +30,7 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
     runtime.gameState = createWorstCaseCombatFixture();
     room.advanceGameStep();
 
-    expect(schemaEntityCount(room.state)).toBe(196);
+    expect(schemaEntityCount(room.state)).toBe(208);
     const encoder = new Encoder(room.state);
     const displayView = new StateView();
     displayView.add(room.state.game, 1);
@@ -81,7 +81,7 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
     expect(decodedSecond.x).toBe(unchangedSecondX);
   });
 
-  it("accepts 20-Hz role controls and a latency pong while 196 entities are simulated", () => {
+  it("accepts 20-Hz role controls and a latency pong while 208 entities are simulated", () => {
     const { room, controllers } = startGame();
     const runtime = internals(room);
     const fixture = createWorstCaseCombatFixture();
@@ -130,7 +130,7 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
     expect(runtime.sequenceWatermarks.get(pilot.client.sessionId)?.get("pilot:input")).toBe(20);
     expect(runtime.sequenceWatermarks.get(gunner.client.sessionId)?.get("gunner:input")).toBe(20);
     expect(runtime.sequenceWatermarks.get(shield.client.sessionId)?.get("shield:input")).toBe(20);
-    expect(dynamicEntityCount(runtime.gameState)).toBeLessThanOrEqual(196);
+    expect(dynamicEntityCount(runtime.gameState)).toBeLessThanOrEqual(208);
   });
 });
 
@@ -184,6 +184,7 @@ function schemaEntityCount(state: SpaceshipDefenderState): number {
   return (
     display.enemyShips.size +
     display.asteroids.size +
+    display.lootDrops.size +
     display.hostileProjectiles.size +
     display.homingMissiles.size +
     display.friendlyProjectiles.size

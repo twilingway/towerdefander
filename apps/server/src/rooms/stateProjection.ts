@@ -5,6 +5,7 @@ import type {
   EntityVisual,
   HomingMissileState as CoreHomingMissileState,
   HostileProjectileState,
+  LootDropState as CoreLootDropState,
   ProjectileState as CoreProjectileState,
   RoleModifiers,
   SpaceshipSimulationConfig,
@@ -20,6 +21,7 @@ import {
   AsteroidState,
   EnemyState,
   HomingMissileState,
+  LootDropState,
   ProjectileState,
   UpgradeCardState,
   UpgradeVoteState,
@@ -93,6 +95,7 @@ export function projectGameState(
   target.display.shieldPhase = game.shieldPhase;
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
+  reconcileKeyed(target.display.lootDrops, game.lootDrops, () => new LootDropState(), syncLootDrop);
   reconcileKeyed(
     target.display.friendlyProjectiles,
     game.projectiles,
@@ -196,6 +199,18 @@ function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
   target.radius = source.radius;
   target.hp = source.hp;
   target.maxHp = source.maxHp;
+}
+
+function syncLootDrop(target: LootDropState, source: CoreLootDropState): void {
+  target.entityId = source.id;
+  target.kind = source.kind;
+  target.spawnSequence = source.spawnSequence;
+  target.x = source.x;
+  target.y = source.y;
+  target.velocityX = source.velocity.x;
+  target.velocityY = source.velocity.y;
+  target.radius = source.radius;
+  target.amount = source.amount;
 }
 
 function syncProjectile(

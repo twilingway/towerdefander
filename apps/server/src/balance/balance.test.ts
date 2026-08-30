@@ -814,6 +814,80 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
+  it("gives a version 24 document the salvage defaults without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 24 had no salvage at all: nothing repaired the hull inside a run.
+    const legacyTuning: Partial<BalanceTuning> = {
+      ...defaults,
+      // A hand-built wave table is what a bad migration takes down with it.
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 7,
+                spawnIntervalTicks: 11,
+                sectors: ["N"],
+                hpMultiplier: 1.5,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      },
+      enemyArchetypes: Object.fromEntries(
+        Object.entries(defaults.enemyArchetypes).map(([kind, archetype]) => {
+          const legacy: Partial<typeof archetype> = { ...archetype };
+          delete legacy.lootChance;
+          return [kind, legacy];
+        })
+      ) as BalanceTuning["enemyArchetypes"]
+    };
+    delete legacyTuning.lootRepairAmount;
+    delete legacyTuning.lootShieldAmount;
+    delete legacyTuning.lootBossRepairAmount;
+    delete legacyTuning.lootLifetimeTicks;
+    delete legacyTuning.lootDropRadius;
+    delete legacyTuning.lootMagnetRadius;
+    delete legacyTuning.lootMagnetAccelerationPerSecondSquared;
+    delete legacyTuning.lootDriftDampingPerSecond;
+    const document = {
+      version: 24,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.lootRepairAmount).toBe(defaults.lootRepairAmount);
+    expect(tuning.lootMagnetRadius).toBe(defaults.lootMagnetRadius);
+    expect(tuning.enemyArchetypes.gunship?.lootChance).toBe(
+      defaults.enemyArchetypes.gunship?.lootChance
+    );
+
+    // The hand-built wave survives intact; that is the whole point of the test.
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    expect(tuning.waveCampaign.waves[0]?.entries[0]).toMatchObject({
+      kind: "gunship",
+      count: 7,
+      hpMultiplier: 1.5
+    });
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
   it("gives a version 15 document the parallax background defaults", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();

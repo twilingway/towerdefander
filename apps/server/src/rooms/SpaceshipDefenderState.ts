@@ -2,6 +2,7 @@ import { ARENA_CUSHION_BAND } from "@spaceship-defender/game-core";
 import { ArraySchema, MapSchema, Schema, type, view } from "@colyseus/schema";
 import type {
   AsteroidOrigin,
+  LootKind,
   CrewRole,
   DefeatReason,
   EncounterPhase,
@@ -172,6 +173,22 @@ export class AsteroidState extends Schema {
   @type("float32") maxHp = 0;
 }
 
+/**
+ * Salvage the pilot flies to. Display-only like every other arena entity: the
+ * controllers never see the world.
+ */
+export class LootDropState extends Schema {
+  @type("string") entityId = "";
+  @type("string") kind: LootKind = "repair";
+  @type("uint32") spawnSequence = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") amount = 0;
+}
+
 export class ProjectileState extends Schema {
   @type("string") entityId = "";
   @type("uint32") spawnSequence = 0;
@@ -241,6 +258,7 @@ export class SpaceshipDisplayState extends Schema {
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
   @type({ map: AsteroidState }) asteroids = new MapSchema<AsteroidState>();
+  @type({ map: LootDropState }) lootDrops = new MapSchema<LootDropState>();
   @type({ map: ProjectileState }) friendlyProjectiles = new MapSchema<ProjectileState>();
   @type({ map: ProjectileState }) hostileProjectiles = new MapSchema<ProjectileState>();
   @type({ map: HomingMissileState }) homingMissiles = new MapSchema<HomingMissileState>();

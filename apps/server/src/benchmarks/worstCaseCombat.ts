@@ -8,6 +8,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState,
   type HomingMissileState,
+  type LootDropState,
   type HostileProjectileState,
   type ProjectileState
 } from "@spaceship-defender/game-core";
@@ -131,6 +132,32 @@ export function createWorstCaseCombatFixture(
     } satisfies ProjectileState;
   });
 
+  // Salvage is part of the worst case now: every drop is distance-checked
+  // against the hull each tick, and a wave that ends in a massacre leaves the
+  // field full of it.
+  const lootDrops = Array.from({ length: config.caps.lootDrops }, (_, index) => {
+    const position = ringPosition(
+      index,
+      config.caps.lootDrops,
+      config,
+      config.arenaRadius * 0.35,
+      0.15
+    );
+    const sequence = spawnSequence++;
+    return {
+      ...movingEntity(
+        `loot-${String(sequence)}`,
+        sequence,
+        position,
+        { x: 4, y: 2 },
+        config.lootDropRadius
+      ),
+      kind: "repair",
+      amount: config.lootRepairAmount,
+      lifetimeTicks: config.lootLifetimeTicks
+    } satisfies LootDropState;
+  });
+
   const fixture: SpaceshipSimulationState = {
     ...base,
     clock: { tick: 100, elapsedMs: 5_000 },
@@ -139,6 +166,7 @@ export function createWorstCaseCombatFixture(
     nextSpawnSequence: spawnSequence,
     enemies,
     asteroids,
+    lootDrops,
     hostileProjectiles,
     homingMissiles,
     projectiles,
@@ -146,7 +174,9 @@ export function createWorstCaseCombatFixture(
     lastFiredTick: 100
   };
   if (dynamicEntityCount(fixture) !== config.caps.dynamicEntities) {
-    throw new Error("Worst-case combat fixture must fill the 196-entity dynamic cap exactly.");
+    throw new Error(
+      `Worst-case combat fixture must fill the ${String(config.caps.dynamicEntities)}-entity dynamic cap exactly.`
+    );
   }
   return fixture;
 }
