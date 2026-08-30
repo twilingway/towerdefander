@@ -88,6 +88,7 @@ const {
   zeroControllerTtlSeconds,
   waveTtlSeconds,
   absoluteTtlSeconds,
+  allowStartWave,
   maxConcurrentRooms
 } = readServerConfig();
 
@@ -162,6 +163,8 @@ export class SpaceshipDefenderRoom extends Room<{
   private statusChangedAtMs = 0;
   private firstControllerJoined = false;
   private disposing = false;
+  /** Wave every run in this room opens on; 1 unless a tester asked otherwise. */
+  private startWave = 1;
   private statsId = "";
   private pendingMetadata: RoomStatsMetadata | undefined;
   private metadataWritePromise: Promise<void> | undefined;
@@ -210,6 +213,19 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     this.state.roomId = this.roomId;
     this.state.crewSize = options.data.crewSize;
+    // A testing aid, so it is refused rather than honoured quietly: an operator
+    // who sees waves being skipped on a public server should be able to find
+    // out why from the log.
+    const requestedWave = options.data.startWave;
+    if (requestedWave !== undefined && requestedWave > 1) {
+      if (allowStartWave) {
+        this.startWave = requestedWave;
+      } else {
+        console.warn(
+          `Ignoring startWave ${String(requestedWave)}: start ALLOW_START_WAVE=true to use it.`
+        );
+      }
+    }
     this.maxMessagesPerSecond =
       options.data.crewSize === 1 ? SOLO_MESSAGE_CEILING : CREW_MESSAGE_CEILING;
     const now = Date.now();
@@ -610,7 +626,11 @@ export class SpaceshipDefenderRoom extends Room<{
     this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
     this.state.game.helm.hullAngularBrakingPerSecondSquared =
       this.gameConfig.headingAngularBrakingPerSecondSquared;
-    this.gameState = createCleanSpaceshipRun(this.gameConfig, createRunSeed(previousSeed));
+    this.gameState = createCleanSpaceshipRun(
+      this.gameConfig,
+      createRunSeed(previousSeed),
+      this.startWave
+    );
     this.state.runNumber += 1;
     this.state.phase = "active";
     this.state.hasGame = true;

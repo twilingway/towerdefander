@@ -47,6 +47,17 @@ interface VisibleDemoBridgeHost {
   readonly __spaceshipVisibleDemoCommand?: (command: VisibleDemoCommand) => unknown;
 }
 
+/**
+ * Wave a `?wave=5` in the address asks the run to open on, clamped to what the
+ * protocol accepts. Anything else reads as the opening wave, so a stray value
+ * never turns into a room nobody asked for.
+ */
+export function readStartWave(search: string, max: number): number {
+  const raw = Number(new URLSearchParams(search).get("wave"));
+  if (!Number.isSafeInteger(raw) || raw < 1) return 1;
+  return Math.min(max, raw);
+}
+
 export function isVisibleDemoMode(
   search: string,
   development: boolean,

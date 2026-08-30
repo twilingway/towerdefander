@@ -3,6 +3,7 @@ import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
+  MAX_START_WAVE,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
   ROOM_TYPE,
@@ -44,7 +45,7 @@ import {
 } from "./displayRoomLifecycle.js";
 import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
-import { isVisibleDemoMode } from "./visibleDemo.js";
+import { isVisibleDemoMode, readStartWave } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -64,6 +65,12 @@ export function DisplayApp() {
     import.meta.env.DEV,
     import.meta.env.VITE_VISIBLE_DEMO
   );
+  // Development builds only. The server refuses the wave without its own flag,
+  // so this control never promises more than the server will do.
+  const allowStartWave = import.meta.env.DEV;
+  const initialStartWave = allowStartWave
+    ? readStartWave(typeof window === "undefined" ? "" : window.location.search, MAX_START_WAVE)
+    : 1;
   const preview = isPreviewMode(
     typeof window === "undefined" ? "" : window.location.search,
     import.meta.env.DEV
@@ -101,7 +108,7 @@ export function DisplayApp() {
     []
   );
 
-  async function createRoom(crewSize: CrewSize): Promise<void> {
+  async function createRoom(crewSize: CrewSize, startWave: number): Promise<void> {
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
@@ -109,7 +116,10 @@ export function DisplayApp() {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
         role: "display",
         protocolVersion: PROTOCOL_VERSION,
-        crewSize
+        crewSize,
+        // Sent only when a tester asked for one, so an ordinary create carries
+        // exactly what it always did.
+        ...(startWave > 1 ? { startWave } : {})
       });
       roomReference.current = room;
       room.onStateChange((state) => {
@@ -197,7 +207,9 @@ export function DisplayApp() {
         status={status}
         error={error}
         visibleDemo={visibleDemo}
-        onCreate={(crewSize) => void createRoom(crewSize)}
+        allowStartWave={allowStartWave}
+        initialStartWave={initialStartWave}
+        onCreate={(crewSize, startWave) => void createRoom(crewSize, startWave)}
       />
     );
   }

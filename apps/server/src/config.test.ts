@@ -20,8 +20,17 @@ describe("readServerConfig", () => {
       maxConcurrentRooms: 30,
       statsPassword: undefined,
       balancePassword: undefined,
-      gracefullyShutdown: true
+      gracefullyShutdown: true,
+      allowStartWave: false
     });
+  });
+
+  it("keeps the late-wave start off unless it is asked for by name", () => {
+    // A public server must not accept being told to drop a crew onto a boss.
+    expect(readServerConfig({}).allowStartWave).toBe(false);
+    expect(readServerConfig({ ALLOW_START_WAVE: "1" }).allowStartWave).toBe(false);
+    expect(readServerConfig({ ALLOW_START_WAVE: "yes" }).allowStartWave).toBe(false);
+    expect(readServerConfig({ ALLOW_START_WAVE: "true" }).allowStartWave).toBe(true);
   });
 
   it("accepts explicit host and port", () => {
@@ -39,7 +48,8 @@ describe("readServerConfig", () => {
       maxConcurrentRooms: 30,
       statsPassword: undefined,
       balancePassword: undefined,
-      gracefullyShutdown: true
+      gracefullyShutdown: true,
+      allowStartWave: false
     });
   });
 

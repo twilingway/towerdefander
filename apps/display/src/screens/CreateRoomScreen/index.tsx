@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CREW_SIZES, type CrewSize } from "@spaceship-defender/protocol";
+import { CREW_SIZES, MAX_START_WAVE, type CrewSize } from "@spaceship-defender/protocol";
 
 import { VisibleDemoOverlay } from "../../VisibleDemoOverlay.js";
 
@@ -7,12 +7,28 @@ interface CreateRoomScreenProps {
   readonly status: "idle" | "connecting" | "connected" | "reconnecting" | "error";
   readonly error: string;
   readonly visibleDemo: boolean;
-  readonly onCreate: (crewSize: CrewSize) => void;
+  /**
+   * Whether to offer the wave picker. A development build only: the server
+   * refuses the wave unless it was started with `ALLOW_START_WAVE=true`, so
+   * showing the control anywhere else would only promise what it cannot do.
+   */
+  readonly allowStartWave: boolean;
+  /** Initial wave, so `?wave=5` can drive it from a script or a bookmark. */
+  readonly initialStartWave: number;
+  readonly onCreate: (crewSize: CrewSize, startWave: number) => void;
 }
 
 /** Shown until a room exists: the pitch, the crew size and the button that opens one. */
-export function CreateRoomScreen({ status, error, visibleDemo, onCreate }: CreateRoomScreenProps) {
+export function CreateRoomScreen({
+  status,
+  error,
+  visibleDemo,
+  allowStartWave,
+  initialStartWave,
+  onCreate
+}: CreateRoomScreenProps) {
   const [crewSize, setCrewSize] = useState<CrewSize>(3);
+  const [startWave, setStartWave] = useState(initialStartWave);
   return (
     <main className="display-shell display-shell--centered">
       <section className="hero-card">
@@ -34,11 +50,29 @@ export function CreateRoomScreen({ status, error, visibleDemo, onCreate }: Creat
             </button>
           ))}
         </div>
+        {allowStartWave && (
+          <label className="field">
+            <span className="field__caption">Начать с волны (для тестов)</span>
+            <input
+              className="field__input"
+              type="number"
+              min={1}
+              max={MAX_START_WAVE}
+              value={startWave}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isFinite(next)) {
+                  setStartWave(Math.min(MAX_START_WAVE, Math.max(1, Math.round(next))));
+                }
+              }}
+            />
+          </label>
+        )}
         {error.length > 0 && <p className="error-message">{error}</p>}
         <button
           type="button"
           onClick={() => {
-            onCreate(crewSize);
+            onCreate(crewSize, startWave);
           }}
           disabled={status === "connecting"}
         >

@@ -14,6 +14,12 @@ export interface ServerConfig {
   balancePassword: string | undefined;
   balancePresetPath: string;
   gracefullyShutdown: boolean;
+  /**
+   * Whether a display may ask a room to open on a late wave. A testing aid,
+   * off unless the operator turns it on, so a public server cannot be told to
+   * drop a crew onto a boss.
+   */
+  allowStartWave: boolean;
 }
 
 const MAX_PHASE_TTL_SECONDS = 86_400;
@@ -80,6 +86,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const rawBalancePassword = environment.ADMIN_BALANCE_PASSWORD;
   const configuredBalancePath = environment.BALANCE_PRESET_PATH?.trim();
   const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
+  const allowStartWave = environment.ALLOW_START_WAVE === "true";
   const host =
     configuredHost === undefined || configuredHost.length === 0 ? "0.0.0.0" : configuredHost;
   const rawPort =
@@ -176,6 +183,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     statsPassword,
     balancePassword,
     balancePresetPath,
-    gracefullyShutdown
+    gracefullyShutdown,
+    allowStartWave
   };
 }

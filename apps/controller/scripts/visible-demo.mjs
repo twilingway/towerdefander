@@ -28,7 +28,12 @@ const STEP_MS = 50;
 const TELEMETRY_MS = 50;
 const VERIFY_TIMEOUT_MS = 150_000;
 const STATUS_EVENT = "spaceship-visible-demo-status";
-const displayUrl = process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1";
+const startWave = process.env.DEMO_START_WAVE;
+// The page reads the wave from its own address, so a demo of the boss is a URL
+// rather than five cleared waves.
+const displayUrl =
+  process.env.DEMO_DISPLAY_URL ??
+  `http://127.0.0.1:36173/?demo=1${startWave === undefined ? "" : `&wave=${startWave}`}`;
 const gameServerUrl = process.env.DEMO_GAME_SERVER_URL ?? "ws://127.0.0.1:36567";
 const balanceUrl = process.env.DEMO_BALANCE_URL ?? "http://127.0.0.1:36567";
 const levelOverride = process.env.DEMO_BOT_LEVEL;

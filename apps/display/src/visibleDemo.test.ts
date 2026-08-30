@@ -8,9 +8,27 @@ import {
   isVisibleDemoMode,
   parseVisibleDemoStatus,
   publishVisibleDemoWorld,
+  readStartWave,
   sendVisibleDemoCommand,
   visibleDemoWorldKey
 } from "./visibleDemo.js";
+
+describe("start wave from the address", () => {
+  it("takes a whole wave and clamps it to what the protocol accepts", () => {
+    expect(readStartWave("?wave=5", 50)).toBe(5);
+    expect(readStartWave("?demo=1&wave=12", 50)).toBe(12);
+    expect(readStartWave("?wave=999", 50)).toBe(50);
+  });
+
+  it("reads anything else as the opening wave", () => {
+    // A stray value must never turn into a run nobody asked for.
+    expect(readStartWave("", 50)).toBe(1);
+    expect(readStartWave("?wave=0", 50)).toBe(1);
+    expect(readStartWave("?wave=-3", 50)).toBe(1);
+    expect(readStartWave("?wave=2.5", 50)).toBe(1);
+    expect(readStartWave("?wave=boss", 50)).toBe(1);
+  });
+});
 
 describe("visible demo helpers", () => {
   it("requires the explicit development gate and query", () => {
