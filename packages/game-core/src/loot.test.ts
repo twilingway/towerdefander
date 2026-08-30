@@ -8,6 +8,8 @@ import {
   createSpaceshipSimulationState,
   getEnemyArchetype,
   type AsteroidState,
+  type HomingMissileState,
+  type HostileProjectileState,
   type CombatEnemyState,
   type LootDropState,
   type ProjectileState,
@@ -293,30 +295,6 @@ describe("salvage pickup", () => {
     expect(result.shieldActive).toBe(false);
   });
 
-  it("recovers what is still on the field when the wave clears", () => {
-    // A boss is the last enemy alive by construction, so killing it ends the
-    // wave on the same tick. Without the sweep its repair would be wiped by
-    // the arena reset and could never be collected.
-    const config = withArchetypeChance("boss", 0);
-    const initial = createSpaceshipSimulationState(config, 80);
-    const x = initial.spaceship.x + 900;
-    const y = initial.spaceship.y;
-
-    const result = advanceCombat(
-      {
-        ...settled(initial, config),
-        spaceshipHp: 100,
-        enemies: [enemyAt(x, y, "boss", config)],
-        projectiles: [projectileAt(x, y, config)]
-      },
-      config
-    );
-
-    expect(result.encounterPhase).toBe("intermission");
-    expect(result.lootDrops).toEqual([]);
-    expect(result.spaceshipHp).toBe(100 + config.lootBossRepairAmount);
-  });
-
   it("lets salvage expire when nobody comes for it", () => {
     const config = quietConfig({ lootLifetimeTicks: 3 });
     const initial = createSpaceshipSimulationState(config, 79);
@@ -336,5 +314,195 @@ describe("salvage pickup", () => {
 
     expect(state.lootDrops).toEqual([]);
     expect(state.spaceshipHp).toBe(100);
+  });
+});
+
+describe("salvage window", () => {
+  /** A field with nothing left on it but one drop, which is what opens the window. */
+  function clearedField(
+    config: SpaceshipSimulationConfig,
+    seed: number,
+    drop: LootDropState
+  ): CombatStepState {
+    return {
+      ...settled(createSpaceshipSimulationState(config, seed), config),
+      spaceshipHp: 100,
+      enemies: [],
+      lootDrops: [drop]
+    };
+  }
+
+  it("holds a won wave open instead of ending it on the last kill", () => {
+    const config = withArchetypeChance("gunship", 1);
+    const initial = createSpaceshipSimulationState(config, 81);
+    const x = initial.spaceship.x + 900;
+    const y = initial.spaceship.y;
+
+    const result = advanceCombat(
+      {
+        ...settled(initial, config),
+        spaceshipHp: 100,
+        enemies: [enemyAt(x, y, "gunship", config)],
+        projectiles: [projectileAt(x, y, config)]
+      },
+      config
+    );
+
+    expect(result.encounterPhase).toBe("combat");
+    expect(result.lootDrops).toHaveLength(1);
+    expect(result.lootWindowTicksRemaining).toBe(config.lootWindowTicks);
+    // Nothing is handed over: the wave stays open so the crew can fly to it.
+    expect(result.spaceshipHp).toBe(100);
+  });
+
+  it("takes the dead wave's shots with it when the window opens", () => {
+    // Measured: without this the crew spends the whole window eating the last
+    // volley, and homing missiles keep chasing until they connect.
+    const config = withArchetypeChance("gunship", 1);
+    const initial = createSpaceshipSimulationState(config, 87);
+    const x = initial.spaceship.x + 900;
+    const y = initial.spaceship.y;
+    const bullet: HostileProjectileState = {
+      id: "incoming",
+      spawnSequence: 5,
+      previousX: x,
+      previousY: y - 200,
+      x,
+      y: y - 200,
+      velocity: { x: 0, y: 60 },
+      radius: 6,
+      spawnedTick: 0,
+      damage: 10,
+      shieldHitCost: 10,
+      lifetimeTicks: 400,
+      visual: null
+    };
+    const missile: HomingMissileState = {
+      id: "chaser",
+      spawnSequence: 6,
+      previousX: x,
+      previousY: y + 200,
+      x,
+      y: y + 200,
+      velocity: { x: 0, y: -60 },
+      radius: 8,
+      spawnedTick: 0,
+      heading: Math.PI,
+      damage: 20,
+      shieldHitCost: 20,
+      lifetimeTicks: 400,
+      speedPerSecond: 60,
+      turnRatePerSecond: 1,
+      visual: null
+    };
+
+    const result = advanceCombat(
+      {
+        ...settled(initial, config),
+        spaceshipHp: 100,
+        enemies: [enemyAt(x, y, "gunship", config)],
+        projectiles: [projectileAt(x, y, config)],
+        hostileProjectiles: [bullet],
+        homingMissiles: [missile]
+      },
+      config
+    );
+
+    expect(result.lootWindowTicksRemaining).toBe(config.lootWindowTicks);
+    expect(result.hostileProjectiles).toEqual([]);
+    expect(result.homingMissiles).toEqual([]);
+  });
+
+  it("gives a boss wave the longer window and restarts the drop clock", () => {
+    const config = withArchetypeChance("boss", 0);
+    const initial = createSpaceshipSimulationState(config, 82);
+    const x = initial.spaceship.x + 900;
+    const y = initial.spaceship.y;
+
+    const result = advanceCombat(
+      {
+        ...settled(initial, config),
+        spaceshipHp: 100,
+        enemies: [enemyAt(x, y, "boss", config)],
+        projectiles: [projectileAt(x, y, config)]
+      },
+      config
+    );
+
+    expect(result.encounterPhase).toBe("combat");
+    expect(result.lootWindowTicksRemaining).toBe(config.lootBossWindowTicks);
+    expect(result.lootDrops[0]?.lifetimeTicks).toBe(config.lootBossWindowTicks);
+  });
+
+  it("ends the wave the moment the last drop is collected", () => {
+    const config = quietConfig();
+    const initial = createSpaceshipSimulationState(config, 83);
+    const drop = dropNear(initial, config, "repair", 40, config.lootMagnetRadius - 20);
+
+    let state = clearedField(config, 83, drop);
+    const first = advanceCombat(state, config);
+    expect(first.encounterPhase).toBe("combat");
+    expect(first.lootWindowTicksRemaining).toBe(config.lootWindowTicks);
+
+    state = { ...state, ...first };
+    for (let tick = 0; tick < 120 && state.encounterPhase === "combat"; tick += 1) {
+      state = { ...state, ...advanceCombat(state, config) };
+    }
+
+    expect(state.encounterPhase).toBe("intermission");
+    expect(state.lootWindowTicksRemaining).toBe(0);
+    expect(state.spaceshipHp).toBe(140);
+  });
+
+  it("ends the wave when the window runs out, and hands over nothing", () => {
+    const config = quietConfig({ lootWindowTicks: 3 });
+    const initial = createSpaceshipSimulationState(config, 84);
+    // Far outside the magnet: the crew never reaches this one.
+    const drop = dropNear(initial, config, "repair", 40, config.lootMagnetRadius + 400);
+
+    let state = clearedField(config, 84, drop);
+    for (let tick = 0; tick < 3; tick += 1) {
+      state = { ...state, ...advanceCombat(state, config) };
+      expect(state.encounterPhase).toBe("combat");
+    }
+    state = { ...state, ...advanceCombat(state, config) };
+
+    expect(state.encounterPhase).toBe("intermission");
+    expect(state.lootDrops).toEqual([]);
+    expect(state.spaceshipHp).toBe(100);
+  });
+
+  it("restarts an old drop's clock so nothing rots inside the window", () => {
+    const config = quietConfig({ lootWindowTicks: 20 });
+    const initial = createSpaceshipSimulationState(config, 85);
+    // Alive, but one tick from rotting when the field clears.
+    const stale: LootDropState = {
+      ...dropNear(initial, config, "repair", 40, config.lootMagnetRadius + 400),
+      spawnedTick: -50,
+      lifetimeTicks: 51
+    };
+
+    const result = advanceCombat(clearedField(config, 85, stale), config);
+
+    expect(result.lootDrops[0]).toMatchObject({ spawnedTick: 0, lifetimeTicks: 20 });
+  });
+
+  it("ends a wave that clears with nothing on the field, as it always did", () => {
+    const config = withArchetypeChance("gunship", 0);
+    const initial = createSpaceshipSimulationState(config, 86);
+    const x = initial.spaceship.x + 900;
+    const y = initial.spaceship.y;
+
+    const result = advanceCombat(
+      {
+        ...settled(initial, config),
+        enemies: [enemyAt(x, y, "gunship", config)],
+        projectiles: [projectileAt(x, y, config)]
+      },
+      config
+    );
+
+    expect(result.encounterPhase).toBe("intermission");
+    expect(result.lootWindowTicksRemaining).toBe(0);
   });
 });

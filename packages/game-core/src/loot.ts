@@ -79,30 +79,52 @@ function createLootDrop(
   };
 }
 
+export interface LootWindow {
+  readonly lootDrops: readonly LootDropState[];
+  readonly lootWindowTicksRemaining: number;
+}
+
 /**
- * Everything still on the field when the wave ends is recovered.
+ * Holds a cleared wave open while salvage is still on the field, and returns
+ * null the moment it is free to end.
  *
  * Without this the reward for the hardest kill of the run is unreachable: a
  * boss is the last enemy alive by construction, so killing it clears the wave
- * on the same tick and the arena wipe would take its repair with it. The crew
- * also cannot fly during an intermission, so leaving salvage lying there is not
- * an option either. Only drops from the last few seconds survive to be swept,
- * because the rest have already expired.
+ * on the same tick, and the crew cannot fly during an intermission. The window
+ * makes that reward something the pilot flies to rather than something the
+ * scoreboard hands over.
+ *
+ * Every drop's clock restarts when the window opens. What the crew is promised
+ * is the window, so salvage that fell early in the wave must not rot halfway
+ * through it — and a drop nobody comes for still ends the wave by expiring.
  */
-export function sweepLootDrops(
-  drops: readonly LootDropState[],
-  hp: number,
-  maxHp: number,
-  shieldEnergy: number,
-  shieldCapacity: number
-): { readonly spaceshipHp: number; readonly shieldEnergy: number } {
-  let spaceshipHp = hp;
-  let energy = shieldEnergy;
-  for (const drop of drops) {
-    if (drop.kind === "repair") spaceshipHp = Math.min(maxHp, spaceshipHp + drop.amount);
-    else energy = Math.min(shieldCapacity, energy + drop.amount);
+export function openOrTickLootWindow(
+  before: Pick<CombatStepState, "enemies" | "lootWindowTicksRemaining">,
+  after: Pick<CombatStepState, "lootDrops">,
+  config: CombatConfig,
+  tick: number
+): LootWindow | null {
+  if (after.lootDrops.length === 0) return null;
+  if (before.lootWindowTicksRemaining > 0) {
+    const remaining = before.lootWindowTicksRemaining - 1;
+    return remaining > 0
+      ? { lootDrops: after.lootDrops, lootWindowTicksRemaining: remaining }
+      : null;
   }
-  return { spaceshipHp, shieldEnergy: energy };
+  // The opening tick is the tick the field cleared, so a boss among the ships
+  // that were alive when it started is a boss that has just died.
+  const bossFell = before.enemies.some(
+    (enemy) => archetypeOf(config, enemy.kind).spawnPolicy === "boss"
+  );
+  const ticks = bossFell ? config.lootBossWindowTicks : config.lootWindowTicks;
+  return {
+    lootDrops: after.lootDrops.map((drop) => ({
+      ...drop,
+      spawnedTick: tick,
+      lifetimeTicks: ticks
+    })),
+    lootWindowTicksRemaining: ticks
+  };
 }
 
 export interface LootStep {

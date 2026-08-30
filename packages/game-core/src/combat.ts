@@ -22,7 +22,7 @@ import { validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 import { createWavePlan } from "./waveDirector.ts";
 import { createTeamUpgradeOffer } from "./upgrades.ts";
 import { addRunStats, createRunStats } from "./runStats.ts";
-import { advanceLootDrops, sweepLootDrops } from "./loot.ts";
+import { advanceLootDrops, openOrTickLootWindow } from "./loot.ts";
 import { UPGRADE_CATALOGUE } from "./upgradeCatalogue.ts";
 import { moveAndSpawnThreats } from "./threats.ts";
 import { scheduleAmbientAsteroid } from "./spawning.ts";
@@ -136,6 +136,7 @@ export function createInitialCombatState(
     enemies: [],
     asteroids: [],
     lootDrops: [],
+    lootWindowTicksRemaining: 0,
     hostileProjectiles: [],
     homingMissiles: [],
     roleModifiers: {
@@ -192,18 +193,22 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
     next.enemies.length === 0 &&
     next.asteroids.every(({ origin }) => origin === "ambient")
   ) {
+    // The wave is won, but it does not end while there is salvage to fly to.
+    const lootWindow = openOrTickLootWindow(state, next, config, next.clock.tick);
+    if (lootWindow !== null) {
+      return {
+        ...pickCombatResult({ ...next, ...lootWindow }),
+        // The shooters are dead, so their shots die with them, exactly as they
+        // did when the wave ended on this tick. The window is for collecting,
+        // not for eating the last volley and the missiles still chasing.
+        hostileProjectiles: [],
+        homingMissiles: [],
+        encounterTick: state.encounterTick + 1
+      };
+    }
     const offerResult = createTeamUpgradeOffer(next.runSeed, next.waveNumber);
-    const swept = sweepLootDrops(
-      next.lootDrops,
-      next.spaceshipHp,
-      next.spaceshipMaxHp,
-      next.shieldEnergy,
-      config.shieldCapacity + next.roleModifiers.shield.capacityBonus
-    );
     return {
       ...pickCombatResult(next),
-      spaceshipHp: swept.spaceshipHp,
-      shieldEnergy: swept.shieldEnergy,
       encounterPhase: "intermission",
       outcome: null,
       defeatReason: null,
@@ -215,6 +220,7 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
       teamUpgradeSelection: null,
       asteroids: [],
       lootDrops: [],
+      lootWindowTicksRemaining: 0,
       hostileProjectiles: [],
       homingMissiles: [],
       projectiles: [],
@@ -362,6 +368,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     enemies: state.enemies,
     asteroids: state.asteroids,
     lootDrops: state.lootDrops,
+    lootWindowTicksRemaining: state.lootWindowTicksRemaining,
     hostileProjectiles: state.hostileProjectiles,
     homingMissiles: state.homingMissiles,
     roleModifiers: state.roleModifiers,

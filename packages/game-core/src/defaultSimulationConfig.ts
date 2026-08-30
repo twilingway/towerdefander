@@ -330,6 +330,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   lootMagnetRadius: 260,
   lootMagnetAccelerationPerSecondSquared: 900,
   lootDriftDampingPerSecond: 1.6,
+  lootWindowTicks: 300,
+  lootBossWindowTicks: 600,
   asteroidVisual: null,
   missileInterceptScoreReward: 5,
   worldPadding: 256,

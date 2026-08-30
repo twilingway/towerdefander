@@ -235,6 +235,13 @@ export interface CombatConfig {
    * the whole arena before anyone can reach it.
    */
   readonly lootDriftDampingPerSecond: number;
+  /**
+   * How long a cleared wave stays open while salvage is still on the field.
+   * A boss wave gets its own, longer number: its repair is the largest of the
+   * run and it lands on the very tick the wave would otherwise end.
+   */
+  readonly lootWindowTicks: number;
+  readonly lootBossWindowTicks: number;
   /** Look of the ambient hazard; null keeps the display's own rock. */
   readonly asteroidVisual: EntityVisual | null;
   readonly missileInterceptScoreReward: number;
@@ -409,6 +416,11 @@ export interface CombatStateFields {
   readonly enemies: readonly CombatEnemyState[];
   readonly asteroids: readonly AsteroidState[];
   readonly lootDrops: readonly LootDropState[];
+  /**
+   * Ticks left in the collection window that holds a cleared wave open. Zero
+   * while the wave is still being fought, and zero again once it is over.
+   */
+  readonly lootWindowTicksRemaining: number;
   readonly hostileProjectiles: readonly HostileProjectileState[];
   readonly homingMissiles: readonly HomingMissileState[];
   readonly roleModifiers: RoleModifiers;

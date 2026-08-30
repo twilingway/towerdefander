@@ -28,6 +28,8 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["asteroidLifetimeTicks", config.asteroidLifetimeTicks],
     ["asteroidSpawnCost", config.asteroidSpawnCost],
     ["lootLifetimeTicks", config.lootLifetimeTicks],
+    ["lootWindowTicks", config.lootWindowTicks],
+    ["lootBossWindowTicks", config.lootBossWindowTicks],
     ["caps.enemyShips", config.caps.enemyShips],
     ["caps.asteroids", config.caps.asteroids],
     ["caps.hostileProjectiles", config.caps.hostileProjectiles],
