@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 37 as const;
+export const PROTOCOL_VERSION = 38 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -249,40 +249,6 @@ export const publicEncounterViewSchema = z
   });
 export type PublicEncounterView = z.infer<typeof publicEncounterViewSchema>;
 
-const multiplier = finite.positive();
-export const pilotRoleModifiersSchema = z
-  .object({
-    speedMultiplier: multiplier,
-    accelerationMultiplier: multiplier,
-    maxHpBonus: finite.nonnegative()
-  })
-  .strict();
-export type PilotRoleModifiers = z.infer<typeof pilotRoleModifiersSchema>;
-export const gunnerRoleModifiersSchema = z
-  .object({
-    damageMultiplier: multiplier,
-    cooldownMultiplier: multiplier,
-    projectileSpeedMultiplier: multiplier
-  })
-  .strict();
-export type GunnerRoleModifiers = z.infer<typeof gunnerRoleModifiersSchema>;
-export const shieldRoleModifiersSchema = z
-  .object({
-    capacityBonus: finite.nonnegative(),
-    rechargeMultiplier: multiplier,
-    arcWidthBonus: finite.nonnegative()
-  })
-  .strict();
-export type ShieldRoleModifiers = z.infer<typeof shieldRoleModifiersSchema>;
-export const publicRoleModifiersViewSchema = z
-  .object({
-    pilot: pilotRoleModifiersSchema,
-    gunner: gunnerRoleModifiersSchema,
-    shield: shieldRoleModifiersSchema
-  })
-  .strict();
-export type PublicRoleModifiersView = z.infer<typeof publicRoleModifiersViewSchema>;
-
 function upgradeBelongsToRole(upgradeId: UpgradeId, role: CrewRole): boolean {
   const ids =
     role === "pilot"
@@ -456,7 +422,6 @@ const gameShape = {
   cannon: publicWeaponHeatViewSchema,
   machineGun: publicMachineGunViewSchema,
   encounter: publicEncounterViewSchema,
-  roleModifiers: publicRoleModifiersViewSchema,
   credits: safeNonnegativeInteger,
   teamUpgrade: publicTeamUpgradeViewSchema
 } satisfies z.ZodRawShape;
@@ -689,6 +654,8 @@ export const displayGameSnapshotSchema = z
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
     lootDrops: z.array(publicLootDropViewSchema).max(COMBAT_ENTITY_CAPS.lootDrops),
+    /** What the crew has bought, in purchase order; the ship stats follow from it. */
+    purchasedUpgrades: z.array(upgradeIdSchema).max(200),
     friendlyProjectiles: z
       .array(publicProjectileViewSchema)
       .max(COMBAT_ENTITY_CAPS.friendlyProjectiles),
