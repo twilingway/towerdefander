@@ -97,6 +97,22 @@ export type UpgradeId = z.infer<typeof upgradeIdSchema>;
 // Zod numbers reject NaN and infinities by default.
 const finite = z.number();
 const CIRCULAR_GEOMETRY_EPSILON = 1e-6;
+/**
+ * Positions ride the wire as float32, so a body the simulation clamped exactly
+ * to the arena rim can arrive a fraction outside it. The tolerance therefore
+ * has to scale with the world rather than sit at a double-precision constant:
+ * at an arena of 4400 the rounding alone reaches 2.5e-4, and a snapshot
+ * rejected over that blinds the client that parsed it — the adapter throws
+ * inside the state handler and the view stops updating entirely.
+ *
+ * Two to the minus twenty-one leaves roughly eight float32 steps of headroom
+ * and is still four thousand times smaller than the smallest hull.
+ */
+const WIRE_PRECISION_RELATIVE = 2 ** -21;
+
+function arenaTolerance(worldWidth: number): number {
+  return Math.max(CIRCULAR_GEOMETRY_EPSILON, worldWidth * WIRE_PRECISION_RELATIVE);
+}
 const safeNonnegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const safePositiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const entityId = z.string().min(1).max(64);
@@ -444,10 +460,11 @@ function circleFitsArena(
   arenaRadius: number,
   padding = 0
 ): boolean {
+  const tolerance = arenaTolerance(worldWidth);
   const legalCenterRadius = arenaRadius + padding - entityRadius;
-  if (legalCenterRadius < -CIRCULAR_GEOMETRY_EPSILON) return false;
+  if (legalCenterRadius < -tolerance) return false;
   const distance = Math.hypot(x - worldWidth / 2, y - worldHeight / 2);
-  return distance <= Math.max(0, legalCenterRadius) + CIRCULAR_GEOMETRY_EPSILON;
+  return distance <= Math.max(0, legalCenterRadius) + tolerance;
 }
 
 function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {

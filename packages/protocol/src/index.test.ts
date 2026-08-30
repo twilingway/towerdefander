@@ -782,7 +782,9 @@ describe("strict v33 room projections", () => {
       spaceshipEdge.game.spaceship.radius +
       0.5e-6;
     expect(controllerRoomViewSchema.safeParse(spaceshipEdge).success).toBe(true);
-    spaceshipEdge.game.spaceship.x += 1e-6;
+    // A whole unit, not a millionth: the tolerance now covers the float32 the
+    // wire publishes in, and a body actually outside is still outside.
+    spaceshipEdge.game.spaceship.x += 1;
     expect(controllerRoomViewSchema.safeParse(spaceshipEdge).success).toBe(false);
 
     const enemyEdge = displayRoom();
@@ -791,8 +793,29 @@ describe("strict v33 room projections", () => {
     enemy.x = enemyEdge.game.worldWidth / 2 + enemyEdge.game.arenaRadius - enemy.radius + 0.5e-6;
     enemy.y = enemyEdge.game.worldHeight / 2;
     expect(displayRoomViewSchema.safeParse(enemyEdge).success).toBe(true);
-    enemy.x += 1e-6;
+    enemy.x += 1;
     expect(displayRoomViewSchema.safeParse(enemyEdge).success).toBe(false);
+  });
+
+  it("takes a body pinned to the rim through the float32 the wire publishes", () => {
+    const room = displayRoom();
+    if (room.game === null) throw new Error("Expected active game.");
+    const enemy = item(room.game.enemyShips, 0);
+    const centre = room.game.worldWidth / 2;
+    // Exactly where the simulation clamps a pinned enemy, rounded the way the
+    // wire publishes it. On this bearing the rounding alone lands 1.3e-4
+    // outside, which a double-precision tolerance rejects — and a rejected
+    // snapshot stops the client's view dead. Of a full turn sampled every
+    // hundredth of a radian, 304 bearings out of 629 land outside.
+    const legal = room.game.arenaRadius - enemy.radius;
+    enemy.x = Math.fround(centre + Math.cos(0.1) * legal);
+    enemy.y = Math.fround(centre + Math.sin(0.1) * legal);
+    expect(displayRoomViewSchema.safeParse(room).success).toBe(true);
+
+    // Still a guard: a body a whole unit out is out, at any world size.
+    enemy.x = centre + Math.cos(0.1) * (legal + 1);
+    enemy.y = centre + Math.sin(0.1) * (legal + 1);
+    expect(displayRoomViewSchema.safeParse(room).success).toBe(false);
   });
 
   it("requires every transient body to remain in the padded circular envelope", () => {
@@ -849,7 +872,7 @@ describe("strict v33 room projections", () => {
       expect(displayRoomViewSchema.safeParse(edge).success).toBe(true);
 
       const outside = displayRoom();
-      mutate(outside, 1.5e-6);
+      mutate(outside, 1);
       expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
     }
   });
