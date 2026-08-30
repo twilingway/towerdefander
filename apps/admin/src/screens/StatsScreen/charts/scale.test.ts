@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { bandsOf, extentOf, formatNumber, heatShare, linePath, project, ticksOf } from "./scale.js";
+import {
+  bandsOf,
+  extentOf,
+  formatNumber,
+  heatShare,
+  linePath,
+  project,
+  ticksOf,
+  toneForShare
+} from "./scale.js";
 
 describe("extentOf", () => {
   it("anchors at zero so a chart of counts is not misread", () => {
@@ -80,5 +89,20 @@ describe("formatNumber", () => {
     expect(formatNumber(7.25)).toBe("7.3");
     expect(formatNumber(1500)).toBe("1.5k");
     expect(formatNumber(Number.NaN)).toBe("—");
+  });
+});
+
+describe("toneForShare", () => {
+  it("bands a percentage into the three traffic-light colours", () => {
+    expect(toneForShare(100)).toBe("good");
+    expect(toneForShare(70)).toBe("good");
+    expect(toneForShare(69)).toBe("warn");
+    expect(toneForShare(40)).toBe("warn");
+    expect(toneForShare(39)).toBe("bad");
+    expect(toneForShare(0)).toBe("bad");
+  });
+
+  it("treats a missing value as the worst band rather than the best", () => {
+    expect(toneForShare(Number.NaN)).toBe("bad");
   });
 });

@@ -5,6 +5,7 @@
   --surface-raised: #16223a;
   --line: #24344f;
   --accent: #4fd1c5;
+  --good: #57d98a;
   --danger: #ff6b81;
   --warn: #f2c14b;
   color-scheme: dark;
@@ -763,6 +764,25 @@ body {
 
 .chart__mark--d {
   color: #7aa2f7;
+}
+
+/* Bars coloured by their own value, not by series: a first read of the shape.
+   The number is printed on the bar too, so nothing rests on the colour. */
+.chart__mark--good {
+  color: var(--good);
+}
+
+.chart__mark--warn {
+  color: var(--warn);
+}
+
+.chart__mark--bad {
+  color: var(--danger);
+}
+
+.chart__value {
+  fill: currentcolor;
+  font-size: 9px;
 }
 
 .chart__mark--b .chart__line {

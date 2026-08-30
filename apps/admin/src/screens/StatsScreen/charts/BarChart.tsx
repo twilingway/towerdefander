@@ -1,5 +1,5 @@
 import type { GroupedBars } from "../aggregate.js";
-import { bandsOf, extentOf, formatNumber, project, ticksOf } from "./scale.js";
+import { bandsOf, extentOf, formatNumber, project, ticksOf, type Tone } from "./scale.js";
 
 const WIDTH = 640;
 const HEIGHT = 220;
@@ -15,12 +15,17 @@ export function BarChart({
   title,
   data,
   stacked = false,
-  unit = ""
+  unit = "",
+  tone,
+  showValues = false
 }: {
   readonly title: string;
   readonly data: GroupedBars;
   readonly stacked?: boolean;
   readonly unit?: string;
+  /** Colours a bar by its own value instead of by which series it belongs to. */
+  readonly tone?: (value: number) => Tone;
+  readonly showValues?: boolean;
 }) {
   const plotWidth = WIDTH - PADDING.left - PADDING.right;
   const plotHeight = HEIGHT - PADDING.top - PADDING.bottom;
@@ -69,17 +74,34 @@ export function BarChart({
                   ? PADDING.top + plotHeight - project(stackTop + value, extent, plotHeight)
                   : PADDING.top + plotHeight - height;
                 if (stacked) stackTop += value;
+                const mark =
+                  tone === undefined
+                    ? (SERIES_CLASS[seriesIndex % SERIES_CLASS.length] ?? "")
+                    : `chart__mark--${tone(value)}`;
+                const x = PADDING.left + group.start + slot.start;
                 return (
-                  <rect
-                    key={series.label}
-                    className={`chart__bar ${SERIES_CLASS[seriesIndex % SERIES_CLASS.length] ?? ""}`}
-                    x={PADDING.left + group.start + slot.start}
-                    y={y}
-                    width={Math.max(1, slot.width)}
-                    height={Math.max(0, height)}
-                  >
-                    <title>{`${category} · ${series.label}: ${formatNumber(value)}${unit}`}</title>
-                  </rect>
+                  <g key={series.label} className={mark}>
+                    <rect
+                      className="chart__bar"
+                      x={x}
+                      y={y}
+                      width={Math.max(1, slot.width)}
+                      height={Math.max(0, height)}
+                    >
+                      <title>{`${category} · ${series.label}: ${formatNumber(value)}${unit}`}</title>
+                    </rect>
+                    {showValues && slot.width >= 12 && (
+                      <text
+                        className="chart__value"
+                        x={x + slot.width / 2}
+                        y={y - 3}
+                        textAnchor="middle"
+                      >
+                        {formatNumber(value)}
+                        {unit}
+                      </text>
+                    )}
+                  </g>
                 );
               })}
               <text
@@ -94,13 +116,15 @@ export function BarChart({
           );
         })}
       </svg>
-      <ul className="chart__legend">
-        {data.series.map((series, index) => (
-          <li key={series.label} className={SERIES_CLASS[index % SERIES_CLASS.length]}>
-            {series.label}
-          </li>
-        ))}
-      </ul>
+      {tone === undefined && (
+        <ul className="chart__legend">
+          {data.series.map((series, index) => (
+            <li key={series.label} className={SERIES_CLASS[index % SERIES_CLASS.length]}>
+              {series.label}
+            </li>
+          ))}
+        </ul>
+      )}
     </figure>
   );
 }

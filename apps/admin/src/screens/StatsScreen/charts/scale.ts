@@ -72,6 +72,19 @@ export function heatShare(value: number, extent: Extent): number {
   return Math.min(1, Math.max(0, (value - extent.min) / span));
 }
 
+export type Tone = "good" | "warn" | "bad";
+
+/**
+ * Traffic-light banding for a percentage bar. Thresholds are deliberately
+ * blunt: the colour is a first read of the shape, and the number is printed on
+ * the bar anyway, so nothing depends on telling two shades apart.
+ */
+export function toneForShare(share: number): Tone {
+  if (!Number.isFinite(share) || share < 40) return "bad";
+  if (share < 70) return "warn";
+  return "good";
+}
+
 export function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "—";
   if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}k`;

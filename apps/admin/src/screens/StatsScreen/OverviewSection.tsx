@@ -10,6 +10,7 @@ import {
 } from "./aggregate.js";
 import { BarChart } from "./charts/BarChart.js";
 import { HeatTable, type HeatRow } from "./charts/HeatTable.js";
+import { toneForShare } from "./charts/scale.js";
 import { LineChart } from "./charts/LineChart.js";
 
 function heatRows(report: BatchReport): { columns: string[]; rows: HeatRow[] } {
@@ -58,9 +59,11 @@ export function OverviewSection({
       <LineChart title="Медианная волна по сложности врага" data={waveByOffset(report)} />
       <HeatTable title="Медианная волна по всем осям" columns={heat.columns} rows={heat.rows} />
       {reach !== undefined && cell !== undefined && (
-        <LineChart
+        <BarChart
           title={`Доля прогонов, дошедших до волны — ${cellLabel(cell.key)}`}
           unit="%"
+          tone={toneForShare}
+          showValues
           data={{
             categories: reach.waves.map((wave) => String(wave)),
             series: [{ label: "дошли, %", points: reach.share }]
