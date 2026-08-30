@@ -856,6 +856,8 @@ describe("version 1 migration", () => {
     delete legacyTuning.lootMagnetRadius;
     delete legacyTuning.lootMagnetAccelerationPerSecondSquared;
     delete legacyTuning.lootDriftDampingPerSecond;
+    delete legacyTuning.lootWindowTicks;
+    delete legacyTuning.lootBossWindowTicks;
     const document = {
       version: 24,
       activePresetId: "operator",
@@ -872,6 +874,8 @@ describe("version 1 migration", () => {
     const tuning = store.getActiveTuning();
     expect(tuning.lootRepairAmount).toBe(defaults.lootRepairAmount);
     expect(tuning.lootMagnetRadius).toBe(defaults.lootMagnetRadius);
+    expect(tuning.lootWindowTicks).toBe(defaults.lootWindowTicks);
+    expect(tuning.lootBossWindowTicks).toBe(defaults.lootBossWindowTicks);
     expect(tuning.enemyArchetypes.gunship?.lootChance).toBe(
       defaults.enemyArchetypes.gunship?.lootChance
     );

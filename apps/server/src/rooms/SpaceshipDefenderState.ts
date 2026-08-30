@@ -72,6 +72,7 @@ export class EncounterState extends Schema {
   @type("uint32") encounterTick = 0;
   @type("uint16") phaseTicksRemaining = 0;
   @type("uint32") waveSecondsRemaining = 0;
+  @type("uint8") lootWindowSecondsRemaining = 0;
   @type("uint32") score = 0;
 }
 

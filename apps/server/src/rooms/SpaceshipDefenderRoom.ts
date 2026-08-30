@@ -117,6 +117,12 @@ const SIMULATION_WAKE_MS = 10;
  * exactly the time the room does not have.
  */
 const MAX_CATCHUP_STEPS = 4;
+/**
+ * Head room between the end of the salvage window and the wave deadline it
+ * pushes: the window closes on a simulation tick, the deadline on a host timer,
+ * and the deadline must never be the one that lands first.
+ */
+const SALVAGE_DEADLINE_SLACK_MS = 2_000;
 
 export class SpaceshipDefenderRoom extends Room<{
   state: SpaceshipDefenderState;
@@ -512,6 +518,7 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
     const previousEncounterPhase = this.gameState.encounterPhase;
+    const previousLootWindow = this.gameState.lootWindowTicksRemaining;
     const projectionWasResult = this.state.game.encounter.phase === "result";
     this.gameState = this.applyShieldAutopilot(this.gameState);
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
@@ -520,6 +527,8 @@ export class SpaceshipDefenderRoom extends Room<{
       this.neutralizeAllRoles();
     } else if (previousEncounterPhase !== "combat" && this.gameState.encounterPhase === "combat") {
       this.armWaveDeadline();
+    } else if (previousLootWindow === 0 && this.gameState.lootWindowTicksRemaining > 0) {
+      this.extendWaveDeadlineForSalvage(this.gameState.lootWindowTicksRemaining);
     }
     this.syncGameState();
     if (
@@ -845,6 +854,20 @@ export class SpaceshipDefenderRoom extends Room<{
     this.clearWaveDeadline();
     if (this.state.phase !== "active" || this.gameState?.encounterPhase !== "combat") return;
     this.waveDeadlineAtMs = now + waveTtlSeconds * 1_000;
+    this.scheduleWaveDeadline(this.waveDeadlineGeneration);
+  }
+
+  /**
+   * A won wave stays in combat while the crew collects salvage, so the deadline
+   * has to move with it: without this a wave cleared at the wire would be lost
+   * to a timeout after it was already won.
+   */
+  private extendWaveDeadlineForSalvage(ticksRemaining: number): void {
+    const until =
+      Date.now() + ticksRemaining * this.gameConfig.fixedStepMs + SALVAGE_DEADLINE_SLACK_MS;
+    if (this.waveDeadlineAtMs !== undefined && this.waveDeadlineAtMs >= until) return;
+    this.clearWaveDeadline();
+    this.waveDeadlineAtMs = until;
     this.scheduleWaveDeadline(this.waveDeadlineGeneration);
   }
 

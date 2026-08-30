@@ -88,6 +88,10 @@ export function projectGameState(
     game.encounterPhase === "combat" && waveDeadlineAtMs !== undefined
       ? Math.max(1, Math.ceil((waveDeadlineAtMs - Date.now()) / 1_000))
       : 0;
+  target.encounter.lootWindowSecondsRemaining =
+    game.encounterPhase === "combat"
+      ? Math.ceil((game.lootWindowTicksRemaining * config.fixedStepMs) / 1_000)
+      : 0;
   target.encounter.score = game.score;
   target.credits = game.credits;
   syncRoleModifiers(target.roleModifiers, game.roleModifiers);

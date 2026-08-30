@@ -83,7 +83,9 @@ const LOOT_FIELDS = [
   "lootDropRadius",
   "lootMagnetRadius",
   "lootMagnetAccelerationPerSecondSquared",
-  "lootDriftDampingPerSecond"
+  "lootDriftDampingPerSecond",
+  "lootWindowTicks",
+  "lootBossWindowTicks"
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
 /** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
@@ -319,8 +321,9 @@ function migrateBackground(tuning: LegacyRecord, defaults: BalanceTuning): unkno
 }
 
 /**
- * Salvage arrived in version 25. Merged field by field off the defaults rather
- * than carried over whole, which is what once cost an operator their wave table.
+ * Salvage arrived in version 25 and its collection window in version 26. Merged
+ * field by field off the defaults rather than carried over whole, which is what
+ * once cost an operator their wave table.
  */
 function migrateLoot(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
   return Object.fromEntries(LOOT_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]]));

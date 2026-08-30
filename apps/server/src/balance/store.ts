@@ -131,6 +131,8 @@ export function createDefaultTuning(): BalanceTuning {
     lootMagnetRadius: config.lootMagnetRadius,
     lootMagnetAccelerationPerSecondSquared: config.lootMagnetAccelerationPerSecondSquared,
     lootDriftDampingPerSecond: config.lootDriftDampingPerSecond,
+    lootWindowTicks: config.lootWindowTicks,
+    lootBossWindowTicks: config.lootBossWindowTicks,
     asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
     arenaRadius: config.arenaRadius,
