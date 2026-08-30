@@ -5,7 +5,13 @@ import {
   type FriendlyProjectileLike,
   type HomingMissileState
 } from "./combatTypes.ts";
-import { ENEMY_RIM_START, ENEMY_STALL_SPEED_FRACTION, UINT32_MAX } from "./combatConstants.ts";
+import {
+  ENEMY_PRESS_SHARE,
+  ENEMY_PRESS_TICKS,
+  ENEMY_RIM_START,
+  ENEMY_STALL_SPEED_FRACTION,
+  UINT32_MAX
+} from "./combatConstants.ts";
 import {
   aimPoint,
   believedPosition,
@@ -49,7 +55,8 @@ export function moveAndSpawnThreats(
     enemies: state.enemies,
     projectiles: state.projectiles,
     tick: state.clock.tick,
-    secondsPerStep
+    secondsPerStep,
+    stalemateTicks: state.stalemateTicks
   };
   let enemies = state.enemies.map((enemy) => moveEnemy(enemy, context, config));
   let asteroids = state.asteroids.map((asteroid) => moveLinear(asteroid, secondsPerStep));
@@ -235,6 +242,8 @@ export interface EnemyStepContext {
   readonly projectiles: readonly FriendlyProjectileLike[];
   readonly tick: number;
   readonly secondsPerStep: number;
+  /** Ticks since either side last drew blood; see `ENEMY_PRESS_TICKS`. */
+  readonly stalemateTicks: number;
 }
 
 export function moveEnemy(
@@ -263,7 +272,13 @@ export function moveEnemy(
     profile.retreatHpFraction > 0 &&
     enemy.maxHp > 0 &&
     enemy.hp / enemy.maxHp < profile.retreatHpFraction;
-  const preferred = archetype.preferredDistance * (retreating ? profile.retreatStandoffFactor : 1);
+  // A fight where nobody lands a hit is the one shape that never resolves on
+  // its own, so the stand-off is given up as the silence drags on.
+  const press = Math.min(1, context.stalemateTicks / ENEMY_PRESS_TICKS);
+  const preferred =
+    archetype.preferredDistance *
+    (retreating ? profile.retreatStandoffFactor : 1) *
+    (1 - press * ENEMY_PRESS_SHARE);
   const speed = archetype.speedPerSecond;
   // Closing and circling blend by how far off the preferred range the ship is.
   // A hard switch at a threshold made the direction jump ninety degrees, and

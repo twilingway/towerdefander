@@ -352,6 +352,12 @@ export interface CombatStateFields {
   readonly defeatReason: DefeatReason | null;
   readonly waveNumber: number;
   readonly encounterTick: number;
+  /**
+   * Ticks since either side last drew blood. Enemies close in as it grows, so a
+   * fight where nobody can land a hit resolves instead of running forever.
+   * Internal: it never reaches a snapshot.
+   */
+  readonly stalemateTicks: number;
   readonly score: number;
   readonly credits: number;
   readonly nextSpawnSequence: number;

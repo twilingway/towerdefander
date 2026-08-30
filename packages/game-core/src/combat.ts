@@ -1,5 +1,6 @@
 import {
   type CombatConfig,
+  type CombatEnemyState,
   type CombatStateFields,
   type CombatStepResult,
   type CombatStepState,
@@ -107,6 +108,7 @@ export function createInitialCombatState(config: CombatConfig, runSeed: number):
     defeatReason: null,
     waveNumber: 1,
     encounterTick: 0,
+    stalemateTicks: 0,
     score: 0,
     credits: 0,
     nextSpawnSequence: 1,
@@ -141,6 +143,11 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
   next = resolveFriendlyHits(next, config);
   next = resolveSpaceshipThreats(next, config);
   next = removeExpiredAndOutOfBounds(next, config);
+  // Reset the moment either side draws blood: the press exists for the fight
+  // that produces nothing, not for the one that is merely slow.
+  const traded =
+    next.spaceshipHp < state.spaceshipHp || enemiesWereHurt(state.enemies, next.enemies);
+  next = { ...next, stalemateTicks: traded ? 0 : state.stalemateTicks + 1 };
 
   if (next.spaceshipHp <= 0) {
     return createTerminalCombatState(pickCombatResult(next), "defeat");
@@ -157,6 +164,7 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
       outcome: null,
       defeatReason: null,
       encounterTick: 0,
+      stalemateTicks: 0,
       offerRngState: offerResult.rngState,
       teamUpgradeOffer: offerResult.offer,
       teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
@@ -170,6 +178,22 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
     };
   }
   return { ...pickCombatResult(next), encounterTick: state.encounterTick + 1 };
+}
+
+/**
+ * An enemy only ever leaves the arena by dying, so a missing id counts as a
+ * hit the same way a lower hit-point total does.
+ */
+function enemiesWereHurt(
+  before: readonly CombatEnemyState[],
+  after: readonly CombatEnemyState[]
+): boolean {
+  const remaining = new Map(after.map((enemy) => [enemy.id, enemy.hp]));
+  for (const enemy of before) {
+    const hp = remaining.get(enemy.id);
+    if (hp === undefined || hp < enemy.hp) return true;
+  }
+  return false;
 }
 
 function advanceIntermission(state: CombatStepState, config: CombatConfig): CombatStepResult {
@@ -279,6 +303,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     defeatReason: state.defeatReason,
     waveNumber: state.waveNumber,
     encounterTick: state.encounterTick,
+    stalemateTicks: state.stalemateTicks,
     score: state.score,
     credits: state.credits,
     nextWaveSpawnTick: state.nextWaveSpawnTick,

@@ -13,6 +13,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
 } from "./index.ts";
+import { ENEMY_PRESS_TICKS } from "./combatConstants.ts";
 
 function combatStep(
   state: SpaceshipSimulationState,
@@ -366,7 +367,9 @@ describe("circular combat spawning and movement", () => {
     };
 
     for (let step = 0; step < 60; step += 1) {
-      state = advanceSpaceshipSimulation(state, config);
+      // Pinned: this measures the closing-and-circling blend, and a fight where
+      // nothing lands would otherwise have the press shrinking the range too.
+      state = { ...advanceSpaceshipSimulation(state, config), stalemateTicks: 0 };
       const enemy = state.enemies[0];
       expect(enemy).toBeDefined();
       if (enemy === undefined) break;
@@ -379,6 +382,66 @@ describe("circular combat spawning and movement", () => {
     // Golden values recorded from the blend before the rim rule was added.
     expect(state.enemies[0]?.x).toBeCloseTo(2853.9148503025867, 6);
     expect(state.enemies[0]?.y).toBeCloseTo(2129.5418583681662, 6);
+  });
+});
+
+describe("a fight that produces nothing closes itself", () => {
+  const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+  const centerX = config.worldWidth / 2;
+  const centerY = config.worldHeight / 2;
+  const archetype = getEnemyArchetype(config, "sniper");
+
+  function standoffFight(stalemateTicks: number): SpaceshipSimulationState {
+    const start = centerX + archetype.preferredDistance;
+    return {
+      ...createSpaceshipSimulationState(config, 91),
+      pendingSpawns: [],
+      stalemateTicks,
+      spaceship: {
+        x: centerX,
+        y: centerY,
+        previousX: centerX,
+        previousY: centerY,
+        velocity: { x: 0, y: 0 }
+      },
+      // Silent on purpose: a shot landing would reset the very counter this
+      // measures, and the point is the fight where nothing lands.
+      enemies: [
+        quietEnemy(config, {
+          kind: "sniper",
+          radius: archetype.radius,
+          x: start,
+          previousX: start,
+          y: centerY,
+          previousY: centerY
+        })
+      ]
+    };
+  }
+
+  function rangeOf(state: SpaceshipSimulationState): number {
+    const enemy = state.enemies[0];
+    return enemy === undefined ? 0 : Math.hypot(enemy.x - centerX, enemy.y - centerY);
+  }
+
+  /** Pinned, so each arm is measured at a fixed point of the press. */
+  function stepAt(stalemateTicks: number, ticks: number): SpaceshipSimulationState {
+    let state = standoffFight(stalemateTicks);
+    for (let step = 0; step < ticks; step += 1) {
+      state = { ...advanceSpaceshipSimulation(state, config), stalemateTicks };
+    }
+    return state;
+  }
+
+  it("holds the stand-off while the fight is still producing", () => {
+    // Within a hull of where it started: the sniper is doing its job.
+    expect(Math.abs(rangeOf(stepAt(0, 60)) - archetype.preferredDistance)).toBeLessThan(120);
+  });
+
+  it("gives up the stand-off once neither side can land a hit", () => {
+    // The stalemate the operator watched: a sniper the ship cannot see and a
+    // ship the sniper cannot lead, circling until the wave clock ran out.
+    expect(rangeOf(stepAt(ENEMY_PRESS_TICKS, 60))).toBeLessThan(rangeOf(stepAt(0, 60)) - 150);
   });
 });
 
