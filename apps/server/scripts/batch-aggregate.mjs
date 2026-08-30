@@ -68,6 +68,7 @@ function aggregateWaves(runs) {
         waveNumber: wave.waveNumber,
         runsReaching: 0,
         runsCleared: 0,
+        runsBought: 0,
         bossWave: false,
         bossKills: 0,
         seconds: [],
@@ -78,6 +79,7 @@ function aggregateWaves(runs) {
       };
       entry.runsReaching += 1;
       if (wave.cleared) entry.runsCleared += 1;
+      if (wave.upgrade != null) entry.runsBought += 1;
       entry.bossWave ||= wave.bossWave;
       entry.bossKills += wave.bossKills;
       entry.seconds.push(wave.seconds ?? 0);
@@ -94,6 +96,7 @@ function aggregateWaves(runs) {
       waveNumber: entry.waveNumber,
       runsReaching: entry.runsReaching,
       runsCleared: entry.runsCleared,
+      runsBought: entry.runsBought,
       bossWave: entry.bossWave,
       bossKills: round(entry.bossKills / entry.runsReaching),
       medianSeconds: median(entry.seconds),

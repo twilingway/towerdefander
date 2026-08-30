@@ -1,6 +1,6 @@
 import type { BatchCell } from "@spaceship-defender/protocol";
 
-import { buildLabel, cellLabel, economyByWave, upgradeRows } from "./aggregate.js";
+import { buildLabel, cellLabel, economyByWave, economyRows, upgradeRows } from "./aggregate.js";
 import { LineChart } from "./charts/LineChart.js";
 
 /** Where the credits went, and which upgrades the ballot actually bought. */
@@ -13,10 +13,37 @@ export function EconomySection({ cell }: { readonly cell: BatchCell }) {
       <h2>Экономика и апгрейды</h2>
       <LineChart title={`Кредиты по волнам — ${cellLabel(cell.key)}`} data={economyByWave(cell)} />
       <p className="hint">
-        Покупка происходит в передышке, между двумя боевыми окнами, и записывается на волну, которая
-        эти кредиты заработала. Первая волна почти никогда ничего не покупает: она приносит меньше
-        цены апгрейда.
+        Обе линии — <strong>среднее на один прогон, дошедший до волны</strong>, а не сумма. Поэтому
+        «потрачено» садится ниже фиксированной цены в 5 кредитов: если до волны дошли 16 прогонов, а
+        купили после неё 10, линия покажет 10 × 5 ÷ 16 = 3.1. Ровно 5 означает, что купили все
+        дошедшие; 0 на первой волне — что она приносит меньше цены апгрейда. Покупка происходит в
+        передышке, между двумя боевыми окнами, и записывается на волну, которая эти кредиты
+        заработала.
       </p>
+      <table className="entries">
+        <thead>
+          <tr>
+            <th scope="col">Волна</th>
+            <th scope="col">Дошли</th>
+            <th scope="col">Пережили</th>
+            <th scope="col">Купили</th>
+            <th scope="col">Потрачено на прогон</th>
+            <th scope="col">Заработано на прогон</th>
+          </tr>
+        </thead>
+        <tbody>
+          {economyRows(cell).map((row) => (
+            <tr key={row.waveNumber}>
+              <td>{row.waveNumber}</td>
+              <td>{row.reaching}</td>
+              <td>{row.cleared}</td>
+              <td>{row.bought}</td>
+              <td>{row.spentPerRun}</td>
+              <td>{row.earnedPerRun}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       <div className="caps">
         <div className="stat">
           <span className="stat__value">{String(bought)}</span>

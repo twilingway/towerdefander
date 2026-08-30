@@ -125,15 +125,43 @@ export function accuracyBars(cells: readonly BatchCell[]): GroupedBars {
   };
 }
 
-/** Credits earned against credits spent, wave by wave. */
+/**
+ * Credits earned against credits spent, wave by wave.
+ *
+ * Both are **means per run that reached the wave**, which is what makes the
+ * spent line land on values below the fixed price of five: a wave where nine of
+ * sixteen runs survived to the intermission and bought shows 9x5/16, not 5.
+ * The table beside the chart carries the counts the mean is made of.
+ */
 export function economyByWave(cell: BatchCell): GroupedBars {
   return {
     categories: cell.waves.map(({ waveNumber }) => String(waveNumber)),
     series: [
-      { label: "Заработано", points: cell.waves.map(({ stats }) => stats.creditsEarned) },
-      { label: "Потрачено", points: cell.waves.map(({ stats }) => stats.creditsSpent) }
+      { label: "Заработано на прогон", points: cell.waves.map(({ stats }) => stats.creditsEarned) },
+      { label: "Потрачено на прогон", points: cell.waves.map(({ stats }) => stats.creditsSpent) }
     ]
   };
+}
+
+export interface EconomyRow {
+  readonly waveNumber: number;
+  readonly reaching: number;
+  readonly cleared: number;
+  readonly bought: number;
+  readonly spentPerRun: number;
+  readonly earnedPerRun: number;
+}
+
+/** The counts behind the means, so a value under the price explains itself. */
+export function economyRows(cell: BatchCell): EconomyRow[] {
+  return cell.waves.map((wave) => ({
+    waveNumber: wave.waveNumber,
+    reaching: wave.runsReaching,
+    cleared: wave.runsCleared,
+    bought: wave.runsBought,
+    spentPerRun: wave.stats.creditsSpent,
+    earnedPerRun: wave.stats.creditsEarned
+  }));
 }
 
 /** A build as one line: `gunner_damage ×2 + pilot_hull`. */

@@ -141,6 +141,7 @@ describe("batch report", () => {
                 waveNumber: 5,
                 runsReaching: 1,
                 runsCleared: 1,
+                runsBought: 1,
                 bossWave: true,
                 bossKills: 1,
                 medianSeconds: 42.5,

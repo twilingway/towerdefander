@@ -85,6 +85,8 @@ export const waveAggregateSchema = z
     /** How many runs of the cell got this far, and how many walked away from it. */
     runsReaching: nonNegativeInteger,
     runsCleared: nonNegativeInteger,
+    /** How many of them then bought an upgrade in the intermission that followed. */
+    runsBought: nonNegativeInteger,
     bossWave: z.boolean(),
     bossKills: nonNegativeFinite,
     medianSeconds: nonNegativeFinite,
