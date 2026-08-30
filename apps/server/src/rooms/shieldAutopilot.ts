@@ -1,3 +1,13 @@
+/**
+ * Keep this file free of runtime relative imports — `import type` only.
+ *
+ * The headless balance harness (`apps/server/scripts/balance-run.mjs`) imports
+ * `nextShieldIntent` from plain node to reproduce a crew that has no shield
+ * seat. Node strips types but does not rewrite a `.js` specifier to `.ts`, so
+ * one ordinary `./neighbour.js` import here would make every crew-1 and crew-2
+ * measurement fail to load. The crew-size case in
+ * `scripts/autopilot-stats.node-test.mjs` is what catches it.
+ */
 import type {
   SpaceshipSimulationConfig,
   SpaceshipSimulationState,

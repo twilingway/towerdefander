@@ -13,6 +13,7 @@
     "build": "pnpm -r build",
     "benchmark:combat": "pnpm --filter @spaceship-defender/server benchmark:combat",
     "stats:autopilot": "pnpm --filter @spaceship-defender/server stats:autopilot",
+    "stats:batch": "pnpm --filter @spaceship-defender/server stats:batch",
     "demo:visible": "node scripts/run-visible-demo.mjs",
     "demo:verify": "cross-env DEMO_HEADLESS=1 DEMO_VERIFY=1 DEMO_BOT_LEVEL=rookie node scripts/run-visible-demo.mjs",
     "daily:video": "node scripts/daily-video.mjs",

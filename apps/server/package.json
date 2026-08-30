@@ -7,6 +7,7 @@
     "build": "tsup --config tsup.config.ts",
     "benchmark:combat": "pnpm run build && node dist/benchmarks/runCombatRoomBenchmark.js",
     "stats:autopilot": "node scripts/run-autopilot-stats.mjs",
+    "stats:batch": "node scripts/run-balance-batch.mjs",
     "dev": "node --env-file-if-exists=../../.env.local --import tsx --watch src/index.ts",
     "start": "node --env-file-if-exists=../../.env.local dist/index.js",
     "typecheck": "tsc --noEmit",
