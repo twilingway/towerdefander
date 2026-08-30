@@ -165,6 +165,33 @@ test("the helm asks for a spin and a push, not a course", () => {
   assert.deepEqual(idle, { turn: 0, thrust: 0 });
 });
 
+test("the helm turns for a crossing instead of backing across it", () => {
+  // Dead astern, which is the course the bot gets the moment it reaches the rim
+  // and is told to go back to the middle. Backing up is two fifths of the speed,
+  // so flying half the arena that way costs far more than the second the hull
+  // spends turning — and with nothing on the screen there is no nose to keep
+  // pointed at anything, which was the only reason to back up at all.
+  const crossing = helmIntent({ x: -1, y: 0 }, 0, createAutopilotMemory(), false);
+  assert.ok(crossing.thrust >= 0, "no thrust into the crossing until the nose is round");
+  assert.ok(Math.abs(crossing.turn) === 1, "full deflection to bring the nose round");
+
+  // The same course while a target is being held stays a reverse.
+  const manoeuvre = helmIntent({ x: -1, y: 0 }, 0, createAutopilotMemory());
+  assert.ok(Math.abs(manoeuvre.thrust + 1) < 1e-9);
+});
+
+test("with nothing on the screen the bot turns rather than backs", () => {
+  // Out at the rim, nose pointing off it, nothing in frame: the search course
+  // is inward, which is almost dead astern. This is the manoeuvre that was 58%
+  // of all the reverse flying in the run.
+  const empty = world({
+    ship: { ...world().ship, x: 4000, y: 2200, heading: 0 }
+  });
+  const plan = planPilot(empty, ACE, createAutopilotMemory());
+  assert.ok(plan.vector.x < -0.9, "the course is back toward the middle");
+  assert.ok(plan.thrust >= 0);
+});
+
 test("the helm backs up only for a course well astern", () => {
   const memory = createAutopilotMemory();
   const behind = helmIntent({ x: -1, y: 0 }, 0, memory);

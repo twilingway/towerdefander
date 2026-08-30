@@ -901,17 +901,27 @@ function orbitVector(world, target, profile, memory, distance) {
  * onto a course and swung back through it, which is the doubling-back the
  * demonstration showed and the live game does not.
  */
-export function helmIntent(vector, heading, memory) {
+export function helmIntent(vector, heading, memory, mayReverse = true) {
   if (Math.hypot(vector.x, vector.y) <= Number.EPSILON) return { turn: 0, thrust: 0 };
   const bearing = Math.atan2(vector.y, vector.x);
   const ahead = shortestAngleDelta(heading, bearing);
   // Past the beam it is quicker to back up than to swing the hull all the way
   // round, and it leaves the nose gun pointed at what was being circled. Held
   // once taken, for the same reason the manoeuvre bands are held.
+  //
+  // What it is never worth is a crossing. Reverse is two fifths of the speed,
+  // so it pays back the second the hull spends turning only over a couple of
+  // hundred units; a run to the far side of the arena flown backwards costs
+  // more than the turn several times over. With nothing on the screen there is
+  // also no nose to keep pointed at anything, which was the whole reason to
+  // back up. Measured over forty runs, the bot flew 26.5% of the fight in
+  // reverse and 58.1% of that was one manoeuvre: the crossing to the middle of
+  // the arena, begun at the rim with the nose pointing off it.
   const reversing =
-    memory.reversing === true
+    mayReverse &&
+    (memory.reversing === true
       ? Math.abs(ahead) > HELM_REVERSE_RADIANS - HELM_REVERSE_MARGIN
-      : Math.abs(ahead) > HELM_REVERSE_RADIANS;
+      : Math.abs(ahead) > HELM_REVERSE_RADIANS);
   memory.reversing = reversing;
   const error = reversing ? shortestAngleDelta(heading, bearing + Math.PI) : ahead;
   return {
@@ -924,7 +934,10 @@ export function helmIntent(vector, heading, memory) {
 
 export function planPilot(world, profile, memory, options = {}) {
   const plan = planPilotCourse(world, profile, memory, options);
-  return { ...plan, ...helmIntent(plan.vector, world.ship.heading, memory) };
+  return {
+    ...plan,
+    ...helmIntent(plan.vector, world.ship.heading, memory, plan.crossing !== true)
+  };
 }
 
 function planPilotCourse(world, profile, memory, options) {
@@ -975,8 +988,14 @@ function planPilotCourse(world, profile, memory, options) {
   // ships that actually kill the crew shoot from outside the camera frame, and
   // the turret keeps servicing the rock while the pilot goes after them.
   // Nothing to press: walk the shots back to whoever is firing them.
+  // Nothing to press and nothing to keep in the bore: whatever this course is,
+  // it is a crossing rather than a manoeuvre, so the hull turns onto it.
   if (target === undefined) {
-    return { vector: huntVector(world, memory, nowMs) ?? searchVector(world, memory), mgFiring };
+    return {
+      vector: huntVector(world, memory, nowMs) ?? searchVector(world, memory),
+      mgFiring,
+      crossing: true
+    };
   }
 
   // Holding a ring around a target the turret cannot track is the stalemate:
