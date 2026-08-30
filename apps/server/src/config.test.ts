@@ -6,8 +6,17 @@ import { readServerConfig } from "./config.js";
 
 describe("readServerConfig", () => {
   it("uses LAN-safe defaults", () => {
-    const { balancePresetPath, ...rest } = readServerConfig({});
+    const {
+      balancePresetPath,
+      statsBatchDirectory,
+      statsHarnessPath,
+      statsProcessGuardUrl,
+      ...rest
+    } = readServerConfig({});
     expect(balancePresetPath).toContain("balance.json");
+    expect(statsBatchDirectory).toContain("stats-batches");
+    expect(statsHarnessPath).toContain("run-balance-batch.mjs");
+    expect(statsProcessGuardUrl).toContain("owned-process-guard.mjs");
     expect(rest).toEqual({
       host: "0.0.0.0",
       port: 2567,
@@ -20,6 +29,8 @@ describe("readServerConfig", () => {
       maxConcurrentRooms: 30,
       statsPassword: undefined,
       balancePassword: undefined,
+      statsBatchKeep: 50,
+      statsBatchTimeoutSeconds: 1800,
       gracefullyShutdown: true,
       allowStartWave: false
     });
@@ -34,8 +45,17 @@ describe("readServerConfig", () => {
   });
 
   it("accepts explicit host and port", () => {
-    const { balancePresetPath, ...rest } = readServerConfig({ HOST: "127.0.0.1", PORT: "3000" });
+    const {
+      balancePresetPath,
+      statsBatchDirectory,
+      statsHarnessPath,
+      statsProcessGuardUrl,
+      ...rest
+    } = readServerConfig({ HOST: "127.0.0.1", PORT: "3000" });
     expect(balancePresetPath).toContain("balance.json");
+    expect(statsBatchDirectory).toContain("stats-batches");
+    expect(statsHarnessPath).toContain("run-balance-batch.mjs");
+    expect(statsProcessGuardUrl).toContain("owned-process-guard.mjs");
     expect(rest).toEqual({
       host: "127.0.0.1",
       port: 3000,
@@ -48,6 +68,8 @@ describe("readServerConfig", () => {
       maxConcurrentRooms: 30,
       statsPassword: undefined,
       balancePassword: undefined,
+      statsBatchKeep: 50,
+      statsBatchTimeoutSeconds: 1800,
       gracefullyShutdown: true,
       allowStartWave: false
     });
