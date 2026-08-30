@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createAutopilotMemory,
+  helmIntent,
   directAim,
   bearingRate,
   commitTarget,
@@ -143,6 +144,39 @@ function enemyAt(entityId, spawnSequence, x, y, overrides = {}) {
     ...overrides
   });
 }
+
+test("the helm asks for a spin and a push, not a course", () => {
+  const memory = createAutopilotMemory();
+  // Dead ahead: no spin wanted, full burn along the nose.
+  const ahead = helmIntent({ x: 1, y: 0 }, 0, memory);
+  assert.equal(ahead.turn, 0);
+  assert.ok(Math.abs(ahead.thrust - 1) < 1e-9);
+
+  // Off to port: full deflection, and almost nothing to the engine until the
+  // nose has caught up, because thrust runs along the hull.
+  const toPort = helmIntent({ x: 0, y: 1 }, 0, createAutopilotMemory());
+  assert.equal(toPort.turn, 1);
+  assert.ok(toPort.thrust < 0.001);
+
+  // A stopped pilot asks for nothing at all rather than holding a course.
+  const idle = helmIntent({ x: 0, y: 0 }, 0, createAutopilotMemory());
+  assert.deepEqual(idle, { turn: 0, thrust: 0 });
+});
+
+test("the helm backs up instead of swinging the hull all the way round", () => {
+  const memory = createAutopilotMemory();
+  const behind = helmIntent({ x: -1, y: 0 }, 0, memory);
+  assert.ok(Math.abs(behind.thrust + 1) < 1e-9);
+  assert.ok(Math.abs(behind.turn) < 1e-9);
+
+  // Held once taken: a course drifting back across the beam does not flip the
+  // thrust end for end, which is a harder jerk than the one this helm removes.
+  // Inside the held band the engine idles while the hull swings its tail round
+  // — what matters is that it does not start driving the other way.
+  const acrossTheBeam = { x: Math.cos(1.3), y: Math.sin(1.3) };
+  assert.ok(helmIntent(acrossTheBeam, 0, memory).thrust <= 0);
+  assert.ok(helmIntent(acrossTheBeam, 0, createAutopilotMemory()).thrust > 0.2);
+});
 
 test("a manoeuvre is held until its band is properly left", () => {
   // The stand-off ring is 360 units here (the camera frame clamps it), so the

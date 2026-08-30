@@ -202,6 +202,8 @@ function playRun(config, seed, level, profile, maxWaves) {
 
     state = applyPilotInput(state, {
       vector: pilot.vector,
+      turn: pilot.turn,
+      thrust: pilot.thrust,
       mgFiring: pilot.mgFiring,
       receivedTick: state.clock.tick
     });

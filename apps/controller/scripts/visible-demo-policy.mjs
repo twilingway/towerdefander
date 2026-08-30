@@ -77,6 +77,20 @@ const STANDOFF_BAND = 0.15;
  * course by more than 1.5 rad 192 times, and the stand-off pair 66 more.
  */
 const BAND_RELEASE = 0.7;
+/**
+ * Bearing error the hull may carry before the helm asks for a full-rate spin.
+ * A tick of hull rotation is about 0.157 rad at the stock rate, so a narrower
+ * band would demand full deflection and overshoot inside a single step.
+ */
+const HELM_SETTLE_RADIANS = 0.25;
+/**
+ * How far past the beam a course has to sit before the helm commits to backing
+ * up, and how far short of it before it commits to driving forward. Without the
+ * gap the reverse decision chatters on the beam and flips the thrust end for
+ * end every other tick, which is a harder jerk than the one this helm removed:
+ * measured, it tripled the course changes past 0.3 rad.
+ */
+const HELM_REVERSE_MARGIN = 0.35;
 /** Fraction of the arena radius past which the orbit turns back inward. */
 const RIM_FRACTION = 0.8;
 /** Inside this fraction of the arena the search sweeps instead of closing in. */
@@ -130,6 +144,7 @@ export function createAutopilotMemory(seed = 1) {
     // Which manoeuvre is being held, and for which target it was chosen.
     closing: false,
     closingTargetId: undefined,
+    reversing: false,
     holding: false,
     holdingTargetId: undefined,
     shieldActive: false
@@ -695,7 +710,43 @@ function orbitVector(world, target, profile, memory, distance) {
  * range, then aim, then coast. Coasting is the only way to fire from a settled
  * heading, because a zero vector brakes but keeps the course.
  */
+/**
+ * Turns a desired course into the spin and push a live pilot's keyboard sends.
+ * The core takes a different branch for each: given an intent the hull spins at
+ * the requested rate and thrust runs along the nose, and without one it chases
+ * an absolute bearing and drifts sideways to the hull. Flying the bot on a
+ * bearing therefore put it on a control model no player has — the hull settled
+ * onto a course and swung back through it, which is the doubling-back the
+ * demonstration showed and the live game does not.
+ */
+export function helmIntent(vector, heading, memory) {
+  if (Math.hypot(vector.x, vector.y) <= Number.EPSILON) return { turn: 0, thrust: 0 };
+  const bearing = Math.atan2(vector.y, vector.x);
+  const ahead = shortestAngleDelta(heading, bearing);
+  // Past the beam it is quicker to back up than to swing the hull all the way
+  // round, and it leaves the nose gun pointed at what was being circled. Held
+  // once taken, for the same reason the manoeuvre bands are held.
+  const beam = Math.PI / 2;
+  const reversing =
+    memory.reversing === true
+      ? Math.abs(ahead) > beam - HELM_REVERSE_MARGIN
+      : Math.abs(ahead) > beam + HELM_REVERSE_MARGIN;
+  memory.reversing = reversing;
+  const error = reversing ? shortestAngleDelta(heading, bearing + Math.PI) : ahead;
+  return {
+    turn: Math.max(-1, Math.min(1, error / HELM_SETTLE_RADIANS)),
+    // Proportional to how well the nose is lined up, so a broadside course
+    // spends the tick turning rather than flying off at an angle to its own aim.
+    thrust: (reversing ? -1 : 1) * Math.max(0, Math.cos(error))
+  };
+}
+
 export function planPilot(world, profile, memory, options = {}) {
+  const plan = planPilotCourse(world, profile, memory, options);
+  return { ...plan, ...helmIntent(plan.vector, world.ship.heading, memory) };
+}
+
+function planPilotCourse(world, profile, memory, options) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
   const ranked = rankTargets(world, options);
   const target = commitTarget(ranked, profile, memory, nowMs, world);

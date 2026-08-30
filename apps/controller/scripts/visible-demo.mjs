@@ -486,6 +486,10 @@ function sendCombatInputs(expectedGeneration) {
     ...envelope(pilotRoom()),
     sequence: pilotSequence,
     vector: pilot.vector,
+    // The same spin and push a live pilot's keyboard sends, so the bot flies
+    // the helm the crew flies rather than an absolute course of its own.
+    turn: pilot.turn,
+    thrust: pilot.thrust,
     mgFiring: pilot.mgFiring
   });
   const gunner = planGunner(world, profile, memory, options);
