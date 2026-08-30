@@ -366,6 +366,33 @@ test("the bot keeps going after a shooter it never saw", () => {
   assert.equal(huntVector(quiet, memory, 1_000 + 9_100), undefined);
 });
 
+test("the guessed shooter never sits outside the arena", () => {
+  const memory = createAutopilotMemory();
+  // Already out toward the rim and shot at from further out still. One camera
+  // frame back along that round lands well past the wall, and the simulation
+  // holds every ship inside it, so nothing can be standing there.
+  const underFire = world({
+    ship: { ...world().ship, x: 3400, y: 2200 },
+    bullets: [entity("shot", 1, { x: 3800, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const answering = huntVector(underFire, memory, 1_000);
+  assert.ok(answering !== undefined && answering.x > 0.9);
+
+  const source = memory.firedFrom;
+  assert.ok(source !== undefined);
+  const fromCentre = Math.hypot(source.x - 2200, source.y - 2200);
+  assert.ok(
+    fromCentre <= underFire.arenaRadius + 1e-9,
+    `guess sits ${String(Math.round(fromCentre))} out of ${String(underFire.arenaRadius)}`
+  );
+
+  // Pulled in, the guess is somewhere the bot can actually reach, so it gets
+  // spent on arrival instead of pinning the ship against the wall until it
+  // times out.
+  const arrived = world({ ship: { ...world().ship, x: source.x, y: source.y } });
+  assert.equal(huntVector(arrived, memory, 1_200), undefined);
+});
+
 test("the guess is spent once the bot arrives and finds nothing", () => {
   const memory = createAutopilotMemory();
   const underFire = world({

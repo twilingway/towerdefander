@@ -737,6 +737,23 @@ function escapeVector(world, profile) {
 }
 
 /**
+ * The same point, pulled back onto the arena if it fell outside. The simulation
+ * holds every ship inside that circle, so a guess beyond it is one no shooter
+ * can occupy — and walking to it means walking into the wall and sitting there
+ * until the guess times out.
+ */
+function insideArena(world, point) {
+  const centreX = world.worldWidth / 2;
+  const centreY = world.worldHeight / 2;
+  const offsetX = point.x - centreX;
+  const offsetY = point.y - centreY;
+  const distance = Math.hypot(offsetX, offsetY);
+  if (distance <= world.arenaRadius) return point;
+  const scale = world.arenaRadius / distance;
+  return { x: centreX + offsetX * scale, y: centreY + offsetY * scale };
+}
+
+/**
  * Bearing back along the course of the nearest shot crossing the screen. A
  * sniper reaches almost three times further than the camera frames and a boss
  * launches from beyond it too, so their shots are the only evidence of them
@@ -753,13 +770,19 @@ export function huntVector(world, memory, nowMs) {
 
   if (nearest !== undefined) {
     // A point rather than a bearing, so the guess stays geometrically true as
-    // the ship moves. One frame out is where an out-ranging archetype sits.
-    memory.firedFrom = {
+    // the ship moves. One frame out is where an out-ranging archetype sits, and
+    // never past the rim, where none can be. The course is read off the point
+    // for the same reason, so a guess that was pulled in is also flown to where
+    // it now is rather than along the bearing it came from.
+    memory.firedFrom = insideArena(world, {
       x: world.ship.x + Math.cos(nearest.bearing) * world.cameraViewWidth,
       y: world.ship.y + Math.sin(nearest.bearing) * world.cameraViewWidth
-    };
+    });
     memory.firedFromAtMs = nowMs;
-    return bearingVector(nearest.bearing);
+    return normalize({
+      x: memory.firedFrom.x - world.ship.x,
+      y: memory.firedFrom.y - world.ship.y
+    });
   }
 
   if (memory.firedFrom === undefined) return undefined;
