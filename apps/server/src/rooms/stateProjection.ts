@@ -20,6 +20,7 @@ import {
   AsteroidState,
   EnemyState,
   HomingMissileState,
+  LaserBeamState,
   LootDropState,
   ProjectileState,
   UpgradeCardState,
@@ -105,6 +106,19 @@ export function projectGameState(
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
   reconcileKeyed(target.display.lootDrops, game.lootDrops, () => new LootDropState(), syncLootDrop);
+  reconcileKeyed(
+    target.display.laserBeams,
+    game.laserBeams,
+    () => new LaserBeamState(),
+    (state, beam) => {
+      state.entityId = beam.id;
+      state.fromX = beam.previousX;
+      state.fromY = beam.previousY;
+      state.toX = beam.x;
+      state.toY = beam.y;
+      state.source = beam.source;
+    }
+  );
   reconcileKeyed(
     target.display.friendlyProjectiles,
     game.projectiles,

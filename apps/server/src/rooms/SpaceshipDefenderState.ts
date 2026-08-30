@@ -166,6 +166,16 @@ export class LootDropState extends Schema {
   @type("float32") amount = 0;
 }
 
+/** A laser pulse: two points and who fired it, kept for a couple of ticks. */
+export class LaserBeamState extends Schema {
+  @type("string") entityId = "";
+  @type("float32") fromX = 0;
+  @type("float32") fromY = 0;
+  @type("float32") toX = 0;
+  @type("float32") toY = 0;
+  @type("string") source = "";
+}
+
 export class ProjectileState extends Schema {
   @type("string") entityId = "";
   @type("uint32") spawnSequence = 0;
@@ -242,6 +252,7 @@ export class SpaceshipDisplayState extends Schema {
   @type({ map: AsteroidState }) asteroids = new MapSchema<AsteroidState>();
   @type({ map: LootDropState }) lootDrops = new MapSchema<LootDropState>();
   @type({ map: ProjectileState }) friendlyProjectiles = new MapSchema<ProjectileState>();
+  @type({ map: LaserBeamState }) laserBeams = new MapSchema<LaserBeamState>();
   @type({ map: ProjectileState }) hostileProjectiles = new MapSchema<ProjectileState>();
   @type({ map: HomingMissileState }) homingMissiles = new MapSchema<HomingMissileState>();
 }

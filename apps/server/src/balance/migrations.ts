@@ -75,6 +75,17 @@ const DEFAULT_ENEMY_COMBAT_SKILL = "rookie";
 /** What an operator's own archetype inherits when salvage arrives. */
 const DEFAULT_LOOT_CHANCE = 0.22;
 /** Every salvage knob, so the migration cannot forget one silently. */
+/** Every weapon-kind knob, so the migration cannot forget one silently. */
+const WEAPON_KIND_FIELDS = [
+  "cannonWeaponKind",
+  "mgWeaponKind",
+  "cannonLaserRange",
+  "mgLaserRange",
+  "laserBeamRadius",
+  "friendlyMissileTurnRatePerSecond",
+  "friendlyMissileAcquireConeRadians"
+] as const satisfies readonly (keyof BalanceTuning)[];
+
 const LOOT_FIELDS = [
   "lootRepairAmount",
   "lootShieldAmount",
@@ -329,6 +340,16 @@ function migrateLoot(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecor
   return Object.fromEntries(LOOT_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]]));
 }
 
+/**
+ * Weapon kinds arrived in version 27. A preset written before them keeps both
+ * barrels kinetic, which is what its numbers already described.
+ */
+function migrateWeaponKinds(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  return Object.fromEntries(
+    WEAPON_KIND_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]])
+  );
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -351,6 +372,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       // must gain every knob, not fail the strict schema and take the
       // operator's waves down with it.
       ...migrateLoot(tuning, defaults),
+      ...migrateWeaponKinds(tuning, defaults),
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
           kind,
