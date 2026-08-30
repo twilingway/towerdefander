@@ -23,6 +23,7 @@ import {
   planShield,
   runWaveKey
 } from "./visible-demo-policy.mjs";
+import { planUpgradeVotes } from "./upgrade-vote-policy.mjs";
 
 const STEP_MS = 50;
 const TELEMETRY_MS = 50;
@@ -667,25 +668,43 @@ async function voteAllUpgrades(waveNumber) {
   // Copy the offer out of the schema: the server reuses those instances for the
   // next offer, so live references would mutate between the three votes.
   const state = teamUpgrade();
-  const firstCard = state.offer.cards.at(0);
-  if (firstCard === undefined) throw new Error("Team upgrade offer has no cards.");
+  if (state.offer.cards.length === 0) throw new Error("Team upgrade offer has no cards.");
   const offer = {
     offerId: state.offer.offerId,
     waveNumber: state.offer.waveNumber,
-    upgradeId: firstCard.upgradeId
+    cards: [...state.offer.cards].map((card) => ({
+      upgradeId: card.upgradeId,
+      role: card.role
+    }))
   };
-  // The crew votes unanimously so the demo always shows one paid upgrade.
-  for (const [role, room] of roomsByRole) {
+  // The seats no longer send one id between them: two agree on the drawn card
+  // and the last votes its own role, which is what a real crew looks like.
+  // The run seed belongs to the server, so the run number stands in for it.
+  const votes = planUpgradeVotes(offer, {
+    seed: pilotRoom().state.runNumber,
+    waveNumber: offer.waveNumber,
+    crewSize: roomsByRole.size,
+    level: autopilot?.level,
+    ship: {
+      hp: latestWorld?.ship?.hp,
+      maxHp: latestWorld?.ship?.maxHp,
+      shieldEnergy: latestWorld?.shield?.energy,
+      shieldCapacity: latestWorld?.shield?.capacity
+    }
+  });
+  for (const { role, upgradeId } of votes) {
     if (stopRequested) return;
+    const room = roomsByRole.get(role);
+    if (room === undefined) continue;
     room.send(clientMessage.upgradeVote, {
       ...envelope(room),
       actionId: randomUUID(),
       waveNumber: offer.waveNumber,
       offerId: offer.offerId,
-      upgradeId: offer.upgradeId,
+      upgradeId,
       revision: 1
     });
-    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === offer.upgradeId, 3_000);
+    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === upgradeId, 3_000);
   }
   upgradedRunWaves.add(upgradeKey);
   verification.upgrades = true;
