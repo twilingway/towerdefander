@@ -161,6 +161,17 @@ const MISSILE_FORECAST_STEP = 0.1;
  * commit its facing to one bearing and a stale one is worse than none.
  */
 const SHIELD_SOURCE_MEMORY_MS = 3_000;
+/**
+ * How soon a missile has to land before it is worth the cannon while its
+ * launcher is on the field. A boss puts missiles up faster than the mount can
+ * clear them — this catalogue fires two every two seconds — so a gunner that
+ * services every one of them never touches the launcher: measured over forty
+ * runs opening on the boss wave, the boss topped the ranking on 9.8% of ticks
+ * and the fight ended with it at 61% health. Beyond the window an escorted
+ * missile is the hull's problem, which is the better place for it: the ship is
+ * a third faster than the missile and the missile expires.
+ */
+const ESCORTED_MISSILE_SECONDS = 2;
 
 const ZERO_VECTOR = { x: 0, y: 0 };
 
@@ -376,13 +387,18 @@ export function rankTargets(world, options = {}) {
   const archetypes = options.archetypes ?? {};
   const frameRadius = Math.max(world.cameraViewWidth / 2, 1);
   const scored = [];
+  const escortedByBoss = world.enemies.some(
+    (enemy) => enemy.kind === "boss" || archetypes[enemy.kind]?.spawnPolicy === "boss"
+  );
 
   for (const missile of world.missiles) {
     const seconds = timeToContact(world.ship, world.shieldRadius, missile);
+    const urgent =
+      seconds !== undefined && (!escortedByBoss || seconds <= ESCORTED_MISSILE_SECONDS);
     scored.push({
       entity: missile,
       role: "missile",
-      score: seconds === undefined ? 40 : 100 - seconds * 10
+      score: urgent ? 100 - seconds * 10 : 40
     });
   }
 
@@ -679,15 +695,30 @@ function escapeVector(world, profile) {
   const horizonSeconds = profile.evadeHorizonTicks * (TICK_MS / 1000);
   if (horizonSeconds <= 0) return undefined;
 
+  // A missile is flown, a bullet is extended: the straight line a missile is not
+  // yet on blinks in and out of an intercept as it turns, and the break blinks
+  // with it. Measured over forty runs opening on the boss wave, the pilot
+  // alternated between breaking and holding station 7213 times, the requested
+  // course swung 0.57 rad every tick, and the ship averaged 134 units per second
+  // of a possible 320 — slower than the missiles chasing it.
   const threats = [];
-  if (profile.evadeMissiles) threats.push(...world.missiles);
-  if (profile.dodgeBullets) threats.push(...world.bullets, ...world.asteroids);
+  if (profile.evadeMissiles) {
+    for (const missile of world.missiles) {
+      const forecast = forecastMissileContact(world.ship, world.ship.radius, missile);
+      if (forecast !== undefined) threats.push({ threat: missile, seconds: forecast.seconds });
+    }
+  }
+  if (profile.dodgeBullets) {
+    for (const threat of [...world.bullets, ...world.asteroids]) {
+      const seconds = timeToContact(world.ship, world.ship.radius, threat);
+      if (seconds !== undefined) threats.push({ threat, seconds });
+    }
+  }
 
   let soonest;
-  for (const threat of threats) {
-    const seconds = timeToContact(world.ship, world.ship.radius, threat);
-    if (seconds === undefined || seconds > horizonSeconds) continue;
-    if (soonest === undefined || seconds < soonest.seconds) soonest = { threat, seconds };
+  for (const candidate of threats) {
+    if (candidate.seconds > horizonSeconds) continue;
+    if (soonest === undefined || candidate.seconds < soonest.seconds) soonest = candidate;
   }
   if (soonest === undefined) return undefined;
 

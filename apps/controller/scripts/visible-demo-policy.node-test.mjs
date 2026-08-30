@@ -372,6 +372,57 @@ test("the shield covers the shot before the rock", () => {
   assert.ok(planShield(distantShot, ACE, createAutopilotMemory()).aim.y < -0.9);
 });
 
+test("an escorted missile does not outrank its launcher", () => {
+  // The cannon cannot clear missiles faster than a boss puts them up, so a
+  // gunner that services every one of them never touches the launcher: the
+  // boss topped the ranking on 9.8% of ticks and the fight ended with it at
+  // 61% health. Past the window an escorted missile is the hull's problem.
+  const boss = enemyAt("boss", 1, 2200, 2600, { kind: "boss", hp: 900, maxHp: 900 });
+  const far = world({
+    enemies: [boss],
+    missiles: [entity("missile", 2, { x: 3034, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(rankTargets(far)[0].entity.entityId, "boss");
+
+  // Inside the window it is about to land, and nothing else is worth the mount.
+  const near = world({
+    enemies: [boss],
+    missiles: [entity("missile", 2, { x: 2554, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(rankTargets(near)[0].entity.entityId, "missile");
+
+  // Without a launcher on the field a missile keeps the priority it had: there
+  // is nothing better for the cannon to be doing.
+  const alone = world({
+    missiles: [entity("missile", 2, { x: 3034, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(rankTargets(alone)[0].role, "missile");
+});
+
+test("the break follows the missile's course, not its current line", () => {
+  // Crossing ahead of the ship: its line misses, so the old reading saw no
+  // threat and the pilot went back to holding station — then saw one again a
+  // tick later. That alternation ran 7213 times over forty runs and left the
+  // ship averaging 134 units per second of a possible 320.
+  const crossing = world({
+    missiles: [
+      entity("missile", 1, {
+        x: 2400,
+        y: 2200,
+        velocityX: -169.7,
+        velocityY: 169.7,
+        heading: 2.356
+      })
+    ]
+  });
+  assert.equal(timeToContact(crossing.ship, crossing.ship.radius, crossing.missiles[0]), undefined);
+
+  // The missile bears due east, so the break is across that bearing.
+  const broken = planPilot(crossing, ACE, createAutopilotMemory());
+  assert.ok(Math.abs(broken.vector.x) < 0.2);
+  assert.ok(Math.abs(broken.vector.y) > 0.9);
+});
+
 test("the arc reads a missile that has not turned in yet", () => {
   // Launched away from the ship, which is what this catalogue's boss does: the
   // burst leaves wide of the target and curves back. Its current line never
