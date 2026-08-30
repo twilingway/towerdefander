@@ -837,11 +837,8 @@ describe("deterministic combat foundation", () => {
       score: 999,
       waveNumber: 8,
       encounterTick: 77,
-      roleModifiers: {
-        pilot: { speedMultiplier: 2, accelerationMultiplier: 2, maxHpBonus: 100 },
-        gunner: { damageMultiplier: 2, cooldownMultiplier: 0.5, projectileSpeedMultiplier: 2 },
-        shield: { capacityBonus: 100, rechargeMultiplier: 2, arcWidthBonus: 1 }
-      },
+      purchasedUpgrades: ["pilot_hull", "gunner_damage", "shield_capacity"],
+      ship: { ...createSpaceshipSimulationState(config, 100).ship, spaceshipMaxHp: 9_999 },
       inputs: {
         pilot: { vector: { x: 1, y: 0 }, mgFiring: false, receivedTick: 5 },
         gunner: { vector: { x: 1, y: 0 }, firing: true, receivedTick: 5 },
@@ -855,7 +852,7 @@ describe("deterministic combat foundation", () => {
     expect(clean.runSeed).toBe(200);
     expect(clean.clock).toEqual({ tick: 0, elapsedMs: 0 });
     expect(clean.spaceshipHp).toBe(config.spaceshipMaxHp);
-    expect(clean.spaceshipMaxHp).toBe(config.spaceshipMaxHp);
+    expect(clean.ship.spaceshipMaxHp).toBe(config.spaceshipMaxHp);
     expect(clean.encounterPhase).toBe("combat");
     expect(clean.outcome).toBeNull();
     expect(clean.waveNumber).toBe(1);
@@ -873,7 +870,8 @@ describe("deterministic combat foundation", () => {
     expect(clean.teamUpgradeVotes).toEqual({ pilot: null, gunner: null, shield: null });
     expect(clean.teamUpgradeSelection).toBeNull();
     expect(clean.inputs).toEqual({ pilot: null, gunner: null, shield: null });
-    expect(clean.roleModifiers).toEqual(createSpaceshipSimulationState(config, 200).roleModifiers);
+    expect(clean.purchasedUpgrades).toEqual([]);
+    expect(clean.ship).toEqual(createSpaceshipSimulationState(config, 200).ship);
   });
 });
 
@@ -1318,7 +1316,7 @@ describe("team upgrades", () => {
       price: 5
     });
     expect(nextWave.credits).toBe(2);
-    expect(nextWave.roleModifiers).not.toEqual(initial.roleModifiers);
+    expect(nextWave.ship).not.toEqual(initial.ship);
     expect(nextWave.inputs).toEqual(initial.inputs);
   });
 
@@ -1369,7 +1367,7 @@ describe("team upgrades", () => {
       );
       expect(skipped.credits).toBe(credits);
       expect(skipped.teamUpgradeSelection).toBeNull();
-      expect(skipped.roleModifiers).toEqual(initial.roleModifiers);
+      expect(skipped.ship).toEqual(initial.ship);
     }
   });
 });

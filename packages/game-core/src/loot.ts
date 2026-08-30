@@ -182,7 +182,7 @@ export function advanceLootDrops(
     const reach = state.spaceship.radius + moved.radius;
     if (Math.hypot(state.spaceship.x - moved.x, state.spaceship.y - moved.y) <= reach) {
       if (moved.kind === "repair") {
-        spaceshipHp = Math.min(state.spaceshipMaxHp, spaceshipHp + moved.amount);
+        spaceshipHp = Math.min(state.ship.spaceshipMaxHp, spaceshipHp + moved.amount);
       } else {
         shieldEnergy = Math.min(shieldCapacity, shieldEnergy + moved.amount);
       }

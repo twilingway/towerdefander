@@ -1,3 +1,4 @@
+import type { ShipStats } from "./shipStats.ts";
 import {
   applyArenaCushion,
   constrainMovingCircleToArena,
@@ -170,7 +171,8 @@ export function moveSpaceshipWithinWorld(
   spaceship: SpaceshipKinematics,
   velocity: Vector2,
   secondsPerStep: number,
-  config: SpaceshipSimulationConfig
+  config: SpaceshipSimulationConfig,
+  ship: ShipStats
 ): SpaceshipKinematics {
   const arena = {
     centerX: config.worldWidth / 2,
@@ -180,7 +182,7 @@ export function moveSpaceshipWithinWorld(
   // The rim pushes back before it holds, so the hull spends its outward speed
   // across several steps instead of losing all of it against the circle in one.
   const cushioned = applyArenaCushion(
-    { x: spaceship.x, y: spaceship.y, radius: config.spaceshipRadius, velocity },
+    { x: spaceship.x, y: spaceship.y, radius: ship.spaceshipRadius, velocity },
     arena,
     secondsPerStep
   );
@@ -190,7 +192,7 @@ export function moveSpaceshipWithinWorld(
     {
       x: candidateX,
       y: candidateY,
-      radius: config.spaceshipRadius,
+      radius: ship.spaceshipRadius,
       velocity: cushioned
     },
     arena
@@ -223,11 +225,12 @@ export function moveProjectiles(
 export function removeExpiredProjectiles(
   projectiles: readonly ProjectileState[],
   currentTick: number,
-  config: SpaceshipSimulationConfig
+  config: SpaceshipSimulationConfig,
+  ship: ShipStats
 ): readonly ProjectileState[] {
   return projectiles.filter(
     (projectile) =>
-      (currentTick - projectile.spawnedTick) * config.fixedStepMs < config.projectileLifetimeMs &&
+      (currentTick - projectile.spawnedTick) * config.fixedStepMs < ship.projectileLifetimeMs &&
       isWithinCircularEnvelope(
         projectile.x,
         projectile.y,

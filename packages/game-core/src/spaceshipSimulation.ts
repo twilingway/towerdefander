@@ -316,13 +316,16 @@ export function advanceSpaceshipSimulation(
     shield: state.inputs.shield
   };
   const secondsPerStep = config.fixedStepMs / 1000;
-  const pilotSpeed = config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier;
+  // The ship's own numbers come from the run, never from the config: a stat
+  // read off the config is a module that silently does nothing.
+  const ship = state.ship;
+  const pilotSpeed = ship.spaceshipSpeedPerSecond;
   // With a turn intent the push runs along the nose, so reverse is the same
   // burn with a negative sign and it never turns the hull.
   // Reverse is deliberately the slower gear; see the config field.
   const thrustSpeed =
     pilotThrust !== null && pilotThrust < 0
-      ? pilotSpeed * config.spaceshipReverseSpeedFactor
+      ? pilotSpeed * ship.spaceshipReverseSpeedFactor
       : pilotSpeed;
   const targetVelocity =
     pilotThrust === null
@@ -334,12 +337,16 @@ export function advanceSpaceshipSimulation(
   const coasting =
     pilotThrust === null ? pilotVector.x === 0 && pilotVector.y === 0 : pilotThrust === 0;
   const velocityDelta = coasting
-    ? config.spaceshipBrakingPerSecondSquared * secondsPerStep
-    : config.spaceshipAccelerationPerSecondSquared *
-      state.roleModifiers.pilot.accelerationMultiplier *
-      secondsPerStep;
+    ? ship.spaceshipBrakingPerSecondSquared * secondsPerStep
+    : ship.spaceshipAccelerationPerSecondSquared * secondsPerStep;
   const nextVelocity = moveVectorTowards(state.spaceship.velocity, targetVelocity, velocityDelta);
-  const spaceship = moveSpaceshipWithinWorld(state.spaceship, nextVelocity, secondsPerStep, config);
+  const spaceship = moveSpaceshipWithinWorld(
+    state.spaceship,
+    nextVelocity,
+    secondsPerStep,
+    config,
+    ship
+  );
 
   const turretTargetAngle = gunnerFresh ? state.turretTargetAngle : null;
   const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
@@ -353,9 +360,9 @@ export function advanceSpaceshipSimulation(
       angularVelocity: state.turretAngularVelocity
     },
     {
-      maxAngularSpeed: config.turretMaxAngularSpeedPerSecond,
-      angularAcceleration: config.turretAngularAccelerationPerSecondSquared,
-      angularBraking: config.turretAngularBrakingPerSecondSquared,
+      maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
+      angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
+      angularBraking: ship.turretAngularBrakingPerSecondSquared,
       secondsPerStep
     }
   );
@@ -366,16 +373,16 @@ export function advanceSpaceshipSimulation(
       angularVelocity: state.shieldAngularVelocity
     },
     {
-      maxAngularSpeed: config.shieldMaxAngularSpeedPerSecond,
-      angularAcceleration: config.shieldAngularAccelerationPerSecondSquared,
-      angularBraking: config.shieldAngularBrakingPerSecondSquared,
+      maxAngularSpeed: ship.shieldMaxAngularSpeedPerSecond,
+      angularAcceleration: ship.shieldAngularAccelerationPerSecondSquared,
+      angularBraking: ship.shieldAngularBrakingPerSecondSquared,
       secondsPerStep
     }
   );
   const headingConfig = {
-    maxAngularSpeed: config.headingMaxAngularSpeedPerSecond,
-    angularAcceleration: config.headingAngularAccelerationPerSecondSquared,
-    angularBraking: config.headingAngularBrakingPerSecondSquared,
+    maxAngularSpeed: ship.headingMaxAngularSpeedPerSecond,
+    angularAcceleration: ship.headingAngularAccelerationPerSecondSquared,
+    angularBraking: ship.headingAngularBrakingPerSecondSquared,
     secondsPerStep
   };
   const headingTraverse =
@@ -403,7 +410,7 @@ export function advanceSpaceshipSimulation(
     shieldPhase = "raising";
     shieldPhaseTicks = 0;
   }
-  if (shieldPhase === "raising" && shieldPhaseTicks >= config.shieldEngageTicks) {
+  if (shieldPhase === "raising" && shieldPhaseTicks >= ship.shieldEngageTicks) {
     shieldPhase = "up";
     shieldPhaseTicks = 0;
   }
@@ -412,27 +419,20 @@ export function advanceSpaceshipSimulation(
   if (
     shieldPhase === "up" &&
     !shieldDesiredActive &&
-    shieldPhaseTicks >= config.shieldMinimumUpTicks
+    shieldPhaseTicks >= ship.shieldMinimumUpTicks
   ) {
     shieldPhase = "cooling";
     shieldPhaseTicks = 0;
   }
-  if (shieldPhase === "cooling" && shieldPhaseTicks >= config.shieldCooldownTicks) {
+  if (shieldPhase === "cooling" && shieldPhaseTicks >= ship.shieldCooldownTicks) {
     shieldPhase = "down";
     shieldPhaseTicks = 0;
   }
   const shieldHolding = shieldPhase === "up";
-  const shieldCapacity = config.shieldCapacity + state.roleModifiers.shield.capacityBonus;
+  const shieldCapacity = ship.shieldCapacity;
   const shieldEnergy = shieldHolding
-    ? clamp(state.shieldEnergy - config.shieldDrainPerSecond * secondsPerStep, 0, shieldCapacity)
-    : clamp(
-        state.shieldEnergy +
-          config.shieldRechargePerSecond *
-            state.roleModifiers.shield.rechargeMultiplier *
-            secondsPerStep,
-        0,
-        shieldCapacity
-      );
+    ? clamp(state.shieldEnergy - ship.shieldDrainPerSecond * secondsPerStep, 0, shieldCapacity)
+    : clamp(state.shieldEnergy + ship.shieldRechargePerSecond * secondsPerStep, 0, shieldCapacity);
   const shieldDepleted = shieldHolding && shieldEnergy === 0;
   // A drained shield drops whatever the hold says: the cooldown starts here.
   if (shieldDepleted) {
@@ -444,7 +444,7 @@ export function advanceSpaceshipSimulation(
   // and winning back the mark clears it with no further input.
   const shieldRearmRequired = shieldDepleted
     ? true
-    : state.shieldRearmRequired && shieldEnergy < config.shieldRearmEnergy;
+    : state.shieldRearmRequired && shieldEnergy < ship.shieldRearmEnergy;
   const movedProjectiles = moveProjectiles(state.projectiles, config);
   const projectiles = [...movedProjectiles];
   let nextProjectileSequence = state.nextProjectileSequence;
@@ -460,10 +460,8 @@ export function advanceSpaceshipSimulation(
     list.length < config.caps.friendlyProjectiles &&
     dynamicEntityCount({ ...state, projectiles: list }) < config.caps.dynamicEntities;
 
-  const gunnerCooldownTicks = Math.max(
-    1,
-    Math.ceil(config.fireCooldownTicks * state.roleModifiers.gunner.cooldownMultiplier)
-  );
+  // Whole ticks and a floor of one are the stat rule now, not this call site.
+  const gunnerCooldownTicks = ship.fireCooldownTicks;
   const gunnerEligible =
     !state.cannonOverheated &&
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
@@ -474,10 +472,10 @@ export function advanceSpaceshipSimulation(
     canSpawn: canCreateFriendlyProjectile(projectiles),
     origin: spaceship,
     angle: turretTraverse.angle,
-    muzzleOffset: config.spaceshipRadius + config.projectileRadius,
-    speed: config.projectileSpeedPerSecond * state.roleModifiers.gunner.projectileSpeedMultiplier,
-    damage: config.friendlyProjectileDamage * state.roleModifiers.gunner.damageMultiplier,
-    radius: config.projectileRadius,
+    muzzleOffset: ship.spaceshipRadius + ship.projectileRadius,
+    speed: ship.projectileSpeedPerSecond,
+    damage: ship.friendlyProjectileDamage,
+    radius: ship.projectileRadius,
     source: "cannon",
     projectileSequence: nextProjectileSequence,
     spawnSequence: nextSpawnSequence,
@@ -486,10 +484,10 @@ export function advanceSpaceshipSimulation(
     heat: cannonHeat,
     overheated: state.cannonOverheated,
     heatTuning: {
-      capacity: config.cannonHeatCapacity,
-      perShot: config.cannonHeatPerShot,
-      coolingPerSecond: config.cannonCoolingPerSecond,
-      rearmThreshold: config.cannonRearmThreshold
+      capacity: ship.cannonHeatCapacity,
+      perShot: ship.cannonHeatPerShot,
+      coolingPerSecond: ship.cannonCoolingPerSecond,
+      rearmThreshold: ship.cannonRearmThreshold
     }
   });
   if (cannonShot.projectile !== null) {
@@ -504,7 +502,7 @@ export function advanceSpaceshipSimulation(
   cannonHeat = cannonShot.heat;
   const cannonOverheated = cannonShot.overheated;
 
-  const mgCooldownTicks = Math.max(1, config.mgFireCooldownTicks);
+  const mgCooldownTicks = Math.max(1, ship.mgFireCooldownTicks);
   const mgEligible =
     !state.mgOverheated &&
     (state.queuedMgFire || (pilotFresh && state.inputs.pilot?.mgFiring === true)) &&
@@ -515,10 +513,10 @@ export function advanceSpaceshipSimulation(
     canSpawn: canCreateFriendlyProjectile(projectiles),
     origin: spaceship,
     angle: headingTraverse.angle,
-    muzzleOffset: config.spaceshipRadius + config.mgProjectileRadius,
-    speed: config.mgProjectileSpeedPerSecond,
-    damage: config.mgDamage,
-    radius: config.mgProjectileRadius,
+    muzzleOffset: ship.spaceshipRadius + ship.mgProjectileRadius,
+    speed: ship.mgProjectileSpeedPerSecond,
+    damage: ship.mgDamage,
+    radius: ship.mgProjectileRadius,
     source: "machineGun",
     projectileSequence: nextProjectileSequence,
     spawnSequence: nextSpawnSequence,
@@ -527,10 +525,10 @@ export function advanceSpaceshipSimulation(
     heat: mgHeat,
     overheated: state.mgOverheated,
     heatTuning: {
-      capacity: config.mgHeatCapacity,
-      perShot: config.mgHeatPerShot,
-      coolingPerSecond: config.mgCoolingPerSecond,
-      rearmThreshold: config.mgRearmThreshold
+      capacity: ship.mgHeatCapacity,
+      perShot: ship.mgHeatPerShot,
+      coolingPerSecond: ship.mgCoolingPerSecond,
+      rearmThreshold: ship.mgRearmThreshold
     }
   });
   if (mgShot.projectile !== null) {

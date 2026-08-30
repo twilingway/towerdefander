@@ -402,7 +402,7 @@ describe("starting on a later wave", () => {
     const late = createSpaceshipSimulationState(config, 17, 5);
     expect(late.credits).toBe(0);
     expect(late.teamUpgradeSelection).toBeNull();
-    expect(late.spaceshipHp).toBe(late.spaceshipMaxHp);
+    expect(late.spaceshipHp).toBe(late.ship.spaceshipMaxHp);
   });
 
   it("refuses a wave that is not a positive whole number", () => {

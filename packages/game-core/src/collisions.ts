@@ -204,12 +204,12 @@ export function resolveSpaceshipThreats(
     radius: state.spaceship.radius,
     spawnedTick: 0
   };
-  const shieldTarget = { ...spaceshipTarget, radius: config.shieldRadius };
+  const shieldTarget = { ...spaceshipTarget, radius: state.ship.shieldRadius };
   const candidates: SpaceshipThreatCandidate[] = [];
   for (const threat of threats) {
     if (state.shieldActive) {
       const shieldToi = relativeSweptCircleTime(threat, shieldTarget);
-      if (shieldToi !== null && isInsideShieldArc(threat, shieldToi, state, config)) {
+      if (shieldToi !== null && isInsideShieldArc(threat, shieldToi, state)) {
         candidates.push({
           timeOfImpact: shieldToi,
           sourceSequence: threat.spawnSequence,
@@ -350,8 +350,7 @@ export function removeExpiredAndOutOfBounds(
 export function isInsideShieldArc(
   threat: MovingEntity,
   timeOfImpact: number,
-  state: CombatStepState,
-  config: CombatConfig
+  state: CombatStepState
 ): boolean {
   const threatX = threat.previousX + (threat.x - threat.previousX) * timeOfImpact;
   const threatY = threat.previousY + (threat.y - threat.previousY) * timeOfImpact;
@@ -360,9 +359,8 @@ export function isInsideShieldArc(
   const spaceshipY =
     state.spaceship.previousY + (state.spaceship.y - state.spaceship.previousY) * timeOfImpact;
   const bearing = Math.atan2(threatY - spaceshipY, threatX - spaceshipX);
-  const arc = Math.min(
-    Math.PI * 2,
-    config.shieldArcRadians + state.roleModifiers.shield.arcWidthBonus
-  );
+  // Already held at a full circle by the stat rule, so the display and the
+  // blocking geometry cannot disagree any more.
+  const arc = state.ship.shieldArcRadians;
   return Math.abs(shortestAngleDelta(state.shieldAngle, bearing)) <= arc / 2;
 }

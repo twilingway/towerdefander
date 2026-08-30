@@ -1,3 +1,5 @@
+import type { ShipStats } from "./shipStats.ts";
+
 import { type CollisionCandidate, type MovingEntity } from "./spatialGrid.ts";
 import { type CombatRunStats } from "./runStats.ts";
 
@@ -250,30 +252,6 @@ export interface CombatConfig {
   readonly caps: CombatCaps;
 }
 
-export interface PilotModifiers {
-  readonly speedMultiplier: number;
-  readonly accelerationMultiplier: number;
-  readonly maxHpBonus: number;
-}
-
-export interface GunnerModifiers {
-  readonly damageMultiplier: number;
-  readonly cooldownMultiplier: number;
-  readonly projectileSpeedMultiplier: number;
-}
-
-export interface ShieldModifiers {
-  readonly capacityBonus: number;
-  readonly rechargeMultiplier: number;
-  readonly arcWidthBonus: number;
-}
-
-export interface RoleModifiers {
-  readonly pilot: PilotModifiers;
-  readonly gunner: GunnerModifiers;
-  readonly shield: ShieldModifiers;
-}
-
 export interface UpgradeCard {
   readonly upgradeId: UpgradeId;
   readonly role: GameplayRole;
@@ -396,7 +374,6 @@ export interface CombatStateFields {
   readonly lootRngState: number;
   readonly ambientAsteroidSpawnDueTick: number | null;
   readonly spaceshipHp: number;
-  readonly spaceshipMaxHp: number;
   readonly encounterPhase: EncounterPhase;
   readonly outcome: TerminalOutcome | null;
   readonly defeatReason: DefeatReason | null;
@@ -421,9 +398,16 @@ export interface CombatStateFields {
    * while the wave is still being fought, and zero again once it is over.
    */
   readonly lootWindowTicksRemaining: number;
+  /**
+   * The ship's own numbers for this run: the preset's base with every purchased
+   * module applied. The simulation reads them from here and never from the
+   * config, so a module cannot be silently ignored by one caller.
+   */
+  readonly ship: ShipStats;
+  /** Append-only, in purchase order; the stats above are derived from it. */
+  readonly purchasedUpgrades: readonly UpgradeId[];
   readonly hostileProjectiles: readonly HostileProjectileState[];
   readonly homingMissiles: readonly HomingMissileState[];
-  readonly roleModifiers: RoleModifiers;
   readonly teamUpgradeOffer: TeamUpgradeOffer | null;
   readonly teamUpgradeVotes: TeamUpgradeVotes;
   readonly teamUpgradeSelection: TeamUpgradeSelection | null;

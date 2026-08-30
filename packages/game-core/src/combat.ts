@@ -17,13 +17,14 @@ import {
   ROLES,
   TEAM_UPGRADE_PRICE
 } from "./combatConstants.ts";
+import { computeShipStats, shipStatsFromConfig, type ShipStats } from "./shipStats.ts";
 import { deriveDomainSeed } from "./rng.ts";
 import { validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 import { createWavePlan } from "./waveDirector.ts";
 import { createTeamUpgradeOffer } from "./upgrades.ts";
 import { addRunStats, createRunStats } from "./runStats.ts";
 import { advanceLootDrops, openOrTickLootWindow } from "./loot.ts";
-import { UPGRADE_CATALOGUE } from "./upgradeCatalogue.ts";
+import { effectsOf } from "./upgradeCatalogue.ts";
 import { moveAndSpawnThreats } from "./threats.ts";
 import { scheduleAmbientAsteroid } from "./spawning.ts";
 import {
@@ -55,15 +56,11 @@ export type {
   EntityVisual,
   FriendlyProjectileLike,
   GameplayRole,
-  GunnerModifiers,
   HomingMissileState,
   HostileProjectileState,
   LootDropState,
   LootKind,
   PendingSpawn,
-  PilotModifiers,
-  RoleModifiers,
-  ShieldModifiers,
   SpawnKind,
   SpawnSector,
   TeamUpgradeOffer,
@@ -91,6 +88,19 @@ export { UPGRADE_CATALOGUE, type UpgradeDefinition } from "./upgradeCatalogue.ts
 export { createRunStats, damageTaken, type CombatRunStats, type ThreatClass } from "./runStats.ts";
 export { createWavePlan, getWaveDifficulty } from "./waveDirector.ts";
 export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./spatialGrid.ts";
+export {
+  computeShipStats,
+  MODULE_TARGET_FIELDS,
+  MODULE_TARGET_EXCLUSIONS,
+  SHIP_STAT_FIELDS,
+  SHIP_STAT_OPS,
+  shipStatsFromConfig,
+  type ModuleTargetField,
+  type ShipStatEffect,
+  type ShipStatField,
+  type ShipStatOp,
+  type ShipStats
+} from "./shipStats.ts";
 
 /**
  * `startWave` exists for testing a late wave without playing the ones before
@@ -98,7 +108,7 @@ export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./s
  * dropped straight onto wave five is weaker than one that fought its way there.
  */
 export function createInitialCombatState(
-  config: CombatConfig,
+  config: CombatConfig & ShipStats,
   runSeed: number,
   startWave = 1
 ): CombatStateFields {
@@ -121,7 +131,6 @@ export function createInitialCombatState(
     lootRngState: deriveDomainSeed(runSeed, startWave, LOOT_DOMAIN),
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     spaceshipHp: config.spaceshipMaxHp,
-    spaceshipMaxHp: config.spaceshipMaxHp,
     encounterPhase: "combat",
     outcome: null,
     defeatReason: null,
@@ -137,13 +146,10 @@ export function createInitialCombatState(
     asteroids: [],
     lootDrops: [],
     lootWindowTicksRemaining: 0,
+    ship: computeShipStats(shipStatsFromConfig(config), []),
+    purchasedUpgrades: [],
     hostileProjectiles: [],
     homingMissiles: [],
-    roleModifiers: {
-      pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-      gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-      shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
-    },
     teamUpgradeOffer: null,
     teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
     teamUpgradeSelection: null,
@@ -151,7 +157,10 @@ export function createInitialCombatState(
   };
 }
 
-export function advanceCombat(state: CombatStepState, config: CombatConfig): CombatStepResult {
+export function advanceCombat(
+  state: CombatStepState,
+  config: CombatConfig & ShipStats
+): CombatStepResult {
   assertCombatResultInvariant(state);
   if (state.encounterPhase === "result") {
     return pickCombatResult(state);
@@ -164,12 +173,7 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
   let next = moveAndSpawnThreats(state, config, secondsPerStep);
   // Salvage moves and is caught before this tick's kills drop more, so a drop
   // spends its first tick where the enemy died instead of jumping.
-  const salvage = advanceLootDrops(
-    next,
-    config,
-    secondsPerStep,
-    config.shieldCapacity + next.roleModifiers.shield.capacityBonus
-  );
+  const salvage = advanceLootDrops(next, config, secondsPerStep, next.ship.shieldCapacity);
   next = {
     ...next,
     lootDrops: salvage.lootDrops,
@@ -247,12 +251,15 @@ function enemiesWereHurt(
   return false;
 }
 
-function advanceIntermission(state: CombatStepState, config: CombatConfig): CombatStepResult {
+function advanceIntermission(
+  state: CombatStepState,
+  config: CombatConfig & ShipStats
+): CombatStepResult {
   const encounterTick = state.encounterTick + 1;
   if (encounterTick < config.intermissionTicks) {
     return { ...pickCombatResult(state), encounterTick, shieldActive: false };
   }
-  const selected = resolveTeamUpgrade(state);
+  const selected = resolveTeamUpgrade(state, config);
   const waveNumber = Math.min(Number.MAX_SAFE_INTEGER, selected.waveNumber + 1);
   const wave = createWavePlan(config, selected.runSeed, waveNumber);
   const ambientSchedule = scheduleAmbientAsteroid(selected.ambientAsteroidRngState, 0, config);
@@ -278,7 +285,10 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
   };
 }
 
-function resolveTeamUpgrade<TState extends CombatStateFields>(state: TState): TState {
+function resolveTeamUpgrade<TState extends CombatStepState>(
+  state: TState,
+  config: CombatConfig & ShipStats
+): TState {
   const offer = state.teamUpgradeOffer;
   if (offer === null) return state;
   const counts = new Map<UpgradeId, number>();
@@ -296,24 +306,40 @@ function resolveTeamUpgrade<TState extends CombatStateFields>(state: TState): TS
     }
   }
   if (winner === undefined || state.credits < winner.price) return state;
-  return applyUpgrade(state, winner.role, offer.offerId, offer.waveNumber, winner.upgradeId);
+  return applyUpgrade(
+    state,
+    config,
+    winner.role,
+    offer.offerId,
+    offer.waveNumber,
+    winner.upgradeId
+  );
 }
 
-function applyUpgrade<TState extends CombatStateFields>(
+function applyUpgrade<TState extends CombatStepState>(
   state: TState,
+  config: CombatConfig & ShipStats,
   role: GameplayRole,
   offerId: string,
   waveNumber: number,
   upgradeId: UpgradeId
 ): TState {
-  const { roleModifiers, maxHpBonus } = UPGRADE_CATALOGUE[upgradeId].apply(state.roleModifiers);
-  const spaceshipMaxHp = state.spaceshipMaxHp + maxHpBonus;
+  const purchasedUpgrades = [...state.purchasedUpgrades, upgradeId];
+  // From the run's base and everything bought, never from the previous result,
+  // so the same set of modules always makes the same ship.
+  const ship = computeShipStats(shipStatsFromConfig(config), effectsOf(purchasedUpgrades));
+  // A maximum that grows repairs by exactly what it added; one that shrinks
+  // trims the current value instead of killing the crew. Same for the battery.
+  const hullDelta = ship.spaceshipMaxHp - state.ship.spaceshipMaxHp;
   return {
     ...state,
-    // A hull upgrade repairs by what it adds; the others leave health alone.
-    spaceshipHp: Math.min(spaceshipMaxHp, state.spaceshipHp + maxHpBonus),
-    spaceshipMaxHp,
-    roleModifiers,
+    spaceshipHp:
+      hullDelta > 0
+        ? Math.min(ship.spaceshipMaxHp, state.spaceshipHp + hullDelta)
+        : Math.min(state.spaceshipHp, ship.spaceshipMaxHp),
+    shieldEnergy: Math.min(state.shieldEnergy, ship.shieldCapacity),
+    ship,
+    purchasedUpgrades,
     credits: state.credits - TEAM_UPGRADE_PRICE,
     runStats: addRunStats(state.runStats, { creditsSpent: TEAM_UPGRADE_PRICE }),
     teamUpgradeSelection: {
@@ -353,7 +379,6 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     lootRngState: state.lootRngState,
     ambientAsteroidSpawnDueTick: state.ambientAsteroidSpawnDueTick,
     spaceshipHp: state.spaceshipHp,
-    spaceshipMaxHp: state.spaceshipMaxHp,
     encounterPhase: state.encounterPhase,
     outcome: state.outcome,
     defeatReason: state.defeatReason,
@@ -369,9 +394,10 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     asteroids: state.asteroids,
     lootDrops: state.lootDrops,
     lootWindowTicksRemaining: state.lootWindowTicksRemaining,
+    ship: state.ship,
+    purchasedUpgrades: state.purchasedUpgrades,
     hostileProjectiles: state.hostileProjectiles,
     homingMissiles: state.homingMissiles,
-    roleModifiers: state.roleModifiers,
     teamUpgradeOffer: state.teamUpgradeOffer,
     teamUpgradeVotes: state.teamUpgradeVotes,
     teamUpgradeSelection: state.teamUpgradeSelection,
