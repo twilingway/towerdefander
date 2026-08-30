@@ -68,6 +68,13 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;
+  /**
+   * Share of the forward speed available in reverse. Backing up is a manoeuvre,
+   * not a second forward gear: at parity a pilot can fly a whole fight in
+   * reverse with the nose kept on the target, which is neither intended nor
+   * good to watch.
+   */
+  readonly spaceshipReverseSpeedFactor: number;
   readonly spaceshipRadius: number;
   readonly inputTimeoutTicks: number;
   readonly projectileSpeedPerSecond: number;
@@ -301,12 +308,17 @@ export function advanceSpaceshipSimulation(
   const pilotSpeed = config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier;
   // With a turn intent the push runs along the nose, so reverse is the same
   // burn with a negative sign and it never turns the hull.
+  // Reverse is deliberately the slower gear; see the config field.
+  const thrustSpeed =
+    pilotThrust !== null && pilotThrust < 0
+      ? pilotSpeed * config.spaceshipReverseSpeedFactor
+      : pilotSpeed;
   const targetVelocity =
     pilotThrust === null
       ? { x: pilotVector.x * pilotSpeed, y: pilotVector.y * pilotSpeed }
       : {
-          x: Math.cos(state.spaceshipHeading) * pilotSpeed * pilotThrust,
-          y: Math.sin(state.spaceshipHeading) * pilotSpeed * pilotThrust
+          x: Math.cos(state.spaceshipHeading) * thrustSpeed * pilotThrust,
+          y: Math.sin(state.spaceshipHeading) * thrustSpeed * pilotThrust
         };
   const coasting =
     pilotThrust === null ? pilotVector.x === 0 && pilotVector.y === 0 : pilotThrust === 0;

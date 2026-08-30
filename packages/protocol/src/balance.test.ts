@@ -166,6 +166,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     spaceshipSpeedPerSecond: 320,
     spaceshipAccelerationPerSecondSquared: 640,
     spaceshipBrakingPerSecondSquared: 800,
+    spaceshipReverseSpeedFactor: 0.4,
     headingMaxAngularSpeedPerSecond: 2.72,
     headingAngularAccelerationPerSecondSquared: 5.44,
     headingAngularBrakingPerSecondSquared: 8.16,

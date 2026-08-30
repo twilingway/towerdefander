@@ -38,6 +38,7 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     ["spaceshipAccelerationPerSecondSquared", config.spaceshipAccelerationPerSecondSquared],
     ["spaceshipBrakingPerSecondSquared", config.spaceshipBrakingPerSecondSquared],
     ["spaceshipRadius", config.spaceshipRadius],
+    ["spaceshipReverseSpeedFactor", config.spaceshipReverseSpeedFactor],
     ["projectileSpeedPerSecond", config.projectileSpeedPerSecond],
     ["projectileRadius", config.projectileRadius],
     ["shieldCapacity", config.shieldCapacity],

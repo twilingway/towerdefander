@@ -1574,6 +1574,39 @@ describe("tank helm", () => {
     expect(back.spaceshipHeading).toBe(heading);
   });
 
+  it("keeps reverse the slower gear", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 3);
+    // Long enough for either direction to have reached its own ceiling.
+    const forward = holdHelm(state, config, { turn: 0, thrust: 1 }, 60);
+    const back = holdHelm(state, config, { turn: 0, thrust: -1 }, 60);
+    const forwardSpeed = Math.hypot(forward.spaceship.velocity.x, forward.spaceship.velocity.y);
+    const backSpeed = Math.hypot(back.spaceship.velocity.x, back.spaceship.velocity.y);
+
+    expect(backSpeed).toBeCloseTo(forwardSpeed * config.spaceshipReverseSpeedFactor, 5);
+    // The point of the knob: backing up must not be a second forward gear, or
+    // a pilot flies the whole fight in reverse with the nose on the target.
+    expect(backSpeed).toBeLessThan(forwardSpeed);
+  });
+
+  it("leaves the stick untouched, which has no nose to reverse along", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 3);
+    let stick = state;
+    for (let step = 0; step < 60; step += 1) {
+      stick = applyPilotInput(stick, {
+        vector: { x: -1, y: 0 },
+        mgFiring: false,
+        receivedTick: stick.clock.tick
+      });
+      stick = advanceSpaceshipSimulation(stick, config);
+    }
+    expect(Math.hypot(stick.spaceship.velocity.x, stick.spaceship.velocity.y)).toBeCloseTo(
+      config.spaceshipSpeedPerSecond,
+      5
+    );
+  });
+
   it("leaves a command without a turn intent driving the bearing as before", () => {
     const config = createSpaceshipSimulationConfig();
     const state = createSpaceshipSimulationState(config, 4);

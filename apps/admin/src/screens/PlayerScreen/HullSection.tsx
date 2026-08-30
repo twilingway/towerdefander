@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { AngularRateField, NumberField } from "../../components/fields.js";
+import { AngularRateField, NumberField, PercentField } from "../../components/fields.js";
 
 interface HullSectionProps {
   readonly tuning: BalanceTuning;
@@ -48,6 +48,15 @@ export function HullSection({ tuning, patch }: HullSectionProps) {
           value={tuning.spaceshipBrakingPerSecondSquared}
           onChange={(spaceshipBrakingPerSecondSquared) => {
             patch({ spaceshipBrakingPerSecondSquared: spaceshipBrakingPerSecondSquared });
+          }}
+        />
+        <PercentField
+          caption="Задний ход, % от скорости"
+          fraction={tuning.spaceshipReverseSpeedFactor}
+          onChange={(spaceshipReverseSpeedFactor) => {
+            patch({
+              spaceshipReverseSpeedFactor: Math.min(1, Math.max(0.01, spaceshipReverseSpeedFactor))
+            });
           }}
         />
         <AngularRateField

@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 21 as const;
+export const BALANCE_FILE_VERSION = 22 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -446,6 +446,8 @@ export const balanceTuningSchema = z
     spaceshipSpeedPerSecond: positiveFinite,
     spaceshipAccelerationPerSecondSquared: positiveFinite,
     spaceshipBrakingPerSecondSquared: positiveFinite,
+    /** Share of the forward speed available in reverse; 1 makes it a second gear. */
+    spaceshipReverseSpeedFactor: z.number().gt(0).max(1),
     headingMaxAngularSpeedPerSecond: positiveFinite,
     headingAngularAccelerationPerSecondSquared: positiveFinite,
     headingAngularBrakingPerSecondSquared: positiveFinite,

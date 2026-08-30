@@ -137,6 +137,7 @@ export function createDefaultTuning(): BalanceTuning {
     spaceshipSpeedPerSecond: config.spaceshipSpeedPerSecond,
     spaceshipAccelerationPerSecondSquared: config.spaceshipAccelerationPerSecondSquared,
     spaceshipBrakingPerSecondSquared: config.spaceshipBrakingPerSecondSquared,
+    spaceshipReverseSpeedFactor: config.spaceshipReverseSpeedFactor,
     headingMaxAngularSpeedPerSecond: config.headingMaxAngularSpeedPerSecond,
     headingAngularAccelerationPerSecondSquared: config.headingAngularAccelerationPerSecondSquared,
     headingAngularBrakingPerSecondSquared: config.headingAngularBrakingPerSecondSquared,

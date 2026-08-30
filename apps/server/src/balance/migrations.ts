@@ -164,6 +164,7 @@ const PLAYER_SHIP_FIELDS = [
   "spaceshipSpeedPerSecond",
   "spaceshipAccelerationPerSecondSquared",
   "spaceshipBrakingPerSecondSquared",
+  "spaceshipReverseSpeedFactor",
   "headingMaxAngularSpeedPerSecond",
   "headingAngularAccelerationPerSecondSquared",
   "headingAngularBrakingPerSecondSquared",

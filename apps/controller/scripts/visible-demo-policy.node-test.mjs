@@ -163,19 +163,25 @@ test("the helm asks for a spin and a push, not a course", () => {
   assert.deepEqual(idle, { turn: 0, thrust: 0 });
 });
 
-test("the helm backs up instead of swinging the hull all the way round", () => {
+test("the helm backs up only for a course well astern", () => {
   const memory = createAutopilotMemory();
   const behind = helmIntent({ x: -1, y: 0 }, 0, memory);
   assert.ok(Math.abs(behind.thrust + 1) < 1e-9);
   assert.ok(Math.abs(behind.turn) < 1e-9);
 
-  // Held once taken: a course drifting back across the beam does not flip the
+  // Abeam is a turn, not a reverse: reverse is the slower gear, so swinging the
+  // hull round pays for itself. At the beam the bot flew a third of the fight
+  // backwards.
+  assert.ok(helmIntent({ x: 0, y: 1 }, 0, createAutopilotMemory()).thrust >= 0);
+  assert.ok(
+    helmIntent({ x: Math.cos(1.3), y: Math.sin(1.3) }, 0, createAutopilotMemory()).thrust > 0
+  );
+
+  // Held once taken: a course drifting back towards the beam does not flip the
   // thrust end for end, which is a harder jerk than the one this helm removes.
-  // Inside the held band the engine idles while the hull swings its tail round
-  // — what matters is that it does not start driving the other way.
-  const acrossTheBeam = { x: Math.cos(1.3), y: Math.sin(1.3) };
-  assert.ok(helmIntent(acrossTheBeam, 0, memory).thrust <= 0);
-  assert.ok(helmIntent(acrossTheBeam, 0, createAutopilotMemory()).thrust > 0.2);
+  const insideTheGap = { x: Math.cos(2.1), y: Math.sin(2.1) };
+  assert.ok(helmIntent(insideTheGap, 0, memory).thrust < 0);
+  assert.equal(helmIntent(insideTheGap, 0, createAutopilotMemory()).thrust, 0);
 });
 
 test("a manoeuvre is held until its band is properly left", () => {

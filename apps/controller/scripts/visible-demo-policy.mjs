@@ -84,10 +84,17 @@ const BAND_RELEASE = 0.7;
  */
 const HELM_SETTLE_RADIANS = 0.25;
 /**
- * How far past the beam a course has to sit before the helm commits to backing
- * up, and how far short of it before it commits to driving forward. Without the
- * gap the reverse decision chatters on the beam and flips the thrust end for
- * end every other tick, which is a harder jerk than the one this helm removed:
+ * How far astern a course has to sit before the helm commits to backing up.
+ * Well past the beam, because reverse is the slower gear: swinging the hull
+ * round costs about a second and then pays full speed, while backing up pays a
+ * fraction of it for as long as it lasts. At the beam the bot spent 36% of the
+ * fight in reverse, which is neither intended nor good to watch.
+ */
+const HELM_REVERSE_RADIANS = (3 * Math.PI) / 4;
+/**
+ * How far the decision has to swing back before it is given up. Without the gap
+ * the reverse decision chatters on its own threshold and flips the thrust end
+ * for end every other tick, a harder jerk than the one this helm removed:
  * measured, it tripled the course changes past 0.3 rad.
  */
 const HELM_REVERSE_MARGIN = 0.35;
@@ -726,11 +733,10 @@ export function helmIntent(vector, heading, memory) {
   // Past the beam it is quicker to back up than to swing the hull all the way
   // round, and it leaves the nose gun pointed at what was being circled. Held
   // once taken, for the same reason the manoeuvre bands are held.
-  const beam = Math.PI / 2;
   const reversing =
     memory.reversing === true
-      ? Math.abs(ahead) > beam - HELM_REVERSE_MARGIN
-      : Math.abs(ahead) > beam + HELM_REVERSE_MARGIN;
+      ? Math.abs(ahead) > HELM_REVERSE_RADIANS - HELM_REVERSE_MARGIN
+      : Math.abs(ahead) > HELM_REVERSE_RADIANS;
   memory.reversing = reversing;
   const error = reversing ? shortestAngleDelta(heading, bearing + Math.PI) : ahead;
   return {

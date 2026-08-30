@@ -11,6 +11,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   spaceshipSpeedPerSecond: 320,
   spaceshipAccelerationPerSecondSquared: 640,
   spaceshipBrakingPerSecondSquared: 800,
+  spaceshipReverseSpeedFactor: 0.4,
   spaceshipRadius: 52,
   inputTimeoutTicks: 5,
   projectileSpeedPerSecond: 720,
