@@ -86,7 +86,12 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     ["cannonCoolingPerSecond", config.cannonCoolingPerSecond],
     ["cannonRearmThreshold", config.cannonRearmThreshold],
     ["mgCoolingPerSecond", config.mgCoolingPerSecond],
-    ["mgRearmThreshold", config.mgRearmThreshold]
+    ["mgRearmThreshold", config.mgRearmThreshold],
+    ["cannonLaserRange", config.cannonLaserRange],
+    ["mgLaserRange", config.mgLaserRange],
+    ["laserBeamRadius", config.laserBeamRadius],
+    ["friendlyMissileTurnRatePerSecond", config.friendlyMissileTurnRatePerSecond],
+    ["friendlyMissileAcquireConeRadians", config.friendlyMissileAcquireConeRadians]
   ];
 
   for (const [name, value] of nonNegativeFiniteNumbers) {

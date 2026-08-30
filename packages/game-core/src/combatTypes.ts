@@ -42,6 +42,14 @@ export interface CombatCaps {
   readonly dynamicEntities: number;
 }
 
+/**
+ * How a friendly barrel delivers its damage. Kinetic is a bullet with a flight
+ * time, laser resolves in the tick it fires, missile turns after a target it
+ * picked at launch. Fixed for the run: the hull brings it, no module edits it.
+ */
+export const FRIENDLY_WEAPON_KINDS = ["kinetic", "laser", "missile"] as const;
+export type FriendlyWeaponKind = (typeof FRIENDLY_WEAPON_KINDS)[number];
+
 export type EnemyWeaponKind = "bullet" | "missile";
 
 export interface EnemyWeaponTuning {
@@ -403,6 +411,8 @@ export interface CombatStateFields {
    * module applied. The simulation reads them from here and never from the
    * config, so a module cannot be silently ignored by one caller.
    */
+  /** Laser pulses fired in the last couple of ticks; display-only, never a cap. */
+  readonly laserBeams: readonly FriendlyProjectileLike[];
   readonly ship: ShipStats;
   /** Append-only, in purchase order; the stats above are derived from it. */
   readonly purchasedUpgrades: readonly UpgradeId[];
@@ -419,6 +429,14 @@ export interface FriendlyProjectileLike extends MovingEntity {
   readonly damage: number;
   readonly source: FriendlyWeaponSource;
 }
+
+/**
+ * A laser pulse: the same shape as any other friendly shot, from the muzzle to
+ * the end of its reach, and resolved in the tick it was fired. It is not an
+ * entity — it takes no room in the caps and is kept for two ticks only so the
+ * display has something to draw.
+ */
+export type LaserBeamState = FriendlyProjectileLike;
 
 export interface CombatStepState extends CombatStateFields {
   readonly clock: { readonly tick: number };

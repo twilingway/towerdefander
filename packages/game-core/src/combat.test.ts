@@ -1057,7 +1057,8 @@ describe("combat motion and collision", () => {
       radius: config.projectileRadius,
       spawnedTick: 0,
       damage: config.friendlyProjectileDamage,
-      source: "cannon"
+      source: "cannon",
+      homing: null
     };
     const result = advanceCombat(
       {
@@ -1212,6 +1213,7 @@ describe("combat motion and collision", () => {
       radius: config.projectileRadius,
       damage: config.friendlyProjectileDamage,
       source: "cannon",
+      homing: null,
       spawnedTick: 0
     }));
     const state: SpaceshipSimulationState = {

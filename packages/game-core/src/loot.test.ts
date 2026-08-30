@@ -53,7 +53,8 @@ function projectileAt(x: number, y: number, config: SpaceshipSimulationConfig): 
     radius: config.projectileRadius,
     spawnedTick: 0,
     damage: 10_000,
-    source: "cannon"
+    source: "cannon",
+    homing: null
   };
 }
 

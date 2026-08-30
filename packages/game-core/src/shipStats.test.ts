@@ -110,13 +110,40 @@ describe("computeShipStats", () => {
  */
 const TRACE_TICKS = 600;
 
-function guardConfig(): SpaceshipSimulationConfig {
+/**
+ * One scenario per weapon kind, and the stat that only that kind reads is
+ * checked under it. Without this the laser and missile stats would pass the
+ * config half for the boring reason that nothing in a kinetic run touches them.
+ */
+const GUARD_SCENARIOS = {
+  kinetic: {},
+  // The turret's reach is cut below the far enemies on purpose: with every
+  // target already inside it, doubling the range would change nothing and the
+  // guard would prove nothing.
+  laser: { cannonWeaponKind: "laser", mgWeaponKind: "laser", cannonLaserRange: 250 },
+  missile: { cannonWeaponKind: "missile", mgWeaponKind: "missile" }
+} as const satisfies Record<string, Partial<SpaceshipSimulationConfig>>;
+
+type GuardScenario = keyof typeof GUARD_SCENARIOS;
+
+const SCENARIO_BY_FIELD: Partial<Record<ShipStatField, GuardScenario>> = {
+  cannonLaserRange: "laser",
+  mgLaserRange: "laser",
+  laserBeamRadius: "laser",
+  friendlyMissileTurnRatePerSecond: "missile",
+  friendlyMissileAcquireConeRadians: "missile"
+};
+
+function guardConfig(
+  overrides: Partial<SpaceshipSimulationConfig> = {}
+): SpaceshipSimulationConfig {
   // The wave is placed by hand below, so nothing else may spawn; the ambient
   // rocks stay, because they are what the shield and the hull meet.
   return createSpaceshipSimulationConfig({
     enemySpawnIntervalTicks: 100_000,
     ambientAsteroidIntervalMinTicks: 40,
-    ambientAsteroidIntervalMaxTicks: 60
+    ambientAsteroidIntervalMaxTicks: 60,
+    ...overrides
   });
 }
 
@@ -203,8 +230,8 @@ function doubled<T extends ShipStats>(source: T, field: ShipStatField): T {
   return { ...source, [field]: source[field] * 2 };
 }
 
-describe("ship stats are read from the state, never from the config", () => {
-  const config = guardConfig();
+function prepareGuard(scenario: GuardScenario) {
+  const config = guardConfig(GUARD_SCENARIOS[scenario]);
   const fresh = createSpaceshipSimulationState(config, 991);
   const initial: SpaceshipSimulationState = {
     ...fresh,
@@ -230,18 +257,27 @@ describe("ship stats are read from the state, never from the config", () => {
       }
     ]
   };
-  const baseline = runTrace(config, initial);
+  return { config, initial, baseline: runTrace(config, initial) };
+}
+
+describe("ship stats are read from the state, never from the config", () => {
+  const prepared = new Map(
+    (Object.keys(GUARD_SCENARIOS) as GuardScenario[]).map((name) => [name, prepareGuard(name)])
+  );
 
   for (const field of SHIP_STAT_FIELDS) {
+    const scenario = SCENARIO_BY_FIELD[field] ?? "kinetic";
     it(`ignores the config's ${field} and follows the state's`, () => {
+      const guard = prepared.get(scenario);
+      if (guard === undefined) throw new Error(`no scenario ${scenario}`);
       expect(
-        runTrace(doubled(config, field), initial),
+        runTrace(doubled(guard.config, field), guard.initial),
         `${field} is still read from the config`
-      ).toBe(baseline);
+      ).toBe(guard.baseline);
       expect(
-        runTrace(config, { ...initial, ship: doubled(initial.ship, field) }),
-        `${field} is never exercised by this scenario, so the guard proves nothing`
-      ).not.toBe(baseline);
+        runTrace(guard.config, { ...guard.initial, ship: doubled(guard.initial.ship, field) }),
+        `${field} is never exercised by the ${scenario} scenario, so the guard proves nothing`
+      ).not.toBe(guard.baseline);
     });
   }
 });

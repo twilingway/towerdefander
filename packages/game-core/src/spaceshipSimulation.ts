@@ -2,6 +2,7 @@ import {
   type CombatConfig,
   type CombatStateFields,
   type EntityVisual,
+  type FriendlyWeaponKind,
   type FriendlyWeaponSource,
   type TurretVisual
 } from "./combatTypes.ts";
@@ -13,6 +14,8 @@ import {
   neutralizeCombatControls
 } from "./simulationCombatBridge.ts";
 import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
+import type { ShipStats } from "./shipStats.ts";
+import { shortestAngleDelta } from "./simulationMath.ts";
 import { addRunStats } from "./runStats.ts";
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 import {
@@ -133,9 +136,20 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly mgHeatPerShot: number;
   readonly mgCoolingPerSecond: number;
   readonly mgRearmThreshold: number;
+  /** How each barrel delivers damage; the numbers above stay the same either way. */
+  readonly cannonWeaponKind: FriendlyWeaponKind;
+  readonly mgWeaponKind: FriendlyWeaponKind;
+  /** Laser: how far the beam reaches, and how thick it is for a hit. */
+  readonly cannonLaserRange: number;
+  readonly mgLaserRange: number;
+  readonly laserBeamRadius: number;
+  /** Missile: how hard it can turn, and the cone it picks a target from. */
+  readonly friendlyMissileTurnRatePerSecond: number;
+  readonly friendlyMissileAcquireConeRadians: number;
 }
 
 export type { FriendlyWeaponSource } from "./combatTypes.ts";
+export { FRIENDLY_WEAPON_KINDS, type FriendlyWeaponKind } from "./combatTypes.ts";
 
 /** Down, coming up, holding, or cooling off. Only `up` blocks damage. */
 export type ShieldPhase = "down" | "raising" | "up" | "cooling";
@@ -186,6 +200,17 @@ export interface ProjectileState {
   readonly damage: number;
   readonly spawnedTick: number;
   readonly source: FriendlyWeaponSource;
+  /**
+   * Set only by a missile barrel: the target picked once at launch, and how
+   * hard the shot may turn after it. Null is an ordinary bullet.
+   */
+  readonly homing: ProjectileHoming | null;
+}
+
+export interface ProjectileHoming {
+  readonly targetId: string;
+  readonly turnRatePerSecond: number;
+  readonly heading: number;
 }
 
 export interface SpaceshipSimulationState extends CombatStateFields {
@@ -277,6 +302,39 @@ export function normalizeVector(vector: Vector2): Vector2 {
     x: vector.x / length,
     y: vector.y / length
   };
+}
+
+/**
+ * The enemy a missile leaves the barrel after: the nearest one inside the
+ * acquisition cone. Picked once, at launch. Re-acquiring in flight would turn
+ * the barrel into an aimbot and take the pointing away from the crew.
+ */
+function acquireMissileTarget(
+  enemies: readonly { readonly id: string; readonly x: number; readonly y: number }[],
+  origin: { readonly x: number; readonly y: number },
+  angle: number,
+  ship: ShipStats
+): ProjectileHoming | null {
+  let nearestId: string | undefined;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const enemy of enemies) {
+    const bearing = Math.atan2(enemy.y - origin.y, enemy.x - origin.x);
+    if (Math.abs(shortestAngleDelta(angle, bearing)) > ship.friendlyMissileAcquireConeRadians) {
+      continue;
+    }
+    const distance = Math.hypot(enemy.x - origin.x, enemy.y - origin.y);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestId = enemy.id;
+    }
+  }
+  return nearestId === undefined
+    ? null
+    : {
+        targetId: nearestId,
+        turnRatePerSecond: ship.friendlyMissileTurnRatePerSecond,
+        heading: angle
+      };
 }
 
 export function advanceSpaceshipSimulation(
@@ -445,7 +503,7 @@ export function advanceSpaceshipSimulation(
   const shieldRearmRequired = shieldDepleted
     ? true
     : state.shieldRearmRequired && shieldEnergy < ship.shieldRearmEnergy;
-  const movedProjectiles = moveProjectiles(state.projectiles, config);
+  const movedProjectiles = moveProjectiles(state.projectiles, config, state.enemies);
   const projectiles = [...movedProjectiles];
   let nextProjectileSequence = state.nextProjectileSequence;
   let nextSpawnSequence = state.nextSpawnSequence;
@@ -468,6 +526,13 @@ export function advanceSpaceshipSimulation(
     (state.lastFiredTick === null || clock.tick - state.lastFiredTick >= gunnerCooldownTicks);
 
   const cannonShot = advanceFriendlyWeapon({
+    kind: config.cannonWeaponKind,
+    range: ship.cannonLaserRange,
+    beamRadius: ship.laserBeamRadius,
+    homing:
+      config.cannonWeaponKind === "missile" && gunnerEligible
+        ? acquireMissileTarget(state.enemies, spaceship, turretTraverse.angle, ship)
+        : null,
     eligible: gunnerEligible,
     canSpawn: canCreateFriendlyProjectile(projectiles),
     origin: spaceship,
@@ -490,8 +555,14 @@ export function advanceSpaceshipSimulation(
       rearmThreshold: ship.cannonRearmThreshold
     }
   });
+  const laserBeams = [...state.laserBeams];
   if (cannonShot.projectile !== null) {
     projectiles.push(cannonShot.projectile);
+    nextProjectileSequence += 1;
+    nextSpawnSequence += 1;
+  }
+  if (cannonShot.beam !== null) {
+    laserBeams.push(cannonShot.beam);
     nextProjectileSequence += 1;
     nextSpawnSequence += 1;
   }
@@ -509,6 +580,13 @@ export function advanceSpaceshipSimulation(
     (state.lastMgFiredTick === null || clock.tick - state.lastMgFiredTick >= mgCooldownTicks);
 
   const mgShot = advanceFriendlyWeapon({
+    kind: config.mgWeaponKind,
+    range: ship.mgLaserRange,
+    beamRadius: ship.laserBeamRadius,
+    homing:
+      config.mgWeaponKind === "missile" && mgEligible
+        ? acquireMissileTarget(state.enemies, spaceship, headingTraverse.angle, ship)
+        : null,
     eligible: mgEligible,
     canSpawn: canCreateFriendlyProjectile(projectiles),
     origin: spaceship,
@@ -536,6 +614,11 @@ export function advanceSpaceshipSimulation(
     nextProjectileSequence += 1;
     nextSpawnSequence += 1;
   }
+  if (mgShot.beam !== null) {
+    laserBeams.push(mgShot.beam);
+    nextProjectileSequence += 1;
+    nextSpawnSequence += 1;
+  }
   if (mgShot.triggered) {
     lastMgFiredTick = clock.tick;
     queuedMgFire = false;
@@ -548,6 +631,7 @@ export function advanceSpaceshipSimulation(
     clock,
     spaceship,
     inputs,
+    laserBeams,
     turretAngle: turretTraverse.angle,
     turretTargetAngle,
     turretAngularVelocity: turretTraverse.angularVelocity,
@@ -576,8 +660,10 @@ export function advanceSpaceshipSimulation(
     // Counted here rather than by watching the projectile list, because a
     // point-blank shot is created and resolved inside the same step.
     runStats: addRunStats(state.runStats, {
-      shotsByCannon: cannonShot.projectile === null ? 0 : 1,
-      shotsByMachineGun: mgShot.projectile === null ? 0 : 1
+      // A shot is a shot whatever left the barrel, so accuracy stays comparable
+      // between a beam that cannot miss and a bullet that can.
+      shotsByCannon: cannonShot.projectile === null && cannonShot.beam === null ? 0 : 1,
+      shotsByMachineGun: mgShot.projectile === null && mgShot.beam === null ? 0 : 1
     })
   };
   return advanceCombatInSpaceshipSimulation(baseState, config);

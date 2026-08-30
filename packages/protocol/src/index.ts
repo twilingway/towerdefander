@@ -16,7 +16,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 38 as const;
+export const PROTOCOL_VERSION = 39 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -395,6 +395,21 @@ export const publicLootDropViewSchema = z
   })
   .strict();
 export type PublicLootDropView = z.infer<typeof publicLootDropViewSchema>;
+/**
+ * A laser pulse the display draws for a couple of ticks. Not an entity: it has
+ * no velocity, no lifetime of its own and no room in the entity caps.
+ */
+export const publicLaserBeamViewSchema = z
+  .object({
+    entityId: z.string().min(1).max(64),
+    fromX: finite,
+    fromY: finite,
+    toX: finite,
+    toY: finite,
+    source: projectileSourceSchema
+  })
+  .strict();
+export type PublicLaserBeamView = z.infer<typeof publicLaserBeamViewSchema>;
 export const publicProjectileViewSchema = z
   .object({
     ...entityShape,
@@ -654,6 +669,7 @@ export const displayGameSnapshotSchema = z
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
     lootDrops: z.array(publicLootDropViewSchema).max(COMBAT_ENTITY_CAPS.lootDrops),
+    laserBeams: z.array(publicLaserBeamViewSchema).max(8),
     /** What the crew has bought, in purchase order; the ship stats follow from it. */
     purchasedUpgrades: z.array(upgradeIdSchema).max(200),
     friendlyProjectiles: z

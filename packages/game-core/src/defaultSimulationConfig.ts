@@ -51,6 +51,15 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   mgHeatPerShot: 4,
   mgCoolingPerSecond: 30,
   mgRearmThreshold: 30,
+  cannonWeaponKind: "kinetic",
+  mgWeaponKind: "kinetic",
+  // Shorter than the cannon's kinetic reach on purpose: never missing has to
+  // cost something, and the something is having to be close.
+  cannonLaserRange: 900,
+  mgLaserRange: 620,
+  laserBeamRadius: 5,
+  friendlyMissileTurnRatePerSecond: Math.PI / 2,
+  friendlyMissileAcquireConeRadians: Math.PI / 6,
   spaceshipMaxHp: 500,
   shieldRadius: 104,
   shieldArcRadians: Math.PI / 2,

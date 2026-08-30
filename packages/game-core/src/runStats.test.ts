@@ -57,7 +57,8 @@ function projectileAt(
     radius: config.projectileRadius,
     spawnedTick: 0,
     damage: config.friendlyProjectileDamage,
-    source
+    source,
+    homing: null
   };
 }
 

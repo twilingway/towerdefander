@@ -7,15 +7,19 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 26 as const;
+export const BALANCE_FILE_VERSION = 27 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
 export type SpawnSector = z.infer<typeof spawnSectorSchema>;
+
+export const FRIENDLY_WEAPON_KINDS = ["kinetic", "laser", "missile"] as const;
+export const friendlyWeaponKindSchema = z.enum(FRIENDLY_WEAPON_KINDS);
+export type FriendlyWeaponKind = z.infer<typeof friendlyWeaponKindSchema>;
 
 export const ENEMY_WEAPON_KINDS = ["bullet", "missile"] as const;
 export const enemyWeaponKindSchema = z.enum(ENEMY_WEAPON_KINDS);
@@ -510,6 +514,16 @@ export const balanceTuningSchema = z
     mgCoolingPerSecond: nonNegativeFinite,
     /** Heat the gun must cool below before it fires again; core caps it by capacity. */
     mgRearmThreshold: nonNegativeFinite,
+    /** How each barrel delivers damage; the numbers above are the same either way. */
+    cannonWeaponKind: friendlyWeaponKindSchema,
+    mgWeaponKind: friendlyWeaponKindSchema,
+    /** Laser: how far the beam reaches, and how thick it is for a hit. */
+    cannonLaserRange: positiveFinite,
+    mgLaserRange: positiveFinite,
+    laserBeamRadius: positiveFinite,
+    /** Missile: how hard it turns, and the cone it picks a target from. */
+    friendlyMissileTurnRatePerSecond: positiveFinite,
+    friendlyMissileAcquireConeRadians: positiveFinite,
 
     // --- Player ship: shield ---
     shieldCapacity: positiveFinite,

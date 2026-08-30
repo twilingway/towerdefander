@@ -2,7 +2,8 @@ import {
   type AsteroidState,
   type CombatConfig,
   type CombatEnemyState,
-  type CombatStepState
+  type CombatStepState,
+  type FriendlyProjectileLike
 } from "./combatTypes.ts";
 import { arenaFromConfig } from "./combatMath.ts";
 import {
@@ -28,7 +29,14 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
   ];
   const grid = buildSpatialGrid(targets, config.spatialCellSize);
   const candidates: CollisionCandidate[] = [];
-  for (const projectile of state.projectiles) {
+  // A laser pulse is a shot like any other, only one that crosses its whole
+  // reach inside the tick that fired it. Older beams are still on the field for
+  // the display and must not hit twice.
+  const shots: readonly FriendlyProjectileLike[] = [
+    ...state.projectiles,
+    ...state.laserBeams.filter(({ spawnedTick }) => spawnedTick === state.clock.tick)
+  ];
+  for (const projectile of shots) {
     for (const target of querySpatialGrid(grid, projectile, config.spatialCellSize)) {
       const toi = relativeSweptCircleTime(projectile, target);
       if (toi !== null) {
@@ -77,7 +85,7 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
   for (const candidate of candidates) {
     if (removedProjectiles.has(candidate.sourceId) || removedTargets.has(candidate.targetId))
       continue;
-    const projectile = state.projectiles.find(({ id }) => id === candidate.sourceId);
+    const projectile = shots.find(({ id }) => id === candidate.sourceId);
     if (projectile === undefined) continue;
     removedProjectiles.add(candidate.sourceId);
     const fromCannon = projectile.source === "cannon";
@@ -322,6 +330,9 @@ export function resolveSpaceshipThreats(
   };
 }
 
+/** How long a fired beam stays on the wire for the display to draw it. */
+export const LASER_BEAM_TICKS = 2;
+
 export function removeExpiredAndOutOfBounds(
   state: CombatStepState,
   config: CombatConfig
@@ -343,6 +354,11 @@ export function removeExpiredAndOutOfBounds(
     ),
     projectiles: state.projectiles.filter((entity) =>
       isWithinCircularEnvelope(entity.x, entity.y, entity.radius, arena, config.worldPadding)
+    ),
+    // Two ticks is long enough for any client frame to catch the flash and
+    // short enough that it never reads as a beam left hanging in the air.
+    laserBeams: state.laserBeams.filter(
+      (beam) => state.clock.tick - beam.spawnedTick < LASER_BEAM_TICKS
     )
   };
 }

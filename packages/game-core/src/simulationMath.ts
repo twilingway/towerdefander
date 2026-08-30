@@ -209,17 +209,50 @@ export function moveSpaceshipWithinWorld(
 
 export function moveProjectiles(
   projectiles: readonly ProjectileState[],
-  config: SpaceshipSimulationConfig
+  config: SpaceshipSimulationConfig,
+  targets: readonly { readonly id: string; readonly x: number; readonly y: number }[] = []
 ): readonly ProjectileState[] {
   const secondsPerStep = config.fixedStepMs / 1000;
 
-  return projectiles.map((projectile) => ({
+  return projectiles.map((projectile) => {
+    const steered = steerHomingProjectile(projectile, targets, secondsPerStep);
+    return {
+      ...steered,
+      previousX: steered.x,
+      previousY: steered.y,
+      x: steered.x + steered.velocity.x * secondsPerStep,
+      y: steered.y + steered.velocity.y * secondsPerStep
+    };
+  });
+}
+
+/**
+ * A missile turns toward the target it picked at launch, at its own rate. A
+ * target that is gone leaves it flying straight: re-acquiring would make the
+ * barrel an aimbot, and the pilot's pointing worthless.
+ */
+function steerHomingProjectile(
+  projectile: ProjectileState,
+  targets: readonly { readonly id: string; readonly x: number; readonly y: number }[],
+  secondsPerStep: number
+): ProjectileState {
+  const homing = projectile.homing;
+  if (homing === null) return projectile;
+  const target = targets.find(({ id }) => id === homing.targetId);
+  if (target === undefined) return projectile;
+  const speed = Math.hypot(projectile.velocity.x, projectile.velocity.y);
+  const bearing = Math.atan2(target.y - projectile.y, target.x - projectile.x);
+  const turn = clamp(
+    shortestAngleDelta(homing.heading, bearing),
+    -homing.turnRatePerSecond * secondsPerStep,
+    homing.turnRatePerSecond * secondsPerStep
+  );
+  const heading = canonicalizeAngle(homing.heading + turn);
+  return {
     ...projectile,
-    previousX: projectile.x,
-    previousY: projectile.y,
-    x: projectile.x + projectile.velocity.x * secondsPerStep,
-    y: projectile.y + projectile.velocity.y * secondsPerStep
-  }));
+    velocity: { x: Math.cos(heading) * speed, y: Math.sin(heading) * speed },
+    homing: { ...homing, heading }
+  };
 }
 
 export function removeExpiredProjectiles(
