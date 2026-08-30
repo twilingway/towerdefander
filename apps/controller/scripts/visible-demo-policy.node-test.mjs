@@ -316,6 +316,26 @@ test("the shield rides the predicted contact instead of the energy meter", () =>
   assert.equal(planShield(quiet, ROOKIE, createAutopilotMemory()).active, true);
 });
 
+test("the shield covers the shot before the rock", () => {
+  // Both connect, the rock a touch sooner. The old arc followed whatever
+  // arrived first, which in a field of drifting rocks meant the operator
+  // watched it face the scenery while a sniper worked on the hull.
+  const both = world({
+    asteroids: [entity("rock", 1, { x: 2200, y: 1900, velocityY: 240, radius: 26 })],
+    bullets: [entity("shot", 2, { x: 2600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const covering = planShield(both, ACE, createAutopilotMemory());
+  assert.ok(covering.aim.x > 0.9, "the arc faces the shot, not the rock");
+
+  // Beyond the arming window nothing is being blocked yet, so the arc simply
+  // tracks the nearest contact and the rock wins on time.
+  const distantShot = world({
+    asteroids: [entity("rock", 1, { x: 2200, y: 1900, velocityY: 240, radius: 26 })],
+    bullets: [entity("shot", 2, { x: 5000, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  assert.ok(planShield(distantShot, ACE, createAutopilotMemory()).aim.y < -0.9);
+});
+
 test("a drained shield is told to drop so the rearm latch clears", () => {
   const drained = world({
     shield: { angle: 0, active: true, energy: 0, capacity: 100, arcHalfAngle: Math.PI / 4 },
@@ -328,12 +348,20 @@ test("a drained shield is told to drop so the rearm latch clears", () => {
 test("below its reserve the shield spends only on what actually hurts", () => {
   const battery = { angle: 0, active: false, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 };
 
-  // A bullet is cheap to eat, so the last of the battery is not spent on it.
+  // A rock is dodgeable and shootable, so the last of the battery is not spent
+  // on it — the ship can answer a rock with the guns or with the helm.
+  const drifting = world({
+    shield: battery,
+    asteroids: [entity("rock", 1, { x: 2400, y: 2200, velocityX: -240, radius: 26 })]
+  });
+  assert.equal(planShield(drifting, ACE, createAutopilotMemory()).active, false);
+
+  // Aimed fire is neither: it is pointed at the ship and arrives regardless.
   const grazed = world({
     shield: battery,
     bullets: [entity("shot", 1, { x: 2400, y: 2200, velocityX: -900, radius: 7 })]
   });
-  assert.equal(planShield(grazed, ACE, createAutopilotMemory()).active, false);
+  assert.equal(planShield(grazed, ACE, createAutopilotMemory()).active, true);
 
   // A missile is not: refusing to raise here is how the ace used to die in a
   // swarm, because under fire the energy never climbs back over the floor.

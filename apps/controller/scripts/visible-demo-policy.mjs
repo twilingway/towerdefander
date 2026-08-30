@@ -118,8 +118,22 @@ const MAX_TRAVERSE_LEAD_SECONDS = 1.5;
 const TRAVERSE_SETTLE_RADIANS = 0.25;
 /** How much better a new target must rank to be worth abandoning the traverse. */
 const DECISIVE_SCORE_RATIO = 1.5;
+/**
+ * What the shield arc is for. Aimed fire outranks a rock: a rock flies a
+ * straight line, can be shot, and can be stepped off; a shot is pointed at you
+ * and arrives whatever you do. The economics agree on the archetype that made
+ * this obvious — a sniper round costs ten energy and saves thirty-five hull,
+ * a rock costs twenty and saves forty.
+ */
+const THREAT_WEIGHTS = { missile: 3, bullet: 2, asteroid: 1 };
 /** Threat weight from `nextShieldContact` worth spending the last energy on. */
-const COSTLY_THREAT_WEIGHT = 2;
+const COSTLY_THREAT_WEIGHT = THREAT_WEIGHTS.bullet;
+/**
+ * Inside this much time to contact the arc covers what hurts most rather than
+ * what merely arrives first. Beyond it nothing is being blocked yet, so the
+ * arc simply tracks the nearest contact.
+ */
+const SHIELD_PRIORITY_SECONDS = 1;
 
 const ZERO_VECTOR = { x: 0, y: 0 };
 
@@ -437,32 +451,46 @@ export function aimBearing(world, target, projectileSpeed, profile, memory) {
  * Ordered by time, not by distance: a slow rock further out can beat a bullet.
  */
 export function nextShieldContact(world) {
-  let soonest;
+  const contacts = [];
   const threats = [
-    ...world.missiles.map((entity) => ({ entity, weight: 3 })),
-    ...world.asteroids.map((entity) => ({ entity, weight: 2 })),
-    ...world.bullets.map((entity) => ({ entity, weight: 1 }))
+    ...world.missiles.map((entity) => ({ entity, weight: THREAT_WEIGHTS.missile })),
+    ...world.bullets.map((entity) => ({ entity, weight: THREAT_WEIGHTS.bullet })),
+    ...world.asteroids.map((entity) => ({ entity, weight: THREAT_WEIGHTS.asteroid }))
   ];
 
   for (const { entity, weight } of threats) {
     const seconds = timeToContact(world.ship, world.shieldRadius, entity);
     if (seconds === undefined) continue;
-    if (
-      soonest === undefined ||
-      seconds < soonest.seconds ||
-      (seconds === soonest.seconds && weight > soonest.weight)
-    ) {
-      const arrival = advanceEntity(entity, seconds);
-      soonest = {
-        entity,
-        weight,
-        seconds,
-        bearing: Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x)
-      };
-    }
+    const arrival = advanceEntity(entity, seconds);
+    contacts.push({
+      entity,
+      weight,
+      seconds,
+      bearing: Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x)
+    });
   }
+  if (contacts.length === 0) return undefined;
 
-  return soonest;
+  const imminent = contacts.filter(({ seconds }) => seconds <= SHIELD_PRIORITY_SECONDS);
+  if (imminent.length === 0) return contacts.reduce(sooner);
+  // Ordered by what it costs to let through, then by how little time is left,
+  // then by spawn order so two identical threats resolve the same way twice.
+  return imminent.reduce((best, contact) =>
+    contact.weight > best.weight ||
+    (contact.weight === best.weight && contact.seconds < best.seconds) ||
+    (contact.weight === best.weight &&
+      contact.seconds === best.seconds &&
+      compareEntities(contact.entity, best.entity) < 0)
+      ? contact
+      : best
+  );
+}
+
+function sooner(best, contact) {
+  return contact.seconds < best.seconds ||
+    (contact.seconds === best.seconds && compareEntities(contact.entity, best.entity) < 0)
+    ? contact
+    : best;
 }
 
 function shieldAlreadyCovers(world, bearing) {
