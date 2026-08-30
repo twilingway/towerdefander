@@ -21,7 +21,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   shieldCapacity: 100,
   shieldDrainPerSecond: 20,
   shieldRechargePerSecond: 10,
-  shieldEngageTicks: 20,
+  shieldEngageTicks: 10,
   shieldMinimumUpTicks: 40,
   shieldCooldownTicks: 20,
   shieldRearmEnergy: 25,

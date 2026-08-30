@@ -420,7 +420,7 @@ describe("version 1 migration", () => {
     await store.load();
 
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().presets[0]?.tuning.shieldEngageTicks).toBe(20);
+    expect(store.getState().presets[0]?.tuning.shieldEngageTicks).toBe(10);
     expect(store.getState().presets[0]?.tuning.shieldMinimumUpTicks).toBe(40);
     expect(store.getState().presets[0]?.tuning.shieldCooldownTicks).toBe(20);
     // The point of the test: the operator's campaign survived the new fields.
