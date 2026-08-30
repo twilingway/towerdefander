@@ -761,6 +761,27 @@ test("a boss firing from beyond the frame is hunted through its missiles", () =>
   assert.notDeepEqual(hunting.vector, { x: 0, y: 0 });
 });
 
+test("the pilot presses ships while the turret keeps the threat", () => {
+  const steady = { ...ACE, evadeMissiles: false, dodgeBullets: false };
+  const scene = world({
+    enemies: [enemyAt("gunship", 1, 2_900, 2_200)],
+    missiles: [
+      entity("inbound", 2, { x: 2_200, y: 1_400, velocityX: 0, velocityY: 240, radius: 12 })
+    ]
+  });
+
+  // The crew's commitment is the missile — it is the more urgent thing to shoot
+  // and the turret traverses on its own.
+  const memory = createAutopilotMemory();
+  const flown = planPilot(scene, steady, memory);
+  assert.equal(memory.target.entityId, "inbound");
+
+  // The hull is flown at the ship anyway, because on this hull the nose is the
+  // engine: aiming it at a missile is flying at a missile, and the boss went
+  // untouched while it did that.
+  assert.ok(flown.vector.x > 0.5, "flies towards the ship, not up at the missile");
+});
+
 test("a target sweeping faster than the turret ends the orbit", () => {
   // Inside the ring the orbit backs away, so the sign of the closing component
   // is what separates holding station from breaking the stalemate. This target

@@ -821,29 +821,36 @@ export function planPilot(world, profile, memory, options = {}) {
 function planPilotCourse(world, profile, memory, options) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
   const ranked = rankTargets(world, options);
-  const target = commitTarget(ranked, profile, memory, nowMs, world);
+  // The turret keeps the crew's commitment, which may well be a missile — it
+  // traverses on its own and owes the hull nothing. The pilot presses ships,
+  // because on this hull the nose is the engine as well as a gun: aiming it at
+  // a missile is flying at a missile, and while it did that the boss went
+  // untouched from full health to half and no further.
+  const committed = commitTarget(ranked, profile, memory, nowMs, world);
+  const committedRole = ranked.find(({ entity }) => entity.entityId === committed?.entityId)?.role;
+  const target =
+    committedRole === "enemy" ? committed : ranked.find(({ role }) => role === "enemy")?.entity;
   const escape = escapeVector(world, profile);
 
   const speed = options.mgSpeed ?? MG_PROJECTILE_SPEED;
   // The nose gun fires along the hull, which swings at twice the turret rate,
   // so the same allowance for getting there applies with a doubled rate.
-  const bearing =
-    target === undefined
+  const noseRate = (options.turretRate ?? TURRET_RATE_PER_SECOND) * 2;
+  const solve = (entity) =>
+    entity === undefined
       ? undefined
-      : leadWithTraverse(
-          world,
-          target,
-          speed,
-          profile,
-          memory,
-          world.ship.heading,
-          (options.turretRate ?? TURRET_RATE_PER_SECOND) * 2
-        );
-  const onAxis =
-    bearing !== undefined &&
-    Math.abs(shortestAngleDelta(world.ship.heading, bearing)) <= profile.mgConeRadians;
+      : leadWithTraverse(world, entity, speed, profile, memory, world.ship.heading, noseRate);
+  // Where the hull is being flown. The ladder below steers by this.
+  const bearing = solve(target);
+  // What the gun would hit right now, which is not always what is being flown
+  // at: a missile crossing the bore is free damage and costs the course nothing.
+  const noseBearing = committed === target ? bearing : solve(committed);
+  const withinCone = (angle) =>
+    angle !== undefined &&
+    Math.abs(shortestAngleDelta(world.ship.heading, angle)) <= profile.mgConeRadians;
+  const onAxis = withinCone(bearing);
   const mgFiring =
-    onAxis &&
+    withinCone(noseBearing) &&
     !world.machineGun.overheated &&
     world.machineGun.heat <= world.machineGun.capacity * profile.mgHeatCeiling;
 
@@ -858,8 +865,8 @@ function planPilotCourse(world, profile, memory, options) {
   // A rock on screen is work for the guns, never a reason to stop hunting: the
   // ships that actually kill the crew shoot from outside the camera frame, and
   // the turret keeps servicing the rock while the pilot goes after them.
-  const role = ranked.find(({ entity }) => entity.entityId === target?.entityId)?.role;
-  if (role !== "enemy" && role !== "missile") {
+  // Nothing to press: walk the shots back to whoever is firing them.
+  if (target === undefined) {
     return { vector: huntVector(world, memory, nowMs) ?? searchVector(world, memory), mgFiring };
   }
 
