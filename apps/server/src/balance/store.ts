@@ -5,6 +5,9 @@ import {
   BALANCE_FILE_VERSION,
   balancePresetsFileSchema,
   balanceTuningSchema,
+  type AutopilotLevel,
+  type AutopilotLevelProfiles,
+  type AutopilotProfile,
   type AutopilotTuning,
   type HelmTuning,
   type BalancePreset,
@@ -42,71 +45,135 @@ const DEFAULT_HELM: HelmTuning = {
 };
 
 /**
- * Measured, not guessed: a sweep of every field, a hundred runs per value, on
- * three independent seed blocks. Two findings are worth keeping in view.
- * Committing to a target for a second beats re-deciding twenty times a second
- * by about a wave and a half - the twitchy ace was the slowest of the three.
- * And the five numbers that decide how the ship is flown are the same for the
- * veteran and the ace; what separates them is aim, evasion and heat, not
- * flying. Half-applying them made the veteran worse than leaving it alone.
+ * How the demo bot flies, per turret kind and per level.
+ *
+ * Both dimensions are real and they are not separable: a sweep of every field,
+ * a hundred runs per value, verified on further seed blocks, moved eleven of
+ * the sixteen fields when the turret changed — including whether to orbit at
+ * all. The level decides how well that flying is aimed and defended.
+ *
+ * The laser set is the measured baseline; the other two kinds are written as
+ * the deltas measured against it, so the reason for every number stays visible.
+ * The rookie keeps the bot that predated the profiles in every kind: no orbit,
+ * no evasion, wide spray, slow hands.
  */
+const LASER_PROFILES: AutopilotLevelProfiles = {
+  rookie: {
+    reactionTicks: 12,
+    retargetIntervalTicks: 40,
+    aimJitterRadians: 0.18,
+    leadFactor: 0,
+    orbit: false,
+    evadeMissiles: false,
+    dodgeBullets: false,
+    threatAwareShield: false,
+    standoffDistance: 700,
+    evadeHorizonTicks: 0,
+    mgConeRadians: Math.PI,
+    cannonConeRadians: Math.PI,
+    mgHeatCeiling: 1,
+    cannonHeatCeiling: 1,
+    shieldLeadTicks: 0,
+    shieldMinEnergy: 0
+  },
+  veteran: {
+    reactionTicks: 20,
+    retargetIntervalTicks: 30,
+    aimJitterRadians: 0.06,
+    leadFactor: 0.65,
+    orbit: true,
+    evadeMissiles: true,
+    dodgeBullets: false,
+    threatAwareShield: true,
+    standoffDistance: 400,
+    evadeHorizonTicks: 12,
+    mgConeRadians: 0.35,
+    cannonConeRadians: 0.2,
+    mgHeatCeiling: 0.75,
+    cannonHeatCeiling: 0.8,
+    shieldLeadTicks: 20,
+    shieldMinEnergy: 0.15
+  },
+  ace: {
+    reactionTicks: 20,
+    retargetIntervalTicks: 30,
+    aimJitterRadians: 0,
+    leadFactor: 1,
+    orbit: true,
+    evadeMissiles: true,
+    dodgeBullets: true,
+    threatAwareShield: true,
+    standoffDistance: 400,
+    evadeHorizonTicks: 12,
+    mgConeRadians: 0.5,
+    cannonConeRadians: 0.06,
+    mgHeatCeiling: 0.95,
+    cannonHeatCeiling: 0.95,
+    shieldLeadTicks: 20,
+    shieldMinEnergy: 0.15
+  }
+};
+
+/** What a kind changes, applied to the levels that fly well enough to notice. */
+type ProfileDelta = Partial<Record<AutopilotLevel, Partial<AutopilotProfile>>>;
+
+/**
+ * A bullet has flight time, so the pilot stops circling and closes in, leads
+ * less than fully, and sprays a wider nose cone while keeping it cooler.
+ */
+const KINETIC_DELTA: ProfileDelta = {
+  veteran: {
+    reactionTicks: 10,
+    leadFactor: 0.6,
+    orbit: false,
+    mgConeRadians: 0.25,
+    mgHeatCeiling: 0.6
+  },
+  ace: { reactionTicks: 10, leadFactor: 0.6, orbit: false, mgConeRadians: 0.25, mgHeatCeiling: 0.6 }
+};
+
+/**
+ * A missile chases on its own, so the pilot stands further off, stops orbiting,
+ * stops breaking from incoming missiles at all — its own shot is already away —
+ * and spends less of the barrel's heat.
+ */
+const MISSILE_DELTA: ProfileDelta = {
+  veteran: {
+    leadFactor: 0.6,
+    orbit: false,
+    evadeMissiles: false,
+    standoffDistance: 600,
+    evadeHorizonTicks: 0,
+    cannonConeRadians: 0.12,
+    cannonHeatCeiling: 0.8,
+    shieldLeadTicks: 10
+  },
+  ace: {
+    leadFactor: 0.6,
+    orbit: false,
+    evadeMissiles: false,
+    standoffDistance: 600,
+    evadeHorizonTicks: 0,
+    cannonConeRadians: 0.12,
+    cannonHeatCeiling: 0.8,
+    shieldLeadTicks: 10
+  }
+};
+
+function withDelta(base: AutopilotLevelProfiles, delta: ProfileDelta): AutopilotLevelProfiles {
+  return {
+    rookie: { ...base.rookie, ...delta.rookie },
+    veteran: { ...base.veteran, ...delta.veteran },
+    ace: { ...base.ace, ...delta.ace }
+  };
+}
+
 const DEFAULT_AUTOPILOT: AutopilotTuning = {
   level: "veteran",
   profiles: {
-    rookie: {
-      reactionTicks: 12,
-      retargetIntervalTicks: 40,
-      aimJitterRadians: 0.18,
-      leadFactor: 0,
-      orbit: false,
-      evadeMissiles: false,
-      dodgeBullets: false,
-      threatAwareShield: false,
-      standoffDistance: 700,
-      evadeHorizonTicks: 0,
-      mgConeRadians: Math.PI,
-      cannonConeRadians: Math.PI,
-      mgHeatCeiling: 1,
-      cannonHeatCeiling: 1,
-      shieldLeadTicks: 0,
-      shieldMinEnergy: 0
-    },
-    veteran: {
-      reactionTicks: 20,
-      retargetIntervalTicks: 30,
-      aimJitterRadians: 0.06,
-      leadFactor: 0.65,
-      orbit: true,
-      evadeMissiles: true,
-      dodgeBullets: false,
-      threatAwareShield: true,
-      standoffDistance: 400,
-      evadeHorizonTicks: 12,
-      mgConeRadians: 0.35,
-      cannonConeRadians: 0.2,
-      mgHeatCeiling: 0.75,
-      cannonHeatCeiling: 0.8,
-      shieldLeadTicks: 20,
-      shieldMinEnergy: 0.15
-    },
-    ace: {
-      reactionTicks: 20,
-      retargetIntervalTicks: 30,
-      aimJitterRadians: 0,
-      leadFactor: 1,
-      orbit: true,
-      evadeMissiles: true,
-      dodgeBullets: true,
-      threatAwareShield: true,
-      standoffDistance: 400,
-      evadeHorizonTicks: 12,
-      mgConeRadians: 0.5,
-      cannonConeRadians: 0.06,
-      mgHeatCeiling: 0.95,
-      cannonHeatCeiling: 0.95,
-      shieldLeadTicks: 20,
-      shieldMinEnergy: 0.15
-    }
+    laser: LASER_PROFILES,
+    kinetic: withDelta(LASER_PROFILES, KINETIC_DELTA),
+    missile: withDelta(LASER_PROFILES, MISSILE_DELTA)
   }
 };
 

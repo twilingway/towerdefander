@@ -18,6 +18,7 @@ import {
   createAutopilotMemory,
   extrapolateWorld,
   leadSpeedFor,
+  resolveAutopilotProfile,
   measureAngularRates,
   planGunner,
   planPilot,
@@ -590,7 +591,7 @@ async function loadAutopilot() {
     throw new Error(`Balance preset from ${endpoint} carries no autopilot section.`);
   }
   const requested = levelOverride ?? tuning.autopilot.level;
-  const profile = tuning.autopilot.profiles[requested];
+  const profile = resolveAutopilotProfile(tuning.autopilot, requested, tuning.cannonWeaponKind);
   if (profile === undefined) {
     throw new Error(`Balance preset has no autopilot profile named "${String(requested)}".`);
   }

@@ -6,8 +6,10 @@
 
 import {
   AUTOPILOT_LEVELS,
+  type AutopilotLevelProfiles,
   ENEMY_SKILL_LEVELS,
   BALANCE_FILE_VERSION,
+  FRIENDLY_WEAPON_KINDS,
   FALLBACK_VISUAL_ASSET_ID,
   LEGACY_BALANCE_FILE_VERSIONS,
   type BalanceTuning
@@ -266,23 +268,37 @@ function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): Legac
  */
 function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
   const autopilot = readRecord(tuning, "autopilot");
-  const profiles = readRecord(autopilot, "profiles");
+  const saved = readRecord(autopilot, "profiles");
+  // Version 27 and earlier kept one set of level profiles for every turret;
+  // version 28 keeps a set per kind. A document from before the split has its
+  // one set copied into all three, which is exactly the bot it described.
+  const flat = AUTOPILOT_LEVELS.some((level) => isRecord(saved[level]));
   return {
     level: autopilot.level ?? defaults.autopilot.level,
     profiles: Object.fromEntries(
-      AUTOPILOT_LEVELS.map((level) => {
-        const saved = profiles[level];
-        // Merged field by field, never carried over whole: a profile saved
-        // before a knob existed must gain it, not fail the strict schema.
-        return [
-          level,
-          isRecord(saved)
-            ? { ...defaults.autopilot.profiles[level], ...saved }
-            : defaults.autopilot.profiles[level]
-        ];
-      })
+      FRIENDLY_WEAPON_KINDS.map((kind) => [
+        kind,
+        migrateAutopilotLevels(
+          flat ? saved : readRecord(saved, kind),
+          defaults.autopilot.profiles[kind]
+        )
+      ])
     )
   };
+}
+
+/**
+ * Field by field inside each level, never a saved level carried over whole: a
+ * profile saved before a knob existed must gain it, not fail the strict schema
+ * and take the operator's waves down with it.
+ */
+function migrateAutopilotLevels(saved: LegacyRecord, defaults: AutopilotLevelProfiles): unknown {
+  return Object.fromEntries(
+    AUTOPILOT_LEVELS.map((level) => {
+      const profile = saved[level];
+      return [level, isRecord(profile) ? { ...defaults[level], ...profile } : defaults[level]];
+    })
+  );
 }
 
 /**

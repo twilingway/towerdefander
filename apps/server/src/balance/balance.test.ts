@@ -1160,7 +1160,7 @@ describe("version 1 migration", () => {
     // profile schema, the whole saved profile was carried over unchanged, it
     // failed the strict schema, and the silent fallback to built-in defaults
     // put an empty campaign in front of the console — which the next save kept.
-    const dated: Record<string, unknown> = { ...defaults.autopilot.profiles.ace };
+    const dated: Record<string, unknown> = { ...defaults.autopilot.profiles.laser.ace };
     delete dated.cannonHeatCeiling;
     const waves = [
       {
@@ -1205,19 +1205,19 @@ describe("version 1 migration", () => {
     // The campaign is the thing that must survive.
     expect(store.getActiveTuning().waveCampaign.waves).toHaveLength(1);
     // And the missing knob is filled rather than fatal.
-    expect(store.getActiveTuning().autopilot.profiles.ace.cannonHeatCeiling).toBe(
-      defaults.autopilot.profiles.ace.cannonHeatCeiling
+    expect(store.getActiveTuning().autopilot.profiles.laser.ace.cannonHeatCeiling).toBe(
+      defaults.autopilot.profiles.laser.ace.cannonHeatCeiling
     );
     // A hand-tuned value in the same profile is not trampled by the defaults.
-    expect(store.getActiveTuning().autopilot.profiles.ace.leadFactor).toBe(
-      defaults.autopilot.profiles.ace.leadFactor
+    expect(store.getActiveTuning().autopilot.profiles.laser.ace.leadFactor).toBe(
+      defaults.autopilot.profiles.laser.ace.leadFactor
     );
   });
 
   it("keeps a hand-tuned autopilot profile and fills only the missing ones", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
-    const handTuned = { ...defaults.autopilot.profiles.ace, mgConeRadians: 0.05 };
+    const handTuned = { ...defaults.autopilot.profiles.laser.ace, mgConeRadians: 0.05 };
     const document = {
       version: 9,
       activePresetId: "operator",
@@ -1235,9 +1235,12 @@ describe("version 1 migration", () => {
 
     const { autopilot } = store.getActiveTuning();
     expect(autopilot.level).toBe("ace");
-    expect(autopilot.profiles.ace.mgConeRadians).toBe(0.05);
-    expect(autopilot.profiles.rookie).toEqual(defaults.autopilot.profiles.rookie);
-    expect(autopilot.profiles.veteran).toEqual(defaults.autopilot.profiles.veteran);
+    // The document predates the split by turret kind, so its one set of levels
+    // is what every kind now starts from.
+    expect(autopilot.profiles.laser.ace.mgConeRadians).toBe(0.05);
+    expect(autopilot.profiles.kinetic.ace.mgConeRadians).toBe(0.05);
+    expect(autopilot.profiles.laser.rookie).toEqual(defaults.autopilot.profiles.laser.rookie);
+    expect(autopilot.profiles.missile.veteran).toEqual(defaults.autopilot.profiles.missile.veteran);
   });
 
   it("keeps the autopilot section out of the simulation config", () => {

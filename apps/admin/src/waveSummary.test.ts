@@ -95,6 +95,10 @@ function autopilotProfile(): AutopilotProfile {
   };
 }
 
+function autopilotLevels() {
+  return { rookie: autopilotProfile(), veteran: autopilotProfile(), ace: autopilotProfile() };
+}
+
 function tuning(): BalanceTuning {
   return {
     enemyArchetypes: Object.fromEntries(
@@ -236,9 +240,9 @@ function tuning(): BalanceTuning {
     autopilot: {
       level: "veteran",
       profiles: {
-        rookie: autopilotProfile(),
-        veteran: autopilotProfile(),
-        ace: autopilotProfile()
+        kinetic: autopilotLevels(),
+        laser: autopilotLevels(),
+        missile: autopilotLevels()
       }
     }
   };

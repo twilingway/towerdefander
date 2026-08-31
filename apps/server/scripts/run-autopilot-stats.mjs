@@ -82,7 +82,7 @@ async function main() {
     intermissionSeconds: values.intermission,
     enemyOffset
   });
-  const profile = profileFor(autopilot, values.level);
+  const profile = profileFor(autopilot, values.level, config.cannonWeaponKind);
 
   const results = [];
   for (let index = 0; index < runs; index += 1) {

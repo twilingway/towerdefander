@@ -69,6 +69,17 @@ export const HITSCAN_SPEED = 1_000_000;
  * moves — measured on the stand as the difference between a median wave of 5
  * and one of 8.
  */
+/**
+ * The profile the bot flies with: a set per turret kind, a profile per level.
+ * The kind matters as much as the level - a sweep moved eleven of the sixteen
+ * fields when the turret changed - so picking one without the other silently
+ * flies a laser profile with a bullet.
+ */
+export function resolveAutopilotProfile(autopilot, level, turretKind) {
+  const byKind = autopilot?.profiles?.[turretKind ?? "kinetic"] ?? autopilot?.profiles?.kinetic;
+  return byKind?.[level];
+}
+
 export function leadSpeedFor(kind, projectileSpeed) {
   return kind === "laser" ? HITSCAN_SPEED : projectileSpeed;
 }

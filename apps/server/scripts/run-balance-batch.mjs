@@ -131,7 +131,7 @@ async function main() {
             intermissionSeconds: request.intermissionSeconds ?? undefined,
             enemyOffset
           });
-          const profile = profileFor(autopilot, level);
+          const profile = profileFor(autopilot, level, config.cannonWeaponKind);
           const runs = [];
           for (let index = 0; index < request.runsPerCell; index += 1) {
             runs.push(

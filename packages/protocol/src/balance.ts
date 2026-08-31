@@ -7,10 +7,10 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 27 as const;
+export const BALANCE_FILE_VERSION = 28 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -402,14 +402,30 @@ export const helmTuningSchema = z
   .strict();
 export type HelmTuning = z.infer<typeof helmTuningSchema>;
 
+const autopilotLevelProfilesSchema = z
+  .object({
+    rookie: autopilotProfileSchema,
+    veteran: autopilotProfileSchema,
+    ace: autopilotProfileSchema
+  })
+  .strict();
+export type AutopilotLevelProfiles = z.infer<typeof autopilotLevelProfilesSchema>;
+
+/**
+ * A set of level profiles per turret kind, because how the bot flies depends on
+ * both and the two are not separable. Measured over three sweeps: eleven of the
+ * sixteen fields want different values for a laser, a bullet and a missile -
+ * including whether to orbit at all - while the level decides how well the same
+ * flying is aimed and defended.
+ */
 export const autopilotTuningSchema = z
   .object({
     level: autopilotLevelSchema,
     profiles: z
       .object({
-        rookie: autopilotProfileSchema,
-        veteran: autopilotProfileSchema,
-        ace: autopilotProfileSchema
+        kinetic: autopilotLevelProfilesSchema,
+        laser: autopilotLevelProfilesSchema,
+        missile: autopilotLevelProfilesSchema
       })
       .strict()
   })

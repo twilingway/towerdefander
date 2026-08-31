@@ -21,6 +21,7 @@ import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import {
   createAutopilotMemory,
   leadSpeedFor,
+  resolveAutopilotProfile,
   planGunner,
   planPilot,
   planShield
@@ -331,8 +332,8 @@ export function buildConfig(tuning, options = {}) {
   return { config: createSpaceshipSimulationConfig(overrides), autopilot };
 }
 
-export function profileFor(autopilot, level) {
-  const profile = autopilot?.profiles?.[level];
+export function profileFor(autopilot, level, turretKind = "kinetic") {
+  const profile = resolveAutopilotProfile(autopilot, level, turretKind);
   if (profile === undefined) {
     throw new Error(
       `No autopilot profile "${level}". Pass --preset with an autopilot section, ` +

@@ -43,13 +43,17 @@ function autopilotProfile(overrides: Partial<AutopilotProfile> = {}): AutopilotP
   };
 }
 
+function autopilotLevels() {
+  return { rookie: autopilotProfile(), veteran: autopilotProfile(), ace: autopilotProfile() };
+}
+
 function autopilotTuning(level: AutopilotLevel = "veteran"): AutopilotTuning {
   return {
     level,
     profiles: {
-      rookie: autopilotProfile(),
-      veteran: autopilotProfile(),
-      ace: autopilotProfile()
+      kinetic: autopilotLevels(),
+      laser: autopilotLevels(),
+      missile: autopilotLevels()
     }
   };
 }
@@ -234,14 +238,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       stopDampening: 1,
       rotateInPlaceThrottle: 0.02
     },
-    autopilot: {
-      level: "veteran",
-      profiles: {
-        rookie: autopilotProfile(),
-        veteran: autopilotProfile(),
-        ace: autopilotProfile()
-      }
-    },
+    autopilot: autopilotTuning(),
     enemySkill: {
       offset: 0,
       profiles: {
@@ -516,12 +513,12 @@ describe("autopilot tuning schema", () => {
     expect(balanceTuningSchema.safeParse({ ...tuning(), autopilot: broken }).success).toBe(false);
   });
 
-  it("requires a profile for every level", () => {
-    const { rookie, veteran } = tuning().autopilot.profiles;
+  it("requires a profile for every level of every weapon kind", () => {
+    const { kinetic, laser } = tuning().autopilot.profiles;
     expect(
       balanceTuningSchema.safeParse({
         ...tuning(),
-        autopilot: { level: "veteran", profiles: { rookie, veteran } }
+        autopilot: { level: "veteran", profiles: { kinetic, laser } }
       }).success
     ).toBe(false);
   });
