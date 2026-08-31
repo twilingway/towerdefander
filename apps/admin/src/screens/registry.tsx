@@ -8,6 +8,7 @@ import { EnemySkillScreen } from "./EnemySkillScreen/index.js";
 import { HelmScreen } from "./HelmScreen/index.js";
 import { PlayerScreen } from "./PlayerScreen/index.js";
 import { PresetsScreen } from "./PresetsScreen/index.js";
+import { ShipsScreen } from "./ShipsScreen/index.js";
 import { StatsScreen } from "./StatsScreen/index.js";
 import { WavesScreen } from "./WavesScreen/index.js";
 
@@ -16,6 +17,7 @@ export const TABS = [
   "enemies",
   "enemySkill",
   "player",
+  "ships",
   "helm",
   "autopilot",
   "director",
@@ -29,6 +31,7 @@ export const TAB_LABELS: Record<Tab, string> = {
   enemies: "Враги",
   enemySkill: "ИИ врага",
   player: "Игрок",
+  ships: "Корабли",
   helm: "Управление",
   autopilot: "Автопилот",
   director: "Директор",
@@ -62,6 +65,7 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
   player: ({ tuning, onTuningChange }) => (
     <PlayerScreen tuning={tuning} onChange={onTuningChange} />
   ),
+  ships: ({ tuning, onTuningChange }) => <ShipsScreen tuning={tuning} onChange={onTuningChange} />,
   helm: ({ tuning, onTuningChange }) => <HelmScreen tuning={tuning} onChange={onTuningChange} />,
   autopilot: ({ tuning, onTuningChange }) => (
     <AutopilotScreen tuning={tuning} onChange={onTuningChange} />

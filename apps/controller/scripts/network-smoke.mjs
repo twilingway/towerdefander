@@ -195,8 +195,10 @@ try {
   gunnerEnabled = false;
   pilot = await reconnectController(pilot, "intermission");
   const offer = await waitForTeamOffer();
-  const pilotCard = offer.cards.find((card) => card.role === "pilot");
-  if (pilotCard === undefined) throw new Error("Team offer has no pilot card.");
+  // Any card of the tier will do: a seat may vote for any of them, and a narrow
+  // tier need not carry one of its own role.
+  const pilotCard = offer.cards[0];
+  if (pilotCard === undefined) throw new Error("Team offer has no cards.");
   const duplicateCommand = makeVoteCommand(pilot, offer, pilotCard.upgradeId, 1);
   pilot.send(clientMessage.upgradeVote, duplicateCommand);
   await waitFor(() => teamUpgrade().votes.get("pilot")?.upgradeId === pilotCard.upgradeId);
@@ -459,8 +461,8 @@ async function resolveTeamPurchase(firstOffer, firstCard) {
     await waitFor(() => encounter().phase === "intermission", 150_000);
     gunnerEnabled = false;
     offer = await waitForTeamOffer();
-    card = offer.cards.find((entry) => entry.role === "pilot");
-    if (card === undefined) throw new Error("Team offer has no pilot card.");
+    card = offer.cards[0];
+    if (card === undefined) throw new Error("Team offer has no cards.");
     await voteForUpgrade(pilot, "pilot", offer, card.upgradeId);
     await voteForUpgrade(gunner, "gunner", offer, card.upgradeId);
     await voteForUpgrade(shield, "shield", offer, card.upgradeId);
@@ -473,7 +475,8 @@ function teamUpgrade() {
 }
 
 async function waitForTeamOffer() {
-  await waitFor(() => teamUpgrade().hasOffer && teamUpgrade().offer.cards.length === 3);
+  // A tier is one to four cards wide; the first one is a single card.
+  await waitFor(() => teamUpgrade().hasOffer && teamUpgrade().offer.cards.length > 0);
   const offer = teamUpgrade().offer;
   return {
     offerId: offer.offerId,
