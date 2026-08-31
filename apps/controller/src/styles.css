@@ -327,7 +327,7 @@ button:disabled {
 .role-control {
   --control-gutter: clamp(0.75rem, 3vmin, 1.5rem);
   --control-inset-bottom: max(var(--control-gutter), env(safe-area-inset-bottom));
-  --control-size: clamp(6.5rem, min(38vmin, 42dvh), 12.5rem);
+  --control-size: clamp(9.75rem, min(57vmin, 63dvh), 18.75rem);
   --stick-travel: calc(var(--control-size) * 0.27);
 
   position: absolute;
@@ -516,15 +516,27 @@ button:disabled {
   display: none;
 }
 
-/* Combat parks the rare exit action in the top-right status cluster, at one
-   fixed size everywhere: viewport-relative sizing made it either unreadable or
-   wide enough to crowd a thumb zone. */
+/* Combat parks the rare exit action in the status cluster at one fixed size
+   everywhere: viewport-relative sizing made it either unreadable or wide enough
+   to crowd a thumb zone. */
 .network-status > .leave-room-button {
   width: 8.5rem;
   min-height: 1.9rem;
   margin-top: 0.3rem;
   padding: 0.25rem 0.5rem;
   font-size: 0.7rem;
+}
+
+/* ...but not under the thumbs. Both corners are taken during a fight — sticks
+   at the bottom, fire zones above them in one solo layout and along the top
+   edge in the other — so the exit goes to the middle of the top edge, the one
+   strip no finger crosses on the way to a control. */
+.play-card--combat .network-status > .leave-room-button {
+  position: absolute;
+  top: max(0.45rem, env(safe-area-inset-top));
+  left: 50%;
+  margin-top: 0;
+  transform: translateX(-50%);
 }
 
 @media (orientation: landscape) and (height <= 620px) {
@@ -710,7 +722,8 @@ button:disabled {
 
 /* Solo panel: one player owns both sticks, so the pilot keeps the left corner
    and the turret takes the right. Two fire layouts ship side by side because
-   which one plays better is a question for thumbs, not for reasoning. */
+   which one plays better is a question for thumbs, not for reasoning: both
+   triggers over the right stick, or both stretched along the top edge. */
 .solo-panel {
   position: absolute;
   inset: 0;
@@ -742,18 +755,25 @@ button:disabled {
   right: max(var(--control-gutter), env(safe-area-inset-right));
 }
 
-/* Stacked: each trigger sits right above its own stick. */
+/* Both triggers above the right stick, nose next to turret: one thumb fires,
+   the other only steers, and the two fire zones stay a pair instead of living
+   on opposite edges. They are deliberately well under half a stick: the pair
+   rides on top of a stick that is now thumb-sized, and anything taller reaches
+   the status row, where the button that leaves the room sits. */
 .solo-panel--stacked .solo-fire {
   bottom: calc(var(--control-inset-bottom) + var(--control-size) + var(--control-gutter));
-  width: calc(var(--control-size) * 0.62);
-}
-
-.solo-panel--stacked .solo-fire--pilot {
-  left: max(var(--control-gutter), env(safe-area-inset-left));
+  width: calc(var(--control-size) * 0.42);
 }
 
 .solo-panel--stacked .solo-fire--gunner {
   right: max(var(--control-gutter), env(safe-area-inset-right));
+}
+
+.solo-panel--stacked .solo-fire--pilot {
+  right: calc(
+    max(var(--control-gutter), env(safe-area-inset-right)) + var(--control-size) * 0.42 +
+      var(--control-gutter)
+  );
 }
 
 /* Triggers: both triggers stretch along the top edge, under the index fingers. */

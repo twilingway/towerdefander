@@ -44,9 +44,9 @@ describe("SoloPanel", () => {
   });
 
   it("names the current layout on the toggle and the other one in its title", () => {
-    expect(markup("stacked")).toContain(">Кнопки над стиками<");
+    expect(markup("stacked")).toContain(">Кнопки справа<");
     expect(markup("stacked")).toContain("Переключить на: Кнопки по верхнему краю");
     expect(markup("triggers")).toContain(">Кнопки по верхнему краю<");
-    expect(markup("triggers")).toContain("Переключить на: Кнопки над стиками");
+    expect(markup("triggers")).toContain("Переключить на: Кнопки справа");
   });
 });

@@ -3,9 +3,10 @@ import type { SessionStorage } from "./reconnectionSession.js";
 export const SOLO_LAYOUT_KEY = "spaceship-defender.solo-layout";
 
 /**
- * Where the two fire zones sit on the solo panel: stacked over their own stick,
- * or stretched along the top edge like gamepad triggers. Which one plays better
- * is a question for thumbs, so both ship and the choice stays on the device.
+ * Where the two fire zones sit on the solo panel: both over the right stick as
+ * a pair, or stretched along the top edge like gamepad triggers. Which one
+ * plays better is a question for thumbs, so both ship and the choice stays on
+ * the device. The stored id stays `stacked` so an old preference still reads.
  */
 export const SOLO_LAYOUTS = ["stacked", "triggers"] as const;
 export type SoloLayout = (typeof SOLO_LAYOUTS)[number];
@@ -21,7 +22,7 @@ export function saveSoloLayout(storage: SessionStorage, layout: SoloLayout): voi
 }
 
 export function soloLayoutLabel(layout: SoloLayout): string {
-  return layout === "stacked" ? "Кнопки над стиками" : "Кнопки по верхнему краю";
+  return layout === "stacked" ? "Кнопки справа" : "Кнопки по верхнему краю";
 }
 
 function isSoloLayout(value: string | null): value is SoloLayout {
