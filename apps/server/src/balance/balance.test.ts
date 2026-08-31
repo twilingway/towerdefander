@@ -7,6 +7,7 @@ import {
   BALANCE_FILE_VERSION,
   MODULE_TARGET_FIELDS,
   MODULE_TIER_WIDTHS,
+  SHIP_STAT_FIELDS,
   balancePresetsFileSchema,
   publicShipCatalogueSchema,
   type BalancePresetsFile,
@@ -14,7 +15,8 @@ import {
 } from "@spaceship-defender/protocol";
 import {
   getEnemyArchetype,
-  MODULE_TARGET_FIELDS as CORE_MODULE_TARGET_FIELDS
+  MODULE_TARGET_FIELDS as CORE_MODULE_TARGET_FIELDS,
+  SHIP_STAT_FIELDS as CORE_SHIP_STAT_FIELDS
 } from "@spaceship-defender/game-core";
 import { describe, expect, it, vi } from "vitest";
 
@@ -132,6 +134,9 @@ describe("balance store", () => {
     // written twice because the packages do not depend on each other, so this
     // is what stops them drifting.
     expect([...MODULE_TARGET_FIELDS]).toEqual([...CORE_MODULE_TARGET_FIELDS]);
+    // The hull list is the same set plus the two a module may not touch, so it
+    // must hold every field the stat engine knows and nothing else.
+    expect([...SHIP_STAT_FIELDS].sort()).toEqual([...CORE_SHIP_STAT_FIELDS].sort());
   });
 
   it("ships a hull tree of the declared shape with a base hull that changes nothing", () => {

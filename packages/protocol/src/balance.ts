@@ -500,6 +500,22 @@ export const MODULE_TARGET_FIELDS = [
 export const moduleTargetFieldSchema = z.enum(MODULE_TARGET_FIELDS);
 export type ModuleTargetField = z.infer<typeof moduleTargetFieldSchema>;
 
+/**
+ * Every numeric field of the ship, including the two a module may not touch.
+ *
+ * A hull may: the two are excluded from modules because clients receive them
+ * once per run and a mid-run change would leave the published value stale, and
+ * a hull is resolved before the run starts. A bigger hull that could not carry
+ * a bigger shield would be a hull with the shield drawn inside it.
+ */
+export const SHIP_STAT_FIELDS = [
+  ...MODULE_TARGET_FIELDS,
+  "shieldRadius",
+  "headingAngularBrakingPerSecondSquared"
+] as const;
+export const shipStatFieldSchema = z.enum(SHIP_STAT_FIELDS);
+export type ShipStatField = z.infer<typeof shipStatFieldSchema>;
+
 /** Additions sum, percents sum with each other, multipliers multiply. */
 export const SHIP_STAT_OPS = ["add", "percent", "multiply"] as const;
 export const shipStatOpSchema = z.enum(SHIP_STAT_OPS);
@@ -652,7 +668,7 @@ export type ShipModuleTier = z.infer<typeof shipModuleTierSchema>;
  */
 export const shipArchetypeOverridesSchema = z
   .object({
-    stats: z.partialRecord(moduleTargetFieldSchema, finite),
+    stats: z.partialRecord(shipStatFieldSchema, finite),
     cannonWeaponKind: friendlyWeaponKindSchema.nullable(),
     mgWeaponKind: friendlyWeaponKindSchema.nullable()
   })

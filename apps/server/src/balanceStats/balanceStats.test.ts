@@ -233,7 +233,7 @@ describe("batch routes", () => {
           enemyOffsets: [-2, -1, 0, 1, 2],
           crewSizes: [1, 2, 3],
           presetIds: ["a", "b", "c"],
-          shipArchetypeIds: ["guardian"],
+          shipArchetypeIds: ["guardian", "blade"],
           runsPerCell: 1
         }
       }),
