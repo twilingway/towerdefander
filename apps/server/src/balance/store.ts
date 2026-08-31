@@ -41,6 +41,15 @@ const DEFAULT_HELM: HelmTuning = {
   rotateInPlaceThrottle: 0.02
 };
 
+/**
+ * Measured, not guessed: a sweep of every field, a hundred runs per value, on
+ * three independent seed blocks. Two findings are worth keeping in view.
+ * Committing to a target for a second beats re-deciding twenty times a second
+ * by about a wave and a half - the twitchy ace was the slowest of the three.
+ * And the five numbers that decide how the ship is flown are the same for the
+ * veteran and the ace; what separates them is aim, evasion and heat, not
+ * flying. Half-applying them made the veteran worse than leaving it alone.
+ */
 const DEFAULT_AUTOPILOT: AutopilotTuning = {
   level: "veteran",
   profiles: {
@@ -53,7 +62,7 @@ const DEFAULT_AUTOPILOT: AutopilotTuning = {
       evadeMissiles: false,
       dodgeBullets: false,
       threatAwareShield: false,
-      standoffDistance: 900,
+      standoffDistance: 700,
       evadeHorizonTicks: 0,
       mgConeRadians: Math.PI,
       cannonConeRadians: Math.PI,
@@ -63,40 +72,40 @@ const DEFAULT_AUTOPILOT: AutopilotTuning = {
       shieldMinEnergy: 0
     },
     veteran: {
-      reactionTicks: 5,
-      retargetIntervalTicks: 10,
+      reactionTicks: 20,
+      retargetIntervalTicks: 30,
       aimJitterRadians: 0.06,
       leadFactor: 0.65,
       orbit: true,
       evadeMissiles: true,
       dodgeBullets: false,
       threatAwareShield: true,
-      standoffDistance: 620,
+      standoffDistance: 400,
       evadeHorizonTicks: 12,
       mgConeRadians: 0.35,
       cannonConeRadians: 0.2,
       mgHeatCeiling: 0.75,
       cannonHeatCeiling: 0.8,
-      shieldLeadTicks: 8,
+      shieldLeadTicks: 20,
       shieldMinEnergy: 0.15
     },
     ace: {
-      reactionTicks: 1,
-      retargetIntervalTicks: 2,
+      reactionTicks: 20,
+      retargetIntervalTicks: 30,
       aimJitterRadians: 0,
       leadFactor: 1,
       orbit: true,
       evadeMissiles: true,
       dodgeBullets: true,
       threatAwareShield: true,
-      standoffDistance: 700,
-      evadeHorizonTicks: 20,
-      mgConeRadians: 0.12,
+      standoffDistance: 400,
+      evadeHorizonTicks: 12,
+      mgConeRadians: 0.5,
       cannonConeRadians: 0.06,
-      mgHeatCeiling: 0.7,
-      cannonHeatCeiling: 0.7,
-      shieldLeadTicks: 14,
-      shieldMinEnergy: 0.25
+      mgHeatCeiling: 0.95,
+      cannonHeatCeiling: 0.95,
+      shieldLeadTicks: 20,
+      shieldMinEnergy: 0.15
     }
   }
 };
