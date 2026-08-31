@@ -754,13 +754,19 @@ function escapeVector(world, profile) {
   if (profile.evadeMissiles) {
     for (const missile of world.missiles) {
       const forecast = forecastMissileContact(world.ship, world.ship.radius, missile);
-      if (forecast !== undefined) threats.push({ threat: missile, seconds: forecast.seconds });
+      if (forecast !== undefined) {
+        threats.push({ threat: missile, seconds: forecast.seconds, kind: "missile" });
+      }
     }
   }
   if (profile.dodgeBullets) {
-    for (const threat of [...world.bullets, ...world.asteroids]) {
-      const seconds = timeToContact(world.ship, world.ship.radius, threat);
-      if (seconds !== undefined) threats.push({ threat, seconds });
+    for (const bullet of world.bullets) {
+      const seconds = timeToContact(world.ship, world.ship.radius, bullet);
+      if (seconds !== undefined) threats.push({ threat: bullet, seconds, kind: "bullet" });
+    }
+    for (const rock of world.asteroids) {
+      const seconds = timeToContact(world.ship, world.ship.radius, rock);
+      if (seconds !== undefined) threats.push({ threat: rock, seconds, kind: "asteroid" });
     }
   }
 
@@ -780,9 +786,9 @@ function escapeVector(world, profile) {
     x: world.worldWidth / 2 - world.ship.x,
     y: world.worldHeight / 2 - world.ship.y
   });
-  return left.x * inward.x + left.y * inward.y >= right.x * inward.x + right.y * inward.y
-    ? left
-    : right;
+  const vector =
+    left.x * inward.x + left.y * inward.y >= right.x * inward.x + right.y * inward.y ? left : right;
+  return { vector, kind: soonest.kind };
 }
 
 /**
@@ -1082,16 +1088,25 @@ function planPilotCourse(world, profile, memory, options) {
     !world.machineGun.overheated &&
     world.machineGun.heat <= world.machineGun.capacity * profile.mgHeatCeiling;
 
-  // The break outranks every manoeuvre, but the gun does not stop: firing is a
-  // question of where the nose already points, and a long evasion swings it
-  // across targets that are worth the burst.
-  if (escape !== undefined) return { vector: escape, mgFiring };
-
   // Salvage is the only hull a crew wins back inside a run, so it outranks the
   // hunt whenever it actually returns something. Mid-fight the detour is capped
   // and the drop has to be worth taking; once the wave is won the window is all
   // the time there is, so everything on the field counts.
   const drop = chooseSalvage(world);
+
+  // The break outranks every manoeuvre, but the gun does not stop: firing is a
+  // question of where the nose already points, and a long evasion swings it
+  // across targets that are worth the burst.
+  //
+  // A rock is the exception. It is slow, it can be shot, the shield covers it,
+  // and it will still be dodgeable in a second - while the repair on the field
+  // is on a fifteen-second clock. Breaking from rocks is what made the bot look
+  // like it was chasing them instead of collecting: on a field of ambient
+  // asteroids the break fires over and over and the drop is never reached.
+  if (escape !== undefined && !(escape.kind === "asteroid" && drop !== undefined)) {
+    return { vector: escape.vector, mgFiring };
+  }
+
   if (drop !== undefined) {
     return {
       vector: normalize({ x: drop.x - world.ship.x, y: drop.y - world.ship.y }),

@@ -1238,3 +1238,35 @@ test("a beam is never led, whatever the preset says its projectiles fly at", () 
   assert.equal(leadSpeedFor(undefined, 720), 720);
   assert.equal(leadSpeedFor("laser", 720), HITSCAN_SPEED);
 });
+
+test("a rock does not outrank the repair, but a bullet does", () => {
+  // What the operator watched: on a field of ambient asteroids the break fired
+  // over and over and the drop was never reached, so the bot looked like it was
+  // chasing rocks.
+  const closing = (entityId, overrides) =>
+    entity(entityId, 9, { x: 2200 + 150, y: 2200, velocityX: -300, velocityY: 0, ...overrides });
+  const hurt = {
+    ship: { ...world().ship, hp: 200 },
+    loot: [repairAt(2200 - 180, 2200)]
+  };
+
+  const dodgingRock = world({ ...hurt, asteroids: [closing("rock-1", { radius: 24 })] });
+  assert.ok(
+    aimAtDrop(
+      planPilot(dodgingRock, ACE, createAutopilotMemory()),
+      dodgingRock.ship,
+      dodgingRock.loot[0]
+    ) > 0.9,
+    "the repair wins against a rock"
+  );
+
+  const dodgingBullet = world({ ...hurt, bullets: [closing("bullet-1", { radius: 6 })] });
+  assert.ok(
+    aimAtDrop(
+      planPilot(dodgingBullet, ACE, createAutopilotMemory()),
+      dodgingBullet.ship,
+      dodgingBullet.loot[0]
+    ) < 0.9,
+    "aimed fire still outranks the repair"
+  );
+});
