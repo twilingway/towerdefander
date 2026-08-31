@@ -83,6 +83,30 @@ export const FRIENDLY_WEAPON_KIND_LABELS: Record<FriendlyWeaponKind, string> = {
   missile: "ракета — догоняет сама, но медленная"
 };
 
+/**
+ * The preset counts in fixed steps and the console edits seconds, so every
+ * seconds field also says what it is in ticks. Otherwise the value on screen
+ * and the value in the file are two different numbers with the same name.
+ */
+function tickHint(ticks: number): string {
+  return `· ${String(Math.round(ticks))} ${tickWord(Math.round(ticks))}`;
+}
+
+function tickWord(ticks: number): string {
+  const tail = ticks % 100;
+  if (tail >= 11 && tail <= 14) return "тиков";
+  switch (ticks % 10) {
+    case 1:
+      return "тик";
+    case 2:
+    case 3:
+    case 4:
+      return "тика";
+    default:
+      return "тиков";
+  }
+}
+
 interface NumberFieldProps {
   readonly caption: string;
   readonly value: number;
@@ -129,7 +153,9 @@ interface SecondsFieldProps {
 export function SecondsField({ caption, ticks, onChange }: SecondsFieldProps) {
   return (
     <label className="field">
-      <span className="field__caption">{caption}</span>
+      <span className="field__caption">
+        {caption} <span className="field__unit">{tickHint(ticks)}</span>
+      </span>
       <input
         className="field__input"
         type="number"
@@ -160,7 +186,9 @@ interface DelayFieldProps {
 export function DelayField({ caption, ticks, disabled = false, onChange }: DelayFieldProps) {
   return (
     <label className={disabled ? "field field--off" : "field"}>
-      <span className="field__caption">{caption}</span>
+      <span className="field__caption">
+        {caption} <span className="field__unit">{tickHint(ticks)}</span>
+      </span>
       <input
         className="field__input"
         type="number"

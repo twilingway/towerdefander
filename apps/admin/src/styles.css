@@ -76,6 +76,13 @@ body {
   font-size: 12px;
 }
 
+/** The same number in the unit the preset file stores it in. */
+.field__unit {
+  color: var(--ink-faint, var(--ink-dim));
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 .field__input {
   background: var(--surface);
   border: 1px solid var(--line);
