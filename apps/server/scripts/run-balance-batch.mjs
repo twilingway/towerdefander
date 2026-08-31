@@ -10,7 +10,7 @@
  * Usage:
  *   node apps/server/scripts/run-balance-batch.mjs --out <dir>
  *        [--levels rookie,veteran,ace] [--offsets=-1,0,1] [--crews 1,2,3]
- *        [--presets default] [--runs 20] [--seed 1] [--max-waves 40]
+ *        [--presets default] [--hulls guardian] [--runs 20] [--seed 1] [--max-waves 40]
  *        [--start-wave 1] [--intermission 3] [--preset path.json]
  */
 import { randomUUID } from "node:crypto";
@@ -38,6 +38,7 @@ const { values } = parseArgs({
     offsets: { type: "string", default: "0" },
     crews: { type: "string", default: "3" },
     presets: { type: "string" },
+    hulls: { type: "string" },
     runs: { type: "string", default: "20" },
     seed: { type: "string", default: "1" },
     "max-waves": { type: "string", default: "40" },
@@ -68,11 +69,24 @@ async function main() {
   const requestedPresets =
     values.presets === undefined ? [presetsOnDisk.activePresetId] : list(values.presets);
 
+  // Hulls of the first requested preset unless the caller names them. A preset
+  // written before hulls has none, and then the built-in tree stands in under
+  // the id the run reports.
+  const firstPreset = presetsOnDisk.presets.find(({ id }) => id === requestedPresets[0]);
+  const hullsOnDisk = Object.keys(firstPreset?.tuning.shipArchetypes ?? {}).sort();
+  const requestedHulls =
+    values.hulls === undefined
+      ? hullsOnDisk.length > 0
+        ? [firstPreset?.tuning.defaultShipArchetypeId ?? hullsOnDisk[0]]
+        : ["default"]
+      : list(values.hulls);
+
   const request = batchRequestSchema.parse({
     levels: list(values.levels),
     enemyOffsets: list(values.offsets).map(Number),
     crewSizes: list(values.crews).map(Number),
     presetIds: requestedPresets,
+    shipArchetypeIds: requestedHulls,
     runsPerCell: Number(values.runs),
     firstSeed: Number(values.seed),
     maxWaves: Number(values["max-waves"]),
@@ -126,43 +140,46 @@ async function main() {
     const { tuning } = tunings.get(presetId);
     for (const level of request.levels) {
       for (const enemyOffset of request.enemyOffsets) {
-        for (const crewSize of request.crewSizes) {
+        for (const shipArchetypeId of request.shipArchetypeIds) {
           const { config, autopilot } = buildConfig(tuning, {
             intermissionSeconds: request.intermissionSeconds ?? undefined,
-            enemyOffset
+            enemyOffset,
+            shipArchetypeId
           });
           const profile = profileFor(autopilot, level, config.cannonWeaponKind);
-          const runs = [];
-          for (let index = 0; index < request.runsPerCell; index += 1) {
-            runs.push(
-              playRun(config, {
-                seed: request.firstSeed + index,
-                level,
-                profile,
-                maxWaves: request.maxWaves,
-                startWave: request.startWave,
-                crewSize,
-                detail: true
+          for (const crewSize of request.crewSizes) {
+            const runs = [];
+            for (let index = 0; index < request.runsPerCell; index += 1) {
+              runs.push(
+                playRun(config, {
+                  seed: request.firstSeed + index,
+                  level,
+                  profile,
+                  maxWaves: request.maxWaves,
+                  startWave: request.startWave,
+                  crewSize,
+                  detail: true
+                })
+              );
+            }
+            const key = { level, enemyOffset, crewSize, presetId, shipArchetypeId };
+            report.cells.push(aggregateCell(key, runs));
+            details.push({ key, runs });
+            await writeAtomic(aggregatePath, report);
+            // One line per finished cell: the parent watches this to report
+            // progress without reopening the file.
+            console.log(
+              JSON.stringify({
+                event: "cell",
+                batchId,
+                key,
+                completedCells: report.cells.length,
+                totalCells: report.totalCells,
+                completedRuns: report.cells.length * request.runsPerCell,
+                totalRuns
               })
             );
           }
-          const key = { level, enemyOffset, crewSize, presetId };
-          report.cells.push(aggregateCell(key, runs));
-          details.push({ key, runs });
-          await writeAtomic(aggregatePath, report);
-          // One line per finished cell: the parent watches this to report
-          // progress without reopening the file.
-          console.log(
-            JSON.stringify({
-              event: "cell",
-              batchId,
-              key,
-              completedCells: report.cells.length,
-              totalCells: report.totalCells,
-              completedRuns: report.cells.length * request.runsPerCell,
-              totalRuns
-            })
-          );
         }
       }
     }

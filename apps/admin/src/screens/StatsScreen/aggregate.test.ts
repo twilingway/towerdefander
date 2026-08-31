@@ -72,6 +72,7 @@ function report(cells: BatchCell[]): BatchReport {
       enemyOffsets: [0],
       crewSizes: [3],
       presetIds: ["default"],
+      shipArchetypeIds: ["guardian"],
       runsPerCell: 4,
       firstSeed: 1,
       maxWaves: 40,
@@ -85,29 +86,53 @@ function report(cells: BatchCell[]): BatchReport {
 }
 
 describe("cell identity", () => {
-  it("keys a cell by all four axes", () => {
-    const key: CellKey = { level: "ace", enemyOffset: -1, crewSize: 2, presetId: "default" };
-    expect(cellId(key)).toBe("default|ace|-1|2");
-    expect(cellLabel(key)).toBe("Ас · сдвиг -1 · экипаж 2");
+  it("keys a cell by all five axes", () => {
+    const key: CellKey = {
+      level: "ace",
+      enemyOffset: -1,
+      crewSize: 2,
+      presetId: "default",
+      shipArchetypeId: "guardian"
+    };
+    expect(cellId(key)).toBe("default|guardian|ace|-1|2");
+    expect(cellLabel(key)).toBe("guardian · Ас · сдвиг -1 · экипаж 2");
   });
 
   it("marks a non-negative offset with a sign so the axis reads in order", () => {
-    expect(cellLabel({ level: "rookie", enemyOffset: 0, crewSize: 1, presetId: "p" })).toContain(
-      "сдвиг +0"
-    );
+    expect(
+      cellLabel({
+        level: "rookie",
+        enemyOffset: 0,
+        crewSize: 1,
+        presetId: "p",
+        shipArchetypeId: "guardian"
+      })
+    ).toContain("сдвиг +0");
   });
 });
 
 describe("wave series", () => {
   const cells = [
     cell(
-      { level: "rookie", enemyOffset: 0, crewSize: 3, presetId: "default" },
+      {
+        level: "rookie",
+        enemyOffset: 0,
+        crewSize: 3,
+        presetId: "default",
+        shipArchetypeId: "guardian"
+      },
       {
         wave: { min: 1, median: 5, mean: 5, p95: 6, max: 6 }
       }
     ),
     cell(
-      { level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" },
+      {
+        level: "ace",
+        enemyOffset: 0,
+        crewSize: 3,
+        presetId: "default",
+        shipArchetypeId: "guardian"
+      },
       {
         wave: { min: 2, median: 9, mean: 9, p95: 10, max: 10 }
       }
@@ -131,7 +156,13 @@ describe("wave series", () => {
 describe("reach share", () => {
   it("reports the percentage of runs that got to each wave", () => {
     const withWaves = cell(
-      { level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" },
+      {
+        level: "ace",
+        enemyOffset: 0,
+        crewSize: 3,
+        presetId: "default",
+        shipArchetypeId: "guardian"
+      },
       {
         completedRuns: 4,
         waves: [
@@ -173,7 +204,13 @@ describe("reach share", () => {
 describe("accuracy", () => {
   it("reads zero shots as zero rather than NaN", () => {
     const bars = accuracyBars([
-      cell({ level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" })
+      cell({
+        level: "ace",
+        enemyOffset: 0,
+        crewSize: 3,
+        presetId: "default",
+        shipArchetypeId: "guardian"
+      })
     ]);
     expect(bars.series[0]?.points).toEqual([0]);
   });
@@ -181,7 +218,13 @@ describe("accuracy", () => {
   it("turns hits over shots into whole percent", () => {
     const bars = accuracyBars([
       cell(
-        { level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" },
+        {
+          level: "ace",
+          enemyOffset: 0,
+          crewSize: 3,
+          presetId: "default",
+          shipArchetypeId: "guardian"
+        },
         { stats: { ...zeroStats, shotsByCannon: 200, hitsByCannon: 50 } }
       )
     ]);
@@ -192,7 +235,13 @@ describe("accuracy", () => {
 describe("outcomes and upgrades", () => {
   it("stacks the three ways a run can end", () => {
     const bars = outcomeBars([
-      cell({ level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" })
+      cell({
+        level: "ace",
+        enemyOffset: 0,
+        crewSize: 3,
+        presetId: "default",
+        shipArchetypeId: "guardian"
+      })
     ]);
     expect(bars.series.map(({ points }) => points[0])).toEqual([3, 1, 0]);
   });
@@ -200,7 +249,13 @@ describe("outcomes and upgrades", () => {
   it("orders bought upgrades by how often they were bought", () => {
     const rows = upgradeRows(
       cell(
-        { level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" },
+        {
+          level: "ace",
+          enemyOffset: 0,
+          crewSize: 3,
+          presetId: "default",
+          shipArchetypeId: "guardian"
+        },
         { upgradesBought: { pilot_hull: 1, gunner_damage: 5, shield_arc: 3 } }
       )
     );
@@ -214,7 +269,13 @@ describe("outcomes and upgrades", () => {
   it("puts earned and spent credits on one wave axis", () => {
     const series = economyByWave(
       cell(
-        { level: "ace", enemyOffset: 0, crewSize: 3, presetId: "default" },
+        {
+          level: "ace",
+          enemyOffset: 0,
+          crewSize: 3,
+          presetId: "default",
+          shipArchetypeId: "guardian"
+        },
         {
           waves: [
             {

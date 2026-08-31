@@ -24,6 +24,7 @@ function toggle<T>(values: readonly T[], value: T): T[] {
 export function BatchLauncher({
   request,
   presetIds,
+  shipArchetypeIds,
   running,
   busy,
   onChange,
@@ -32,6 +33,8 @@ export function BatchLauncher({
 }: {
   readonly request: BatchRequest;
   readonly presetIds: readonly string[];
+  /** Hulls of the active preset; the fifth axis of the matrix. */
+  readonly shipArchetypeIds: readonly string[];
   readonly running: BatchProgress | null;
   readonly busy: boolean;
   readonly onChange: (request: BatchRequest) => void;
@@ -116,6 +119,23 @@ export function BatchLauncher({
               }}
             />
             {presetId}
+          </label>
+        ))}
+      </div>
+
+      <div className="axis-row">
+        <span className="axis-row__caption">Корпус</span>
+        {shipArchetypeIds.map((hullId) => (
+          <label key={hullId} className="axis-row__option">
+            <input
+              type="checkbox"
+              checked={request.shipArchetypeIds.includes(hullId)}
+              onChange={() => {
+                const ids = toggle(request.shipArchetypeIds, hullId);
+                if (ids.length > 0) onChange({ ...request, shipArchetypeIds: ids });
+              }}
+            />
+            {hullId}
           </label>
         ))}
       </div>

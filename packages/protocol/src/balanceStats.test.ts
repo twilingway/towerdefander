@@ -17,6 +17,7 @@ function request(overrides: Partial<BatchRequest> = {}): BatchRequest {
     enemyOffsets: [0],
     crewSizes: [3],
     presetIds: ["default"],
+    shipArchetypeIds: ["guardian"],
     runsPerCell: 20,
     firstSeed: 1,
     maxWaves: 40,
@@ -77,6 +78,7 @@ describe("batch request", () => {
       enemyOffsets: [-1, 0, 1],
       crewSizes: [1, 2, 3],
       presetIds: ["default", "hard"],
+      shipArchetypeIds: ["guardian"],
       runsPerCell: 10
     });
     expect(countBatchCells(asked)).toBe(54);
@@ -105,7 +107,13 @@ describe("batch report", () => {
         finishedAtMs: 2,
         cells: [
           {
-            key: { level: "veteran", enemyOffset: 0, crewSize: 3, presetId: "default" },
+            key: {
+              level: "veteran",
+              enemyOffset: 0,
+              crewSize: 3,
+              presetId: "default",
+              shipArchetypeId: "guardian"
+            },
             completedRuns: 1,
             wave: zeroSummary,
             score: zeroSummary,
@@ -114,12 +122,12 @@ describe("batch report", () => {
             bossWavesCleared: 1,
             bossKills: 1,
             stats: zeroStats,
-            upgradesBought: { pilot_hull: 1, gunner_damage: 2 },
+            upgradesBought: { hullPlating1: 1, heavyRounds: 2 },
             splitVotes: 3,
             builds: [
               {
-                key: "gunner_damagex2+pilot_hullx1",
-                build: { gunner_damage: 2, pilot_hull: 1 },
+                key: "heavyRoundsx2+hullPlating1x1",
+                build: { heavyRounds: 2, hullPlating1: 1 },
                 runs: 1,
                 medianWave: 5,
                 bestWave: 5,

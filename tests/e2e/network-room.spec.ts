@@ -373,7 +373,8 @@ test("crew votes one shared upgrade and pays for it once", async ({ browser }) =
 
     const intermission = display.locator(".encounter-overlay--intermission");
     await expect(intermission).toContainText("Голосование за общее улучшение");
-    await expect(intermission.locator(".intermission-card")).toHaveCount(3);
+    // The first tier of the tree is one card wide; the tier widens with depth.
+    await expect(intermission.locator(".intermission-card")).toHaveCount(1);
     // An encounter window must sit above the combat telemetry, and the whole
     // ballot must fit a landscape phone: a card below the fold reads as a
     // controller that simply ignores the vote.

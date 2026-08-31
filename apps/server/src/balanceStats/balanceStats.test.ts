@@ -76,6 +76,7 @@ const batchRequest: BatchRequest = {
   enemyOffsets: [0],
   crewSizes: [3],
   presetIds: ["default"],
+  shipArchetypeIds: ["guardian"],
   runsPerCell: 1,
   firstSeed: 1,
   maxWaves: 2,
@@ -232,6 +233,7 @@ describe("batch routes", () => {
           enemyOffsets: [-2, -1, 0, 1, 2],
           crewSizes: [1, 2, 3],
           presetIds: ["a", "b", "c"],
+          shipArchetypeIds: ["guardian"],
           runsPerCell: 1
         }
       }),

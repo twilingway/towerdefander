@@ -29,12 +29,19 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : "Неизвестная ошибка.";
 }
 
+/** Hulls of the active preset, in a stable order, for the batch's fifth axis. */
+function activeHullIds(document: BalancePresetsFile): readonly string[] {
+  const active = document.presets.find(({ id }) => id === document.activePresetId);
+  return Object.keys(active?.tuning.shipArchetypes ?? {}).sort();
+}
+
 function defaultRequest(document: BalancePresetsFile): BatchRequest {
   return {
     levels: ["rookie", "veteran", "ace"],
     enemyOffsets: [0],
     crewSizes: [3],
     presetIds: [document.activePresetId],
+    shipArchetypeIds: [activeHullIds(document)[0] ?? "guardian"],
     runsPerCell: 10,
     firstSeed: 1,
     maxWaves: 40,
@@ -136,6 +143,7 @@ export function StatsScreen({
       <BatchLauncher
         request={request}
         presetIds={document.presets.map(({ id }) => id)}
+        shipArchetypeIds={activeHullIds(document)}
         running={running}
         busy={busy}
         onChange={setRequest}

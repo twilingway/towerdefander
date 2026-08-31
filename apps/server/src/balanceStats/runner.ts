@@ -76,6 +76,8 @@ export class BatchRunner {
       request.crewSizes.join(","),
       "--presets",
       request.presetIds.join(","),
+      "--hulls",
+      request.shipArchetypeIds.join(","),
       "--runs",
       String(request.runsPerCell),
       "--seed",
@@ -169,5 +171,5 @@ export class BatchRunner {
 
 function describeCell(key: CellKey | undefined): string {
   if (key === undefined) return "cell finished";
-  return `${key.presetId} · ${key.level} · offset ${String(key.enemyOffset)} · crew ${String(key.crewSize)}`;
+  return `${key.presetId} · ${key.shipArchetypeId} · ${key.level} · offset ${String(key.enemyOffset)} · crew ${String(key.crewSize)}`;
 }

@@ -18,11 +18,11 @@ export const LEVEL_LABELS: Record<string, string> = {
 };
 
 export function cellId(key: CellKey): string {
-  return `${key.presetId}|${key.level}|${String(key.enemyOffset)}|${String(key.crewSize)}`;
+  return `${key.presetId}|${key.shipArchetypeId}|${key.level}|${String(key.enemyOffset)}|${String(key.crewSize)}`;
 }
 
 export function cellLabel(key: CellKey): string {
-  return `${LEVEL_LABELS[key.level] ?? key.level} · сдвиг ${key.enemyOffset >= 0 ? "+" : ""}${String(key.enemyOffset)} · экипаж ${String(key.crewSize)}`;
+  return `${key.shipArchetypeId} · ${LEVEL_LABELS[key.level] ?? key.level} · сдвиг ${key.enemyOffset >= 0 ? "+" : ""}${String(key.enemyOffset)} · экипаж ${String(key.crewSize)}`;
 }
 
 function uniqueInOrder<T>(values: readonly T[]): T[] {

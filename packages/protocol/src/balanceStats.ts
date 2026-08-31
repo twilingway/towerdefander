@@ -13,11 +13,14 @@ import { AUTOPILOT_LEVELS } from "./balance.ts";
  * worse than no measurement: the reader drops a foreign version and says how
  * many it dropped.
  */
-export const BALANCE_STATS_FILE_VERSION = 1 as const;
+export const BALANCE_STATS_FILE_VERSION = 2 as const;
 
 /** Ceilings that keep one console click from pinning a core for an hour. */
 export const MAX_BATCH_RUNS = 2000;
-export const MAX_BATCH_CELLS = 90;
+// Five axes now that the hull is one of them: three levels, five difficulty
+// offsets, three crew sizes, the presets and the hulls. The ceiling holds a
+// full three-hull sweep of the other four axes at their usual widths.
+export const MAX_BATCH_CELLS = 135;
 
 export const ENEMY_OFFSETS = [-2, -1, 0, 1, 2] as const;
 export const CREW_SIZES = [1, 2, 3] as const;
@@ -34,6 +37,8 @@ export const batchRequestSchema = z
     enemyOffsets: z.array(z.number().int().min(-2).max(2)).min(1).max(5),
     crewSizes: z.array(z.number().int().min(1).max(3)).min(1).max(3),
     presetIds: z.array(z.string().min(1).max(64)).min(1).max(10),
+    /** Hulls to sweep. Empty means "whatever the preset calls its default". */
+    shipArchetypeIds: z.array(z.string().min(1).max(48)).min(1).max(6),
     runsPerCell: z.number().int().positive().max(200),
     firstSeed: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     maxWaves: z.number().int().positive().max(200),
@@ -147,7 +152,8 @@ export const cellKeySchema = z
     level: z.enum(AUTOPILOT_LEVELS),
     enemyOffset: z.number().int().min(-2).max(2),
     crewSize: z.number().int().min(1).max(3),
-    presetId: z.string().min(1).max(64)
+    presetId: z.string().min(1).max(64),
+    shipArchetypeId: z.string().min(1).max(48)
   })
   .strict();
 export type CellKey = z.infer<typeof cellKeySchema>;
@@ -244,7 +250,8 @@ export function countBatchCells(request: BatchRequest): number {
     request.levels.length *
     request.enemyOffsets.length *
     request.crewSizes.length *
-    request.presetIds.length
+    request.presetIds.length *
+    request.shipArchetypeIds.length
   );
 }
 
