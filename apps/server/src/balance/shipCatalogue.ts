@@ -102,15 +102,22 @@ const BLADE: ShipArchetype = {
   unlockedAtWave: 15,
   overrides: {
     stats: {
-      spaceshipMaxHp: 340,
+      // Fragility is priced in damage, not in speed. Measured: the stat block
+      // alone costs four waves on the stand, and the speed buys none of them
+      // back, because the demo bot holds the distance its autopilot profile
+      // says rather than the one the hull wants. So the Blade pays for thin
+      // armour with a barrel that hurts: damage x1.4 and a shorter cooldown put
+      // it level with the Guardian in median and within half a wave in mean.
+      spaceshipMaxHp: 400,
       spaceshipRadius: 44,
       shieldRadius: 92,
       spaceshipSpeedPerSecond: 420,
       spaceshipAccelerationPerSecondSquared: 900,
-      shieldCapacity: 70,
-      shieldArcRadians: 60 * DEGREES,
-      cannonLaserRange: 700,
-      mgLaserRange: 520
+      shieldCapacity: 85,
+      shieldArcRadians: 75 * DEGREES,
+      friendlyProjectileDamage: 35,
+      mgDamage: 11,
+      fireCooldownTicks: 4
     },
     cannonWeaponKind: "laser",
     mgWeaponKind: "laser"
@@ -152,7 +159,10 @@ const BASTION: ShipArchetype = {
       spaceshipAccelerationPerSecondSquared: 420,
       headingMaxAngularSpeedPerSecond: Math.PI * 0.7,
       shieldCapacity: 160,
-      shieldArcRadians: 130 * DEGREES
+      shieldArcRadians: 130 * DEGREES,
+      // Toughness is what a stand-off fighter converts into waves best, so the
+      // Bastion pays for it in cadence: a launcher that takes its time.
+      fireCooldownTicks: 7
     },
     cannonWeaponKind: "missile",
     mgWeaponKind: "missile"
