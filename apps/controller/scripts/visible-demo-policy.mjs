@@ -55,6 +55,46 @@ export function normalize(vector) {
   return { x: vector.x / length, y: vector.y / length };
 }
 
+/**
+ * Stand-in muzzle velocity for a barrel that hits the instant it fires. The
+ * lead solution is written in terms of a projectile speed, and this is what
+ * "do not lead at all" looks like in those terms: fast enough that the lead
+ * collapses onto the bearing, finite enough to stay arithmetic.
+ */
+export const HITSCAN_SPEED = 1_000_000;
+
+/**
+ * What speed the lead solution should use for a barrel of this kind. A laser
+ * led like a bullet aims where the target will be and misses everything that
+ * moves — measured on the stand as the difference between a median wave of 5
+ * and one of 8.
+ */
+export function leadSpeedFor(kind, projectileSpeed) {
+  return kind === "laser" ? HITSCAN_SPEED : projectileSpeed;
+}
+
+/**
+ * How far off the bearing a barrel may fire and still expect to connect.
+ *
+ * A bullet has travel time and a body of its own, so the profile's cone is a
+ * reasonable gamble. A beam either crosses the target this instant or does not,
+ * so its cone is the angle the target actually subtends - anything wider is a
+ * shot spent on empty space, and on screen it reads as a barrel that cannot
+ * shoot straight.
+ */
+function firingCone(speed, target, world, profileCone, traverseReach) {
+  if (speed < HITSCAN_SPEED) return Math.max(profileCone, traverseReach);
+  const distance = Math.max(1, distanceBetween(world.ship, target));
+  return Math.max(Math.atan2(target.radius, distance), HITSCAN_AIM_FLOOR);
+}
+
+/**
+ * The tightest cone a hitscan barrel will wait for. Small enough to matter at
+ * the ranges a beam reaches, wide enough that a settling turret still crosses
+ * it instead of hunting forever.
+ */
+const HITSCAN_AIM_FLOOR = 0.02;
+
 const TICK_MS = 50;
 /**
  * Stock muzzle velocities, used only when the caller does not know better.
@@ -690,10 +730,8 @@ export function planGunner(world, profile, memory, options = {}) {
   const cool =
     cannon === undefined ||
     (!cannon.overheated && cannon.heat <= cannon.capacity * (profile.cannonHeatCeiling ?? 1));
-  const firing =
-    cool &&
-    Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <=
-      Math.max(profile.cannonConeRadians, reach);
+  const cone = firingCone(speed, target, world, profile.cannonConeRadians, reach);
+  const firing = cool && Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <= cone;
   return { aim: bearingVector(bearing), firing };
 }
 
@@ -1031,12 +1069,16 @@ function planPilotCourse(world, profile, memory, options) {
   // What the gun would hit right now, which is not always what is being flown
   // at: a missile crossing the bore is free damage and costs the course nothing.
   const noseBearing = committed === target ? bearing : solve(committed);
-  const withinCone = (angle) =>
+  const noseCone = (entity) =>
+    entity === undefined
+      ? profile.mgConeRadians
+      : firingCone(speed, entity, world, profile.mgConeRadians, profile.mgConeRadians);
+  const withinCone = (angle, entity) =>
     angle !== undefined &&
-    Math.abs(shortestAngleDelta(world.ship.heading, angle)) <= profile.mgConeRadians;
-  const onAxis = withinCone(bearing);
+    Math.abs(shortestAngleDelta(world.ship.heading, angle)) <= noseCone(entity);
+  const onAxis = withinCone(bearing, target);
   const mgFiring =
-    withinCone(noseBearing) &&
+    withinCone(noseBearing, committed === target ? target : committed) &&
     !world.machineGun.overheated &&
     world.machineGun.heat <= world.machineGun.capacity * profile.mgHeatCeiling;
 

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   createAutopilotMemory,
+  HITSCAN_SPEED,
+  leadSpeedFor,
   helmIntent,
   huntVector,
   directAim,
@@ -1225,4 +1227,14 @@ test("the detour is capped while the fight is on and lifted once it is won", () 
     aimAtDrop(planPilot(won, ACE, createAutopilotMemory()), won.ship, far) > 0.9,
     "inside the window there is nothing else to do with the time"
   );
+});
+
+test("a beam is never led, whatever the preset says its projectiles fly at", () => {
+  // Both harnesses feed the lead solution from here. Leading a laser is what
+  // made it the weakest of the three kinds on the stand and made it miss
+  // everything that moved on screen.
+  assert.equal(leadSpeedFor("kinetic", 720), 720);
+  assert.equal(leadSpeedFor("missile", 720), 720);
+  assert.equal(leadSpeedFor(undefined, 720), 720);
+  assert.equal(leadSpeedFor("laser", 720), HITSCAN_SPEED);
 });

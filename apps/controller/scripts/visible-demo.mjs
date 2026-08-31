@@ -17,6 +17,7 @@ import { chromium } from "@playwright/test";
 import {
   createAutopilotMemory,
   extrapolateWorld,
+  leadSpeedFor,
   measureAngularRates,
   planGunner,
   planPilot,
@@ -591,9 +592,10 @@ async function loadAutopilot() {
     profile,
     archetypes: tuning.enemyArchetypes ?? {},
     // Both muzzle velocities are preset values, so the lead solution has to
-    // use the ones this run will actually fire with.
-    cannonSpeed: tuning.projectileSpeedPerSecond,
-    mgSpeed: tuning.mgProjectileSpeedPerSecond,
+    // use the ones this run will actually fire with - and a beam is not led at
+    // all, whatever the preset says its projectiles fly at.
+    cannonSpeed: leadSpeedFor(tuning.cannonWeaponKind, tuning.projectileSpeedPerSecond),
+    mgSpeed: leadSpeedFor(tuning.mgWeaponKind, tuning.mgProjectileSpeedPerSecond),
     // How fast the turret can actually swing decides whether a crossing target
     // is winnable at all, so the bot has to read it rather than assume it.
     turretRate: tuning.turretMaxAngularSpeedPerSecond

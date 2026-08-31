@@ -20,6 +20,7 @@ import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 
 import {
   createAutopilotMemory,
+  leadSpeedFor,
   planGunner,
   planPilot,
   planShield
@@ -38,11 +39,6 @@ export const DEFAULT_MAX_WAVES = 40;
 export const MAX_RUN_TICKS = 400_000;
 /** Seats in the order a room fills them; mirrors CREW_ROLES on the server. */
 export const CREW_ROLES = ["pilot", "gunner", "shield"];
-/**
- * Stand-in muzzle velocity for a hitscan barrel: fast enough that the lead
- * solution collapses to the bearing, finite enough that it stays arithmetic.
- */
-const HITSCAN_SPEED = 1_000_000;
 
 export function defaultPresetPath() {
   return fileURLToPath(new URL("../data/balance.json", import.meta.url));
@@ -167,12 +163,8 @@ export function playRun(config, options) {
   const memory = createAutopilotMemory(seed);
   const policyOptions = {
     archetypes: config.enemyArchetypes,
-    // A beam arrives the instant it is fired, so leading a target with one is
-    // simply aiming past it. The lead solution takes a muzzle velocity, and
-    // HITSCAN_SPEED is what "no lead" looks like in those terms.
-    cannonSpeed:
-      config.cannonWeaponKind === "laser" ? HITSCAN_SPEED : config.projectileSpeedPerSecond,
-    mgSpeed: config.mgWeaponKind === "laser" ? HITSCAN_SPEED : config.mgProjectileSpeedPerSecond,
+    cannonSpeed: leadSpeedFor(config.cannonWeaponKind, config.projectileSpeedPerSecond),
+    mgSpeed: leadSpeedFor(config.mgWeaponKind, config.mgProjectileSpeedPerSecond),
     turretRate: config.turretMaxAngularSpeedPerSecond
   };
   const seats = CREW_ROLES.slice(0, crewSize);
