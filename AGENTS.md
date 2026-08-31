@@ -27,6 +27,13 @@ computer browsers as pilot, gunner, and shield operator.
 - Keep the visual implementation 2D. The target direction is pseudo-3D spaceship art, layered deep
   space, particles, and shader effects; do not introduce a true 3D renderer without an accepted
   OpenSpec change.
+- **The bot has two harnesses; a fix to one is not a fix.** `apps/server/scripts/balance-run.mjs`
+  drives the autopilot headlessly for measurement, `apps/controller/scripts/visible-demo.mjs` drives
+  the same policy through a real browser. Anything that changes what the bot perceives or decides —
+  the world picture it is handed, the options fed to the policy, the aiming rules — has to land in
+  both, and belongs in the shared `visible-demo-policy.mjs` whenever it can. Twice now a rule was
+  fixed on the stand alone and the operator watched the old behaviour on screen: the numbers said
+  the change worked and the game said it did not.
 
 ## Spec-driven workflow
 

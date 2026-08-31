@@ -51,6 +51,12 @@ Every harness uses its own port block, so they can run while `pnpm dev` is up. `
 child processes with `--import ./scripts/owned-process-guard.mjs` so stopping a harness kills only
 processes it started — keep that guard when adding a harness.
 
+`stats:autopilot`/`stats:batch` and `demo:visible`/`demo:verify` drive the **same** autopilot policy
+— headlessly and through a real browser. A change to what the bot sees or decides has to land in
+both world builders, and belongs in the shared `apps/controller/scripts/visible-demo-policy.mjs`
+whenever it can; see the working agreement in `AGENTS.md`. A fix made on the stand alone measures as
+working and plays as broken.
+
 ## Architecture
 
 Server-authoritative realtime game: `apps/server` (Colyseus) owns trusted state; display and
