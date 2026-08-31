@@ -48,7 +48,7 @@ import {
 import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
-import { isVisibleDemoMode, readStartWave } from "./visibleDemo.js";
+import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -74,6 +74,11 @@ export function DisplayApp() {
   const initialStartWave = allowStartWave
     ? readStartWave(typeof window === "undefined" ? "" : window.location.search, MAX_START_WAVE)
     : 1;
+  // Lets a demo or a bookmark open the run on a named hull; the picker below
+  // still wins when someone touches it.
+  const urlShipArchetypeId = readShipArchetypeId(
+    typeof window === "undefined" ? "" : window.location.search
+  );
   const preview = isPreviewMode(
     typeof window === "undefined" ? "" : window.location.search,
     import.meta.env.DEV
@@ -234,7 +239,7 @@ export function DisplayApp() {
         allowStartWave={allowStartWave}
         initialStartWave={initialStartWave}
         ships={shipCatalogue?.ships ?? []}
-        defaultShipId={shipCatalogue?.defaultShipId}
+        defaultShipId={urlShipArchetypeId ?? shipCatalogue?.defaultShipId}
         onCreate={(crewSize, shipArchetypeId, startWave) =>
           void createRoom(crewSize, shipArchetypeId, startWave)
         }

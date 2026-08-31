@@ -37,16 +37,23 @@ const STATUS_EVENT = "spaceship-visible-demo-status";
  * the launcher always passes an explicit `DEMO_DISPLAY_URL` — appending it only
  * to the fallback meant the option was silently dropped on every real run.
  */
-function withStartWave(base, startWave) {
-  if (startWave === undefined || startWave.trim().length === 0) return base;
+function withQuery(base, key, value) {
+  if (value === undefined || value.trim().length === 0) return base;
   const url = new URL(base);
-  url.searchParams.set("wave", startWave.trim());
+  url.searchParams.set(key, value.trim());
   return url.toString();
 }
 
-const displayUrl = withStartWave(
-  process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1",
-  process.env.DEMO_START_WAVE
+// `DEMO_SHIP=blade` opens the run on a named hull, which is the only way to
+// watch one of the other two play rather than read its numbers.
+const displayUrl = withQuery(
+  withQuery(
+    process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1",
+    "wave",
+    process.env.DEMO_START_WAVE
+  ),
+  "ship",
+  process.env.DEMO_SHIP
 );
 console.log(`Visible demo display: ${displayUrl}`);
 const gameServerUrl = process.env.DEMO_GAME_SERVER_URL ?? "ws://127.0.0.1:36567";

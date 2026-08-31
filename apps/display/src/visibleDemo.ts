@@ -59,6 +59,18 @@ export function readStartWave(search: string, max: number): number {
   return Math.min(max, raw);
 }
 
+/**
+ * Hull a `?ship=blade` in the address asks the room to open on. An unknown or
+ * missing id reads as "whatever the preset calls its default", which is what an
+ * ordinary visit gets — so a stray value never opens a room on a ship nobody
+ * chose.
+ */
+export function readShipArchetypeId(search: string): string | undefined {
+  const raw = new URLSearchParams(search).get("ship");
+  if (raw === null || !/^[a-z][a-zA-Z0-9-]{0,47}$/u.test(raw)) return undefined;
+  return raw;
+}
+
 export function isVisibleDemoMode(
   search: string,
   development: boolean,
