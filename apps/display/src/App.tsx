@@ -27,6 +27,7 @@ import {
 } from "@spaceship-defender/client-shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
 import { CrewLatency } from "./components/CrewLatency/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
@@ -347,6 +348,7 @@ export function DisplayApp() {
                 secondsRemaining={view.game.encounter.waveSecondsRemaining}
               />
             ))}
+          {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
           <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
             <TeamUpgradeOverlay

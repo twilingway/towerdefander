@@ -508,10 +508,16 @@ p {
   box-shadow: 0 0 0.8rem rgb(255 73 60 / 85%);
 }
 
+/* Half the size it was: four digits do not need a nine-rem disc, and the band
+   under it belongs to the boss bar. */
+.display-shell--battle {
+  --wave-clock-size: clamp(3.5rem, 4.5vw, 4.5rem);
+}
+
 .wave-countdown {
   display: grid;
-  width: clamp(7rem, 9vw, 9rem);
-  padding: 0.8rem;
+  width: var(--wave-clock-size, clamp(3.5rem, 4.5vw, 4.5rem));
+  padding: 0.35rem;
   border: 2px solid rgb(117 216 255 / 68%);
   border-radius: 50%;
   color: #c9f5ff;
@@ -527,16 +533,64 @@ p {
   backdrop-filter: blur(6px);
 }
 
+/* The caption no longer fits and no longer has to: the timer carries its own
+   aria-label, so the words are still there for a screen reader. */
 .wave-countdown span {
-  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  display: none;
 }
 
 .wave-countdown strong {
   color: #ffd783;
-  font-size: clamp(1.4rem, 2.2vw, 2.1rem);
+  font-size: clamp(0.95rem, 1.4vw, 1.3rem);
+}
+
+/* Directly under the clock, and only while a boss is alive. */
+.boss-health {
+  position: absolute;
+  z-index: 25;
+  top: calc(max(0.75rem, env(safe-area-inset-top)) + var(--wave-clock-size) + 0.5rem);
+  left: 50%;
+  display: grid;
+  width: min(26rem, 38vw);
+  gap: 0.2rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid rgb(255 93 79 / 45%);
+  border-radius: 0.75rem;
+  color: #ffd7cf;
+  background: rgb(30 8 10 / 78%);
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  backdrop-filter: blur(6px);
+}
+
+.boss-health span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.boss-health small {
+  color: #ffb8af;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.boss-health__bar {
+  width: 100%;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.boss-health__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff5d4f, #ffb54a);
+  transition: width 120ms linear;
 }
 
 .wave-countdown--warning {

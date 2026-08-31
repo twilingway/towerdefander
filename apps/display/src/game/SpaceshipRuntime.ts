@@ -672,7 +672,8 @@ const FALLBACK_ENEMY_VISUAL: PublicEnemyCatalogueEntry = {
   label: "Unknown",
   shape: FALLBACK_VISUAL_ASSET_ID,
   modelScale: 1,
-  showHealthBar: false
+  showHealthBar: false,
+  isBoss: false
 };
 
 /** An archetype the display has no entry for still gets drawn, just generically. */

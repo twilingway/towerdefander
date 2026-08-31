@@ -289,13 +289,30 @@ export const PREVIEW_ENDLESS_TIER: readonly ModuleTreeEntry[] = [
  * chosen art instead of the fallback silhouettes.
  */
 const PREVIEW_ENEMY_CATALOGUE: PublicEnemyCatalogueEntry[] = [
-  { kind: "gunship", label: "Ганшип", shape: "ship-delta", modelScale: 1, showHealthBar: true },
+  {
+    kind: "gunship",
+    label: "Ганшип",
+    shape: "ship-delta",
+    modelScale: 1,
+    showHealthBar: true,
+    isBoss: false
+  },
   {
     kind: "missileCarrier",
     label: "Ракетоносец",
     shape: "ship-broadwing",
     modelScale: 1,
-    showHealthBar: true
+    showHealthBar: true,
+    isBoss: false
+  },
+  // One boss in the fixture, so the preview shows the bar under the clock.
+  {
+    kind: "boss",
+    label: "Босс",
+    shape: "boss-hammerhead",
+    modelScale: 1.4,
+    showHealthBar: true,
+    isBoss: true
   }
 ];
 
@@ -450,6 +467,19 @@ function createPreviewGame(
           heading: 0,
           hp: 120,
           maxHp: 140
+        },
+        {
+          entityId: "preview-boss",
+          spawnSequence: 10,
+          x: 2180,
+          y: 1420,
+          velocityX: -14,
+          velocityY: 22,
+          radius: 96,
+          kind: "boss",
+          heading: Math.PI / 2,
+          hp: 1420,
+          maxHp: 2000
         }
       ],
       lootDrops: [],

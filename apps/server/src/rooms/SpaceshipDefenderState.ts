@@ -228,6 +228,7 @@ export class EnemyVisualState extends Schema {
   @type("string") shape = "ship-spear";
   @type("float32") modelScale = 1;
   @type("boolean") showHealthBar = false;
+  @type("boolean") isBoss = false;
 }
 
 export class SpaceshipDisplayState extends Schema {

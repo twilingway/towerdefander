@@ -209,6 +209,7 @@ interface NetworkEnemyVisualState {
   shape: string;
   modelScale: number;
   showHealthBar: boolean;
+  isBoss: boolean;
 }
 
 export interface NetworkRoomState {
@@ -346,7 +347,8 @@ export function toDisplayRoomView(
               label: entry.label,
               shape: entry.shape,
               modelScale: entry.modelScale,
-              showHealthBar: entry.showHealthBar
+              showHealthBar: entry.showHealthBar,
+              isBoss: entry.isBoss
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),

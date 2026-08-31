@@ -22,7 +22,9 @@ describe("createPreviewRoomView", () => {
   it("fills the combat frame with entities for the Phaser scene", () => {
     const game = createPreviewRoomView("combat").game;
 
-    expect(game?.enemyShips).toHaveLength(2);
+    // Two ordinary enemies and the boss, so the boss bar has something to name.
+    expect(game?.enemyShips).toHaveLength(3);
+    expect(game?.enemyCatalogue.filter((entry) => entry.isBoss)).toHaveLength(1);
     // One rock of each origin, so the preview shows both radar looks at once.
     expect(game?.asteroids.map((asteroid) => asteroid.origin)).toEqual(["wave", "ambient"]);
     expect(game?.friendlyProjectiles.map((projectile) => projectile.source)).toEqual([

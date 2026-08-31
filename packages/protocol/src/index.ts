@@ -24,7 +24,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 40 as const;
+export const PROTOCOL_VERSION = 41 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -622,7 +622,9 @@ export const publicEnemyCatalogueEntrySchema = z
     label: z.string().min(1).max(48),
     shape: visualAssetIdSchema,
     modelScale: z.number().min(0.2).max(4),
-    showHealthBar: z.boolean()
+    showHealthBar: z.boolean(),
+    /** Sent once per run: the display names the boss, it never guesses one. */
+    isBoss: z.boolean()
   })
   .strict();
 export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;

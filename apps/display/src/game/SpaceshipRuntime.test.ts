@@ -99,6 +99,7 @@ function catalogueEntry(
     shape: "ship-delta",
     modelScale: 1,
     showHealthBar: false,
+    isBoss: false,
     ...overrides
   };
 }

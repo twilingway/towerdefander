@@ -689,6 +689,7 @@ export class SpaceshipDefenderRoom extends Room<{
       entry.shape = archetype.visual.shape;
       entry.modelScale = archetype.visual.modelScale;
       entry.showHealthBar = archetype.visual.showHealthBar;
+      entry.isBoss = archetype.spawnPolicy === "boss";
       catalogue.set(kind, entry);
     }
   }

@@ -1,4 +1,9 @@
-import type { ShieldPhase } from "@spaceship-defender/protocol";
+import type {
+  DisplayGameSnapshot,
+  PublicEnemyCatalogueEntry,
+  PublicEnemyView,
+  ShieldPhase
+} from "@spaceship-defender/protocol";
 
 export interface RadarPoint {
   readonly x: number;
@@ -70,4 +75,40 @@ export function getShieldStatusLabel(
   if (rearmRequired) return "НАБИРАЕТ ЗАРЯД";
   if (energy <= 0) return "РАЗРЯЖЕН";
   return "выключен";
+}
+
+export interface BossView {
+  readonly entityId: string;
+  readonly label: string;
+  readonly hp: number;
+  readonly maxHp: number;
+}
+
+/**
+ * The boss the HUD names, or nothing.
+ *
+ * Which archetype is a boss comes from the catalogue the room publishes once
+ * per run, never from a guess about size or health: an operator is free to
+ * call a boss anything and give it any silhouette. With more than one alive the
+ * healthiest one is the one worth watching, and it is the one that keeps the
+ * bar when the other dies.
+ */
+export function selectBoss(game: DisplayGameSnapshot): BossView | undefined {
+  const labels = new Map<string, string>();
+  for (const entry of game.enemyCatalogue satisfies readonly PublicEnemyCatalogueEntry[]) {
+    if (entry.isBoss) labels.set(entry.kind, entry.label);
+  }
+  if (labels.size === 0) return undefined;
+  let found: PublicEnemyView | undefined;
+  for (const enemy of game.enemyShips) {
+    if (!labels.has(enemy.kind)) continue;
+    if (found === undefined || enemy.hp > found.hp) found = enemy;
+  }
+  if (found === undefined) return undefined;
+  return {
+    entityId: found.entityId,
+    label: labels.get(found.kind) ?? found.kind,
+    hp: found.hp,
+    maxHp: found.maxHp
+  };
 }
