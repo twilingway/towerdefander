@@ -671,8 +671,10 @@ async function neutralizeForPhase(currentEncounter) {
 async function voteAllUpgrades(waveNumber) {
   const upgradeKey = runWaveKey(pilotRoom().state.runNumber, waveNumber);
   if (stopRequested || upgradedRunWaves.has(upgradeKey)) return;
+  // A tier is one to four cards wide, not always three: the tree widens with
+  // depth, so waiting for exactly three would hang on the first intermission.
   await waitFor(
-    () => teamUpgrade()?.hasOffer === true && teamUpgrade().offer.cards.length === 3,
+    () => teamUpgrade()?.hasOffer === true && teamUpgrade().offer.cards.length > 0,
     3_000
   );
   if (stopRequested) return;
@@ -685,7 +687,16 @@ async function voteAllUpgrades(waveNumber) {
     waveNumber: state.offer.waveNumber,
     cards: [...state.offer.cards].map((card) => ({
       upgradeId: card.upgradeId,
-      role: card.role
+      role: card.role,
+      // The effects come along because the vote policy weighs a card by what it
+      // changes, not by its id: ids are preset data now, and a card without its
+      // effects leaves the bot picking at random here while the headless stand
+      // picks well. Same policy, same inputs, or the two stands disagree.
+      effects: [...card.effects].map((effect) => ({
+        target: effect.target,
+        op: effect.op,
+        value: effect.value
+      }))
     }))
   };
   // The seats no longer send one id between them: two agree on the drawn card
