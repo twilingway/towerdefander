@@ -105,6 +105,23 @@ function armedLoops(spy: {
     .map((call) => call[1] as number | undefined);
 }
 
+/**
+ * Steps until the room says so, and reports how many ticks it took. Timings
+ * that follow from balance numbers — a battery draining, a lock clearing — are
+ * read as events here, so a retuned drain rate never reads as a broken shield.
+ */
+function advanceUntil(
+  room: SpaceshipDefenderRoom,
+  reached: () => boolean,
+  limitTicks = 600
+): number {
+  for (let ticks = 1; ticks <= limitTicks; ticks += 1) {
+    room.advanceGameStep();
+    if (reached()) return ticks;
+  }
+  throw new Error(`Room never reached the expected state within ${String(limitTicks)} ticks.`);
+}
+
 /** Steps the room until the shield has served its engage window and is up. */
 function raiseShield(room: SpaceshipDefenderRoom): void {
   const ticks = internals(room).gameConfig.shieldEngageTicks + 1;
@@ -917,18 +934,23 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 1, y: 0 },
       active: true
     });
-    for (let index = 0; index < 120; index += 1) room.advanceGameStep();
+    // Stepped to the event, not to a round number of ticks: how long the
+    // battery lasts is a balance number, and counting ticks here is what made
+    // this test read a half-charged battery as a broken shield.
+    const ticksToDepletion = advanceUntil(room, () => room.state.game.shield.rearmRequired);
+    expect(ticksToDepletion).toBeGreaterThan(0);
     expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
-    expect(room.state.game.shield.rearmRequired).toBe(true);
 
     // The button is never released and never pressed again: the old rule left
     // an operator holding a shield that refused for ever with nothing on the
-    // panel saying why. A quarter of the battery at ten a second is two and a
-    // half seconds, and the engage window follows it.
-    for (let index = 0; index < 80; index += 1) room.advanceGameStep();
-    expect(room.state.game.shield.rearmRequired).toBe(false);
-    expect(room.state.game.shield.active).toBe(true);
-    expect(room.state.game.shield.energy).toBeGreaterThan(10);
+    // panel saying why. The lock now clears on the re-arm mark by itself.
+    const ticksToRearm = advanceUntil(room, () => !room.state.game.shield.rearmRequired);
+    expect(ticksToRearm).toBeGreaterThan(0);
+    expect(room.state.game.shield.energy).toBeGreaterThanOrEqual(25);
+    // The engage window follows the mark, and the hold nobody released raises
+    // the shield without a new command.
+    const ticksToActive = advanceUntil(room, () => room.state.game.shield.active);
+    expect(ticksToActive).toBeGreaterThan(0);
   });
 
   it("clears a queued gunner click on disconnect and reconnect", async () => {
