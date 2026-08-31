@@ -33,6 +33,22 @@ describe("createPreviewRoomView", () => {
     expect(createPreviewRoomView("pilot", "combat").game?.teamUpgrade.offer).toBeNull();
   });
 
+  it("seats a solo crew alone and hands it the pilot panel", () => {
+    const view = createPreviewRoomView("shield", "combat", 1);
+
+    expect(controllerRoomViewSchema.safeParse(view).error?.issues ?? []).toEqual([]);
+    expect(view.crewSize).toBe(1);
+    expect(view.players.map((player) => player.role)).toEqual(["pilot"]);
+    expect(view.assignedRole).toBe("pilot");
+  });
+
+  it("keeps a vote only for the seats a smaller crew has", () => {
+    const votes = createPreviewRoomView("pilot", "intermission", 1).game?.teamUpgrade.votes;
+
+    expect(votes?.pilot).not.toBeNull();
+    expect(votes?.gunner).toBeNull();
+  });
+
   it("shows the current player as not ready on the result screen", () => {
     const view = createPreviewRoomView("gunner", "result");
 

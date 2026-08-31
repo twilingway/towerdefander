@@ -1,5 +1,6 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  CREW_ROLES,
   PROTOCOL_VERSION,
   clientMessage,
   roomClosingSchema,
@@ -8,6 +9,7 @@ import {
   serverMessage,
   type ControllerRoomView,
   type CrewRole,
+  type CrewSize,
   type UpgradeId
 } from "@spaceship-defender/protocol";
 import {
@@ -73,18 +75,24 @@ export function ControllerApp() {
   const [errorEpoch, setErrorEpoch] = useState(0);
   const [previewRole, setPreviewRole] = useState<CrewRole>("pilot");
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  const [previewCrewSize, setPreviewCrewSize] = useState<CrewSize>(3);
   const preview = isPreviewMode(readBrowserSearch(), import.meta.env.DEV);
+  // Dropping to a smaller crew takes the later seats away, so the role follows
+  // the fixture back to the pilot instead of pointing at a player who is gone.
+  const previewSeat = CREW_ROLES.slice(0, previewCrewSize).includes(previewRole)
+    ? previewRole
+    : "pilot";
   // Layout preview feeds the same view state the network fills, so every screen
   // renders through the production components instead of a second copy.
   const previewView = useMemo(
-    () => (preview ? createPreviewRoomView(previewRole, previewPhase) : undefined),
-    [preview, previewPhase, previewRole]
+    () => (preview ? createPreviewRoomView(previewSeat, previewPhase, previewCrewSize) : undefined),
+    [preview, previewCrewSize, previewPhase, previewSeat]
   );
   const activeView = previewView ?? view;
   const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
   const currentPlayer = findCurrentPlayer(
     activeView,
-    previewView === undefined ? playerId : previewPlayerId(previewRole)
+    previewView === undefined ? playerId : previewPlayerId(previewSeat)
   );
   const connectedToRoom = status === "connected" || status === "reconnecting";
   const inLobby = activeView?.phase === "lobby";
@@ -380,10 +388,12 @@ export function ControllerApp() {
     >
       {previewView !== undefined && (
         <PreviewControls
-          role={previewRole}
+          role={previewSeat}
           phase={previewPhase}
+          crewSize={previewCrewSize}
           onRoleChange={setPreviewRole}
           onPhaseChange={setPreviewPhase}
+          onCrewSizeChange={setPreviewCrewSize}
         />
       )}
       <section

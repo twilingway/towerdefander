@@ -28,19 +28,38 @@ describe("layout preview", () => {
     expect(markup).not.toContain("Превью верстки");
   });
 
-  it("marks the selected role and phase in the preview switcher", () => {
+  it("marks the selected crew size, role and phase in the preview switcher", () => {
     const markup = renderToStaticMarkup(
       <PreviewControls
         role="shield"
         phase="intermission"
+        crewSize={3}
         onRoleChange={() => undefined}
         onPhaseChange={() => undefined}
+        onCrewSizeChange={() => undefined}
       />
     );
 
     expect(markup).toContain("Оператор щита");
     expect(markup).toContain("Передышка");
-    expect(markup.match(/aria-pressed="true"/gu)).toHaveLength(2);
+    expect(markup.match(/aria-pressed="true"/gu)).toHaveLength(3);
+  });
+
+  it("offers only the seats a solo crew has", () => {
+    const markup = renderToStaticMarkup(
+      <PreviewControls
+        role="pilot"
+        phase="combat"
+        crewSize={1}
+        onRoleChange={() => undefined}
+        onPhaseChange={() => undefined}
+        onCrewSizeChange={() => undefined}
+      />
+    );
+
+    expect(markup).toContain("Соло");
+    expect(markup).toContain("Пилот");
+    expect(markup).not.toContain("Оператор щита");
   });
 
   it("opens expanded and offers a collapse control", () => {
@@ -48,8 +67,10 @@ describe("layout preview", () => {
       <PreviewControls
         role="pilot"
         phase="combat"
+        crewSize={3}
         onRoleChange={() => undefined}
         onPhaseChange={() => undefined}
+        onCrewSizeChange={() => undefined}
       />
     );
 

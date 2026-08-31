@@ -1,8 +1,10 @@
 import type { PreviewPhase } from "@spaceship-defender/client-shared";
+import { CREW_ROLES } from "@spaceship-defender/protocol";
 import type {
   ControllerGameSnapshot,
   ControllerRoomView,
   CrewRole,
+  CrewSize,
   PublicPlayerView
 } from "@spaceship-defender/protocol";
 
@@ -76,25 +78,36 @@ const EMPTY_TEAM_UPGRADE = {
   selection: null
 } as const;
 
-export function createPreviewRoomView(role: CrewRole, phase: PreviewPhase): ControllerRoomView {
-  const players = PREVIEW_PLAYERS.map((player) =>
-    phase === "result" && player.role === role ? { ...player, ready: false } : player
+export function createPreviewRoomView(
+  role: CrewRole,
+  phase: PreviewPhase,
+  crewSize: CrewSize = 3
+): ControllerRoomView {
+  // A smaller crew fills seats in CREW_ROLES order, the way the room assigns
+  // them; a role without a seat falls back to the pilot, who always has one.
+  const seats = CREW_ROLES.slice(0, crewSize);
+  const seat = seats.includes(role) ? role : "pilot";
+  const players = PREVIEW_PLAYERS.filter(({ role: candidate }) => seats.includes(candidate)).map(
+    (player) => (phase === "result" && player.role === seat ? { ...player, ready: false } : player)
   );
   return {
     roomId: "PREVIEW",
     phase: phase === "lobby" ? "lobby" : "active",
     runNumber: phase === "lobby" ? 0 : 1,
-    crewSize: 3,
+    crewSize,
     shipArchetypeId: "guardian",
     displayConnected: true,
     displayLatencyMs: 18,
     players,
-    assignedRole: role,
-    game: phase === "lobby" ? null : createPreviewGame(phase)
+    assignedRole: seat,
+    game: phase === "lobby" ? null : createPreviewGame(phase, seats)
   };
 }
 
-function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGameSnapshot {
+function createPreviewGame(
+  phase: Exclude<PreviewPhase, "lobby">,
+  seats: readonly CrewRole[]
+): ControllerGameSnapshot {
   if (phase === "combat") {
     return {
       ...PREVIEW_WORLD,
@@ -112,7 +125,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         phase: "combat",
         outcome: null,
         defeatReason: null,
-        waveNumber: 3,
+        waveNumber: 7,
         encounterTick: 240,
         phaseTicksRemaining: 0,
         waveSecondsRemaining: 47,
@@ -141,7 +154,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         phase: "intermission",
         outcome: null,
         defeatReason: null,
-        waveNumber: 3,
+        waveNumber: 7,
         encounterTick: 260,
         phaseTicksRemaining: 180,
         waveSecondsRemaining: 0,
@@ -152,9 +165,9 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
       helm: PREVIEW_HELM,
       teamUpgrade: {
         offer: {
-          offerId: "preview-offer-w3",
-          waveNumber: 3,
-          tier: 6,
+          offerId: "preview-offer-w7",
+          waveNumber: 7,
+          tier: 7,
           cards: [
             {
               upgradeId: "afterburner",
@@ -180,8 +193,11 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
           ]
         },
         votes: {
+          // A seat the crew size does not have cannot have voted.
           pilot: { role: "pilot", upgradeId: "turretDrive", revision: 2 },
-          gunner: { role: "gunner", upgradeId: "turretDrive", revision: 1 },
+          gunner: seats.includes("gunner")
+            ? { role: "gunner", upgradeId: "turretDrive", revision: 1 }
+            : null,
           shield: null
         },
         selection: null
@@ -205,7 +221,7 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
       phase: "result",
       outcome: "defeat",
       defeatReason: "spaceship_destroyed",
-      waveNumber: 4,
+      waveNumber: 8,
       encounterTick: 520,
       phaseTicksRemaining: 0,
       waveSecondsRemaining: 0,
