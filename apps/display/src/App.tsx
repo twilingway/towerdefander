@@ -32,7 +32,7 @@ import { CrewLatency } from "./components/CrewLatency/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
-import { getCurrentWaveUpgrade, getShieldStatusLabel } from "./combatHudViewModel.js";
+import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
@@ -45,7 +45,13 @@ import {
   confirmDisplayRoomClose,
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
-import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
+import {
+  createPreviewRoomView,
+  PREVIEW_CAMERA_VIEW_WIDTH,
+  PREVIEW_ENDLESS_TIER,
+  PREVIEW_MODULE_TIERS
+} from "./previewMode.js";
+import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
@@ -304,39 +310,9 @@ export function DisplayApp() {
               <strong>{view.game.encounter.waveNumber}</strong>
               <small>{encounterLabel(view.game.encounter.phase)}</small>
             </div>
-            <div>
-              <span>Корпус</span>
-              <strong>
-                {Math.ceil(view.game.spaceship.hp)} / {Math.ceil(view.game.spaceship.maxHp)}
-              </strong>
-              <div className="hud-energy hud-energy--hull" aria-label="Прочность корпуса">
-                <i
-                  style={{
-                    width: `${String((view.game.spaceship.hp / view.game.spaceship.maxHp) * 100)}%`
-                  }}
-                />
-              </div>
-            </div>
-            <div>
-              <span>Щит</span>
-              <strong data-testid="hud-shield-status">
-                {getShieldStatusLabel(
-                  view.game.shieldPhase,
-                  view.game.shield.rearmRequired,
-                  view.game.shield.energy
-                )}
-              </strong>
-              <div className="hud-energy" aria-label="Энергия щита">
-                <i
-                  style={{
-                    width: `${String((view.game.shield.energy / view.game.shield.capacity) * 100)}%`
-                  }}
-                />
-              </div>
-              <small>
-                {Math.round(view.game.shield.energy)} / {Math.round(view.game.shield.capacity)}
-              </small>
-            </div>
+            {/* Hull and shield moved onto the radar dial: two rings, their end
+                labels and the shield state word say everything these two cards
+                did, in the place the pilot is already looking. */}
             <div>
               <span>Счёт</span>
               <strong>{view.game.encounter.score}</strong>
@@ -391,6 +367,21 @@ export function DisplayApp() {
               readyCount={view.players.filter(({ ready }) => ready).length}
               closing={closingRoom}
               onClose={() => void handleCloseRoom()}
+            />
+          )}
+          {/* Preview only until the tree reaches the display in a real run:
+              the catalogue does not carry it yet. */}
+          {previewView !== undefined && (
+            <ModuleTreeWindow
+              tiers={PREVIEW_MODULE_TIERS}
+              endlessTier={PREVIEW_ENDLESS_TIER}
+              purchased={view.game.purchasedModules}
+              ship={{
+                maxHp: view.game.spaceship.maxHp,
+                shieldCapacity: view.game.shield.capacity,
+                shieldArcRadians: view.game.shield.arcHalfAngle * 2,
+                shieldRadius: view.game.shieldRadius
+              }}
             />
           )}
           <CrewLatency view={view} game={view.game} />

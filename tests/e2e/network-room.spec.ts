@@ -440,7 +440,18 @@ async function assertResponsiveBattlefield(display: Page): Promise<void> {
     expect(radarBounds.x).toBeGreaterThanOrEqual(0);
     expect(radarBounds.y).toBeGreaterThanOrEqual(0);
     expect(radarBounds.x + radarBounds.width).toBeLessThanOrEqual(viewport.width);
-    expect(radarBounds.y + radarBounds.height).toBeLessThanOrEqual(hudBounds.y);
+    // The dial owns the middle of the bottom edge and the readouts flank it, so
+    // the invariant is that no card is under it — not that it sits above them.
+    for (const card of await display.locator(".spaceship-hud > div").all()) {
+      const cardBounds = await card.boundingBox();
+      if (cardBounds === null) continue;
+      const overlaps =
+        cardBounds.x < radarBounds.x + radarBounds.width &&
+        radarBounds.x < cardBounds.x + cardBounds.width &&
+        cardBounds.y < radarBounds.y + radarBounds.height &&
+        radarBounds.y < cardBounds.y + cardBounds.height;
+      expect(overlaps, "the radar must not cover a HUD card").toBe(false);
+    }
   }
 
   await expect(canvas).toHaveCount(1);

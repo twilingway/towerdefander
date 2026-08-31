@@ -411,6 +411,9 @@ p {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
+/* The dial owns the middle of the bottom edge, so the readouts flank it: two
+   cards to the left, two to the right, and a reserved column between them the
+   width of the radar. */
 .display-shell--battle .spaceship-hud {
   position: absolute;
   z-index: 25;
@@ -418,7 +421,15 @@ p {
   bottom: max(0.75rem, env(safe-area-inset-bottom));
   left: max(0.75rem, env(safe-area-inset-left));
   gap: 0.5rem;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr))
+    calc(var(--radar-size) + 4rem)
+    repeat(2, minmax(0, 1fr));
   pointer-events: none;
+}
+
+.display-shell--battle .spaceship-hud > div:nth-child(3) {
+  grid-column: 4;
 }
 
 .display-shell--battle .spaceship-hud > div {
@@ -560,13 +571,21 @@ p {
   transform: translateX(-50%);
 }
 
+/* One number for the dial, because the HUD reserves a column of exactly this
+   width for it. */
+.display-shell--battle {
+  --radar-size: clamp(11rem, 17vw, 16rem);
+}
+
 .combat-radar {
   position: absolute;
   z-index: 25;
-  bottom: max(8rem, calc(env(safe-area-inset-bottom) + 7.2rem));
+  /* Flat on the bottom edge: the hull and shield cards it replaced used to sit
+     above it, and nothing needs that band any more. */
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
   left: 50%;
   display: grid;
-  width: clamp(10rem, 15vw, 14rem);
+  width: var(--radar-size);
   padding: 0.45rem;
   border: 1px solid rgb(71 224 233 / 35%);
   border-radius: 50%;
@@ -646,6 +665,97 @@ p {
 
 .combat-radar__spaceship path {
   fill: #b9fff8;
+}
+
+.combat-radar__ring-track {
+  fill: none;
+  stroke: rgb(255 255 255 / 9%);
+  stroke-width: 4;
+}
+
+/* The colour of the hull ring is a value, not a state, so it is painted from
+   the component; the stylesheet owns only the shape. */
+.combat-radar__ring-value {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 120ms linear;
+}
+
+/* Thinner, colder and set well outside the hull ring, so the pair reads as two
+   gauges instead of one double line. */
+.combat-radar__ring--shield .combat-radar__ring-track,
+.combat-radar__ring--shield .combat-radar__ring-value {
+  stroke-width: 3;
+}
+
+.combat-radar__ring--hull .combat-radar__ring-value {
+  filter: drop-shadow(0 0 3px rgb(0 0 0 / 55%));
+}
+
+.combat-radar__turret {
+  stroke: #ffd783;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.combat-radar__speed-plate {
+  fill: rgb(3 20 29 / 88%);
+  stroke: rgb(86 235 240 / 45%);
+  stroke-width: 1;
+}
+
+.combat-radar__speed {
+  fill: #bdfaff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: rgb(3 20 29 / 85%);
+  stroke-width: 3;
+}
+
+/* The shield word the HUD card used to carry, in the gap under the dial. */
+.combat-radar__shield-state {
+  fill: #9ad7ff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  paint-order: stroke;
+  stroke: rgb(3 20 29 / 85%);
+  stroke-width: 3;
+}
+
+.combat-radar__shield-state[data-shield-phase="up"] {
+  fill: #75d8ff;
+}
+
+.combat-radar__shield-state[data-shield-phase="cooling"] {
+  fill: #ffd783;
+}
+
+/* Ends of the two arcs: nothing but 0 and the pair the ring is filling to. */
+.combat-radar__scale {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: rgb(3 20 29 / 85%);
+  stroke-width: 3.5;
+}
+
+/* The pair carries the number the HUD card used to, so it is the loud one. */
+.combat-radar__scale--value {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.combat-radar__scale--hull {
+  fill: #cfe6d8;
+}
+
+.combat-radar__scale--shield {
+  fill: #9ad7ff;
 }
 
 .combat-radar__frame {
@@ -859,14 +969,24 @@ p {
   pointer-events: auto;
 }
 
+/* Too narrow to flank anything: the readouts go back to two columns across the
+   bottom and the dial sits above them, as it did before. */
 @media (width <= 900px) {
-  .spaceship-hud {
+  .display-shell--battle {
+    --radar-size: clamp(8.5rem, 22vw, 10rem);
+  }
+
+  .spaceship-hud,
+  .display-shell--battle .spaceship-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .display-shell--battle .spaceship-hud > div:nth-child(3) {
+    grid-column: auto;
   }
 
   .combat-radar {
     bottom: max(12.5rem, calc(env(safe-area-inset-bottom) + 11.7rem));
-    width: clamp(8.5rem, 22vw, 10rem);
   }
 }
 
@@ -962,4 +1082,222 @@ p {
 .preview-controls__toggle {
   font-size: 0.85rem;
   line-height: 1;
+}
+
+/* The tree as a tank line: tiers left to right, the modules of a tier stacked
+   under its numeral, taken ones lit and the open tier outlined. It is a window
+   over the stage rather than part of the HUD, because it answers a question the
+   crew asks between waves, not during one — above every other overlay, and
+   collapsible for exactly the same reason. */
+.module-tree {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 60;
+  display: grid;
+  width: min(96vw, 120rem);
+  max-height: 88vh;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1rem;
+  background: rgb(6 16 20 / 92%);
+  transform: translate(-50%, -50%);
+}
+
+.module-tree__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* Collapsed it is just its own toggle, and it leaves the middle of the screen:
+   centred is where the window belongs, not the button that reopens it. */
+.module-tree--collapsed {
+  top: max(4.5rem, calc(env(safe-area-inset-top) + 4rem));
+  width: auto;
+  max-height: none;
+  padding: 0.35rem;
+  transform: translateX(-50%);
+}
+
+.module-tree__toggle {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: #cfe6e1;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.module-tree__header small {
+  color: #b9d3ce;
+}
+
+.module-tree__grid {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+}
+
+/* Eleven columns share the width instead of demanding it: the window is the one
+   place the whole tree has to be visible at once, and a horizontal scrollbar
+   hides exactly the tiers the crew has not reached yet. */
+.module-tree__tier {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  align-content: start;
+  gap: 0.3rem;
+}
+
+.module-tree__numeral {
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  color: #7f9c97;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.module-tree__tier.is-open > .module-tree__numeral {
+  border-bottom-color: #ffd783;
+  color: #ffd783;
+}
+
+.module-tree__cells {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 0.3rem;
+  list-style: none;
+}
+
+.module-tree__cell {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-inline-start-width: 3px;
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 4%);
+  color: #7f9c97;
+  font-size: 0.7rem;
+  line-height: 1.15;
+}
+
+.module-tree__cell strong {
+  font-weight: 700;
+}
+
+.module-tree__cell small {
+  color: inherit;
+  font-size: 0.62rem;
+  opacity: 0.85;
+}
+
+.module-tree__cell .module-tree__seat {
+  opacity: 0.55;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* What the ship is now, and what the tree has already given it. */
+.module-tree__stats {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+.module-tree__facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 0.35rem 0.9rem;
+}
+
+.module-tree__facts dt {
+  color: #7f9c97;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.module-tree__facts dd {
+  margin: 0;
+  color: #eef7f4;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.module-tree__gains {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.5rem;
+}
+
+.module-tree__gains-caption {
+  color: #7f9c97;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.module-tree__gains ul {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  gap: 0.3rem;
+  list-style: none;
+}
+
+.module-tree__gains li {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid rgb(120 211 156 / 35%);
+  border-radius: 999px;
+  background: rgb(120 211 156 / 12%);
+  color: #dff3e9;
+  font-size: 0.65rem;
+}
+
+.module-tree__gains em {
+  color: #7f9c97;
+  font-size: 0.68rem;
+}
+
+/* Taken: full contrast and a white edge, the way a picked node reads in a tank
+   line. Open: the tier the crew can buy from right now. */
+.module-tree__cell.is-taken {
+  border-color: rgb(255 255 255 / 75%);
+  background: rgb(120 211 156 / 16%);
+  color: #eef7f4;
+}
+
+.module-tree__cell.is-open {
+  border-color: #ffd783;
+  background: rgb(255 215 131 / 10%);
+  color: #f6efdc;
+}
+
+.module-tree__cell[data-role="pilot"] {
+  border-inline-start-color: #e0563f;
+}
+
+.module-tree__cell[data-role="gunner"] {
+  border-inline-start-color: #ffb54a;
+}
+
+.module-tree__cell[data-role="shield"] {
+  border-inline-start-color: #4da9d8;
 }

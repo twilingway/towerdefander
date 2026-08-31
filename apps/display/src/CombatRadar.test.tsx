@@ -157,3 +157,84 @@ describe("CombatRadar", () => {
     expect(markup).toContain("Корабль экипажа. Врагов: 0");
   });
 });
+
+describe("status rings", () => {
+  it("reads the hull and the shield as fractions of their own capacity", () => {
+    const markup = renderToStaticMarkup(
+      <CombatRadar
+        game={{
+          ...baseGame,
+          spaceship: { ...baseGame.spaceship, hp: 125, maxHp: 500 },
+          shield: { ...baseGame.shield, energy: 50, capacity: 100 }
+        }}
+      />
+    );
+
+    expect(markup).toContain('data-hull-fraction="0.25"');
+    expect(markup).toContain('data-shield-fraction="0.50"');
+    // A quarter of the hull left is the critical band, not a colour the CSS guesses.
+    expect(markup).toContain('data-level="critical"');
+  });
+
+  it("opens both rings at the bottom and paints a full hull green", () => {
+    const markup = renderToStaticMarkup(<CombatRadar game={baseGame} />);
+
+    // Half past seven: the empty end of both arcs, with the numbers below it.
+    expect(markup).toContain("rotate(135 100 100)");
+    expect(markup).toContain('stroke="hsl(138 72% 52%)"');
+  });
+
+  it("labels each arc with its zero and with what it is filling to", () => {
+    const markup = renderToStaticMarkup(
+      <CombatRadar
+        game={{
+          ...baseGame,
+          spaceship: { ...baseGame.spaceship, hp: 320, maxHp: 500 },
+          shield: { ...baseGame.shield, energy: 64, capacity: 120 }
+        }}
+      />
+    );
+
+    expect(markup).toContain(">320 / 500</text>");
+    expect(markup).toContain(">64 / 120</text>");
+    expect(markup.match(/>0<\/text>/gu)).toHaveLength(2);
+  });
+
+  it("carries the shield state word the HUD card used to show", () => {
+    const markup = renderToStaticMarkup(
+      <CombatRadar game={{ ...baseGame, shieldPhase: "up", shield: { ...baseGame.shield } }} />
+    );
+
+    expect(markup).toContain('data-testid="hud-shield-status"');
+    expect(markup).toContain("АКТИВЕН");
+  });
+
+  it("reddens the hull ring as the hull goes", () => {
+    const markup = renderToStaticMarkup(
+      <CombatRadar
+        game={{ ...baseGame, spaceship: { ...baseGame.spaceship, hp: 60, maxHp: 500 } }}
+      />
+    );
+
+    expect(markup).toContain('stroke="hsl(4 72% 52%)"');
+  });
+
+  it("reads the speed off the velocity the room publishes", () => {
+    const markup = renderToStaticMarkup(
+      <CombatRadar
+        game={{ ...baseGame, spaceship: { ...baseGame.spaceship, velocityX: 300, velocityY: 400 } }}
+      />
+    );
+
+    expect(markup).toContain("500 ед/с");
+  });
+
+  it("draws an empty ring rather than a full one when there is no capacity", () => {
+    const markup = renderToStaticMarkup(
+      <CombatRadar game={{ ...baseGame, shield: { ...baseGame.shield, energy: 0, capacity: 0 } }} />
+    );
+
+    expect(markup).toContain('data-shield-fraction="0.00"');
+    expect(markup).toContain('data-hull-fraction="1.00"');
+  });
+});
