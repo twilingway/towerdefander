@@ -1,6 +1,11 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { AngularRateField, NumberField, SecondsField } from "../../components/fields.js";
+import {
+  AngularRateField,
+  NumberField,
+  SecondsField,
+  WeaponKindField
+} from "../../components/fields.js";
 
 interface CannonSectionProps {
   readonly tuning: BalanceTuning;
@@ -12,7 +17,20 @@ export function CannonSection({ tuning, patch }: CannonSectionProps) {
   return (
     <>
       <h3 className="card__subtitle">Пушка ганнера</h3>
+      <p className="screen__hint">
+        Урон, перезарядка и нагрев работают одинаково при любом способе доставки. Остальное зависит
+        от вида: кинетика летит и потому имеет скорость, радиус и время жизни снаряда; лазер бьёт
+        мгновенно и вместо них имеет дальность луча; ракета летит как снаряд, но доворачивает к
+        цели. Погашенные поля выбранный вид не читает.
+      </p>
       <div className="card__grid">
+        <WeaponKindField
+          caption="Способ доставки"
+          value={tuning.cannonWeaponKind}
+          onChange={(cannonWeaponKind) => {
+            patch({ cannonWeaponKind });
+          }}
+        />
         <NumberField
           caption="Урон"
           value={tuning.friendlyProjectileDamage}
@@ -28,8 +46,17 @@ export function CannonSection({ tuning, patch }: CannonSectionProps) {
           }}
         />
         <NumberField
+          caption="Дальность луча"
+          value={tuning.cannonLaserRange}
+          disabled={tuning.cannonWeaponKind !== "laser"}
+          onChange={(cannonLaserRange) => {
+            patch({ cannonLaserRange });
+          }}
+        />
+        <NumberField
           caption="Скорость снаряда"
           value={tuning.projectileSpeedPerSecond}
+          disabled={tuning.cannonWeaponKind === "laser"}
           onChange={(projectileSpeedPerSecond) => {
             patch({ projectileSpeedPerSecond: projectileSpeedPerSecond });
           }}
@@ -37,6 +64,7 @@ export function CannonSection({ tuning, patch }: CannonSectionProps) {
         <NumberField
           caption="Радиус снаряда"
           value={tuning.projectileRadius}
+          disabled={tuning.cannonWeaponKind === "laser"}
           onChange={(projectileRadius) => {
             patch({ projectileRadius: projectileRadius });
           }}
@@ -44,6 +72,7 @@ export function CannonSection({ tuning, patch }: CannonSectionProps) {
         <NumberField
           caption="Время жизни снаряда, мс"
           value={tuning.projectileLifetimeMs}
+          disabled={tuning.cannonWeaponKind === "laser"}
           onChange={(projectileLifetimeMs) => {
             patch({ projectileLifetimeMs: Math.max(1, Math.round(projectileLifetimeMs)) });
           }}

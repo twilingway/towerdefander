@@ -1,4 +1,9 @@
-import { SPAWN_SECTORS, type SpawnSector } from "@spaceship-defender/protocol";
+import {
+  FRIENDLY_WEAPON_KINDS,
+  SPAWN_SECTORS,
+  type FriendlyWeaponKind,
+  type SpawnSector
+} from "@spaceship-defender/protocol";
 
 import { TICK_SECONDS, secondsToTicks, ticksToSeconds } from "../waveSummary.js";
 
@@ -42,6 +47,41 @@ export function SectorPicker({ value, onChange }: SectorPickerProps) {
     </div>
   );
 }
+
+interface WeaponKindFieldProps {
+  readonly caption: string;
+  readonly value: FriendlyWeaponKind;
+  readonly onChange: (value: FriendlyWeaponKind) => void;
+}
+
+/** Как ствол доставляет урон. Стоит в разделе самого ствола, потому что от него
+ * зависит, какие из остальных чисел этого раздела вообще читаются. */
+export function WeaponKindField({ caption, value, onChange }: WeaponKindFieldProps) {
+  return (
+    <label className="field">
+      <span className="field__caption">{caption}</span>
+      <select
+        className="field__input"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value as FriendlyWeaponKind);
+        }}
+      >
+        {FRIENDLY_WEAPON_KINDS.map((kind) => (
+          <option key={kind} value={kind}>
+            {FRIENDLY_WEAPON_KIND_LABELS[kind]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export const FRIENDLY_WEAPON_KIND_LABELS: Record<FriendlyWeaponKind, string> = {
+  kinetic: "кинетика — снаряд летит, нужно упреждение",
+  laser: "лазер — не мажет, но не достаёт далеко",
+  missile: "ракета — догоняет сама, но медленная"
+};
 
 interface NumberFieldProps {
   readonly caption: string;
