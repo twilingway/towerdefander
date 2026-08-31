@@ -33,7 +33,12 @@ computer browsers as pilot, gunner, and shield operator.
   the world picture it is handed, the options fed to the policy, the aiming rules — has to land in
   both, and belongs in the shared `visible-demo-policy.mjs` whenever it can. Twice now a rule was
   fixed on the stand alone and the operator watched the old behaviour on screen: the numbers said
-  the change worked and the game said it did not.
+  the change worked and the game said it did not. When one of them changes, diff the world pictures
+  and the option objects of both — an audit on 2026-08-31 found the browser crew voting on upgrades
+  with no wave clock at all, so it always believed the wave had gone briskly.
+- **`stats:autopilot` and `stats:batch` measure `apps/server/data/balance.json` unless `--preset`
+  says otherwise.** That is the operator's live file, so a console edit moves the numbers; a
+  measurement worth comparing names its preset.
 
 ## Spec-driven workflow
 

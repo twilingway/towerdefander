@@ -83,6 +83,14 @@ let autopilotMemory;
 let autopilotMemoryKey;
 let latestTelemetry;
 let latestWorld;
+/**
+ * How long the wave that just ended took, in seconds. One of the signals the
+ * upgrade policy weighs - a dragging wave asks for guns - and the headless
+ * stand has always passed it. Measured off the world picture, so both harnesses
+ * measure the same thing.
+ */
+let waveStartTick;
+let waveSeconds = 0;
 /** Turret and hull angular speed measured between the last two raw frames. */
 let angularRates = { turret: 0, heading: 0 };
 let lastTelemetryAt = 0;
@@ -691,7 +699,8 @@ async function voteAllUpgrades(waveNumber) {
       hp: latestWorld?.ship?.hp,
       maxHp: latestWorld?.ship?.maxHp,
       shieldEnergy: latestWorld?.shield?.energy,
-      shieldCapacity: latestWorld?.shield?.capacity
+      shieldCapacity: latestWorld?.shield?.capacity,
+      waveSeconds
     }
   });
   for (const { role, upgradeId } of votes) {
@@ -769,10 +778,22 @@ async function refreshTelemetry() {
     if (observed !== undefined && observed.sampledAtMs !== latestWorld?.sampledAtMs) {
       angularRates = measureAngularRates(latestWorld, observed);
     }
+    trackWaveClock(latestWorld, observed);
     latestWorld = observed;
   } catch (error) {
     if (stopRequested || page.isClosed()) return;
     throw error;
+  }
+}
+
+/** The wave clock, kept at the phase edges exactly as the stand keeps it. */
+function trackWaveClock(previous, observed) {
+  if (observed === undefined) return;
+  if (waveStartTick === undefined) waveStartTick = observed.tick;
+  if (previous?.phase === "combat" && observed.phase === "intermission") {
+    waveSeconds = ((observed.tick - waveStartTick) * STEP_MS) / 1000;
+  } else if (previous?.phase === "intermission" && observed.phase === "combat") {
+    waveStartTick = observed.tick;
   }
 }
 

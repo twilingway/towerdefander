@@ -132,7 +132,6 @@ export function buildWorld(state, config, sampledAtMs) {
     bullets: framed(state.hostileProjectiles).map(toEntity),
     asteroids: framed(state.asteroids).map((rock) => ({
       ...toEntity(rock),
-      origin: rock.origin,
       hp: rock.hp,
       maxHp: rock.maxHp
     })),
