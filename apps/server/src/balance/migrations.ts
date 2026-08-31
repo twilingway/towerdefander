@@ -366,6 +366,18 @@ function migrateWeaponKinds(tuning: LegacyRecord, defaults: BalanceTuning): Lega
   );
 }
 
+/**
+ * Hull archetypes arrived in version 29. A preset written before them gets the
+ * repository's catalogue and its base hull; its flat player-ship block stays
+ * untouched and keeps serving as the base every hull is a diff against.
+ */
+function migrateShipArchetypes(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  return {
+    shipArchetypes: tuning.shipArchetypes ?? defaults.shipArchetypes,
+    defaultShipArchetypeId: tuning.defaultShipArchetypeId ?? defaults.defaultShipArchetypeId
+  };
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -389,6 +401,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       // operator's waves down with it.
       ...migrateLoot(tuning, defaults),
       ...migrateWeaponKinds(tuning, defaults),
+      ...migrateShipArchetypes(tuning, defaults),
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
           kind,

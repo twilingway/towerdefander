@@ -6,6 +6,10 @@ import {
   BACKGROUND_PARALLAX_STRENGTH_MAX,
   BALANCE_FILE_VERSION,
   BUILTIN_ENEMY_KINDS,
+  CREW_ROLES,
+  MODULES_PER_ARCHETYPE,
+  MODULE_TIER_COUNT,
+  MODULE_TIER_WIDTHS,
   ARENA_RADIUS_MAX,
   ARENA_RADIUS_MIN,
   CAMERA_VIEW_WIDTH_MAX,
@@ -18,7 +22,9 @@ import {
   type AutopilotTuning,
   type BalanceTuning,
   type EnemyArchetype,
-  type EnemySkillProfile
+  type EnemySkillProfile,
+  type ShipArchetype,
+  type ShipModule
 } from "./index.js";
 
 function autopilotProfile(overrides: Partial<AutopilotProfile> = {}): AutopilotProfile {
@@ -116,6 +122,33 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
   };
 }
 
+function shipModule(id: string, index: number): ShipModule {
+  return {
+    id,
+    label: `Module ${id}`,
+    role: CREW_ROLES[index % CREW_ROLES.length] ?? "pilot",
+    effects: [{ target: "spaceshipMaxHp", op: "add", value: 5 }]
+  };
+}
+
+/** A tree of the exact shape the schema demands, with roles spread across each tier. */
+function shipArchetype(overrides: Partial<ShipArchetype> = {}): ShipArchetype {
+  return {
+    label: "Test hull",
+    description: "A hull for tests",
+    visual: null,
+    unlockedAtWave: 1,
+    overrides: { stats: {}, cannonWeaponKind: null, mgWeaponKind: null },
+    tiers: MODULE_TIER_WIDTHS.map((width, tier) =>
+      Array.from({ length: width }, (_unused, slot) =>
+        shipModule(`t${String(tier)}m${String(slot)}`, slot)
+      )
+    ),
+    endlessTier: [shipModule("endless", 0)],
+    ...overrides
+  };
+}
+
 function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
   return {
     enemyArchetypes: Object.fromEntries(BUILTIN_ENEMY_KINDS.map((kind) => [kind, archetype()])),
@@ -176,6 +209,8 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidVisual: null,
     missileInterceptScoreReward: 5,
     spaceshipVisual: null,
+    shipArchetypes: { guardian: shipArchetype() },
+    defaultShipArchetypeId: "guardian",
     spaceshipMaxHp: 500,
     spaceshipRadius: 52,
     spaceshipSpeedPerSecond: 320,
@@ -594,5 +629,100 @@ describe("autopilot tuning schema", () => {
     expect(
       autopilotProfileSchema.safeParse(autopilotProfile({ standoffDistance: 2001 })).success
     ).toBe(false);
+  });
+});
+
+describe("ship archetypes", () => {
+  const withHull = (hull: ShipArchetype): BalanceTuning =>
+    tuning({ shipArchetypes: { guardian: hull }, defaultShipArchetypeId: "guardian" });
+
+  it("accepts a tree of the declared shape", () => {
+    expect(balanceTuningSchema.safeParse(withHull(shipArchetype())).success).toBe(true);
+    expect(MODULE_TIER_WIDTHS.reduce((sum, width) => sum + width, 0)).toBe(MODULES_PER_ARCHETYPE);
+    expect(MODULE_TIER_COUNT).toBe(10);
+  });
+
+  it("refuses a tier of the wrong width", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 2 ? [...tier, shipModule("extra", 2)] : tier
+    );
+    expect(balanceTuningSchema.safeParse(withHull({ ...hull, tiers })).success).toBe(false);
+  });
+
+  it("refuses a tier that leaves a role out", () => {
+    const hull = shipArchetype();
+    // The seventh tier is three wide, so it owes all three roles.
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 6 ? tier.map((module) => ({ ...module, role: "pilot" as const })) : tier
+    );
+    expect(balanceTuningSchema.safeParse(withHull({ ...hull, tiers })).success).toBe(false);
+  });
+
+  it("refuses a module id used twice in one hull", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 1 ? tier.map((module) => ({ ...module, id: "twice" })) : tier
+    );
+    expect(balanceTuningSchema.safeParse(withHull({ ...hull, tiers })).success).toBe(false);
+  });
+
+  it("refuses an effect aimed at a field the ship does not have", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 0
+        ? tier.map((module) => ({
+            ...module,
+            effects: [{ target: "spaceshipTeleport", op: "add", value: 1 }]
+          }))
+        : tier
+    );
+    expect(
+      balanceTuningSchema.safeParse(withHull({ ...hull, tiers } as unknown as ShipArchetype))
+        .success
+    ).toBe(false);
+  });
+
+  it("refuses an effect aimed at a field the clients only receive once", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 0
+        ? tier.map((module) => ({
+            ...module,
+            effects: [{ target: "shieldRadius", op: "add", value: 1 }]
+          }))
+        : tier
+    );
+    expect(
+      balanceTuningSchema.safeParse(withHull({ ...hull, tiers } as unknown as ShipArchetype))
+        .success
+    ).toBe(false);
+  });
+
+  it("refuses a default hull that is not in the catalogue", () => {
+    expect(
+      balanceTuningSchema.safeParse(
+        tuning({ shipArchetypes: { guardian: shipArchetype() }, defaultShipArchetypeId: "blade" })
+      ).success
+    ).toBe(false);
+  });
+
+  it("keeps hull overrides sparse and typed", () => {
+    const hull = shipArchetype({
+      overrides: {
+        stats: { spaceshipMaxHp: 340, spaceshipSpeedPerSecond: 420 },
+        cannonWeaponKind: "laser",
+        mgWeaponKind: null
+      }
+    });
+    expect(balanceTuningSchema.safeParse(withHull(hull)).success).toBe(true);
+    const bad = shipArchetype({
+      overrides: {
+        stats: { nonsense: 1 },
+        cannonWeaponKind: null,
+        mgWeaponKind: null
+      }
+    } as unknown as Partial<ShipArchetype>);
+    expect(balanceTuningSchema.safeParse(withHull(bad)).success).toBe(false);
   });
 });

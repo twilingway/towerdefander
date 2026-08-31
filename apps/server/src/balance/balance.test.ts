@@ -5,11 +5,16 @@ import { join } from "node:path";
 import type { Request, RequestHandler, Response } from "express";
 import {
   BALANCE_FILE_VERSION,
+  MODULE_TARGET_FIELDS,
+  MODULE_TIER_WIDTHS,
   balancePresetsFileSchema,
   type BalancePresetsFile,
   type BalanceTuning
 } from "@spaceship-defender/protocol";
-import { getEnemyArchetype } from "@spaceship-defender/game-core";
+import {
+  getEnemyArchetype,
+  MODULE_TARGET_FIELDS as CORE_MODULE_TARGET_FIELDS
+} from "@spaceship-defender/game-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { Readable } from "node:stream";
@@ -117,6 +122,31 @@ function tunedPresetsFile(hp: number): BalancePresetsFile {
 describe("balance store", () => {
   it("publishes built-in defaults that satisfy the shared schema", () => {
     expect(balancePresetsFileSchema.safeParse(createDefaultPresetsFile()).success).toBe(true);
+  });
+
+  it("keeps the two module target lists identical", () => {
+    // The stat engine owns its list in game-core; the balance schema needs the
+    // same list to refuse a mistyped target on the path it sits on. They are
+    // written twice because the packages do not depend on each other, so this
+    // is what stops them drifting.
+    expect([...MODULE_TARGET_FIELDS]).toEqual([...CORE_MODULE_TARGET_FIELDS]);
+  });
+
+  it("ships a hull tree of the declared shape with a base hull that changes nothing", () => {
+    const defaults = createDefaultTuning();
+    const base = defaults.shipArchetypes[defaults.defaultShipArchetypeId];
+    expect(base).toBeDefined();
+    // An empty diff is the promise that a run on the base hull is the run the
+    // game had before hulls existed.
+    expect(base?.overrides).toEqual({ stats: {}, cannonWeaponKind: null, mgWeaponKind: null });
+    for (const [id, hull] of Object.entries(defaults.shipArchetypes)) {
+      expect(
+        hull.tiers.map((tier) => tier.length),
+        id
+      ).toEqual([...MODULE_TIER_WIDTHS]);
+      const ids = hull.tiers.flatMap((tier) => tier.map((module) => module.id));
+      expect(new Set(ids).size, id).toBe(ids.length);
+    }
   });
 
   it("falls back to defaults and warns when the file is missing", async () => {
@@ -886,6 +916,65 @@ describe("version 1 migration", () => {
       kind: "gunship",
       count: 7,
       hpMultiplier: 1.5
+    });
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("gives a version 28 document the hull catalogue without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 28 had one hull and nine hardcoded upgrade cards.
+    const legacyTuning: Partial<BalanceTuning> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "sniper",
+                count: 4,
+                spawnIntervalTicks: 9,
+                sectors: ["SW"],
+                hpMultiplier: 2.25,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    delete legacyTuning.shipArchetypes;
+    delete legacyTuning.defaultShipArchetypeId;
+    const document = {
+      version: 28,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.defaultShipArchetypeId).toBe(defaults.defaultShipArchetypeId);
+    expect(Object.keys(tuning.shipArchetypes)).toEqual(Object.keys(defaults.shipArchetypes));
+    // The flat player-ship block is the base every hull is a diff against, so
+    // the migration must leave it exactly where the operator had it.
+    expect(tuning.spaceshipMaxHp).toBe(legacyTuning.spaceshipMaxHp);
+
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    expect(tuning.waveCampaign.waves[0]?.entries[0]).toMatchObject({
+      kind: "sniper",
+      count: 4,
+      hpMultiplier: 2.25
     });
 
     const migratedOnce = migrateBalanceDocument(document);

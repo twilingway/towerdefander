@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+export * from "./crewRoles.ts";
 export * from "./enemyKinds.ts";
 export * from "./visualCatalog.ts";
+import { CREW_ROLES, crewRoleSchema, type CrewRole } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
@@ -21,7 +23,6 @@ export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
 export const CREW_SIZES = [1, 2, 3] as const;
-export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
 export const ENCOUNTER_PHASES = ["combat", "intermission", "result"] as const;
 export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
 export const DEFEAT_REASONS = ["spaceship_destroyed", "wave_timeout"] as const;
@@ -70,7 +71,6 @@ export const UPGRADE_IDS = [
 
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
-export const crewRoleSchema = z.enum(CREW_ROLES);
 export const crewSizeSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 /**
  * Highest wave a room may be asked to open on. A testing aid: the server
@@ -80,7 +80,6 @@ export const crewSizeSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]
 export const MAX_START_WAVE = 50;
 export const startWaveSchema = z.number().int().min(1).max(MAX_START_WAVE);
 export type CrewSize = z.infer<typeof crewSizeSchema>;
-export type CrewRole = z.infer<typeof crewRoleSchema>;
 export const roomPhaseSchema = z.enum(["lobby", "active"]);
 export type RoomPhase = z.infer<typeof roomPhaseSchema>;
 export const encounterPhaseSchema = z.enum(ENCOUNTER_PHASES);

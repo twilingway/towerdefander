@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CREW_ROLES, crewRoleSchema } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
@@ -7,10 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 28 as const;
+export const BALANCE_FILE_VERSION = 29 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+  28
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -136,11 +138,16 @@ export const turretVisualSchema = z
   .nullable();
 export type TurretVisual = z.infer<typeof turretVisualSchema>;
 
+const finite = z.number();
 const positiveFinite = z.number().positive();
 const nonNegativeFinite = z.number().nonnegative();
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 /** Zero is legal for the shield timings: it restores the old instant toggle. */
 const nonNegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+
+function issue(context: z.RefinementCtx, path: PropertyKey[], message: string): void {
+  context.addIssue({ code: "custom", path, message });
+}
 
 export const enemyWeaponTuningSchema = z
   .object({
@@ -432,6 +439,207 @@ export const autopilotTuningSchema = z
   .strict();
 export type AutopilotTuning = z.infer<typeof autopilotTuningSchema>;
 
+// --- Ship archetypes: the hull a run is played on, and its module tree ---
+
+/**
+ * Fields a module may address. It mirrors `MODULE_TARGET_FIELDS` in
+ * `game-core`, which owns the stat engine; a test in the server package, which
+ * sees both, asserts the two lists are identical.
+ *
+ * Duplicated rather than imported because the two packages do not depend on
+ * each other, and the duplication buys something: a target the operator
+ * mistyped is refused at the path it sits on, in the console, instead of
+ * quietly doing nothing for a whole run.
+ */
+export const MODULE_TARGET_FIELDS = [
+  "spaceshipMaxHp",
+  "spaceshipRadius",
+  "spaceshipSpeedPerSecond",
+  "spaceshipAccelerationPerSecondSquared",
+  "spaceshipBrakingPerSecondSquared",
+  "spaceshipReverseSpeedFactor",
+  "headingMaxAngularSpeedPerSecond",
+  "headingAngularAccelerationPerSecondSquared",
+  "friendlyProjectileDamage",
+  "fireCooldownTicks",
+  "projectileSpeedPerSecond",
+  "projectileRadius",
+  "projectileLifetimeMs",
+  "turretMaxAngularSpeedPerSecond",
+  "turretAngularAccelerationPerSecondSquared",
+  "turretAngularBrakingPerSecondSquared",
+  "cannonHeatCapacity",
+  "cannonHeatPerShot",
+  "cannonCoolingPerSecond",
+  "cannonRearmThreshold",
+  "mgDamage",
+  "mgFireCooldownTicks",
+  "mgProjectileSpeedPerSecond",
+  "mgProjectileRadius",
+  "mgHeatCapacity",
+  "mgHeatPerShot",
+  "mgCoolingPerSecond",
+  "mgRearmThreshold",
+  "cannonLaserRange",
+  "mgLaserRange",
+  "laserBeamRadius",
+  "friendlyMissileTurnRatePerSecond",
+  "friendlyMissileAcquireConeRadians",
+  "shieldCapacity",
+  "shieldDrainPerSecond",
+  "shieldRechargePerSecond",
+  "shieldEngageTicks",
+  "shieldMinimumUpTicks",
+  "shieldCooldownTicks",
+  "shieldRearmEnergy",
+  "shieldArcRadians",
+  "shieldMaxAngularSpeedPerSecond",
+  "shieldAngularAccelerationPerSecondSquared",
+  "shieldAngularBrakingPerSecondSquared"
+] as const;
+export const moduleTargetFieldSchema = z.enum(MODULE_TARGET_FIELDS);
+export type ModuleTargetField = z.infer<typeof moduleTargetFieldSchema>;
+
+/** Additions sum, percents sum with each other, multipliers multiply. */
+export const SHIP_STAT_OPS = ["add", "percent", "multiply"] as const;
+export const shipStatOpSchema = z.enum(SHIP_STAT_OPS);
+export type ShipStatOp = z.infer<typeof shipStatOpSchema>;
+
+export const shipStatEffectSchema = z
+  .object({
+    target: moduleTargetFieldSchema,
+    op: shipStatOpSchema,
+    /** Free-signed: a module is allowed to cost something to gain something. */
+    value: z.number()
+  })
+  .strict();
+export type ShipStatEffectTuning = z.infer<typeof shipStatEffectSchema>;
+
+export const MAX_MODULE_EFFECTS = 4;
+export const shipModuleIdSchema = z
+  .string()
+  .min(1)
+  .max(48)
+  .regex(ENEMY_ARCHETYPE_ID_PATTERN, "Module id must start with a lowercase letter.");
+export type ShipModuleId = z.infer<typeof shipModuleIdSchema>;
+
+/**
+ * One card of the tree. The operator names it and says what it does; the number
+ * in the caption clients show is assembled from the effects, so the two cannot
+ * drift apart on the second day of authoring.
+ */
+export const shipModuleSchema = z
+  .object({
+    id: shipModuleIdSchema,
+    label: z.string().min(1).max(48),
+    /** Whose card this is. Authoring metadata: any seat may vote for any card. */
+    role: crewRoleSchema,
+    effects: z.array(shipStatEffectSchema).min(1).max(MAX_MODULE_EFFECTS).readonly()
+  })
+  .strict();
+export type ShipModule = z.infer<typeof shipModuleSchema>;
+
+/**
+ * The shape of the tree belongs to the code, not to the preset: the operator
+ * decides what stands in a tier, never how many tiers there are or how wide
+ * they get. Narrow early tiers make the first waves readable to a new crew;
+ * the width arrives once the crew knows what the ship is short of.
+ */
+export const MODULE_TIER_WIDTHS = [1, 2, 2, 2, 2, 3, 3, 3, 4, 4] as const;
+export const MODULE_TIER_COUNT = MODULE_TIER_WIDTHS.length;
+export const MAX_MODULE_TIER_WIDTH = 4;
+export const MODULES_PER_ARCHETYPE = MODULE_TIER_WIDTHS.reduce((sum, width) => sum + width, 0);
+
+const shipModuleTierSchema = z.array(shipModuleSchema).min(1).max(MAX_MODULE_TIER_WIDTH).readonly();
+export type ShipModuleTier = z.infer<typeof shipModuleTierSchema>;
+
+/**
+ * What a hull changes about the base ship. Sparse on purpose: an archetype
+ * states its differences, so a base value edited in the flat block reaches
+ * every hull that did not deliberately override it.
+ */
+export const shipArchetypeOverridesSchema = z
+  .object({
+    stats: z.partialRecord(moduleTargetFieldSchema, finite),
+    cannonWeaponKind: friendlyWeaponKindSchema.nullable(),
+    mgWeaponKind: friendlyWeaponKindSchema.nullable()
+  })
+  .strict();
+export type ShipArchetypeOverrides = z.infer<typeof shipArchetypeOverridesSchema>;
+
+export const MAX_SHIP_ARCHETYPES = 6;
+export const shipArchetypeIdSchema = z
+  .string()
+  .min(1)
+  .max(48)
+  .regex(ENEMY_ARCHETYPE_ID_PATTERN, "Ship id must start with a lowercase letter.");
+export type ShipArchetypeId = z.infer<typeof shipArchetypeIdSchema>;
+
+export const shipArchetypeSchema = z
+  .object({
+    label: z.string().min(1).max(48),
+    description: z.string().min(1).max(240),
+    /** Look of the hull; null keeps the display's own default silhouette. */
+    visual: entityVisualSchema,
+    /**
+     * Informational until runs remember anything between themselves: shown
+     * beside the hull so a locked ship does not appear out of nowhere later.
+     */
+    unlockedAtWave: positiveInteger,
+    overrides: shipArchetypeOverridesSchema,
+    tiers: z.array(shipModuleTierSchema).length(MODULE_TIER_COUNT).readonly(),
+    /**
+     * What a crew that bought the whole tree is offered from then on. Its
+     * modules are repeatable, so they carry percentages and additions only.
+     */
+    endlessTier: shipModuleTierSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    const tiers = [...value.tiers, value.endlessTier];
+    tiers.forEach((tier, index) => {
+      const width = MODULE_TIER_WIDTHS[index];
+      if (width !== undefined && tier.length !== width) {
+        issue(
+          context,
+          ["tiers", index],
+          `Tier ${String(index + 1)} must hold exactly ${String(width)} modules.`
+        );
+      }
+      const roles = new Set(tier.map(({ role }) => role));
+      const requiredRoles = tier.length >= 3 ? CREW_ROLES.length : Math.min(2, tier.length);
+      if (roles.size < requiredRoles) {
+        issue(
+          context,
+          ["tiers", index],
+          `A tier of ${String(tier.length)} must cover ${String(requiredRoles)} roles, not ${String(roles.size)}.`
+        );
+      }
+      tier.forEach((module, moduleIndex) => {
+        if (seen.has(module.id))
+          issue(context, ["tiers", index, moduleIndex, "id"], "Module ids must be unique.");
+        seen.add(module.id);
+      });
+    });
+  });
+export type ShipArchetype = z.infer<typeof shipArchetypeSchema>;
+
+export const shipArchetypeTableSchema = z
+  .record(shipArchetypeIdSchema, shipArchetypeSchema)
+  .superRefine((value, context) => {
+    const ids = Object.keys(value);
+    if (ids.length === 0) {
+      context.addIssue({ code: "custom", message: "Catalogue must hold at least one hull." });
+    }
+    if (ids.length > MAX_SHIP_ARCHETYPES) {
+      context.addIssue({
+        code: "custom",
+        message: `Catalogue cannot hold more than ${String(MAX_SHIP_ARCHETYPES)} hulls.`
+      });
+    }
+  });
+
 export const balanceTuningSchema = z
   .object({
     enemyArchetypes: enemyArchetypeTableSchema,
@@ -482,6 +690,12 @@ export const balanceTuningSchema = z
     enemySkill: enemySkillTuningSchema,
     /** Keyboard helm feel; the simulation never reads this section either. */
     helm: helmTuningSchema,
+
+    // --- Ship archetypes: which hull a run is played on ---
+    /** Hulls a room may be created with, each with its own ten-tier tree. */
+    shipArchetypes: shipArchetypeTableSchema,
+    /** The hull a room gets when its creator names none. */
+    defaultShipArchetypeId: shipArchetypeIdSchema,
 
     // --- Player ship: hull and movement ---
     /** Look of the player hull; null keeps the display's own default silhouette. */
@@ -569,6 +783,13 @@ export const balanceTuningSchema = z
         path: ["ambientAsteroidIntervalMinTicks"],
         message: "Ambient asteroid minimum interval cannot exceed the maximum."
       });
+    }
+    if (!Object.hasOwn(value.shipArchetypes, value.defaultShipArchetypeId)) {
+      issue(
+        context,
+        ["defaultShipArchetypeId"],
+        "Default hull must be one of the catalogue hulls."
+      );
     }
   });
 export type BalanceTuning = z.infer<typeof balanceTuningSchema>;

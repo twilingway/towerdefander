@@ -20,6 +20,8 @@ import {
   type SpaceshipSimulationConfig
 } from "@spaceship-defender/game-core";
 
+import { DEFAULT_SHIP_ARCHETYPES, DEFAULT_SHIP_ARCHETYPE_ID } from "./shipCatalogue.js";
+
 const DEFAULT_PRESET_ID = "default";
 
 /**
@@ -224,6 +226,8 @@ export function createDefaultTuning(): BalanceTuning {
     autopilot: DEFAULT_AUTOPILOT,
     enemySkill: config.enemySkill,
     helm: DEFAULT_HELM,
+    shipArchetypes: DEFAULT_SHIP_ARCHETYPES,
+    defaultShipArchetypeId: DEFAULT_SHIP_ARCHETYPE_ID,
     spaceshipVisual: config.spaceshipVisual,
     spaceshipMaxHp: config.spaceshipMaxHp,
     spaceshipRadius: config.spaceshipRadius,

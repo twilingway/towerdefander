@@ -1,9 +1,12 @@
 import {
   BUILTIN_ENEMY_KINDS,
+  CREW_ROLES,
+  MODULE_TIER_WIDTHS,
   type AutopilotProfile,
   type BalanceTuning,
   type EnemyArchetype,
-  type EnemySkillProfile
+  type EnemySkillProfile,
+  type ShipArchetype
 } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
@@ -99,6 +102,29 @@ function autopilotLevels() {
   return { rookie: autopilotProfile(), veteran: autopilotProfile(), ace: autopilotProfile() };
 }
 
+/** A hull of the exact shape the schema demands; the numbers do not matter here. */
+function shipArchetype(): ShipArchetype {
+  const card = (id: string, slot: number) => ({
+    id,
+    label: `Module ${id}`,
+    role: CREW_ROLES[slot % CREW_ROLES.length] ?? ("pilot" as const),
+    effects: [{ target: "spaceshipMaxHp" as const, op: "add" as const, value: 5 }]
+  });
+  return {
+    label: "Hull",
+    description: "Test hull",
+    visual: null,
+    unlockedAtWave: 1,
+    overrides: { stats: {}, cannonWeaponKind: null, mgWeaponKind: null },
+    tiers: MODULE_TIER_WIDTHS.map((width, tier) =>
+      Array.from({ length: width }, (_unused, slot) =>
+        card(`t${String(tier)}m${String(slot)}`, slot)
+      )
+    ),
+    endlessTier: [card("endless", 0)]
+  };
+}
+
 function tuning(): BalanceTuning {
   return {
     enemyArchetypes: Object.fromEntries(
@@ -171,6 +197,8 @@ function tuning(): BalanceTuning {
     mgProjectileVisual: null,
     asteroidVisual: null,
     spaceshipVisual: null,
+    shipArchetypes: { guardian: shipArchetype() },
+    defaultShipArchetypeId: "guardian",
     spaceshipMaxHp: 500,
     spaceshipRadius: 52,
     spaceshipSpeedPerSecond: 320,
