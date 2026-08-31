@@ -76,17 +76,25 @@ export class EncounterState extends Schema {
   @type("uint32") score = 0;
 }
 
+export class ShipStatEffectState extends Schema {
+  /** Which ship number the module moves; a catalogue field name, not an enum. */
+  @type("string") target = "";
+  @type("string") op = "add";
+  @type("float32") value = 0;
+}
+
 export class UpgradeCardState extends Schema {
   @type("string") upgradeId: UpgradeId = "";
   @type("string") role: CrewRole = "pilot";
   /** The module's name; the numbers live in the summary beside it. */
   @type("string") label = "";
   /**
-   * What the module does, assembled from its effects. A string on a field that
-   * changes once per wave is affordable, and it is what stops a hand-written
-   * caption promising a number the effect does not deliver.
+   * What the module does. The effects travel rather than a written caption, so
+   * the number a crew reads is the number that gets applied, and so the demo
+   * bot can weigh a card whose id it has never seen. Four per card at most,
+   * changing once per wave.
    */
-  @type("string") summary = "";
+  @type([ShipStatEffectState]) effects = new ArraySchema<ShipStatEffectState>();
   @type("uint8") price = 5;
 }
 

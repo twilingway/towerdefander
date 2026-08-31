@@ -575,7 +575,8 @@ button:disabled {
   }
 
   .play-card > .upgrade-panel .upgrade-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* One to four cards, depending on how deep the tree the crew is in. */
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   }
 
   .play-card > .upgrade-panel .upgrade-card {

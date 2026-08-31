@@ -329,6 +329,23 @@ export function buildConfig(tuning, options = {}) {
   const autopilot = overrides.autopilot;
   delete overrides.autopilot;
   delete overrides.helm;
+  // The hull the stand flies. Same resolution the room does: the sparse diff
+  // lands on the flat ship block and the hull's tree becomes the tiers the
+  // offer is built from. A preset written before hulls has neither, and then
+  // the built-in tree stands in — otherwise the crew would buy nothing at all.
+  const hulls = overrides.shipArchetypes;
+  const hullId = options.shipArchetypeId ?? overrides.defaultShipArchetypeId;
+  const hull = hulls?.[hullId] ?? (hulls === undefined ? undefined : Object.values(hulls)[0]);
+  delete overrides.shipArchetypes;
+  delete overrides.defaultShipArchetypeId;
+  if (hull !== undefined) {
+    Object.assign(overrides, hull.overrides?.stats ?? {});
+    if (hull.overrides?.cannonWeaponKind != null)
+      overrides.cannonWeaponKind = hull.overrides.cannonWeaponKind;
+    if (hull.overrides?.mgWeaponKind != null) overrides.mgWeaponKind = hull.overrides.mgWeaponKind;
+    overrides.moduleTiers = hull.tiers;
+    overrides.endlessTier = hull.endlessTier;
+  }
   return { config: createSpaceshipSimulationConfig(overrides), autopilot };
 }
 

@@ -91,11 +91,17 @@ interface NetworkHomingMissileState extends NetworkCombatEntityState {
   visualScale?: number;
 }
 
+interface NetworkShipStatEffectState {
+  target: string;
+  op: string;
+  value: number;
+}
+
 interface NetworkUpgradeCardState {
   upgradeId: UpgradeId;
   role: CrewRole;
   label: string;
-  summary: string;
+  effects: ValueCollection<NetworkShipStatEffectState>;
   price: number;
 }
 
@@ -377,7 +383,10 @@ function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
             offerId: teamUpgrade.offer.offerId,
             waveNumber: teamUpgrade.offer.waveNumber,
             tier: teamUpgrade.offer.tier,
-            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
+            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({
+              ...card,
+              effects: [...card.effects.values()].map((effect) => ({ ...effect }))
+            }))
           }
         : null,
     votes,

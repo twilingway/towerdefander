@@ -14,7 +14,7 @@ import type {
   TeamUpgradeVote
 } from "@spaceship-defender/game-core";
 
-import { CREW_ROLES, summariseModuleEffects, type CrewRole } from "@spaceship-defender/protocol";
+import { CREW_ROLES, type CrewRole } from "@spaceship-defender/protocol";
 
 import {
   AsteroidState,
@@ -23,6 +23,7 @@ import {
   LaserBeamState,
   LootDropState,
   ProjectileState,
+  ShipStatEffectState,
   UpgradeCardState,
   UpgradeVoteState,
   type SpaceshipDefenderState,
@@ -272,9 +273,14 @@ function syncTeamUpgrade(
       card.upgradeId = source.upgradeId;
       card.role = source.role;
       card.label = source.label;
-      // Assembled here rather than stored in the preset: the operator writes a
-      // name and the effects, and the caption follows from the effects.
-      card.summary = summariseModuleEffects(source.effects);
+      card.effects.splice(0, card.effects.length);
+      for (const effect of source.effects) {
+        const mirrored = new ShipStatEffectState();
+        mirrored.target = effect.target;
+        mirrored.op = effect.op;
+        mirrored.value = effect.value;
+        card.effects.push(mirrored);
+      }
       card.price = source.price;
     }
     while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();

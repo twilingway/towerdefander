@@ -146,6 +146,19 @@ button:disabled {
   background: #132d2a;
 }
 
+.ship-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+
+.ship-pitch {
+  margin-block: 0 1rem;
+  color: #b9d3ce;
+  font-size: clamp(0.9rem, 1.2vw, 1.15rem);
+}
+
 .eyebrow {
   margin: 0;
   color: #e6b85c;
@@ -691,12 +704,42 @@ p {
   color: #ffd783;
 }
 
+.tier-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block: 0.6rem;
+}
+
+.tier-ribbon__step {
+  width: 1.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 18%);
+}
+
+.tier-ribbon__step.is-done {
+  background: #78d39c;
+}
+
+.tier-ribbon__step.is-current {
+  background: #ffd783;
+  box-shadow: 0 0 0 2px rgb(255 215 131 / 35%);
+}
+
+.tier-ribbon small {
+  margin-inline-start: 0.5rem;
+  color: #b9d3ce;
+}
+
 .intermission-cards {
   display: grid;
   margin: 0;
   padding: 0;
   gap: 0.6rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* A tier is one to four cards wide, so the columns follow the tier. */
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   list-style: none;
 }
 

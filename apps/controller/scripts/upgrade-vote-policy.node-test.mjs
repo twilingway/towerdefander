@@ -3,15 +3,37 @@ import test from "node:test";
 
 import { CREW_ROLES, drawUpgradeCard, planUpgradeVotes } from "./upgrade-vote-policy.mjs";
 
-/** One card per role, the way `createTeamUpgradeOffer` always builds an offer. */
+/**
+ * A tier three cards wide, one per seat. The bot reads what a card does from
+ * its effects, not from its id, so the fixture carries them.
+ */
 function offer(waveNumber = 1) {
   return {
     offerId: `offer-w${String(waveNumber)}`,
     waveNumber,
+    tier: 6,
     cards: [
-      { upgradeId: "pilot_hull", role: "pilot", label: "hull", value: 25, price: 5 },
-      { upgradeId: "gunner_damage", role: "gunner", label: "damage", value: 0.15, price: 5 },
-      { upgradeId: "shield_capacity", role: "shield", label: "capacity", value: 20, price: 5 }
+      {
+        upgradeId: "hullPlating2",
+        role: "pilot",
+        label: "hull",
+        effects: [{ target: "spaceshipMaxHp", op: "add", value: 60 }],
+        price: 5
+      },
+      {
+        upgradeId: "heavyRounds",
+        role: "gunner",
+        label: "damage",
+        effects: [{ target: "friendlyProjectileDamage", op: "percent", value: 0.18 }],
+        price: 5
+      },
+      {
+        upgradeId: "capacitor2",
+        role: "shield",
+        label: "capacity",
+        effects: [{ target: "shieldCapacity", op: "add", value: 40 }],
+        price: 5
+      }
     ]
   };
 }
@@ -88,7 +110,7 @@ function hullShare(level, ship) {
   let hull = 0;
   for (let wave = 1; wave <= 400; wave += 1) {
     const card = drawUpgradeCard(offer(wave), { seed: 99, waveNumber: wave, level, ship });
-    if (card.upgradeId === "pilot_hull") hull += 1;
+    if (card.upgradeId === "hullPlating2") hull += 1;
   }
   return hull / 400;
 }

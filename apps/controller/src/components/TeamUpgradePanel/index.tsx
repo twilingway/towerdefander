@@ -1,6 +1,7 @@
 import {
   CREW_ROLES,
   TEAM_UPGRADE_PRICE,
+  summariseModuleEffects,
   type CrewRole,
   type PublicTeamUpgradeView,
   type UpgradeId
@@ -126,7 +127,7 @@ export function TeamUpgradePanel({
               }}
             >
               <strong>{card.label}</strong>
-              <small>{card.summary}</small>
+              <small>{summariseModuleEffects(card.effects)}</small>
               <small>{roleLabel(card.role)}</small>
               <small>
                 {pending

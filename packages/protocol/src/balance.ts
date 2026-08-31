@@ -717,6 +717,33 @@ export const shipArchetypeSchema = z
   });
 export type ShipArchetype = z.infer<typeof shipArchetypeSchema>;
 
+/**
+ * What a display is told about the hulls before it joins a room.
+ *
+ * Deliberately narrow: a name, a look and the wave the hull is meant to open
+ * at. No stats and no tree, because this is the only balance surface that
+ * answers without a password, and picking a ship does not require knowing how
+ * strong it is.
+ */
+export const publicShipSchema = z
+  .object({
+    id: shipArchetypeIdSchema,
+    label: z.string().min(1).max(48),
+    description: z.string().min(1).max(240),
+    visual: entityVisualSchema,
+    unlockedAtWave: positiveInteger
+  })
+  .strict();
+export type PublicShip = z.infer<typeof publicShipSchema>;
+
+export const publicShipCatalogueSchema = z
+  .object({
+    ships: z.array(publicShipSchema).min(1).max(MAX_SHIP_ARCHETYPES),
+    defaultShipId: shipArchetypeIdSchema
+  })
+  .strict();
+export type PublicShipCatalogue = z.infer<typeof publicShipCatalogueSchema>;
+
 export const shipArchetypeTableSchema = z
   .record(shipArchetypeIdSchema, shipArchetypeSchema)
   .superRefine((value, context) => {

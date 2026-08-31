@@ -1,5 +1,10 @@
 import { useState } from "react";
-import { CREW_SIZES, MAX_START_WAVE, type CrewSize } from "@spaceship-defender/protocol";
+import {
+  CREW_SIZES,
+  MAX_START_WAVE,
+  type CrewSize,
+  type PublicShip
+} from "@spaceship-defender/protocol";
 
 import { VisibleDemoOverlay } from "../../VisibleDemoOverlay.js";
 
@@ -15,7 +20,18 @@ interface CreateRoomScreenProps {
   readonly allowStartWave: boolean;
   /** Initial wave, so `?wave=5` can drive it from a script or a bookmark. */
   readonly initialStartWave: number;
-  readonly onCreate: (crewSize: CrewSize, startWave: number) => void;
+  /**
+   * Hulls from the server's public catalogue. Empty while it is still being
+   * fetched, or if it could not be: then the picker stays hidden and the server
+   * gives the room its own default hull.
+   */
+  readonly ships: readonly PublicShip[];
+  readonly defaultShipId: string | undefined;
+  readonly onCreate: (
+    crewSize: CrewSize,
+    shipArchetypeId: string | undefined,
+    startWave: number
+  ) => void;
 }
 
 /** Shown until a room exists: the pitch, the crew size and the button that opens one. */
@@ -25,10 +41,17 @@ export function CreateRoomScreen({
   visibleDemo,
   allowStartWave,
   initialStartWave,
+  ships,
+  defaultShipId,
   onCreate
 }: CreateRoomScreenProps) {
   const [crewSize, setCrewSize] = useState<CrewSize>(3);
   const [startWave, setStartWave] = useState(initialStartWave);
+  const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
+  // The catalogue arrives after the first render, so the choice falls back to
+  // whatever the server calls its default until someone picks otherwise.
+  const shipId = pickedShipId ?? defaultShipId;
+  const ship = ships.find((candidate) => candidate.id === shipId);
   return (
     <main className="display-shell display-shell--centered">
       <section className="hero-card">
@@ -50,6 +73,24 @@ export function CreateRoomScreen({
             </button>
           ))}
         </div>
+        {ships.length > 1 && (
+          <div className="ship-picker" role="group" aria-label="Корабль">
+            {ships.map((candidate) => (
+              <button
+                type="button"
+                key={candidate.id}
+                className={candidate.id === shipId ? "is-selected" : ""}
+                aria-pressed={candidate.id === shipId}
+                onClick={() => {
+                  setPickedShipId(candidate.id);
+                }}
+              >
+                {candidate.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {ship !== undefined && <p className="ship-pitch">{ship.description}</p>}
         {allowStartWave && (
           <label className="field">
             <span className="field__caption">Начать с волны (для тестов)</span>
@@ -72,7 +113,7 @@ export function CreateRoomScreen({
         <button
           type="button"
           onClick={() => {
-            onCreate(crewSize, startWave);
+            onCreate(crewSize, shipId, startWave);
           }}
           disabled={status === "connecting"}
         >

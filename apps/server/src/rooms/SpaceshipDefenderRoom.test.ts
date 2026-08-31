@@ -1322,7 +1322,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     // A tier of three owes all three seats, but not in any fixed slot order.
     expect(new Set([...upgrade.offer.cards].map(({ role }) => role))).toEqual(new Set(CREW_ROLES));
     expect(upgrade.offer.cards).toHaveLength(3);
-    for (const card of upgrade.offer.cards) expect(card.summary.length).toBeGreaterThan(0);
+    for (const card of upgrade.offer.cards) expect(card.effects.length).toBeGreaterThan(0);
     expect(display.client.view?.has(room.state.game)).toBe(true);
     for (const controller of controllers) expect(controller.client.view).toBeDefined();
     expect(room.state.game.display.enemyShips).toHaveLength(0);

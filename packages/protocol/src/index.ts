@@ -10,6 +10,7 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 import {
+  MAX_MODULE_EFFECTS,
   MAX_MODULE_TIER_WIDTH,
   MODULE_TIER_COUNT,
   backgroundTuningSchema,
@@ -18,6 +19,7 @@ import {
   helmSchemeSchema,
   shipArchetypeIdSchema,
   shipModuleIdSchema,
+  shipStatEffectSchema,
   turretVisualSchema,
   visualAssetIdSchema
 } from "./balance.ts";
@@ -246,8 +248,13 @@ export const publicUpgradeCardSchema = z
     role: crewRoleSchema,
     /** The module's name, as the operator wrote it. */
     label: z.string().min(1).max(96),
-    /** What it does, assembled from its effects so the two cannot drift. */
-    summary: z.string().min(1).max(160),
+    /**
+     * What it does. The card carries the effects rather than a written caption
+     * so the number a crew reads is the number that gets applied, and so the
+     * demo bot can weigh a card it has never seen — clients render them with
+     * `summariseModuleEffects`.
+     */
+    effects: z.array(shipStatEffectSchema).min(1).max(MAX_MODULE_EFFECTS),
     price: z.literal(TEAM_UPGRADE_PRICE)
   })
   .strict();

@@ -8,6 +8,7 @@ import {
   MODULE_TARGET_FIELDS,
   MODULE_TIER_WIDTHS,
   balancePresetsFileSchema,
+  publicShipCatalogueSchema,
   type BalancePresetsFile,
   type BalanceTuning
 } from "@spaceship-defender/protocol";
@@ -23,6 +24,7 @@ import {
   createBalanceSaveHandler,
   createBalanceStateHandler,
   createBalanceValidateHandler,
+  createShipCatalogueHandler,
   readJsonBody
 } from "./routes.js";
 import {
@@ -1424,6 +1426,26 @@ describe("balance routes", () => {
     expect(output.state.status).toBe(200);
     expect(output.state.headers["cache-control"]).toBe("no-store");
     expect(balancePresetsFileSchema.safeParse(output.state.body).success).toBe(true);
+  });
+
+  it("serves the hull catalogue to anyone, with no stats and no tree in it", async () => {
+    const store = storeFor(await temporaryPresetPath());
+    const output = response();
+    // A stranger's address, and no password configured: every other balance
+    // route refuses this, and this one must not.
+    await invoke(
+      createShipCatalogueHandler({ password: undefined, store }),
+      request("203.0.113.7"),
+      output.response
+    );
+    expect(output.state.status).toBe(200);
+    const parsed = publicShipCatalogueSchema.safeParse(output.state.body);
+    expect(parsed.success).toBe(true);
+    const body = JSON.stringify(output.state.body);
+    for (const leaked of ["tiers", "endlessTier", "overrides", "spaceshipMaxHp", "effects"]) {
+      expect(body).not.toContain(leaked);
+    }
+    expect(parsed.data?.defaultShipId).toBe(createDefaultTuning().defaultShipArchetypeId);
   });
 
   it("rejects a non-loopback client when no password is set", async () => {

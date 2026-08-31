@@ -13,21 +13,50 @@
 export const CREW_ROLES = ["pilot", "gunner", "shield"];
 
 /**
- * How attractive a card is before the ship's condition is taken into account.
- * A missing id falls back to 1, so a new upgrade joins the draw by adding a row
- * here rather than by touching the algorithm.
+ * How attractive a card is before the ship's condition is taken into account,
+ * keyed by what its first effect changes rather than by the module's id.
+ *
+ * Ids stopped being a closed list when the tree moved into the preset: an
+ * operator authoring a new module cannot be expected to also teach the bot
+ * about it. A target with no row here falls back to 1, so the bot keeps buying
+ * something sensible on a tree it has never seen.
  */
-const BASE_WEIGHT = {
-  pilot_speed: 1,
-  pilot_acceleration: 1,
-  pilot_hull: 1.4,
-  gunner_damage: 1.6,
-  gunner_cooldown: 1.3,
-  gunner_projectile_speed: 0.9,
-  shield_capacity: 1.2,
-  shield_recharge: 1.1,
-  shield_arc: 0.8
+const TARGET_WEIGHT = {
+  spaceshipMaxHp: 1.4,
+  friendlyProjectileDamage: 1.6,
+  fireCooldownTicks: 1.3,
+  mgDamage: 1.2,
+  mgFireCooldownTicks: 1.1,
+  shieldCapacity: 1.2,
+  shieldRechargePerSecond: 1.1,
+  shieldDrainPerSecond: 1,
+  shieldArcRadians: 0.8,
+  projectileSpeedPerSecond: 0.9,
+  spaceshipSpeedPerSecond: 1,
+  spaceshipAccelerationPerSecondSquared: 1
 };
+
+/** What a card is mainly about: the target of the first effect it carries. */
+function primaryTarget(card) {
+  return card?.effects?.[0]?.target;
+}
+
+/** Which need signal a target answers, so the weights bend with the run. */
+const HULL_TARGETS = new Set(["spaceshipMaxHp"]);
+const SHIELD_TARGETS = new Set([
+  "shieldCapacity",
+  "shieldRechargePerSecond",
+  "shieldDrainPerSecond",
+  "shieldArcRadians"
+]);
+const GUN_TARGETS = new Set([
+  "friendlyProjectileDamage",
+  "fireCooldownTicks",
+  "mgDamage",
+  "mgFireCooldownTicks",
+  "cannonHeatCapacity",
+  "cannonCoolingPerSecond"
+]);
 
 /**
  * How far the ship's condition is allowed to bend the base weights. A rookie
@@ -73,15 +102,13 @@ function clamp01(value) {
  * being worked, and how badly the wave is dragging. Resist a fourth without
  * numbers to justify it.
  */
-function needFor(upgradeId, ship) {
+function needFor(target, ship) {
   const hurt = clamp01(1 - safeShare(ship.hp, ship.maxHp, 1));
   const shieldStrain = clamp01(1 - safeShare(ship.shieldEnergy, ship.shieldCapacity, 1));
   const slowWave = clamp01((ship.waveSeconds ?? 0) / TARGET_WAVE_SECONDS - 1);
-  if (upgradeId === "pilot_hull") return 1 + hurt;
-  if (upgradeId === "shield_capacity" || upgradeId === "shield_recharge") {
-    return 1 + shieldStrain;
-  }
-  if (upgradeId === "gunner_damage" || upgradeId === "gunner_cooldown") return 1 + slowWave;
+  if (target !== undefined && HULL_TARGETS.has(target)) return 1 + hurt;
+  if (target !== undefined && SHIELD_TARGETS.has(target)) return 1 + shieldStrain;
+  if (target !== undefined && GUN_TARGETS.has(target)) return 1 + slowWave;
   return 1;
 }
 
@@ -91,9 +118,10 @@ function safeShare(value, total, fallback) {
 }
 
 function weightOf(card, level, ship) {
-  const base = BASE_WEIGHT[card.upgradeId] ?? 1;
+  const target = primaryTarget(card);
+  const base = (target === undefined ? undefined : TARGET_WEIGHT[target]) ?? 1;
   const sensitivity = NEED_SENSITIVITY[level] ?? 0;
-  return Math.max(0.001, base * (1 + sensitivity * (needFor(card.upgradeId, ship) - 1)));
+  return Math.max(0.001, base * (1 + sensitivity * (needFor(target, ship) - 1)));
 }
 
 /** Which card the crew agrees on this intermission. */

@@ -194,21 +194,21 @@ describe("controller room view", () => {
                 upgradeId: "afterburner",
                 role: "pilot",
                 label: "Форсаж",
-                summary: "Скорость +14%",
+                effects: [{ target: "spaceshipSpeedPerSecond", op: "percent", value: 0.14 }],
                 price: 5
               },
               {
                 upgradeId: "turretDrive",
                 role: "gunner",
                 label: "Привод башни",
-                summary: "Скорость поворота башни +25%",
+                effects: [{ target: "turretMaxAngularSpeedPerSecond", op: "percent", value: 0.25 }],
                 price: 5
               },
               {
                 upgradeId: "capacitor2",
                 role: "shield",
                 label: "Батарея",
-                summary: "Ёмкость щита +40",
+                effects: [{ target: "shieldCapacity", op: "add", value: 40 }],
                 price: 5
               }
             ])

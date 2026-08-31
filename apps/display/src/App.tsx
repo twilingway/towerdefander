@@ -12,7 +12,8 @@ import {
   serverLatencyProbeSchema,
   serverMessage,
   type CrewSize,
-  type DisplayRoomView
+  type DisplayRoomView,
+  type PublicShipCatalogue
 } from "@spaceship-defender/protocol";
 import {
   createDefaultGameServerUrl,
@@ -46,6 +47,7 @@ import {
 } from "./displayRoomLifecycle.js";
 import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
+import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isVisibleDemoMode, readStartWave } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -84,6 +86,7 @@ export function DisplayApp() {
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
+  const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
   // and the Phaser frame all render through the production path.
   const previewView = useMemo(
@@ -97,6 +100,19 @@ export function DisplayApp() {
     [view]
   );
 
+  // The hulls a room can be opened on. Fetched once, and only informative: a
+  // display that cannot reach the route still creates rooms, on the preset's
+  // own default hull.
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchShipCatalogue(gameServerUrl, controller.signal).then((catalogue) => {
+      if (!controller.signal.aborted) setShipCatalogue(catalogue);
+    });
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
   useEffect(
     () => () => {
       const room = roomReference.current;
@@ -109,7 +125,11 @@ export function DisplayApp() {
     []
   );
 
-  async function createRoom(crewSize: CrewSize, startWave: number): Promise<void> {
+  async function createRoom(
+    crewSize: CrewSize,
+    shipArchetypeId: string | undefined,
+    startWave: number
+  ): Promise<void> {
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
@@ -118,6 +138,9 @@ export function DisplayApp() {
         role: "display",
         protocolVersion: PROTOCOL_VERSION,
         crewSize,
+        // Absent means the preset's own hull, so a display that could not reach
+        // the catalogue still opens a room.
+        ...(shipArchetypeId === undefined ? {} : { shipArchetypeId }),
         // Sent only when a tester asked for one, so an ordinary create carries
         // exactly what it always did.
         ...(startWave > 1 ? { startWave } : {})
@@ -210,7 +233,11 @@ export function DisplayApp() {
         visibleDemo={visibleDemo}
         allowStartWave={allowStartWave}
         initialStartWave={initialStartWave}
-        onCreate={(crewSize, startWave) => void createRoom(crewSize, startWave)}
+        ships={shipCatalogue?.ships ?? []}
+        defaultShipId={shipCatalogue?.defaultShipId}
+        onCreate={(crewSize, shipArchetypeId, startWave) =>
+          void createRoom(crewSize, shipArchetypeId, startWave)
+        }
       />
     );
   }
@@ -347,6 +374,7 @@ export function DisplayApp() {
               score={view.game.encounter.score}
               waveNumber={view.game.encounter.waveNumber}
               phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
+              purchasedModules={view.game.purchasedModules}
             />
           )}
           {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (

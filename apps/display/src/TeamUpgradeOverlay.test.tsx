@@ -14,21 +14,21 @@ const teamUpgrade: PublicTeamUpgradeView = {
         upgradeId: "hullPlating2",
         role: "pilot",
         label: "Композитный корпус",
-        summary: "Прочность корпуса +60",
+        effects: [{ target: "spaceshipMaxHp", op: "add", value: 60 }],
         price: 5
       },
       {
         upgradeId: "heavyRounds",
         role: "gunner",
         label: "Тяжёлые снаряды",
-        summary: "Урон пушки +18%, Скорость снаряда −5%",
+        effects: [{ target: "friendlyProjectileDamage", op: "percent", value: 0.18 }],
         price: 5
       },
       {
         upgradeId: "wideArc",
         role: "shield",
         label: "Широкий сектор",
-        summary: "Сектор щита +20°",
+        effects: [{ target: "shieldArcRadians", op: "add", value: Math.PI / 9 }],
         price: 5
       }
     ]
@@ -50,6 +50,13 @@ describe("TeamUpgradeOverlay", () => {
         score={480}
         waveNumber={3}
         phaseTicksRemaining={600}
+        purchasedModules={[
+          "hullPlating1",
+          "thrusters1",
+          "ammoFeed1",
+          "gyroscopes1",
+          "noseCooling1"
+        ]}
       />
     );
 
@@ -71,6 +78,13 @@ describe("TeamUpgradeOverlay", () => {
         score={40}
         waveNumber={3}
         phaseTicksRemaining={120}
+        purchasedModules={[
+          "hullPlating1",
+          "thrusters1",
+          "ammoFeed1",
+          "gyroscopes1",
+          "noseCooling1"
+        ]}
       />
     );
 
@@ -89,6 +103,13 @@ describe("TeamUpgradeOverlay", () => {
         score={0}
         waveNumber={1}
         phaseTicksRemaining={600}
+        purchasedModules={[
+          "hullPlating1",
+          "thrusters1",
+          "ammoFeed1",
+          "gyroscopes1",
+          "noseCooling1"
+        ]}
       />
     );
 
