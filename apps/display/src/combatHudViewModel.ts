@@ -1,3 +1,4 @@
+import { getVisualAsset } from "@spaceship-defender/protocol";
 import type {
   DisplayGameSnapshot,
   PublicEnemyCatalogueEntry,
@@ -80,6 +81,8 @@ export function getShieldStatusLabel(
 export interface BossView {
   readonly entityId: string;
   readonly label: string;
+  /** Name of the silhouette, when the archetype is called something generic. */
+  readonly name: string | undefined;
   readonly hp: number;
   readonly maxHp: number;
 }
@@ -94,20 +97,25 @@ export interface BossView {
  * bar when the other dies.
  */
 export function selectBoss(game: DisplayGameSnapshot): BossView | undefined {
-  const labels = new Map<string, string>();
+  const bosses = new Map<string, PublicEnemyCatalogueEntry>();
   for (const entry of game.enemyCatalogue satisfies readonly PublicEnemyCatalogueEntry[]) {
-    if (entry.isBoss) labels.set(entry.kind, entry.label);
+    if (entry.isBoss) bosses.set(entry.kind, entry);
   }
-  if (labels.size === 0) return undefined;
+  if (bosses.size === 0) return undefined;
   let found: PublicEnemyView | undefined;
   for (const enemy of game.enemyShips) {
-    if (!labels.has(enemy.kind)) continue;
+    if (!bosses.has(enemy.kind)) continue;
     if (found === undefined || enemy.hp > found.hp) found = enemy;
   }
   if (found === undefined) return undefined;
+  const entry = bosses.get(found.kind);
+  // An operator usually calls the archetype something plain, so the silhouette
+  // is where the name lives; when the two agree there is nothing to add.
+  const name = entry === undefined ? undefined : getVisualAsset(entry.shape).name;
   return {
     entityId: found.entityId,
-    label: labels.get(found.kind) ?? found.kind,
+    label: entry?.label ?? found.kind,
+    name: name === undefined || name === entry?.label ? undefined : name,
     hp: found.hp,
     maxHp: found.maxHp
   };

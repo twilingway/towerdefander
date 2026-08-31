@@ -654,18 +654,6 @@ p {
   backdrop-filter: blur(3px);
 }
 
-.combat-radar__title {
-  position: absolute;
-  z-index: 1;
-  top: 8%;
-  left: 50%;
-  color: rgb(156 245 250 / 72%);
-  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  transform: translateX(-50%);
-}
-
 .combat-radar svg {
   display: block;
   width: 100%;
@@ -745,12 +733,6 @@ p {
 
 .combat-radar__ring--hull .combat-radar__ring-value {
   filter: drop-shadow(0 0 3px rgb(0 0 0 / 55%));
-}
-
-.combat-radar__turret {
-  stroke: #ffd783;
-  stroke-width: 2;
-  stroke-linecap: round;
 }
 
 .combat-radar__speed-plate {
@@ -1169,11 +1151,12 @@ p {
 /* Collapsed it is just its own toggle, and it leaves the middle of the screen:
    centred is where the window belongs, not the button that reopens it. */
 .module-tree--collapsed {
-  top: max(4.5rem, calc(env(safe-area-inset-top) + 4rem));
+  top: max(13rem, calc(env(safe-area-inset-top) + 12rem));
+  left: max(1.25rem, env(safe-area-inset-left));
   width: auto;
   max-height: none;
   padding: 0.35rem;
-  transform: translateX(-50%);
+  transform: none;
 }
 
 .module-tree__toggle {

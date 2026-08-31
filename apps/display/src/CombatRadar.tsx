@@ -56,7 +56,6 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
       data-shield-fraction={shield.toFixed(2)}
       aria-label="Мини-карта арены по центру снизу"
     >
-      <span className="combat-radar__title">РАДАР</span>
       <svg
         viewBox={`0 0 ${String(RADAR_VIEW_BOX_SIZE)} ${String(RADAR_VIEW_BOX_SIZE)}`}
         role="img"
@@ -217,16 +216,6 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
           text={`${String(Math.round(game.shield.energy))} / ${String(Math.round(game.shield.capacity))}`}
           testId="combat-radar-shield-scale"
         />
-        {/* Where the gun looks, drawn off the hull marker: the heading arrow
-            already says where the ship goes, and here the two differ. */}
-        <line
-          className="combat-radar__turret"
-          data-testid="combat-radar-turret"
-          x1={spaceship.x}
-          y1={spaceship.y}
-          x2={spaceship.x + Math.cos(game.turretAngle) * 14}
-          y2={spaceship.y + Math.sin(game.turretAngle) * 14}
-        />
         <text
           className="combat-radar__shield-state"
           data-testid="hud-shield-status"
@@ -259,9 +248,8 @@ export const CombatRadar = memo(function CombatRadar({ game }: CombatRadarProps)
       </svg>
       <span className="sr-only">
         Внутреннее кольцо — прочность корпуса, внешнее — энергия щита; оба пустеют к шести часам.
-        Число в круге — скорость корабля, короткий луч у метки — направление турели. Астероиды
-        показаны точками: светлые дают кредиты, тёмные — только очки. Ракеты и снаряды на мини-карте
-        не отображаются.
+        Число под кругом — скорость корабля. Астероиды показаны точками: светлые дают кредиты,
+        тёмные — только очки. Ракеты и снаряды на мини-карте не отображаются.
       </span>
     </aside>
   );

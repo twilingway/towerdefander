@@ -111,6 +111,15 @@ export function DisplayApp() {
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
     [view]
   );
+  // Which tree the crew is walking: this run's hull out of the catalogue, or
+  // the fixture when the preview has no server to ask.
+  const runHull = shipCatalogue?.ships.find((ship) => ship.id === view?.shipArchetypeId);
+  const moduleTree =
+    runHull !== undefined
+      ? { tiers: runHull.tiers, endlessTier: runHull.endlessTier }
+      : previewView === undefined
+        ? undefined
+        : { tiers: PREVIEW_MODULE_TIERS, endlessTier: PREVIEW_ENDLESS_TIER };
 
   // The hulls a room can be opened on. Fetched once, and only informative: a
   // display that cannot reach the route still creates rooms, on the preset's
@@ -371,13 +380,14 @@ export function DisplayApp() {
               onClose={() => void handleCloseRoom()}
             />
           )}
-          {/* Preview only until the tree reaches the display in a real run:
-              the catalogue does not carry it yet. */}
-          {previewView !== undefined && (
+          {/* The run's own hull, straight from the catalogue; the fixture is
+              the preview's stand-in when no server answered. */}
+          {moduleTree !== undefined && (
             <ModuleTreeWindow
-              tiers={PREVIEW_MODULE_TIERS}
-              endlessTier={PREVIEW_ENDLESS_TIER}
+              tiers={moduleTree.tiers}
+              endlessTier={moduleTree.endlessTier}
               purchased={view.game.purchasedModules}
+              initiallyShown={previewView !== undefined}
               ship={{
                 maxHp: view.game.spaceship.maxHp,
                 shieldCapacity: view.game.shield.capacity,

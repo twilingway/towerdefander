@@ -24,6 +24,8 @@ interface ModuleTreeWindowProps {
   /** Bought modules in purchase order; their ids mark the path through the tree. */
   readonly purchased: readonly string[];
   readonly ship: ModuleTreeShip;
+  /** Open on first render; a live run keeps it folded until someone asks. */
+  readonly initiallyShown?: boolean;
 }
 
 const TIER_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
@@ -37,10 +39,16 @@ const TIER_NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "
  * Which tier is open follows the purchase count, the same rule `availableTierIndex`
  * runs in the core — the wave does not gate it.
  */
-export function ModuleTreeWindow({ tiers, endlessTier, purchased, ship }: ModuleTreeWindowProps) {
+export function ModuleTreeWindow({
+  tiers,
+  endlessTier,
+  purchased,
+  ship,
+  initiallyShown = false
+}: ModuleTreeWindowProps) {
   // The tree covers the stage and every overlay on purpose, so it has to be
   // dismissable: it answers a question, and then it is in the way.
-  const [shown, setShown] = useState(true);
+  const [shown, setShown] = useState(initiallyShown);
   const bought = new Set(purchased);
   const openIndex = Math.min(purchased.length, tiers.length);
   const gains = summariseGains(tiers, endlessTier, purchased);

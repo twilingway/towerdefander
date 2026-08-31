@@ -17,7 +17,10 @@ export function BossHealth({ game }: BossHealthProps) {
   const percent = getResourcePercent(boss.hp, boss.maxHp);
   return (
     <div className="boss-health" data-testid="boss-health" data-entity-id={boss.entityId}>
-      <span>{boss.label}</span>
+      <span>
+        {boss.label}
+        {boss.name === undefined ? "" : ` · ${boss.name}`}
+      </span>
       <div
         className="boss-health__bar"
         role="meter"

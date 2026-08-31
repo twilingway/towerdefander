@@ -170,7 +170,9 @@ export function createShipCatalogueHandler(options: BalanceRouteOptions): Reques
         label: hull.label,
         description: hull.description,
         visual: hull.visual,
-        unlockedAtWave: hull.unlockedAtWave
+        unlockedAtWave: hull.unlockedAtWave,
+        tiers: hull.tiers,
+        endlessTier: hull.endlessTier
       })),
       defaultShipId: tuning.defaultShipArchetypeId
     };

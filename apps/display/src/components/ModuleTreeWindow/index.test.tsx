@@ -13,6 +13,7 @@ function markup(purchased: readonly string[]): string {
       endlessTier={PREVIEW_ENDLESS_TIER}
       purchased={purchased}
       ship={SHIP}
+      initiallyShown
     />
   );
 }
@@ -36,7 +37,22 @@ describe("ModuleTreeWindow", () => {
     expect(html).toContain('class="module-tree__cell is-open" data-role="shield"');
   });
 
-  it("opens expanded and offers a control that hides it", () => {
+  it("stays folded until asked, so a live run keeps its stage", () => {
+    const html = renderToStaticMarkup(
+      <ModuleTreeWindow
+        tiers={PREVIEW_MODULE_TIERS}
+        endlessTier={PREVIEW_ENDLESS_TIER}
+        purchased={[]}
+        ship={SHIP}
+      />
+    );
+
+    expect(html).toContain("module-tree--collapsed");
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain("module-tree__tier");
+  });
+
+  it("opens expanded when asked and offers a control that hides it", () => {
     const html = markup([]);
 
     expect(html).toContain('aria-expanded="true"');
