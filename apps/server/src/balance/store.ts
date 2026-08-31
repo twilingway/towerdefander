@@ -204,7 +204,7 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidCreditReward: config.asteroidCreditReward,
     lootRepairAmount: config.lootRepairAmount,
     lootShieldAmount: config.lootShieldAmount,
-    lootBossRepairAmount: config.lootBossRepairAmount,
+    lootBossRepairShare: config.lootBossRepairShare,
     lootLifetimeTicks: config.lootLifetimeTicks,
     lootDropRadius: config.lootDropRadius,
     lootMagnetRadius: config.lootMagnetRadius,

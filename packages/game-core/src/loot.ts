@@ -36,7 +36,9 @@ export function rollLootDrop(
   config: CombatConfig,
   rngState: number,
   spawnSequence: number,
-  tick: number
+  tick: number,
+  /** Effective hull of the ship being repaired, not the base one from config. */
+  hullMaxHp: number
 ): LootRoll {
   const archetype = archetypeOf(config, enemy.kind);
   const boss = archetype.spawnPolicy === "boss";
@@ -46,7 +48,7 @@ export function rollLootDrop(
   }
   const kind: LootKind = boss || random % 2 === 0 ? "repair" : "shieldCell";
   const amount = boss
-    ? config.lootBossRepairAmount
+    ? config.lootBossRepairShare * hullMaxHp
     : kind === "repair"
       ? config.lootRepairAmount
       : config.lootShieldAmount;

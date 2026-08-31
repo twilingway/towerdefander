@@ -234,7 +234,7 @@ export interface CombatConfig {
   readonly lootRepairAmount: number;
   readonly lootShieldAmount: number;
   /** A boss always leaves this instead: the reward for taking a boss wave. */
-  readonly lootBossRepairAmount: number;
+  readonly lootBossRepairShare: number;
   readonly lootLifetimeTicks: number;
   readonly lootDropRadius: number;
   /** Inside this distance a drop stops drifting and comes to the ship. */

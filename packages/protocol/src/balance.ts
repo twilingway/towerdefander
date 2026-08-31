@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 29 as const;
+export const BALANCE_FILE_VERSION = 30 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28
+  28, 29
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -747,7 +747,14 @@ export const publicShipSchema = z
     label: z.string().min(1).max(48),
     description: z.string().min(1).max(240),
     visual: entityVisualSchema,
-    unlockedAtWave: positiveInteger
+    unlockedAtWave: positiveInteger,
+    /**
+     * The hull's tree, so a display can draw the whole path a crew is walking.
+     * It is published here rather than on the wire because it never changes
+     * inside a run: one fetch a page, not one field a tick.
+     */
+    tiers: z.array(z.array(shipModuleSchema).readonly()).readonly(),
+    endlessTier: z.array(shipModuleSchema).readonly()
   })
   .strict();
 export type PublicShip = z.infer<typeof publicShipSchema>;
@@ -796,8 +803,13 @@ export const balanceTuningSchema = z
     // --- Salvage: the only hull a crew wins back inside a run ---
     lootRepairAmount: positiveFinite,
     lootShieldAmount: positiveFinite,
-    /** A boss always leaves this instead of rolling; the reward for a boss wave. */
-    lootBossRepairAmount: positiveFinite,
+    /**
+     * A boss always leaves a repair instead of rolling, sized as a share of the
+     * hull it is repairing rather than as a flat number: the reward for a boss
+     * wave has to mean the same thing on a 400-hp hull and on a 720-hp one, and
+     * a hull grown by modules must not outgrow it. One is a full repair.
+     */
+    lootBossRepairShare: z.number().min(0).max(1),
     lootLifetimeTicks: positiveInteger,
     lootDropRadius: positiveFinite,
     /** Inside this distance salvage stops drifting and comes to the ship. */

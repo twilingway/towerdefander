@@ -334,7 +334,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   // actually decides whether runs get longer.
   lootRepairAmount: 35,
   lootShieldAmount: 30,
-  lootBossRepairAmount: 200,
+  lootBossRepairShare: 1,
   lootLifetimeTicks: 300,
   lootDropRadius: 18,
   lootMagnetRadius: 260,

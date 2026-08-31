@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { DelayField, NumberField } from "../../components/fields.js";
+import { DelayField, NumberField, PercentField } from "../../components/fields.js";
 
 interface SalvageSectionProps {
   readonly tuning: BalanceTuning;
@@ -35,11 +35,11 @@ export function SalvageSection({ tuning, patch }: SalvageSectionProps) {
             patch({ lootShieldAmount });
           }}
         />
-        <NumberField
-          caption="Ремонт с босса"
-          value={tuning.lootBossRepairAmount}
-          onChange={(lootBossRepairAmount) => {
-            patch({ lootBossRepairAmount });
+        <PercentField
+          caption="Ремонт с босса, % корпуса"
+          fraction={tuning.lootBossRepairShare}
+          onChange={(lootBossRepairShare) => {
+            patch({ lootBossRepairShare: Math.min(1, Math.max(0, lootBossRepairShare)) });
           }}
         />
         <DelayField

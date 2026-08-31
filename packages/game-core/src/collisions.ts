@@ -130,7 +130,8 @@ export function resolveFriendlyHits(state: CombatStepState, config: CombatConfig
             config,
             lootRngState,
             nextSpawnSequence,
-            state.clock.tick
+            state.clock.tick,
+            state.ship.spaceshipMaxHp
           );
           lootRngState = rolled.rngState;
           if (rolled.drop !== null) {

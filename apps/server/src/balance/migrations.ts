@@ -91,7 +91,7 @@ const WEAPON_KIND_FIELDS = [
 const LOOT_FIELDS = [
   "lootRepairAmount",
   "lootShieldAmount",
-  "lootBossRepairAmount",
+  "lootBossRepairShare",
   "lootLifetimeTicks",
   "lootDropRadius",
   "lootMagnetRadius",
@@ -252,6 +252,10 @@ function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): Legac
   // upgrade to the battery lengthen the wait. A leftover key would fail the
   // strict schema and take the operator's waves with it.
   delete migrated.shieldRearmEnergyFraction;
+  // Version 29 sized the boss repair in hit points; version 30 sizes it as a
+  // share of the hull. Same story as the fraction above: a leftover key fails
+  // the strict schema, and the whole preset — waves included — goes with it.
+  delete migrated.lootBossRepairAmount;
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }

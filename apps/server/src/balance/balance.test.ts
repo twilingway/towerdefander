@@ -6,6 +6,7 @@ import type { Request, RequestHandler, Response } from "express";
 import {
   BALANCE_FILE_VERSION,
   MODULE_TARGET_FIELDS,
+  MODULE_TIER_COUNT,
   MODULE_TIER_WIDTHS,
   SHIP_STAT_FIELDS,
   balancePresetsFileSchema,
@@ -887,7 +888,7 @@ describe("version 1 migration", () => {
     };
     delete legacyTuning.lootRepairAmount;
     delete legacyTuning.lootShieldAmount;
-    delete legacyTuning.lootBossRepairAmount;
+    delete legacyTuning.lootBossRepairShare;
     delete legacyTuning.lootLifetimeTicks;
     delete legacyTuning.lootDropRadius;
     delete legacyTuning.lootMagnetRadius;
@@ -1433,7 +1434,7 @@ describe("balance routes", () => {
     expect(balancePresetsFileSchema.safeParse(output.state.body).success).toBe(true);
   });
 
-  it("serves the hull catalogue to anyone, with no stats and no tree in it", async () => {
+  it("serves the hull catalogue to anyone, with the tree but without the stats", async () => {
     const store = storeFor(await temporaryPresetPath());
     const output = response();
     // A stranger's address, and no password configured: every other balance
@@ -1447,10 +1448,65 @@ describe("balance routes", () => {
     const parsed = publicShipCatalogueSchema.safeParse(output.state.body);
     expect(parsed.success).toBe(true);
     const body = JSON.stringify(output.state.body);
-    for (const leaked of ["tiers", "endlessTier", "overrides", "spaceshipMaxHp", "effects"]) {
+    // The tree is what a display draws its window from; the ship's numbers are
+    // not, and neither is anything else the preset holds.
+    for (const leaked of ["overrides", "waveCampaign", "enemyArchetypes", "autopilot"]) {
       expect(body).not.toContain(leaked);
     }
+    const hull = parsed.data?.ships[0];
+    expect(hull?.tiers).toHaveLength(MODULE_TIER_COUNT);
+    expect(hull?.endlessTier.length).toBeGreaterThan(0);
+    expect(hull?.tiers[0]?.[0]?.effects.length).toBeGreaterThan(0);
     expect(parsed.data?.defaultShipId).toBe(createDefaultTuning().defaultShipArchetypeId);
+  });
+
+  it("keeps the waves when a version 29 preset still sizes the boss repair in hit points", async () => {
+    const path = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const legacyTuning: Record<string, unknown> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 3,
+                spawnIntervalTicks: 40,
+                sectors: ["N"],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    // Exactly what the operator's file carried: the old absolute amount, and no
+    // share at all. A leftover key used to fail the strict schema and take the
+    // wave table with it.
+    delete legacyTuning.lootBossRepairShare;
+    legacyTuning.lootBossRepairAmount = 200;
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 29,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Оператор", tuning: legacyTuning }]
+      }),
+      "utf8"
+    );
+
+    const store = storeFor(path);
+    await store.load();
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    expect(tuning.lootBossRepairShare).toBe(defaults.lootBossRepairShare);
+    expect(Object.hasOwn(tuning, "lootBossRepairAmount")).toBe(false);
   });
 
   it("rejects a non-loopback client when no password is set", async () => {

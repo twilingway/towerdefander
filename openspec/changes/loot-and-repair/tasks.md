@@ -141,3 +141,10 @@
       отдельно: `pnpm build` код 0, `pnpm smoke:network` код 0, `pnpm test:e2e` 5 passed за 2.6 мин
       код 0, `pnpm demo:verify` пройден целиком, включая `intermission` и `wave2`. Валидация
       изменения: `openspec validate loot-and-repair --strict` — valid.
+
+## 9. Ремонт с босса долей корпуса
+
+- [x] 9.1 Заменить абсолютный номинал `lootBossRepairAmount` долей эффективного корпуса
+      `lootBossRepairShare`, поднять `BALANCE_FILE_VERSION` до 30 и отдать долю в консоль процентом.
+- [x] 9.2 Тесты ядра на номинал и хранилища на пресет предыдущей версии.
+- [ ] 9.3 Приёмка глазами: ремонт с босса вытягивает корпус с любого остатка.

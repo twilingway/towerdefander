@@ -144,7 +144,7 @@ describe("salvage drops", () => {
     const result = killOne("boss", config);
     expect(result.lootDrops).toHaveLength(1);
     expect(result.lootDrops[0]?.kind).toBe("repair");
-    expect(result.lootDrops[0]?.amount).toBe(config.lootBossRepairAmount);
+    expect(result.lootDrops[0]?.amount).toBe(config.lootBossRepairShare * config.spaceshipMaxHp);
   });
 
   it("never drops salvage from an asteroid", () => {
