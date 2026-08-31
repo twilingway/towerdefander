@@ -8,12 +8,11 @@ import {
   type GameplayRole,
   type TerminalOutcome,
   type UpgradeCard,
-  type UpgradeId
+  type ModuleId
 } from "./combatTypes.ts";
 import {
   AMBIENT_ASTEROID_DOMAIN,
   LOOT_DOMAIN,
-  OFFER_DOMAIN,
   ROLES,
   TEAM_UPGRADE_PRICE
 } from "./combatConstants.ts";
@@ -70,7 +69,8 @@ export type {
   TerminalOutcome,
   TurretVisual,
   UpgradeCard,
-  UpgradeId,
+  ModuleId,
+  ShipModuleDefinition,
   UpgradeVoteCommand,
   UpgradeVoteResult,
   WaveCampaign,
@@ -83,8 +83,9 @@ export { resolveEnemySkill } from "./enemySkill.ts";
 export { TEAM_UPGRADE_PRICE } from "./combatConstants.ts";
 export { getEnemyArchetype, validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 export { deriveDomainSeed, nextUint32 } from "./rng.ts";
-export { createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
-export { UPGRADE_CATALOGUE, type UpgradeDefinition } from "./upgradeCatalogue.ts";
+export { availableTierIndex, createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
+export { effectsOf, findModule } from "./upgradeCatalogue.ts";
+export { DEFAULT_ENDLESS_TIER, DEFAULT_MODULE_TIERS } from "./moduleTree.ts";
 export { createRunStats, damageTaken, type CombatRunStats, type ThreatClass } from "./runStats.ts";
 export { createWavePlan, getWaveDifficulty } from "./waveDirector.ts";
 export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./spatialGrid.ts";
@@ -126,7 +127,6 @@ export function createInitialCombatState(
   return {
     runSeed,
     spawnRngState: rngState,
-    offerRngState: deriveDomainSeed(runSeed, startWave, OFFER_DOMAIN),
     ambientAsteroidRngState: ambientSchedule.rngState,
     lootRngState: deriveDomainSeed(runSeed, startWave, LOOT_DOMAIN),
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
@@ -148,7 +148,7 @@ export function createInitialCombatState(
     lootWindowTicksRemaining: 0,
     laserBeams: [],
     ship: computeShipStats(shipStatsFromConfig(config), []),
-    purchasedUpgrades: [],
+    purchasedModules: [],
     hostileProjectiles: [],
     homingMissiles: [],
     teamUpgradeOffer: null,
@@ -211,7 +211,12 @@ export function advanceCombat(
         encounterTick: state.encounterTick + 1
       };
     }
-    const offerResult = createTeamUpgradeOffer(next.runSeed, next.waveNumber);
+    const offer = createTeamUpgradeOffer(
+      config.moduleTiers,
+      config.endlessTier,
+      next.purchasedModules.length,
+      next.waveNumber
+    );
     return {
       ...pickCombatResult(next),
       encounterPhase: "intermission",
@@ -219,8 +224,7 @@ export function advanceCombat(
       defeatReason: null,
       encounterTick: 0,
       stalemateTicks: 0,
-      offerRngState: offerResult.rngState,
-      teamUpgradeOffer: offerResult.offer,
+      teamUpgradeOffer: offer,
       teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
       teamUpgradeSelection: null,
       asteroids: [],
@@ -293,7 +297,7 @@ function resolveTeamUpgrade<TState extends CombatStepState>(
 ): TState {
   const offer = state.teamUpgradeOffer;
   if (offer === null) return state;
-  const counts = new Map<UpgradeId, number>();
+  const counts = new Map<ModuleId, number>();
   for (const role of ROLES) {
     const vote = state.teamUpgradeVotes[role];
     if (vote !== null) counts.set(vote.upgradeId, (counts.get(vote.upgradeId) ?? 0) + 1);
@@ -324,12 +328,15 @@ function applyUpgrade<TState extends CombatStepState>(
   role: GameplayRole,
   offerId: string,
   waveNumber: number,
-  upgradeId: UpgradeId
+  upgradeId: ModuleId
 ): TState {
-  const purchasedUpgrades = [...state.purchasedUpgrades, upgradeId];
+  const purchasedModules = [...state.purchasedModules, upgradeId];
   // From the run's base and everything bought, never from the previous result,
   // so the same set of modules always makes the same ship.
-  const ship = computeShipStats(shipStatsFromConfig(config), effectsOf(purchasedUpgrades));
+  const ship = computeShipStats(
+    shipStatsFromConfig(config),
+    effectsOf(purchasedModules, config.moduleTiers, config.endlessTier)
+  );
   // A maximum that grows repairs by exactly what it added; one that shrinks
   // trims the current value instead of killing the crew. Same for the battery.
   const hullDelta = ship.spaceshipMaxHp - state.ship.spaceshipMaxHp;
@@ -341,7 +348,7 @@ function applyUpgrade<TState extends CombatStepState>(
         : Math.min(state.spaceshipHp, ship.spaceshipMaxHp),
     shieldEnergy: Math.min(state.shieldEnergy, ship.shieldCapacity),
     ship,
-    purchasedUpgrades,
+    purchasedModules,
     credits: state.credits - TEAM_UPGRADE_PRICE,
     runStats: addRunStats(state.runStats, { creditsSpent: TEAM_UPGRADE_PRICE }),
     teamUpgradeSelection: {
@@ -376,7 +383,6 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
   return {
     runSeed: state.runSeed,
     spawnRngState: state.spawnRngState,
-    offerRngState: state.offerRngState,
     ambientAsteroidRngState: state.ambientAsteroidRngState,
     lootRngState: state.lootRngState,
     ambientAsteroidSpawnDueTick: state.ambientAsteroidSpawnDueTick,
@@ -398,7 +404,7 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
     lootWindowTicksRemaining: state.lootWindowTicksRemaining,
     laserBeams: state.laserBeams,
     ship: state.ship,
-    purchasedUpgrades: state.purchasedUpgrades,
+    purchasedModules: state.purchasedModules,
     hostileProjectiles: state.hostileProjectiles,
     homingMissiles: state.homingMissiles,
     teamUpgradeOffer: state.teamUpgradeOffer,

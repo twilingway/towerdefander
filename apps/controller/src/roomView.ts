@@ -30,7 +30,7 @@ interface NetworkUpgradeCardState {
   upgradeId: UpgradeId;
   role: CrewRole;
   label: string;
-  value: number;
+  summary: string;
   price: number;
 }
 
@@ -45,6 +45,7 @@ interface NetworkTeamUpgradeState {
   offer: {
     offerId: string;
     waveNumber: number;
+    tier: number;
     cards: ValueCollection<NetworkUpgradeCardState>;
   };
   votes: ValueCollection<NetworkUpgradeVoteState>;
@@ -113,6 +114,7 @@ export interface NetworkRoomState {
   phase?: ControllerRoomView["phase"];
   runNumber?: number;
   crewSize?: number;
+  shipArchetypeId?: string;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -130,6 +132,7 @@ export function toControllerRoomView(
     state.phase === undefined ||
     typeof state.runNumber !== "number" ||
     typeof state.crewSize !== "number" ||
+    typeof state.shipArchetypeId !== "string" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -155,6 +158,7 @@ export function toControllerRoomView(
     phase: state.phase,
     runNumber: state.runNumber,
     crewSize: state.crewSize,
+    shipArchetypeId: state.shipArchetypeId,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
@@ -218,6 +222,7 @@ function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
         ? {
             offerId: teamUpgrade.offer.offerId,
             waveNumber: teamUpgrade.offer.waveNumber,
+            tier: teamUpgrade.offer.tier,
             cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
           }
         : null,

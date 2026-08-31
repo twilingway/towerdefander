@@ -10,15 +10,19 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 import {
+  MAX_MODULE_TIER_WIDTH,
+  MODULE_TIER_COUNT,
   backgroundTuningSchema,
   cameraViewWidthSchema,
   entityVisualSchema,
   helmSchemeSchema,
+  shipArchetypeIdSchema,
+  shipModuleIdSchema,
   turretVisualSchema,
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 39 as const;
+export const PROTOCOL_VERSION = 40 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -44,7 +48,6 @@ export const ROOM_CLOSING_REASONS = [
 ] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
 export const INTERMISSION_DURATION_TICKS = 600 as const;
-export const UPGRADE_OFFER_COUNT = 3 as const;
 export const TEAM_UPGRADE_PRICE = 5 as const;
 export const COMBAT_ENTITY_CAPS = {
   enemyShips: 40,
@@ -55,19 +58,6 @@ export const COMBAT_ENTITY_CAPS = {
   friendlyProjectiles: 32,
   dynamicEntities: 208
 } as const;
-
-export const PILOT_UPGRADE_IDS = ["pilot_speed", "pilot_acceleration", "pilot_hull"] as const;
-export const GUNNER_UPGRADE_IDS = [
-  "gunner_damage",
-  "gunner_cooldown",
-  "gunner_projectile_speed"
-] as const;
-export const SHIELD_UPGRADE_IDS = ["shield_capacity", "shield_recharge", "shield_arc"] as const;
-export const UPGRADE_IDS = [
-  ...PILOT_UPGRADE_IDS,
-  ...GUNNER_UPGRADE_IDS,
-  ...SHIELD_UPGRADE_IDS
-] as const;
 
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
@@ -107,7 +97,8 @@ export type LootKind = z.infer<typeof lootKindSchema>;
 export const PROJECTILE_SOURCES = ["cannon", "machineGun"] as const;
 export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
 export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
-export const upgradeIdSchema = z.enum(UPGRADE_IDS);
+/** A module id is a catalogue id, like an enemy kind: the preset owns the list. */
+export const upgradeIdSchema = shipModuleIdSchema;
 export type UpgradeId = z.infer<typeof upgradeIdSchema>;
 
 // Zod numbers reject NaN and infinities by default.
@@ -248,22 +239,15 @@ export const publicEncounterViewSchema = z
   });
 export type PublicEncounterView = z.infer<typeof publicEncounterViewSchema>;
 
-function upgradeBelongsToRole(upgradeId: UpgradeId, role: CrewRole): boolean {
-  const ids =
-    role === "pilot"
-      ? PILOT_UPGRADE_IDS
-      : role === "gunner"
-        ? GUNNER_UPGRADE_IDS
-        : SHIELD_UPGRADE_IDS;
-  return (ids as readonly string[]).includes(upgradeId);
-}
-
 export const publicUpgradeCardSchema = z
   .object({
     upgradeId: upgradeIdSchema,
+    /** Whose card it is. Authoring metadata: any seat may vote for any card. */
     role: crewRoleSchema,
+    /** The module's name, as the operator wrote it. */
     label: z.string().min(1).max(96),
-    value: finite,
+    /** What it does, assembled from its effects so the two cannot drift. */
+    summary: z.string().min(1).max(160),
     price: z.literal(TEAM_UPGRADE_PRICE)
   })
   .strict();
@@ -272,16 +256,14 @@ export const publicTeamUpgradeOfferSchema = z
   .object({
     offerId: z.string().min(1).max(64),
     waveNumber: safePositiveInteger,
-    cards: z.array(publicUpgradeCardSchema).length(UPGRADE_OFFER_COUNT)
+    /** Which tier of the tree these came from; 1-based, 0 once the tree is spent. */
+    tier: z.number().int().min(0).max(MODULE_TIER_COUNT),
+    cards: z.array(publicUpgradeCardSchema).min(1).max(MAX_MODULE_TIER_WIDTH)
   })
   .strict()
   .superRefine((value, context) => {
     const upgradeIds = new Set<UpgradeId>();
     value.cards.forEach((card, index) => {
-      if (card.role !== CREW_ROLES[index])
-        issue(context, ["cards", index, "role"], "Cards must use pilot, gunner, shield order.");
-      if (!upgradeBelongsToRole(card.upgradeId, card.role))
-        issue(context, ["cards", index, "upgradeId"], "Upgrade must belong to its offer role.");
       if (upgradeIds.has(card.upgradeId))
         issue(context, ["cards", index, "upgradeId"], "Offer cards must be distinct.");
       upgradeIds.add(card.upgradeId);
@@ -312,11 +294,7 @@ export const publicTeamUpgradeSelectionSchema = z
     role: crewRoleSchema,
     price: z.literal(TEAM_UPGRADE_PRICE)
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (!upgradeBelongsToRole(value.upgradeId, value.role))
-      issue(context, ["upgradeId"], "Upgrade must belong to its selection role.");
-  });
+  .strict();
 export type PublicTeamUpgradeSelection = z.infer<typeof publicTeamUpgradeSelectionSchema>;
 export const publicTeamUpgradeViewSchema = z
   .object({
@@ -670,7 +648,7 @@ export const displayGameSnapshotSchema = z
     lootDrops: z.array(publicLootDropViewSchema).max(COMBAT_ENTITY_CAPS.lootDrops),
     laserBeams: z.array(publicLaserBeamViewSchema).max(8),
     /** What the crew has bought, in purchase order; the ship stats follow from it. */
-    purchasedUpgrades: z.array(upgradeIdSchema).max(200),
+    purchasedModules: z.array(upgradeIdSchema).max(200),
     friendlyProjectiles: z
       .array(publicProjectileViewSchema)
       .max(COMBAT_ENTITY_CAPS.friendlyProjectiles),
@@ -721,6 +699,8 @@ const roomShape = {
   displayConnected: z.boolean(),
   displayLatencyMs: latencyMsSchema,
   crewSize: crewSizeSchema,
+  /** The hull this run is played on; a room keeps it across a rematch. */
+  shipArchetypeId: shipArchetypeIdSchema,
   players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
 } satisfies z.ZodRawShape;
 export const controllerRoomViewSchema = z
@@ -743,6 +723,8 @@ export const displayCreateOptionsSchema = z
     role: z.literal("display"),
     protocolVersion: z.literal(PROTOCOL_VERSION),
     crewSize: crewSizeSchema,
+    /** Which hull to fly. Absent means the preset's own default hull. */
+    shipArchetypeId: shipArchetypeIdSchema.optional(),
     /** Testing aid; the server ignores it unless it was started with it on. */
     startWave: startWaveSchema.optional()
   })
@@ -758,6 +740,8 @@ export const displayJoinOptionsSchema = z
     role: z.literal("display"),
     protocolVersion: z.literal(PROTOCOL_VERSION),
     crewSize: crewSizeSchema.optional(),
+    /** Accepted and ignored on a rejoin, like the crew size beside it. */
+    shipArchetypeId: shipArchetypeIdSchema.optional(),
     startWave: startWaveSchema.optional()
   })
   .strict();

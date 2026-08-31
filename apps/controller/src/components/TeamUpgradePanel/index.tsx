@@ -126,6 +126,7 @@ export function TeamUpgradePanel({
               }}
             >
               <strong>{card.label}</strong>
+              <small>{card.summary}</small>
               <small>{roleLabel(card.role)}</small>
               <small>
                 {pending
@@ -139,8 +140,8 @@ export function TeamUpgradePanel({
         })}
       </div>
       <p className="upgrade-hint">
-        Побеждает карточка с большинством голосов, при равенстве — первая по порядку ролей. Голос
-        можно менять до конца передышки.
+        Побеждает карточка с большинством голосов, при равенстве — та, что левее в ряду. Голос можно
+        менять до конца передышки.
       </p>
     </div>
   );

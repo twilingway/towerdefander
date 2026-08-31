@@ -219,6 +219,14 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     this.state.roomId = this.roomId;
     this.state.crewSize = options.data.crewSize;
+    // A hull the preset does not carry is refused rather than swapped for the
+    // default: a crew that picked a ship must not be given another one silently.
+    const tuning = getBalanceStore().getActiveTuning();
+    const requestedHull = options.data.shipArchetypeId;
+    if (requestedHull !== undefined && !Object.hasOwn(tuning.shipArchetypes, requestedHull)) {
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_message");
+    }
+    this.state.shipArchetypeId = requestedHull ?? tuning.defaultShipArchetypeId;
     // A testing aid, so it is refused rather than honoured quietly: an operator
     // who sees waves being skipped on a public server should be able to find
     // out why from the log.
@@ -625,7 +633,7 @@ export class SpaceshipDefenderRoom extends Room<{
     const previousSeed = this.gameState?.runSeed;
     // A run keeps the balance it started with; console edits land on the next run.
     const balance = getBalanceStore();
-    this.gameConfig = balance.getActiveSimulationConfig();
+    this.gameConfig = balance.getActiveSimulationConfig(this.state.shipArchetypeId);
     // The helm is input feel, not physics, so it rides beside the config rather
     // than inside it — and like the config, a run keeps what it started with.
     const helm = balance.getActiveTuning().helm;

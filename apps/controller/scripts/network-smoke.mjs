@@ -500,7 +500,7 @@ function makeVoteCommand(room, offer, upgradeId, revision) {
 
 /** What the crew has bought: the published proof that a purchase landed. */
 function pilotModifierSnapshot() {
-  return [...display.state.game.display.purchasedUpgrades];
+  return [...display.state.game.display.purchasedModules];
 }
 
 function world() {

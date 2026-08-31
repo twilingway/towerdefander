@@ -85,6 +85,7 @@ export function createPreviewRoomView(role: CrewRole, phase: PreviewPhase): Cont
     phase: phase === "lobby" ? "lobby" : "active",
     runNumber: phase === "lobby" ? 0 : 1,
     crewSize: 3,
+    shipArchetypeId: "guardian",
     displayConnected: true,
     displayLatencyMs: 18,
     players,
@@ -153,33 +154,34 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
         offer: {
           offerId: "preview-offer-w3",
           waveNumber: 3,
+          tier: 6,
           cards: [
             {
-              upgradeId: "pilot_speed",
+              upgradeId: "afterburner",
               role: "pilot",
-              label: "Скорость +10%",
-              value: 0.1,
+              label: "Форсаж",
+              summary: "Скорость +14%, Ускорение +18%",
               price: 5
             },
             {
-              upgradeId: "gunner_damage",
+              upgradeId: "turretDrive",
               role: "gunner",
-              label: "Урон +15%",
-              value: 0.15,
+              label: "Привод башни",
+              summary: "Скорость поворота башни +25%",
               price: 5
             },
             {
-              upgradeId: "shield_capacity",
+              upgradeId: "capacitor2",
               role: "shield",
-              label: "Ёмкость +20",
-              value: 20,
+              label: "Батарея повышенной ёмкости",
+              summary: "Ёмкость щита +40",
               price: 5
             }
           ]
         },
         votes: {
-          pilot: { role: "pilot", upgradeId: "gunner_damage", revision: 2 },
-          gunner: { role: "gunner", upgradeId: "gunner_damage", revision: 1 },
+          pilot: { role: "pilot", upgradeId: "turretDrive", revision: 2 },
+          gunner: { role: "gunner", upgradeId: "turretDrive", revision: 1 },
           shield: null
         },
         selection: null

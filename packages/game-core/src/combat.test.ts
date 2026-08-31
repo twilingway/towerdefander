@@ -159,14 +159,53 @@ describe("deterministic combat foundation", () => {
     ).toThrow(RangeError);
   });
 
-  it("keeps spawn and offer streams deterministic and independent", () => {
+  it("builds the offer from the tier alone, with no seed in it", () => {
     const config = createSpaceshipSimulationConfig();
     expect(createWavePlan(config, 123, 8)).toEqual(createWavePlan(config, 123, 8));
-    expect(createTeamUpgradeOffer(123, 8)).toEqual(createTeamUpgradeOffer(123, 8));
-    const offers = createTeamUpgradeOffer(123, 8);
+    const offer = (purchased: number) =>
+      createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, purchased, 8);
+    // Two runs that bought the same number of modules see the same cards, and
+    // nothing the spawn stream did in between can move them.
+    expect(offer(3)).toEqual(offer(3));
     createWavePlan(config, 123, 8);
     createWavePlan(config, 123, 9);
-    expect(createTeamUpgradeOffer(123, 8)).toEqual(offers);
+    expect(offer(3)).toEqual(offer(3));
+    expect(offer(0)?.cards).toHaveLength(1);
+    expect(offer(0)?.tier).toBe(1);
+  });
+
+  it("walks the tiers by purchases and then repeats the tail", () => {
+    const config = createSpaceshipSimulationConfig();
+    const offer = (purchased: number) =>
+      createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, purchased, 12);
+    const widths = config.moduleTiers.map((tier) => tier.length);
+    widths.forEach((width, index) => {
+      expect(offer(index)?.cards).toHaveLength(width);
+      expect(offer(index)?.tier).toBe(index + 1);
+    });
+    // Past the last tier the tail comes up, and it comes up again after that.
+    const spent = config.moduleTiers.length;
+    expect(offer(spent)?.cards.map((card) => card.upgradeId)).toEqual(
+      config.endlessTier.map((module) => module.id)
+    );
+    expect(offer(spent + 5)?.tier).toBe(0);
+  });
+
+  it("never offers a module the crew already bought", () => {
+    const config = createSpaceshipSimulationConfig();
+    const seen = new Set<string>();
+    for (let purchased = 0; purchased < config.moduleTiers.length; purchased += 1) {
+      const cards = createTeamUpgradeOffer(
+        config.moduleTiers,
+        config.endlessTier,
+        purchased,
+        purchased + 1
+      )?.cards;
+      for (const card of cards ?? []) {
+        expect(seen.has(card.upgradeId)).toBe(false);
+        seen.add(card.upgradeId);
+      }
+    }
   });
 
   it("unlocks a kind at its configured wave and scales difficulty monotonically", () => {
@@ -837,7 +876,7 @@ describe("deterministic combat foundation", () => {
       score: 999,
       waveNumber: 8,
       encounterTick: 77,
-      purchasedUpgrades: ["pilot_hull", "gunner_damage", "shield_capacity"],
+      purchasedModules: ["pilot_hull", "gunner_damage", "shield_capacity"],
       ship: { ...createSpaceshipSimulationState(config, 100).ship, spaceshipMaxHp: 9_999 },
       inputs: {
         pilot: { vector: { x: 1, y: 0 }, mgFiring: false, receivedTick: 5 },
@@ -870,7 +909,7 @@ describe("deterministic combat foundation", () => {
     expect(clean.teamUpgradeVotes).toEqual({ pilot: null, gunner: null, shield: null });
     expect(clean.teamUpgradeSelection).toBeNull();
     expect(clean.inputs).toEqual({ pilot: null, gunner: null, shield: null });
-    expect(clean.purchasedUpgrades).toEqual([]);
+    expect(clean.purchasedModules).toEqual([]);
     expect(clean.ship).toEqual(createSpaceshipSimulationState(config, 200).ship);
   });
 });
@@ -1256,13 +1295,14 @@ describe("team upgrades", () => {
   it("accepts a newer role vote and rejects a stale revision", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 42);
-    const generated = createTeamUpgradeOffer(initial.runSeed, 1);
+    const generated = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 4, 1);
+    if (generated === null) throw new Error("expected an offer");
     const intermission: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
-      teamUpgradeOffer: generated.offer
+      teamUpgradeOffer: generated
     };
-    const offer = generated.offer;
+    const offer = generated;
     const firstCard = offer.cards[0];
     if (firstCard === undefined) throw new Error("expected offer card");
     const first = voteForTeamUpgrade(intermission, {
@@ -1292,15 +1332,16 @@ describe("team upgrades", () => {
   it("resolves majority atomically at the 600-tick deadline", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 24);
-    const generated = createTeamUpgradeOffer(initial.runSeed, 1);
-    const gunnerCard = generated.offer.cards[1];
+    const generated = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 4, 1);
+    if (generated === null) throw new Error("expected an offer");
+    const gunnerCard = generated.cards[1];
     if (gunnerCard === undefined) throw new Error("expected gunner card");
     const beforeDeadline: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
       encounterTick: 599,
       credits: 7,
-      teamUpgradeOffer: generated.offer,
+      teamUpgradeOffer: generated,
       teamUpgradeVotes: {
         pilot: { role: "pilot", upgradeId: gunnerCard.upgradeId, revision: 1 },
         gunner: { role: "gunner", upgradeId: gunnerCard.upgradeId, revision: 1 },
@@ -1325,7 +1366,10 @@ describe("team upgrades", () => {
   it("uses stable card order for ties and skips no-vote or unaffordable purchases", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 31);
-    const offer = createTeamUpgradeOffer(initial.runSeed, 1).offer;
+    // The sixth tier is the first one three cards wide, so it is the first that
+    // can produce a 1-1-1 ballot at all.
+    const offer = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 5, 1);
+    if (offer === null) throw new Error("expected an offer");
     const [pilot, gunner, shield] = offer.cards;
     if (pilot === undefined || gunner === undefined || shield === undefined)
       throw new Error("cards");

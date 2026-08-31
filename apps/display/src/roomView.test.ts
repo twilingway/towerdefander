@@ -13,6 +13,7 @@ describe("display room view", () => {
       phase: "active",
       runNumber: 2,
       crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: 18,
       players: collection([
@@ -78,7 +79,7 @@ describe("display room view", () => {
         credits: 6,
         display: {
           cameraViewWidth: 1600,
-          purchasedUpgrades: [],
+          purchasedModules: [],
           laserBeams: [],
           backgroundParallaxStrength: 0.8,
           backgroundDriftSpeed: 2,

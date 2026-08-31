@@ -44,6 +44,7 @@ export function TeamUpgradeOverlay({
                 key={card.upgradeId}
               >
                 <strong>{card.label}</strong>
+                <small>{card.summary}</small>
                 <small>{roleLabel(card.role)}</small>
                 <small>
                   {voters.length === 0
@@ -58,7 +59,7 @@ export function TeamUpgradeOverlay({
       <p>
         {credits < price
           ? "Кредитов не хватает — улучшение не купится."
-          : "Побеждает большинство голосов, при равенстве — первая карточка по порядку ролей."}
+          : "Побеждает большинство голосов, при равенстве — карточка левее в этом ряду."}
       </p>
     </div>
   );

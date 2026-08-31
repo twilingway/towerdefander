@@ -195,12 +195,23 @@ function aimBulletAtHull(room: SpaceshipDefenderRoom): void {
   };
 }
 
-function forceIntermission(room: SpaceshipDefenderRoom): void {
+/**
+ * Clears the field so the next step ends the wave.
+ *
+ * `boughtTiers` decides which tier the crew is offered, because the tree widens
+ * with depth: the first tier is one card and the sixth is the first that can
+ * put all three seats on screen at once.
+ */
+function forceIntermission(room: SpaceshipDefenderRoom, boughtTiers = 0): void {
   const runtime = internals(room);
   const game = runtime.gameState;
   if (game === undefined) throw new Error("Expected an active game.");
+  const purchasedModules = runtime.gameConfig.moduleTiers
+    .slice(0, boughtTiers)
+    .flatMap((tier) => (tier[0] === undefined ? [] : [tier[0].id]));
   runtime.gameState = {
     ...game,
+    purchasedModules,
     pendingSpawns: [],
     enemies: [],
     asteroids: [],
@@ -1303,13 +1314,15 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     const room = createRoom();
     const display = joinDisplay(room);
     const { controllers } = startGame(room);
-    forceIntermission(room);
+    forceIntermission(room, 5);
 
     const upgrade = room.state.game.teamUpgrade;
     expect(upgrade.hasOffer).toBe(true);
-    expect(upgrade.offer).toMatchObject({ waveNumber: 1 });
-    expect([...upgrade.offer.cards].map(({ role }) => role)).toEqual(CREW_ROLES);
+    expect(upgrade.offer).toMatchObject({ waveNumber: 1, tier: 6 });
+    // A tier of three owes all three seats, but not in any fixed slot order.
+    expect(new Set([...upgrade.offer.cards].map(({ role }) => role))).toEqual(new Set(CREW_ROLES));
     expect(upgrade.offer.cards).toHaveLength(3);
+    for (const card of upgrade.offer.cards) expect(card.summary.length).toBeGreaterThan(0);
     expect(display.client.view?.has(room.state.game)).toBe(true);
     for (const controller of controllers) expect(controller.client.view).toBeDefined();
     expect(room.state.game.display.enemyShips).toHaveLength(0);
@@ -1319,21 +1332,23 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
   it("accepts a vote exactly once and detects an action ID collision", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    forceIntermission(room);
+    forceIntermission(room, 5);
     const actionId = "11111111-1111-4111-8111-111111111111";
+    // The five modules the helper pre-bought to widen the tier; a vote must not
+    // add a sixth before the deadline.
+    const purchased = [...room.state.game.display.purchasedModules];
 
     voteUpgrade(room, pilot, "pilot", actionId);
-    const purchased = [...room.state.game.display.purchasedUpgrades];
-    expect(purchased).toEqual([]);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchased);
     expect(room.state.game.teamUpgrade.votes.get("pilot")).toMatchObject({ revision: 1 });
 
     voteUpgrade(room, pilot, "pilot", actionId);
-    expect([...room.state.game.display.purchasedUpgrades]).toEqual(purchased);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchased);
     expect(countErrors(pilot, "stale_action")).toBe(0);
 
     voteUpgrade(room, pilot, "pilot", actionId, 1);
     expect(countErrors(pilot, "action_conflict")).toBe(1);
-    expect([...room.state.game.display.purchasedUpgrades]).toEqual(purchased);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchased);
   });
 
   it("rejects a legacy upgrade vote before journal or world mutation", () => {
@@ -1345,7 +1360,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       throw new Error("Expected pilot offer.");
     const card = upgrade.offer.cards.at(0);
     const gameBefore = internals(room).gameState;
-    const purchasedBefore = [...room.state.game.display.purchasedUpgrades];
+    const purchasedBefore = [...room.state.game.display.purchasedModules];
 
     room.handleUpgradeVote(pilot.client, {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
@@ -1362,7 +1377,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     expect(countErrors(pilot, "protocol_mismatch")).toBe(1);
     expect(internals(room).upgradeJournals.has(pilot.client.sessionId)).toBe(false);
     expect(internals(room).gameState).toBe(gameBefore);
-    expect([...room.state.game.display.purchasedUpgrades]).toEqual(purchasedBefore);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchasedBefore);
     expect(room.state.game.teamUpgrade.votes.get("pilot")).toBeUndefined();
   });
 
@@ -1410,7 +1425,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
   it("allows a role to vote for another role card without applying it early", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    forceIntermission(room);
+    forceIntermission(room, 5);
     const upgrade = room.state.game.teamUpgrade;
     if (!upgrade.hasOffer || upgrade.offer.cards.length < 2)
       throw new Error("Expected gunner card.");
@@ -1430,13 +1445,14 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
 
     expect(countErrors(pilot, "role_mismatch")).toBe(0);
     expect(room.state.game.teamUpgrade.votes.get("pilot")?.upgradeId).toBe(card.upgradeId);
-    expect([...room.state.game.display.purchasedUpgrades]).toEqual([]);
+    // Nothing is bought before the deadline; the five are what widened the tier.
+    expect(room.state.game.display.purchasedModules).toHaveLength(5);
   });
 
   it("keeps an accepted journal across reconnect and ship stats across replacement", async () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    forceIntermission(room);
+    forceIntermission(room, 5);
     const actionId = "33333333-3333-4333-8333-333333333333";
     voteUpgrade(room, pilot, "pilot", actionId);
     const shipBefore = { ...internals(room).gameState?.ship };
@@ -1546,7 +1562,7 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
       actionId: "99999999-9999-4999-8999-999999999999",
       waveNumber: 1,
       offerId: "old-offer",
-      upgradeId: "pilot_speed",
+      upgradeId: "afterburner",
       revision: 1
     });
     room.handleReady(pilot.client, {

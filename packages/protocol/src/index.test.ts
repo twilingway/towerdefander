@@ -72,6 +72,7 @@ function controllerRoom(): ControllerRoomView {
     phase: "active",
     runNumber: 1,
     crewSize: 3,
+    shipArchetypeId: "guardian",
     assignedRole: "pilot",
     displayConnected: true,
     displayLatencyMs: 18,
@@ -141,6 +142,7 @@ function displayRoom(): DisplayRoomView {
     phase: "active",
     runNumber: controller.runNumber,
     crewSize: 3,
+    shipArchetypeId: "guardian",
     displayConnected: true,
     displayLatencyMs: 18,
     players: players(),
@@ -148,7 +150,7 @@ function displayRoom(): DisplayRoomView {
       ...controllerGame,
       rimBandWidth: 260,
       shieldPhase: "down",
-      purchasedUpgrades: [],
+      purchasedModules: [],
       laserBeams: [],
       cameraViewWidth: 1600,
       background: {
@@ -243,16 +245,29 @@ function teamUpgrade(): PublicTeamUpgradeView {
     offer: {
       offerId: "team-1",
       waveNumber: 1,
+      tier: 6,
       cards: [
         {
-          upgradeId: "pilot_speed",
+          upgradeId: "afterburner",
           role: "pilot",
-          label: "Maximum speed +10%",
-          value: 0.1,
+          label: "Форсаж",
+          summary: "Скорость +14%",
           price: 5
         },
-        { upgradeId: "gunner_damage", role: "gunner", label: "Damage +15%", value: 0.15, price: 5 },
-        { upgradeId: "shield_capacity", role: "shield", label: "Capacity +20", value: 20, price: 5 }
+        {
+          upgradeId: "turretDrive",
+          role: "gunner",
+          label: "Привод башни",
+          summary: "Скорость поворота башни +25%",
+          price: 5
+        },
+        {
+          upgradeId: "capacitor2",
+          role: "shield",
+          label: "Батарея",
+          summary: "Ёмкость щита +40",
+          price: 5
+        }
       ]
     },
     votes: { pilot: null, gunner: null, shield: null },
@@ -280,40 +295,40 @@ function intermissionController(): ControllerRoomView {
 }
 
 describe("protocol v33 handshake and messages", () => {
-  it("publishes the fixed crew and v39", () => {
-    expect(PROTOCOL_VERSION).toBe(39);
+  it("publishes the fixed crew and v40", () => {
+    expect(PROTOCOL_VERSION).toBe(40);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v39 create/join and rejects v38 and unknown fields", () => {
+  it("accepts v40 create/join and rejects v39 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 39, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 40, crewSize: 3 })
         .success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 38, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 39, crewSize: 3 })
         .success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 39,
+        protocolVersion: 40,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 38,
+        protocolVersion: 39,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 39,
+        protocolVersion: 40,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -345,9 +360,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v39 and the active run", () => {
+  it("keeps continuous role messages strict on v40 and the active run", () => {
     const envelope = {
-      protocolVersion: 39,
+      protocolVersion: 40,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -423,7 +438,7 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 38,
+        protocolVersion: 39,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -433,9 +448,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v39 pilot input", () => {
+  it("requires the machine gun trigger on v40 pilot input", () => {
     const envelope = {
-      protocolVersion: 39,
+      protocolVersion: 40,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -452,7 +467,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("carries an optional turn intent on pilot input", () => {
     const envelope = {
-      protocolVersion: 39,
+      protocolVersion: 40,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -474,11 +489,11 @@ describe("protocol v33 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 39, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 40, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 38, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 39, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -521,14 +536,14 @@ describe("protocol v33 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 39,
+    protocolVersion: 40,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
     actionId: ACTION_ID,
     waveNumber: 1,
     offerId: "team-1",
-    upgradeId: "pilot_speed",
+    upgradeId: "afterburner",
     revision: 1
   } as const;
 
@@ -541,6 +556,7 @@ describe("upgrade:vote", () => {
       { ...command, protocolVersion: 12 },
       { ...command, runNumber: 0 },
       { ...command, revision: 0 },
+      { ...command, upgradeId: "Not A Module Id" },
       { ...command, selectedIndex: 0 }
     ]) {
       expect(upgradeVoteCommandSchema.safeParse(invalid).success).toBe(false);
@@ -567,12 +583,26 @@ describe("upgrade:vote", () => {
 });
 
 describe("shared team upgrade projection", () => {
-  it("requires three distinct cards in stable role order", () => {
+  it("takes a tier of one to four distinct cards in any role order", () => {
     expect(publicTeamUpgradeViewSchema.safeParse(teamUpgrade()).success).toBe(true);
-    const wrongRole = teamUpgrade();
-    if (wrongRole.offer === null) throw new Error("offer");
-    wrongRole.offer.cards[0] = { ...item(wrongRole.offer.cards, 0), role: "gunner" };
-    expect(publicTeamUpgradeViewSchema.safeParse(wrongRole).success).toBe(false);
+
+    // A role no longer owns a slot: the tier decides what is on offer, and the
+    // seats vote for whichever card they want.
+    const reordered = teamUpgrade();
+    if (reordered.offer === null) throw new Error("offer");
+    reordered.offer.cards = [...reordered.offer.cards].reverse();
+    expect(publicTeamUpgradeViewSchema.safeParse(reordered).success).toBe(true);
+
+    const narrow = teamUpgrade();
+    if (narrow.offer === null) throw new Error("offer");
+    narrow.offer.cards = [item(narrow.offer.cards, 0)];
+    narrow.offer.tier = 1;
+    expect(publicTeamUpgradeViewSchema.safeParse(narrow).success).toBe(true);
+
+    const empty = teamUpgrade();
+    if (empty.offer === null) throw new Error("offer");
+    empty.offer.cards = [];
+    expect(publicTeamUpgradeViewSchema.safeParse(empty).success).toBe(false);
 
     const duplicate = teamUpgrade();
     if (duplicate.offer === null) throw new Error("offer");
@@ -595,16 +625,20 @@ describe("shared team upgrade projection", () => {
     expect(publicTeamUpgradeViewSchema.safeParse(selected).success).toBe(true);
   });
 
-  it("rejects an upgrade ID assigned to another role", () => {
+  it("refuses a tier wider than the widest the tree can hold", () => {
+    const card = (id: string) => ({
+      upgradeId: id,
+      role: "pilot" as const,
+      label: id,
+      summary: "Прочность корпуса +5",
+      price: 5 as const
+    });
     expect(
       publicTeamUpgradeOfferSchema.safeParse({
-        offerId: "wrong",
+        offerId: "too-wide",
         waveNumber: 1,
-        cards: [
-          { upgradeId: "shield_capacity", role: "pilot", label: "Wrong", value: 1, price: 5 },
-          { upgradeId: "gunner_damage", role: "gunner", label: "Damage", value: 0.1, price: 5 },
-          { upgradeId: "shield_arc", role: "shield", label: "Arc", value: 0.1, price: 5 }
-        ]
+        tier: 10,
+        cards: ["a", "b", "c", "d", "e"].map(card)
       }).success
     ).toBe(false);
   });
@@ -988,18 +1022,18 @@ describe("strict v33 room projections", () => {
 describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 39, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 40, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 39,
+        protocolVersion: 40,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 39,
+        protocolVersion: 40,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -1007,13 +1041,13 @@ describe("v33 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 38,
+        protocolVersion: 39,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 38, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 39, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

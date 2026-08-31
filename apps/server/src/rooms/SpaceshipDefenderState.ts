@@ -77,16 +77,24 @@ export class EncounterState extends Schema {
 }
 
 export class UpgradeCardState extends Schema {
-  @type("string") upgradeId: UpgradeId = "pilot_speed";
+  @type("string") upgradeId: UpgradeId = "";
   @type("string") role: CrewRole = "pilot";
+  /** The module's name; the numbers live in the summary beside it. */
   @type("string") label = "";
-  @type("float32") value = 0;
+  /**
+   * What the module does, assembled from its effects. A string on a field that
+   * changes once per wave is affordable, and it is what stops a hand-written
+   * caption promising a number the effect does not deliver.
+   */
+  @type("string") summary = "";
   @type("uint8") price = 5;
 }
 
 export class UpgradeOfferState extends Schema {
   @type("string") offerId = "";
   @type("uint32") waveNumber = 1;
+  /** Which tier of the tree is on offer; 0 once the tree is spent. */
+  @type("uint8") tier = 0;
   @type([UpgradeCardState]) cards = new ArraySchema<UpgradeCardState>();
 }
 
@@ -239,7 +247,7 @@ export class SpaceshipDisplayState extends Schema {
    * What the crew has bought, in purchase order. Display-only and changed once
    * a wave: the ship's own numbers are derived from it and never travel.
    */
-  @type(["string"]) purchasedUpgrades = new ArraySchema<string>();
+  @type(["string"]) purchasedModules = new ArraySchema<string>();
   /**
    * Why the shield is or is not protecting. Display-gated: the operator panel
    * keeps its own wording, and the controller view is strict about its keys.
@@ -283,6 +291,11 @@ export class SpaceshipDefenderState extends Schema {
   @type("string") phase: RoomPhase = "lobby";
   @type("uint32") runNumber = 0;
   @type("uint8") crewSize = 3;
+  /**
+   * The hull the run is played on. It changes once, at creation, so a string is
+   * the right shape here: an id the clients look up in their own catalogue.
+   */
+  @type("string") shipArchetypeId = "";
   @type("boolean") displayConnected = false;
   @type("int32") displayLatencyMs = -1;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();

@@ -53,7 +53,7 @@ const PREVIEW_WORLD = {
   arenaRadius: 2200,
   rimBandWidth: 260,
   shieldPhase: "down",
-  purchasedUpgrades: [],
+  purchasedModules: [],
   spaceship: {
     x: 2200,
     y: 2200,
@@ -98,6 +98,7 @@ export function createPreviewRoomView(
     phase: phase === "lobby" ? "lobby" : "active",
     runNumber: phase === "lobby" ? 0 : 1,
     crewSize: 3,
+    shipArchetypeId: "guardian",
     displayConnected: true,
     displayLatencyMs: 18,
     players: [...PREVIEW_PLAYERS],
@@ -113,7 +114,7 @@ function createPreviewGame(
     return {
       ...PREVIEW_WORLD,
       shieldPhase: "down",
-      purchasedUpgrades: [],
+      purchasedModules: [],
       cameraViewWidth,
       shield: {
         angle: Math.PI / 2,
@@ -253,7 +254,7 @@ function createPreviewGame(
       ...PREVIEW_WORLD,
       ...EMPTY_WORLD_ENTITIES,
       shieldPhase: "down",
-      purchasedUpgrades: [],
+      purchasedModules: [],
       cameraViewWidth,
       shield: {
         angle: 0,
@@ -281,33 +282,34 @@ function createPreviewGame(
         offer: {
           offerId: "preview-offer-w3",
           waveNumber: 3,
+          tier: 6,
           cards: [
             {
-              upgradeId: "pilot_speed",
+              upgradeId: "afterburner",
               role: "pilot",
-              label: "Скорость +10%",
-              value: 0.1,
+              label: "Форсаж",
+              summary: "Скорость +14%, Ускорение +18%",
               price: 5
             },
             {
-              upgradeId: "gunner_damage",
+              upgradeId: "turretDrive",
               role: "gunner",
-              label: "Урон +15%",
-              value: 0.15,
+              label: "Привод башни",
+              summary: "Скорость поворота башни +25%",
               price: 5
             },
             {
-              upgradeId: "shield_capacity",
+              upgradeId: "capacitor2",
               role: "shield",
-              label: "Ёмкость +20",
-              value: 20,
+              label: "Батарея повышенной ёмкости",
+              summary: "Ёмкость щита +40",
               price: 5
             }
           ]
         },
         votes: {
-          pilot: { role: "pilot", upgradeId: "gunner_damage", revision: 2 },
-          gunner: { role: "gunner", upgradeId: "gunner_damage", revision: 1 },
+          pilot: { role: "pilot", upgradeId: "turretDrive", revision: 2 },
+          gunner: { role: "gunner", upgradeId: "turretDrive", revision: 1 },
           shield: null
         },
         selection: null
@@ -318,7 +320,7 @@ function createPreviewGame(
     ...PREVIEW_WORLD,
     ...EMPTY_WORLD_ENTITIES,
     shieldPhase: "down",
-    purchasedUpgrades: [],
+    purchasedModules: [],
     cameraViewWidth,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
     shield: {

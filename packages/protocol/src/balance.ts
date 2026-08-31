@@ -515,6 +515,98 @@ export const shipStatEffectSchema = z
   .strict();
 export type ShipStatEffectTuning = z.infer<typeof shipStatEffectSchema>;
 
+/**
+ * What each target is called where a person reads it: on an intermission card
+ * and in the console's module editor. The caption a crew sees is assembled from
+ * these and the effect's own number, so the preset never states a number twice
+ * and a label can never promise something the effect does not do.
+ */
+export const MODULE_TARGET_LABELS: Readonly<Record<ModuleTargetField, string>> = {
+  spaceshipMaxHp: "Прочность корпуса",
+  spaceshipRadius: "Радиус корпуса",
+  spaceshipSpeedPerSecond: "Скорость",
+  spaceshipAccelerationPerSecondSquared: "Ускорение",
+  spaceshipBrakingPerSecondSquared: "Торможение",
+  spaceshipReverseSpeedFactor: "Задний ход",
+  headingMaxAngularSpeedPerSecond: "Скорость разворота",
+  headingAngularAccelerationPerSecondSquared: "Отзывчивость разворота",
+  friendlyProjectileDamage: "Урон пушки",
+  fireCooldownTicks: "Перезарядка пушки",
+  projectileSpeedPerSecond: "Скорость снаряда",
+  projectileRadius: "Калибр снаряда",
+  projectileLifetimeMs: "Дальность снаряда",
+  turretMaxAngularSpeedPerSecond: "Скорость поворота башни",
+  turretAngularAccelerationPerSecondSquared: "Отзывчивость башни",
+  turretAngularBrakingPerSecondSquared: "Торможение башни",
+  cannonHeatCapacity: "Запас нагрева пушки",
+  cannonHeatPerShot: "Нагрев пушки за выстрел",
+  cannonCoolingPerSecond: "Охлаждение пушки",
+  cannonRearmThreshold: "Порог готовности пушки",
+  mgDamage: "Урон носового ствола",
+  mgFireCooldownTicks: "Перезарядка носового ствола",
+  mgProjectileSpeedPerSecond: "Скорость носовой пули",
+  mgProjectileRadius: "Калибр носовой пули",
+  mgHeatCapacity: "Запас нагрева носа",
+  mgHeatPerShot: "Нагрев носа за выстрел",
+  mgCoolingPerSecond: "Охлаждение носа",
+  mgRearmThreshold: "Порог готовности носа",
+  cannonLaserRange: "Дальность луча пушки",
+  mgLaserRange: "Дальность носового луча",
+  laserBeamRadius: "Толщина луча",
+  friendlyMissileTurnRatePerSecond: "Доворот ракеты",
+  friendlyMissileAcquireConeRadians: "Конус захвата ракеты",
+  shieldCapacity: "Ёмкость щита",
+  shieldDrainPerSecond: "Расход щита",
+  shieldRechargePerSecond: "Восстановление щита",
+  shieldEngageTicks: "Подъём щита",
+  shieldMinimumUpTicks: "Минимальная выдержка щита",
+  shieldCooldownTicks: "Пауза щита",
+  shieldRearmEnergy: "Энергия повторного подъёма",
+  shieldArcRadians: "Сектор щита",
+  shieldMaxAngularSpeedPerSecond: "Скорость поворота щита",
+  shieldAngularAccelerationPerSecondSquared: "Отзывчивость щита",
+  shieldAngularBrakingPerSecondSquared: "Торможение щита"
+};
+
+const TICK_SECONDS = 0.05;
+/** Targets whose stored unit would read as noise on a card. */
+const DEGREE_TARGETS: readonly ModuleTargetField[] = [
+  "shieldArcRadians",
+  "friendlyMissileAcquireConeRadians"
+];
+const TICK_TARGETS: readonly ModuleTargetField[] = [
+  "fireCooldownTicks",
+  "mgFireCooldownTicks",
+  "shieldEngageTicks",
+  "shieldMinimumUpTicks",
+  "shieldCooldownTicks"
+];
+
+function signed(value: number, unit: string): string {
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded > 0 ? "+" : "−"}${String(Math.abs(rounded))}${unit}`;
+}
+
+/** One effect as a person reads it. A share always reads as a percentage. */
+export function formatShipStatEffect(effect: ShipStatEffectTuning): string {
+  const name = MODULE_TARGET_LABELS[effect.target];
+  if (effect.op === "percent") return `${name} ${signed(effect.value * 100, "%")}`;
+  // A multiplier is a share of what was there: 0.9 is a tenth off.
+  if (effect.op === "multiply") return `${name} ${signed((effect.value - 1) * 100, "%")}`;
+  if (DEGREE_TARGETS.includes(effect.target))
+    return `${name} ${signed((effect.value * 180) / Math.PI, "°")}`;
+  if (TICK_TARGETS.includes(effect.target))
+    return `${name} ${signed(effect.value * TICK_SECONDS, " с")}`;
+  if (effect.target === "projectileLifetimeMs")
+    return `${name} ${signed(effect.value / 1000, " с")}`;
+  return `${name} ${signed(effect.value, "")}`;
+}
+
+/** What a module does, in one line, for the card and for the console preview. */
+export function summariseModuleEffects(effects: readonly ShipStatEffectTuning[]): string {
+  return effects.map(formatShipStatEffect).join(", ");
+}
+
 export const MAX_MODULE_EFFECTS = 4;
 export const shipModuleIdSchema = z
   .string()

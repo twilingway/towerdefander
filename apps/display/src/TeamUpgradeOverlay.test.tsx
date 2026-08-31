@@ -8,22 +8,35 @@ const teamUpgrade: PublicTeamUpgradeView = {
   offer: {
     offerId: "offer-w3",
     waveNumber: 3,
+    tier: 6,
     cards: [
-      { upgradeId: "pilot_hull", role: "pilot", label: "Корпус +25", value: 25, price: 5 },
       {
-        upgradeId: "gunner_cooldown",
-        role: "gunner",
-        label: "Перезарядка -10%",
-        value: 0.1,
+        upgradeId: "hullPlating2",
+        role: "pilot",
+        label: "Композитный корпус",
+        summary: "Прочность корпуса +60",
         price: 5
       },
-      { upgradeId: "shield_arc", role: "shield", label: "Дуга +10°", value: 0.17, price: 5 }
+      {
+        upgradeId: "heavyRounds",
+        role: "gunner",
+        label: "Тяжёлые снаряды",
+        summary: "Урон пушки +18%, Скорость снаряда −5%",
+        price: 5
+      },
+      {
+        upgradeId: "wideArc",
+        role: "shield",
+        label: "Широкий сектор",
+        summary: "Сектор щита +20°",
+        price: 5
+      }
     ]
   },
   votes: {
-    pilot: { role: "pilot", upgradeId: "shield_arc", revision: 1 },
+    pilot: { role: "pilot", upgradeId: "wideArc", revision: 1 },
     gunner: null,
-    shield: { role: "shield", upgradeId: "shield_arc", revision: 4 }
+    shield: { role: "shield", upgradeId: "wideArc", revision: 4 }
   },
   selection: null
 };

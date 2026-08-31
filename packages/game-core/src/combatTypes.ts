@@ -1,4 +1,4 @@
-import type { ShipStats } from "./shipStats.ts";
+import type { ShipStatEffect, ShipStats } from "./shipStats.ts";
 
 import { type CollisionCandidate, type MovingEntity } from "./spatialGrid.ts";
 import { type CombatRunStats } from "./runStats.ts";
@@ -21,16 +21,17 @@ export const ASTEROID_SPAWN_KIND = "asteroid" as const;
 /** A catalogue id, or ASTEROID_SPAWN_KIND for the ambient hazard. */
 export type SpawnKind = EnemyKind;
 
-export type UpgradeId =
-  | "pilot_speed"
-  | "pilot_acceleration"
-  | "pilot_hull"
-  | "gunner_damage"
-  | "gunner_cooldown"
-  | "gunner_projectile_speed"
-  | "shield_capacity"
-  | "shield_recharge"
-  | "shield_arc";
+/** A preset id, not a fixed enum: the modules live in the balance catalogue. */
+export type ModuleId = string;
+
+/** One card of a hull's tree, as the simulation receives it. */
+export interface ShipModuleDefinition {
+  readonly id: ModuleId;
+  readonly role: GameplayRole;
+  /** The module's name. The numbers live in the effects, never in the name. */
+  readonly label: string;
+  readonly effects: readonly ShipStatEffect[];
+}
 
 export interface CombatCaps {
   readonly enemyShips: number;
@@ -258,25 +259,36 @@ export interface CombatConfig {
   readonly worldPadding: number;
   readonly spatialCellSize: number;
   readonly caps: CombatCaps;
+  /**
+   * The tree of the hull this run is played on, already resolved: the
+   * simulation is handed the chosen ship's tiers and never learns that a
+   * catalogue of hulls exists.
+   */
+  readonly moduleTiers: readonly (readonly ShipModuleDefinition[])[];
+  /** Offered on every intermission once the tiers are spent; repeatable. */
+  readonly endlessTier: readonly ShipModuleDefinition[];
 }
 
 export interface UpgradeCard {
-  readonly upgradeId: UpgradeId;
+  readonly upgradeId: ModuleId;
   readonly role: GameplayRole;
   readonly label: string;
-  readonly value: number;
+  /** What the module does. Clients caption the card from these, not from prose. */
+  readonly effects: readonly ShipStatEffect[];
   readonly price: 5;
 }
 
 export interface TeamUpgradeOffer {
   readonly offerId: string;
   readonly waveNumber: number;
+  /** Which tier of the tree these cards came from; 1-based, 0 for the tail. */
+  readonly tier: number;
   readonly cards: readonly UpgradeCard[];
 }
 
 export interface TeamUpgradeVote {
   readonly role: GameplayRole;
-  readonly upgradeId: UpgradeId;
+  readonly upgradeId: ModuleId;
   readonly revision: number;
 }
 
@@ -284,7 +296,7 @@ export type TeamUpgradeVotes = Readonly<Record<GameplayRole, TeamUpgradeVote | n
 export interface TeamUpgradeSelection {
   readonly waveNumber: number;
   readonly offerId: string;
-  readonly upgradeId: UpgradeId;
+  readonly upgradeId: ModuleId;
   readonly role: GameplayRole;
   readonly price: 5;
 }
@@ -376,7 +388,6 @@ export interface PendingSpawn {
 export interface CombatStateFields {
   readonly runSeed: number;
   readonly spawnRngState: number;
-  readonly offerRngState: number;
   readonly ambientAsteroidRngState: number;
   /** Drop rolls for the current wave, derived fresh from the run seed and wave. */
   readonly lootRngState: number;
@@ -415,7 +426,7 @@ export interface CombatStateFields {
   readonly laserBeams: readonly FriendlyProjectileLike[];
   readonly ship: ShipStats;
   /** Append-only, in purchase order; the stats above are derived from it. */
-  readonly purchasedUpgrades: readonly UpgradeId[];
+  readonly purchasedModules: readonly ModuleId[];
   readonly hostileProjectiles: readonly HostileProjectileState[];
   readonly homingMissiles: readonly HomingMissileState[];
   readonly teamUpgradeOffer: TeamUpgradeOffer | null;
@@ -471,7 +482,7 @@ export interface UpgradeVoteCommand {
   readonly role: GameplayRole;
   readonly waveNumber: number;
   readonly offerId: string;
-  readonly upgradeId: UpgradeId;
+  readonly upgradeId: ModuleId;
   readonly revision: number;
 }
 

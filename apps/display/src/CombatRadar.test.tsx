@@ -14,7 +14,7 @@ const baseGame: DisplayGameSnapshot = {
   arenaRadius: 2_200,
   rimBandWidth: 260,
   shieldPhase: "down",
-  purchasedUpgrades: [],
+  purchasedModules: [],
   spaceship: {
     x: 2_200,
     y: 2_200,

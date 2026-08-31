@@ -18,6 +18,7 @@ describe("controller room view", () => {
       phase: "active",
       runNumber: 2,
       crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: -1,
       players: collection([
@@ -122,6 +123,7 @@ describe("controller room view", () => {
       phase: "active",
       runNumber: 1,
       crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([
@@ -186,39 +188,40 @@ describe("controller room view", () => {
           offer: {
             offerId: "offer-w1",
             waveNumber: 1,
+            tier: 6,
             cards: collection([
               {
-                upgradeId: "pilot_speed",
+                upgradeId: "afterburner",
                 role: "pilot",
-                label: "Скорость +10%",
-                value: 0.1,
+                label: "Форсаж",
+                summary: "Скорость +14%",
                 price: 5
               },
               {
-                upgradeId: "gunner_damage",
+                upgradeId: "turretDrive",
                 role: "gunner",
-                label: "Урон +15%",
-                value: 0.15,
+                label: "Привод башни",
+                summary: "Скорость поворота башни +25%",
                 price: 5
               },
               {
-                upgradeId: "shield_capacity",
+                upgradeId: "capacitor2",
                 role: "shield",
-                label: "Ёмкость +20",
-                value: 20,
+                label: "Батарея",
+                summary: "Ёмкость щита +40",
                 price: 5
               }
             ])
           },
           votes: collection([
-            { role: "shield", upgradeId: "pilot_speed", revision: 1 },
-            { role: "pilot", upgradeId: "pilot_speed", revision: 2 }
+            { role: "shield", upgradeId: "afterburner", revision: 1 },
+            { role: "pilot", upgradeId: "afterburner", revision: 2 }
           ]),
           hasSelection: false,
           selection: {
             offerId: "",
             waveNumber: 1,
-            upgradeId: "pilot_speed",
+            upgradeId: "afterburner",
             role: "pilot",
             price: 5
           }
@@ -236,7 +239,7 @@ describe("controller room view", () => {
     ]);
     expect(view?.game?.teamUpgrade.votes.pilot).toEqual({
       role: "pilot",
-      upgradeId: "pilot_speed",
+      upgradeId: "afterburner",
       revision: 2
     });
     expect(view?.game?.teamUpgrade.votes.shield?.revision).toBe(1);
@@ -251,6 +254,7 @@ describe("controller room view", () => {
       phase: "active",
       runNumber: 3,
       crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([

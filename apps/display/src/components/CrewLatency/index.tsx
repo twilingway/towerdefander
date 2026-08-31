@@ -24,8 +24,7 @@ export function CrewLatency({ view, game }: CrewLatencyProps) {
         );
       })}
       <span>
-        Куплено:{" "}
-        {game.purchasedUpgrades.length === 0 ? "ничего" : game.purchasedUpgrades.join(", ")}
+        Куплено: {game.purchasedModules.length === 0 ? "ничего" : game.purchasedModules.join(", ")}
       </span>
     </aside>
   );

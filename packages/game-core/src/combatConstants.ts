@@ -29,7 +29,6 @@ export const ENEMY_PRESS_TICKS = 200;
 /** Share of the fighting distance given up once the press is at full. */
 export const ENEMY_PRESS_SHARE = 0.75;
 export const SPAWN_DOMAIN = 0x5350_4157;
-export const OFFER_DOMAIN = 0x4f46_4652;
 export const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
 export const AIM_DOMAIN = 0x414d_5f41;
 export const LOOT_DOMAIN = 0x4c4f_4f54;

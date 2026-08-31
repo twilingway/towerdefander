@@ -14,7 +14,7 @@ import type {
   TeamUpgradeVote
 } from "@spaceship-defender/game-core";
 
-import { CREW_ROLES, type CrewRole } from "@spaceship-defender/protocol";
+import { CREW_ROLES, summariseModuleEffects, type CrewRole } from "@spaceship-defender/protocol";
 
 import {
   AsteroidState,
@@ -99,9 +99,9 @@ export function projectGameState(
   target.display.shieldPhase = game.shieldPhase;
   // Grows by one entry a wave at most, so a rewrite costs nothing and the
   // display never has to diff it.
-  if (target.display.purchasedUpgrades.length !== game.purchasedUpgrades.length) {
-    target.display.purchasedUpgrades.splice(0, target.display.purchasedUpgrades.length);
-    target.display.purchasedUpgrades.push(...game.purchasedUpgrades);
+  if (target.display.purchasedModules.length !== game.purchasedModules.length) {
+    target.display.purchasedModules.splice(0, target.display.purchasedModules.length);
+    target.display.purchasedModules.push(...game.purchasedModules);
   }
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
@@ -265,13 +265,16 @@ function syncTeamUpgrade(
   if (offer !== null) {
     target.offer.offerId = offer.offerId;
     target.offer.waveNumber = offer.waveNumber;
+    target.offer.tier = offer.tier;
     for (const [index, source] of offer.cards.entries()) {
       while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
       const card = target.offer.cards.at(index);
       card.upgradeId = source.upgradeId;
       card.role = source.role;
       card.label = source.label;
-      card.value = source.value;
+      // Assembled here rather than stored in the preset: the operator writes a
+      // name and the effects, and the caption follows from the effects.
+      card.summary = summariseModuleEffects(source.effects);
       card.price = source.price;
     }
     while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();

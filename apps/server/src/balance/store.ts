@@ -12,7 +12,8 @@ import {
   type HelmTuning,
   type BalancePreset,
   type BalancePresetsFile,
-  type BalanceTuning
+  type BalanceTuning,
+  type ShipArchetype
 } from "@spaceship-defender/protocol";
 import {
   createSpaceshipSimulationConfig,
@@ -286,18 +287,54 @@ export function createDefaultPresetsFile(): BalancePresetsFile {
 
 /** Throws a RangeError when the tuning cannot drive a simulation. */
 export function assertTuningIsPlayable(tuning: BalanceTuning): void {
-  validateSpaceshipSimulationConfig(toSimulationConfig(tuning));
+  for (const hullId of Object.keys(tuning.shipArchetypes)) {
+    validateSpaceshipSimulationConfig(toSimulationConfig(tuning, hullId));
+  }
 }
 
-export function toSimulationConfig(tuning: BalanceTuning): SpaceshipSimulationConfig {
+/**
+ * The preset plus one chosen hull, as the simulation sees it.
+ *
+ * This is where a hull stops being a catalogue entry: its sparse diff lands on
+ * the flat ship block and its tree becomes the tiers the offer is built from,
+ * so the simulation is handed a ship and never learns that a choice was made.
+ */
+export function toSimulationConfig(
+  tuning: BalanceTuning,
+  shipArchetypeId?: string
+): SpaceshipSimulationConfig {
   // The autopilot section drives the demo harness and the helm section drives
   // the controller's keyboard; neither reaches the simulation.
   const simulation: Partial<BalanceTuning> = { ...tuning };
   delete simulation.autopilot;
   delete simulation.helm;
+  delete simulation.shipArchetypes;
+  delete simulation.defaultShipArchetypeId;
+  const hull = resolveShipArchetype(tuning, shipArchetypeId);
   // The world follows the arena radius inside the factory, so every caller that
   // builds a config from a preset gets the same geometry.
-  return createSpaceshipSimulationConfig(simulation);
+  return createSpaceshipSimulationConfig({
+    ...simulation,
+    ...hull.overrides.stats,
+    ...(hull.overrides.cannonWeaponKind === null
+      ? {}
+      : { cannonWeaponKind: hull.overrides.cannonWeaponKind }),
+    ...(hull.overrides.mgWeaponKind === null ? {} : { mgWeaponKind: hull.overrides.mgWeaponKind }),
+    moduleTiers: hull.tiers,
+    endlessTier: hull.endlessTier
+  });
+}
+
+/** The named hull, or the preset's own default when the name is not a hull. */
+export function resolveShipArchetype(
+  tuning: BalanceTuning,
+  shipArchetypeId?: string
+): ShipArchetype {
+  const chosen = shipArchetypeId === undefined ? undefined : tuning.shipArchetypes[shipArchetypeId];
+  const fallback = tuning.shipArchetypes[tuning.defaultShipArchetypeId];
+  const hull = chosen ?? fallback;
+  if (hull === undefined) throw new RangeError("Preset has no hull to play on");
+  return hull;
 }
 
 function findActivePreset(file: BalancePresetsFile): BalancePreset {
@@ -397,8 +434,8 @@ export class BalanceStore {
     return findActivePreset(this.file).tuning;
   }
 
-  getActiveSimulationConfig(): SpaceshipSimulationConfig {
-    return toSimulationConfig(this.getActiveTuning());
+  getActiveSimulationConfig(shipArchetypeId?: string): SpaceshipSimulationConfig {
+    return toSimulationConfig(this.getActiveTuning(), shipArchetypeId);
   }
 
   /** Validates, writes atomically and only then swaps the in-memory state. */

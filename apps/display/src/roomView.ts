@@ -95,7 +95,7 @@ interface NetworkUpgradeCardState {
   upgradeId: UpgradeId;
   role: CrewRole;
   label: string;
-  value: number;
+  summary: string;
   price: number;
 }
 
@@ -110,6 +110,7 @@ interface NetworkTeamUpgradeState {
   offer: {
     offerId: string;
     waveNumber: number;
+    tier: number;
     cards: ValueCollection<NetworkUpgradeCardState>;
   };
   votes: ValueCollection<NetworkUpgradeVoteState>;
@@ -187,7 +188,7 @@ interface NetworkGameState {
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;
-    purchasedUpgrades: readonly string[];
+    purchasedModules: readonly string[];
     lootDrops: ValueCollection<NetworkLootDropState>;
     laserBeams: ValueCollection<NetworkLaserBeamState>;
     friendlyProjectiles: ValueCollection<NetworkProjectileState>;
@@ -209,6 +210,7 @@ export interface NetworkRoomState {
   phase?: DisplayRoomView["phase"];
   runNumber?: number;
   crewSize?: number;
+  shipArchetypeId?: string;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -225,6 +227,7 @@ export function toDisplayRoomView(
     state.phase === undefined ||
     typeof state.runNumber !== "number" ||
     typeof state.crewSize !== "number" ||
+    typeof state.shipArchetypeId !== "string" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -249,6 +252,7 @@ export function toDisplayRoomView(
     phase: state.phase,
     runNumber: state.runNumber,
     crewSize: state.crewSize,
+    shipArchetypeId: state.shipArchetypeId,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
@@ -340,7 +344,7 @@ export function toDisplayRoomView(
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),
-            purchasedUpgrades: [...display.purchasedUpgrades],
+            purchasedModules: [...display.purchasedModules],
             lootDrops: toSpawnOrder(display.lootDrops),
             laserBeams: [...display.laserBeams.values()].map((beam) => ({ ...beam })),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
@@ -372,6 +376,7 @@ function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
         ? {
             offerId: teamUpgrade.offer.offerId,
             waveNumber: teamUpgrade.offer.waveNumber,
+            tier: teamUpgrade.offer.tier,
             cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
           }
         : null,

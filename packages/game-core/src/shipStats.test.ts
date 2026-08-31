@@ -220,9 +220,9 @@ function runTrace(config: SpaceshipSimulationConfig, initial: SpaceshipSimulatio
     });
     state = advanceSpaceshipSimulation(state, config);
   }
-  const { ship, purchasedUpgrades, ...rest } = state;
+  const { ship, purchasedModules, ...rest } = state;
   void ship;
-  void purchasedUpgrades;
+  void purchasedModules;
   return JSON.stringify(rest);
 }
 

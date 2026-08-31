@@ -108,7 +108,7 @@ const testGame = {
   arenaRadius: 2200,
   rimBandWidth: 260,
   shieldPhase: "down",
-  purchasedUpgrades: [],
+  purchasedModules: [],
   spaceship: {
     x: 100,
     y: 100,

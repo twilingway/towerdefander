@@ -1,3 +1,4 @@
+import { DEFAULT_ENDLESS_TIER, DEFAULT_MODULE_TIERS } from "./moduleTree.ts";
 import { type SpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
 /** The built-in balance the server starts from before a preset is loaded. */
 export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
@@ -353,5 +354,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
     homingMissiles: 12,
     friendlyProjectiles: 32,
     dynamicEntities: 208
-  }
+  },
+  moduleTiers: DEFAULT_MODULE_TIERS,
+  endlessTier: DEFAULT_ENDLESS_TIER
 };

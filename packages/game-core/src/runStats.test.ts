@@ -207,7 +207,13 @@ describe("run statistics", () => {
   it("records credits spent when the crew buys an upgrade", () => {
     const config = quietConfig();
     const initial = createSpaceshipSimulationState(config, 76);
-    const { offer } = createTeamUpgradeOffer(initial.runSeed, initial.waveNumber);
+    const offer = createTeamUpgradeOffer(
+      config.moduleTiers,
+      config.endlessTier,
+      4,
+      initial.waveNumber
+    );
+    if (offer === null) throw new Error("expected an offer");
     const card = offer.cards[0];
     if (card === undefined) throw new Error("offer must carry a card");
 
