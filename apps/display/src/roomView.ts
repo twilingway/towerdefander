@@ -154,12 +154,16 @@ interface NetworkGameState {
     /** The aiming envelope: what the barrel is, how far, and its lock cone. */
     kind: string;
     reach: number;
+    speed: number;
     acquireHalfAngle: number;
   };
   machineGun: {
     heat: number;
     capacity: number;
     overheated: boolean;
+    kind: string;
+    reach: number;
+    speed: number;
   };
   encounter: {
     phase: EncounterPhase;

@@ -88,12 +88,16 @@ interface NetworkGameState {
     /** Drawn by the display, not the panel; carried so the view stays whole. */
     kind: string;
     reach: number;
+    speed: number;
     acquireHalfAngle: number;
   };
   machineGun: {
     heat: number;
     capacity: number;
     overheated: boolean;
+    kind: string;
+    reach: number;
+    speed: number;
   };
   helm?: {
     scheme: HelmScheme;

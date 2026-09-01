@@ -40,9 +40,17 @@ const baseGame: DisplayGameSnapshot = {
     overheated: false,
     kind: "kinetic",
     reach: 1500,
+    speed: 1000,
     acquireHalfAngle: 0
   },
-  machineGun: { heat: 0, capacity: 100, overheated: false },
+  machineGun: {
+    heat: 0,
+    capacity: 100,
+    overheated: false,
+    kind: "kinetic",
+    reach: 620,
+    speed: 900
+  },
   encounter: {
     phase: "combat",
     outcome: null,

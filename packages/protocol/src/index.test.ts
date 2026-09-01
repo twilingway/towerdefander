@@ -108,9 +108,17 @@ function controllerRoom(): ControllerRoomView {
         overheated: false,
         kind: "kinetic",
         reach: 1500,
+        speed: 1000,
         acquireHalfAngle: 0
       },
-      machineGun: { heat: 40, capacity: 100, overheated: false },
+      machineGun: {
+        heat: 40,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 620,
+        speed: 900
+      },
       encounter: {
         phase: "combat",
         outcome: null,
@@ -302,40 +310,40 @@ function intermissionController(): ControllerRoomView {
 }
 
 describe("protocol v33 handshake and messages", () => {
-  it("publishes the fixed crew and v43", () => {
-    expect(PROTOCOL_VERSION).toBe(43);
+  it("publishes the fixed crew and v45", () => {
+    expect(PROTOCOL_VERSION).toBe(45);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v43 create/join and rejects v42 and unknown fields", () => {
+  it("accepts v45 create/join and rejects v44 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 43, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 45, crewSize: 3 })
         .success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 42, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 44, crewSize: 3 })
         .success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 43,
+        protocolVersion: 45,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 42,
+        protocolVersion: 44,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 43,
+        protocolVersion: 45,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -367,9 +375,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v43 and the active run", () => {
+  it("keeps continuous role messages strict on v45 and the active run", () => {
     const envelope = {
-      protocolVersion: 43,
+      protocolVersion: 45,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -445,7 +453,7 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 42,
+        protocolVersion: 44,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -455,9 +463,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v43 pilot input", () => {
+  it("requires the machine gun trigger on v45 pilot input", () => {
     const envelope = {
-      protocolVersion: 43,
+      protocolVersion: 45,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -474,7 +482,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("carries an optional turn intent on pilot input", () => {
     const envelope = {
-      protocolVersion: 43,
+      protocolVersion: 45,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -496,11 +504,11 @@ describe("protocol v33 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 43, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 45, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 42, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 44, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -543,7 +551,7 @@ describe("protocol v33 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 43,
+    protocolVersion: 45,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -660,20 +668,48 @@ describe("strict v33 room projections", () => {
   it("publishes the machine gun view in both snapshots with heat inside capacity", () => {
     const controller = controllerRoom();
     if (controller.game === null) throw new Error("Expected active game.");
-    expect(controller.game.machineGun).toEqual({ heat: 40, capacity: 100, overheated: false });
+    expect(controller.game.machineGun).toEqual({
+      heat: 40,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
 
     const display = displayRoom();
     if (display.game === null) throw new Error("Expected active game.");
-    expect(display.game.machineGun).toEqual({ heat: 40, capacity: 100, overheated: false });
+    expect(display.game.machineGun).toEqual({
+      heat: 40,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
 
     const overheated = controllerRoom();
     if (overheated.game === null) throw new Error("Expected active game.");
-    overheated.game.machineGun = { heat: 100, capacity: 100, overheated: true };
+    overheated.game.machineGun = {
+      heat: 100,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    };
     expect(controllerRoomViewSchema.safeParse(overheated).success).toBe(true);
 
     const overCapacity = controllerRoom();
     if (overCapacity.game === null) throw new Error("Expected active game.");
-    overCapacity.game.machineGun = { heat: 101, capacity: 100, overheated: true };
+    overCapacity.game.machineGun = {
+      heat: 101,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    };
     expect(controllerRoomViewSchema.safeParse(overCapacity).success).toBe(false);
 
     const missing = controllerRoom() as unknown as Record<string, unknown>;
@@ -1029,18 +1065,18 @@ describe("strict v33 room projections", () => {
 describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 43, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 45, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 43,
+        protocolVersion: 45,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 43,
+        protocolVersion: 45,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -1048,13 +1084,13 @@ describe("v33 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 42,
+        protocolVersion: 44,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 42, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 44, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

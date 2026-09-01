@@ -309,6 +309,29 @@ export function normalizeVector(vector: Vector2): Vector2 {
  * acquisition cone. Picked once, at launch. Re-acquiring in flight would turn
  * the barrel into an aimbot and take the pointing away from the crew.
  */
+/**
+ * Where the turret is bolted, in world coordinates. The mount is stated as a
+ * share of the hull radius and turns with the hull, which is exactly how the
+ * display places the sprite - one rule, so the barrel a crew sees is the barrel
+ * that fires.
+ */
+function turretMount(
+  origin: Vector2,
+  heading: number,
+  ship: ShipStats,
+  visual: TurretVisual
+): Vector2 {
+  if (visual === null) return origin;
+  const offsetX = visual.mountX * ship.spaceshipRadius;
+  const offsetY = visual.mountY * ship.spaceshipRadius;
+  const cos = Math.cos(heading);
+  const sin = Math.sin(heading);
+  return {
+    x: origin.x + offsetX * cos - offsetY * sin,
+    y: origin.y + offsetX * sin + offsetY * cos
+  };
+}
+
 function acquireMissileTarget(
   enemies: readonly { readonly id: string; readonly x: number; readonly y: number }[],
   origin: { readonly x: number; readonly y: number },
@@ -535,7 +558,11 @@ export function advanceSpaceshipSimulation(
         : null,
     eligible: gunnerEligible,
     canSpawn: canCreateFriendlyProjectile(projectiles),
-    origin: spaceship,
+    // The turret sits where it is drawn, and its shots leave from there. Fired
+    // from the hull's centre instead they crossed the barrel at an angle of
+    // their own - about three degrees at half the reach, which is wider than
+    // the aim tolerance, so the display marked ships the shot then missed.
+    origin: turretMount(spaceship, state.spaceshipHeading, ship, config.turretVisual),
     angle: turretTraverse.angle,
     muzzleOffset: ship.spaceshipRadius + ship.projectileRadius,
     speed: ship.projectileSpeedPerSecond,

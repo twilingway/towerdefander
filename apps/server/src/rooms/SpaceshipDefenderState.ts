@@ -39,6 +39,11 @@ export class MachineGunState extends Schema {
   @type("float32") heat = 0;
   @type("float32") capacity = 0;
   @type("boolean") overheated = false;
+  // What the barrel is and how far it throws. Fixed for the run unless a module
+  // moves it, so the string costs one patch rather than one a tick.
+  @type("string") kind = "kinetic";
+  @type("float32") reach = 0;
+  @type("float32") speed = 0;
 }
 
 /**
@@ -49,10 +54,6 @@ export class MachineGunState extends Schema {
  * paying for one on every client.
  */
 export class CannonState extends MachineGunState {
-  // Fixed for the run unless a module moves it, so the string costs one patch
-  // rather than one a tick.
-  @type("string") kind = "kinetic";
-  @type("float32") reach = 0;
   @type("float32") acquireHalfAngle = 0;
 }
 

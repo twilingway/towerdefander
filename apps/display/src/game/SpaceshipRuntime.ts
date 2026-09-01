@@ -45,6 +45,7 @@ import {
   type Point,
   type PointTrack
 } from "./spaceshipViewModel.js";
+import { pickFocusedTarget } from "../combatFocus.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 import {
   BACKGROUND_LAYERS,
@@ -96,6 +97,11 @@ class SpaceshipScene extends Phaser.Scene {
   private shield: Phaser.GameObjects.Graphics | undefined;
   private beams: Phaser.GameObjects.Graphics | undefined;
   private aimEnvelope: Phaser.GameObjects.Graphics | undefined;
+  private focusRing: Phaser.GameObjects.Graphics | undefined;
+  /** What the ring held last frame, so it does not jump on every wobble. */
+  private focusedEntityId: string | undefined;
+  private noseFocus: Phaser.GameObjects.Graphics | undefined;
+  private noseFocusedEntityId: string | undefined;
   private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
@@ -174,6 +180,9 @@ class SpaceshipScene extends Phaser.Scene {
     // Under everything that matters: it is a hint about where the gun can
     // reach, and it must never sit on top of what is being aimed at.
     this.aimEnvelope = this.add.graphics().setDepth(4);
+    // Above the ships it marks, below the shield and the pulses.
+    this.focusRing = this.add.graphics().setDepth(12);
+    this.noseFocus = this.add.graphics().setDepth(12);
     const tick = this.snapshot.tick;
     this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
@@ -205,7 +214,12 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret.rotation = sampleAngleTrack(this.turretTrack, playbackTick);
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     this.drawShield();
+    // From the mount, which is where the simulation fires from too: the barrel
+    // a crew sees is the barrel that shoots, so the envelope and the ring start
+    // on it rather than at the hull's centre.
     this.drawAimEnvelope(mount, this.turret.rotation);
+    this.drawFocusRing(mount, this.turret.rotation, playbackTick);
+    this.drawNoseFocus(spaceshipPosition, spaceshipHeading, playbackTick);
     this.drawLaserBeams();
     this.focusCamera(spaceshipPosition);
 
@@ -413,7 +427,7 @@ class SpaceshipScene extends Phaser.Scene {
    * readable: the gunner's question is as often "does it even carry that far"
    * as "am I on it".
    */
-  private drawAimEnvelope(mount: { readonly x: number; readonly y: number }, angle: number): void {
+  private drawAimEnvelope(origin: { readonly x: number; readonly y: number }, angle: number): void {
     const layer = this.aimEnvelope;
     if (layer === undefined) return;
     layer.clear();
@@ -421,7 +435,7 @@ class SpaceshipScene extends Phaser.Scene {
     if (reach <= 0) return;
     const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
     layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
-    layer.slice(mount.x, mount.y, reach, angle - half, angle + half);
+    layer.slice(origin.x, origin.y, reach, angle - half, angle + half);
     layer.fillPath();
     layer.lineStyle(
       AIM_ENVELOPE_STYLE.width,
@@ -430,10 +444,106 @@ class SpaceshipScene extends Phaser.Scene {
     );
     for (const edge of [angle - half, angle + half]) {
       layer.beginPath();
-      layer.moveTo(mount.x, mount.y);
-      layer.lineTo(mount.x + Math.cos(edge) * reach, mount.y + Math.sin(edge) * reach);
+      layer.moveTo(origin.x, origin.y);
+      layer.lineTo(origin.x + Math.cos(edge) * reach, origin.y + Math.sin(edge) * reach);
       layer.strokePath();
     }
+  }
+
+  /**
+   * A ring around the ship a shot would hit right now, breathing so it reads as
+   * live rather than as decoration. There is no lock in this game - the gunner
+   * turns a barrel - so the ring is read off the geometry every frame, and it
+   * moves the moment the bore does.
+   *
+   * Drawn at the interpolated positions, not the snapshot's, or it would sit a
+   * frame behind the ship it is marking.
+   */
+  private drawFocusRing(
+    origin: { readonly x: number; readonly y: number },
+    bearing: number,
+    playbackTick: number
+  ): void {
+    const layer = this.focusRing;
+    if (layer === undefined) return;
+    layer.clear();
+    const focus = pickFocusedTarget({
+      origin,
+      bearing,
+      reach: this.snapshot.cannon.reach,
+      speed: this.snapshot.cannon.speed,
+      heldEntityId: this.focusedEntityId,
+      candidates: this.focusCandidates(playbackTick)
+    });
+    this.focusedEntityId = focus?.target.entityId;
+    if (focus === undefined) return;
+    const { target, firable } = focus;
+    const alpha = firable ? 0.9 : 0.55 + 0.45 * Math.sin(this.time.now / FOCUS_RING_BREATH_MS);
+    layer.lineStyle(
+      firable ? FOCUS_RING_FIRABLE_WIDTH : FOCUS_RING_WIDTH,
+      firable ? FOCUS_RING_FIRABLE_COLOR : FOCUS_RING_HELD_COLOR,
+      alpha
+    );
+    layer.strokeCircle(target.x, target.y, target.radius + FOCUS_RING_MARGIN);
+  }
+
+  /**
+   * The ship the nose gun is about to be fired into. Same question as the ring
+   * asks of the turret, put to the other barrel: the hull is this one's mount,
+   * so the bearing is the ship's own heading.
+   */
+  private drawNoseFocus(
+    origin: { readonly x: number; readonly y: number },
+    heading: number,
+    playbackTick: number
+  ): void {
+    const layer = this.noseFocus;
+    if (layer === undefined) return;
+    layer.clear();
+    const focus = pickFocusedTarget({
+      origin,
+      bearing: heading,
+      reach: this.snapshot.machineGun.reach,
+      speed: this.snapshot.machineGun.speed,
+      heldEntityId: this.noseFocusedEntityId,
+      candidates: this.focusCandidates(playbackTick)
+    });
+    this.noseFocusedEntityId = focus?.target.entityId;
+    if (focus?.firable !== true) return;
+    const { target } = focus;
+    const radius = target.radius + NOSE_FOCUS_MARGIN;
+    const bearing = Math.atan2(target.y - origin.y, target.x - origin.x);
+    layer.lineStyle(NOSE_FOCUS_WIDTH, NOSE_FOCUS_COLOR, 0.85);
+    // Two arcs across the line of fire, so the brackets open toward the shooter
+    // however the pair happens to be turned.
+    for (const side of [Math.PI / 2, -Math.PI / 2]) {
+      const centre = bearing + side;
+      layer.beginPath();
+      layer.arc(target.x, target.y, radius, centre - NOSE_FOCUS_SWEEP, centre + NOSE_FOCUS_SWEEP);
+      layer.strokePath();
+    }
+  }
+
+  private focusCandidates(playbackTick: number): readonly {
+    entityId: string;
+    x: number;
+    y: number;
+    radius: number;
+    velocityX: number;
+    velocityY: number;
+  }[] {
+    return this.snapshot.enemyShips.map((enemy) => {
+      const visual = this.combatVisuals.get(enemy.entityId);
+      const at = visual === undefined ? enemy : samplePointTrack(visual.position, playbackTick);
+      return {
+        entityId: enemy.entityId,
+        x: at.x,
+        y: at.y,
+        radius: enemy.radius,
+        velocityX: enemy.velocityX,
+        velocityY: enemy.velocityY
+      };
+    });
   }
 
   private drawShield(): void {
@@ -745,6 +855,32 @@ const AIM_ENVELOPE_STYLE = {
   edgeAlpha: 0.28,
   width: 2
 } as const;
+/**
+ * The ring says two things in two colours. White while the target is merely the
+ * one being held - breathing, so a still frame still reads as "this one, now".
+ * Green the moment the barrel is actually on it and inside its reach, which is
+ * the only moment a shot connects; that one holds steady, because a light that
+ * means "fire" should not be blinking.
+ */
+const FOCUS_RING_HELD_COLOR = 0xffffff;
+const FOCUS_RING_FIRABLE_COLOR = 0x62ff9b;
+const FOCUS_RING_WIDTH = 2;
+const FOCUS_RING_FIRABLE_WIDTH = 3;
+const FOCUS_RING_MARGIN = 10;
+const FOCUS_RING_BREATH_MS = 220;
+
+/**
+ * The nose gun's mark: two brackets rather than a ring, and yellow rather than
+ * white, because it is a different barrel with a different bore. The pilot flies
+ * this one - the hull is the mount - so the ship it is about to be fired into is
+ * worth saying out loud even though no envelope is drawn for it.
+ */
+const NOSE_FOCUS_COLOR = 0xffd24a;
+const NOSE_FOCUS_WIDTH = 2;
+const NOSE_FOCUS_MARGIN = 16;
+/** Half the span of each bracket, so the pair reads as "( )" around the hull. */
+const NOSE_FOCUS_SWEEP = Math.PI / 5;
+
 /** A barrel with no lock cone still shows this much, so its reach is legible. */
 const AIM_MIN_HALF_ANGLE = 0.03;
 

@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import { SoloPanel } from "./SoloPanel.js";
 
-const heat = { heat: 20, capacity: 100, overheated: false } as const;
+const heat = {
+  heat: 20,
+  capacity: 100,
+  overheated: false,
+  kind: "kinetic",
+  reach: 620,
+  speed: 900
+} as const;
 
 function markup(layout: "stacked" | "triggers"): string {
   return renderToStaticMarkup(

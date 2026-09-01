@@ -283,8 +283,23 @@ function worldGame(overrides: Record<string, unknown> = {}) {
       capacity: 100,
       arcHalfAngle: Math.PI / 4
     },
-    cannon: { heat: 12, capacity: 100, overheated: false },
-    machineGun: { heat: 12, capacity: 100, overheated: false },
+    cannon: {
+      heat: 12,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic" as const,
+      reach: 1500,
+      speed: 1000,
+      acquireHalfAngle: 0
+    },
+    machineGun: {
+      heat: 12,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic" as const,
+      reach: 620,
+      speed: 900
+    },
     encounter: { phase: "combat" as const, waveNumber: 3, lootWindowSecondsRemaining: 0 },
     enemyShips: [enemy("enemy-near", 1, 2_300, 2_200)],
     homingMissiles: [missile("missile-near", 2, 2_250, 2_200)],

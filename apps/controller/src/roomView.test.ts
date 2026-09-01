@@ -71,9 +71,17 @@ describe("controller room view", () => {
           overheated: false,
           kind: "kinetic",
           reach: 1500,
+          speed: 1000,
           acquireHalfAngle: 0
         },
-        machineGun: { heat: 0, capacity: 100, overheated: false },
+        machineGun: {
+          heat: 0,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "combat",
           hasOutcome: false,
@@ -109,7 +117,14 @@ describe("controller room view", () => {
       energy: 64,
       capacity: 100
     });
-    expect(view?.game?.machineGun).toEqual({ heat: 0, capacity: 100, overheated: false });
+    expect(view?.game?.machineGun).toEqual({
+      heat: 0,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
     expect(view?.game?.spaceship.heading).toBe(0);
     expect(findCurrentPlayer(view, "p2")?.role).toBe("shield");
     expect(findCurrentPlayer(view, "p2")?.latencyMs).toBe(62);
@@ -175,9 +190,17 @@ describe("controller room view", () => {
           overheated: false,
           kind: "kinetic",
           reach: 1500,
+          speed: 1000,
           acquireHalfAngle: 0
         },
-        machineGun: { heat: 40, capacity: 100, overheated: false },
+        machineGun: {
+          heat: 40,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "intermission",
           outcome: null,
@@ -313,9 +336,17 @@ describe("controller room view", () => {
           overheated: true,
           kind: "kinetic",
           reach: 1500,
+          speed: 1000,
           acquireHalfAngle: 0
         },
-        machineGun: { heat: 100, capacity: 100, overheated: true },
+        machineGun: {
+          heat: 100,
+          capacity: 100,
+          overheated: true,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "result",
           hasOutcome: true,

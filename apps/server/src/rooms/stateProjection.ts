@@ -76,15 +76,32 @@ export function projectGameState(
   // anything that flies ends where its lifetime does. Only a barrel that locks
   // on has a cone, and only the turret is drawn one: the pilot flies the bore.
   target.cannon.kind = config.cannonWeaponKind;
+  // Both numbers come off the run's own stats rather than the preset: a shot
+  // lives by `ship.projectileLifetimeMs`, and a module that buys a longer burn
+  // has to move the envelope with it.
   target.cannon.reach =
     config.cannonWeaponKind === "laser"
       ? game.ship.cannonLaserRange
-      : (game.ship.projectileSpeedPerSecond * config.projectileLifetimeMs) / 1_000;
+      : (game.ship.projectileSpeedPerSecond * game.ship.projectileLifetimeMs) / 1_000;
+  // A beam does not travel, so nothing leads it; everything else is led by the
+  // speed the shell actually leaves at.
+  target.cannon.speed =
+    config.cannonWeaponKind === "laser" ? 0 : game.ship.projectileSpeedPerSecond;
   target.cannon.acquireHalfAngle =
     config.cannonWeaponKind === "missile" ? game.ship.friendlyMissileAcquireConeRadians : 0;
   target.machineGun.heat = game.mgHeat;
   target.machineGun.capacity = game.ship.mgHeatCapacity;
   target.machineGun.overheated = game.mgOverheated;
+  // Same two numbers as the turret's, read off the nose barrel: what it is, how
+  // far it throws, and how fast, so the display can mark the ship a burst from
+  // it would meet.
+  target.machineGun.kind = config.mgWeaponKind;
+  target.machineGun.reach =
+    config.mgWeaponKind === "laser"
+      ? game.ship.mgLaserRange
+      : (game.ship.mgProjectileSpeedPerSecond * game.ship.projectileLifetimeMs) / 1_000;
+  target.machineGun.speed =
+    config.mgWeaponKind === "laser" ? 0 : game.ship.mgProjectileSpeedPerSecond;
   target.encounter.phase = game.encounterPhase;
   target.encounter.hasOutcome = game.outcome !== null;
   target.encounter.outcome = game.outcome ?? "defeat";

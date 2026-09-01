@@ -67,9 +67,17 @@ describe("display room view", () => {
           overheated: false,
           kind: "kinetic",
           reach: 1500,
+          speed: 1000,
           acquireHalfAngle: 0
         },
-        machineGun: { heat: 30, capacity: 100, overheated: false },
+        machineGun: {
+          heat: 30,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "combat",
           hasOutcome: false,
@@ -190,7 +198,14 @@ describe("display room view", () => {
     expect(view?.game?.hostileProjectiles).toHaveLength(1);
     expect(view?.game?.hostileProjectiles[0]).not.toHaveProperty("source");
     expect(view?.game?.spaceship.heading).toBe(Math.PI / 3);
-    expect(view?.game?.machineGun).toEqual({ heat: 30, capacity: 100, overheated: false });
+    expect(view?.game?.machineGun).toEqual({
+      heat: 30,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
     expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
     expect(view?.game?.encounter.outcome).toBeNull();

@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 43 as const;
+export const PROTOCOL_VERSION = 45 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -231,14 +231,34 @@ export const publicCannonViewSchema = z
     ...weaponHeatShape,
     kind: friendlyWeaponKindSchema,
     reach: finite.nonnegative(),
+    /**
+     * How fast a shot travels, so a client can work out where a shot fired now
+     * would meet a moving ship. Zero means it does not travel at all: a beam
+     * arrives in the tick it is fired, and is aimed at the target rather than
+     * ahead of it.
+     */
+    speed: finite.nonnegative(),
     acquireHalfAngle: finite.nonnegative()
   })
   .strict()
   .superRefine(refineHeat);
 export type PublicCannonView = z.infer<typeof publicCannonViewSchema>;
 
-export const publicMachineGunViewSchema = publicWeaponHeatViewSchema;
-export type PublicMachineGunView = PublicWeaponHeatView;
+/**
+ * The nose gun says what it is and how far it throws, but nothing about a cone:
+ * the pilot flies the bore, so there is no envelope to read - only the ship it
+ * is about to be fired into, which the display marks.
+ */
+export const publicMachineGunViewSchema = z
+  .object({
+    ...weaponHeatShape,
+    kind: friendlyWeaponKindSchema,
+    reach: finite.nonnegative(),
+    speed: finite.nonnegative()
+  })
+  .strict()
+  .superRefine(refineHeat);
+export type PublicMachineGunView = z.infer<typeof publicMachineGunViewSchema>;
 
 export const publicEncounterViewSchema = z
   .object({

@@ -432,9 +432,17 @@ function createPreviewGame(
         overheated: false,
         kind: "kinetic",
         reach: 1500,
+        speed: 1000,
         acquireHalfAngle: 0
       },
-      machineGun: { heat: 46, capacity: 100, overheated: false },
+      machineGun: {
+        heat: 46,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 620,
+        speed: 900
+      },
       encounter: {
         phase: "combat",
         outcome: null,
@@ -591,9 +599,17 @@ function createPreviewGame(
         overheated: false,
         kind: "kinetic",
         reach: 1500,
+        speed: 1000,
         acquireHalfAngle: 0
       },
-      machineGun: { heat: 0, capacity: 100, overheated: false },
+      machineGun: {
+        heat: 0,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 620,
+        speed: 900
+      },
       encounter: {
         phase: "intermission",
         outcome: null,
@@ -666,9 +682,17 @@ function createPreviewGame(
       overheated: true,
       kind: "kinetic",
       reach: 1500,
+      speed: 1000,
       acquireHalfAngle: 0
     },
-    machineGun: { heat: 100, capacity: 100, overheated: true },
+    machineGun: {
+      heat: 100,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    },
     encounter: {
       phase: "result",
       outcome: "defeat",
