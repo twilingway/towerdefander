@@ -386,6 +386,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 3,
+            startDelayTicks: 0,
             spawnIntervalTicks: 40,
             sectors: ["N"],
             hpMultiplier: null,
@@ -433,6 +434,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 2,
+            startDelayTicks: 0,
             spawnIntervalTicks: 30,
             sectors: ["E"],
             hpMultiplier: null,
@@ -489,6 +491,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 2,
+            startDelayTicks: 0,
             spawnIntervalTicks: 30,
             sectors: ["E"],
             hpMultiplier: null,
@@ -535,6 +538,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 2,
+            startDelayTicks: 0,
             spawnIntervalTicks: 30,
             sectors: ["E"],
             hpMultiplier: null,
@@ -580,6 +584,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 2,
+            startDelayTicks: 0,
             spawnIntervalTicks: 30,
             sectors: ["E"],
             hpMultiplier: null,
@@ -867,6 +872,7 @@ describe("version 1 migration", () => {
               {
                 kind: "gunship",
                 count: 7,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 11,
                 sectors: ["N"],
                 hpMultiplier: 1.5,
@@ -944,6 +950,7 @@ describe("version 1 migration", () => {
               {
                 kind: "sniper",
                 count: 4,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 9,
                 sectors: ["SW"],
                 hpMultiplier: 2.25,
@@ -1213,6 +1220,7 @@ describe("version 1 migration", () => {
               {
                 kind: "gunship",
                 count: 2,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 40,
                 sectors: [],
                 hpMultiplier: null,
@@ -1265,6 +1273,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 3,
+            startDelayTicks: 0,
             spawnIntervalTicks: 40,
             sectors: [],
             hpMultiplier: null,
@@ -1473,6 +1482,7 @@ describe("balance routes", () => {
               {
                 kind: "gunship",
                 count: 3,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 40,
                 sectors: ["N"],
                 hpMultiplier: null,
