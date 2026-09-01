@@ -208,7 +208,7 @@ describe("circular combat spawning and movement", () => {
           {
             kind: "gunship" as const,
             planSequence: 0,
-            spawnIntervalTicks: 12,
+            dueTick: 0,
             sectors: [],
             hpMultiplier: null,
             tempoMultiplier: null
@@ -240,7 +240,7 @@ describe("circular combat spawning and movement", () => {
           {
             kind: "asteroid",
             planSequence: 0,
-            spawnIntervalTicks: 12,
+            dueTick: 0,
             sectors: [],
             hpMultiplier: null,
             tempoMultiplier: null
@@ -486,7 +486,7 @@ describe("ambient asteroid scheduler", () => {
         {
           kind: "gunship",
           planSequence: 0,
-          spawnIntervalTicks: 12,
+          dueTick: 0,
           sectors: [],
           hpMultiplier: null,
           tempoMultiplier: null
@@ -565,7 +565,7 @@ describe("ambient asteroid scheduler", () => {
         {
           kind: "asteroid",
           planSequence: 0,
-          spawnIntervalTicks: 12,
+          dueTick: 0,
           sectors: [],
           hpMultiplier: null,
           tempoMultiplier: null

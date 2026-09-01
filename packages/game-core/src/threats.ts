@@ -3,7 +3,8 @@ import {
   type CombatEnemyState,
   type CombatStepState,
   type FriendlyProjectileLike,
-  type HomingMissileState
+  type HomingMissileState,
+  type PendingSpawn
 } from "./combatTypes.ts";
 import {
   ENEMY_PRESS_SHARE,
@@ -161,14 +162,25 @@ export function moveAndSpawnThreats(
 
   let pendingSpawns = state.pendingSpawns;
   let spawnRngState = state.spawnRngState;
-  let nextWaveSpawnTick = state.nextWaveSpawnTick;
-  if (pendingSpawns.length > 0 && state.encounterTick >= nextWaveSpawnTick) {
-    const pending = pendingSpawns[0];
-    if (
-      pending !== undefined &&
-      canSpawnKind(config, pending.kind, enemies, asteroids, workingDynamicCount) &&
-      !(waitsForClearedWave(config, pending.kind) && hasLiveWaveThreats(enemies, asteroids))
-    ) {
+  // Everything whose tick has come, in plan order. One arrival per tick was a
+  // queue with a delay, and it played as blocks of one kind; the plan now says
+  // when each arrival is due and this only honours it. A spawn the caps or the
+  // boss rule refuse keeps its place and comes at the first opportunity.
+  if (pendingSpawns.length > 0) {
+    const held: PendingSpawn[] = [];
+    let released = false;
+    for (const pending of pendingSpawns) {
+      if (pending.dueTick > state.encounterTick) {
+        held.push(pending);
+        continue;
+      }
+      if (
+        !canSpawnKind(config, pending.kind, enemies, asteroids, workingDynamicCount) ||
+        (waitsForClearedWave(config, pending.kind) && hasLiveWaveThreats(enemies, asteroids))
+      ) {
+        held.push(pending);
+        continue;
+      }
       const result = spawnEntity(
         pending.kind,
         "wave",
@@ -182,12 +194,12 @@ export function moveAndSpawnThreats(
       );
       spawnRngState = result.rngState;
       nextSpawnSequence += 1;
-      pendingSpawns = pendingSpawns.slice(1);
-      nextWaveSpawnTick = state.encounterTick + pending.spawnIntervalTicks;
+      released = true;
       if (result.enemy !== null) enemies = [...enemies, result.enemy];
       if (result.asteroid !== null) asteroids = [...asteroids, result.asteroid];
       workingDynamicCount += 1;
     }
+    if (released) pendingSpawns = held;
   }
 
   let ambientAsteroidRngState = state.ambientAsteroidRngState;
@@ -228,7 +240,6 @@ export function moveAndSpawnThreats(
     homingMissiles,
     pendingSpawns,
     spawnRngState,
-    nextWaveSpawnTick,
     ambientAsteroidRngState,
     ambientAsteroidSpawnDueTick,
     nextSpawnSequence

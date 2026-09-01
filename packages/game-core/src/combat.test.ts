@@ -42,6 +42,7 @@ function bossAfterEscortConfig() {
             {
               kind: "gunship",
               count: 1,
+              startDelayTicks: 0,
               spawnIntervalTicks: 1,
               sectors: [],
               hpMultiplier: null,
@@ -50,6 +51,7 @@ function bossAfterEscortConfig() {
             {
               kind: "boss",
               count: 1,
+              startDelayTicks: 0,
               spawnIntervalTicks: 1,
               sectors: [],
               hpMultiplier: null,
@@ -75,6 +77,7 @@ function scriptedCampaignConfig() {
             {
               kind: "gunship",
               count: 3,
+              startDelayTicks: 0,
               spawnIntervalTicks: 3,
               sectors: ["N"],
               hpMultiplier: null,
@@ -83,6 +86,7 @@ function scriptedCampaignConfig() {
             {
               kind: "asteroid",
               count: 1,
+              startDelayTicks: 4,
               spawnIntervalTicks: 9,
               sectors: ["SE"],
               hpMultiplier: null,
@@ -97,6 +101,7 @@ function scriptedCampaignConfig() {
             {
               kind: "asteroid",
               count: 2,
+              startDelayTicks: 0,
               spawnIntervalTicks: 5,
               sectors: [],
               hpMultiplier: null,
@@ -247,13 +252,16 @@ describe("deterministic combat foundation", () => {
     );
   });
 
-  it("builds a scripted wave exactly as configured and keeps it seed independent", () => {
+  it("builds a scripted wave as a schedule and keeps it seed independent", () => {
     const config = scriptedCampaignConfig();
     const plan = createWavePlan(config, 91, 1).plan;
-    expect(plan.map(({ kind }) => kind)).toEqual(["gunship", "gunship", "gunship", "asteroid"]);
+    // Three gunships every three ticks from zero, one rock at four: the rock
+    // lands between the second and the third, where the schedule puts it, and
+    // not after the whole group the way the queue used to play it.
+    expect(plan.map(({ kind }) => kind)).toEqual(["gunship", "gunship", "asteroid", "gunship"]);
+    expect(plan.map(({ dueTick }) => dueTick)).toEqual([0, 3, 4, 6]);
     expect(createWavePlan(config, 4242, 1).plan).toEqual(plan);
-    expect(plan.map(({ spawnIntervalTicks }) => spawnIntervalTicks)).toEqual([3, 3, 3, 9]);
-    expect(plan.map(({ sectors }) => sectors)).toEqual([["N"], ["N"], ["N"], ["SE"]]);
+    expect(plan.map(({ sectors }) => sectors)).toEqual([["N"], ["N"], ["SE"], ["N"]]);
   });
 
   it("falls back to the director past the last scripted wave", () => {
@@ -266,19 +274,30 @@ describe("deterministic combat foundation", () => {
     expect(createWavePlan(config, 91, 3)).toEqual(directed);
   });
 
-  it("honours per-entry spawn intervals when draining a scripted wave", () => {
+  it("releases a scripted wave on its schedule, interleaving the groups", () => {
     const config = scriptedCampaignConfig();
     let state = createSpaceshipSimulationState(config, 12);
-    const spawnTicks: number[] = [];
+    const arrivals: { readonly tick: number; readonly kinds: readonly string[] }[] = [];
     let previousPending = state.pendingSpawns.length;
+    let previousKinds = 0;
     for (let step = 0; step < 12; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
       if (state.pendingSpawns.length < previousPending) {
-        spawnTicks.push(state.encounterTick);
+        const spawned = [
+          ...state.enemies.map(({ kind }) => kind),
+          ...state.asteroids.map(() => "asteroid")
+        ];
+        arrivals.push({ tick: state.encounterTick, kinds: spawned.slice(previousKinds) });
+        previousKinds = spawned.length;
         previousPending = state.pendingSpawns.length;
       }
     }
-    expect(spawnTicks).toEqual([1, 4, 7, 10]);
+    // Gunships at 0, 3 and 6, the rock at 4: it arrives between the second and
+    // the third, not after the whole group the way a queue used to play it.
+    expect(arrivals.map(({ tick }) => tick)).toEqual([1, 4, 5, 7]);
+    expect(arrivals.some(({ kinds }) => kinds.includes("asteroid"))).toBe(true);
+    const asteroidAt = arrivals.findIndex(({ kinds }) => kinds.includes("asteroid"));
+    expect(asteroidAt).toBe(2);
   });
 
   it("keeps scripted spawns inside their configured sector", () => {
@@ -411,6 +430,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "gunship",
                 count: 12,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: ["N", "S"],
                 hpMultiplier: null,
@@ -466,6 +486,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "eliteGunship",
                 count: 2,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: [],
                 hpMultiplier: null,
@@ -498,6 +519,7 @@ describe("deterministic combat foundation", () => {
                 {
                   kind: "dreadnought",
                   count: 1,
+                  startDelayTicks: 0,
                   spawnIntervalTicks: 12,
                   sectors: [],
                   hpMultiplier: null,
@@ -740,6 +762,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "gunship",
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: [],
                 hpMultiplier: 4,
@@ -748,6 +771,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "gunship",
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: [],
                 hpMultiplier: null,

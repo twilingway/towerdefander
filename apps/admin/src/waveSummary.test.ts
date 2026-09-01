@@ -140,6 +140,7 @@ function tuning(): BalanceTuning {
             {
               kind: "gunship",
               count: 3,
+              startDelayTicks: 0,
               spawnIntervalTicks: 20,
               sectors: ["N"],
               hpMultiplier: null,
@@ -148,6 +149,7 @@ function tuning(): BalanceTuning {
             {
               kind: "asteroid",
               count: 2,
+              startDelayTicks: 30,
               spawnIntervalTicks: 10,
               sectors: [],
               hpMultiplier: null,
@@ -302,7 +304,9 @@ describe("wave summary", () => {
     const summary = summariseWave(value, wave, 1);
     expect(summary.threatCount).toBe(5);
     expect(summary.spawnCost).toBe(3 * 2 + 2 * 1);
-    expect(summary.spawnSeconds).toBeCloseTo((3 * 20 + 2 * 10) * 0.05);
+    // The wave lasts as long as its last arrival, not as the sum of both waits:
+    // the first group ends at tick 40, the second starts at 30 and ends at 40.
+    expect(summary.spawnSeconds).toBeCloseTo(40 * 0.05);
   });
 
   it("flags a wave that costs more than the director budget of the same number", () => {

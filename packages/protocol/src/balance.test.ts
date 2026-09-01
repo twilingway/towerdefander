@@ -159,6 +159,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
             {
               kind: "gunship",
               count: 2,
+              startDelayTicks: 0,
               spawnIntervalTicks: 12,
               sectors: ["N"],
               hpMultiplier: null,
@@ -418,6 +419,7 @@ describe("balance tuning schema", () => {
               {
                 kind,
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 12,
                 sectors: [],
                 hpMultiplier: null,
@@ -446,6 +448,7 @@ describe("balance tuning schema", () => {
               {
                 kind: "gunship",
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 12,
                 sectors: ["UP"],
                 hpMultiplier: null,

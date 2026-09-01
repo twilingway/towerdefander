@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 30 as const;
+export const BALANCE_FILE_VERSION = 31 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29
+  28, 29, 30
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -287,6 +287,12 @@ export const waveSpawnEntrySchema = z
   .object({
     kind: spawnKindSchema,
     count: positiveInteger.max(200),
+    /**
+     * Ticks from the start of the wave to this group's first arrival. The wave
+     * is a schedule: two groups with different starts arrive interleaved, and
+     * the order they are written in decides nothing.
+     */
+    startDelayTicks: nonNegativeInteger.max(20_000),
     spawnIntervalTicks: positiveInteger.max(20_000),
     // Empty means the whole circumference; several sectors are picked between per spawn.
     sectors: z.array(spawnSectorSchema).max(SPAWN_SECTORS.length).readonly(),

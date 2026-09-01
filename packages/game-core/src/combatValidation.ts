@@ -330,6 +330,9 @@ export function validateWaveCampaign(config: CombatConfig): void {
       if (!Number.isSafeInteger(entry.spawnIntervalTicks) || entry.spawnIntervalTicks <= 0) {
         throw new RangeError(`${entryLabel}.spawnIntervalTicks must be a positive safe integer`);
       }
+      if (!Number.isSafeInteger(entry.startDelayTicks) || entry.startDelayTicks < 0) {
+        throw new RangeError(`${entryLabel}.startDelayTicks must be a non-negative safe integer`);
+      }
       for (const sector of entry.sectors) {
         if (!SPAWN_SECTORS.includes(sector)) {
           throw new RangeError(`${entryLabel}.sectors contains an unknown spawn sector`);

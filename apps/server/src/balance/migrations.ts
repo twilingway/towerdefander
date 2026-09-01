@@ -38,6 +38,9 @@ function migrateEntry(entry: unknown): unknown {
   const migrated: LegacyRecord = {
     ...entry,
     sectors: entry.sectors ?? (typeof sector === "string" ? [sector] : []),
+    // Version 30 played a wave as a queue, so every group started at zero and
+    // waited its turn. Keeping that start preserves the wave as it was written.
+    startDelayTicks: entry.startDelayTicks ?? 0,
     hpMultiplier: entry.hpMultiplier ?? null,
     tempoMultiplier: entry.tempoMultiplier ?? null
   };

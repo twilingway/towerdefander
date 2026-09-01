@@ -283,6 +283,22 @@ function backfillArchetypes(saved) {
   );
 }
 
+/**
+ * A saved wave predates the schedule and has no start on its groups; the stand
+ * reads the preset raw, without the server's migration, so it fills the field
+ * the way that migration would. Same shape of trap as the archetypes above.
+ */
+function backfillWaves(campaign) {
+  if (campaign?.waves === undefined) return undefined;
+  return {
+    ...campaign,
+    waves: campaign.waves.map((wave) => ({
+      ...wave,
+      entries: (wave.entries ?? []).map((entry) => ({ startDelayTicks: 0, ...entry }))
+    }))
+  };
+}
+
 /** Every preset in the document, so the batch can sweep them by id. */
 export async function readPresets(presetPath) {
   const raw = presetPath ?? defaultPresetPath();
@@ -301,10 +317,15 @@ export async function readTuning(presetPath, presetId) {
     throw new Error(`No preset "${String(wanted)}" with a tuning in ${String(presetPath)}`);
   }
   const enemyArchetypes = backfillArchetypes(tuning.enemyArchetypes);
+  const waveCampaign = backfillWaves(tuning.waveCampaign);
   return {
     presetId: chosen.id,
     presetName: chosen.name ?? chosen.id,
-    tuning: enemyArchetypes === undefined ? tuning : { ...tuning, enemyArchetypes }
+    tuning: {
+      ...tuning,
+      ...(enemyArchetypes === undefined ? {} : { enemyArchetypes }),
+      ...(waveCampaign === undefined ? {} : { waveCampaign })
+    }
   };
 }
 

@@ -76,6 +76,8 @@ export type SpawnSector = (typeof SPAWN_SECTORS)[number];
 export interface WaveSpawnEntry {
   readonly kind: SpawnKind;
   readonly count: number;
+  /** Ticks from the start of the wave to this group's first arrival. */
+  readonly startDelayTicks: number;
   readonly spawnIntervalTicks: number;
   /** Empty means the whole circumference. */
   readonly sectors: readonly SpawnSector[];
@@ -379,7 +381,8 @@ export interface HomingMissileState extends MovingEntity {
 export interface PendingSpawn {
   readonly kind: SpawnKind;
   readonly planSequence: number;
-  readonly spawnIntervalTicks: number;
+  /** Encounter tick this one is due at, counted from the start of the wave. */
+  readonly dueTick: number;
   readonly sectors: readonly SpawnSector[];
   readonly hpMultiplier: number | null;
   readonly tempoMultiplier: number | null;
@@ -407,7 +410,6 @@ export interface CombatStateFields {
   readonly score: number;
   readonly credits: number;
   readonly nextSpawnSequence: number;
-  readonly nextWaveSpawnTick: number;
   readonly pendingSpawns: readonly PendingSpawn[];
   readonly enemies: readonly CombatEnemyState[];
   readonly asteroids: readonly AsteroidState[];

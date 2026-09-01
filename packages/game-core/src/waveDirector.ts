@@ -45,6 +45,15 @@ export function createWavePlan(
   return createDirectedWavePlan(config, waveNumber, rngState);
 }
 
+/**
+ * A wave is a schedule, not a queue.
+ *
+ * Each group is laid out from its own start at its own interval, and the whole
+ * list is then sorted by arrival. Written as a queue it played as blocks — every
+ * interceptor, then every rock, then every gunship — because the order entries
+ * happen to be written in decided who came first. Ties keep the authoring order,
+ * so two groups due on the same tick stay deterministic.
+ */
 export function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSpawn[] {
   const plan: PendingSpawn[] = [];
   for (const entry of wave.entries) {
@@ -52,14 +61,16 @@ export function createScriptedWavePlan(wave: WaveDefinition): readonly PendingSp
       plan.push({
         kind: entry.kind,
         planSequence: plan.length,
-        spawnIntervalTicks: entry.spawnIntervalTicks,
+        dueTick: entry.startDelayTicks + index * entry.spawnIntervalTicks,
         sectors: entry.sectors,
         hpMultiplier: entry.hpMultiplier,
         tempoMultiplier: entry.tempoMultiplier
       });
     }
   }
-  return plan;
+  return [...plan].sort(
+    (left, right) => left.dueTick - right.dueTick || left.planSequence - right.planSequence
+  );
 }
 
 export function findBossKindForWave(
@@ -139,7 +150,8 @@ export function createDirectedWavePlan(
     plan: kinds.map((kind, planSequence) => ({
       kind,
       planSequence,
-      spawnIntervalTicks: config.enemySpawnIntervalTicks,
+      // The director keeps its old cadence: one arrival per interval.
+      dueTick: planSequence * config.enemySpawnIntervalTicks,
       sectors: [],
       hpMultiplier: null,
       tempoMultiplier: null

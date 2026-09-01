@@ -34,6 +34,7 @@ function createEntry(tuning: BalanceTuning): WaveSpawnEntry {
   return {
     kind: first,
     count: 2,
+    startDelayTicks: 0,
     spawnIntervalTicks: 12,
     sectors: [DEFAULT_SECTOR],
     hpMultiplier: null,
@@ -91,12 +92,14 @@ export function WavesScreen({ tuning, onChange }: WavesScreenProps) {
         </p>
         <p className="screen__hint">
           <strong>Тип</strong> — кто спавнится, в скобках его цена в бюджете директора.{" "}
-          <strong>Количество</strong> — сколько штук в группе. <strong>Интервал</strong> — пауза
-          между соседними спавнами группы, в секундах (шаг 0.05 с — один шаг симуляции).{" "}
-          <strong>Секторы</strong> — с каких сторон арены они приходят: N сверху, E справа, S снизу,
-          W слева, каждый сектор шириной 45°. Отмечено несколько — каждый спавн случайно берёт один
-          из них; не отмечено ничего — приходят со всей окружности. Точка внутри сектора всегда
-          выбирается случайно от сида забега.
+          <strong>Количество</strong> — сколько штук в группе. <strong>Старт</strong> — на какой
+          секунде волны приходит первый из группы: волна играется расписанием, поэтому группы с
+          разным стартом идут вперемешку, а порядок строк ничего не решает.{" "}
+          <strong>Интервал</strong> — пауза между соседними спавнами группы, в секундах (шаг 0.05 с
+          — один шаг симуляции). <strong>Секторы</strong> — с каких сторон арены они приходят: N
+          сверху, E справа, S снизу, W слева, каждый сектор шириной 45°. Отмечено несколько — каждый
+          спавн случайно берёт один из них; не отмечено ничего — приходят со всей окружности. Точка
+          внутри сектора всегда выбирается случайно от сида забега.
         </p>
       </header>
 
@@ -148,6 +151,7 @@ export function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                   <tr>
                     <th>Тип</th>
                     <th>Количество</th>
+                    <th title="Секунда волны, на которой приходит первый из группы">Старт, с</th>
                     <th title="Пауза между соседними спавнами группы">Интервал, с</th>
                     <th title="Стороны арены, с которых приходит группа">Секторы</th>
                     <th title="HP одной единицы на этой волне с учётом множителя">HP ×</th>
@@ -187,6 +191,23 @@ export function WavesScreen({ tuning, onChange }: WavesScreenProps) {
                               patchEntry(waveIndex, entryIndex, {
                                 count: Math.max(1, Number(event.target.value) || 1)
                               });
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="field__input"
+                            type="number"
+                            step={TICK_SECONDS}
+                            min={0}
+                            value={ticksToSeconds(entry.startDelayTicks)}
+                            onChange={(event) => {
+                              const next = Number(event.target.value);
+                              if (Number.isFinite(next) && next >= 0) {
+                                patchEntry(waveIndex, entryIndex, {
+                                  startDelayTicks: secondsToTicks(next)
+                                });
+                              }
                             }}
                           />
                         </td>

@@ -115,7 +115,13 @@ export function summariseWave(
   for (const entry of wave.entries) {
     threatCount += entry.count;
     spawnCost += spawnCostOf(tuning, entry.kind) * entry.count;
-    spawnTicks += entry.spawnIntervalTicks * entry.count;
+    // The wave is a schedule, so its length is the last arrival on it, not the
+    // sum of every group's waits: two groups running side by side take as long
+    // as the longer one.
+    spawnTicks = Math.max(
+      spawnTicks,
+      entry.startDelayTicks + entry.spawnIntervalTicks * Math.max(0, entry.count - 1)
+    );
   }
   const directorBudget = directorBudgetAt(tuning, waveNumber);
   return {
