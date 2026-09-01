@@ -155,6 +155,13 @@ const FIRE_MEMORY_MS = 8_000;
 /** Close enough to the guessed source to call the guess spent. */
 const FIRE_SOURCE_ARRIVAL = 200;
 /**
+ * How much of the frame has to be between the ship and its guess before the
+ * guess can be checked against what is actually there. Inside this the bot can
+ * see the place it is walking to; outside it, an out-ranging shooter would
+ * still be invisible and the guess is all the evidence there is.
+ */
+const FIRE_SOURCE_VISIBLE_SHARE = 0.5;
+/**
  * How far off course the pilot will go for salvage while a fight is still on.
  * About two seconds of cruise: far enough to take what fell in the fight the
  * crew is already in, short enough not to leave it.
@@ -840,6 +847,19 @@ function insideArena(world, point) {
  * launches from beyond it too, so their shots are the only evidence of them
  * the bot ever gets. Walking one back points at whatever fired it.
  */
+/**
+ * A guess that has come into view with nothing standing on it. A shot outlives
+ * the ship that fired it, so the last round from a wing that is already dead
+ * arms a guess nobody is left to occupy - and the bot used to fly at it for the
+ * full eight seconds, into an empty corner or into the rim.
+ */
+function sourceIsSpent(world, point) {
+  if (distanceBetween(world.ship, point) > world.cameraViewWidth * FIRE_SOURCE_VISIBLE_SHARE) {
+    return false;
+  }
+  return !world.enemies.some((enemy) => distanceBetween(enemy, point) <= FIRE_SOURCE_ARRIVAL);
+}
+
 export function huntVector(world, memory, nowMs) {
   let nearest;
   for (const shot of [...world.bullets, ...world.missiles]) {
@@ -874,7 +894,8 @@ export function huntVector(world, memory, nowMs) {
   // Spent when it goes stale or when the bot gets there and finds nothing.
   if (
     nowMs - memory.firedFromAtMs > FIRE_MEMORY_MS ||
-    Math.hypot(toSource.x, toSource.y) < FIRE_SOURCE_ARRIVAL
+    Math.hypot(toSource.x, toSource.y) < FIRE_SOURCE_ARRIVAL ||
+    sourceIsSpent(world, memory.firedFrom)
   ) {
     memory.firedFrom = undefined;
     return undefined;

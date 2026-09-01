@@ -186,6 +186,25 @@ test("with nothing on the screen the bot turns rather than backs", () => {
   assert.ok(plan.thrust >= 0);
 });
 
+test("a shot from a ship already dead stops being hunted once its guess is in view", () => {
+  const memory = createAutopilotMemory();
+  const incoming = world({
+    bullets: [entity("stray", 1, { x: 2200 + 300, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  assert.notEqual(huntVector(incoming, memory, 0), undefined);
+  assert.notEqual(memory.firedFrom, undefined);
+
+  // The wing that fired it is gone: nothing on screen, and the guess is now
+  // half a frame away, which is close enough to see that nobody is standing on
+  // it. It used to be flown at for the full eight seconds - into an empty
+  // corner, or into the rim.
+  const inView = world({
+    ship: { ...world().ship, x: memory.firedFrom.x - 600, y: memory.firedFrom.y }
+  });
+  assert.equal(huntVector(inView, memory, 100), undefined);
+  assert.equal(memory.firedFrom, undefined);
+});
+
 test("an empty screen is searched nose first", () => {
   // Nose pointing the opposite way to the course, which is where a fight leaves
   // it. Read as a manoeuvre this is a reverse, the latch holds it while the
