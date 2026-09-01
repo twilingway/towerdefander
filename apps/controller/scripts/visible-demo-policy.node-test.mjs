@@ -798,46 +798,31 @@ function rockAt(entityId, spawnSequence, x, y, velocityX, velocityY) {
   return entity(entityId, spawnSequence, { x, y, velocityX, velocityY, hp: 65, maxHp: 65 });
 }
 
-test("a rock already past the rim and still heading out is not a target", () => {
-  // Arena centre is 2200,2200 with radius 2200: 4300 on x is outside it.
-  const leaving = world({
-    cameraViewWidth: 4400,
-    ship: {
-      x: 4000,
-      y: 2200,
-      heading: 0,
-      velocityX: 0,
-      velocityY: 0,
-      radius: 52,
-      hp: 500,
-      maxHp: 500
-    },
-    asteroids: [rockAt("outbound", 1, 4500, 2200, 190, 0)]
-  });
-  assert.deepEqual(rankTargets(leaving), []);
-  assert.equal(planGunner(leaving, ACE, createAutopilotMemory()).firing, false);
-
-  // The same rock on its way back in is still worth shooting.
-  const returning = world({
-    cameraViewWidth: 4400,
-    ship: {
-      x: 4000,
-      y: 2200,
-      heading: 0,
-      velocityX: 0,
-      velocityY: 0,
-      radius: 52,
-      hp: 500,
-      maxHp: 500
-    },
-    asteroids: [rockAt("inbound", 1, 4500, 2200, -190, 0)]
-  });
-  assert.equal(rankTargets(returning).length, 1);
+test("a rock is never a target, wherever it is and whichever way it drifts", () => {
+  // Arena centre is 2200,2200 with radius 2200, so these three cover the lot:
+  // outside and leaving, outside and coming back, and drifting inside.
+  const rocks = [
+    rockAt("outbound", 1, 4500, 2200, 190, 0),
+    rockAt("inbound", 1, 4500, 2200, -190, 0),
+    rockAt("drifting", 1, 2600, 2200, 190, 0)
+  ];
+  for (const rock of rocks) {
+    const scene = world({ asteroids: [rock] });
+    assert.deepEqual(rankTargets(scene), [], `${rock.entityId} was ranked`);
+    assert.equal(planGunner(scene, ACE, createAutopilotMemory()).firing, false);
+  }
 });
 
-test("a rock inside the arena stays a target whichever way it drifts", () => {
-  const inside = world({ asteroids: [rockAt("drifting", 1, 2600, 2200, 190, 0)] });
-  assert.equal(rankTargets(inside).length, 1);
+test("a rock never breaks the course either: the shield is what answers it", () => {
+  // A rock closing head-on from +x while the ship is closing on an enemy that
+  // way. A break would throw the course sideways; the rock raises none, so the
+  // pilot keeps pressing.
+  const scene = world({
+    enemies: [enemyAt("target", 1, 2200 + 1500, 2200)],
+    asteroids: [rockAt("incoming", 2, 2200 + 300, 2200, -300, 0)]
+  });
+  const pilot = planPilot(scene, { ...ACE, evadeMissiles: false }, createAutopilotMemory());
+  assert.ok(pilot.vector.x > 0.5, "the rock threw the pilot off its approach");
 });
 
 test("an empty screen never leaves the pilot parked", () => {
@@ -904,12 +889,10 @@ test("a rock on screen does not call off the hunt for an unseen shooter", () => 
   const pilot = planPilot(scene, { ...ACE, dodgeBullets: false }, memory);
   assert.ok(pilot.vector.x > 0.9);
 
-  // The gunner still has a target: the rock is worth credits.
-  assert.equal(
-    planGunner(scene, { ...ACE, dodgeBullets: false }, memory).firing !== undefined,
-    true
-  );
-  assert.equal(memory.target.entityId, "rock");
+  // The gunner has nothing to hold: a rock is not a target, so the mount waits
+  // for the ship the pilot is closing on instead of spending its traverse.
+  assert.equal(planGunner(scene, { ...ACE, dodgeBullets: false }, memory).firing, false);
+  assert.equal(memory.target, undefined);
 });
 
 test("a visible enemy outranks the hunt", () => {

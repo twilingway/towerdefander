@@ -424,18 +424,6 @@ export function extrapolateWorld(world, nowMs, options = {}) {
   };
 }
 
-/**
- * Already past the rim and still heading out. Enemies are held inside the
- * arena by the simulation, but asteroids drift through it and then despawn, so
- * one that is on its way out is not worth a shot or a turret traverse.
- */
-function isLeavingArena(world, entity) {
-  const offsetX = entity.x - world.worldWidth / 2;
-  const offsetY = entity.y - world.worldHeight / 2;
-  if (Math.hypot(offsetX, offsetY) <= world.arenaRadius) return false;
-  return offsetX * entity.velocityX + offsetY * entity.velocityY >= 0;
-}
-
 function maxEngagementRange(archetype) {
   return archetype.weapons.reduce((widest, weapon) => Math.max(widest, weapon.engagementRange), 0);
 }
@@ -444,6 +432,10 @@ function maxEngagementRange(archetype) {
  * One ranking shared by both gunners. Interceptable missiles outrank everything
  * because they are lethal and destructible; a boss outranks ordinary ships; an
  * enemy already inside its own engagement range outranks one still approaching.
+ *
+ * Rocks are not ranked at all. They are the one threat the shield answers on
+ * its own, and every second the guns spent on them was a second taken from the
+ * ships that do the killing or from salvage on a timer.
  */
 export function rankTargets(world, options = {}) {
   const archetypes = options.archetypes ?? {};
@@ -482,16 +474,6 @@ export function rankTargets(world, options = {}) {
       role: "enemy",
       score:
         (isBoss ? 60 : 30) + (engaging ? 12 : 0) + (outranging ? 18 : 0) + proximity + finishable
-    });
-  }
-
-  for (const rock of world.asteroids) {
-    if (isLeavingArena(world, rock)) continue;
-    const seconds = timeToContact(world.ship, world.shieldRadius, rock);
-    scored.push({
-      entity: rock,
-      role: "asteroid",
-      score: seconds === undefined ? 4 : 25 - seconds * 2
     });
   }
 
@@ -781,10 +763,6 @@ function escapeVector(world, profile) {
     for (const bullet of world.bullets) {
       const seconds = timeToContact(world.ship, world.ship.radius, bullet);
       if (seconds !== undefined) threats.push({ threat: bullet, seconds, kind: "bullet" });
-    }
-    for (const rock of world.asteroids) {
-      const seconds = timeToContact(world.ship, world.ship.radius, rock);
-      if (seconds !== undefined) threats.push({ threat: rock, seconds, kind: "asteroid" });
     }
   }
 
@@ -1114,14 +1092,10 @@ function planPilotCourse(world, profile, memory, options) {
 
   // The break outranks every manoeuvre, but the gun does not stop: firing is a
   // question of where the nose already points, and a long evasion swings it
-  // across targets that are worth the burst.
-  //
-  // A rock is the exception. It is slow, it can be shot, the shield covers it,
-  // and it will still be dodgeable in a second - while the repair on the field
-  // is on a fifteen-second clock. Breaking from rocks is what made the bot look
-  // like it was chasing them instead of collecting: on a field of ambient
-  // asteroids the break fires over and over and the drop is never reached.
-  if (escape !== undefined && !(escape.kind === "asteroid" && drop !== undefined)) {
+  // across targets that are worth the burst. Rocks never raise a break at all
+  // - the shield is what answers them - so nothing here has to hold the course
+  // against them any more.
+  if (escape !== undefined) {
     return { vector: escape.vector, mgFiring };
   }
 
@@ -1136,9 +1110,6 @@ function planPilotCourse(world, profile, memory, options) {
   // Without the orbit skill the pilot keeps the old circular patrol.
   if (!profile.orbit) return { vector: pilotVector(nowMs), mgFiring };
 
-  // A rock on screen is work for the guns, never a reason to stop hunting: the
-  // ships that actually kill the crew shoot from outside the camera frame, and
-  // the turret keeps servicing the rock while the pilot goes after them.
   // Nothing to press: walk the shots back to whoever is firing them.
   // Nothing to press and nothing to keep in the bore: whatever this course is,
   // it is a crossing rather than a manoeuvre, so the hull turns onto it.
