@@ -29,8 +29,8 @@ const TICKS_PER_SECOND = 20;
  * what stands here is only what a file written before them gets.
  */
 const FALLBACK_AUTHORING = {
-  budgetBase: 6,
-  budgetGrowth: 1.6,
+  budgetBase: 10,
+  budgetGrowth: 2.2,
   asteroidEveryWaves: 3,
   hpPerCannonShot: 25,
   hpScale: 0.75,
@@ -1085,8 +1085,12 @@ const AUTOPILOT_PROFILES = {
  */
 const AUTOPILOT_BY_KIND = {
   laser: {
-    veteran: { orbit: true, reactionTicks: 20, mgConeRadians: 0.35, mgHeatCeiling: 0.7 },
-    ace: { orbit: true, reactionTicks: 20, mgConeRadians: 0.5, mgHeatCeiling: 0.95 }
+    // A beam either crosses the target this instant or it does not, so the
+    // sideways half of an orbit is time the barrel spends off bearing. The
+    // veteran was circling with a hand that shakes and reached wave thirty in
+    // 15% of its runs, against 40% for the beginner who bores straight in.
+    veteran: { orbit: false, reactionTicks: 20, mgConeRadians: 0.35, mgHeatCeiling: 0.7 },
+    ace: { orbit: false, reactionTicks: 20, mgConeRadians: 0.5, mgHeatCeiling: 0.95 }
   },
   missile: {
     veteran: {
