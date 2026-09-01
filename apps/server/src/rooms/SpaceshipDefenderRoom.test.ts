@@ -1082,22 +1082,22 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       waveNumber: 1,
       encounterTick: 0,
       phaseTicksRemaining: 0,
-      waveSecondsRemaining: 1200,
+      waveSecondsRemaining: 300,
       score: 0
     });
   });
 
-  it("resets the 20-minute deadline only when the next combat wave starts", () => {
+  it("resets the five-minute deadline only when the next combat wave starts", () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
     try {
       const { room } = startGame();
       const runtime = internals(room);
-      expect(runtime.waveDeadlineAtMs).toBe(1_210_000);
+      expect(runtime.waveDeadlineAtMs).toBe(310_000);
 
       now.mockReturnValue(20_000);
       room.advanceGameStep();
-      expect(runtime.waveDeadlineAtMs).toBe(1_210_000);
-      expect(room.state.game.encounter.waveSecondsRemaining).toBe(1190);
+      expect(runtime.waveDeadlineAtMs).toBe(310_000);
+      expect(room.state.game.encounter.waveSecondsRemaining).toBe(290);
 
       forceIntermission(room);
       expect(runtime.waveDeadlineAtMs).toBeUndefined();
@@ -1108,9 +1108,9 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       expect(room.state.game.encounter).toMatchObject({
         phase: "combat",
         waveNumber: 2,
-        waveSecondsRemaining: 1200
+        waveSecondsRemaining: 300
       });
-      expect(runtime.waveDeadlineAtMs).toBe(1_220_000);
+      expect(runtime.waveDeadlineAtMs).toBe(320_000);
     } finally {
       now.mockRestore();
     }
@@ -1225,7 +1225,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
         ready(room, controller);
       });
       expect(room.state.runNumber).toBe(2);
-      expect(runtime.waveDeadlineAtMs).toBe(firstDeadline + 1_000 + 1_200_000);
+      expect(runtime.waveDeadlineAtMs).toBe(firstDeadline + 1_000 + 300_000);
       expect(runtime.lifecycle.expiresAt("room_lifetime_expired")).toBe(hardCap);
     } finally {
       now.mockRestore();
@@ -1238,13 +1238,13 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       const room = createRoom();
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
       startGame(room);
-      const staleCallback = setTimeout.mock.calls.find((call) => call[1] === 1_200_000)?.[0] as
+      const staleCallback = setTimeout.mock.calls.find((call) => call[1] === 300_000)?.[0] as
         (() => void) | undefined;
       if (staleCallback === undefined) throw new Error("Expected a wave deadline callback.");
 
       forceIntermission(room);
       const generation = internals(room).waveDeadlineGeneration;
-      now.mockReturnValue(1_210_000);
+      now.mockReturnValue(310_000);
       staleCallback();
       expect(internals(room).waveDeadlineGeneration).toBe(generation);
       expect(room.state.game.encounter.phase).toBe("intermission");

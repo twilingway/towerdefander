@@ -145,10 +145,14 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     5 * 60,
     MAX_PHASE_TTL_SECONDS
   );
+  // A wave that cannot be cleared is a lost run, not a longer one. Twenty
+  // minutes was set when a wave dumped its ships in the first thirty seconds
+  // and was over inside a minute; a wave is a two-minute schedule now, so the
+  // deadline has to be close enough to it to mean something.
   const waveTtlSeconds = readIntegerSeconds(
     environment,
     "ROOM_WAVE_TTL_SECONDS",
-    20 * 60,
+    5 * 60,
     MAX_PHASE_TTL_SECONDS
   );
   const absoluteTtlSeconds = readIntegerSeconds(
