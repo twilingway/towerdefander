@@ -14,8 +14,14 @@
     "benchmark:combat": "pnpm --filter @spaceship-defender/server benchmark:combat",
     "stats:autopilot": "pnpm --filter @spaceship-defender/server stats:autopilot",
     "stats:batch": "pnpm --filter @spaceship-defender/server stats:batch",
+    "stats:matrix": "pnpm stats:batch --levels rookie,veteran,ace --hulls guardian,blade,bastion --runs 20 --seed 1 --max-waves 30",
+    "campaign:author": "node apps/server/scripts/author-campaign.mjs",
+    "campaign:preview": "node apps/server/scripts/author-campaign.mjs --dry-run",
     "demo:visible": "node scripts/run-visible-demo.mjs",
     "demo:verify": "cross-env DEMO_HEADLESS=1 DEMO_VERIFY=1 DEMO_BOT_LEVEL=rookie node scripts/run-visible-demo.mjs",
+    "demo:guardian": "cross-env DEMO_SHIP=guardian node scripts/run-visible-demo.mjs",
+    "demo:blade": "cross-env DEMO_SHIP=blade node scripts/run-visible-demo.mjs",
+    "demo:bastion": "cross-env DEMO_SHIP=bastion node scripts/run-visible-demo.mjs",
     "daily:video": "node scripts/daily-video.mjs",
     "daily:dashboard": "node scripts/serve-daily-dashboard.mjs",
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",
@@ -28,7 +34,8 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm smoke:network && pnpm test:e2e",
     "spec": "cross-env OPENSPEC_TELEMETRY=0 openspec",
     "spec:status": "cross-env OPENSPEC_TELEMETRY=0 openspec status",
-    "spec:validate": "cross-env OPENSPEC_TELEMETRY=0 openspec validate --all"
+    "spec:validate": "cross-env OPENSPEC_TELEMETRY=0 openspec validate --all",
+    "demo:boss": "cross-env DEMO_START_WAVE=5 node scripts/run-visible-demo.mjs"
   },
   "devDependencies": {
     "@eslint/js": "latest",

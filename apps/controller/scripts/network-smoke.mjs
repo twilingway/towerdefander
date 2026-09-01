@@ -191,7 +191,7 @@ try {
 
   shieldOpposite = false;
   shieldSurvivalMode = true;
-  await waitFor(() => encounter().phase === "intermission", 90_000);
+  await waitFor(() => encounter().phase === "intermission", 240_000);
   gunnerEnabled = false;
   pilot = await reconnectController(pilot, "intermission");
   const offer = await waitForTeamOffer();
@@ -458,7 +458,10 @@ async function resolveTeamPurchase(firstOffer, firstCard) {
       throw new Error("An unaffordable offer still published a selection.");
 
     gunnerEnabled = true;
-    await waitFor(() => encounter().phase === "intermission", 150_000);
+    // A wave is a schedule now, and its last arrival is a minute or more in:
+    // clearing one and reaching the intermission takes longer than it did when
+    // every wave dumped its ships in the first thirty seconds.
+    await waitFor(() => encounter().phase === "intermission", 300_000);
     gunnerEnabled = false;
     offer = await waitForTeamOffer();
     card = offer.cards[0];
