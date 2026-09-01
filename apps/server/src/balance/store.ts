@@ -70,6 +70,9 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     evadeMissiles: false,
     dodgeBullets: false,
     threatAwareShield: false,
+    // Choosing the distance is part of the craft, so the beginner does not:
+    // it wanders inside its own reach, where more of the field can answer it.
+    standoffShare: 0.6,
     standoffDistance: 700,
     evadeHorizonTicks: 0,
     mgConeRadians: Math.PI,
@@ -88,6 +91,7 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     evadeMissiles: true,
     dodgeBullets: false,
     threatAwareShield: true,
+    standoffShare: 0.85,
     standoffDistance: 400,
     evadeHorizonTicks: 12,
     mgConeRadians: 0.35,
@@ -106,6 +110,7 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     evadeMissiles: true,
     dodgeBullets: true,
     threatAwareShield: true,
+    standoffShare: 0.85,
     standoffDistance: 400,
     evadeHorizonTicks: 12,
     mgConeRadians: 0.5,
@@ -129,10 +134,18 @@ const KINETIC_DELTA: ProfileDelta = {
     reactionTicks: 10,
     leadFactor: 0.6,
     orbit: false,
+    standoffShare: 0.5,
     mgConeRadians: 0.25,
     mgHeatCeiling: 0.6
   },
-  ace: { reactionTicks: 10, leadFactor: 0.6, orbit: false, mgConeRadians: 0.25, mgHeatCeiling: 0.6 }
+  ace: {
+    reactionTicks: 10,
+    leadFactor: 0.6,
+    orbit: false,
+    standoffShare: 0.5,
+    mgConeRadians: 0.25,
+    mgHeatCeiling: 0.6
+  }
 };
 
 /**
@@ -145,6 +158,7 @@ const MISSILE_DELTA: ProfileDelta = {
     leadFactor: 0.6,
     orbit: false,
     evadeMissiles: false,
+    standoffShare: 0.75,
     standoffDistance: 600,
     evadeHorizonTicks: 0,
     cannonConeRadians: 0.12,
@@ -155,6 +169,7 @@ const MISSILE_DELTA: ProfileDelta = {
     leadFactor: 0.6,
     orbit: false,
     evadeMissiles: false,
+    standoffShare: 0.75,
     standoffDistance: 600,
     evadeHorizonTicks: 0,
     cannonConeRadians: 0.12,

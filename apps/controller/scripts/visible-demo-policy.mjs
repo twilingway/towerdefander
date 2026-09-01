@@ -460,12 +460,23 @@ export function rankTargets(world, options = {}) {
 
   for (const missile of world.missiles) {
     const seconds = timeToContact(world.ship, world.shieldRadius, missile);
+    // A missile the shield is already facing is the shield's problem. Shooting
+    // it anyway is how a launcher wins without being fought: it feeds the
+    // turret a target a second, the crew intercepts all of them, and the ship
+    // that keeps firing them is never shot at.
+    const covered =
+      seconds !== undefined &&
+      shieldAlreadyCovers(world, Math.atan2(missile.y - world.ship.y, missile.x - world.ship.x));
     const urgent =
-      seconds !== undefined && (!escortedByBoss || seconds <= ESCORTED_MISSILE_SECONDS);
+      seconds !== undefined && !covered && (!escortedByBoss || seconds <= ESCORTED_MISSILE_SECONDS);
     scored.push({
       entity: missile,
       role: "missile",
-      score: urgent ? 100 - seconds * 10 : 40
+      // Forty for one that is simply not on an intercept course - still lethal,
+      // still destructible, worth the gun when nothing else wants it. Below an
+      // ordinary ship for one the sector is holding, because that one is
+      // already answered.
+      score: urgent ? 100 - seconds * 10 : covered ? 15 : 40
     });
   }
 
@@ -548,15 +559,19 @@ export function commitTarget(ranked, profile, memory, nowMs, world) {
   // switching on every reshuffle leaves the turret permanently in transit and
   // never on target. Spend the traverse already invested unless the newcomer is
   // decisively more dangerous.
+  //
+  // The guard used to hold only while the mount was still crossing, which let
+  // it go at the moment it mattered most: on a screen full of small ships the
+  // proximity score reshuffles every second, so the turret arrived, found the
+  // ranking had moved on, and set off again - a hull surrounded by wreckers
+  // that shot at none of them. It holds whatever the traverse is doing now, and
+  // the ratio is what still lets a boss or an interceptable missile take the
+  // mount: those outscore a swarm ship by far more than half again.
   if (world !== undefined) {
     const committedScore =
       ranked.find(({ entity }) => entity.entityId === memory.target.entityId)?.score ?? 0;
     const bestScore = ranked[0]?.score ?? 0;
-    const aim = directAim(world.ship, memory.target);
-    const pending = Math.abs(shortestAngleDelta(world.turretAngle, Math.atan2(aim.y, aim.x)));
-    if (bestScore <= committedScore * DECISIVE_SCORE_RATIO && pending > TRAVERSE_SETTLE_RADIANS) {
-      return memory.target;
-    }
+    if (bestScore <= committedScore * DECISIVE_SCORE_RATIO) return memory.target;
   }
   if (memory.candidateId !== best.entityId) {
     memory.candidateId = best.entityId;
@@ -952,14 +967,32 @@ function searchVector(world, memory) {
 }
 
 /**
- * The ring the pilot actually holds. A ring wider than the camera frames
- * pushes the target off the screen, and what the bot cannot see it drops, so
- * the operator's number is capped by what a viewer has in front of them. The
- * frame's short side is its height, so that is what bounds it.
+ * The ring the pilot actually holds, measured against the gun rather than
+ * written down.
+ *
+ * A share of the barrel's own reach, because the distance worth holding is a
+ * property of the weapon: a beam that carries nine hundred wants to be fought
+ * at the edge of nine hundred, and a shell that flies fifteen hundred does not
+ * want to be fought at four. A written-down number knows neither, and it knows
+ * nothing at all about the reach the crew bought during the run - the Blade
+ * took a quarter more beam range and went on fighting at the same four hundred.
+ *
+ * The profile's own distance survives as the floor: closer than this the hull
+ * does not want to be, whatever the arithmetic says.
+ *
+ * The frame still caps it, but by its width rather than its height. Bounding a
+ * ring by the short side put every barrel on the same five hundred and sixty:
+ * the beam wants seven hundred and sixty, the launcher eleven hundred, and all
+ * three came back capped to the same number, so the distance stopped saying
+ * anything about the weapon. The width is the honest bound because the hull
+ * closes along its own bearing, and what it is closing on is framed sideways;
+ * the price is that a target held directly above or below can reach the edge.
  */
-export function effectiveStandoff(world, profile) {
-  const halfHeight = (world.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2;
-  return Math.min(profile.standoffDistance, halfHeight * STANDOFF_FRAME_FRACTION);
+export function effectiveStandoff(world, profile, reach) {
+  const frame = (world.cameraViewWidth / 2) * STANDOFF_FRAME_FRACTION;
+  const share = profile.standoffShare ?? 0;
+  const wanted = reach !== undefined && share > 0 ? reach * share : profile.standoffDistance;
+  return Math.min(Math.max(wanted, profile.standoffDistance), frame);
 }
 
 /**
@@ -1016,8 +1049,8 @@ function onStation(distance, standoff, target, memory) {
   return holding;
 }
 
-function orbitVector(world, target, profile, memory, distance) {
-  const standoff = effectiveStandoff(world, profile);
+function orbitVector(world, target, profile, memory, distance, reach) {
+  const standoff = effectiveStandoff(world, profile, reach);
   const radial = normalize({ x: target.x - world.ship.x, y: target.y - world.ship.y });
   let tangential = { x: -radial.y * memory.orbitSign, y: radial.x * memory.orbitSign };
 
@@ -1184,9 +1217,12 @@ function planPilotCourse(world, profile, memory, options) {
   }
 
   const distance = distanceBetween(world.ship, target);
-  const standoff = effectiveStandoff(world, profile);
+  // The gun's own reach, which grows with what the crew bought, so the ring
+  // moves out with it instead of staying where the profile was written.
+  const reach = world.cannon?.reach;
+  const standoff = effectiveStandoff(world, profile, reach);
   if (onStation(distance, standoff, target, memory)) {
     return { vector: onAxis ? ZERO_VECTOR : bearingVector(bearing), mgFiring };
   }
-  return { vector: orbitVector(world, target, profile, memory, distance), mgFiring };
+  return { vector: orbitVector(world, target, profile, memory, distance, reach), mgFiring };
 }

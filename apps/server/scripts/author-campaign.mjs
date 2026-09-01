@@ -1022,6 +1022,7 @@ const AUTOPILOT_PROFILES = {
     reactionTicks: 12,
     retargetIntervalTicks: 40,
     aimJitterRadians: 0.18,
+    standoffShare: 0.6,
     standoffDistance: 550,
     cannonConeRadians: 0.6,
     mgConeRadians: 0.9,
@@ -1043,6 +1044,7 @@ const AUTOPILOT_PROFILES = {
     reactionTicks: 16,
     retargetIntervalTicks: 36,
     aimJitterRadians: 0.12,
+    standoffShare: 0.85,
     standoffDistance: 400,
     cannonConeRadians: 0.2,
     mgConeRadians: 0.3,
@@ -1061,6 +1063,7 @@ const AUTOPILOT_PROFILES = {
     reactionTicks: 10,
     retargetIntervalTicks: 30,
     aimJitterRadians: 0,
+    standoffShare: 0.85,
     standoffDistance: 400,
     cannonConeRadians: 0.06,
     mgConeRadians: 0.25,
@@ -1086,6 +1089,14 @@ const AUTOPILOT_PROFILES = {
  * the barrel had been forgotten.
  */
 const AUTOPILOT_BY_KIND = {
+  kinetic: {
+    // A shell has flight time, so the far half of its reach is where a moving
+    // target is most likely to have left before the shot arrives. The middle
+    // of the reach is the honest ring for it, and it is still twice as far out
+    // as the four hundred the profile used to name.
+    veteran: { standoffShare: 0.5 },
+    ace: { standoffShare: 0.5 }
+  },
   laser: {
     // A beam either crosses the target this instant or it does not, so the
     // sideways half of an orbit is time the barrel spends off bearing. The
@@ -1097,6 +1108,7 @@ const AUTOPILOT_BY_KIND = {
   missile: {
     veteran: {
       reactionTicks: 20,
+      standoffShare: 0.75,
       standoffDistance: 600,
       evadeMissiles: false,
       evadeHorizonTicks: 0,
@@ -1106,6 +1118,7 @@ const AUTOPILOT_BY_KIND = {
     },
     ace: {
       reactionTicks: 20,
+      standoffShare: 0.75,
       standoffDistance: 600,
       evadeMissiles: false,
       evadeHorizonTicks: 0,

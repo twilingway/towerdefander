@@ -87,6 +87,7 @@ function autopilotProfile(): AutopilotProfile {
     evadeMissiles: true,
     dodgeBullets: false,
     threatAwareShield: true,
+    standoffShare: 0.7,
     standoffDistance: 620,
     evadeHorizonTicks: 12,
     mgConeRadians: 0.35,

@@ -205,6 +205,36 @@ test("a shot from a ship already dead stops being hunted once its guess is in vi
   assert.equal(memory.firedFrom, undefined);
 });
 
+test("the fighting ring is measured against the gun, not written down", () => {
+  // Same profile, two barrels: the one that carries twice as far is fought at
+  // twice the distance. A written-down number cannot tell the two apart, and
+  // that is why a hull that bought a quarter more beam range went on fighting
+  // at the four hundred its profile named.
+  // Wide enough that the frame is not what decides either answer.
+  const scene = world({ cameraViewWidth: 8_000 });
+  const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 200 };
+  assert.equal(effectiveStandoff(scene, profile, 1_000), 800);
+  assert.equal(effectiveStandoff(scene, profile, 2_000), 1_600);
+});
+
+test("the profile distance is the floor under the ring, and the frame is the ceiling", () => {
+  const scene = world({ cameraViewWidth: 6_000 });
+  const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 900 };
+  // A short barrel does not drag the pilot into the swarm: the floor holds.
+  assert.equal(effectiveStandoff(scene, profile, 400), 900);
+
+  // And nothing is held further out than the crew can see it happen.
+  const narrow = world({ cameraViewWidth: 1_600 });
+  const framed = effectiveStandoff(narrow, { ...profile, standoffDistance: 200 }, 5_000);
+  assert.ok(framed <= 640, `the frame did not cap the ring: ${String(framed)}`);
+});
+
+test("a profile with no share keeps the distance it names", () => {
+  const scene = world({ cameraViewWidth: 6_000 });
+  const profile = { ...ACE, standoffShare: 0, standoffDistance: 640 };
+  assert.equal(effectiveStandoff(scene, profile, 2_000), 640);
+});
+
 test("an empty screen is searched nose first", () => {
   // Nose pointing the opposite way to the course, which is where a fight leaves
   // it. Read as a manoeuvre this is a reverse, the latch holds it while the
@@ -237,13 +267,14 @@ test("the helm backs up only for a course well astern", () => {
 });
 
 test("a manoeuvre is held until its band is properly left", () => {
-  // The stand-off ring is 360 units here (the camera frame clamps it), so the
-  // entry band ends at 414 and the release band at 437. The second sample is a
-  // tick later, because the pilot re-reads a target only once per tick.
-  const onStation = world({ enemies: [enemyAt("target", 1, 2_600, 2_200)] });
+  // The ring is 640 units here (the camera frame clamps it across its width),
+  // so the entry band ends at 736 and the release band at 777. The second
+  // sample is a tick later, because the pilot re-reads a target only once per
+  // tick.
+  const onStation = world({ enemies: [enemyAt("target", 1, 2_880, 2_200)] });
   const justOutside = world({
     sampledAtMs: 1_050,
-    enemies: [enemyAt("target", 1, 2_620, 2_200)]
+    enemies: [enemyAt("target", 1, 2_950, 2_200)]
   });
 
   // Judged from scratch, twenty units past the edge is a different manoeuvre:
@@ -714,10 +745,11 @@ test("the orbiting pilot closes an open range and coasts on station", () => {
 });
 
 test("the stand-off ring never grows past what the camera frames", () => {
-  // The frame is 9/16 of its width, so its short side bounds the ring.
+  // The ring is bounded across the frame, because that is the way the hull is
+  // looking when it closes.
   const narrow = world({ cameraViewWidth: 800 });
   assert.ok(effectiveStandoff(narrow, ACE) < ACE.standoffDistance);
-  assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 180) < 1e-9);
+  assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 320) < 1e-9);
 
   // A frame wide enough leaves the operator's own number alone.
   const wide = world({ cameraViewWidth: 4400 });
@@ -725,8 +757,7 @@ test("the stand-off ring never grows past what the camera frames", () => {
 
   // A target held on the clamped ring stays inside the frame.
   const framed = world({ cameraViewWidth: 2200 });
-  const halfHeight = (2200 * 9) / 16 / 2;
-  assert.ok(effectiveStandoff(framed, ACE) < halfHeight);
+  assert.ok(effectiveStandoff(framed, ACE) < 2200 / 2);
 });
 
 test("the orbit turns back inward at the arena rim", () => {
@@ -748,6 +779,28 @@ test("the orbit turns back inward at the arena rim", () => {
   assert.equal(memory.orbitSign, -1);
 });
 
+test("a missile the shield is facing does not take the turret off its launcher", () => {
+  // What a launcher would otherwise do to a crew: feed it one interceptable
+  // missile a second, take the turret for every one of them, and never be shot
+  // at itself. The sector is already pointed at this one, so it is the shield's
+  // to stop and the gun stays on the ship that fired it.
+  const inbound = entity("inbound", 2, { x: 2_200 + 400, y: 2_200, velocityX: -240, radius: 12 });
+  const launcher = enemyAt("launcher", 1, 2_900, 2_200);
+  const uncovered = world({
+    enemies: [launcher],
+    missiles: [inbound],
+    shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: Math.PI / 4 }
+  });
+  assert.equal(rankTargets(uncovered)[0]?.role, "missile");
+
+  const covered = world({
+    enemies: [launcher],
+    missiles: [inbound],
+    shield: { angle: 0, active: true, energy: 100, capacity: 100, arcHalfAngle: Math.PI / 4 }
+  });
+  assert.equal(rankTargets(covered)[0]?.role, "enemy");
+});
+
 test("a committed target is held through the retarget interval", () => {
   const memory = createAutopilotMemory();
   const first = world({ enemies: [enemyAt("first", 1, 2500, 2200)] });
@@ -760,10 +813,22 @@ test("a committed target is held through the retarget interval", () => {
   planGunner(better, ROOKIE, memory, { nowMs: 1_100 });
   assert.equal(memory.target.entityId, "first");
 
-  // Past the interval plus the reaction delay the better target is taken.
+  // And it is still held long past the interval: a nearer ship of the same
+  // class is not a reason to abandon one already being shot at. This is what a
+  // hull surrounded by small ships used to fail at - it crossed the arc to
+  // whoever was nearest this second and never finished any of them.
   planGunner(better, ROOKIE, memory, { nowMs: 4_000 });
   planGunner(better, ROOKIE, memory, { nowMs: 5_000 });
-  assert.equal(memory.target.entityId, "closer");
+  assert.equal(memory.target.entityId, "first");
+
+  // A boss outscores a swarm ship by far more than half again, so it takes the
+  // mount even though the first is alive and under the bore.
+  const withBoss = world({
+    enemies: [enemyAt("first", 1, 2500, 2200), enemyAt("boss", 3, 2600, 2200, { kind: "boss" })]
+  });
+  planGunner(withBoss, ROOKIE, memory, { nowMs: 6_000 });
+  planGunner(withBoss, ROOKIE, memory, { nowMs: 7_000 });
+  assert.equal(memory.target.entityId, "boss");
 });
 
 test("a vanished target is dropped without waiting out the interval", () => {
@@ -935,7 +1000,7 @@ test("without the orbit skill the ship bores in instead of circling", () => {
   // Inside twice the stand-off the orbiting profile spends most of the course
   // sideways; the one without the skill spends none of it. That difference is
   // the whole of what the skill withholds now.
-  const scene = world({ enemies: [enemyAt("target", 1, 2200, 2200 + 500)] });
+  const scene = world({ enemies: [enemyAt("target", 1, 2200, 2200 + 900)] });
   const straight = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
   const circling = planPilot(scene, ACE, createAutopilotMemory(), { nowMs: 0 });
   assert.ok(straight.vector.y > 0.999, "a course without the skill went sideways");
@@ -989,7 +1054,7 @@ test("a boss firing from beyond the frame is hunted through its missiles", () =>
 test("the pilot presses ships while the turret keeps the threat", () => {
   const steady = { ...ACE, evadeMissiles: false, dodgeBullets: false };
   const scene = world({
-    enemies: [enemyAt("gunship", 1, 2_900, 2_200)],
+    enemies: [enemyAt("gunship", 1, 3_200, 2_200)],
     missiles: [
       entity("inbound", 2, { x: 2_200, y: 1_400, velocityX: 0, velocityY: 240, radius: 12 })
     ]
@@ -1033,12 +1098,12 @@ test("a slow-crossing target still gets the orbit", () => {
   const ring = effectiveStandoff(world(), ACE);
   const first = world({
     sampledAtMs: 0,
-    enemies: [enemyAt("drifting", 1, 2200 + ring + 100, 2200, { velocityY: 10 })]
+    enemies: [enemyAt("drifting", 1, 2200 + ring + 200, 2200, { velocityY: 10 })]
   });
   planPilot(first, ACE, memory);
   const second = world({
     sampledAtMs: 100,
-    enemies: [enemyAt("drifting", 1, 2200 + ring + 100, 2200 + 1, { velocityY: 10 })]
+    enemies: [enemyAt("drifting", 1, 2200 + ring + 200, 2200 + 1, { velocityY: 10 })]
   });
   const orbiting = planPilot(second, ACE, memory);
 

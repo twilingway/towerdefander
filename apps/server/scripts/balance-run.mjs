@@ -112,7 +112,14 @@ export function buildWorld(state, config, sampledAtMs) {
     cannon: {
       heat: state.cannonHeat,
       capacity: state.ship.cannonHeatCapacity,
-      overheated: state.cannonOverheated
+      overheated: state.cannonOverheated,
+      // How far this barrel carries, which is what the fighting distance is a
+      // share of. A beam ends where its range does; anything that flies ends
+      // where its lifetime does.
+      reach:
+        config.cannonWeaponKind === "laser"
+          ? state.ship.cannonLaserRange
+          : (state.ship.projectileSpeedPerSecond * config.projectileLifetimeMs) / 1_000
     },
     machineGun: {
       heat: state.mgHeat,

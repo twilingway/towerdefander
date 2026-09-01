@@ -1,6 +1,7 @@
 import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import type {
   PublicAsteroidView,
+  PublicCannonView,
   PublicEncounterView,
   PublicEnemyView,
   PublicHomingMissileView,
@@ -279,6 +280,8 @@ export interface VisibleDemoWorld {
     readonly heat: number;
     readonly capacity: number;
     readonly overheated: boolean;
+    /** How far the barrel carries; the bot holds a share of it as its ring. */
+    readonly reach: number;
   };
   readonly machineGun: {
     readonly heat: number;
@@ -302,7 +305,7 @@ interface VisibleDemoWorldGame extends VisibleDemoThreatGame {
   readonly turretAngle: number;
   readonly spaceship: PublicSpaceshipView;
   readonly shield: PublicShieldView;
-  readonly cannon: PublicMachineGunView;
+  readonly cannon: PublicCannonView;
   readonly machineGun: PublicMachineGunView;
   readonly encounter: Pick<
     PublicEncounterView,
@@ -361,7 +364,8 @@ export function buildVisibleDemoWorld(
     cannon: {
       heat: game.cannon.heat,
       capacity: game.cannon.capacity,
-      overheated: game.cannon.overheated
+      overheated: game.cannon.overheated,
+      reach: game.cannon.reach
     },
     machineGun: {
       heat: game.machineGun.heat,
