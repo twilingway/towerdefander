@@ -23,9 +23,9 @@ export function SalvageSection({ tuning, patch }: SalvageSectionProps) {
       <div className="card__grid">
         <NumberField
           caption="Ремонт корпуса"
-          value={tuning.lootRepairAmount}
-          onChange={(lootRepairAmount) => {
-            patch({ lootRepairAmount });
+          value={tuning.lootRepairShare}
+          onChange={(lootRepairShare) => {
+            patch({ lootRepairShare });
           }}
         />
         <NumberField

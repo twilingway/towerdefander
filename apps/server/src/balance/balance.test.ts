@@ -892,7 +892,7 @@ describe("version 1 migration", () => {
         })
       ) as BalanceTuning["enemyArchetypes"]
     };
-    delete legacyTuning.lootRepairAmount;
+    delete legacyTuning.lootRepairShare;
     delete legacyTuning.lootShieldAmount;
     delete legacyTuning.lootBossRepairShare;
     delete legacyTuning.lootLifetimeTicks;
@@ -916,7 +916,7 @@ describe("version 1 migration", () => {
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
 
     const tuning = store.getActiveTuning();
-    expect(tuning.lootRepairAmount).toBe(defaults.lootRepairAmount);
+    expect(tuning.lootRepairShare).toBe(defaults.lootRepairShare);
     expect(tuning.lootMagnetRadius).toBe(defaults.lootMagnetRadius);
     expect(tuning.lootWindowTicks).toBe(defaults.lootWindowTicks);
     expect(tuning.lootBossWindowTicks).toBe(defaults.lootBossWindowTicks);
@@ -1517,6 +1517,56 @@ describe("balance routes", () => {
     expect(tuning.waveCampaign.waves).toHaveLength(1);
     expect(tuning.lootBossRepairShare).toBe(defaults.lootBossRepairShare);
     expect(Object.hasOwn(tuning, "lootBossRepairAmount")).toBe(false);
+  });
+
+  it("keeps the waves when a version 31 preset still sizes the repair in hit points", async () => {
+    const path = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const legacyTuning: Record<string, unknown> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 3,
+                startDelayTicks: 0,
+                spawnIntervalTicks: 40,
+                sectors: ["N"],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    // The same trap the boss repair set in version 29: the old absolute key
+    // left behind fails the strict schema and takes the wave table with it.
+    delete legacyTuning.lootRepairShare;
+    legacyTuning.lootRepairAmount = 35;
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 31,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Оператор", tuning: legacyTuning }]
+      }),
+      "utf8"
+    );
+
+    const store = storeFor(path);
+    await store.load();
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    // Converted against the hull it was tuned on, not dropped for the default.
+    expect(tuning.lootRepairShare).toBeCloseTo(35 / defaults.spaceshipMaxHp, 6);
+    expect(Object.hasOwn(tuning, "lootRepairAmount")).toBe(false);
   });
 
   it("rejects a non-loopback client when no password is set", async () => {

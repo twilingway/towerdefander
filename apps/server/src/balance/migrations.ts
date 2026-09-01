@@ -92,7 +92,7 @@ const WEAPON_KIND_FIELDS = [
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
 const LOOT_FIELDS = [
-  "lootRepairAmount",
+  "lootRepairShare",
   "lootShieldAmount",
   "lootBossRepairShare",
   "lootLifetimeTicks",
@@ -259,6 +259,9 @@ function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): Legac
   // share of the hull. Same story as the fraction above: a leftover key fails
   // the strict schema, and the whole preset — waves included — goes with it.
   delete migrated.lootBossRepairAmount;
+  // Version 31 sized the ordinary repair in hit points too. Same trap: the
+  // leftover key fails the strict schema and the waves go with it.
+  delete migrated.lootRepairAmount;
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }
@@ -360,7 +363,27 @@ function migrateBackground(tuning: LegacyRecord, defaults: BalanceTuning): unkno
  * once cost an operator their wave table.
  */
 function migrateLoot(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
-  return Object.fromEntries(LOOT_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]]));
+  return {
+    ...Object.fromEntries(LOOT_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]])),
+    lootRepairShare: migrateRepairShare(tuning, defaults)
+  };
+}
+
+/**
+ * Version 31 sized the ordinary repair in hit points, so one drop healed the
+ * light hull for nearly twice what it healed the heavy one; version 32 states
+ * it as a share of whatever hull is flying. The saved number is converted
+ * against the hull it was tuned on rather than thrown away.
+ */
+function migrateRepairShare(tuning: LegacyRecord, defaults: BalanceTuning): number {
+  const saved = tuning.lootRepairShare;
+  if (typeof saved === "number") return saved;
+  const amount = tuning.lootRepairAmount;
+  const hull = tuning.spaceshipMaxHp;
+  if (typeof amount !== "number" || typeof hull !== "number" || hull <= 0) {
+    return defaults.lootRepairShare;
+  }
+  return Math.min(1, Math.max(0, amount / hull));
 }
 
 /**
@@ -415,7 +438,17 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
           migrateArchetype(kind, archetype, defaults)
         ])
       ),
-      waveCampaign: { ...campaign, waves: readArray(campaign, "waves").map(migrateWave) }
+      waveCampaign: {
+        ...campaign,
+        waves: readArray(campaign, "waves").map(migrateWave),
+        // Field by field, like the helm and the salvage: a preset written
+        // before the generator's knobs moved into the file must gain them
+        // rather than fail the strict schema and take the waves with it.
+        authoring: {
+          ...defaults.waveCampaign.authoring,
+          ...readRecord(campaign, "authoring")
+        }
+      }
     }
   };
 }

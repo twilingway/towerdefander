@@ -288,6 +288,23 @@ function backfillArchetypes(saved) {
  * reads the preset raw, without the server's migration, so it fills the field
  * the way that migration would. Same shape of trap as the archetypes above.
  */
+/**
+ * The stand reads the preset the way it sits on disk, so a field the store
+ * would have migrated has to be filled here too. Version 31 sized the repair
+ * drop in hit points; the share is the same number against the hull it was
+ * tuned on.
+ */
+function backfillLoot(tuning) {
+  if (typeof tuning.lootRepairShare === "number") return tuning;
+  const { lootRepairAmount, ...rest } = tuning;
+  const hull = tuning.spaceshipMaxHp;
+  const share =
+    typeof lootRepairAmount === "number" && typeof hull === "number" && hull > 0
+      ? Math.min(1, Math.max(0, lootRepairAmount / hull))
+      : createSpaceshipSimulationConfig().lootRepairShare;
+  return { ...rest, lootRepairShare: share };
+}
+
 function backfillWaves(campaign) {
   if (campaign?.waves === undefined) return undefined;
   return {
@@ -322,7 +339,7 @@ export async function readTuning(presetPath, presetId) {
     presetId: chosen.id,
     presetName: chosen.name ?? chosen.id,
     tuning: {
-      ...tuning,
+      ...backfillLoot(tuning),
       ...(enemyArchetypes === undefined ? {} : { enemyArchetypes }),
       ...(waveCampaign === undefined ? {} : { waveCampaign })
     }

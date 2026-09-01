@@ -332,7 +332,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   // Salvage: the only hull a crew wins back inside a run. Every number here is
   // a guess until a batch says otherwise; the chance per archetype is what
   // actually decides whether runs get longer.
-  lootRepairAmount: 35,
+  lootRepairShare: 0.06,
   lootShieldAmount: 30,
   lootBossRepairShare: 1,
   lootLifetimeTicks: 300,

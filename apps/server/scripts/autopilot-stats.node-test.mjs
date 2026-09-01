@@ -102,9 +102,12 @@ test("the enemy difficulty offset reaches the simulation", () => {
   const hard = JSON.parse(run([...base, "--enemy-offset=2"]));
   assert.equal(easy.enemyOffset, -2);
   assert.equal(hard.enemyOffset, 2);
+  // Not the score: eight waves are cleared at either difficulty, and the same
+  // kills pay the same points. What the offset moves is how long the clearing
+  // takes - a tougher enemy dodges, retreats and outlives its own cooldown.
   assert.notDeepEqual(
-    easy.results.map(({ score }) => score),
-    hard.results.map(({ score }) => score)
+    easy.results.map(({ ticks }) => ticks),
+    hard.results.map(({ ticks }) => ticks)
   );
 });
 

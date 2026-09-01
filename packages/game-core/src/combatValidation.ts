@@ -62,7 +62,6 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["asteroidRadius", config.asteroidRadius],
     ["asteroidSpeedPerSecond", config.asteroidSpeedPerSecond],
     ["shieldCapacity", config.shieldCapacity],
-    ["lootRepairAmount", config.lootRepairAmount],
     ["lootShieldAmount", config.lootShieldAmount],
     ["lootDropRadius", config.lootDropRadius],
     ["lootMagnetRadius", config.lootMagnetRadius],
@@ -74,6 +73,13 @@ export function validateCombatConfig(config: CombatConfig): void {
     if (!Number.isFinite(value) || value <= 0) {
       throw new RangeError(`${name} must be a positive finite number`);
     }
+  }
+  if (
+    !Number.isFinite(config.lootRepairShare) ||
+    config.lootRepairShare < 0 ||
+    config.lootRepairShare > 1
+  ) {
+    throw new RangeError("lootRepairShare must be a fraction of the hull between 0 and 1");
   }
   if (
     !Number.isFinite(config.lootBossRepairShare) ||

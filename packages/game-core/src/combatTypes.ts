@@ -233,7 +233,8 @@ export interface CombatConfig {
   readonly asteroidScoreReward: number;
   readonly asteroidCreditReward: number;
   /** Hull points one repair drop returns, and shield energy one cell returns. */
-  readonly lootRepairAmount: number;
+  /** Share of the ship's own maximum hull a repair drop gives back. */
+  readonly lootRepairShare: number;
   readonly lootShieldAmount: number;
   /** A boss always leaves this instead: the reward for taking a boss wave. */
   readonly lootBossRepairShare: number;

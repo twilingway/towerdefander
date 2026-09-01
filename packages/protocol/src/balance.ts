@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 31 as const;
+export const BALANCE_FILE_VERSION = 32 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30
+  28, 29, 30, 31
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -326,10 +326,52 @@ export const directorTuningSchema = z
   .strict();
 export type DirectorTuning = z.infer<typeof directorTuningSchema>;
 
+/**
+ * How the wave table is authored, as opposed to what it says. The server never
+ * reads any of this: the generator does, and it lives here so an operator can
+ * turn the campaign from the console instead of editing a script and waiting
+ * for someone to run it.
+ */
+export const campaignAuthoringSchema = z
+  .object({
+    /** A wave may spend `base + growth * (n - 1)` on the ships it calls in. */
+    budgetBase: positiveFinite,
+    budgetGrowth: nonNegativeFinite,
+    /** Every n-th wave also drops rocks; they cost nothing and read as weather. */
+    asteroidEveryWaves: positiveInteger,
+    /** Enemy health is authored in cannon shots, so a hull change moves it all. */
+    hpPerCannonShot: positiveFinite,
+    hpScale: positiveFinite,
+    /** Damage-a-second ceiling: `base + perSpawnCost * cost`, and a flat one for bosses. */
+    damagePerSecondBase: nonNegativeFinite,
+    damagePerSecondPerSpawnCost: nonNegativeFinite,
+    bossDamagePerSecondCap: positiveFinite,
+    /** Share of a beam's paper output that actually lands; it does not miss. */
+    laserDamageShare: z.number().gt(0).max(1),
+    /** How far the ship's own gun reaches, and what enemies may have against it. */
+    shipReach: positiveFinite,
+    maxEngagementShare: positiveFinite,
+    maxStandoffShare: positiveFinite,
+    /** Seconds between one group's arrival window and the next inside a wave. */
+    groupStartStepSeconds: nonNegativeFinite,
+    /** Seconds between two ships of one group, per family. */
+    swarmIntervalSeconds: positiveFinite,
+    lineIntervalSeconds: positiveFinite,
+    heavyIntervalSeconds: positiveFinite,
+    /**
+     * Earliest the boss may appear. Only a floor: it waits for the field to be
+     * cleared whatever this says.
+     */
+    bossFloorSeconds: nonNegativeFinite
+  })
+  .strict();
+export type CampaignAuthoring = z.infer<typeof campaignAuthoringSchema>;
+
 export const waveCampaignSchema = z
   .object({
     waves: z.array(waveDefinitionSchema).max(200).readonly(),
-    director: directorTuningSchema
+    director: directorTuningSchema,
+    authoring: campaignAuthoringSchema
   })
   .strict();
 export type WaveCampaign = z.infer<typeof waveCampaignSchema>;
@@ -807,7 +849,7 @@ export const balanceTuningSchema = z
     asteroidCreditReward: nonNegativeFinite,
 
     // --- Salvage: the only hull a crew wins back inside a run ---
-    lootRepairAmount: positiveFinite,
+    lootRepairShare: z.number().min(0).max(1),
     lootShieldAmount: positiveFinite,
     /**
      * A boss always leaves a repair instead of rolling, sized as a share of the

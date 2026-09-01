@@ -10,6 +10,7 @@
  *
  * Usage: node scripts/author-campaign.mjs [--preset <path>] [--dry-run]
  */
+import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 
@@ -21,6 +22,59 @@ import {
 import { defaultPresetPath } from "./balance-run.mjs";
 
 const TICKS_PER_SECOND = 20;
+
+/**
+ * How the campaign is authored. Every one of these lives in the balance file
+ * now, so an operator turns the campaign from the console and re-runs this;
+ * what stands here is only what a file written before them gets.
+ */
+const FALLBACK_AUTHORING = {
+  budgetBase: 14,
+  budgetGrowth: 3,
+  asteroidEveryWaves: 3,
+  hpPerCannonShot: 25,
+  hpScale: 0.75,
+  damagePerSecondBase: 2,
+  damagePerSecondPerSpawnCost: 2.2,
+  bossDamagePerSecondCap: 26,
+  laserDamageShare: 0.75,
+  shipReach: 1080,
+  maxEngagementShare: 1.6,
+  maxStandoffShare: 1.3,
+  groupStartStepSeconds: 34,
+  swarmIntervalSeconds: 7,
+  lineIntervalSeconds: 14,
+  heavyIntervalSeconds: 22,
+  bossFloorSeconds: 30
+};
+
+/**
+ * Read before anything below is evaluated, because the catalogue and the wave
+ * table are built as this module loads and every number in them comes from
+ * here. `main` reads the file again to write it; this pass is only for the
+ * knobs.
+ */
+function readAuthoring() {
+  const flag = process.argv.findIndex((one) => one === "--preset");
+  const inline = process.argv.find((one) => one.startsWith("--preset="));
+  const path =
+    flag >= 0 && process.argv[flag + 1] !== undefined
+      ? process.argv[flag + 1]
+      : inline !== undefined
+        ? inline.slice("--preset=".length)
+        : defaultPresetPath();
+  try {
+    const document = JSON.parse(readFileSync(path, "utf8"));
+    const presets = Array.isArray(document.presets) ? document.presets : [];
+    const chosen = presets.find(({ id }) => id === document.activePresetId) ?? presets[0];
+    return { ...FALLBACK_AUTHORING, ...(chosen?.tuning?.waveCampaign?.authoring ?? {}) };
+  } catch {
+    // A file that is missing or unreadable is the generator's own first run.
+    return FALLBACK_AUTHORING;
+  }
+}
+
+const authoring = readAuthoring();
 const seconds = (value) => Math.max(0, Math.round(value * TICKS_PER_SECOND));
 
 /**
@@ -64,14 +118,15 @@ function weapon({
  * written as "how many cannon shots does this take". A one-shot enemy is a
  * target, not a fight: nothing below dies to a single hit.
  */
-const CANNON_SHOT = 25;
+
 /**
  * One knob over the whole catalogue. Health is written in cannon shots because
  * that is what the fight feels like, and this scales the lot at once when the
  * measurements say the crew cannot chew through it in the time a wave allows.
  */
-const HP_SCALE = 0.75;
-const shots = (count) => Math.max(1, Math.round(CANNON_SHOT * count * HP_SCALE));
+
+const shots = (count) =>
+  Math.max(1, Math.round(authoring.hpPerCannonShot * count * authoring.hpScale));
 
 /**
  * What an archetype is allowed to put out, in damage per second, from what the
@@ -109,21 +164,20 @@ function beam({ damage, cooldown, reach, radius = 10, shieldCost = null }) {
  * the ladder they displaced tougher ships from came out fifteen points softer
  * than it went in.
  */
-const LASER_DPS_SHARE = 0.75;
 
 function damagePerSecondCap(spawnCost, boss = false) {
   // A boss is a long fight, not a shredder. Priced like everything else it put
   // out sixty-eight points a second by wave thirty: an ordinary wave cost the
   // crew fifty points of hull, a boss wave cost six hundred, and every run
   // ended on one. Its budget buys health and presence; the barrels stay human.
-  if (boss) return 26;
-  return 2.2 * spawnCost + 2;
+  if (boss) return authoring.bossDamagePerSecondCap;
+  return authoring.damagePerSecondPerSpawnCost * spawnCost + authoring.damagePerSecondBase;
 }
 
 function damagePerSecond(weapons) {
   return weapons.reduce((total, one) => {
     const paper = (one.damage * one.burstCount) / (one.cooldownTicks / TICKS_PER_SECOND);
-    return total + (one.kind === "laser" ? paper / LASER_DPS_SHARE : paper);
+    return total + (one.kind === "laser" ? paper / authoring.laserDamageShare : paper);
   }, 0);
 }
 
@@ -148,20 +202,21 @@ function withinBudget(weapons, spawnCost, boss) {
  * archetype moves and how hard it hits at its distance, never from standing
  * where the fight cannot happen.
  */
-const SHIP_REACH = 1080;
+
 /**
  * Artillery is allowed to out-range the hull — that is what makes it artillery
  * — but only by enough that closing on it is a decision, not a hopeless chase.
  * The bot ranks an out-ranging shooter above the swarm in its face, so the gap
  * is answered by flying at it.
  */
-const MAX_ENGAGEMENT = Math.round(SHIP_REACH * 1.6);
-const MAX_STANDOFF = Math.round(SHIP_REACH * 1.3);
 
 function reachable(weapons) {
   return weapons.map((one) => ({
     ...one,
-    engagementRange: Math.min(one.engagementRange, MAX_ENGAGEMENT)
+    engagementRange: Math.min(
+      one.engagementRange,
+      Math.round(authoring.shipReach * authoring.maxEngagementShare)
+    )
   }));
 }
 
@@ -189,7 +244,10 @@ function enemy({
     hp,
     radius,
     speedPerSecond: speed,
-    preferredDistance: Math.min(distance, MAX_STANDOFF),
+    preferredDistance: Math.min(
+      distance,
+      Math.round(authoring.shipReach * authoring.maxStandoffShare)
+    ),
     turnRatePerSecond: turn,
     turnAccelerationPerSecondSquared: turnAccel,
     turnBrakingPerSecondSquared: turnBrake,
@@ -881,7 +939,7 @@ const ARCHETYPES = {
 /**
  * The ramp, as one number.
  *
- * A wave costs `WAVE_BUDGET_BASE + WAVE_BUDGET_GROWTH * (n - 1)` in the same
+ * A wave costs `budgetBase + budgetGrowth * (n - 1)` from the authoring block, in the same
  * spawn-cost currency the director spends, and the table is filled to that
  * budget out of what has unlocked. Written by hand the early waves tracked the
  * director's own curve, which climbs about two and a half a wave — that is a
@@ -1106,15 +1164,12 @@ function retuneHullDamage(id, hull) {
   };
 }
 
-const WAVE_BUDGET_BASE = 5;
-const WAVE_BUDGET_GROWTH = 1;
 /** Waves that also drop rocks; they cost nothing and read as weather. */
-const ASTEROID_EVERY = 3;
 
 /** Past the table the director carries on, and on the same slope. */
 const DIRECTOR = {
-  baseBudget: WAVE_BUDGET_BASE,
-  budgetGrowth: Math.round(WAVE_BUDGET_GROWTH),
+  baseBudget: Math.round(authoring.budgetBase),
+  budgetGrowth: Math.max(1, Math.round(authoring.budgetGrowth)),
   budgetCap: 120,
   hpGrowth: 0.04,
   hpMultiplierCap: 8,
@@ -1166,7 +1221,7 @@ function bossForWave(waveNumber) {
 }
 
 function buildWave(waveNumber) {
-  const budget = WAVE_BUDGET_BASE + WAVE_BUDGET_GROWTH * (waveNumber - 1);
+  const budget = authoring.budgetBase + authoring.budgetGrowth * (waveNumber - 1);
   const shares = familyShares(waveNumber);
   const groups = [];
   let slot = 0;
@@ -1179,20 +1234,26 @@ function buildWave(waveNumber) {
     for (const [index, kind] of picks.entries()) {
       const portion = (budget * share) / picks.length;
       const count = Math.max(1, Math.round(portion / ARCHETYPES[kind].spawnCost));
-      const start = slot * 7 + index * 3;
-      const interval = family === "swarm" ? 3 : family === "line" ? 7 : 11;
+      const step = authoring.groupStartStepSeconds;
+      const start = slot * step + index * (step / 2);
+      const interval =
+        family === "swarm"
+          ? authoring.swarmIntervalSeconds
+          : family === "line"
+            ? authoring.lineIntervalSeconds
+            : authoring.heavyIntervalSeconds;
       groups.push([kind, count, start, interval, [SECTOR_CYCLE[(waveNumber + slot + index) % 8]]]);
     }
     slot += 1;
   }
-  if (waveNumber % ASTEROID_EVERY === 0) {
+  if (waveNumber % authoring.asteroidEveryWaves === 0) {
     groups.push(["asteroid", 2, 18, 12, []]);
   }
   const boss = waveNumber % 5 === 0 ? bossForWave(waveNumber) : undefined;
   if (boss !== undefined) {
     // Late enough that the wave is a fight first and a boss second; it waits for
     // the field to clear anyway, so this only decides when it becomes possible.
-    groups.push([boss, 1, 30, 10, [SECTOR_CYCLE[waveNumber % 8]]]);
+    groups.push([boss, 1, authoring.bossFloorSeconds, 10, [SECTOR_CYCLE[waveNumber % 8]]]);
   }
   return groups;
 }
@@ -1294,7 +1355,14 @@ async function main() {
         retuneHullDamage(id, retuneTail(hull))
       ])
     );
-    preset.tuning.waveCampaign = { ...preset.tuning.waveCampaign, waves, director: DIRECTOR };
+    // The knobs go back in with the table they produced, so the file describes
+    // how it was built and the console edits the same numbers this read.
+    preset.tuning.waveCampaign = {
+      ...preset.tuning.waveCampaign,
+      waves,
+      director: DIRECTOR,
+      authoring
+    };
   }
   const summary = {
     preset: path,

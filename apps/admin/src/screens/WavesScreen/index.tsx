@@ -9,6 +9,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { SectorPicker } from "../../components/fields.js";
+import { AuthoringSection } from "./AuthoringSection.js";
 import {
   TICK_SECONDS,
   entryStats,
@@ -102,6 +103,8 @@ export function WavesScreen({ tuning, onChange }: WavesScreenProps) {
           внутри сектора всегда выбирается случайно от сида забега.
         </p>
       </header>
+
+      <AuthoringSection tuning={tuning} onChange={onChange} />
 
       {waves.length === 0 ? (
         <p className="empty">

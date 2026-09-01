@@ -47,10 +47,12 @@ export function rollLootDrop(
     return { rngState: next, drop: null };
   }
   const kind: LootKind = boss || random % 2 === 0 ? "repair" : "shieldCell";
+  // Both repairs are a share of the hull that is actually flying: an absolute
+  // number healed the light hull for twice what it healed the heavy one.
   const amount = boss
     ? config.lootBossRepairShare * hullMaxHp
     : kind === "repair"
-      ? config.lootRepairAmount
+      ? config.lootRepairShare * hullMaxHp
       : config.lootShieldAmount;
   return { rngState: next, drop: createLootDrop(enemy, config, kind, amount, spawnSequence, tick) };
 }

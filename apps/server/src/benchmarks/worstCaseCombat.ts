@@ -154,7 +154,7 @@ export function createWorstCaseCombatFixture(
         config.lootDropRadius
       ),
       kind: "repair",
-      amount: config.lootRepairAmount,
+      amount: config.lootRepairShare * config.spaceshipMaxHp,
       lifetimeTicks: config.lootLifetimeTicks
     } satisfies LootDropState;
   });

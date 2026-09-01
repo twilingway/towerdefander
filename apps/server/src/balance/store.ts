@@ -184,11 +184,38 @@ import { migrateBalanceDocument } from "./migrations.js";
 
 export { migrateBalanceDocument };
 
+/**
+ * What the campaign generator was built with. Numbers an operator can now turn
+ * from the console; the script reads them back rather than carrying its own.
+ */
+export const DEFAULT_CAMPAIGN_AUTHORING = {
+  budgetBase: 14,
+  budgetGrowth: 3,
+  asteroidEveryWaves: 3,
+  hpPerCannonShot: 25,
+  hpScale: 0.75,
+  damagePerSecondBase: 2,
+  damagePerSecondPerSpawnCost: 2.2,
+  bossDamagePerSecondCap: 26,
+  laserDamageShare: 0.75,
+  shipReach: 1080,
+  maxEngagementShare: 1.6,
+  maxStandoffShare: 1.3,
+  groupStartStepSeconds: 34,
+  swarmIntervalSeconds: 7,
+  lineIntervalSeconds: 14,
+  heavyIntervalSeconds: 22,
+  bossFloorSeconds: 30
+} as const;
+
 export function createDefaultTuning(): BalanceTuning {
   const config = createSpaceshipSimulationConfig();
   return balanceTuningSchema.parse({
     enemyArchetypes: config.enemyArchetypes,
-    waveCampaign: config.waveCampaign,
+    // The authoring block is the generator's, not the simulation's: the core
+    // knows nothing about it, so the defaults are stated here beside the rest
+    // of the balance file.
+    waveCampaign: { ...config.waveCampaign, authoring: DEFAULT_CAMPAIGN_AUTHORING },
     enemySpawnIntervalTicks: config.enemySpawnIntervalTicks,
     intermissionTicks: config.intermissionTicks,
     ambientAsteroidIntervalMinTicks: config.ambientAsteroidIntervalMinTicks,
@@ -202,7 +229,7 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidSpawnCost: config.asteroidSpawnCost,
     asteroidScoreReward: config.asteroidScoreReward,
     asteroidCreditReward: config.asteroidCreditReward,
-    lootRepairAmount: config.lootRepairAmount,
+    lootRepairShare: config.lootRepairShare,
     lootShieldAmount: config.lootShieldAmount,
     lootBossRepairShare: config.lootBossRepairShare,
     lootLifetimeTicks: config.lootLifetimeTicks,
