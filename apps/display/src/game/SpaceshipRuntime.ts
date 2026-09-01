@@ -95,6 +95,7 @@ class SpaceshipScene extends Phaser.Scene {
   private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
   private beams: Phaser.GameObjects.Graphics | undefined;
+  private aimEnvelope: Phaser.GameObjects.Graphics | undefined;
   private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
@@ -170,6 +171,9 @@ class SpaceshipScene extends Phaser.Scene {
     // Above the arena, below the shield: a pulse is over before it can hide
     // anything that matters.
     this.beams = this.add.graphics().setDepth(13);
+    // Under everything that matters: it is a hint about where the gun can
+    // reach, and it must never sit on top of what is being aimed at.
+    this.aimEnvelope = this.add.graphics().setDepth(4);
     const tick = this.snapshot.tick;
     this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
@@ -201,6 +205,7 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret.rotation = sampleAngleTrack(this.turretTrack, playbackTick);
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     this.drawShield();
+    this.drawAimEnvelope(mount, this.turret.rotation);
     this.drawLaserBeams();
     this.focusCamera(spaceshipPosition);
 
@@ -395,6 +400,39 @@ class SpaceshipScene extends Phaser.Scene {
       this.beams.strokePath();
       this.beams.fillStyle(style.color, style.alpha);
       this.beams.fillCircle(beam.fromX, beam.fromY, style.width);
+    }
+  }
+
+  /**
+   * Where the turret can reach, and - for a barrel that locks on - how far off
+   * the bore it will still take a lock. The fill says "inside here"; the two
+   * rays say where the edge is, because a wash of colour alone reads as glow
+   * rather than as a boundary.
+   *
+   * A barrel that locks onto nothing still gets a sliver, so the reach stays
+   * readable: the gunner's question is as often "does it even carry that far"
+   * as "am I on it".
+   */
+  private drawAimEnvelope(mount: { readonly x: number; readonly y: number }, angle: number): void {
+    const layer = this.aimEnvelope;
+    if (layer === undefined) return;
+    layer.clear();
+    const { reach, acquireHalfAngle } = this.snapshot.cannon;
+    if (reach <= 0) return;
+    const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
+    layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
+    layer.slice(mount.x, mount.y, reach, angle - half, angle + half);
+    layer.fillPath();
+    layer.lineStyle(
+      AIM_ENVELOPE_STYLE.width,
+      AIM_ENVELOPE_STYLE.color,
+      AIM_ENVELOPE_STYLE.edgeAlpha
+    );
+    for (const edge of [angle - half, angle + half]) {
+      layer.beginPath();
+      layer.moveTo(mount.x, mount.y);
+      layer.lineTo(mount.x + Math.cos(edge) * reach, mount.y + Math.sin(edge) * reach);
+      layer.strokePath();
     }
   }
 
@@ -697,6 +735,19 @@ const SHIELD_GLOW_DISTANCE = 24;
  * game object never gets a filter list. The arc still has to be drawn, so the
  * glow is treated as an enhancement that may simply be unavailable.
  */
+/**
+ * The aiming envelope. Faint enough to read the arena through it, with edges
+ * solid enough to be a line rather than a glow.
+ */
+const AIM_ENVELOPE_STYLE = {
+  color: 0x7ef0ff,
+  fillAlpha: 0.05,
+  edgeAlpha: 0.28,
+  width: 2
+} as const;
+/** A barrel with no lock cone still shows this much, so its reach is legible. */
+const AIM_MIN_HALF_ANGLE = 0.03;
+
 /** Turret and nose beams read apart the way their projectiles already do. */
 const LASER_CANNON_STYLE = { width: 3, color: 0x7ef0ff, alpha: 0.9 } as const;
 const LASER_NOSE_STYLE = { width: 2, color: 0xffd783, alpha: 0.85 } as const;

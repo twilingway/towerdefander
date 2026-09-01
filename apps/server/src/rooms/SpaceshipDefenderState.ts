@@ -41,6 +41,21 @@ export class MachineGunState extends Schema {
   @type("boolean") overheated = false;
 }
 
+/**
+ * The turret carries an aiming envelope the nose gun does not: what the barrel
+ * is, how far it reaches, and how far off the bore it will still take a lock.
+ * A class of its own rather than three more fields on the shared one - the
+ * pilot flies the bore, so the nose has no envelope to read and should not be
+ * paying for one on every client.
+ */
+export class CannonState extends MachineGunState {
+  // Fixed for the run unless a module moves it, so the string costs one patch
+  // rather than one a tick.
+  @type("string") kind = "kinetic";
+  @type("float32") reach = 0;
+  @type("float32") acquireHalfAngle = 0;
+}
+
 /** Keyboard helm feel from the active preset; the controller drives with it. */
 export class HelmState extends Schema {
   // Fixed for the run, like the silhouettes: sent once, never per tick.
@@ -284,7 +299,7 @@ export class SpaceshipGameState extends Schema {
   @type(SpaceshipState) spaceship = new SpaceshipState();
   @type("float32") turretAngle = 0;
   @type(ShieldState) shield = new ShieldState();
-  @type(MachineGunState) cannon = new MachineGunState();
+  @type(CannonState) cannon = new CannonState();
   @type(MachineGunState) machineGun = new MachineGunState();
   @type(EncounterState) encounter = new EncounterState();
   @type("uint32") credits = 0;

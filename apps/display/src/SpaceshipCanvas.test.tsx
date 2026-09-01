@@ -128,7 +128,14 @@ const testGame = {
     capacity: 100,
     arcHalfAngle: 0.72
   },
-  cannon: { heat: 0, capacity: 100, overheated: false },
+  cannon: {
+    heat: 0,
+    capacity: 100,
+    overheated: false,
+    kind: "kinetic",
+    reach: 1500,
+    acquireHalfAngle: 0
+  },
   machineGun: { heat: 0, capacity: 100, overheated: false },
   encounter: {
     phase: "combat",

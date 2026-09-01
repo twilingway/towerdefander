@@ -72,6 +72,16 @@ export function projectGameState(
   target.cannon.heat = game.cannonHeat;
   target.cannon.capacity = game.ship.cannonHeatCapacity;
   target.cannon.overheated = game.cannonOverheated;
+  // The envelope the gunner aims inside. A beam ends where its own range does;
+  // anything that flies ends where its lifetime does. Only a barrel that locks
+  // on has a cone, and only the turret is drawn one: the pilot flies the bore.
+  target.cannon.kind = config.cannonWeaponKind;
+  target.cannon.reach =
+    config.cannonWeaponKind === "laser"
+      ? game.ship.cannonLaserRange
+      : (game.ship.projectileSpeedPerSecond * config.projectileLifetimeMs) / 1_000;
+  target.cannon.acquireHalfAngle =
+    config.cannonWeaponKind === "missile" ? game.ship.friendlyMissileAcquireConeRadians : 0;
   target.machineGun.heat = game.mgHeat;
   target.machineGun.capacity = game.ship.mgHeatCapacity;
   target.machineGun.overheated = game.mgOverheated;

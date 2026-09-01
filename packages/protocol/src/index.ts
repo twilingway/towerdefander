@@ -16,6 +16,7 @@ import {
   backgroundTuningSchema,
   cameraViewWidthSchema,
   entityVisualSchema,
+  friendlyWeaponKindSchema,
   helmSchemeSchema,
   shipArchetypeIdSchema,
   shipModuleIdSchema,
@@ -24,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 42 as const;
+export const PROTOCOL_VERSION = 43 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -198,19 +199,44 @@ export const publicShieldViewSchema = z
   });
 export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
 
+const weaponHeatShape = {
+  heat: finite.nonnegative(),
+  capacity: finite.nonnegative(),
+  overheated: z.boolean()
+} satisfies z.ZodRawShape;
+
+function refineHeat(value: { heat: number; capacity: number }, context: z.RefinementCtx): void {
+  if (value.heat > value.capacity)
+    issue(context, ["heat"], "Weapon heat must not exceed capacity.");
+}
+
 export const publicWeaponHeatViewSchema = z
+  .object(weaponHeatShape)
+  .strict()
+  .superRefine(refineHeat);
+export type PublicWeaponHeatView = z.infer<typeof publicWeaponHeatViewSchema>;
+
+/**
+ * The turret says more than its heat: what kind of barrel it is, how far it
+ * carries, and - for a barrel that locks on - how far off the bore it will
+ * still take a lock. That is the envelope the display draws around the gunner's
+ * aim. The nose gun carries none of it: the pilot flies the bore, so there is
+ * no envelope to read.
+ *
+ * All three are fixed for the run unless a module moves them, so they cost a
+ * patch on purchase rather than one every tick.
+ */
+export const publicCannonViewSchema = z
   .object({
-    heat: finite.nonnegative(),
-    capacity: finite.nonnegative(),
-    overheated: z.boolean()
+    ...weaponHeatShape,
+    kind: friendlyWeaponKindSchema,
+    reach: finite.nonnegative(),
+    acquireHalfAngle: finite.nonnegative()
   })
   .strict()
-  .superRefine((value, context) => {
-    if (value.heat > value.capacity)
-      issue(context, ["heat"], "Weapon heat must not exceed capacity.");
-  });
-export type PublicWeaponHeatView = z.infer<typeof publicWeaponHeatViewSchema>;
-/** Kept as the old name so existing display and controller code reads the same. */
+  .superRefine(refineHeat);
+export type PublicCannonView = z.infer<typeof publicCannonViewSchema>;
+
 export const publicMachineGunViewSchema = publicWeaponHeatViewSchema;
 export type PublicMachineGunView = PublicWeaponHeatView;
 
@@ -423,7 +449,7 @@ const gameShape = {
   spaceship: publicSpaceshipViewSchema,
   turretAngle: finite,
   shield: publicShieldViewSchema,
-  cannon: publicWeaponHeatViewSchema,
+  cannon: publicCannonViewSchema,
   machineGun: publicMachineGunViewSchema,
   encounter: publicEncounterViewSchema,
   credits: safeNonnegativeInteger,

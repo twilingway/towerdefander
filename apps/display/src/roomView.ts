@@ -151,6 +151,10 @@ interface NetworkGameState {
     heat: number;
     capacity: number;
     overheated: boolean;
+    /** The aiming envelope: what the barrel is, how far, and its lock cone. */
+    kind: string;
+    reach: number;
+    acquireHalfAngle: number;
   };
   machineGun: {
     heat: number;

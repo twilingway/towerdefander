@@ -61,7 +61,14 @@ describe("display room view", () => {
           energy: 75,
           capacity: 100
         },
-        cannon: { heat: 30, capacity: 100, overheated: false },
+        cannon: {
+          heat: 30,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 1500,
+          acquireHalfAngle: 0
+        },
         machineGun: { heat: 30, capacity: 100, overheated: false },
         encounter: {
           phase: "combat",
