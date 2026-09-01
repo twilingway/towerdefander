@@ -332,6 +332,23 @@ function turretMount(
   };
 }
 
+/**
+ * The barrel is converged, the way a pair of wing guns is.
+ *
+ * A shot leaves the mount, but every aiming solution in this game - the bot's
+ * lead, the display's focus ring, a gunner watching the turret - is drawn from
+ * the hull's own position. Firing straight along the barrel's angle out of a
+ * mount half a hull radius off centre therefore misses by the parallax: about
+ * two and a half degrees at seven hundred units, which on a small ship is every
+ * shot. So the shot is aimed at the point the turret designates from the hull,
+ * and leaves the barrel toward it.
+ */
+function convergedAngle(hull: Vector2, mount: Vector2, angle: number, convergence: number): number {
+  const targetX = hull.x + Math.cos(angle) * convergence;
+  const targetY = hull.y + Math.sin(angle) * convergence;
+  return Math.atan2(targetY - mount.y, targetX - mount.x);
+}
+
 function acquireMissileTarget(
   enemies: readonly { readonly id: string; readonly x: number; readonly y: number }[],
   origin: { readonly x: number; readonly y: number },
@@ -548,6 +565,7 @@ export function advanceSpaceshipSimulation(
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
     (state.lastFiredTick === null || clock.tick - state.lastFiredTick >= gunnerCooldownTicks);
 
+  const cannonMuzzle = turretMount(spaceship, state.spaceshipHeading, ship, config.turretVisual);
   const cannonShot = advanceFriendlyWeapon({
     kind: config.cannonWeaponKind,
     range: ship.cannonLaserRange,
@@ -562,8 +580,15 @@ export function advanceSpaceshipSimulation(
     // from the hull's centre instead they crossed the barrel at an angle of
     // their own - about three degrees at half the reach, which is wider than
     // the aim tolerance, so the display marked ships the shot then missed.
-    origin: turretMount(spaceship, state.spaceshipHeading, ship, config.turretVisual),
-    angle: turretTraverse.angle,
+    origin: cannonMuzzle,
+    angle: convergedAngle(
+      spaceship,
+      cannonMuzzle,
+      turretTraverse.angle,
+      config.cannonWeaponKind === "laser"
+        ? ship.cannonLaserRange
+        : (ship.projectileSpeedPerSecond * ship.projectileLifetimeMs) / 1_000
+    ),
     muzzleOffset: ship.spaceshipRadius + ship.projectileRadius,
     speed: ship.projectileSpeedPerSecond,
     damage: ship.friendlyProjectileDamage,

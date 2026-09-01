@@ -66,13 +66,48 @@ describe("spaceship view model", () => {
     expect(getArenaSpokes(2200, 2200, 0)).toEqual([]);
   });
 
-  it("preserves at least the distant 1600 by 900 logical view across screen shapes", () => {
-    expect(getResponsiveViewport(1920, 1080)).toEqual({ zoom: 1.2, width: 1600, height: 900 });
-    const wide = getResponsiveViewport(1366, 768);
-    expect(wide.zoom).toBeCloseTo(768 / 900);
-    expect(wide.width).toBeCloseTo(1366 / (768 / 900));
-    expect(wide.height).toBeCloseTo(900);
-    expect(getResponsiveViewport(1024, 768)).toEqual({ zoom: 0.64, width: 1600, height: 1200 });
+  it("shows every device the same slice of the world", () => {
+    // The whole point: what a crew can see must not depend on the shape of the
+    // glass. Measured before this held, on a 2500 by 1406 frame, an ultrawide
+    // saw 34% more width than a laptop and a 4:3 tablet 33% more height - which
+    // is thirty per cent more warning about what is flying at you.
+    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    const devices: readonly (readonly [string, number, number])[] = [
+      ["1920x1080", 1920, 1080],
+      ["2560x1440", 2560, 1440],
+      ["3840x2160", 3840, 2160],
+      ["3440x1440 ultrawide", 3440, 1440],
+      ["iPhone 14 landscape", 844, 390],
+      ["iPhone SE landscape", 667, 375],
+      ["iPad", 1180, 820],
+      ["iPad mini 4:3", 1024, 768],
+      ["folding phone portrait", 1812, 2176]
+    ];
+    for (const [name, width, height] of devices) {
+      const viewport = getResponsiveViewport(width, height, frame.width, frame.height);
+      expect(viewport.width, `${name} sees a different width`).toBeCloseTo(frame.width, 6);
+      expect(viewport.height, `${name} sees a different height`).toBeCloseTo(frame.height, 6);
+    }
+  });
+
+  it("centres the frame in the glass and leaves the rest as bars", () => {
+    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    // Ultrawide: the frame is as tall as the screen, so the bars are at the sides.
+    const wide = getResponsiveViewport(3440, 1440, frame.width, frame.height);
+    expect(wide.screen.height).toBeCloseTo(1440, 6);
+    expect(wide.screen.width).toBeLessThan(3440);
+    expect(wide.screen.x).toBeCloseTo((3440 - wide.screen.width) / 2, 6);
+    expect(wide.screen.y).toBeCloseTo(0, 6);
+
+    // A 4:3 tablet is the other way round: full width, bars above and below.
+    const tall = getResponsiveViewport(1024, 768, frame.width, frame.height);
+    expect(tall.screen.width).toBeCloseTo(1024, 6);
+    expect(tall.screen.height).toBeLessThan(768);
+    expect(tall.screen.y).toBeCloseTo((768 - tall.screen.height) / 2, 6);
+
+    // And a 16:9 screen has no bars at all.
+    const exact = getResponsiveViewport(1920, 1080, frame.width, frame.height);
+    expect(exact.screen).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
   });
 
   it("frames the tuned camera width instead of the design default", () => {

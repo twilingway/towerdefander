@@ -58,6 +58,13 @@ import {
   type BackgroundLayerConfig
 } from "./spaceBackground.js";
 
+/** What the viewport spec reads: the camera's pixel rect and its zoom. */
+interface DisplayCameraSlice {
+  readonly width: number;
+  readonly height: number;
+  readonly zoom: number;
+}
+
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
 const OUTSIDE_SPACE_COLOR = 0x02070d;
@@ -124,6 +131,10 @@ class SpaceshipScene extends Phaser.Scene {
     BASE_VIEWPORT_HEIGHT,
     1
   );
+  /** The glass: what the browser actually gave us, before any letterboxing. */
+  private canvasWidth = BASE_VIEWPORT_WIDTH;
+  private canvasHeight = Math.round(BASE_VIEWPORT_WIDTH * CAMERA_VIEW_ASPECT);
+  /** The camera's own pixel rect, which is the frame centred inside the glass. */
   private rendererWidth = BASE_VIEWPORT_WIDTH;
   private rendererHeight = BASE_VIEWPORT_HEIGHT;
 
@@ -245,7 +256,7 @@ class SpaceshipScene extends Phaser.Scene {
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.
     if (snapshot.cameraViewWidth !== framedWidth) {
-      this.configureViewport(this.rendererWidth, this.rendererHeight);
+      this.configureViewport(this.canvasWidth, this.canvasHeight);
     }
     if (shouldSnap || this.spaceshipBody === undefined || this.turret === undefined) {
       this.snapToSnapshot(snapshot, snapshot.tick);
@@ -613,19 +624,45 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.cameraViewWidth,
       this.snapshot.cameraViewWidth * CAMERA_VIEW_ASPECT
     );
-    this.rendererWidth = actualWidth;
-    this.rendererHeight = actualHeight;
+    this.canvasWidth = actualWidth;
+    this.canvasHeight = actualHeight;
+    // Phaser centres a camera on its own pixel size, and the camera is the
+    // letterboxed frame now rather than the whole canvas - so the scroll and the
+    // background cover are measured against the frame, not the glass.
+    this.rendererWidth = viewport.screen.width;
+    this.rendererHeight = viewport.screen.height;
     this.viewportWidth = viewport.width;
     this.viewportHeight = viewport.height;
     this.cameras.main.setZoom(viewport.zoom);
+    // The frame is centred in the glass and nothing is drawn outside it, so the
+    // slice of arena a crew sees is the same on an ultrawide monitor, a laptop
+    // and a tablet - the difference between them is the width of the bars.
+    this.cameras.main.setViewport(
+      viewport.screen.x,
+      viewport.screen.y,
+      viewport.screen.width,
+      viewport.screen.height
+    );
     // Scroll-factor-0 layers still get zoomed around the camera origin, so their world rect is
     // not the viewport window; keep both size and position in sync with it.
-    this.backgroundCover = getBackgroundCoverRect(actualWidth, actualHeight, viewport.zoom);
+    this.backgroundCover = getBackgroundCoverRect(
+      viewport.screen.width,
+      viewport.screen.height,
+      viewport.zoom
+    );
     for (const layer of this.backgroundLayers) {
       layer.sprite
         .setPosition(this.backgroundCover.x, this.backgroundCover.y)
         .setSize(this.backgroundCover.width, this.backgroundCover.height);
     }
+    // Published for the viewport spec, which has no other way to ask what the
+    // camera is actually showing. Inert otherwise: a plain object, written once
+    // per resize.
+    (globalThis as { __spaceshipDisplayCamera?: DisplayCameraSlice }).__spaceshipDisplayCamera = {
+      width: viewport.screen.width,
+      height: viewport.screen.height,
+      zoom: viewport.zoom
+    };
     this.focusCamera(this.spaceshipBody ?? this.snapshot.spaceship);
   }
 

@@ -36,6 +36,13 @@ export interface VisualTransitions {
 
 export interface ResponsiveViewport {
   readonly zoom: number;
+  /** Where the frame lands in screen pixels; outside it the glass is a bar. */
+  readonly screen: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
   readonly width: number;
   readonly height: number;
 }
@@ -151,6 +158,18 @@ export interface CameraScrollInput {
   readonly rendererHeight: number;
 }
 
+/**
+ * The frame every crew sees, letterboxed into whatever glass they have.
+ *
+ * The zoom is the same fit it always was - the largest that puts the frame
+ * inside the screen. What changed is that the visible world is the frame
+ * itself, not the screen divided by that zoom: dividing it back out handed the
+ * looser axis to the device, so an ultrawide monitor saw a third more arena
+ * than a laptop and a 4:3 tablet a third more sky. Thirty per cent more warning
+ * about what is flying at you is not a display setting.
+ *
+ * `screen` is where that frame lands in pixels. Everything outside it is a bar.
+ */
 export function getResponsiveViewport(
   actualWidth: number,
   actualHeight: number,
@@ -160,7 +179,19 @@ export function getResponsiveViewport(
   const safeWidth = Number.isFinite(actualWidth) && actualWidth > 0 ? actualWidth : baseWidth;
   const safeHeight = Number.isFinite(actualHeight) && actualHeight > 0 ? actualHeight : baseHeight;
   const zoom = Math.min(safeWidth / baseWidth, safeHeight / baseHeight);
-  return { zoom, width: safeWidth / zoom, height: safeHeight / zoom };
+  const screenWidth = baseWidth * zoom;
+  const screenHeight = baseHeight * zoom;
+  return {
+    zoom,
+    width: baseWidth,
+    height: baseHeight,
+    screen: {
+      x: (safeWidth - screenWidth) / 2,
+      y: (safeHeight - screenHeight) / 2,
+      width: screenWidth,
+      height: screenHeight
+    }
+  };
 }
 
 /** Screen pixels of slack kept past every renderer edge, so rounding never bares the void. */

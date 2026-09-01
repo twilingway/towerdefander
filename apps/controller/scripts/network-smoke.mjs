@@ -28,7 +28,12 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
     RECONNECTION_GRACE_SECONDS: "0.25",
     // Point at a path that never exists so the run uses built-in balance
     // defaults instead of whatever an operator saved from the console.
-    BALANCE_PRESET_PATH: join(tmpdir(), `smoke-balance-${randomUUID()}.json`)
+    BALANCE_PRESET_PATH: join(tmpdir(), `smoke-balance-${randomUUID()}.json`),
+    // The game gives a crew five minutes to clear a wave. This harness has one
+    // scripted gunner and has to clear two of them to bank a team upgrade, so
+    // it buys itself room: at the product's own deadline the run would end in
+    // defeat before the smoke ever reached its second intermission.
+    ROOM_WAVE_TTL_SECONDS: "1800"
   },
   stdio: "ignore",
   windowsHide: true
@@ -191,7 +196,10 @@ try {
 
   shieldOpposite = false;
   shieldSurvivalMode = true;
-  await waitFor(() => encounter().phase === "intermission", 240_000);
+  // One scripted gunner against a whole wave, on a machine that is also
+  // building and running the browser suite. The room itself is given half an
+  // hour above, so this only has to outlast the fight.
+  await waitFor(() => encounter().phase === "intermission", 600_000);
   gunnerEnabled = false;
   pilot = await reconnectController(pilot, "intermission");
   const offer = await waitForTeamOffer();

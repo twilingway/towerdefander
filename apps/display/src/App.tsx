@@ -35,6 +35,7 @@ import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
+import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
@@ -70,6 +71,7 @@ const controllerUrl = readStringEnvironment(
 );
 
 export function DisplayApp() {
+  const portrait = useIsPortrait();
   const visibleDemo = isVisibleDemoMode(
     typeof window === "undefined" ? "" : window.location.search,
     import.meta.env.DEV,
@@ -342,12 +344,16 @@ export function DisplayApp() {
             </div>
             <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
           </header>
-          <SpaceshipCanvas
-            game={view.game}
-            runNumber={view.runNumber}
-            connectionEpoch={connectionEpoch}
-            visibleDemo={visibleDemo}
-          />
+          {portrait ? (
+            <RotateNotice />
+          ) : (
+            <SpaceshipCanvas
+              game={view.game}
+              runNumber={view.runNumber}
+              connectionEpoch={connectionEpoch}
+              visibleDemo={visibleDemo}
+            />
+          )}
           {view.game.encounter.phase === "combat" &&
             (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
               <SalvageCountdown secondsRemaining={view.game.encounter.lootWindowSecondsRemaining} />

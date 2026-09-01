@@ -1338,3 +1338,57 @@ p {
 .module-tree__cell[data-role="shield"] {
   border-inline-start-color: #4da9d8;
 }
+
+/*
+ * The display is a landscape instrument: its frame is 16:9 and every crew is
+ * given the same slice of arena out of it. Portrait cannot hold that frame, so
+ * the screen asks to be turned rather than playing a worse game.
+ */
+.rotate-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 60vh;
+  padding: 2rem;
+  text-align: center;
+  color: #cfe6ff;
+  background: radial-gradient(circle at 50% 40%, #12203a 0%, #060a14 70%);
+}
+
+.rotate-notice__icon {
+  font-size: 3.5rem;
+  line-height: 1;
+  color: #7ef0ff;
+  animation: rotate-notice-turn 2.4s ease-in-out infinite;
+}
+
+.rotate-notice h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.rotate-notice p {
+  margin: 0;
+  max-width: 28ch;
+  opacity: 0.75;
+}
+
+@keyframes rotate-notice-turn {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-notice__icon {
+    animation: none;
+  }
+}
