@@ -1,6 +1,7 @@
 import { mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import type { Request, RequestHandler, Response } from "express";
 import { describe, expect, it, vi } from "vitest";
@@ -108,6 +109,43 @@ function runnerFor(store: BatchStore, harnessPath: string): BatchRunner {
     guardUrl: "file:///missing-guard.mjs"
   });
 }
+
+/**
+ * The guard the harnesses are spawned with. Listening on the IPC channel refs
+ * it, and a ref'd channel keeps a finished child alive: the runner then never
+ * sees an exit, and the console shows a batch still running long after its
+ * report is written.
+ */
+const guardUrl = pathToFileURL(
+  resolve(import.meta.dirname, "../../../../scripts/owned-process-guard.mjs")
+).href;
+
+describe("batch runner", () => {
+  it("clears the running batch when the harness is done", async () => {
+    const directory = await temporaryDirectory();
+    const store = new BatchStore({ directory, keep: 10 });
+    const harnessPath = join(directory, "harness.mjs");
+    // Does what the real one does in miniature: a tick of asynchronous work,
+    // then nothing left to do.
+    await writeFile(harnessPath, "await new Promise((done) => setTimeout(done, 10));", "utf8");
+    const runner = new BatchRunner({
+      store,
+      presetPath: join(directory, "balance.json"),
+      timeoutSeconds: 60,
+      harnessPath,
+      guardUrl
+    });
+
+    await runner.start("live0001", batchRequest);
+    expect(runner.running()).toBeDefined();
+
+    const deadline = Date.now() + 5_000;
+    while (runner.running() !== undefined && Date.now() < deadline) {
+      await new Promise((done) => setTimeout(done, 25));
+    }
+    expect(runner.running()).toBeUndefined();
+  });
+});
 
 describe("batch store", () => {
   it("reports a batch left running by a dead process as stopped", async () => {
