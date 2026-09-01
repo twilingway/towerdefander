@@ -17,7 +17,6 @@ import {
   interceptAim,
   nextShieldActive,
   nextShieldContact,
-  pilotVector,
   planGunner,
   planPilot,
   planShield,
@@ -25,13 +24,6 @@ import {
   runWaveKey,
   timeToContact
 } from "./visible-demo-policy.mjs";
-
-test("pilot policy traces a normalized loop", () => {
-  assert.deepEqual(pilotVector(0), { x: 1, y: 0 });
-  const quarter = pilotVector(4_500);
-  assert.ok(Math.abs(quarter.x) < 1e-12);
-  assert.ok(Math.abs(quarter.y - 1) < 1e-12);
-});
 
 test("intercept aim leads a moving target", () => {
   const aim = interceptAim({ x: 0, y: 0 }, { x: 100, y: 0, velocityX: 0, velocityY: 100 }, 200);
@@ -192,6 +184,16 @@ test("with nothing on the screen the bot turns rather than backs", () => {
   const plan = planPilot(empty, ACE, createAutopilotMemory());
   assert.ok(plan.vector.x < -0.9, "the course is back toward the middle");
   assert.ok(plan.thrust >= 0);
+});
+
+test("an empty screen is searched nose first", () => {
+  // Nose pointing the opposite way to the course, which is where a fight leaves
+  // it. Read as a manoeuvre this is a reverse, the latch holds it while the
+  // course keeps turning, and the ship crosses the arena tail first at two
+  // fifths of its speed - which is what it looked like on screen.
+  const scene = world({ ship: { ...world().ship, heading: Math.PI } });
+  const plan = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
+  assert.ok(plan.thrust >= 0, "the search was flown in reverse");
 });
 
 test("the helm backs up only for a course well astern", () => {
@@ -898,12 +900,27 @@ test("a visible target still outranks the search", () => {
   assert.equal(memory.target.entityId, "visible");
 });
 
-test("the rookie patrol is untouched by the search behaviour", () => {
-  const empty = world();
-  assert.deepEqual(
-    planPilot(empty, ROOKIE, createAutopilotMemory(), { nowMs: 0 }).vector,
-    pilotVector(0)
-  );
+test("a profile without the orbit skill still fights", () => {
+  // It used to fly a fixed circle and never look at a target at all, so two of
+  // the three hulls engaged only when the circle happened to carry them into
+  // range - laps of ignoring the fight, which is what it looked like on screen.
+  // Abeam of where the old patrol circle points at this instant, so a course
+  // that merely happens to agree with the circle cannot pass this.
+  const scene = world({ enemies: [enemyAt("target", 1, 2200, 2200 + 1200)] });
+  const plan = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
+  assert.ok(plan.vector.y > 0.9, "the course is not on the target");
+  assert.ok(plan.thrust >= 0, "and it is flown nose first");
+});
+
+test("without the orbit skill the ship bores in instead of circling", () => {
+  // Inside twice the stand-off the orbiting profile spends most of the course
+  // sideways; the one without the skill spends none of it. That difference is
+  // the whole of what the skill withholds now.
+  const scene = world({ enemies: [enemyAt("target", 1, 2200, 2200 + 500)] });
+  const straight = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
+  const circling = planPilot(scene, ACE, createAutopilotMemory(), { nowMs: 0 });
+  assert.ok(straight.vector.y > 0.999, "a course without the skill went sideways");
+  assert.ok(circling.vector.y < 0.95, "the orbiting course did not");
 });
 
 test("a rock on screen does not call off the hunt for an unseen shooter", () => {

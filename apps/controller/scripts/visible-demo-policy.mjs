@@ -1,12 +1,5 @@
 import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 
-const TURN_MS = 18_000;
-
-export function pilotVector(elapsedMs) {
-  const angle = ((elapsedMs % TURN_MS) / TURN_MS) * Math.PI * 2;
-  return normalize({ x: Math.cos(angle), y: Math.sin(angle) });
-}
-
 export function interceptAim(spaceship, target, projectileSpeed = 720) {
   if (target === undefined) return { x: 1, y: 0 };
   const relativeX = target.x - spaceship.x;
@@ -1019,8 +1012,16 @@ function orbitVector(world, target, profile, memory, distance) {
   }
 
   // Positive closes the range, negative opens it; the rest goes sideways.
+  //
+  // Without the orbit skill nothing goes sideways: the ship bores straight in
+  // or straight out and never circles its target. That is the whole of what the
+  // skill withholds now. It used to withhold the entire ladder - a profile
+  // without it flew a fixed circle and never looked at a target at all, so two
+  // of the three hulls only ever engaged when the circle happened to carry them
+  // into range, which read on screen as a bot ignoring the fight for laps at a
+  // time.
   const closing = Math.max(-1, Math.min(1, (distance - standoff) / standoff));
-  const sideways = 1 - Math.abs(closing);
+  const sideways = profile.orbit ? 1 - Math.abs(closing) : 0;
   return normalize({
     x: radial.x * closing + tangential.x * sideways,
     y: radial.y * closing + tangential.y * sideways
@@ -1143,9 +1144,6 @@ function planPilotCourse(world, profile, memory, options) {
       crossing: true
     };
   }
-
-  // Without the orbit skill the pilot keeps the old circular patrol.
-  if (!profile.orbit) return { vector: pilotVector(nowMs), mgFiring };
 
   // Nothing to press: walk the shots back to whoever is firing them.
   // Nothing to press and nothing to keep in the bore: whatever this course is,
