@@ -371,7 +371,7 @@ describe("deterministic combat foundation", () => {
     expect(state.pendingSpawns).toHaveLength(0);
   });
 
-  it("lets an ambient asteroid coexist with the boss release", () => {
+  it("lets an asteroid of either origin coexist with the boss release", () => {
     const config = bossAfterEscortConfig();
     let state = createSpaceshipSimulationState(config, 21);
     for (let step = 0; step < 10; step += 1) {
@@ -398,12 +398,14 @@ describe("deterministic combat foundation", () => {
     );
     expect(released.enemies.map(({ kind }) => kind)).toEqual(["boss"]);
 
-    const blocked = advanceSpaceshipSimulation(
-      { ...state, enemies: [], asteroids: [{ ...drifting, origin: "wave" }] },
+    // A wave rock is weather too. Holding the boss behind one meant a single
+    // slow stone crossing the arena added its whole flight to the wave, which
+    // is dead time nobody asked for.
+    const fromTheWave = advanceSpaceshipSimulation(
+      { ...state, enemies: [], asteroids: [{ ...drifting, id: "wave-1", origin: "wave" }] },
       config
     );
-    expect(blocked.enemies).toHaveLength(0);
-    expect(blocked.pendingSpawns.map(({ kind }) => kind)).toEqual(["boss"]);
+    expect(fromTheWave.enemies.map(({ kind }) => kind)).toEqual(["boss"]);
   });
 
   it("keeps the wave in combat while the boss is still queued", () => {

@@ -194,7 +194,7 @@ export function moveAndSpawnThreats(
       }
       if (
         !canSpawnKind(config, pending.kind, enemies, asteroids, workingDynamicCount) ||
-        (waitsForClearedWave(config, pending.kind) && hasLiveWaveThreats(enemies, asteroids))
+        (waitsForClearedWave(config, pending.kind) && hasLiveWaveThreats(enemies))
       ) {
         held.push(pending);
         continue;

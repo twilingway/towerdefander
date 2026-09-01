@@ -1,5 +1,4 @@
 import {
-  type AsteroidState,
   type CombatConfig,
   type CombatEnemyState,
   type EnemyKind,
@@ -90,11 +89,8 @@ export function waitsForClearedWave(config: CombatConfig, kind: SpawnKind): bool
   return kind !== "asteroid" && archetypeOf(config, kind).spawnPolicy === "boss";
 }
 
-export function hasLiveWaveThreats(
-  enemies: readonly CombatEnemyState[],
-  asteroids: readonly AsteroidState[]
-): boolean {
-  return enemies.length > 0 || asteroids.some(({ origin }) => origin === "wave");
+export function hasLiveWaveThreats(enemies: readonly CombatEnemyState[]): boolean {
+  return enemies.length > 0;
 }
 
 export function createDirectedWavePlan(
