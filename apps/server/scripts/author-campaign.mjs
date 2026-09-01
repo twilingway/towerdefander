@@ -29,8 +29,8 @@ const TICKS_PER_SECOND = 20;
  * what stands here is only what a file written before them gets.
  */
 const FALLBACK_AUTHORING = {
-  budgetBase: 14,
-  budgetGrowth: 3,
+  budgetBase: 6,
+  budgetGrowth: 1.6,
   asteroidEveryWaves: 3,
   hpPerCannonShot: 25,
   hpScale: 0.75,
