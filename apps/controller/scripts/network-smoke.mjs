@@ -458,10 +458,15 @@ async function resolveTeamPurchase(firstOffer, firstCard) {
       throw new Error("An unaffordable offer still published a selection.");
 
     gunnerEnabled = true;
-    // A wave is a schedule now, and its last arrival is a minute or more in:
-    // clearing one and reaching the intermission takes longer than it did when
-    // every wave dumped its ships in the first thirty seconds.
-    await waitFor(() => encounter().phase === "intermission", 300_000);
+    // A wave is a schedule now, and its last arrival is a minute or more in.
+    // This is also the one place the smoke has to fight a whole wave down with
+    // a single scripted gunner rather than a crew, so it is given room: the
+    // transport is what is under test here, not the marksmanship. The ceiling
+    // is generous because the room runs in real time and this step shares the
+    // machine with the rest of the gate: it passed at six hundred seconds alone
+    // and timed out at the same number with a build and the browser suite
+    // beside it.
+    await waitFor(() => encounter().phase === "intermission", 900_000);
     gunnerEnabled = false;
     offer = await waitForTeamOffer();
     card = offer.cards[0];

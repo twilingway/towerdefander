@@ -19,6 +19,8 @@ import {
   waveDefinitionSchema
 } from "../../../packages/protocol/src/balance.ts";
 
+import { DEFAULT_SHIP_ARCHETYPES } from "../src/balance/shipCatalogue.ts";
+
 import { defaultPresetPath } from "./balance-run.mjs";
 
 const TICKS_PER_SECOND = 20;
@@ -1159,6 +1161,19 @@ const HULL_DAMAGE_OVERRIDES = {
   bastion: { fireCooldownTicks: 9 }
 };
 
+/**
+ * The tree and the tail a hull is authored with. Both live in the catalogue
+ * beside the hull they belong to, and a saved preset keeps its own copy of them
+ * - the migration never touches `shipArchetypes` - so without this pass a
+ * rebuilt campaign would still be played with the trees the file was saved
+ * with.
+ */
+function resetTree(id, hull) {
+  const authored = DEFAULT_SHIP_ARCHETYPES[id];
+  if (authored === undefined) return hull;
+  return { ...hull, tiers: authored.tiers, endlessTier: authored.endlessTier };
+}
+
 function retuneHullDamage(id, hull) {
   const overrides = HULL_DAMAGE_OVERRIDES[id];
   if (overrides === undefined) return hull;
@@ -1264,32 +1279,6 @@ function buildWave(waveNumber) {
 
 const WAVES = Array.from({ length: 30 }, (_unused, index) => buildWave(index + 1));
 
-/**
- * What a purchase past the tenth tier is worth.
- *
- * A thirty-wave run buys about twenty-nine modules, so most of a crew's growth
- * happens in the repeatable tail; at thirty health and eight percent a pick it
- * was growth on paper only. The reference this campaign is measured against
- * grows a machine by ninety percent in health and about two and a half times in
- * output over a full run, and that is what these are sized for. The ten authored
- * tiers are left alone: they carry the hull's identity, the tail carries scale.
- */
-const TAIL_EFFECTS = {
-  pilot: [{ target: "spaceshipMaxHp", op: "add", value: 60 }],
-  gunner: [{ target: "friendlyProjectileDamage", op: "percent", value: 0.12 }],
-  shield: [{ target: "shieldCapacity", op: "add", value: 30 }]
-};
-
-function retuneTail(hull) {
-  return {
-    ...hull,
-    endlessTier: hull.endlessTier.map((module) => ({
-      ...module,
-      effects: TAIL_EFFECTS[module.role] ?? module.effects
-    }))
-  };
-}
-
 function toWave(groups) {
   return {
     entries: groups.map(([kind, count, start, interval, sectors]) => ({
@@ -1356,7 +1345,7 @@ async function main() {
     preset.tuning.shipArchetypes = Object.fromEntries(
       Object.entries(preset.tuning.shipArchetypes ?? {}).map(([id, hull]) => [
         id,
-        retuneHullDamage(id, retuneTail(hull))
+        retuneHullDamage(id, resetTree(id, hull))
       ])
     );
     // The knobs go back in with the table they produced, so the file describes
