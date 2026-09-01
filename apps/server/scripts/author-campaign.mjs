@@ -38,10 +38,11 @@ function weapon({
   burst = 1,
   spread = 0,
   reachShare = 0.75,
+  reach = null,
   shieldCost = null,
   turnRate = 2.2
 }) {
-  const reach = (speed * lifetime) / TICKS_PER_SECOND;
+  const flight = (speed * lifetime) / TICKS_PER_SECOND;
   return {
     kind,
     cooldownTicks: cooldown,
@@ -50,7 +51,7 @@ function weapon({
     projectileRadius: radius,
     projectileSpeedPerSecond: speed,
     projectileLifetimeTicks: lifetime,
-    engagementRange: Math.round(reach * reachShare),
+    engagementRange: Math.round(reach ?? flight * reachShare),
     turnRatePerSecond: turnRate,
     burstCount: burst,
     burstSpreadRadians: spread,
@@ -80,6 +81,36 @@ const shots = (count) => Math.max(1, Math.round(CANNON_SHOT * count * HP_SCALE))
  * than trusted — a barrel over it gets its cooldown stretched until the whole
  * archetype fits, which keeps the rhythm the author wrote and drops the volume.
  */
+/**
+ * A beam barrel. Speed and lifetime say nothing about a shot that arrives in
+ * the tick it left, so they sit at the floor and the reach is stated outright:
+ * for a beam it is both how far it carries and where the barrel opens fire.
+ */
+function beam({ damage, cooldown, reach, radius = 10, shieldCost = null }) {
+  return weapon({
+    kind: "laser",
+    damage,
+    cooldown,
+    reach,
+    radius,
+    shieldCost,
+    speed: 1,
+    lifetime: 1
+  });
+}
+
+/**
+ * What share of a beam's paper output actually lands. A shell can be dodged and
+ * a beam cannot, so priced at the same cap the beam has to count for more than
+ * it says - otherwise "same damage a second" means twice the damage taken.
+ *
+ * Half was the first guess and it was too kind: measured over thirty runs a
+ * cell, the beam families carried 330-640 points of the 2500 a run took, and
+ * the ladder they displaced tougher ships from came out fifteen points softer
+ * than it went in.
+ */
+const LASER_DPS_SHARE = 0.75;
+
 function damagePerSecondCap(spawnCost, boss = false) {
   // A boss is a long fight, not a shredder. Priced like everything else it put
   // out sixty-eight points a second by wave thirty: an ordinary wave cost the
@@ -90,10 +121,10 @@ function damagePerSecondCap(spawnCost, boss = false) {
 }
 
 function damagePerSecond(weapons) {
-  return weapons.reduce(
-    (total, one) => total + (one.damage * one.burstCount) / (one.cooldownTicks / TICKS_PER_SECOND),
-    0
-  );
+  return weapons.reduce((total, one) => {
+    const paper = (one.damage * one.burstCount) / (one.cooldownTicks / TICKS_PER_SECOND);
+    return total + (one.kind === "laser" ? paper / LASER_DPS_SHARE : paper);
+  }, 0);
 }
 
 function withinBudget(weapons, spawnCost, boss) {
@@ -175,7 +206,7 @@ function enemy({
   };
 }
 
-/** Seventeen standard archetypes in three families, and nine bosses. */
+/** Twenty standard archetypes in three families, and ten bosses. */
 const ARCHETYPES = {
   // --- Swarm: cheap, fast, close, dies in two or three shots ---
   interceptor: enemy({
@@ -243,6 +274,30 @@ const ARCHETYPES = {
     credits: 3,
     loot: 0.2,
     weapons: [weapon({ damage: 9, cooldown: 26, speed: 700, lifetime: 30, burst: 3, spread: 0.2 })]
+  }),
+
+  /**
+   * The first barrel the crew cannot dodge. It has to come close to use it, it
+   * dies to two shots, and it is what teaches the shield seat that the answer
+   * to a beam is the arc rather than the stick.
+   */
+  sparker: enemy({
+    label: "Искра",
+    hp: shots(4),
+    radius: 18,
+    speed: 240,
+    distance: 300,
+    turn: 3.4,
+    turnAccel: 9,
+    turnBrake: 9,
+    shape: "ship-scissor",
+    scale: 0.9,
+    cost: 2,
+    unlock: 8,
+    score: 20,
+    credits: 2,
+    loot: 0.18,
+    weapons: [beam({ damage: 7, cooldown: 32, reach: 380, radius: 8 })]
   }),
 
   // --- Line: the middle of every wave ---
@@ -377,6 +432,23 @@ const ARCHETYPES = {
     ]
   }),
 
+  lantern: enemy({
+    label: "Фонарь",
+    hp: shots(8),
+    radius: 32,
+    speed: 150,
+    distance: 480,
+    turn: 2,
+    shape: "ship-ringrunner",
+    scale: 1.05,
+    cost: 4,
+    unlock: 14,
+    score: 40,
+    credits: 4,
+    loot: 0.26,
+    weapons: [beam({ damage: 15, cooldown: 45, reach: 520, radius: 10 })]
+  }),
+
   // --- Heavy: slow, thick, and the reason a wave has to be fought ---
   bulwark: enemy({
     label: "Оплот",
@@ -507,6 +579,30 @@ const ARCHETYPES = {
     ]
   }),
 
+  /**
+   * A beam that does not have to close. It is slow enough to be left for later
+   * and thick enough that leaving it costs the hull the whole time: the wave
+   * where standing still stops being free.
+   */
+  smelter: enemy({
+    label: "Плавильня",
+    hp: shots(16),
+    radius: 54,
+    speed: 80,
+    distance: 520,
+    turn: 0.9,
+    turnAccel: 2,
+    turnBrake: 2,
+    shape: "station-refinery",
+    scale: 1.3,
+    cost: 7,
+    unlock: 22,
+    score: 78,
+    credits: 8,
+    loot: 0.38,
+    weapons: [beam({ damage: 24, cooldown: 45, reach: 620, radius: 12 })]
+  }),
+
   // --- Bosses: one per fifth wave, and three more for the director past thirty ---
   boss: enemy({
     label: "Молот",
@@ -613,6 +709,30 @@ const ARCHETYPES = {
       })
     ]
   }),
+  /**
+   * The beam boss. Its shell barrel is what the crew dodges and its beam is
+   * what the shield has to be pointed at, so neither seat can sit the fight out.
+   */
+  bossPrism: enemy({
+    label: "Призма",
+    boss: true,
+    hp: shots(84),
+    radius: 108,
+    speed: 58,
+    distance: 640,
+    turn: 0.9,
+    shape: "boss-obelisk",
+    scale: 1.5,
+    cost: 27,
+    unlock: 25,
+    score: 560,
+    credits: 54,
+    loot: 1,
+    weapons: [
+      beam({ damage: 26, cooldown: 60, reach: 700, radius: 16 }),
+      weapon({ damage: 12, cooldown: 30, speed: 660, lifetime: 60, burst: 2, spread: 0.2 })
+    ]
+  }),
   bossDreadnought: enemy({
     label: "Владыка",
     boss: true,
@@ -624,7 +744,7 @@ const ARCHETYPES = {
     shape: "boss-dreadnought",
     scale: 1.5,
     cost: 27,
-    unlock: 25,
+    unlock: 30,
     score: 560,
     credits: 54,
     loot: 1,
@@ -653,7 +773,7 @@ const ARCHETYPES = {
     shape: "boss-mothership",
     scale: 1.6,
     cost: 30,
-    unlock: 30,
+    unlock: 35,
     score: 700,
     credits: 66,
     loot: 1,
@@ -682,7 +802,7 @@ const ARCHETYPES = {
     shape: "boss-splitter",
     scale: 1.55,
     cost: 33,
-    unlock: 35,
+    unlock: 40,
     score: 780,
     credits: 72,
     loot: 1,
@@ -709,7 +829,7 @@ const ARCHETYPES = {
     shape: "boss-voideye",
     scale: 1.6,
     cost: 36,
-    unlock: 40,
+    unlock: 45,
     score: 860,
     credits: 78,
     loot: 1,
@@ -738,7 +858,7 @@ const ARCHETYPES = {
     shape: "boss-solar",
     scale: 1.65,
     cost: 40,
-    unlock: 45,
+    unlock: 50,
     score: 950,
     credits: 84,
     loot: 1,
@@ -1004,9 +1124,19 @@ const DIRECTOR = {
 };
 
 const FAMILIES = {
-  swarm: ["interceptor", "wasp", "skirmisher", "lancer"],
-  line: ["gunship", "escort", "missileCarrier", "sniper", "gunboat", "railer", "mortar", "warden"],
-  heavy: ["bulwark", "siege", "dreadnought", "hive", "leviathan"]
+  swarm: ["interceptor", "wasp", "skirmisher", "lancer", "sparker"],
+  line: [
+    "gunship",
+    "escort",
+    "missileCarrier",
+    "sniper",
+    "gunboat",
+    "railer",
+    "mortar",
+    "warden",
+    "lantern"
+  ],
+  heavy: ["bulwark", "siege", "dreadnought", "hive", "leviathan", "smelter"]
 };
 
 /** How the wave's budget is split between the three families as it grows. */

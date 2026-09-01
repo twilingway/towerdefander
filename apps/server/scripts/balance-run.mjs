@@ -201,7 +201,7 @@ export function playRun(config, options) {
       receivedTick: state.clock.tick
     });
     if (seats.includes("shield")) {
-      const shield = planShield(world, profile, memory);
+      const shield = planShield(world, profile, memory, policyOptions);
       state = applyShieldInput(state, {
         vector: shield.aim,
         active: shield.active,

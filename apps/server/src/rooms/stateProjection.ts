@@ -14,7 +14,7 @@ import type {
   TeamUpgradeVote
 } from "@spaceship-defender/game-core";
 
-import { CREW_ROLES, type CrewRole } from "@spaceship-defender/protocol";
+import { CREW_ROLES, ENEMY_BEAM_SOURCE, type CrewRole } from "@spaceship-defender/protocol";
 
 import {
   AsteroidState,
@@ -107,9 +107,14 @@ export function projectGameState(
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
   reconcileKeyed(target.display.lootDrops, game.lootDrops, () => new LootDropState(), syncLootDrop);
+  // Both sides' pulses ride one collection: a beam is a beam to the display,
+  // and the source is what tells it which way to paint the line.
   reconcileKeyed(
     target.display.laserBeams,
-    game.laserBeams,
+    [
+      ...game.laserBeams,
+      ...game.hostileBeams.map((beam) => ({ ...beam, source: ENEMY_BEAM_SOURCE }))
+    ],
     () => new LaserBeamState(),
     (state, beam) => {
       state.entityId = beam.id;

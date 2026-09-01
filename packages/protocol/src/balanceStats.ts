@@ -13,7 +13,7 @@ import { AUTOPILOT_LEVELS } from "./balance.ts";
  * worse than no measurement: the reader drops a foreign version and says how
  * many it dropped.
  */
-export const BALANCE_STATS_FILE_VERSION = 2 as const;
+export const BALANCE_STATS_FILE_VERSION = 3 as const;
 
 /** Ceilings that keep one console click from pinning a core for an hour. */
 export const MAX_BATCH_RUNS = 2000;
@@ -60,7 +60,7 @@ const summarySchema = z
   .strict();
 export type StatSummary = z.infer<typeof summarySchema>;
 
-/** The fifteen counters `game-core` keeps, as a delta or as a run total. */
+/** The sixteen counters `game-core` keeps, as a delta or as a run total. */
 export const runStatsSchema = z
   .object({
     shotsByCannon: nonNegativeFinite,
@@ -72,6 +72,7 @@ export const runStatsSchema = z
     damageTakenFromBullets: nonNegativeFinite,
     damageTakenFromMissiles: nonNegativeFinite,
     damageTakenFromAsteroids: nonNegativeFinite,
+    damageTakenFromBeams: nonNegativeFinite,
     shieldBlocks: nonNegativeFinite,
     shieldEnergySpentOnBlocks: nonNegativeFinite,
     shieldOverdrawnHits: nonNegativeFinite,

@@ -5,6 +5,7 @@ import {
   type CombatEnemyState,
   type EnemyWeaponTuning,
   type HomingMissileState,
+  type HostileBeamState,
   type HostileProjectileState,
   type SpawnKind,
   type SpawnSector,
@@ -48,6 +49,40 @@ export function createHostileBullet(
     damage: weapon.damage,
     shieldHitCost: weapon.shieldHitCost,
     lifetimeTicks: weapon.projectileLifetimeTicks,
+    visual: weapon.visual
+  };
+}
+
+/**
+ * A beam is the whole reach of the barrel travelled inside one tick: the muzzle
+ * in `previous`, the far end in `x`/`y`, and no velocity. The swept-circle test
+ * that resolves every other shot answers this shape too, so the beam needs no
+ * geometry of its own - only the reach, which is the distance the barrel opens
+ * fire at.
+ */
+export function createHostileBeam(
+  enemy: CombatEnemyState,
+  target: { readonly x: number; readonly y: number },
+  weapon: EnemyWeaponTuning,
+  aimOffset: number,
+  spawnSequence: number,
+  tick: number
+): HostileBeamState {
+  const heading = Math.atan2(target.y - enemy.y, target.x - enemy.x) + aimOffset;
+  return {
+    // Not `beam-`: friendly pulses number themselves off a different counter
+    // and both sides share one keyed collection on the wire.
+    id: `enemy-beam-${String(spawnSequence)}`,
+    spawnSequence,
+    previousX: enemy.x,
+    previousY: enemy.y,
+    x: enemy.x + Math.cos(heading) * weapon.engagementRange,
+    y: enemy.y + Math.sin(heading) * weapon.engagementRange,
+    velocity: { x: 0, y: 0 },
+    radius: weapon.projectileRadius,
+    spawnedTick: tick,
+    damage: weapon.damage,
+    shieldHitCost: weapon.shieldHitCost,
     visual: weapon.visual
   };
 }

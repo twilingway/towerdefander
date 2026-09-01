@@ -22,8 +22,11 @@ export function secondsToTicks(seconds: number): number {
 /**
  * How far a shot from this weapon can travel before its lifetime runs out. A
  * homing missile spends part of that on turning, so its useful range is lower.
+ * A beam has neither speed nor lifetime: it reaches exactly as far as the
+ * distance the barrel opens fire at, inside the tick it fired.
  */
 export function weaponReach(weapon: EnemyWeaponTuning): number {
+  if (weapon.kind === "laser") return Math.round(weapon.engagementRange);
   return Math.round(
     weapon.projectileSpeedPerSecond * weapon.projectileLifetimeTicks * TICK_SECONDS
   );

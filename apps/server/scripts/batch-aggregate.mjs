@@ -17,6 +17,7 @@ const RUN_STAT_KEYS = [
   "damageTakenFromBullets",
   "damageTakenFromMissiles",
   "damageTakenFromAsteroids",
+  "damageTakenFromBeams",
   "shieldBlocks",
   "shieldEnergySpentOnBlocks",
   "shieldOverdrawnHits",

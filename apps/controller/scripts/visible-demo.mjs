@@ -535,7 +535,7 @@ function sendCombatInputs(expectedGeneration) {
     aim: gunner.aim,
     firing: gunner.firing
   });
-  const shield = planShield(world, profile, memory);
+  const shield = planShield(world, profile, memory, options);
   shieldActive = shield.active;
   shieldSequence += 1;
   shieldRoom().send(clientMessage.shieldInput, {

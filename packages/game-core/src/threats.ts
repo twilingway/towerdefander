@@ -32,6 +32,7 @@ import {
   burstAimOffset,
   canAddEntity,
   canSpawnKind,
+  createHostileBeam,
   createHostileBullet,
   createMissile,
   scheduleAmbientAsteroid,
@@ -67,6 +68,9 @@ export function moveAndSpawnThreats(
   let homingMissiles = state.homingMissiles.map((missile) =>
     moveMissile(missile, state.spaceship, secondsPerStep)
   );
+  // Beams from the last couple of ticks are still on the wire for the display;
+  // the ones fired below are appended to them and resolved this same tick.
+  let hostileBeams = state.hostileBeams;
   let nextSpawnSequence = state.nextSpawnSequence;
   let workingDynamicCount =
     enemies.length +
@@ -96,11 +100,14 @@ export function moveAndSpawnThreats(
       // itself; only where the shot is pointed comes from what the enemy believes.
       if (distanceToSpaceship > weapon.engagementRange) return;
       firedWeapons.add(`${enemy.id}:${String(weaponIndex)}`);
+      // A beam arrives the instant it leaves, so leading it is a systematic
+      // miss ahead of the nose: zero speed is how the aim solution is told to
+      // point at the ship rather than at where it is going.
       const target = aimPoint(
         enemy,
         enemy.perception,
         profile,
-        weapon.projectileSpeedPerSecond,
+        weapon.kind === "laser" ? 0 : weapon.projectileSpeedPerSecond,
         state.clock.tick,
         secondsPerStep
       );
@@ -112,6 +119,17 @@ export function moveAndSpawnThreats(
             ? 0
             : ((random / UINT32_MAX) * 2 - 1) * profile.aimJitterRadians;
         const aimOffset = burstAimOffset(weapon, shot) + jitter;
+        if (weapon.kind === "laser") {
+          // No cap check: the beam is gone by the end of this tick and takes no
+          // room in the arena. It still draws a spawn sequence, because that is
+          // what orders simultaneous hits.
+          hostileBeams = [
+            ...hostileBeams,
+            createHostileBeam(enemy, target, weapon, aimOffset, nextSpawnSequence, state.clock.tick)
+          ];
+          nextSpawnSequence += 1;
+          continue;
+        }
         if (weapon.kind === "bullet") {
           if (
             !canAddEntity(
@@ -238,6 +256,7 @@ export function moveAndSpawnThreats(
     asteroids,
     hostileProjectiles,
     homingMissiles,
+    hostileBeams,
     pendingSpawns,
     spawnRngState,
     ambientAsteroidRngState,

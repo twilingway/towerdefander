@@ -24,7 +24,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 41 as const;
+export const PROTOCOL_VERSION = 42 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -96,7 +96,12 @@ export type AsteroidOrigin = z.infer<typeof asteroidOriginSchema>;
 export const LOOT_KINDS = ["repair", "shieldCell"] as const;
 export const lootKindSchema = z.enum(LOOT_KINDS);
 export type LootKind = z.infer<typeof lootKindSchema>;
-export const PROJECTILE_SOURCES = ["cannon", "machineGun"] as const;
+/**
+ * Who fired a shot or a pulse. The friendly ones name a barrel; every hostile
+ * beam shares one source, because the display only has to tell it from ours.
+ */
+export const PROJECTILE_SOURCES = ["cannon", "machineGun", "enemy"] as const;
+export const ENEMY_BEAM_SOURCE = "enemy" as const;
 export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
 export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
 /** A module id is a catalogue id, like an enemy kind: the preset owns the list. */
@@ -655,7 +660,10 @@ export const displayGameSnapshotSchema = z
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
     lootDrops: z.array(publicLootDropViewSchema).max(COMBAT_ENTITY_CAPS.lootDrops),
-    laserBeams: z.array(publicLaserBeamViewSchema).max(8),
+    // Both sides fire into this one collection, and a busy wave can light up
+    // several beams in a tick. Past the cap a pulse is simply not drawn: the
+    // damage was resolved on the server either way.
+    laserBeams: z.array(publicLaserBeamViewSchema).max(24),
     /** What the crew has bought, in purchase order; the ship stats follow from it. */
     purchasedModules: z.array(upgradeIdSchema).max(200),
     friendlyProjectiles: z

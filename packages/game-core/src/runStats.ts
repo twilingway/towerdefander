@@ -24,6 +24,7 @@ export interface CombatRunStats {
   readonly damageTakenFromBullets: number;
   readonly damageTakenFromMissiles: number;
   readonly damageTakenFromAsteroids: number;
+  readonly damageTakenFromBeams: number;
   readonly shieldBlocks: number;
   readonly shieldEnergySpentOnBlocks: number;
   /** Reached the hull with the sector up but the battery too low to pay for it. */
@@ -45,6 +46,7 @@ export function createRunStats(): CombatRunStats {
     damageTakenFromBullets: 0,
     damageTakenFromMissiles: 0,
     damageTakenFromAsteroids: 0,
+    damageTakenFromBeams: 0,
     shieldBlocks: 0,
     shieldEnergySpentOnBlocks: 0,
     shieldOverdrawnHits: 0,
@@ -71,6 +73,7 @@ export function addRunStats(stats: CombatRunStats, delta: Partial<CombatRunStats
     damageTakenFromMissiles: stats.damageTakenFromMissiles + (delta.damageTakenFromMissiles ?? 0),
     damageTakenFromAsteroids:
       stats.damageTakenFromAsteroids + (delta.damageTakenFromAsteroids ?? 0),
+    damageTakenFromBeams: stats.damageTakenFromBeams + (delta.damageTakenFromBeams ?? 0),
     shieldBlocks: stats.shieldBlocks + (delta.shieldBlocks ?? 0),
     shieldEnergySpentOnBlocks:
       stats.shieldEnergySpentOnBlocks + (delta.shieldEnergySpentOnBlocks ?? 0),
@@ -84,6 +87,9 @@ export function addRunStats(stats: CombatRunStats, delta: Partial<CombatRunStats
 /** Total health the run lost, which must equal the damage recorded against it. */
 export function damageTaken(stats: CombatRunStats): number {
   return (
-    stats.damageTakenFromBullets + stats.damageTakenFromMissiles + stats.damageTakenFromAsteroids
+    stats.damageTakenFromBullets +
+    stats.damageTakenFromMissiles +
+    stats.damageTakenFromAsteroids +
+    stats.damageTakenFromBeams
   );
 }

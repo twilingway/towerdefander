@@ -1,5 +1,6 @@
 import {
   CAMERA_VIEW_ASPECT,
+  ENEMY_BEAM_SOURCE,
   FALLBACK_VISUAL_ASSET_ID,
   getVisualAsset
 } from "@spaceship-defender/protocol";
@@ -386,7 +387,7 @@ class SpaceshipScene extends Phaser.Scene {
     if (this.beams === undefined) return;
     this.beams.clear();
     for (const beam of this.snapshot.laserBeams) {
-      const style = beam.source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
+      const style = beamStyle(beam.source);
       this.beams.lineStyle(style.width, style.color, style.alpha);
       this.beams.beginPath();
       this.beams.moveTo(beam.fromX, beam.fromY);
@@ -699,6 +700,17 @@ const SHIELD_GLOW_DISTANCE = 24;
 /** Turret and nose beams read apart the way their projectiles already do. */
 const LASER_CANNON_STYLE = { width: 3, color: 0x7ef0ff, alpha: 0.9 } as const;
 const LASER_NOSE_STYLE = { width: 2, color: 0xffd783, alpha: 0.85 } as const;
+/**
+ * Hostile fire is red on this display and ours is not, so the beam follows the
+ * same rule. Thicker than either of ours, because a hit that cannot be dodged
+ * has to be the thing you see first.
+ */
+const LASER_ENEMY_STYLE = { width: 4, color: 0xff5a4a, alpha: 0.9 } as const;
+
+function beamStyle(source: string) {
+  if (source === ENEMY_BEAM_SOURCE) return LASER_ENEMY_STYLE;
+  return source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
+}
 
 function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.Glow | undefined {
   shield.enableFilters();

@@ -23,7 +23,7 @@ export const FRIENDLY_WEAPON_KINDS = ["kinetic", "laser", "missile"] as const;
 export const friendlyWeaponKindSchema = z.enum(FRIENDLY_WEAPON_KINDS);
 export type FriendlyWeaponKind = z.infer<typeof friendlyWeaponKindSchema>;
 
-export const ENEMY_WEAPON_KINDS = ["bullet", "missile"] as const;
+export const ENEMY_WEAPON_KINDS = ["bullet", "missile", "laser"] as const;
 export const enemyWeaponKindSchema = z.enum(ENEMY_WEAPON_KINDS);
 export type EnemyWeaponKind = z.infer<typeof enemyWeaponKindSchema>;
 

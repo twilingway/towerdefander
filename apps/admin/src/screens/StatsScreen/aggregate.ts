@@ -101,7 +101,8 @@ export function damageByWave(cell: BatchCell): GroupedBars {
       { label: "Нос", points: cell.waves.map(({ stats }) => stats.damageDealtByMachineGun) },
       { label: "Пули", points: cell.waves.map(({ stats }) => stats.damageTakenFromBullets) },
       { label: "Ракеты", points: cell.waves.map(({ stats }) => stats.damageTakenFromMissiles) },
-      { label: "Астероиды", points: cell.waves.map(({ stats }) => stats.damageTakenFromAsteroids) }
+      { label: "Астероиды", points: cell.waves.map(({ stats }) => stats.damageTakenFromAsteroids) },
+      { label: "Лучи", points: cell.waves.map(({ stats }) => stats.damageTakenFromBeams) }
     ]
   };
 }

@@ -31,6 +31,7 @@ const zeroStats: RunStatsReport = {
   damageTakenFromBullets: 0,
   damageTakenFromMissiles: 0,
   damageTakenFromAsteroids: 0,
+  damageTakenFromBeams: 0,
   shieldBlocks: 0,
   shieldEnergySpentOnBlocks: 0,
   shieldOverdrawnHits: 0,

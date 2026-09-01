@@ -180,7 +180,7 @@ interface SpaceshipThreatCandidate {
   readonly timeOfImpact: number;
   readonly sourceSequence: number;
   readonly sourceId: string;
-  readonly kind: "bullet" | "missile" | "asteroid";
+  readonly kind: "bullet" | "missile" | "asteroid" | "beam";
   readonly shieldHitCost: number;
   readonly shieldHit: boolean;
 }
@@ -196,6 +196,11 @@ export function resolveSpaceshipThreats(
   })[] = [
     ...state.hostileProjectiles.map((entity) => ({ ...entity, threatKind: "bullet" as const })),
     ...state.homingMissiles.map((entity) => ({ ...entity, threatKind: "missile" as const })),
+    // Only this tick's beams: an older one is still on the wire for the display
+    // and must not burn the hull a second time.
+    ...state.hostileBeams
+      .filter(({ spawnedTick }) => spawnedTick === state.clock.tick)
+      .map((entity) => ({ ...entity, threatKind: "beam" as const })),
     ...state.asteroids.map((entity) => ({
       ...entity,
       threatKind: "asteroid" as const,
@@ -257,6 +262,7 @@ export function resolveSpaceshipThreats(
   let damageTakenFromBullets = 0;
   let damageTakenFromMissiles = 0;
   let damageTakenFromAsteroids = 0;
+  let damageTakenFromBeams = 0;
   let shieldBlocks = 0;
   let shieldEnergySpentOnBlocks = 0;
   let shieldOverdrawnHits = 0;
@@ -302,6 +308,7 @@ export function resolveSpaceshipThreats(
         spaceshipHp = Math.max(0, spaceshipHp - threat.damage);
         if (candidate.kind === "bullet") damageTakenFromBullets += applied;
         else if (candidate.kind === "missile") damageTakenFromMissiles += applied;
+        else if (candidate.kind === "beam") damageTakenFromBeams += applied;
         else damageTakenFromAsteroids += applied;
         removed.add(candidate.sourceId);
       }
@@ -316,6 +323,7 @@ export function resolveSpaceshipThreats(
       damageTakenFromBullets,
       damageTakenFromMissiles,
       damageTakenFromAsteroids,
+      damageTakenFromBeams,
       shieldBlocks,
       shieldEnergySpentOnBlocks,
       shieldOverdrawnHits,
@@ -359,6 +367,9 @@ export function removeExpiredAndOutOfBounds(
     // Two ticks is long enough for any client frame to catch the flash and
     // short enough that it never reads as a beam left hanging in the air.
     laserBeams: state.laserBeams.filter(
+      (beam) => state.clock.tick - beam.spawnedTick < LASER_BEAM_TICKS
+    ),
+    hostileBeams: state.hostileBeams.filter(
       (beam) => state.clock.tick - beam.spawnedTick < LASER_BEAM_TICKS
     )
   };

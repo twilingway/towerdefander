@@ -51,7 +51,7 @@ export interface CombatCaps {
 export const FRIENDLY_WEAPON_KINDS = ["kinetic", "laser", "missile"] as const;
 export type FriendlyWeaponKind = (typeof FRIENDLY_WEAPON_KINDS)[number];
 
-export type EnemyWeaponKind = "bullet" | "missile";
+export type EnemyWeaponKind = "bullet" | "missile" | "laser";
 
 export interface EnemyWeaponTuning {
   readonly kind: EnemyWeaponKind;
@@ -368,6 +368,21 @@ export interface HostileProjectileState extends MovingEntity {
   readonly visual: EntityVisual | null;
 }
 
+/**
+ * An enemy beam: the muzzle in `previous`, the end of its reach in `x`/`y`, and
+ * no velocity at all, because it crosses the whole distance inside the tick
+ * that fired it. The same shape a friendly pulse has, plus what a hostile
+ * threat has to carry - the damage and what blocking it costs the shield.
+ *
+ * It is not an entity: it takes no room in the caps and is kept for a couple of
+ * ticks only so the display has something to draw.
+ */
+export interface HostileBeamState extends MovingEntity {
+  readonly damage: number;
+  readonly shieldHitCost: number;
+  readonly visual: EntityVisual | null;
+}
+
 export interface HomingMissileState extends MovingEntity {
   readonly heading: number;
   readonly damage: number;
@@ -426,6 +441,8 @@ export interface CombatStateFields {
    */
   /** Laser pulses fired in the last couple of ticks; display-only, never a cap. */
   readonly laserBeams: readonly FriendlyProjectileLike[];
+  /** The same, fired at the ship. Resolved on its own tick, drawn for two. */
+  readonly hostileBeams: readonly HostileBeamState[];
   readonly ship: ShipStats;
   /** Append-only, in purchase order; the stats above are derived from it. */
   readonly purchasedModules: readonly ModuleId[];

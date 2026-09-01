@@ -308,6 +308,34 @@ test("an enemy inside its own engagement range outranks one still approaching", 
   assert.equal(rankTargets(scene, { archetypes })[0].entity.entityId, "shooting");
 });
 
+test("an enemy inside its beam reach outranks a closer one firing shells", () => {
+  // The shell can be dodged and the beam cannot, so the further ship wins even
+  // though proximity is on the closer one's side.
+  const archetypes = {
+    gunship: { spawnPolicy: "standard", weapons: [{ kind: "bullet", engagementRange: 900 }] },
+    burner: { spawnPolicy: "standard", weapons: [{ kind: "laser", engagementRange: 420 }] }
+  };
+  const scene = world({
+    enemies: [
+      enemyAt("shelling", 1, 2200 + 300, 2200),
+      enemyAt("burning", 2, 2200 + 400, 2200, { kind: "burner" })
+    ]
+  });
+  assert.equal(rankTargets(scene, { archetypes })[0].entity.entityId, "burning");
+});
+
+test("the shield faces a beam already in reach over a shell still flying", () => {
+  const archetypes = {
+    burner: { spawnPolicy: "standard", weapons: [{ kind: "laser", engagementRange: 420 }] }
+  };
+  const scene = world({
+    enemies: [enemyAt("burning", 1, 2200, 2200 - 380, { kind: "burner" })],
+    bullets: [entity("shot", 2, { x: 2200 + 600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const facing = planShield(scene, ACE, createAutopilotMemory(), { archetypes });
+  assert.ok(facing.aim.y < -0.9, "the arc turned onto the shell instead of the beam");
+});
+
 test("the cannon waits out the turret traverse", () => {
   // Target abeam, turret still pointing along +x.
   const abeam = world({ enemies: [enemyAt("abeam", 1, 2200, 2900)] });

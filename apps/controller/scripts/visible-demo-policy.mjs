@@ -197,7 +197,7 @@ const DECISIVE_SCORE_RATIO = 1.5;
  * this obvious — a sniper round costs ten energy and saves thirty-five hull,
  * a rock costs twenty and saves forty.
  */
-const THREAT_WEIGHTS = { missile: 3, bullet: 2, asteroid: 1 };
+const THREAT_WEIGHTS = { missile: 3, bullet: 2, beam: 2, asteroid: 1 };
 /** Threat weight from `nextShieldContact` worth spending the last energy on. */
 const COSTLY_THREAT_WEIGHT = THREAT_WEIGHTS.bullet;
 /**
@@ -429,6 +429,19 @@ function maxEngagementRange(archetype) {
 }
 
 /**
+ * How far this archetype's beams carry, or zero when it has none. A beam is
+ * the one shot that cannot be outrun once it is fired, so being inside this
+ * ring is not a risk the bot can wait out - only close and kill, or leave.
+ */
+function beamReach(archetype) {
+  return archetype.weapons.reduce(
+    (widest, weapon) =>
+      weapon.kind === "laser" ? Math.max(widest, weapon.engagementRange) : widest,
+    0
+  );
+}
+
+/**
  * One ranking shared by both gunners. Interceptable missiles outrank everything
  * because they are lethal and destructible; a boss outranks ordinary ships; an
  * enemy already inside its own engagement range outranks one still approaching.
@@ -469,11 +482,20 @@ export function rankTargets(world, options = {}) {
     // Ranked above the swarm, the standoff the pilot keeps to its target is
     // what carries the ship into range.
     const outranging = engaging && distance > frameRadius;
+    // Above `engaging`, because a shell in the air can be dodged and a beam
+    // already landed. While one of these is in reach the hull is losing health
+    // on a timer no manoeuvre touches.
+    const burning = archetype !== undefined && distance <= beamReach(archetype);
     scored.push({
       entity: enemy,
       role: "enemy",
       score:
-        (isBoss ? 60 : 30) + (engaging ? 12 : 0) + (outranging ? 18 : 0) + proximity + finishable
+        (isBoss ? 60 : 30) +
+        (engaging ? 12 : 0) +
+        (outranging ? 18 : 0) +
+        (burning ? 20 : 0) +
+        proximity +
+        finishable
     });
   }
 
@@ -565,7 +587,7 @@ export function aimBearing(world, target, projectileSpeed, profile, memory) {
  * Soonest threat to reach the shield ring, with the bearing it will arrive on.
  * Ordered by time, not by distance: a slow rock further out can beat a bullet.
  */
-export function nextShieldContact(world) {
+export function nextShieldContact(world, options = {}) {
   const contacts = [];
   const bearingOf = (arrival) => Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x);
 
@@ -586,6 +608,21 @@ export function nextShieldContact(world) {
     ...world.bullets.map((entity) => ({ entity, weight: THREAT_WEIGHTS.bullet })),
     ...world.asteroids.map((entity) => ({ entity, weight: THREAT_WEIGHTS.asteroid }))
   ];
+
+  // A beam has no flight to forecast: by the time it exists it has already hit.
+  // The only thing the arc can answer is the ship that is about to fire one, so
+  // an enemy standing inside its own beam reach is treated as a contact at zero
+  // seconds - it wins among equals precisely because it is landing now.
+  for (const enemy of world.enemies) {
+    const reach = beamReach(options.archetypes?.[enemy.kind] ?? { weapons: [] });
+    if (reach <= 0 || distanceBetween(world.ship, enemy) > reach) continue;
+    contacts.push({
+      entity: enemy,
+      weight: THREAT_WEIGHTS.beam,
+      seconds: 0,
+      bearing: bearingOf(enemy)
+    });
+  }
 
   for (const { entity, weight } of straight) {
     const seconds = timeToContact(world.ship, world.shieldRadius, entity);
@@ -652,8 +689,8 @@ function expectedThreatBearing(world, memory) {
   return Math.atan2(source.y - world.ship.y, source.x - world.ship.x);
 }
 
-export function planShield(world, profile, memory) {
-  const contact = nextShieldContact(world);
+export function planShield(world, profile, memory, options = {}) {
+  const contact = nextShieldContact(world, options);
   // Facing is decided ahead of the threat; raising is still the operator's
   // number from the console. The arc may sit on an enemy for a whole magazine
   // without the shield ever coming up, and that is the intended shape: turning
