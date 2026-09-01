@@ -471,10 +471,17 @@ export function rankTargets(world, options = {}) {
     const engaging = archetype !== undefined && distance <= maxEngagementRange(archetype);
     const proximity = 10 * Math.max(0, 1 - distance / frameRadius);
     const finishable = enemy.hp / enemy.maxHp <= 0.3 ? 8 : 0;
+    // Something shooting from beyond the frame is the one thing proximity alone
+    // will never answer: the swarm in your face always scored higher, so a
+    // sniper parked outside plinked for free and the pilot never closed on it.
+    // Ranked above the swarm, the standoff the pilot keeps to its target is
+    // what carries the ship into range.
+    const outranging = engaging && distance > frameRadius;
     scored.push({
       entity: enemy,
       role: "enemy",
-      score: (isBoss ? 60 : 30) + (engaging ? 12 : 0) + proximity + finishable
+      score:
+        (isBoss ? 60 : 30) + (engaging ? 12 : 0) + (outranging ? 18 : 0) + proximity + finishable
     });
   }
 
