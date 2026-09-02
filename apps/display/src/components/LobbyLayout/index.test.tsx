@@ -20,6 +20,13 @@ function markup(crewSize: CrewSize): string {
 }
 
 describe("LobbyLayout", () => {
+  it("offers the fullscreen switch where the room is set up", () => {
+    // Rendered without a document, so the host reads as unsupported and the
+    // button is absent rather than dead: what this pins is that the lobby asks
+    // for it at all, and that it degrades to nothing.
+    expect(markup(3)).not.toContain('data-testid="fullscreen-button"');
+  });
+
   it("counts the seats a solo room actually has and names the autopilot", () => {
     const html = markup(1);
 

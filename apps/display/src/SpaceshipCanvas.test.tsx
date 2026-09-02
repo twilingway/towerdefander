@@ -29,6 +29,7 @@ describe("SpaceshipCanvas", () => {
     const runtime: SpaceshipRuntime = {
       prepareHydration,
       update,
+      readFps: () => 60,
       destroy: vi.fn()
     };
     const snapshot = { tick: 42 } as DisplayGameSnapshot;

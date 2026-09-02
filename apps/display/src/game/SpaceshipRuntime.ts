@@ -1093,6 +1093,11 @@ function getEntityHeading(entity: CombatEntity): number {
 export interface SpaceshipRuntime {
   update(snapshot: DisplayGameSnapshot): void;
   prepareHydration(): void;
+  /**
+   * Frames a second as the game loop measures them, not as the browser paints
+   * them: what the scene manages to draw is the number worth showing.
+   */
+  readFps(): number;
   destroy(): void;
 }
 
@@ -1117,6 +1122,9 @@ export function createSpaceshipRuntime(
     },
     prepareHydration() {
       scene.prepareHydration();
+    },
+    readFps() {
+      return game.loop.actualFps;
     },
     destroy() {
       game.destroy(true);

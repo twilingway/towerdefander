@@ -30,6 +30,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
 import { CrewLatency } from "./components/CrewLatency/index.js";
+import { FpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
@@ -99,6 +100,7 @@ export function DisplayApp() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  const [fps, setFps] = useState(0);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
@@ -296,6 +298,7 @@ export function DisplayApp() {
           <span className="latency-indicator" aria-live="polite">
             Экран → сервер {formatLatency(view.displayLatencyMs)}
           </span>
+          {view.game !== null && <FpsReadout fps={fps} />}
           <button
             type="button"
             className="room-close-button"
@@ -352,6 +355,7 @@ export function DisplayApp() {
               runNumber={view.runNumber}
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
+              onFps={setFps}
             />
           )}
           {view.game.encounter.phase === "combat" &&

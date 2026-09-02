@@ -15,13 +15,22 @@ interface SpaceshipCanvasProps {
   readonly runNumber: number;
   readonly connectionEpoch: number;
   readonly visibleDemo?: boolean;
+  /**
+   * Frames a second, sampled here because this is where the loop is, and read
+   * out in the header because that is where a player looks for it.
+   */
+  readonly onFps?: (fps: number) => void;
 }
+
+/** Twice a second: faster than this and the digits blur into noise. */
+const FPS_SAMPLE_INTERVAL_MS = 500;
 
 export function SpaceshipCanvas({
   game,
   runNumber,
   connectionEpoch,
-  visibleDemo = false
+  visibleDemo = false,
+  onFps
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<SpaceshipRuntime | undefined>(undefined);
@@ -91,6 +100,19 @@ export function SpaceshipCanvas({
     lastRuntimeRunNumberReference.current = runNumber;
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, runNumber]);
+
+  const onFpsReference = useRef(onFps);
+  onFpsReference.current = onFps;
+  useEffect(() => {
+    if (onFps === undefined) return;
+    const sample = () => {
+      onFpsReference.current?.(runtimeReference.current?.readFps() ?? 0);
+    };
+    const timer = globalThis.setInterval(sample, FPS_SAMPLE_INTERVAL_MS);
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, [onFps === undefined]);
 
   useEffect(() => {
     // Demo-only: the Node bot reads this instead of scraping the render path.

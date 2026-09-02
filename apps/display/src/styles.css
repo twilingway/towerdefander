@@ -918,6 +918,38 @@ p {
   background: #9e3f3a;
 }
 
+/* Offered in the lobby, where the room is being set up and nobody is flying. */
+.fullscreen-button {
+  min-height: 2.6rem;
+  margin-top: 0.75rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  color: #d8efe9;
+  background: rgb(255 255 255 / 8%);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Beside the ping, because both answer "is this display keeping up". */
+.fps-readout {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  color: #8fb3ad;
+  background: rgb(8 19 19 / 72%);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fps-readout strong {
+  color: #d8efe9;
+}
+
+/* Dropping frames badly enough to see, so the number says so on its own. */
+.fps-readout--strained strong {
+  color: #ffb27a;
+}
+
 .visible-demo-overlay {
   position: fixed;
   z-index: 50;
@@ -1023,6 +1055,116 @@ p {
 
   .combat-radar {
     bottom: max(12.5rem, calc(env(safe-area-inset-bottom) + 11.7rem));
+  }
+}
+
+/*
+ * A phone standing in for the display.
+ *
+ * Keyed on height, not width: a phone held sideways is 844 points across and
+ * 390 tall, so a width rule reads it as roomy while the cards stacked two deep
+ * eat three quarters of it. Short is the thing that hurts.
+ *
+ * Everything but the battlefield gets out of the way. The readouts go back to
+ * flanking the dial in one strip along the bottom edge and drop their second
+ * lines, which are the sentences rather than the numbers. The crew's per-seat
+ * pings go with them: the header carries the display's own, and the rest is a
+ * diagnostic nobody reads mid-fight. What is left of the room controls is sized
+ * for a thumb and no larger.
+ */
+@media (height <= 520px) {
+  .display-shell--battle {
+    --radar-size: clamp(4.5rem, 13vw, 6.5rem);
+  }
+
+  .display-shell--battle .spaceship-hud {
+    right: max(0.4rem, env(safe-area-inset-right));
+    bottom: max(0.4rem, env(safe-area-inset-bottom));
+    left: max(0.4rem, env(safe-area-inset-left));
+    gap: 0.3rem;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr))
+      calc(var(--radar-size) + 2rem)
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .display-shell--battle .spaceship-hud > div:nth-child(3) {
+    grid-column: 4;
+  }
+
+  .display-shell--battle .spaceship-hud > div {
+    padding: 0.25rem 0.45rem;
+    border-radius: 0.5rem;
+  }
+
+  .display-shell--battle .spaceship-hud small {
+    display: none;
+  }
+
+  .display-shell--battle .spaceship-hud span {
+    font-size: 0.58rem;
+  }
+
+  .display-shell--battle .spaceship-hud strong {
+    font-size: 1rem;
+  }
+
+  .display-shell--battle .crew-latency-overlay {
+    display: none;
+  }
+
+  .display-shell--battle > .room-header {
+    top: max(0.4rem, env(safe-area-inset-top));
+    right: max(0.4rem, env(safe-area-inset-right));
+    left: max(0.4rem, env(safe-area-inset-left));
+    align-items: start;
+  }
+
+  .display-shell--battle .room-code {
+    font-size: 0.95rem;
+  }
+
+  .display-shell--battle .room-network {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .display-shell--battle .phase-badge {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+  }
+
+  .display-shell--battle .latency-indicator,
+  .display-shell--battle .fps-readout {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.62rem;
+  }
+
+  .display-shell--battle .room-close-button {
+    min-height: 1.75rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+  }
+
+  .display-shell--battle .module-tree--collapsed {
+    top: max(2.4rem, calc(env(safe-area-inset-top) + 2rem));
+    left: max(0.4rem, env(safe-area-inset-left));
+    padding: 0.2rem;
+  }
+
+  .display-shell--battle .module-tree__toggle {
+    /* Buttons carry a thumb-sized minimum height across the app; on a screen
+       this short that alone is a tenth of the battlefield. */
+    min-height: 1.5rem;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.58rem;
+  }
+
+  /* Back onto the bottom edge, in the column the strip keeps for it. */
+  .combat-radar {
+    bottom: max(0.4rem, env(safe-area-inset-bottom));
   }
 }
 
@@ -1402,5 +1544,55 @@ p {
 @media (prefers-reduced-motion: reduce) {
   .rotate-notice__icon {
     animation: none;
+  }
+}
+
+/*
+ * The tree on a short screen, and last in the file on purpose: these override
+ * the tree's own rules above, which win on order at equal specificity.
+ *
+ * Eleven tiers sharing a phone's width give each card fifty-five points, which
+ * fits no card. The columns keep a width a card can be read at and the row
+ * scrolls sideways instead - the one gesture a phone is good at - and the open
+ * tier scrolls itself into view, so the swipe is only for looking around.
+ */
+@media (height <= 520px) {
+  .module-tree {
+    width: min(98vw, 120rem);
+    max-height: 94vh;
+    gap: 0.35rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .module-tree__grid {
+    gap: 0.3rem;
+  }
+
+  .module-tree__tier {
+    flex: 0 0 8.5rem;
+  }
+
+  .module-tree__numeral {
+    font-size: 0.65rem;
+  }
+
+  .module-tree__cell {
+    padding: 0.22rem 0.35rem;
+    font-size: 0.62rem;
+  }
+
+  .module-tree__header small {
+    display: none;
+  }
+
+  .module-tree__stats {
+    gap: 0.3rem;
+    padding-top: 0.35rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The cards already say what has been taken; this is the same list again. */
+  .module-tree__gains {
+    display: none;
   }
 }

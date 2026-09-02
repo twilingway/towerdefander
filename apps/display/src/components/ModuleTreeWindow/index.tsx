@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { roleLabel } from "@spaceship-defender/client-shared";
 import { formatShipStatEffect, summariseModuleEffects } from "@spaceship-defender/protocol";
 import type { CrewRole, ShipStatEffectTuning } from "@spaceship-defender/protocol";
@@ -181,8 +181,17 @@ function TierColumn({
   readonly bought: ReadonlySet<string>;
   readonly open: boolean;
 }) {
+  const column = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // On a wide screen every tier is on screen at once and this does nothing.
+    // On a short one the columns keep a readable width and the row scrolls, so
+    // without this the crew opens the tree on tier one and has to swipe to find
+    // the tier they can actually buy from.
+    if (!open) return;
+    column.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [open]);
   return (
-    <div className={`module-tree__tier${open ? " is-open" : ""}`}>
+    <div ref={column} className={`module-tree__tier${open ? " is-open" : ""}`}>
       <span className="module-tree__numeral">{caption}</span>
       <ul className="module-tree__cells">
         {modules.map((module) => {

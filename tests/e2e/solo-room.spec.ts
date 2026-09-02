@@ -31,6 +31,14 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");
 
+    // The lobby is where the room is set up and the browser will only grant
+    // fullscreen from a click, so the switch lives here. A component test
+    // cannot see it at all: rendered without a document it reads the API as
+    // missing and draws nothing.
+    const fullscreen = display.getByTestId("fullscreen-button");
+    await expect(fullscreen).toHaveText("Развернуть на весь экран");
+    await expect(fullscreen).toHaveAttribute("aria-pressed", "false");
+
     const solo = await joinSolo(browser, contexts, roomCode);
     await expect(solo.locator('[data-testid="solo-panel"]')).toBeVisible();
     await expect(solo.locator('[data-testid="virtual-stick"]')).toHaveCount(2);
@@ -76,7 +84,9 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
     const rimRun = await coveredWhileHeld(solo, world, courseBounds, 0.95);
     const thirdRun = await coveredWhileHeld(solo, world, courseBounds, 0.35);
     expect(rimRun).toBeGreaterThan(40);
-    expect(thirdRun).toBeGreaterThan(rimRun * 0.9);
+    // Equal is the point: a third of the ring is the whole throttle, so the two
+    // runs land on the same distance and a strict "greater" fails on a tie.
+    expect(thirdRun).toBeGreaterThanOrEqual(rimRun * 0.9);
 
     // The turret stick is the one control that reads a push and a tap
     // differently: past six tenths it names a bearing, short of it the barrel
@@ -100,6 +110,13 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
       .poll(async () => world.getAttribute("data-latest-projectile-id"))
       .not.toBe(shotBeforeTap);
     expect(await readNumber(world, "data-turret-angle")).toBeCloseTo(heldBearing, 1);
+
+    // The scene reports the loop it is running, which the snapshot cannot know.
+    await expect
+      .poll(async () =>
+        Number(await display.getByTestId("fps-readout").locator("strong").innerText())
+      )
+      .toBeGreaterThan(1);
 
     await expect(solo.locator(".connection")).toHaveText("В сети");
   } finally {

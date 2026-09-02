@@ -2,6 +2,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { formatLatency, roleLabel } from "@spaceship-defender/client-shared";
 import { CREW_ROLES, type CrewSize, type DisplayRoomView } from "@spaceship-defender/protocol";
 
+import { FullscreenButton } from "../FullscreenButton/index.js";
+
 interface LobbyLayoutProps {
   readonly view: DisplayRoomView;
   readonly joinUrl: string;
@@ -19,6 +21,7 @@ export function LobbyLayout({ view, joinUrl }: LobbyLayoutProps) {
           <h2>{joinHeading(view.crewSize)}</h2>
           <p>{joinHint(view.crewSize)}</p>
           <a href={joinUrl}>{joinUrl}</a>
+          <FullscreenButton />
         </div>
       </div>
       <div className="players-card">
