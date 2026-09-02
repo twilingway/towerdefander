@@ -66,6 +66,29 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
       shortestDelta(await readNumber(world, "data-turret-angle"), restingTurret)
     ).toBeGreaterThan(0.3);
 
+    // The turret stick is the one control that reads a push and a tap
+    // differently: past six tenths it names a bearing, short of it the barrel
+    // keeps what it had and the tap is a round. Solo owns both seats from one
+    // panel, so it has to hold here too.
+    const turretStick = solo.locator(".solo-stick--gunner [data-testid='virtual-stick']");
+    const stickBounds = await turretStick.boundingBox();
+    if (stickBounds === null) throw new Error("Solo turret stick has no bounds.");
+    const centreX = stickBounds.x + stickBounds.width / 2;
+    const centreY = stickBounds.y + stickBounds.height / 2;
+
+    await solo.mouse.click(centreX, stickBounds.y + stickBounds.height * 0.15);
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-turret-angle")))
+      .toBeCloseTo(-Math.PI / 2, 1);
+
+    const heldBearing = await readNumber(world, "data-turret-angle");
+    const shotBeforeTap = await world.getAttribute("data-latest-projectile-id");
+    await solo.mouse.click(centreX, centreY + stickBounds.height * 0.06);
+    await expect
+      .poll(async () => world.getAttribute("data-latest-projectile-id"))
+      .not.toBe(shotBeforeTap);
+    expect(await readNumber(world, "data-turret-angle")).toBeCloseTo(heldBearing, 1);
+
     await expect(solo.locator(".connection")).toHaveText("В сети");
   } finally {
     for (const context of contexts) await context.close();
