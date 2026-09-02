@@ -1275,8 +1275,21 @@ function retuneHullDamage(id, hull) {
 /** Waves that also drop rocks; they cost nothing and read as weather. */
 
 /** Past the table the director carries on, and on the same slope. */
+/** How many waves the table below carries; past it the director takes over. */
+const CAMPAIGN_WAVES = 30;
+
 const DIRECTOR = {
-  baseBudget: Math.round(authoring.budgetBase),
+  // The director opens at wave CAMPAIGN_WAVES + 1, so its budget has to pick
+  // the campaign's curve up where the table leaves it. Derived from the opening
+  // wave's budget instead, the first directed wave arrived a third smaller than
+  // the authored one before it, and the campaign visibly stepped down.
+  baseBudget: Math.max(
+    1,
+    Math.round(
+      authoring.budgetBase +
+        (authoring.budgetGrowth - Math.max(1, Math.round(authoring.budgetGrowth))) * CAMPAIGN_WAVES
+    )
+  ),
   budgetGrowth: Math.max(1, Math.round(authoring.budgetGrowth)),
   budgetCap: 120,
   hpGrowth: 0.04,
@@ -1366,7 +1379,7 @@ function buildWave(waveNumber) {
   return groups;
 }
 
-const WAVES = Array.from({ length: 30 }, (_unused, index) => buildWave(index + 1));
+const WAVES = Array.from({ length: CAMPAIGN_WAVES }, (_unused, index) => buildWave(index + 1));
 
 function toWave(groups) {
   return {

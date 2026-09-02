@@ -264,14 +264,55 @@ describe("deterministic combat foundation", () => {
     expect(plan.map(({ sectors }) => sectors)).toEqual([["N"], ["N"], ["SE"], ["N"]]);
   });
 
-  it("falls back to the director past the last scripted wave", () => {
+  it("stages one of the authored waves past the last scripted one", () => {
     const config = scriptedCampaignConfig();
     const scripted = createWavePlan(config, 91, 2).plan;
     expect(scripted.map(({ kind }) => kind)).toEqual(["asteroid", "asteroid"]);
+
+    // Past the table the director re-stages a wave that was written rather than
+    // inventing one: the kinds, the sectors and the schedule are the campaign's,
+    // and only how many arrive is its own call. Invented, it played as a dump -
+    // a shuffled bag one spawn interval apart, forty deep on a late wave.
+    const authored = config.waveCampaign.waves.flatMap(({ entries }) => entries);
+    const shapes = new Map(
+      authored.map((entry) => [
+        entry.kind,
+        `${String(entry.startDelayTicks)}/${entry.sectors.join()}`
+      ])
+    );
     const directed = createWavePlan(config, 91, 3);
     expect(directed.plan.length).toBeGreaterThan(0);
-    expect(directed.plan.every(({ sectors }) => sectors.length === 0)).toBe(true);
+    for (const spawn of directed.plan) {
+      expect(shapes.has(spawn.kind), `${spawn.kind} is not in the campaign`).toBe(true);
+      const first = directed.plan.find(({ kind }) => kind === spawn.kind);
+      expect(`${String(first?.dueTick ?? -1)}/${spawn.sectors.join()}`).toBe(
+        shapes.get(spawn.kind)
+      );
+    }
     expect(createWavePlan(config, 91, 3)).toEqual(directed);
+  });
+
+  it("sizes a staged wave by the director's budget", () => {
+    const config = scriptedCampaignConfig();
+    const richer = createSpaceshipSimulationConfig({
+      waveCampaign: {
+        ...config.waveCampaign,
+        director: { ...config.waveCampaign.director, baseBudget: 200, budgetCap: 400 }
+      }
+    });
+    const lean = createWavePlan(config, 91, 3).plan.length;
+    const rich = createWavePlan(richer, 91, 3).plan.length;
+    expect(rich).toBeGreaterThan(lean);
+  });
+
+  it("improvises when there is no campaign to stage", () => {
+    // How the built-in defaults ship: a director and an empty table.
+    const config = createSpaceshipSimulationConfig({
+      waveCampaign: { ...createSpaceshipSimulationConfig().waveCampaign, waves: [] }
+    });
+    const plan = createWavePlan(config, 91, 3).plan;
+    expect(plan.length).toBeGreaterThan(0);
+    expect(plan.every(({ sectors }) => sectors.length === 0)).toBe(true);
   });
 
   it("releases a scripted wave on its schedule, interleaving the groups", () => {
