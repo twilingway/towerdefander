@@ -565,6 +565,19 @@ class SpaceshipScene extends Phaser.Scene {
     const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
     // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
     const radius = this.snapshot.shieldRadius;
+    // A filtered object is composited by a camera of its own, and one that
+    // focuses on the drawing context is told the main camera's size, scroll and
+    // zoom but never where the letterboxed frame sits in the glass - so the
+    // glow was laid down from the canvas corner while the hull was drawn from
+    // the frame's, and the raised shield drifted off the ship by the width of
+    // the bars. Focused on the arc itself, it travels with the hull instead.
+    const filterExtent = (radius + style.lineWidth + SHIELD_GLOW_DISTANCE) * 2;
+    this.shield.focusFiltersOverride(
+      filterExtent / 2,
+      filterExtent / 2,
+      filterExtent,
+      filterExtent
+    );
     this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
     if (style.crescentThickness !== null) {
       const crescent = getShieldCrescentPoints(arc.start, arc.end, radius, style.crescentThickness);
@@ -938,6 +951,11 @@ function beamStyle(source: string) {
 
 function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.Glow | undefined {
   shield.enableFilters();
+  // Graphics carries no width or height, so Phaser calls it poorly bounded and
+  // focuses its filters on the drawing context - the one path that drops the
+  // camera's own position. `drawShield` hands it the bounds instead, every
+  // frame, because the shield radius is bought and sold during a run.
+  shield.setFiltersFocusContext(false);
   const filters = shield.filters;
   if (filters === null) return undefined;
   const glow = filters.external.addGlow(
