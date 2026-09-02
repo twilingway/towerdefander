@@ -352,7 +352,11 @@ describe("circular combat spawning and movement", () => {
     const config = quietArenaConfig();
     const centerX = config.worldWidth / 2;
     const centerY = config.worldHeight / 2;
-    const enemyX = centerX + 900;
+    // A quarter of a kilometre outside the distance this archetype wants to
+    // hold, so the sixty steps below cover the closing and the first of the
+    // circling. Written as an offset from the hold rather than an absolute,
+    // because the hold moves whenever the crew's own reach does.
+    const enemyX = centerX + getEnemyArchetype(config, "gunship").preferredDistance + 250;
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 73),
       pendingSpawns: [],
@@ -379,9 +383,11 @@ describe("circular combat spawning and movement", () => {
       );
     }
 
-    // Golden values recorded from the blend before the rim rule was added.
-    expect(state.enemies[0]?.x).toBeCloseTo(2853.9148503025867, 6);
-    expect(state.enemies[0]?.y).toBeCloseTo(2129.5418583681662, 6);
+    // Golden values recorded from the blend before the rim rule was added, and
+    // re-recorded when the archetype's hold distance followed the crew's reach
+    // down: the blend is the same, the ring it settles on is closer.
+    expect(state.enemies[0]?.x).toBeCloseTo(2495.0594577084157, 6);
+    expect(state.enemies[0]?.y).toBeCloseTo(2132.150533227034, 6);
   });
 });
 

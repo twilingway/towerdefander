@@ -16,7 +16,14 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   spaceshipRadius: 52,
   inputTimeoutTicks: 5,
   projectileSpeedPerSecond: 720,
-  projectileLifetimeMs: 1500,
+  // Reach is speed times lifetime, and the honest ceiling for it is half the
+  // frame's height - the short way out of the picture, and therefore the only
+  // distance a crew is sure to see what it is shooting at on any glass. At 680
+  // ms the shell carries 490 and the nose burst 612, both inside the 619 the
+  // frame promises. It used to be 1080 and 1350: the far half of that was fire
+  // at what the display had not drawn yet, and a shell that flies a second and
+  // a half is one a moving target simply leaves.
+  projectileLifetimeMs: 680,
   projectileRadius: 8,
   fireCooldownTicks: 5,
   shieldCapacity: 100,
@@ -55,9 +62,11 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   cannonWeaponKind: "kinetic",
   mgWeaponKind: "kinetic",
   // Shorter than the cannon's kinetic reach on purpose: never missing has to
-  // cost something, and the something is having to be close.
-  cannonLaserRange: 900,
-  mgLaserRange: 620,
+  // cost something, and the something is having to be close. Both barrels keep
+  // the ratio they had against the shell they replace, now that the shell
+  // itself is bounded by the frame.
+  cannonLaserRange: 440,
+  mgLaserRange: 300,
   laserBeamRadius: 5,
   friendlyMissileTurnRatePerSecond: (4 * Math.PI) / 15,
   friendlyMissileAcquireConeRadians: Math.PI / 20,
@@ -130,12 +139,19 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       }
     }
   },
+  /**
+   * Every distance here is a statement about the crew's gun - in its face, at
+   * the edge of it, out past where it can answer - so all of them moved with
+   * the gun when the shell stopped flying 1080 and started flying 490. The
+   * odd-looking numbers are the old ones times that ratio; the operator preset
+   * carries the same scaling, applied by `author-campaign.mjs`.
+   */
   enemyArchetypes: {
     gunship: {
       hp: 50,
       radius: 28,
       speedPerSecond: 150,
-      preferredDistance: 650,
+      preferredDistance: 295,
       combatSkill: "rookie",
       turnRatePerSecond: (2 * Math.PI) / 3,
       turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 3),
@@ -149,7 +165,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 7,
           projectileSpeedPerSecond: 440,
           projectileLifetimeTicks: 180,
-          engagementRange: 1200,
+          engagementRange: 544,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0,
@@ -173,7 +189,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       hp: 110,
       radius: 38,
       speedPerSecond: 95,
-      preferredDistance: 900,
+      preferredDistance: 408,
       combatSkill: "rookie",
       turnRatePerSecond: Math.PI / 2,
       turnAccelerationPerSecondSquared: 2 * (Math.PI / 2),
@@ -187,7 +203,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 12,
           projectileSpeedPerSecond: 260,
           projectileLifetimeTicks: 240,
-          engagementRange: 1700,
+          engagementRange: 771,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0,
@@ -211,7 +227,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       hp: 70,
       radius: 30,
       speedPerSecond: 70,
-      preferredDistance: 1400,
+      preferredDistance: 635,
       combatSkill: "veteran",
       turnRatePerSecond: (2 * Math.PI) / 5,
       turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 5),
@@ -225,7 +241,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 9,
           projectileSpeedPerSecond: 900,
           projectileLifetimeTicks: 120,
-          engagementRange: 3000,
+          engagementRange: 1361,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0,
@@ -249,7 +265,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       hp: 22,
       radius: 18,
       speedPerSecond: 260,
-      preferredDistance: 320,
+      preferredDistance: 145,
       combatSkill: "veteran",
       turnRatePerSecond: (4 * Math.PI) / 3,
       turnAccelerationPerSecondSquared: 2 * ((4 * Math.PI) / 3),
@@ -263,7 +279,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 5,
           projectileSpeedPerSecond: 520,
           projectileLifetimeTicks: 90,
-          engagementRange: 600,
+          engagementRange: 272,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 1,
           burstSpreadRadians: 0,
@@ -287,7 +303,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       hp: 900,
       radius: 90,
       speedPerSecond: 60,
-      preferredDistance: 700,
+      preferredDistance: 318,
       combatSkill: "ace",
       turnRatePerSecond: Math.PI / 4,
       turnAccelerationPerSecondSquared: 2 * (Math.PI / 4),
@@ -301,7 +317,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
           projectileRadius: 14,
           projectileSpeedPerSecond: 240,
           projectileLifetimeTicks: 300,
-          engagementRange: 1600,
+          engagementRange: 726,
           turnRatePerSecond: Math.PI / 2,
           burstCount: 3,
           burstSpreadRadians: Math.PI / 6,

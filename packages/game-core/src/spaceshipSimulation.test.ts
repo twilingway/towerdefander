@@ -90,7 +90,7 @@ describe("spaceship configuration", () => {
       spaceshipRadius: 52,
       inputTimeoutTicks: 5,
       projectileSpeedPerSecond: 720,
-      projectileLifetimeMs: 1500,
+      projectileLifetimeMs: 680,
       projectileRadius: 8,
       fireCooldownTicks: 5,
       shieldCapacity: 100,

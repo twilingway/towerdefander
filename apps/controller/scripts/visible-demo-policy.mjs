@@ -980,19 +980,25 @@ function searchVector(world, memory) {
  * The profile's own distance survives as the floor: closer than this the hull
  * does not want to be, whatever the arithmetic says.
  *
- * The frame still caps it, but by its width rather than its height. Bounding a
- * ring by the short side put every barrel on the same five hundred and sixty:
- * the beam wants seven hundred and sixty, the launcher eleven hundred, and all
- * three came back capped to the same number, so the distance stopped saying
- * anything about the weapon. The width is the honest bound because the hull
- * closes along its own bearing, and what it is closing on is framed sideways;
- * the price is that a target held directly above or below can reach the edge.
+ * The frame caps it by its height, which is the short way out of the picture
+ * and so the only distance that holds whichever way the target sits. Bounding
+ * it that way used to flatten every barrel onto one number - the beam wanted
+ * seven hundred and sixty and the launcher eleven hundred, and both came back
+ * capped to five hundred and sixty - but that was a fleet whose guns carried
+ * past the frame. Now that no barrel reaches further than the frame does, the
+ * cap binds nothing that the weapon itself had not already decided, and a
+ * target held straight above the hull stays on screen.
+ *
+ * The gun is the last word: a written-down distance further out than the barrel
+ * carries would park the hull where it cannot answer, and a floor is meant to
+ * keep it out of the swarm, not out of the fight.
  */
 export function effectiveStandoff(world, profile, reach) {
-  const frame = (world.cameraViewWidth / 2) * STANDOFF_FRAME_FRACTION;
+  const frame = ((world.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2) * STANDOFF_FRAME_FRACTION;
   const share = profile.standoffShare ?? 0;
   const wanted = reach !== undefined && share > 0 ? reach * share : profile.standoffDistance;
-  return Math.min(Math.max(wanted, profile.standoffDistance), frame);
+  const ceiling = reach === undefined ? frame : Math.min(frame, reach);
+  return Math.min(Math.max(wanted, profile.standoffDistance), ceiling);
 }
 
 /**

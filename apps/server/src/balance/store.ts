@@ -73,7 +73,7 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     // Choosing the distance is part of the craft, so the beginner does not:
     // it wanders inside its own reach, where more of the field can answer it.
     standoffShare: 0.6,
-    standoffDistance: 700,
+    standoffDistance: 250,
     evadeHorizonTicks: 0,
     mgConeRadians: Math.PI,
     cannonConeRadians: Math.PI,
@@ -159,7 +159,7 @@ const MISSILE_DELTA: ProfileDelta = {
     orbit: false,
     evadeMissiles: false,
     standoffShare: 0.75,
-    standoffDistance: 600,
+    standoffDistance: 450,
     evadeHorizonTicks: 0,
     cannonConeRadians: 0.12,
     cannonHeatCeiling: 0.8,
@@ -170,7 +170,7 @@ const MISSILE_DELTA: ProfileDelta = {
     orbit: false,
     evadeMissiles: false,
     standoffShare: 0.75,
-    standoffDistance: 600,
+    standoffDistance: 450,
     evadeHorizonTicks: 0,
     cannonConeRadians: 0.12,
     cannonHeatCeiling: 0.8,

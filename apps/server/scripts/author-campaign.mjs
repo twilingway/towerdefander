@@ -40,7 +40,7 @@ const FALLBACK_AUTHORING = {
   damagePerSecondPerSpawnCost: 2.2,
   bossDamagePerSecondCap: 26,
   laserDamageShare: 0.75,
-  shipReach: 1080,
+  shipReach: 490,
   maxEngagementShare: 1.6,
   maxStandoffShare: 1.3,
   groupStartStepSeconds: 34,
@@ -196,7 +196,9 @@ function withinBudget(weapons, spawnCost, boss) {
 
 /**
  * How far the crew's own gun reaches, from the preset the campaign is written
- * against: a 720-unit shell living 1.5 seconds.
+ * against: a 720-unit shell living 0.68 seconds. It was 1080 while the shell
+ * lived a second and a half; every enemy distance here is a share of this one,
+ * so the catalogue follows the guns down rather than being retyped.
  *
  * Nothing may out-range that by much. A sniper parked at 1400 firing 3443 was
  * unanswerable — the hull it shoots at cannot reach back, and no amount of
@@ -204,6 +206,20 @@ function withinBudget(weapons, spawnCost, boss) {
  * archetype moves and how hard it hits at its distance, never from standing
  * where the fight cannot happen.
  */
+
+/**
+ * The reach every distance below was written against. Each archetype's range is
+ * a statement about the crew's gun - a skirmisher in its face, a railer out past
+ * where it can answer - so when the gun moves, the whole catalogue has to move
+ * with it or the statements stop being true. Clamping alone does not do that: cut
+ * to the new reach it put nineteen of thirty archetypes on the same distance and
+ * the catalogue stopped saying anything about range at all.
+ */
+const AUTHORED_AGAINST_REACH = 1080;
+
+function scaledToReach(distance) {
+  return Math.round((distance * authoring.shipReach) / AUTHORED_AGAINST_REACH);
+}
 
 /**
  * Artillery is allowed to out-range the hull — that is what makes it artillery
@@ -216,7 +232,7 @@ function reachable(weapons) {
   return weapons.map((one) => ({
     ...one,
     engagementRange: Math.min(
-      one.engagementRange,
+      scaledToReach(one.engagementRange),
       Math.round(authoring.shipReach * authoring.maxEngagementShare)
     )
   }));
@@ -247,7 +263,7 @@ function enemy({
     radius,
     speedPerSecond: speed,
     preferredDistance: Math.min(
-      distance,
+      scaledToReach(distance),
       Math.round(authoring.shipReach * authoring.maxStandoffShare)
     ),
     turnRatePerSecond: turn,
@@ -1023,7 +1039,10 @@ const AUTOPILOT_PROFILES = {
     retargetIntervalTicks: 40,
     aimJitterRadians: 0.18,
     standoffShare: 0.6,
-    standoffDistance: 550,
+    // A floor, not a station: it only has to keep the beginner out of the swarm.
+    // Written above the barrel's reach it did the opposite - parked him where
+    // nothing he fired could arrive - so it moved down with the guns.
+    standoffDistance: 250,
     cannonConeRadians: 0.6,
     mgConeRadians: 0.9,
     cannonHeatCeiling: 1,
@@ -1109,7 +1128,7 @@ const AUTOPILOT_BY_KIND = {
     veteran: {
       reactionTicks: 20,
       standoffShare: 0.75,
-      standoffDistance: 600,
+      standoffDistance: 450,
       evadeMissiles: false,
       evadeHorizonTicks: 0,
       shieldLeadTicks: 10,
@@ -1119,7 +1138,7 @@ const AUTOPILOT_BY_KIND = {
     ace: {
       reactionTicks: 20,
       standoffShare: 0.75,
-      standoffDistance: 600,
+      standoffDistance: 450,
       evadeMissiles: false,
       evadeHorizonTicks: 0,
       shieldLeadTicks: 10,

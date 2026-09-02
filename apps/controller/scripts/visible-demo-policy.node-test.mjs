@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
+
 import {
   createAutopilotMemory,
   HITSCAN_SPEED,
@@ -220,8 +222,9 @@ test("the fighting ring is measured against the gun, not written down", () => {
 test("the profile distance is the floor under the ring, and the frame is the ceiling", () => {
   const scene = world({ cameraViewWidth: 6_000 });
   const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 900 };
-  // A short barrel does not drag the pilot into the swarm: the floor holds.
-  assert.equal(effectiveStandoff(scene, profile, 400), 900);
+  // A short barrel does not drag the pilot into the swarm: the floor holds,
+  // for as long as the floor is somewhere the barrel can still reach.
+  assert.equal(effectiveStandoff(scene, { ...profile, standoffShare: 0.2 }, 2_000), 900);
 
   // And nothing is held further out than the crew can see it happen.
   const narrow = world({ cameraViewWidth: 1_600 });
@@ -267,14 +270,15 @@ test("the helm backs up only for a course well astern", () => {
 });
 
 test("a manoeuvre is held until its band is properly left", () => {
-  // The ring is 640 units here (the camera frame clamps it across its width),
-  // so the entry band ends at 736 and the release band at 777. The second
-  // sample is a tick later, because the pilot re-reads a target only once per
-  // tick.
-  const onStation = world({ enemies: [enemyAt("target", 1, 2_880, 2_200)] });
+  // The bands are shares of the ring - it ends at 1.15 of it and only releases
+  // at 1.21 - so the samples are written as shares too, and the frame is left
+  // to decide how many units that is. The second sample is a tick later,
+  // because the pilot re-reads a target only once per tick.
+  const ring = effectiveStandoff(world(), ACE);
+  const onStation = world({ enemies: [enemyAt("target", 1, 2_200 + ring * 1.06, 2_200)] });
   const justOutside = world({
     sampledAtMs: 1_050,
-    enemies: [enemyAt("target", 1, 2_950, 2_200)]
+    enemies: [enemyAt("target", 1, 2_200 + ring * 1.17, 2_200)]
   });
 
   // Judged from scratch, twenty units past the edge is a different manoeuvre:
@@ -745,19 +749,32 @@ test("the orbiting pilot closes an open range and coasts on station", () => {
 });
 
 test("the stand-off ring never grows past what the camera frames", () => {
-  // The ring is bounded across the frame, because that is the way the hull is
-  // looking when it closes.
+  // Bounded by the frame's height, which is the short way out of the picture:
+  // a ring inside it holds whichever way the target sits.
   const narrow = world({ cameraViewWidth: 800 });
   assert.ok(effectiveStandoff(narrow, ACE) < ACE.standoffDistance);
-  assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 320) < 1e-9);
+  assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 180) < 1e-9);
 
   // A frame wide enough leaves the operator's own number alone.
   const wide = world({ cameraViewWidth: 4400 });
   assert.equal(effectiveStandoff(wide, ACE), ACE.standoffDistance);
 
-  // A target held on the clamped ring stays inside the frame.
+  // A target held on the clamped ring stays inside the frame, top to bottom.
   const framed = world({ cameraViewWidth: 2200 });
-  assert.ok(effectiveStandoff(framed, ACE) < 2200 / 2);
+  assert.ok(effectiveStandoff(framed, ACE) < (2200 * CAMERA_VIEW_ASPECT) / 2);
+});
+
+test("the ring is never held further out than the barrel carries", () => {
+  // A floor is there to keep the hull out of the swarm. Left above the reach
+  // after the guns were cut it did the opposite: the bot parked at six hundred
+  // with a shell that dies at four hundred and ninety, and fired at nothing.
+  const scene = world({ cameraViewWidth: 4_000 });
+  const stubborn = { ...ACE, standoffShare: 0.75, standoffDistance: 600 };
+  assert.equal(effectiveStandoff(scene, stubborn, 490), 490);
+
+  // With the reach unknown - a barrel the telemetry did not carry - the frame
+  // is still the only ceiling there is.
+  assert.equal(effectiveStandoff(scene, stubborn), 600);
 });
 
 test("the orbit turns back inward at the arena rim", () => {
@@ -1000,7 +1017,8 @@ test("without the orbit skill the ship bores in instead of circling", () => {
   // Inside twice the stand-off the orbiting profile spends most of the course
   // sideways; the one without the skill spends none of it. That difference is
   // the whole of what the skill withholds now.
-  const scene = world({ enemies: [enemyAt("target", 1, 2200, 2200 + 900)] });
+  const inside = 2200 + effectiveStandoff(world(), ACE) * 1.4;
+  const scene = world({ enemies: [enemyAt("target", 1, 2200, inside)] });
   const straight = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
   const circling = planPilot(scene, ACE, createAutopilotMemory(), { nowMs: 0 });
   assert.ok(straight.vector.y > 0.999, "a course without the skill went sideways");

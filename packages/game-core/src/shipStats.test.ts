@@ -134,6 +134,44 @@ const SCENARIO_BY_FIELD: Partial<Record<ShipStatField, GuardScenario>> = {
   friendlyMissileAcquireConeRadians: "missile"
 };
 
+/**
+ * Where the guard's four enemies stand and open fire, pinned rather than taken
+ * from the catalogue. This scenario is an instrument for the stat plumbing, and
+ * a balance pass that moved every archetype closer quietly broke it: the guard
+ * ship died halfway through the trace, and a state frozen on the result screen
+ * exercises nothing - the beam's reach and the shield's minimum hold stopped
+ * being proven while every other field still was. Pinned, the instrument reads
+ * the same whatever the catalogue is tuned to next.
+ */
+const GUARD_ENEMY_RANGES: Readonly<Record<string, { hold: number; engage: number }>> = {
+  gunship: { hold: 650, engage: 1200 },
+  missileCarrier: { hold: 900, engage: 1700 },
+  sniper: { hold: 1400, engage: 3000 },
+  interceptor: { hold: 320, engage: 600 }
+};
+
+function pinnedArchetypes(
+  archetypes: SpaceshipSimulationConfig["enemyArchetypes"]
+): SpaceshipSimulationConfig["enemyArchetypes"] {
+  return Object.fromEntries(
+    Object.entries(archetypes).map(([kind, archetype]) => {
+      const pinned = GUARD_ENEMY_RANGES[kind];
+      if (pinned === undefined) return [kind, archetype];
+      return [
+        kind,
+        {
+          ...archetype,
+          preferredDistance: pinned.hold,
+          weapons: archetype.weapons.map((weapon) => ({
+            ...weapon,
+            engagementRange: pinned.engage
+          }))
+        }
+      ];
+    })
+  );
+}
+
 function guardConfig(
   overrides: Partial<SpaceshipSimulationConfig> = {}
 ): SpaceshipSimulationConfig {
@@ -143,6 +181,7 @@ function guardConfig(
     enemySpawnIntervalTicks: 100_000,
     ambientAsteroidIntervalMinTicks: 40,
     ambientAsteroidIntervalMaxTicks: 60,
+    enemyArchetypes: pinnedArchetypes(createSpaceshipSimulationConfig().enemyArchetypes),
     ...overrides
   });
 }
