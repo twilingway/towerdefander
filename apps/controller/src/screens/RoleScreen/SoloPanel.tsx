@@ -6,6 +6,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import { ActionZone } from "../../ActionZone.js";
+import { AIM_COMMIT_SHARE } from "../../controlInput.js";
 import { VirtualStick } from "../../VirtualStick.js";
 import { Meter } from "../../components/Meter/index.js";
 import type { ControlState } from "../../model/control.js";
@@ -121,6 +122,11 @@ export function SoloPanel({
           onCancel={gunner.cancelAim}
           enabled={controlsEnabled}
           resetKey={generation}
+          commitShare={AIM_COMMIT_SHARE}
+          onTap={() => {
+            gunner.beginFire();
+            gunner.endFire();
+          }}
         />
       </div>
       <div className="solo-readout">

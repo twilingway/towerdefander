@@ -10,6 +10,7 @@ import type {
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
 
+import { AIM_COMMIT_SHARE } from "../../controlInput.js";
 import { VirtualStick } from "../../VirtualStick.js";
 import { readLocalStorage } from "../../model/browser.js";
 import type { ControlState } from "../../model/control.js";
@@ -78,6 +79,15 @@ export function RoleScreen({
     cancelFire,
     toggleShield
   } = controls;
+  /**
+   * A tap is a single shot: the fire path already holds a pulse for a minimum
+   * of sixty milliseconds, so beginning and ending in the same breath is one
+   * round rather than nothing.
+   */
+  function pulseFire(): void {
+    beginFire();
+    endFire();
+  }
   // The helm belongs to the pilot seat in every crew size; the solo panel runs
   // its own instance because it also owns the turret.
   usePilotKeyboard({
@@ -120,6 +130,10 @@ export function RoleScreen({
         onCancel={cancelAim}
         enabled={controlsEnabled}
         resetKey={generation}
+        // The barrel carries real angular inertia, so it is turned by a
+        // deliberate push and fired by a tap; the hull and the sector are still
+        // aimed by wherever the thumb sits.
+        {...(role === "gunner" ? { commitShare: AIM_COMMIT_SHARE, onTap: pulseFire } : {})}
       />
       {role === "pilot" && (
         <PilotPanel

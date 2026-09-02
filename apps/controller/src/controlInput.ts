@@ -20,6 +20,31 @@ export function normalizeControlVector(vector: ControlVector): ControlVector {
   return { x: x / length, y: y / length };
 }
 
+/**
+ * How far the stick has to be pushed before it names a new bearing for the
+ * barrel.
+ *
+ * Reported raw, every twitch inside the ring was a fresh bearing and the turret
+ * chased the thumb: the barrel has real angular inertia, so a stream of small
+ * corrections reads as shaking rather than as aiming. Past the threshold the
+ * stick means "go there"; short of it the barrel keeps the bearing it was last
+ * given, which is what `applyGunnerInput` does with a neutral vector.
+ */
+export const AIM_COMMIT_SHARE = 0.6;
+
+/**
+ * The bearing a stick position commands, or neutral when it commands nothing.
+ * A pointer that never commits is a tap - which the gunner's stick reads as a
+ * shot rather than as a turn.
+ */
+export function commitAim(
+  vector: ControlVector,
+  commitShare = AIM_COMMIT_SHARE
+): ControlVector | null {
+  const committed = normalizeControlVector(vector);
+  return Math.hypot(committed.x, committed.y) >= commitShare ? committed : null;
+}
+
 export function getKeyboardVector(keys: ReadonlySet<string>): ControlVector {
   const x =
     Number(keys.has("KeyD") || keys.has("ArrowRight")) -

@@ -177,6 +177,26 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       .poll(async () => Number(await world.getAttribute("data-turret-angle")))
       .toBeLessThan(-0.5);
 
+    // Inside the commit threshold the stick asks for nothing: the barrel keeps
+    // the bearing it was given, and the tap is read as a round instead. Pushed
+    // to the rim it aims, nudged it fires - which is what stopped the turret
+    // chasing every twitch of the thumb.
+    // The barrel is still swinging onto the bearing the push named, and a
+    // traverse in flight would read as the tap having moved it. Let it arrive.
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-turret-angle")))
+      .toBeCloseTo(-Math.PI / 2, 1);
+    const heldBearing = Number(await world.getAttribute("data-turret-angle"));
+    const shotBeforeTap = await world.getAttribute("data-latest-projectile-id");
+    await gunner.mouse.click(
+      gunnerStickBounds.x + gunnerStickBounds.width / 2,
+      gunnerStickBounds.y + gunnerStickBounds.height * 0.44
+    );
+    await expect
+      .poll(async () => world.getAttribute("data-latest-projectile-id"))
+      .not.toBe(shotBeforeTap);
+    expect(Number(await world.getAttribute("data-turret-angle"))).toBeCloseTo(heldBearing, 1);
+
     await assertFireStopsAfter(gunner, world, fireBounds, "pointercancel");
     await assertFireStopsAfter(gunner, world, fireBounds, "lostpointercapture");
     await assertFireStopsAfter(gunner, world, fireBounds, "blur");
@@ -301,6 +321,9 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     // Wave state lives on the shared display now; controllers keep only their
     // controls.
     await expect(world).toHaveAttribute("data-wave-number", "1");
+    // A whole hull, whatever the campaign says a whole hull is: the rematch has
+    // to hand back the hull the run started with, not five hundred points.
+    const wholeHull = Number(await world.getAttribute("data-spaceship-max-hp"));
     await expect
       .poll(async () => ({
         hp: Number(await world.getAttribute("data-spaceship-hp")),
@@ -312,8 +335,8 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
         latestProjectileId: await world.getAttribute("data-latest-projectile-id")
       }))
       .toEqual({
-        hp: 500,
-        maxHp: 500,
+        hp: wholeHull,
+        maxHp: wholeHull,
         score: 0,
         friendlyProjectiles: 0,
         hostileProjectiles: 0,

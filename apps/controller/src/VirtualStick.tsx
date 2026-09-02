@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { normalizeControlVector, PointerCycle, type ControlVector } from "./controlInput.js";
+import {
+  commitAim,
+  normalizeControlVector,
+  PointerCycle,
+  type ControlVector
+} from "./controlInput.js";
 
 interface VirtualStickProps {
   readonly label: string;
@@ -9,6 +14,14 @@ interface VirtualStickProps {
   readonly onCancel?: () => void;
   readonly enabled?: boolean;
   readonly resetKey?: string;
+  /**
+   * How far the stick must be pushed before it reports a bearing at all. Given
+   * one, the knob still follows the thumb but the seat is only told about a
+   * deliberate push, and a pointer that comes up without ever reaching it is a
+   * tap rather than a turn.
+   */
+  readonly commitShare?: number;
+  readonly onTap?: () => void;
 }
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
@@ -19,7 +32,9 @@ export function VirtualStick({
   onRelease,
   onCancel,
   enabled = true,
-  resetKey = ""
+  resetKey = "",
+  commitShare,
+  onTap
 }: VirtualStickProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const pointerCycleReference = useRef<PointerCycle>(undefined);
@@ -30,7 +45,11 @@ export function VirtualStick({
   onChangeReference.current = onChange;
   onReleaseReference.current = onRelease;
   onCancelReference.current = onCancel;
+  const onTapReference = useRef(onTap);
+  onTapReference.current = onTap;
   const [vector, setVector] = useState<ControlVector>(NEUTRAL);
+  const [committed, setCommitted] = useState(false);
+  const committedReference = useRef(false);
 
   function applyPointer(event: ReactPointerEvent<HTMLDivElement>): void {
     const host = hostReference.current;
@@ -43,8 +62,19 @@ export function VirtualStick({
       x: (event.clientX - (bounds.left + bounds.width / 2)) / radius,
       y: (event.clientY - (bounds.top + bounds.height / 2)) / radius
     });
+    // The knob follows the thumb whatever the seat is told, so the stick still
+    // reads as live while it is being nudged.
     setVector(next);
-    onChangeReference.current(next);
+    if (commitShare === undefined) {
+      onChangeReference.current(next);
+      return;
+    }
+    const commanded = commitAim(next, commitShare);
+    if (commanded !== null && !committedReference.current) {
+      committedReference.current = true;
+      setCommitted(true);
+    }
+    onChangeReference.current(commanded ?? NEUTRAL);
   }
 
   function release(event?: ReactPointerEvent<HTMLDivElement>, cancelled = false): void {
@@ -55,7 +85,14 @@ export function VirtualStick({
           ? pointerCycle.cancel(event.pointerId)
           : pointerCycle.complete(event.pointerId);
     if (!released) return;
+    // A pointer that came and went without ever asking for a bearing is a tap.
+    // Cancelled ones are not: a stick torn away by a blur asked for nothing
+    // either, and firing on that would be a shot nobody meant.
+    const tapped = !cancelled && !committedReference.current;
+    committedReference.current = false;
+    setCommitted(false);
     setVector(NEUTRAL);
+    if (tapped) onTapReference.current?.();
     if (cancelled) {
       (onCancelReference.current ?? onReleaseReference.current)?.();
     } else if (onReleaseReference.current !== undefined) {
@@ -72,6 +109,8 @@ export function VirtualStick({
       const host = hostReference.current;
       if (host?.hasPointerCapture(pointerId) === true) host.releasePointerCapture(pointerId);
       if (!pointerCycle.cancel(pointerId)) return;
+      committedReference.current = false;
+      setCommitted(false);
       setVector(NEUTRAL);
       (onCancelReference.current ?? onReleaseReference.current)?.();
     }
@@ -98,6 +137,7 @@ export function VirtualStick({
       aria-label={label}
       data-testid="virtual-stick"
       aria-disabled={!enabled}
+      data-committed={commitShare === undefined ? undefined : String(committed)}
       onPointerDown={(event) => {
         if (!enabled || !pointerCycle.claim(event.pointerId, event.button)) {
           return;

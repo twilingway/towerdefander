@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  AIM_COMMIT_SHARE,
+  commitAim,
   getFireReleaseDelay,
   getKeyboardVector,
   getNextShieldDesiredActive,
@@ -8,6 +10,27 @@ import {
   normalizeControlVector,
   PointerCycle
 } from "./controlInput.js";
+
+describe("aim commitment", () => {
+  it("names a bearing only past the threshold", () => {
+    // Half a stick is a nudge; the barrel keeps what it was given.
+    expect(commitAim({ x: 0.5, y: 0 })).toBeNull();
+    expect(commitAim({ x: 0, y: -0.59 })).toBeNull();
+    expect(commitAim({ x: 0, y: -0.61 })).toEqual({ x: 0, y: -0.61 });
+  });
+
+  it("measures the push, not the axis", () => {
+    // Two axes at 0.45 are 0.64 of a stick, which is a push.
+    const diagonal = commitAim({ x: 0.45, y: 0.45 });
+    expect(diagonal).not.toBeNull();
+    expect(Math.hypot(diagonal?.x ?? 0, diagonal?.y ?? 0)).toBeGreaterThan(AIM_COMMIT_SHARE);
+  });
+
+  it("keeps a stick pushed to the rim at unit length", () => {
+    const rim = commitAim({ x: 3, y: 4 });
+    expect(Math.hypot(rim?.x ?? 0, rim?.y ?? 0)).toBeCloseTo(1, 12);
+  });
+});
 
 describe("controller input", () => {
   it("normalizes diagonals and rejects non-finite components", () => {
