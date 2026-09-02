@@ -9,6 +9,15 @@ const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
  */
 const previewUrl = `${displayUrl}/?preview=1`;
 
+interface DisplayCamera {
+  readonly width: number;
+  readonly height: number;
+  readonly zoom: number;
+  readonly pixelRatio: number;
+  readonly canvasWidth: number;
+  readonly canvasHeight: number;
+}
+
 const devices = [
   { name: "1920x1080", width: 1920, height: 1080 },
   { name: "2560x1440", width: 2560, height: 1440 },
@@ -50,7 +59,7 @@ test("every device is shown the same slice of the world", async ({ browser }) =>
         () =>
           (
             globalThis as {
-              __spaceshipDisplayCamera?: { width: number; height: number; zoom: number };
+              __spaceshipDisplayCamera?: DisplayCamera;
             }
           ).__spaceshipDisplayCamera
       );
@@ -106,5 +115,67 @@ test("the module tree keeps its cards inside its window on a short screen", asyn
     );
   } finally {
     await context.close();
+  }
+});
+
+/**
+ * A dense panel gets the pixels it has.
+ *
+ * The buffer used to be sized in CSS pixels, so on a phone at three device
+ * pixels to one the arena was rasterised at a ninth of the pixels it was shown
+ * at and blown back up - mush beside a HUD the browser had drawn at full
+ * density. What must not move while that is fixed is the slice of world: more
+ * pixels, same arena. Both halves are asserted here, because sharpness is a
+ * thing you can only argue about and these two numbers are not.
+ */
+test("a dense panel is drawn at its own resolution, on the same slice of world", async ({
+  browser
+}) => {
+  const glass = { width: 844, height: 390 };
+  const contexts: BrowserContext[] = [];
+  try {
+    const measured: { readonly name: string; readonly camera: DisplayCamera }[] = [];
+    for (const deviceScaleFactor of [1, 3]) {
+      const context = await browser.newContext({ viewport: glass, deviceScaleFactor });
+      contexts.push(context);
+      const page = await context.newPage();
+      await page.goto(previewUrl);
+      await expect(page.getByTestId("spaceship-world")).toBeVisible();
+      await page.waitForTimeout(500);
+
+      const camera = await page.evaluate(
+        () => (globalThis as { __spaceshipDisplayCamera?: DisplayCamera }).__spaceshipDisplayCamera
+      );
+      expect(camera, `no camera at ${String(deviceScaleFactor)}x`).toBeDefined();
+      if (camera === undefined) continue;
+
+      // The buffer is the glass times whatever density survived the ceiling,
+      // and the element it is shown in is still exactly the CSS box.
+      // The e2e project compiles against Node types, so the buffer is read
+      // through the locator rather than through `document`.
+      const canvasLocator = page.locator(".battlefield-canvas canvas");
+      const bufferWidth = Number(await canvasLocator.getAttribute("width"));
+      const box = await canvasLocator.boundingBox();
+      expect(bufferWidth).toBe(Math.round(glass.width * camera.pixelRatio));
+      expect(box?.width).toBeCloseTo(glass.width, 0);
+      measured.push({ name: `${String(deviceScaleFactor)}x`, camera });
+    }
+
+    const dense = measured.find(({ name }) => name === "3x");
+    expect(
+      dense?.camera.pixelRatio,
+      "the dense panel was drawn at one pixel per point"
+    ).toBeGreaterThan(1);
+    const first = measured[0];
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    for (const one of measured) {
+      expect(one.camera.width / one.camera.zoom, `${one.name} sees a different width`).toBeCloseTo(
+        first.camera.width / first.camera.zoom,
+        0
+      );
+    }
+  } finally {
+    for (const context of contexts) await context.close();
   }
 });

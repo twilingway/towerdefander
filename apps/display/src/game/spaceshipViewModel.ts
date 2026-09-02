@@ -194,6 +194,107 @@ export function getResponsiveViewport(
   };
 }
 
+/**
+ * How many device pixels the scene is willing to draw per pixel of glass.
+ *
+ * A canvas draws into a buffer sized in CSS pixels unless someone says
+ * otherwise, and a phone shows three device pixels for each of those - so the
+ * arena was rasterised at a third of the linear resolution of the panel and
+ * then blown back up, which is why the battlefield read as mush beside a HUD
+ * the browser had drawn at full density. The cost is the square of this
+ * number, on a scene that is already fill-bound, so it is capped rather than
+ * taken: two is four times the pixels, three would be nine.
+ */
+export const DEVICE_PIXEL_RATIO_CAP = 2;
+
+export interface BackingStoreInput {
+  readonly cssWidth: number;
+  readonly cssHeight: number;
+  readonly devicePixelRatio: number;
+  readonly cap?: number;
+  /**
+   * Largest edge the GPU will hand out. The shield's glow allocates a target
+   * the size of the frame, and older mobile parts stop at 4096.
+   */
+  readonly maxDimension?: number;
+}
+
+export interface BackingStoreSize {
+  readonly width: number;
+  readonly height: number;
+  /** What the sizes were multiplied by, after the cap and the clamp. */
+  readonly ratio: number;
+}
+
+/**
+ * The buffer to draw into for a given piece of glass. Everything downstream
+ * stays honest because `getResponsiveViewport` is homogeneous: multiply the
+ * sizes by this ratio and the zoom comes out multiplied by the same ratio, so
+ * `screen.width / zoom` - the slice of world a crew is shown - does not move.
+ */
+export function getBackingStoreSize(input: BackingStoreInput): BackingStoreSize {
+  const cssWidth = Number.isFinite(input.cssWidth) && input.cssWidth > 0 ? input.cssWidth : 1;
+  const cssHeight = Number.isFinite(input.cssHeight) && input.cssHeight > 0 ? input.cssHeight : 1;
+  // jsdom reports no ratio at all, and a browser can report a zero mid-resize.
+  const density =
+    Number.isFinite(input.devicePixelRatio) && input.devicePixelRatio > 0
+      ? input.devicePixelRatio
+      : 1;
+  const asked = input.cap ?? DEVICE_PIXEL_RATIO_CAP;
+  const cap = Number.isFinite(asked) && asked > 0 ? asked : DEVICE_PIXEL_RATIO_CAP;
+  const maxDimension =
+    Number.isFinite(input.maxDimension) && (input.maxDimension ?? 0) > 0
+      ? (input.maxDimension ?? Number.POSITIVE_INFINITY)
+      : Number.POSITIVE_INFINITY;
+  const longest = Math.max(cssWidth, cssHeight);
+  const ratio = Math.max(1, Math.min(density, cap, maxDimension / longest));
+  return {
+    width: Math.round(cssWidth * ratio),
+    height: Math.round(cssHeight * ratio),
+    ratio
+  };
+}
+
+/**
+ * Thinnest bar worth putting a readout in. Below this a stacked chip is a
+ * column of clipped words, and the readouts are better off overlaying the
+ * battlefield the way they do on a screen with no bars at all.
+ */
+export const USABLE_BAR_THICKNESS_PX = 56;
+
+export interface LetterboxBars {
+  /** Thickness of one bar, in the same pixels the sizes came in. */
+  readonly thickness: number;
+  /** Which pair of bars the frame leaves, and whether they are worth using. */
+  readonly placement: "side" | "top" | "none";
+}
+
+/**
+ * Where the letterbox leaves room, and whether there is enough of it to hold
+ * anything.
+ *
+ * The frame is a fixed slice of world, so glass that is not its shape has bars
+ * - and on a phone held sideways that is a fifth of the screen sitting empty
+ * while the readouts lie on top of the battlefield. This says which side the
+ * empty strip is on, so the readouts can be put in it instead.
+ */
+export function getLetterboxBars(
+  glassWidth: number,
+  glassHeight: number,
+  frame: { readonly width: number; readonly height: number },
+  minimumThickness = USABLE_BAR_THICKNESS_PX
+): LetterboxBars {
+  const sideBar = (glassWidth - frame.width) / 2;
+  const topBar = (glassHeight - frame.height) / 2;
+  if (sideBar >= topBar && sideBar >= minimumThickness) {
+    return { thickness: sideBar, placement: "side" };
+  }
+  if (topBar > sideBar && topBar >= minimumThickness) {
+    return { thickness: topBar, placement: "top" };
+  }
+  return { thickness: Math.max(0, Math.max(sideBar, topBar)), placement: "none" };
+}
+
 /** Screen pixels of slack kept past every renderer edge, so rounding never bares the void. */
 export const BACKGROUND_COVER_MARGIN_PX = 64;
 

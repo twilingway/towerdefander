@@ -10,7 +10,10 @@ import {
   getArenaRingRadii,
   getRimBandStroke,
   getArenaSpokes,
+  DEVICE_PIXEL_RATIO_CAP,
   getBackgroundCoverRect,
+  getBackingStoreSize,
+  getLetterboxBars,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getSegmentAlpha,
@@ -26,6 +29,86 @@ import {
   samplePointTrack,
   SnapshotResetLatch
 } from "./spaceshipViewModel.js";
+
+describe("getLetterboxBars", () => {
+  const frameFor = (glassWidth: number, glassHeight: number) => {
+    const viewport = getResponsiveViewport(glassWidth, glassHeight, 2500, 2500 * (9 / 16));
+    return { width: viewport.screen.width, height: viewport.screen.height };
+  };
+
+  it("finds the empty fifth of a phone held sideways", () => {
+    // 844x390 fits the frame by height, so what is left is a bar down each
+    // side - and it is where the readouts belong, not on top of the arena.
+    const bars = getLetterboxBars(844, 390, frameFor(844, 390));
+    expect(bars.placement).toBe("side");
+    expect(bars.thickness).toBeCloseTo((844 - 390 * (16 / 9)) / 2, 6);
+  });
+
+  it("finds the band a squarer screen leaves above and below", () => {
+    const bars = getLetterboxBars(1024, 768, frameFor(1024, 768));
+    expect(bars.placement).toBe("top");
+  });
+
+  it("says so when there is nothing worth using", () => {
+    // Exactly the frame's shape, and a hair off it: a two-pixel strip holds no
+    // readout, so the layout stays as it is on a screen with no bars at all.
+    expect(getLetterboxBars(1920, 1080, frameFor(1920, 1080)).placement).toBe("none");
+    expect(getLetterboxBars(1930, 1080, frameFor(1930, 1080)).placement).toBe("none");
+  });
+});
+
+describe("getBackingStoreSize", () => {
+  const glass = { cssWidth: 844, cssHeight: 390 };
+
+  it("draws a phone at its own density, up to the cap", () => {
+    const capped = getBackingStoreSize({ ...glass, devicePixelRatio: 2.75 });
+    expect(capped.ratio).toBe(DEVICE_PIXEL_RATIO_CAP);
+    expect(capped).toMatchObject({ width: 1688, height: 780 });
+
+    // Under the cap the device gets exactly what it asks for.
+    const modest = getBackingStoreSize({ ...glass, devicePixelRatio: 1.5 });
+    expect(modest.ratio).toBe(1.5);
+    expect(modest).toMatchObject({ width: 1266, height: 585 });
+  });
+
+  it("leaves an ordinary screen exactly as it was", () => {
+    // The change has to be a no-op at density one, or every measurement taken
+    // before it stops meaning anything.
+    const desktop = getBackingStoreSize({ cssWidth: 1920, cssHeight: 1080, devicePixelRatio: 1 });
+    expect(desktop).toEqual({ width: 1920, height: 1080, ratio: 1 });
+  });
+
+  it("never asks the GPU for an edge it does not have", () => {
+    // The shield's glow allocates a target the size of the frame, and older
+    // mobile parts refuse past 4096.
+    const clamped = getBackingStoreSize({
+      cssWidth: 2560,
+      cssHeight: 1440,
+      devicePixelRatio: 3,
+      cap: 3,
+      maxDimension: 4096
+    });
+    expect(clamped.width).toBeLessThanOrEqual(4096);
+    expect(clamped.ratio).toBeCloseTo(4096 / 2560, 12);
+  });
+
+  it("falls back to the glass when the browser reports no density", () => {
+    // jsdom has none, and a browser can report zero in the middle of a resize.
+    for (const devicePixelRatio of [0, Number.NaN, -2]) {
+      expect(getBackingStoreSize({ ...glass, devicePixelRatio }).ratio).toBe(1);
+    }
+  });
+
+  it("keeps the slice of world the crew is shown", () => {
+    // The invariant the whole change rests on: more pixels, same arena.
+    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    const plain = getResponsiveViewport(844, 390, frame.width, frame.height);
+    const dense = getBackingStoreSize({ ...glass, devicePixelRatio: 2 });
+    const denser = getResponsiveViewport(dense.width, dense.height, frame.width, frame.height);
+    expect(denser.screen.width / denser.zoom).toBeCloseTo(plain.screen.width / plain.zoom, 6);
+    expect(denser.screen.height / denser.zoom).toBeCloseTo(plain.screen.height / plain.zoom, 6);
+  });
+});
 
 describe("spaceship view model", () => {
   it("strokes the rim band as the ring the simulation slows a hull in", () => {

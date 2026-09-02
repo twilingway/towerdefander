@@ -27,7 +27,9 @@ import {
   getArenaRingRadii,
   getArenaSpokes,
   getRimBandStroke,
+  BACKGROUND_COVER_MARGIN_PX,
   getBackgroundCoverRect,
+  getBackingStoreSize,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
@@ -45,6 +47,7 @@ import {
   type Point,
   type PointTrack
 } from "./spaceshipViewModel.js";
+import { watchDevicePixelRatio } from "./devicePixels.js";
 import { pickFocusedTarget } from "../combatFocus.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 import {
@@ -58,11 +61,20 @@ import {
   type BackgroundLayerConfig
 } from "./spaceBackground.js";
 
-/** What the viewport spec reads: the camera's pixel rect and its zoom. */
+/**
+ * What the viewport spec reads: the camera's pixel rect and its zoom, both in
+ * the pixels the scene draws into rather than the CSS pixels the page is laid
+ * out in. The two differ by `pixelRatio` on a dense panel, and the slice of
+ * world - `width / zoom` - is the same number either way, which is the point.
+ */
 interface DisplayCameraSlice {
   readonly width: number;
   readonly height: number;
   readonly zoom: number;
+  readonly pixelRatio: number;
+  /** The whole glass, letterbox bars included. */
+  readonly canvasWidth: number;
+  readonly canvasHeight: number;
 }
 
 const BASE_VIEWPORT_WIDTH = 1600;
@@ -131,7 +143,14 @@ class SpaceshipScene extends Phaser.Scene {
     BASE_VIEWPORT_HEIGHT,
     1
   );
-  /** The glass: what the browser actually gave us, before any letterboxing. */
+  /**
+   * Device pixels per CSS pixel, handed in by whoever sized the buffer. Only
+   * the numbers measured in absolute pixels care - the background's cover
+   * margin - because everything else is world space multiplied by the camera
+   * zoom, and the zoom scaled with the buffer.
+   */
+  private pixelRatio = 1;
+  /** The glass, in the same pixels the scene draws into. */
   private canvasWidth = BASE_VIEWPORT_WIDTH;
   private canvasHeight = Math.round(BASE_VIEWPORT_WIDTH * CAMERA_VIEW_ASPECT);
   /** The camera's own pixel rect, which is the frame centred inside the glass. */
@@ -626,6 +645,14 @@ class SpaceshipScene extends Phaser.Scene {
     this.shieldTrack = tracks.shield;
   }
 
+  /**
+   * Told, not derived: the factory owns the ratio because it owns the buffer,
+   * and a scene that recomputed it would be a second opinion about one number.
+   */
+  setPixelRatio(ratio: number): void {
+    this.pixelRatio = ratio;
+  }
+
   private readonly handleResize = (gameSize: Phaser.Structs.Size): void => {
     this.configureViewport(gameSize.width, gameSize.height);
   };
@@ -661,7 +688,11 @@ class SpaceshipScene extends Phaser.Scene {
     this.backgroundCover = getBackgroundCoverRect(
       viewport.screen.width,
       viewport.screen.height,
-      viewport.zoom
+      viewport.zoom,
+      // The only number here measured in pixels rather than world units, so the
+      // only one that has to be told the buffer got denser: left alone, the
+      // slack behind the edge would shrink by the ratio.
+      BACKGROUND_COVER_MARGIN_PX * this.pixelRatio
     );
     for (const layer of this.backgroundLayers) {
       layer.sprite
@@ -674,7 +705,10 @@ class SpaceshipScene extends Phaser.Scene {
     (globalThis as { __spaceshipDisplayCamera?: DisplayCameraSlice }).__spaceshipDisplayCamera = {
       width: viewport.screen.width,
       height: viewport.screen.height,
-      zoom: viewport.zoom
+      zoom: viewport.zoom,
+      pixelRatio: this.pixelRatio,
+      canvasWidth: actualWidth,
+      canvasHeight: actualHeight
     };
     this.focusCamera(this.spaceshipBody ?? this.snapshot.spaceship);
   }
@@ -886,8 +920,14 @@ export function resolveEnemyVisual(
 const SHIELD_GLOW_COLOR = 0x65baff;
 /** Gentle bloom: the crescent already carries the shape, the glow only softens it. */
 const SHIELD_GLOW_OUTER_STRENGTH = 2.4;
-/** Fixed at creation by Phaser; a wider distance at higher quality falls off smoothly. */
-const SHIELD_GLOW_QUALITY = 16;
+/**
+ * Sample count of the glow shader, fixed at creation by Phaser. Ten is Phaser's
+ * own default and this stood at sixteen; the shield is the only filtered object
+ * in the scene, which makes it the one pass whose cost grows with the square of
+ * the render resolution, and a sixty per cent surcharge on it is not something
+ * the bloom shows off.
+ */
+const SHIELD_GLOW_QUALITY = 10;
 const SHIELD_GLOW_DISTANCE = 24;
 
 /**
@@ -1101,21 +1141,95 @@ export interface SpaceshipRuntime {
   destroy(): void;
 }
 
+export interface SpaceshipRuntimeOptions {
+  /**
+   * Device pixels per CSS pixel the scene may draw at. Overridable so the
+   * ceiling can be chosen on the device that pays for it - see `?dpr=`.
+   */
+  readonly pixelRatioCap?: number;
+}
+
 export function createSpaceshipRuntime(
   host: HTMLElement,
-  initialSnapshot: DisplayGameSnapshot
+  initialSnapshot: DisplayGameSnapshot,
+  options: SpaceshipRuntimeOptions = {}
 ): SpaceshipRuntime {
   const scene = new SpaceshipScene(initialSnapshot);
+  /**
+   * What to draw into, for the glass we have right now.
+   *
+   * `Scale.RESIZE` sized the buffer in CSS pixels, which on a phone is a third
+   * of the panel in each direction - the arena was rasterised at a ninth of the
+   * pixels it was shown at and blown back up, while the HUD beside it was drawn
+   * by the browser at full density. Phaser 4 has no setting for this, so the
+   * mode goes to `NONE` and the sizing becomes ours: one observer, one call to
+   * `scale.resize`, and the engine resizes the renderer, the cameras and the
+   * filter targets off the back of it.
+   */
+  const target = () => {
+    const cssWidth = host.clientWidth > 0 ? host.clientWidth : BASE_VIEWPORT_WIDTH;
+    const cssHeight = host.clientHeight > 0 ? host.clientHeight : BASE_VIEWPORT_HEIGHT;
+    return getBackingStoreSize({
+      cssWidth,
+      cssHeight,
+      devicePixelRatio: globalThis.devicePixelRatio,
+      ...(options.pixelRatioCap === undefined ? {} : { cap: options.pixelRatioCap }),
+      // The glow allocates a target the size of the frame, and older mobile
+      // parts refuse past this; before boot there is nobody to ask.
+      maxDimension: 4096
+    });
+  };
+  const initial = target();
+  scene.setPixelRatio(initial.ratio);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: host,
-    width: host.clientWidth > 0 ? host.clientWidth : BASE_VIEWPORT_WIDTH,
-    height: host.clientHeight > 0 ? host.clientHeight : BASE_VIEWPORT_HEIGHT,
+    width: initial.width,
+    height: initial.height,
     backgroundColor: "#07171f",
     scene,
-    render: { antialias: true, roundPixels: false },
-    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }
+    render: {
+      antialias: true,
+      roundPixels: false,
+      /**
+       * The background is drawn far smaller than it is stored: the frame is
+       * 2500 world units across and the tiles are 512 and 1024 texels, so a
+       * texel lands on a third of a pixel on a phone. Sampled one level deep
+       * that is undersampling, and it reads as the starfield crawling and
+       * sparkling whenever the camera moves. Every one of the six textures is a
+       * power of two, so the whole chain is legal - and trilinear minification
+       * is cheaper than the aliasing it replaces, not dearer.
+       */
+      mipmapFilter: "LINEAR_MIPMAP_LINEAR",
+      /** Free on a phone, and picks the discrete GPU on a laptop that has two. */
+      powerPreference: "high-performance"
+    },
+    // Ours to size, and ours alone: `RESIZE` would overwrite the buffer with the
+    // CSS box on every parent poll, and centring is the stylesheet's job - the
+    // canvas is pinned to its box there, so Phaser's margins would be zeroes it
+    // recomputed on every refresh.
+    scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.NO_CENTER }
   });
+
+  const applyTarget = (): void => {
+    if (!game.isBooted) return;
+    const next = target();
+    // Guarded, because the observer also fires for changes that leave the box
+    // where it was, and `resize` re-emits the event the scene listens to.
+    if (next.width === game.scale.gameSize.width && next.height === game.scale.gameSize.height) {
+      return;
+    }
+    scene.setPixelRatio(next.ratio);
+    game.scale.resize(next.width, next.height);
+  };
+  // Two watchers, and they are not the same one twice: the observer hears the
+  // box change - rotation, fullscreen, the HUD reflowing around it - and the
+  // media query hears the density change under a box that did not move, which
+  // is a window dragged to another monitor or the browser zoomed.
+  const observer = new ResizeObserver(applyTarget);
+  observer.observe(host);
+  const unwatchRatio = watchDevicePixelRatio(applyTarget);
+
   return {
     update(snapshot) {
       scene.applySnapshot(snapshot);
@@ -1127,6 +1241,8 @@ export function createSpaceshipRuntime(
       return game.loop.actualFps;
     },
     destroy() {
+      observer.disconnect();
+      unwatchRatio();
       game.destroy(true);
     }
   };

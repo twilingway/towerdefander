@@ -2,6 +2,7 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
+import { readPixelRatioCap } from "./game/devicePixels.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
 import {
   buildVisibleDemoWorld,
@@ -56,7 +57,9 @@ export function SpaceshipCanvas({
     void import("./game/SpaceshipRuntime.js")
       .then(({ createSpaceshipRuntime }) => {
         if (!disposed) {
-          runtimeReference.current = createSpaceshipRuntime(host, latestGame.current);
+          runtimeReference.current = createSpaceshipRuntime(host, latestGame.current, {
+            pixelRatioCap: readPixelRatioCap(globalThis.location.search)
+          });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;

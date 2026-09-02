@@ -25,11 +25,12 @@ import {
   roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
 import { CrewLatency } from "./components/CrewLatency/index.js";
+import { useLetterboxBars } from "./useLetterboxBars.js";
 import { FpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
@@ -101,6 +102,7 @@ export function DisplayApp() {
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   const [fps, setFps] = useState(0);
+  const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
@@ -110,6 +112,13 @@ export function DisplayApp() {
     [preview, previewPhase, previewCameraViewWidth]
   );
   const view = previewView ?? networkView;
+  // The readouts move into the letterbox on glass that leaves enough of one;
+  // the frame is the camera's, so the arithmetic is the camera's too.
+  const bars = useLetterboxBars(
+    shellReference,
+    view?.game?.cameraViewWidth ?? PREVIEW_CAMERA_VIEW_WIDTH,
+    view?.game != null
+  );
   const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
   const joinUrl = useMemo(
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
@@ -277,7 +286,12 @@ export function DisplayApp() {
     view.game?.asteroids.filter(({ origin }) => origin === "wave").length ?? 0;
 
   return (
-    <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
+    <main
+      ref={shellReference}
+      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}
+      data-bars={bars.placement}
+      style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
+    >
       {previewView !== undefined && (
         <PreviewControls
           phase={previewPhase}

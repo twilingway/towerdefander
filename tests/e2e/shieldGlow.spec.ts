@@ -117,15 +117,27 @@ async function measureShield(page: Page): Promise<ShieldMeasurement | null> {
     () =>
       (
         globalThis as {
-          __spaceshipDisplayCamera?: { width: number; height: number; zoom: number };
+          __spaceshipDisplayCamera?: {
+            width: number;
+            height: number;
+            zoom: number;
+            canvasWidth: number;
+            canvasHeight: number;
+          };
         }
       ).__spaceshipDisplayCamera
   );
   expect(camera, "the display published no camera").toBeDefined();
   if (camera === undefined) return null;
+  // The camera is measured in the pixels the scene draws into and the shot in
+  // the pixels the browser captured; the two agree only while the panel is one
+  // to one. Taken as a share of the glass, the frame is unit-free and the
+  // measurement survives a dense panel.
+  const frameShare = camera.width / camera.canvasWidth;
+  const frameHeightShare = camera.height / camera.canvasHeight;
 
   return page.evaluate(
-    async ([encoded, frameWidth, frameHeight]: [string, number, number]) => {
+    async ([encoded, widthShare, heightShare]: [string, number, number]) => {
       const response = await fetch(`data:image/png;base64,${encoded}`);
       const bitmap = await createImageBitmap(await response.blob());
       const surface = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -149,6 +161,8 @@ async function measureShield(page: Page): Promise<ShieldMeasurement | null> {
       }
       if (pixels === 0) return null;
       // Relative to the frame, not to the glass: the bars are not part of the view.
+      const frameWidth = bitmap.width * widthShare;
+      const frameHeight = bitmap.height * heightShare;
       const originX = (bitmap.width - frameWidth) / 2;
       const originY = (bitmap.height - frameHeight) / 2;
       return {
@@ -157,6 +171,6 @@ async function measureShield(page: Page): Promise<ShieldMeasurement | null> {
         pixels
       };
     },
-    [shot, camera.width, camera.height] as [string, number, number]
+    [shot, frameShare, frameHeightShare] as [string, number, number]
   );
 }

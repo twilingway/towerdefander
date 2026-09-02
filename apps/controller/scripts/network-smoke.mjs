@@ -152,24 +152,21 @@ try {
 
   gunner = await reconnectController(gunner, "combat");
 
-  const gunship = await waitForEnemy(undefined, 35_000);
-  shieldLockedTargetId = gunship.entityId;
-  shieldEnabled = false;
-  shieldOpposite = false;
-  await waitFor(() => {
-    const current = findEntity(gunship.entityId);
-    if (current === undefined) return false;
-    // Close enough that it is inside its own firing range, whoever it is: the
-    // campaign's swarm hulls open up at a couple of hundred units, and waiting
-    // at nine hundred left the sector up with nothing to block.
-    return (
-      distance(current) < 350 &&
-      Math.abs(angleDelta(display.state.game.shield.angle, bearing(current))) < 0.18
-    );
-  }, 35_000);
-  shieldEnabled = true;
-  const shieldBlock = await waitForShieldBlock(20_000);
+  await waitForEnemy(undefined, 35_000);
+  // Whatever is nearest, held for as long as the battery allows.
+  //
+  // Locked to one ship and raised once, this depended on that ship staying
+  // alive, in range and shooting inside a single charge - and a charge is six
+  // seconds at a hundred and twenty points against twenty a second, so most of
+  // the window was spent with the sector already down. Tracking the nearest
+  // threat and cycling the sector the way the survival policy does gives the
+  // wave several passes to land a shot on it.
   shieldLockedTargetId = undefined;
+  shieldOpposite = false;
+  shieldSurvivalMode = true;
+  shieldEnabled = true;
+  const shieldBlock = await waitForShieldBlock(45_000);
+  shieldSurvivalMode = false;
 
   shieldEnabled = false;
   shieldOpposite = true;
