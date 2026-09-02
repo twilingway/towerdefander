@@ -8,7 +8,7 @@
  * line per finished cell goes to stdout for whoever is watching live.
  *
  * Usage:
- *   node apps/server/scripts/run-balance-batch.mjs --out <dir>
+ *   node apps/server/scripts/run-balance-batch.mjs [--out <dir>]
  *        [--levels rookie,veteran,ace] [--offsets=-1,0,1] [--crews 1,2,3]
  *        [--presets default] [--hulls guardian] [--runs 20] [--seed 1] [--max-waves 40]
  *        [--start-wave 1] [--intermission 3] [--preset path.json]
@@ -16,6 +16,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import {
@@ -61,9 +62,18 @@ async function writeAtomic(path, document) {
   await rename(temporary, path);
 }
 
+/**
+ * Where a batch lands when the caller does not say. The same directory the
+ * server hands the harness when the console starts a batch, and the same one
+ * the console lists from - resolved against this package rather than the
+ * working directory, because the console and the CLI have to look in one place.
+ * Without it `pnpm stats:matrix` refused to run at all: the script carries no
+ * `--out` of its own.
+ */
+const DEFAULT_OUT_DIRECTORY = fileURLToPath(new URL("../data/stats-batches", import.meta.url));
+
 async function main() {
-  const outDirectory = values.out;
-  if (outDirectory === undefined) throw new Error("--out <directory> is required");
+  const outDirectory = values.out ?? DEFAULT_OUT_DIRECTORY;
 
   const presetsOnDisk = await readPresets(values.preset);
   const requestedPresets =

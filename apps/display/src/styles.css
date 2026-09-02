@@ -1131,6 +1131,11 @@ p {
   left: 50%;
   z-index: 60;
   display: grid;
+  /* Toggle, tree, ship facts. Only the middle row gives way when the screen is
+     short, and it gives way by scrolling: capped by max-height alone the cards
+     simply ran out past the bottom of the window and off the glass, so on a
+     phone in landscape the last two tiers could not be read or reached. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(96vw, 120rem);
   max-height: 88vh;
   gap: 0.5rem;
@@ -1139,6 +1144,12 @@ p {
   border-radius: 1rem;
   background: rgb(6 16 20 / 92%);
   transform: translate(-50%, -50%);
+}
+
+/* Collapsed, the aside is one button and the three-row template would leave the
+   rows it no longer has holding space above and below it. */
+.module-tree--collapsed {
+  grid-template-rows: auto;
 }
 
 .module-tree__header {
@@ -1178,8 +1189,9 @@ p {
 
 .module-tree__grid {
   display: flex;
+  min-height: 0;
   gap: 0.35rem;
-  overflow-x: auto;
+  overflow: auto;
 }
 
 /* Eleven columns share the width instead of demanding it: the window is the one

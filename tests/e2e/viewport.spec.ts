@@ -74,3 +74,37 @@ test("every device is shown the same slice of the world", async ({ browser }) =>
     for (const context of contexts) await context.close();
   }
 });
+
+/**
+ * The module tree is the largest thing the HUD ever puts on screen, and it is
+ * capped by a share of the viewport height. A cap alone only decides where the
+ * window ends: the cards inside it went on past that edge and off the glass, so
+ * on a phone held sideways the last tiers could not be read and could not be
+ * reached. They have to stay inside the window, and the window inside the glass.
+ */
+test("the module tree keeps its cards inside its window on a short screen", async ({ browser }) => {
+  const short = { width: 844, height: 390 };
+  const context = await browser.newContext({ viewport: short });
+  try {
+    const page = await context.newPage();
+    await page.goto(previewUrl);
+    const tree = page.getByLabel("Дерево модулей корабля");
+    await expect(tree).toBeVisible();
+    // Let the layout settle before it is measured.
+    await page.waitForTimeout(500);
+
+    const windowBox = await tree.boundingBox();
+    const cardsBox = await page.locator(".module-tree__grid").boundingBox();
+    expect(windowBox, "the tree window has no box").not.toBeNull();
+    expect(cardsBox, "the tree has no cards").not.toBeNull();
+    if (windowBox === null || cardsBox === null) return;
+
+    const windowBottom = windowBox.y + windowBox.height;
+    expect(windowBottom, "the window itself runs off the screen").toBeLessThanOrEqual(short.height);
+    expect(cardsBox.y + cardsBox.height, "the cards run out past the window").toBeLessThanOrEqual(
+      windowBottom + 1
+    );
+  } finally {
+    await context.close();
+  }
+});
