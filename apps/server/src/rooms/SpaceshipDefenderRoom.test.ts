@@ -97,6 +97,17 @@ function startGame(room = createRoom()): {
 }
 
 /** Delays of the calls that armed the loop; a stop passes no callback at all. */
+/**
+ * The balance the room is actually running, read rather than typed. A full
+ * battery and a whole hull are events in these tests - "it starts full", "it
+ * lost one point" - and typing the numbers made a retuned campaign read as a
+ * broken shield.
+ */
+function activeBalance() {
+  const config = getBalanceStore().getActiveSimulationConfig();
+  return { capacity: config.shieldCapacity, maxHp: config.spaceshipMaxHp };
+}
+
 function armedLoops(spy: {
   mock: { calls: readonly (readonly unknown[])[] };
 }): (number | undefined)[] {
@@ -343,7 +354,8 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
       arenaRadius: 2200
     });
     expect(room.state.game.spaceship).toMatchObject({ x: 2200, y: 2200, radius: 52 });
-    expect(room.state.game.shield).toMatchObject({ energy: 100, capacity: 100 });
+    const { capacity } = activeBalance();
+    expect(room.state.game.shield).toMatchObject({ energy: capacity, capacity });
     expect(room.state.game.display.obstacles).toHaveLength(9);
     expect(room.maxMessagesPerSecond).toBe(25);
     // Stopping passes no callback, so only the armed calls count.
@@ -781,7 +793,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     });
     raiseShield(room);
     expect(room.state.game.shield.active).toBe(true);
-    expect(room.state.game.shield.energy).toBe(99);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
     expect(room.state.game.shield.angle).toBeGreaterThan(0);
     expect(room.state.game.shield.angle).toBeLessThan(Math.PI);
   });
@@ -801,7 +813,10 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
 
     room.advanceGameStep();
     const firstAngle = room.state.game.shield.angle;
-    expect(room.state.game.shield).toMatchObject({ active: false, energy: 100 });
+    expect(room.state.game.shield).toMatchObject({
+      active: false,
+      energy: activeBalance().capacity
+    });
     expect(firstAngle).toBeLessThan(0);
     expect(firstAngle).toBeGreaterThan(-Math.PI / 2);
 
@@ -911,12 +926,12 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     } as const;
     room.handleShieldInput(shield.client, input);
     room.handleShieldInput(shield.client, input);
-    expect(room.state.game.shield.energy).toBe(100);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity);
     // Coming up spends nothing; the drain starts with the hold.
     raiseShield(room);
-    expect(room.state.game.shield.energy).toBe(99);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
     room.advanceGameStep();
-    expect(room.state.game.shield.energy).toBe(98);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 2);
   });
 
   it("publishes depletion and re-arms itself once the battery is back", () => {
@@ -939,7 +954,11 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     // this test read a half-charged battery as a broken shield.
     const ticksToDepletion = advanceUntil(room, () => room.state.game.shield.rearmRequired);
     expect(ticksToDepletion).toBeGreaterThan(0);
-    expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
+    expect(room.state.game.shield).toMatchObject({
+      active: false,
+      energy: 0,
+      capacity: activeBalance().capacity
+    });
 
     // The button is never released and never pressed again: the old rule left
     // an operator holding a shield that refused for ever with nothing on the
@@ -1045,7 +1064,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     vi.spyOn(room, "allowReconnection").mockResolvedValue(shield.client);
     await room.onLeave(shield.client, 1006);
     expect(room.state.game.shield.active).toBe(false);
-    expect(room.state.game.shield.energy).toBe(99);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
   });
 
   it("does not expose a role requested by the controller", () => {
@@ -1075,7 +1094,10 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     const { room } = startGame();
 
     expect("runSeed" in room.state.game).toBe(false);
-    expect(room.state.game.spaceship).toMatchObject({ hp: 500, maxHp: 500 });
+    expect(room.state.game.spaceship).toMatchObject({
+      hp: activeBalance().maxHp,
+      maxHp: activeBalance().maxHp
+    });
     expect(room.state.game.shield.arcHalfAngle).toBeCloseTo(Math.PI / 4);
     expect(room.state.game.encounter).toMatchObject({
       phase: "combat",
@@ -1127,7 +1149,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
 
       const frozenTick = room.state.game.tick;
       room.advanceGameStep();
-      expect(room.state.game.spaceship.hp).toBe(500);
+      expect(room.state.game.spaceship.hp).toBe(activeBalance().maxHp);
       expect(room.state.game.encounter).toMatchObject({
         phase: "result",
         outcome: "defeat",
@@ -1664,7 +1686,10 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
     ).toEqual(roster);
     expect([...room.state.players.values()].every(({ ready }) => !ready)).toBe(true);
     expect(room.state.game).toMatchObject({ tick: 0, elapsedMs: 0 });
-    expect(room.state.game.spaceship).toMatchObject({ hp: 500, maxHp: 500 });
+    expect(room.state.game.spaceship).toMatchObject({
+      hp: activeBalance().maxHp,
+      maxHp: activeBalance().maxHp
+    });
     expect(room.state.game.encounter).toMatchObject({
       phase: "combat",
       hasOutcome: false,

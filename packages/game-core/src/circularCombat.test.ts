@@ -160,9 +160,17 @@ function rimPinDistanceFloor(config: SpaceshipSimulationConfig, kind: string): n
 }
 
 function quietArenaConfig(): SpaceshipSimulationConfig {
+  const base = createSpaceshipSimulationConfig();
   return createSpaceshipSimulationConfig({
     ambientAsteroidIntervalMinTicks: 100_000,
-    ambientAsteroidIntervalMaxTicks: 100_000
+    ambientAsteroidIntervalMaxTicks: 100_000,
+    // The beginner's blend, which is what the rim tests below measure. The
+    // campaign flies its gunships as veterans, and a veteran spends half its
+    // course sideways - a different question from whether the wall lets go.
+    enemyArchetypes: {
+      ...base.enemyArchetypes,
+      gunship: { ...getEnemyArchetype(base, "gunship"), combatSkill: "rookie" }
+    }
   });
 }
 
@@ -386,8 +394,8 @@ describe("circular combat spawning and movement", () => {
     // Golden values recorded from the blend before the rim rule was added, and
     // re-recorded when the archetype's hold distance followed the crew's reach
     // down: the blend is the same, the ring it settles on is closer.
-    expect(state.enemies[0]?.x).toBeCloseTo(2495.0594577084157, 6);
-    expect(state.enemies[0]?.y).toBeCloseTo(2132.150533227034, 6);
+    expect(state.enemies[0]?.x).toBeCloseTo(2610.9488059723653, 6);
+    expect(state.enemies[0]?.y).toBeCloseTo(2130.8283632441126, 6);
   });
 });
 
@@ -617,7 +625,8 @@ describe("ambient asteroid scheduler", () => {
   });
 
   it("does not let ambient asteroids block intermission and gives defeat precedence", () => {
-    const config = createSpaceshipSimulationConfig({ asteroidDamage: 500 });
+    // Lethal to any hull the campaign ships, which is the point of the test.
+    const config = createSpaceshipSimulationConfig({ asteroidDamage: 10_000 });
     const initial = createSpaceshipSimulationState(config, 71);
     const harmless = ambientAsteroid(config, 0);
     const intermission = combatStep(

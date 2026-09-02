@@ -318,7 +318,7 @@ describe("version 1 migration", () => {
     expect(wave?.entries.map(({ sectors }) => sectors)).toEqual([["SE"], []]);
     // The v1 document carried no visual at all, so the built-in default fills in.
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "interceptor").visual.shape).toBe(
-      "ship-spear"
+      "ship-dart"
     );
   });
 
@@ -370,8 +370,8 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2200);
-    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2200);
+    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2500);
+    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2500);
   });
 
   it("gives a version 18 document the default arena without touching its waves", async () => {
@@ -518,7 +518,7 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     const saved = store.getState().presets[0]?.tuning;
-    expect(saved?.enemyArchetypes.gunship?.combatSkill).toBe("rookie");
+    expect(saved?.enemyArchetypes.gunship?.combatSkill).toBe("veteran");
     expect(saved?.enemySkill.offset).toBe(0);
     // Kept what the operator set, gained only what was missing.
     expect(saved?.enemySkill.profiles.veteran.leadFactor).toBe(0.9);
@@ -675,10 +675,11 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    // Gunship bullets reach 440 * 180 * 0.05 = 3960 world units.
+    // Gunship bullets reach 640 * 33 * 0.05 = 1056 world units, and seven tenths
+    // of that is where the barrel is allowed to open.
     expect(
       getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").weapons[0]
-    ).toMatchObject({ engagementRange: 2772 });
+    ).toMatchObject({ engagementRange: 739 });
   });
 
   it("turns version 7 silhouettes into catalogue assets and drops their colours", async () => {
@@ -740,13 +741,25 @@ describe("version 1 migration", () => {
     const tuning = store.getState().presets[0]?.tuning;
     if (tuning === undefined) throw new Error("Expected the migrated preset.");
     // Every old silhouette lands on the asset the mapping table names.
-    expect(kinds.map((kind) => tuning.enemyArchetypes[kind]?.visual.shape)).toEqual([
-      "ship-spear",
-      "ship-blockfrigate",
-      "ship-diamond",
-      "ship-arrowhead",
-      "ship-hexcorvette"
-    ]);
+    // Every old silhouette lands on the asset the mapping table names, and the
+    // catalogue is thirty kinds now, so the expectation is the mapping applied
+    // to the same cycle rather than five names typed out.
+    const migratedShapes = {
+      arrowhead: "ship-spear",
+      block: "ship-blockfrigate",
+      diamond: "ship-diamond",
+      dart: "ship-arrowhead",
+      hexagon: "ship-hexcorvette",
+      cross: "station-crossdock",
+      ring: "station-ring",
+      spike: "station-starrelay"
+    } as const;
+    expect(kinds.map((kind) => tuning.enemyArchetypes[kind]?.visual.shape)).toEqual(
+      kinds.map((_kind, index) => {
+        const legacy = legacyShapes[index % legacyShapes.length];
+        return legacy === undefined ? undefined : migratedShapes[legacy];
+      })
+    );
     for (const kind of kinds) {
       const visual = tuning.enemyArchetypes[kind]?.visual;
       expect(visual, kind).not.toHaveProperty("color");

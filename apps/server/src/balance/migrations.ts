@@ -123,7 +123,12 @@ function migrateWeapon(weapon: unknown): unknown {
     ...weapon,
     engagementRange:
       weapon.engagementRange ??
-      (Number.isFinite(reach) && reach > 0 ? Math.round(reach * MIGRATED_RANGE_SHARE) : 1200),
+      // A beam states its reach outright and its speed and lifetime sit at the
+      // floor, so the arithmetic here rounds to nothing for it - and a range of
+      // zero is a barrel the schema refuses to load at all.
+      (Number.isFinite(reach) && reach > 0
+        ? Math.max(1, Math.round(reach * MIGRATED_RANGE_SHARE))
+        : 1200),
     // Version 7 had no look for shots; the display default is what they had.
     visual: weapon.visual ?? null
   };

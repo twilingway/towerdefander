@@ -121,12 +121,21 @@ const GUARD_SCENARIOS = {
   // target already inside it, doubling the range would change nothing and the
   // guard would prove nothing.
   laser: { cannonWeaponKind: "laser", mgWeaponKind: "laser", cannonLaserRange: 250 },
-  missile: { cannonWeaponKind: "missile", mgWeaponKind: "missile" }
+  missile: { cannonWeaponKind: "missile", mgWeaponKind: "missile" },
+  /**
+   * A sector that outlives the asking. The operator's pattern below raises it
+   * and lets go at once, so what decides when it falls is the minimum hold -
+   * but only while the battery can pay for that long, which under the
+   * campaign's own drain it cannot. Long hold, deep battery, slow drain: then
+   * the hold is the only thing left to read.
+   */
+  shield: { shieldMinimumUpTicks: 200, shieldCapacity: 400, shieldDrainPerSecond: 1 }
 } as const satisfies Record<string, Partial<SpaceshipSimulationConfig>>;
 
 type GuardScenario = keyof typeof GUARD_SCENARIOS;
 
 const SCENARIO_BY_FIELD: Partial<Record<ShipStatField, GuardScenario>> = {
+  shieldMinimumUpTicks: "shield",
   cannonLaserRange: "laser",
   mgLaserRange: "laser",
   laserBeamRadius: "laser",
@@ -181,6 +190,12 @@ function guardConfig(
     enemySpawnIntervalTicks: 100_000,
     ambientAsteroidIntervalMinTicks: 40,
     ambientAsteroidIntervalMaxTicks: 60,
+    // Pinned with the enemies, and for the same reason: this is an instrument.
+    // The battery has to outlast the minimum hold, or the sector comes down
+    // because it ran dry and the hold never decides anything - which is how the
+    // campaign's own numbers left `shieldMinimumUpTicks` unproven while the
+    // guard still reported green.
+    shieldCapacity: 100,
     enemyArchetypes: pinnedArchetypes(createSpaceshipSimulationConfig().enemyArchetypes),
     ...overrides
   });

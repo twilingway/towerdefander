@@ -1,3 +1,9 @@
+import {
+  AUTHORED_DIRECTOR,
+  AUTHORED_ENEMY_ARCHETYPES,
+  AUTHORED_SHIP_STATS,
+  AUTHORED_WAVES
+} from "./authoredCampaign.ts";
 import { DEFAULT_ENDLESS_TIER, DEFAULT_MODULE_TIERS } from "./moduleTree.ts";
 import { type SpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
 /** The built-in balance the server starts from before a preset is loaded. */
@@ -5,28 +11,25 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   fixedStepMs: 50,
   worldWidth: 4400,
   worldHeight: 4400,
-  cameraViewWidth: 2200,
+  // The frame the campaign is balanced inside, and the same one the console
+  // carries: every barrel is bounded by half its height, and the shell that
+  // catalogue counts health in reaches 680.
+  cameraViewWidth: 2500,
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   spaceshipVisual: null,
   arenaRadius: 2200,
-  spaceshipSpeedPerSecond: 320,
   spaceshipAccelerationPerSecondSquared: 640,
   spaceshipBrakingPerSecondSquared: 800,
   spaceshipReverseSpeedFactor: 0.4,
   spaceshipRadius: 52,
   inputTimeoutTicks: 5,
-  projectileSpeedPerSecond: 720,
   // Reach is speed times lifetime, and the honest ceiling for it is half the
   // frame's height - the short way out of the picture, and therefore the only
   // distance a crew is sure to see what it is shooting at on any glass. At 680
-  // ms the shell carries 490 and the nose burst 612, both inside the 619 the
-  // frame promises. It used to be 1080 and 1350: the far half of that was fire
-  // at what the display had not drawn yet, and a shell that flies a second and
-  // a half is one a moving target simply leaves.
+  // ms the shell carries 680 and the nose burst 612, both inside the 703 the
+  // frame promises. It used to be a second and a half, which is a shell a
+  // moving target simply leaves, and fire at what the display had not drawn.
   projectileLifetimeMs: 680,
-  projectileRadius: 8,
-  fireCooldownTicks: 5,
-  shieldCapacity: 100,
   shieldDrainPerSecond: 20,
   shieldRechargePerSecond: 10,
   shieldEngageTicks: 10,
@@ -45,7 +48,6 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   headingAngularAccelerationPerSecondSquared: 50,
   headingAngularBrakingPerSecondSquared: 50,
   mgFireCooldownTicks: 2,
-  mgDamage: 8,
   mgProjectileSpeedPerSecond: 900,
   mgProjectileRadius: 5,
   projectileVisual: null,
@@ -70,29 +72,18 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   laserBeamRadius: 5,
   friendlyMissileTurnRatePerSecond: (4 * Math.PI) / 15,
   friendlyMissileAcquireConeRadians: Math.PI / 20,
-  spaceshipMaxHp: 500,
   shieldRadius: 104,
   shieldArcRadians: Math.PI / 2,
   asteroidShieldHitCost: 20,
   asteroidDamage: 40,
-  friendlyProjectileDamage: 25,
   enemySpawnIntervalTicks: 12,
   ambientAsteroidIntervalMinTicks: 40,
   ambientAsteroidIntervalMaxTicks: 100,
   intermissionTicks: 600,
-  waveCampaign: {
-    waves: [],
-    director: {
-      baseBudget: 5,
-      budgetGrowth: 2,
-      budgetCap: 120,
-      hpGrowth: 0.12,
-      hpMultiplierCap: 8,
-      tempoGrowth: 0.05,
-      tempoMultiplierCap: 3,
-      bossWaveInterval: 5
-    }
-  },
+  // The campaign the console shows, not a second one: an empty table left the
+  // director improvising every wave, and a server without a preset played a
+  // different game from the one that was tuned.
+  waveCampaign: { waves: AUTHORED_WAVES, director: AUTHORED_DIRECTOR },
   /**
    * Neutral against the enemy that predated the profiles: `rookie` carries the
    * old orbit share and range band, so a catalogue set to it plays the way it
@@ -139,205 +130,10 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
       }
     }
   },
-  /**
-   * Every distance here is a statement about the crew's gun - in its face, at
-   * the edge of it, out past where it can answer - so all of them moved with
-   * the gun when the shell stopped flying 1080 and started flying 490. The
-   * odd-looking numbers are the old ones times that ratio; the operator preset
-   * carries the same scaling, applied by `author-campaign.mjs`.
-   */
-  enemyArchetypes: {
-    gunship: {
-      hp: 50,
-      radius: 28,
-      speedPerSecond: 150,
-      preferredDistance: 295,
-      combatSkill: "rookie",
-      turnRatePerSecond: (2 * Math.PI) / 3,
-      turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 3),
-      turnBrakingPerSecondSquared: 3 * ((2 * Math.PI) / 3),
-      weapons: [
-        {
-          kind: "bullet",
-          cooldownTicks: 30,
-          damage: 10,
-          shieldHitCost: 4,
-          projectileRadius: 7,
-          projectileSpeedPerSecond: 440,
-          projectileLifetimeTicks: 180,
-          engagementRange: 544,
-          turnRatePerSecond: Math.PI / 2,
-          burstCount: 1,
-          burstSpreadRadians: 0,
-          visual: null
-        }
-      ],
-      visual: {
-        shape: "ship-delta",
-        modelScale: 1,
-        showHealthBar: false
-      },
-      label: "Ганшип",
-      spawnPolicy: "standard",
-      spawnCost: 2,
-      unlockWave: 1,
-      scoreReward: 25,
-      creditReward: 2,
-      lootChance: 0.22
-    },
-    missileCarrier: {
-      hp: 110,
-      radius: 38,
-      speedPerSecond: 95,
-      preferredDistance: 408,
-      combatSkill: "rookie",
-      turnRatePerSecond: Math.PI / 2,
-      turnAccelerationPerSecondSquared: 2 * (Math.PI / 2),
-      turnBrakingPerSecondSquared: 3 * (Math.PI / 2),
-      weapons: [
-        {
-          kind: "missile",
-          cooldownTicks: 70,
-          damage: 30,
-          shieldHitCost: 12,
-          projectileRadius: 12,
-          projectileSpeedPerSecond: 260,
-          projectileLifetimeTicks: 240,
-          engagementRange: 771,
-          turnRatePerSecond: Math.PI / 2,
-          burstCount: 1,
-          burstSpreadRadians: 0,
-          visual: null
-        }
-      ],
-      visual: {
-        shape: "ship-broadwing",
-        modelScale: 1,
-        showHealthBar: false
-      },
-      label: "Ракетоносец",
-      spawnPolicy: "standard",
-      spawnCost: 4,
-      unlockWave: 3,
-      scoreReward: 25,
-      creditReward: 4,
-      lootChance: 0.3
-    },
-    sniper: {
-      hp: 70,
-      radius: 30,
-      speedPerSecond: 70,
-      preferredDistance: 635,
-      combatSkill: "veteran",
-      turnRatePerSecond: (2 * Math.PI) / 5,
-      turnAccelerationPerSecondSquared: 2 * ((2 * Math.PI) / 5),
-      turnBrakingPerSecondSquared: 3 * ((2 * Math.PI) / 5),
-      weapons: [
-        {
-          kind: "bullet",
-          cooldownTicks: 100,
-          damage: 35,
-          shieldHitCost: 10,
-          projectileRadius: 9,
-          projectileSpeedPerSecond: 900,
-          projectileLifetimeTicks: 120,
-          engagementRange: 1361,
-          turnRatePerSecond: Math.PI / 2,
-          burstCount: 1,
-          burstSpreadRadians: 0,
-          visual: null
-        }
-      ],
-      visual: {
-        shape: "ship-needle",
-        modelScale: 1,
-        showHealthBar: false
-      },
-      label: "Снайпер",
-      spawnPolicy: "standard",
-      spawnCost: 3,
-      unlockWave: 5,
-      scoreReward: 30,
-      creditReward: 3,
-      lootChance: 0.25
-    },
-    interceptor: {
-      hp: 22,
-      radius: 18,
-      speedPerSecond: 260,
-      preferredDistance: 145,
-      combatSkill: "veteran",
-      turnRatePerSecond: (4 * Math.PI) / 3,
-      turnAccelerationPerSecondSquared: 2 * ((4 * Math.PI) / 3),
-      turnBrakingPerSecondSquared: 3 * ((4 * Math.PI) / 3),
-      weapons: [
-        {
-          kind: "bullet",
-          cooldownTicks: 12,
-          damage: 4,
-          shieldHitCost: 2,
-          projectileRadius: 5,
-          projectileSpeedPerSecond: 520,
-          projectileLifetimeTicks: 90,
-          engagementRange: 272,
-          turnRatePerSecond: Math.PI / 2,
-          burstCount: 1,
-          burstSpreadRadians: 0,
-          visual: null
-        }
-      ],
-      visual: {
-        shape: "ship-spear",
-        modelScale: 1,
-        showHealthBar: false
-      },
-      label: "Перехватчик",
-      spawnPolicy: "standard",
-      spawnCost: 1,
-      unlockWave: 1,
-      scoreReward: 12,
-      creditReward: 1,
-      lootChance: 0.15
-    },
-    boss: {
-      hp: 900,
-      radius: 90,
-      speedPerSecond: 60,
-      preferredDistance: 318,
-      combatSkill: "ace",
-      turnRatePerSecond: Math.PI / 4,
-      turnAccelerationPerSecondSquared: 2 * (Math.PI / 4),
-      turnBrakingPerSecondSquared: 3 * (Math.PI / 4),
-      weapons: [
-        {
-          kind: "missile",
-          cooldownTicks: 60,
-          damage: 30,
-          shieldHitCost: 12,
-          projectileRadius: 14,
-          projectileSpeedPerSecond: 240,
-          projectileLifetimeTicks: 300,
-          engagementRange: 726,
-          turnRatePerSecond: Math.PI / 2,
-          burstCount: 3,
-          burstSpreadRadians: Math.PI / 6,
-          visual: null
-        }
-      ],
-      visual: {
-        shape: "boss-dreadnought",
-        modelScale: 1,
-        showHealthBar: true
-      },
-      label: "Босс",
-      spawnPolicy: "boss",
-      spawnCost: 20,
-      unlockWave: 10,
-      scoreReward: 250,
-      creditReward: 30,
-      lootChance: 1
-    }
-  },
+  // Thirty archetypes with their distances, health and cadence as authored -
+  // health counted in cannon hits of the gun below, which is the whole reason
+  // these two have to travel together.
+  enemyArchetypes: AUTHORED_ENEMY_ARCHETYPES,
   asteroidHp: 65,
   asteroidRadius: 34,
   asteroidSpeedPerSecond: 190,
@@ -372,5 +168,11 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
     dynamicEntities: 208
   },
   moduleTiers: DEFAULT_MODULE_TIERS,
-  endlessTier: DEFAULT_ENDLESS_TIER
+  endlessTier: DEFAULT_ENDLESS_TIER,
+  // Last, so it wins: the gun the catalogue above was balanced against. Health
+  // in that catalogue is written as "how many hits of this does it take", so a
+  // default that fires anything else makes the whole table say the wrong thing
+  // - which is exactly what it used to do, at 25 damage against a table
+  // counted in 38s.
+  ...AUTHORED_SHIP_STATS
 };

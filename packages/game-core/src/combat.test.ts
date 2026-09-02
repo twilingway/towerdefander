@@ -66,6 +66,22 @@ function bossAfterEscortConfig() {
   });
 }
 
+/**
+ * The built-in campaign with its wave table taken away and its catalogue cut to
+ * the handful these tests name. What they measure is the director's own rules -
+ * unlock gating, boss placement, budget - and with the whole authored campaign
+ * in place they would be reading the thirty waves that are written out instead.
+ */
+function directorOnlyConfig(overrides: Partial<SpaceshipSimulationConfig> = {}) {
+  const base = createSpaceshipSimulationConfig();
+  const kinds = ["interceptor", "gunship", "missileCarrier", "sniper", "boss"];
+  return createSpaceshipSimulationConfig({
+    enemyArchetypes: Object.fromEntries(kinds.map((kind) => [kind, getEnemyArchetype(base, kind)])),
+    waveCampaign: { waves: [], director: base.waveCampaign.director },
+    ...overrides
+  });
+}
+
 function scriptedCampaignConfig() {
   const base = createSpaceshipSimulationConfig();
   return createSpaceshipSimulationConfig({
@@ -214,7 +230,7 @@ describe("deterministic combat foundation", () => {
   });
 
   it("unlocks a kind at its configured wave and scales difficulty monotonically", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = directorOnlyConfig();
     expect(getEnemyArchetype(config, "missileCarrier").unlockWave).toBe(3);
     expect(createWavePlan(config, 91, 1).plan.some(({ kind }) => kind === "missileCarrier")).toBe(
       false
@@ -235,8 +251,8 @@ describe("deterministic combat foundation", () => {
   });
 
   it("moves a kind unlock by reconfiguring the archetype", () => {
-    const base = createSpaceshipSimulationConfig();
-    const config = createSpaceshipSimulationConfig({
+    const base = directorOnlyConfig();
+    const config = directorOnlyConfig({
       enemyArchetypes: {
         ...base.enemyArchetypes,
         missileCarrier: { ...getEnemyArchetype(base, "missileCarrier"), unlockWave: 6 }
@@ -368,11 +384,11 @@ describe("deterministic combat foundation", () => {
   });
 
   it("spawns a boss only on configured boss waves", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = directorOnlyConfig();
     const bossInterval = config.waveCampaign.director.bossWaveInterval;
     expect(bossInterval).toBe(5);
-    expect(getEnemyArchetype(config, "boss").unlockWave).toBe(10);
-    for (const wave of [1, 5, 9, 11, 12]) {
+    expect(getEnemyArchetype(config, "boss").unlockWave).toBe(5);
+    for (const wave of [1, 4, 9, 11, 12]) {
       expect(createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "boss")).toBe(false);
     }
     for (const wave of [10, 15, 20]) {
@@ -381,7 +397,7 @@ describe("deterministic combat foundation", () => {
   });
 
   it("closes the directed plan with the boss instead of shuffling it in", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = directorOnlyConfig();
     for (const seed of [7, 91, 4242, 90_001]) {
       const plan = createWavePlan(config, seed, 10).plan;
       expect(plan.filter(({ kind }) => kind === "boss")).toHaveLength(1);
@@ -560,7 +576,7 @@ describe("deterministic combat foundation", () => {
             {
               entries: [
                 {
-                  kind: "dreadnought",
+                  kind: "phantom",
                   count: 1,
                   startDelayTicks: 0,
                   spawnIntervalTicks: 12,
@@ -849,9 +865,11 @@ describe("deterministic combat foundation", () => {
   });
 
   it("never picks a boss as ordinary director filler", () => {
-    const config = createSpaceshipSimulationConfig({
+    // With no table to stage and no boss interval, every wave is the director's
+    // own bag - and a boss must never be in it.
+    const config = directorOnlyConfig({
       waveCampaign: {
-        ...createSpaceshipSimulationConfig().waveCampaign,
+        waves: [],
         director: {
           ...createSpaceshipSimulationConfig().waveCampaign.director,
           bossWaveInterval: null
@@ -1049,7 +1067,9 @@ describe("combat motion and collision", () => {
       ...state,
       shieldAngle: -Math.PI,
       shieldActive: true,
-      shieldEnergy: 2,
+      // Under the cheapest block in the catalogue: the campaign's barrels were
+      // split into smaller shots, and a two-point battery can pay for one now.
+      shieldEnergy: 1,
       pendingSpawns: []
     };
     const bullet: HostileProjectileState = {
@@ -1235,6 +1255,8 @@ describe("combat motion and collision", () => {
   it("suppresses capped friendly fire while consuming the ordinary cooldown", () => {
     const baseConfig = createSpaceshipSimulationConfig();
     const config = createSpaceshipSimulationConfig({
+      // Pinned: seven steps are counted against this cadence, not the campaign's.
+      fireCooldownTicks: 5,
       caps: { ...baseConfig.caps, friendlyProjectiles: 1, dynamicEntities: 165 }
     });
     let state = createSpaceshipSimulationState(config, 53);
@@ -1571,7 +1593,18 @@ describe("enemy turn inertia", () => {
   });
 
   it("settles onto its preferred range without a jump in course", () => {
-    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+    // Pinned to the beginner's blend, which is what this measures. The campaign
+    // flies its gunships as veterans, and a veteran crosses into its range with
+    // half its course sideways - whether that crossing is as smooth is a
+    // question this test never asked.
+    const base = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({
+      enemySpawnIntervalTicks: 1_000_000,
+      enemyArchetypes: {
+        ...base.enemyArchetypes,
+        gunship: { ...getEnemyArchetype(base, "gunship"), combatSkill: "rookie" }
+      }
+    });
     const state = createSpaceshipSimulationState(config, 93);
     const archetype = getEnemyArchetype(config, "gunship");
     // Starts outside the range it wants and crosses into it. This crossing is

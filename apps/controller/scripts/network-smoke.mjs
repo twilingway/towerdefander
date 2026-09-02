@@ -121,7 +121,12 @@ try {
     active: false
   });
   await waitFor(() => display.state.game.shield.angle > 0);
-  if (display.state.game.shield.active || display.state.game.shield.energy !== 100)
+  // Full is read off the battery rather than typed: the campaign sets the
+  // capacity, and a retuned one must not read as a leaking shield.
+  if (
+    display.state.game.shield.active ||
+    display.state.game.shield.energy !== display.state.game.shield.capacity
+  )
     throw new Error("Inactive shield pre-aim consumed energy.");
 
   const roleError = nextServerError(shield);
@@ -147,20 +152,23 @@ try {
 
   gunner = await reconnectController(gunner, "combat");
 
-  const gunship = await waitForEnemy("gunship", 35_000);
+  const gunship = await waitForEnemy(undefined, 35_000);
   shieldLockedTargetId = gunship.entityId;
   shieldEnabled = false;
   shieldOpposite = false;
   await waitFor(() => {
     const current = findEntity(gunship.entityId);
     if (current === undefined) return false;
+    // Close enough that it is inside its own firing range, whoever it is: the
+    // campaign's swarm hulls open up at a couple of hundred units, and waiting
+    // at nine hundred left the sector up with nothing to block.
     return (
-      distance(current) < 900 &&
+      distance(current) < 350 &&
       Math.abs(angleDelta(display.state.game.shield.angle, bearing(current))) < 0.18
     );
   }, 35_000);
   shieldEnabled = true;
-  const shieldBlock = await waitForShieldBlock(8_000);
+  const shieldBlock = await waitForShieldBlock(20_000);
   shieldLockedTargetId = undefined;
 
   shieldEnabled = false;
@@ -358,11 +366,17 @@ async function waitForShieldBlock(timeoutMs) {
     );
     const passiveDrain = tickDelta * 20 * (STEP_MS / 1000);
     const collisionCost = previous.energy - current.energy - passiveDrain;
+    // A point beyond the passive drain. It used to want three and a half, which
+    // was the cheapest block in the catalogue back when a barrel fired one big
+    // shot; the campaign splits its heavy barrels into three small ones now and
+    // the block costs the sector two - so the check was reading a real block as
+    // no block at all. What proves it is the pair above: a shot vanished at the
+    // sector and the hull took nothing.
     if (
       previous.active &&
       removedNearShield &&
       current.hp === previous.hp &&
-      collisionCost >= 3.5
+      collisionCost >= 0.9
     ) {
       return { collisionCost, hp: current.hp, tick: current.tick };
     }
@@ -396,17 +410,25 @@ async function waitForShootableTarget(timeoutMs) {
   return snapshot(target);
 }
 
+/**
+ * The nearest enemy of a kind, or of any kind when none is named. Named, this
+ * waited for a gunship and the campaign does not call one in until wave two -
+ * the smoke is about the wire, not about who is flying, so it takes whoever
+ * arrives.
+ */
 async function waitForEnemy(kind, timeoutMs) {
   await waitFor(() => hasEnemy(kind), timeoutMs);
   const enemy = [...world().enemyShips.values()]
-    .filter((candidate) => candidate.kind === kind)
+    .filter((candidate) => kind === undefined || candidate.kind === kind)
     .sort((a, b) => distance(a) - distance(b))[0];
-  if (enemy === undefined) throw new Error(`No ${kind} was found.`);
+  if (enemy === undefined) throw new Error(`No ${kind ?? "enemy"} was found.`);
   return snapshot(enemy);
 }
 
 function hasEnemy(kind) {
-  return [...world().enemyShips.values()].some((enemy) => enemy.kind === kind);
+  return [...world().enemyShips.values()].some(
+    (enemy) => kind === undefined || enemy.kind === kind
+  );
 }
 
 async function reconnectController(room, expectedPhase) {

@@ -84,16 +84,16 @@ describe("spaceship configuration", () => {
       worldWidth: 4400,
       worldHeight: 4400,
       arenaRadius: 2200,
-      spaceshipSpeedPerSecond: 320,
+      spaceshipSpeedPerSecond: 380,
       spaceshipAccelerationPerSecondSquared: 640,
       spaceshipBrakingPerSecondSquared: 800,
       spaceshipRadius: 52,
       inputTimeoutTicks: 5,
-      projectileSpeedPerSecond: 720,
+      projectileSpeedPerSecond: 1000,
       projectileLifetimeMs: 680,
-      projectileRadius: 8,
-      fireCooldownTicks: 5,
-      shieldCapacity: 100,
+      projectileRadius: 14,
+      fireCooldownTicks: 3,
+      shieldCapacity: 120,
       shieldDrainPerSecond: 20,
       shieldRechargePerSecond: 10,
       turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
@@ -109,7 +109,7 @@ describe("spaceship configuration", () => {
       createSpaceshipSimulationState(config, 1)
     );
     expect(createSpaceshipSimulationState(config, 1)).toMatchObject({
-      shieldEnergy: 100,
+      shieldEnergy: 120,
       shieldRearmRequired: false,
       queuedFire: false,
       turretTargetAngle: null,
@@ -182,6 +182,24 @@ describe("spaceship configuration", () => {
   });
 });
 
+/**
+ * A world small enough to reach the rim in a step. The catalogue comes with it,
+ * because the built-in one carries the whole campaign now and its heaviest hull
+ * does not fit inside a hundred units.
+ */
+function smallArenaConfig(overrides: Partial<SpaceshipSimulationConfig> = {}) {
+  const base = createSpaceshipSimulationConfig();
+  const gunship = getEnemyArchetype(base, "gunship");
+  return createSpaceshipSimulationConfig({
+    worldWidth: 200,
+    worldHeight: 200,
+    arenaRadius: 100,
+    enemyArchetypes: { gunship: { ...gunship, radius: 10 } },
+    waveCampaign: { waves: [], director: base.waveCampaign.director },
+    ...overrides
+  });
+}
+
 describe("pilot movement", () => {
   it("accelerates to max speed in ten equal fixed steps", () => {
     const config = createSpaceshipSimulationConfig();
@@ -230,11 +248,7 @@ describe("pilot movement", () => {
   });
 
   it("projects at the circular rim and clears only the outward velocity component", () => {
-    const config = createSpaceshipSimulationConfig({
-      worldWidth: 200,
-      worldHeight: 200,
-      arenaRadius: 100
-    });
+    const config = smallArenaConfig();
     const nearRight: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       spaceship: { x: 147, y: 100, velocity: { x: 100, y: 100 } }
@@ -604,7 +618,8 @@ describe("gunner simulation", () => {
   });
 
   it("continues cooldown cadence while fire remains held", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: this measures the cadence, not what the campaign is tuned to.
+    const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 5 });
     let state = createSpaceshipSimulationState(config, 1);
     for (let step = 0; step < 11; step += 1) {
       state = applyGunnerInput(state, {
@@ -716,7 +731,7 @@ describe("gunner simulation", () => {
   });
 
   it("stops held cadence when input becomes stale but preserves turret angle", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 5 });
     const firing = applyGunnerInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: 1 },
       firing: true,
@@ -742,12 +757,7 @@ describe("gunner simulation", () => {
     state = advance(state, lifetimeConfig, 30);
     expect(state.projectiles).toEqual([]);
 
-    const smallWorld = createSpaceshipSimulationConfig({
-      worldWidth: 200,
-      worldHeight: 200,
-      arenaRadius: 100,
-      projectileSpeedPerSecond: 4000
-    });
+    const smallWorld = smallArenaConfig({ projectileSpeedPerSecond: 4000 });
     let escaping = applyGunnerInput(createSpaceshipSimulationState(smallWorld, 1), {
       vector: { x: 1, y: 0 },
       firing: true,
@@ -762,7 +772,8 @@ describe("gunner simulation", () => {
 
 describe("shield simulation", () => {
   it("keeps manual active state after input becomes stale and preserves angle", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     const state = advance(
       applyShieldInput(createSpaceshipSimulationState(config, 1), {
         vector: { x: -1, y: 0 },
@@ -874,7 +885,8 @@ describe("shield simulation", () => {
   });
 
   it("drains a full shield in five seconds of holding and requires re-arming", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: 1 },
       active: true,
@@ -900,7 +912,8 @@ describe("shield simulation", () => {
   });
 
   it("recharges an inactive empty shield in ten seconds and clamps at capacity", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       shieldEnergy: 0,
@@ -920,7 +933,8 @@ describe("shield simulation", () => {
   });
 
   it("re-arms itself once the battery wins back the mark", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: -1 },
       active: true,
@@ -1440,7 +1454,12 @@ describe("shield timing", () => {
 
 describe("elastic rim", () => {
   it("turns a full-throttle run around inside the band, never on the circle", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned at the speed the cushion was tuned for. The campaign's hull runs at
+    // 380 and covers nineteen units a step, which overshoots the point where the
+    // band balances thrust and takes the hard projection once in four hundred
+    // steps - the band wants widening for it, and that is a change to how the
+    // rim feels rather than a fixture detail.
+    const config = createSpaceshipSimulationConfig({ spaceshipSpeedPerSecond: 320 });
     const legalRadius = config.arenaRadius - config.spaceshipRadius;
     const center = config.worldWidth / 2;
     let state = createSpaceshipSimulationState(config, 5);
