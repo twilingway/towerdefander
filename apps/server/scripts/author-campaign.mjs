@@ -34,13 +34,18 @@ const FALLBACK_AUTHORING = {
   budgetBase: 10,
   budgetGrowth: 2.2,
   asteroidEveryWaves: 3,
-  hpPerCannonShot: 25,
-  hpScale: 0.75,
+  // What one cannon hit takes off, and it has to be the crew's actual damage:
+  // health below is written as "how many hits does this take", and while this
+  // said 25 against a gun that does 38 - and a scale cut another quarter off -
+  // the catalogue delivered 49% of every number it stated. An archetype
+  // authored as four hits died in two.
+  hpPerCannonShot: 38,
+  hpScale: 1,
   damagePerSecondBase: 2,
   damagePerSecondPerSpawnCost: 2.2,
   bossDamagePerSecondCap: 26,
   laserDamageShare: 0.75,
-  shipReach: 490,
+  shipReach: 680,
   maxEngagementShare: 1.6,
   maxStandoffShare: 1.3,
   groupStartStepSeconds: 34,
@@ -80,6 +85,33 @@ const authoring = readAuthoring();
 const seconds = (value) => Math.max(0, Math.round(value * TICKS_PER_SECOND));
 
 /**
+ * Into how many shots a heavy barrel is broken up, and the smallest shot worth
+ * having. Both damage and cooldown are divided, so the archetype puts out the
+ * same damage per second and the budget below sees no difference - what changes
+ * is that the exchange happens. Measured before this: a gunship lives 0.48 s
+ * under focused fire and reloads in 1.6 s, a railer 0.6 s against 5.5 s, so an
+ * enemy fired between a tenth and a third of a shot per life and the fight was
+ * over before it answered. A swarm barrel already fires fast and is left alone
+ * - three of four damage is one, and a wall of one-point shots is noise.
+ */
+const ENEMY_SHOT_SPLIT = 3;
+const MIN_SPLIT_DAMAGE = 3;
+
+/** Bullets only: a missile is a different threat, and a beam is not dodged. */
+function splitBarrel(kind, damage, cooldown) {
+  if (kind !== "bullet") return { damage, cooldown };
+  const split = Math.max(1, Math.min(ENEMY_SHOT_SPLIT, Math.floor(damage / MIN_SPLIT_DAMAGE)));
+  if (split === 1) return { damage, cooldown };
+  const nextDamage = Math.max(1, Math.round(damage / split));
+  // Cooldown follows the damage that survived rounding, not the split, so the
+  // damage per second the author wrote is the damage per second delivered.
+  return {
+    damage: nextDamage,
+    cooldown: Math.max(1, Math.round((cooldown * nextDamage) / damage))
+  };
+}
+
+/**
  * A barrel, with its reach derived rather than typed twice. A shot that expires
  * before it arrives is a weapon that misses for reasons nobody can see, so the
  * engagement range is a share of how far the projectile actually flies.
@@ -99,11 +131,12 @@ function weapon({
   turnRate = 2.2
 }) {
   const flight = (speed * lifetime) / TICKS_PER_SECOND;
+  const barrel = splitBarrel(kind, damage, cooldown);
   return {
     kind,
-    cooldownTicks: cooldown,
-    damage,
-    shieldHitCost: shieldCost ?? Math.max(1, Math.round(damage * 0.6)),
+    cooldownTicks: barrel.cooldown,
+    damage: barrel.damage,
+    shieldHitCost: shieldCost ?? Math.max(1, Math.round(barrel.damage * 0.6)),
     projectileRadius: radius,
     projectileSpeedPerSecond: speed,
     projectileLifetimeTicks: lifetime,
@@ -196,9 +229,11 @@ function withinBudget(weapons, spawnCost, boss) {
 
 /**
  * How far the crew's own gun reaches, from the preset the campaign is written
- * against: a 720-unit shell living 0.68 seconds. It was 1080 while the shell
- * lived a second and a half; every enemy distance here is a share of this one,
- * so the catalogue follows the guns down rather than being retyped.
+ * against: a 1000-unit shell living 0.68 seconds. Read it off the preset and do
+ * not retype it from the core defaults, which fire slower - that mistake put
+ * this at 490 and pulled every enemy in the catalogue 28% closer than the guns
+ * warranted. Every enemy distance here is a share of this one, so the catalogue
+ * follows the guns rather than being retyped.
  *
  * Nothing may out-range that by much. A sniper parked at 1400 firing 3443 was
  * unanswerable — the hull it shoots at cannot reach back, and no amount of
@@ -228,14 +263,36 @@ function scaledToReach(distance) {
  * is answered by flying at it.
  */
 
+/**
+ * How much further than its own engagement range a shot is allowed to carry. A
+ * bullet needs a little, so a target that backs off while the shot is in the
+ * air is still hit; a missile needs much more, because it chases. Measured
+ * before this: the median enemy bullet flew 2.9 times its engagement range and
+ * a railer's 5.6, all left over from the ranges before they were cut - and the
+ * arena carried five times the bullets it needed to, against a cap of 96.
+ */
+const BULLET_LIFETIME_MARGIN = 1.25;
+const MISSILE_LIFETIME_MARGIN = 2.5;
+
 function reachable(weapons) {
-  return weapons.map((one) => ({
-    ...one,
-    engagementRange: Math.min(
+  return weapons.map((one) => {
+    const engagementRange = Math.min(
       scaledToReach(one.engagementRange),
       Math.round(authoring.shipReach * authoring.maxEngagementShare)
-    )
-  }));
+    );
+    // A beam arrives in the tick it leaves; its speed and lifetime are nominal
+    // and mean nothing, so they are left exactly as the author wrote them.
+    if (one.kind === "laser") return { ...one, engagementRange };
+    const margin = one.kind === "missile" ? MISSILE_LIFETIME_MARGIN : BULLET_LIFETIME_MARGIN;
+    const ticks = Math.ceil(
+      ((engagementRange * margin) / one.projectileSpeedPerSecond) * TICKS_PER_SECOND
+    );
+    return {
+      ...one,
+      engagementRange,
+      projectileLifetimeTicks: Math.max(1, Math.min(one.projectileLifetimeTicks, ticks))
+    };
+  });
 }
 
 function enemy({
@@ -1392,6 +1449,15 @@ async function main() {
   const summary = {
     preset: path,
     archetypes: Object.keys(ARCHETYPES).length,
+    // What one authored shot is actually worth. Health here is written as "how
+    // many cannon hits does this take", and the translation had drifted to
+    // half: 1 means the catalogue delivers the number it states.
+    hitsPerAuthoredShot: Number(
+      (
+        (authoring.hpPerCannonShot * authoring.hpScale) /
+        (document.presets?.[0]?.tuning?.friendlyProjectileDamage ?? authoring.hpPerCannonShot)
+      ).toFixed(2)
+    ),
     hottest: Object.entries(ARCHETYPES)
       .map(([kind, one]) => ({
         kind,
