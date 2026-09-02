@@ -6,7 +6,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import { ActionZone } from "../../ActionZone.js";
-import { AIM_COMMIT_SHARE } from "../../controlInput.js";
+import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "../../controlInput.js";
 import { VirtualStick } from "../../VirtualStick.js";
 import { Meter } from "../../components/Meter/index.js";
 import type { ControlState } from "../../model/control.js";
@@ -112,6 +112,7 @@ export function SoloPanel({
           onCancel={pilot.cancelAim}
           enabled={controlsEnabled}
           resetKey={generation}
+          fullThrottleShare={FULL_THROTTLE_SHARE}
         />
       </div>
       <div className="solo-stick solo-stick--gunner">

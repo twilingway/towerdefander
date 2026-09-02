@@ -10,7 +10,7 @@ import type {
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
 
-import { AIM_COMMIT_SHARE } from "../../controlInput.js";
+import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "../../controlInput.js";
 import { VirtualStick } from "../../VirtualStick.js";
 import { readLocalStorage } from "../../model/browser.js";
 import type { ControlState } from "../../model/control.js";
@@ -132,8 +132,10 @@ export function RoleScreen({
         resetKey={generation}
         // The barrel carries real angular inertia, so it is turned by a
         // deliberate push and fired by a tap; the hull and the sector are still
-        // aimed by wherever the thumb sits.
+        // aimed by wherever the thumb sits. The hull's throttle is the length of
+        // that push, and it is all the way open at a third of the ring.
         {...(role === "gunner" ? { commitShare: AIM_COMMIT_SHARE, onTap: pulseFire } : {})}
+        {...(role === "pilot" ? { fullThrottleShare: FULL_THROTTLE_SHARE } : {})}
       />
       {role === "pilot" && (
         <PilotPanel

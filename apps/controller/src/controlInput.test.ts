@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AIM_COMMIT_SHARE,
   commitAim,
+  FULL_THROTTLE_SHARE,
   getFireReleaseDelay,
   getKeyboardVector,
   getNextShieldDesiredActive,
   LatestInputScheduler,
   normalizeControlVector,
-  PointerCycle
+  PointerCycle,
+  throttleAim
 } from "./controlInput.js";
 
 describe("aim commitment", () => {
@@ -29,6 +31,29 @@ describe("aim commitment", () => {
   it("keeps a stick pushed to the rim at unit length", () => {
     const rim = commitAim({ x: 3, y: 4 });
     expect(Math.hypot(rim?.x ?? 0, rim?.y ?? 0)).toBeCloseTo(1, 12);
+  });
+});
+
+describe("throttle saturation", () => {
+  it("opens the throttle fully at a third of the ring", () => {
+    const pushed = throttleAim({ x: FULL_THROTTLE_SHARE, y: 0 });
+    expect(Math.hypot(pushed.x, pushed.y)).toBeCloseTo(1, 12);
+    // And stays open past it rather than overshooting into a longer vector.
+    const rim = throttleAim({ x: 1, y: 0 });
+    expect(Math.hypot(rim.x, rim.y)).toBeCloseTo(1, 12);
+  });
+
+  it("leaves the inner third for crawling", () => {
+    // Half of the way to full throttle is half the speed, so a hull can still
+    // be walked into position.
+    const half = throttleAim({ x: 0, y: FULL_THROTTLE_SHARE / 2 });
+    expect(Math.hypot(half.x, half.y)).toBeCloseTo(0.5, 12);
+    expect(throttleAim({ x: 0, y: 0 })).toEqual({ x: 0, y: 0 });
+  });
+
+  it("keeps the bearing the stick names", () => {
+    const diagonal = throttleAim({ x: 0.2, y: -0.2 });
+    expect(Math.atan2(diagonal.y, diagonal.x)).toBeCloseTo(Math.atan2(-1, 1), 12);
   });
 });
 

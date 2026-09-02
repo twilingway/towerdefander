@@ -4,6 +4,7 @@ import {
   commitAim,
   normalizeControlVector,
   PointerCycle,
+  throttleAim,
   type ControlVector
 } from "./controlInput.js";
 
@@ -22,6 +23,12 @@ interface VirtualStickProps {
    */
   readonly commitShare?: number;
   readonly onTap?: () => void;
+  /**
+   * How far the stick must be pushed to ask for everything the hull has. The
+   * length of the push is the throttle, so without this the top speed lives
+   * only at the rim.
+   */
+  readonly fullThrottleShare?: number;
 }
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
@@ -34,7 +41,8 @@ export function VirtualStick({
   enabled = true,
   resetKey = "",
   commitShare,
-  onTap
+  onTap,
+  fullThrottleShare
 }: VirtualStickProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const pointerCycleReference = useRef<PointerCycle>(undefined);
@@ -66,7 +74,9 @@ export function VirtualStick({
     // reads as live while it is being nudged.
     setVector(next);
     if (commitShare === undefined) {
-      onChangeReference.current(next);
+      onChangeReference.current(
+        fullThrottleShare === undefined ? next : throttleAim(next, fullThrottleShare)
+      );
       return;
     }
     const commanded = commitAim(next, commitShare);

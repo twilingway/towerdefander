@@ -66,6 +66,18 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
       shortestDelta(await readNumber(world, "data-turret-angle"), restingTurret)
     ).toBeGreaterThan(0.3);
 
+    // The hull's throttle is the length of the push, and it is all the way open
+    // at a third of the ring: pushed to the rim and pushed a third of the way,
+    // the ship has to cover the same ground. Measured as ground covered because
+    // that is what the pilot feels.
+    const courseStick = solo.locator(".solo-stick--pilot [data-testid='virtual-stick']");
+    const courseBounds = await courseStick.boundingBox();
+    if (courseBounds === null) throw new Error("Solo course stick has no bounds.");
+    const rimRun = await coveredWhileHeld(solo, world, courseBounds, 0.95);
+    const thirdRun = await coveredWhileHeld(solo, world, courseBounds, 0.35);
+    expect(rimRun).toBeGreaterThan(40);
+    expect(thirdRun).toBeGreaterThan(rimRun * 0.9);
+
     // The turret stick is the one control that reads a push and a tap
     // differently: past six tenths it names a bearing, short of it the barrel
     // keeps what it had and the tap is a round. Solo owns both seats from one
@@ -94,6 +106,31 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
     for (const context of contexts) await context.close();
   }
 });
+
+/**
+ * Ground covered in half a second with the stick held at a share of its travel,
+ * pushed along +x from the middle.
+ */
+async function coveredWhileHeld(
+  page: Page,
+  world: Locator,
+  stick: { x: number; y: number; width: number; height: number },
+  share: number
+): Promise<number> {
+  const centreX = stick.x + stick.width / 2;
+  const centreY = stick.y + stick.height / 2;
+  await page.mouse.move(centreX, centreY);
+  await page.mouse.down();
+  await page.mouse.move(centreX + (stick.width / 2) * share, centreY);
+  // Long enough to be up to speed before the run is measured.
+  await page.waitForTimeout(600);
+  const from = await readNumber(world, "data-spaceship-x");
+  await page.waitForTimeout(500);
+  const to = await readNumber(world, "data-spaceship-x");
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  return to - from;
+}
 
 async function joinSolo(
   browser: Browser,
