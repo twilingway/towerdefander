@@ -80,35 +80,40 @@ function boreOf(candidate: FocusCandidate, distance: number): number {
 }
 
 /**
- * Where a shot fired now would meet this ship.
+ * How long a shot fired now would be in the air before it met this ship.
  *
  * The barrel is laid ahead of a crossing target, not on it, so testing the bore
  * against where the ship is standing answers the wrong question: the better the
  * gunner leads, the further off the mark the test reads. Two passes are enough
  * - the flight time barely moves after the first correction, and a third would
  * be arguing with the tick rate.
+ *
+ * A time rather than a point, so the caller can hold the meeting in two locals.
+ * This runs for every ship on the field every frame, and an object per call is
+ * a crowd's worth of garbage - which surfaces as a stalled frame, not as a
+ * lower frame rate.
  */
-function meetingPoint(query: FocusQuery, candidate: FocusCandidate): { x: number; y: number } {
+function meetingSeconds(query: FocusQuery, candidate: FocusCandidate): number {
   const speed = query.speed ?? 0;
   const velocityX = candidate.velocityX ?? 0;
   const velocityY = candidate.velocityY ?? 0;
-  if (speed <= 0 || (velocityX === 0 && velocityY === 0)) return candidate;
+  if (speed <= 0 || (velocityX === 0 && velocityY === 0)) return 0;
   let seconds = Math.hypot(candidate.x - query.origin.x, candidate.y - query.origin.y) / speed;
   for (let pass = 0; pass < 2; pass += 1) {
     const x = candidate.x + velocityX * seconds;
     const y = candidate.y + velocityY * seconds;
     seconds = Math.hypot(x - query.origin.x, y - query.origin.y) / speed;
   }
-  return { x: candidate.x + velocityX * seconds, y: candidate.y + velocityY * seconds };
+  return seconds;
 }
 
 function aimAt(
   query: FocusQuery,
   candidate: FocusCandidate
 ): { readonly distance: number; readonly error: number; readonly bore: number } {
-  const meeting = meetingPoint(query, candidate);
-  const dx = meeting.x - query.origin.x;
-  const dy = meeting.y - query.origin.y;
+  const seconds = meetingSeconds(query, candidate);
+  const dx = candidate.x + (candidate.velocityX ?? 0) * seconds - query.origin.x;
+  const dy = candidate.y + (candidate.velocityY ?? 0) * seconds - query.origin.y;
   const distance = Math.hypot(dx, dy);
   return {
     distance,

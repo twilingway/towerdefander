@@ -30,6 +30,7 @@ describe("SpaceshipCanvas", () => {
       prepareHydration,
       update,
       readFps: () => 60,
+      readWorstFrameMs: () => 0,
       setPixelRatioCap: vi.fn(),
       destroy: vi.fn()
     };

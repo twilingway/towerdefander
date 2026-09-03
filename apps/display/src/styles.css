@@ -950,6 +950,16 @@ p {
   color: #ffb27a;
 }
 
+/* The longest single frame of the last second, shown only when there was one
+   worth naming: a stall reads as a freeze, which the average never shows. */
+.frame-spike {
+  color: #8fb3ad;
+}
+
+.frame-spike--alarming strong {
+  color: #ff8f6a;
+}
+
 .visible-demo-overlay {
   position: fixed;
   z-index: 50;

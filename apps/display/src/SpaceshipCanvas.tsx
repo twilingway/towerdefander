@@ -18,10 +18,11 @@ interface SpaceshipCanvasProps {
   readonly connectionEpoch: number;
   readonly visibleDemo?: boolean;
   /**
-   * Frames a second, sampled here because this is where the loop is, and read
-   * out in the header because that is where a player looks for it.
+   * How the scene is running, sampled here because this is where the loop is,
+   * and read out in the header because that is where a player looks for it.
+   * The average and the worst frame answer different questions, so both travel.
    */
-  readonly onFps?: (fps: number) => void;
+  readonly onFrameStats?: (stats: { readonly fps: number; readonly worstFrameMs: number }) => void;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -32,7 +33,7 @@ export function SpaceshipCanvas({
   runNumber,
   connectionEpoch,
   visibleDemo = false,
-  onFps
+  onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<SpaceshipRuntime | undefined>(undefined);
@@ -105,8 +106,8 @@ export function SpaceshipCanvas({
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, runNumber]);
 
-  const onFpsReference = useRef(onFps);
-  onFpsReference.current = onFps;
+  const onFrameStatsReference = useRef(onFrameStats);
+  onFrameStatsReference.current = onFrameStats;
   const fpsWindow = useRef<number[]>([]);
   // Read at render, and the component tests render without a document at all -
   // the types say `location` is always there, the renderer says otherwise.
@@ -116,7 +117,10 @@ export function SpaceshipCanvas({
   useEffect(() => {
     const sample = () => {
       const fps = runtimeReference.current?.readFps() ?? 0;
-      onFpsReference.current?.(fps);
+      onFrameStatsReference.current?.({
+        fps,
+        worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0
+      });
       // Down only, and only on a run of samples: a wave that briefly puts forty
       // ships on the field is not a phone that cannot run the game.
       const window = fpsWindow.current;

@@ -559,6 +559,76 @@ export function extendAngleTrack(track: AngleTrack, to: number, toTick: number):
   };
 }
 
+/**
+ * What the focus rings are read against: one ship, at the position being drawn
+ * rather than the one last sent.
+ *
+ * Mutable, and deliberately so - see `fillFocusCandidates`.
+ */
+export interface MutableFocusCandidate {
+  entityId: string;
+  x: number;
+  y: number;
+  radius: number;
+  velocityX: number;
+  velocityY: number;
+}
+
+/** Everything the rings need off an enemy, before it is placed. */
+export interface FocusSource {
+  readonly entityId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+}
+
+/**
+ * Refills a list of ships in place and hands back the same array.
+ *
+ * The turret ring and the nose brackets ask the same question of the same
+ * ships, and each used to build its own list of fresh objects every frame: at
+ * forty enemies that is eighty objects a frame, five thousand a second, thrown
+ * away immediately. That kind of garbage does not show up as a lower frame
+ * rate, it shows up as an occasional stalled frame - which is the thing a
+ * player calls a freeze.
+ *
+ * Reusing the array is only safe because nothing here outlives the frame that
+ * filled it: `pickFocusedTarget` hands one of these objects straight back to
+ * its caller, which reads it at once and keeps only the entity id. Anything
+ * that wants to hold a candidate across frames has to copy it first.
+ */
+export function fillFocusCandidates(
+  scratch: MutableFocusCandidate[],
+  enemies: readonly FocusSource[],
+  positionAt: (enemy: FocusSource) => Point
+): readonly MutableFocusCandidate[] {
+  scratch.length = enemies.length;
+  for (const [index, enemy] of enemies.entries()) {
+    const at = positionAt(enemy);
+    const slot = scratch[index];
+    if (slot === undefined) {
+      scratch[index] = {
+        entityId: enemy.entityId,
+        x: at.x,
+        y: at.y,
+        radius: enemy.radius,
+        velocityX: enemy.velocityX,
+        velocityY: enemy.velocityY
+      };
+      continue;
+    }
+    slot.entityId = enemy.entityId;
+    slot.x = at.x;
+    slot.y = at.y;
+    slot.radius = enemy.radius;
+    slot.velocityX = enemy.velocityX;
+    slot.velocityY = enemy.velocityY;
+  }
+  return scratch;
+}
+
 export function samplePointTrack(track: PointTrack, playbackTick: number): Point {
   const segment = playbackTick < track.current.fromTick ? track.previous : track.current;
   return interpolatePoint(

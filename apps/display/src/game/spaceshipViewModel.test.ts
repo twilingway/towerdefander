@@ -24,12 +24,14 @@ import {
   getShieldDashSegments,
   getShieldVisualStyle,
   extendPointTrack,
+  fillFocusCandidates,
   interpolateAngle,
   interpolatePoint,
   observePlaybackTick,
   reconcileStableIds,
   samplePointTrack,
-  SnapshotResetLatch
+  SnapshotResetLatch,
+  type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 
 describe("getLetterboxBars", () => {
@@ -681,5 +683,56 @@ describe("spaceship view model", () => {
       expect(Math.abs(oneTwentyHzAngle - sixtyHzAngle)).toBeLessThanOrEqual(0.001);
     }
     expect(sixtyHzTrace.at(-1)).toBeCloseTo(from + Math.PI * 0.2);
+  });
+});
+
+describe("fillFocusCandidates", () => {
+  const enemy = (entityId: string, x: number) => ({
+    entityId,
+    x,
+    y: 0,
+    radius: 20,
+    velocityX: 5,
+    velocityY: -5
+  });
+
+  it("hands back the same array, so a steady crowd costs nothing per frame", () => {
+    const scratch: MutableFocusCandidate[] = [];
+    const ships = [enemy("a", 100), enemy("b", 200)];
+    const first = fillFocusCandidates(scratch, ships, (one) => ({ x: one.x, y: one.y }));
+    expect(first).toBe(scratch);
+    // Held before the refill, or the comparison reads the same array twice and
+    // passes however the objects inside it were made.
+    const heldSlots = [...first];
+    const second = fillFocusCandidates(scratch, ships, (one) => ({ x: one.x, y: one.y }));
+    expect(second).toBe(first);
+    // The objects inside it, which is the allocation that actually mattered.
+    expect(second[0]).toBe(heldSlots[0]);
+    expect(second[1]).toBe(heldSlots[1]);
+  });
+
+  it("places each ship where it is being drawn, not where it was last sent", () => {
+    const scratch: MutableFocusCandidate[] = [];
+    const filled = fillFocusCandidates(scratch, [enemy("a", 100)], () => ({ x: 140, y: 12 }));
+    expect(filled[0]).toEqual({
+      entityId: "a",
+      x: 140,
+      y: 12,
+      radius: 20,
+      velocityX: 5,
+      velocityY: -5
+    });
+  });
+
+  it("follows a crowd that thins and fills again", () => {
+    const scratch: MutableFocusCandidate[] = [];
+    const at = (one: { x: number; y: number }) => ({ x: one.x, y: one.y });
+    fillFocusCandidates(scratch, [enemy("a", 1), enemy("b", 2), enemy("c", 3)], at);
+    const thinned = fillFocusCandidates(scratch, [enemy("c", 3)], at);
+    // A dead ship must leave, or the ring keeps marking a hull that is gone.
+    expect(thinned).toHaveLength(1);
+    expect(thinned[0]?.entityId).toBe("c");
+    const refilled = fillFocusCandidates(scratch, [enemy("d", 4), enemy("e", 5)], at);
+    expect(refilled.map((one) => one.entityId)).toEqual(["d", "e"]);
   });
 });

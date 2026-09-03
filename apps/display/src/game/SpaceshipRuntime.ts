@@ -24,6 +24,7 @@ import {
   createSnappedVisualTransitions,
   extendAngleTrack,
   extendPointTrack,
+  fillFocusCandidates,
   getArenaRingRadii,
   getArenaSpokes,
   getRimBandStroke,
@@ -43,6 +44,7 @@ import {
   SnapshotResetLatch,
   type AngleTrack,
   type BackgroundCoverRect,
+  type MutableFocusCandidate,
   type PlaybackClock,
   type Point,
   type PointTrack
@@ -89,6 +91,14 @@ const RIM_BAND_ALPHA = 0.12;
 /** The parallax background shows through the arena disc. */
 const ARENA_FILL_ALPHA = 0.5;
 
+/**
+ * How long the worst frame is gathered over before it is published. A second,
+ * because that is the unit the frame counter beside it already speaks in, and
+ * because a shorter window makes the reading flicker faster than it can be
+ * read.
+ */
+const FRAME_WINDOW_MS = 1000;
+
 interface BackgroundLayerState {
   readonly sprite: Phaser.GameObjects.TileSprite;
   readonly config: BackgroundLayerConfig;
@@ -130,8 +140,22 @@ class SpaceshipScene extends Phaser.Scene {
   private playback: PlaybackClock;
   /** Arrival of the last snapshot that carried a new tick, for pace measuring. */
   private lastSnapshotAt: number | undefined;
+  /**
+   * The longest frame of the last completed second, in milliseconds.
+   *
+   * The frame counter beside it is an average smoothed across seconds, so one
+   * stalled frame never moves it at all - and a stall is precisely what a
+   * player calls a freeze. This is the other half of the same question, and it
+   * is collected here because the scene is the only thing that sees every
+   * frame.
+   */
+  private worstFrameMs = 0;
+  private frameWindowWorstMs = 0;
+  private frameWindowEndsAt = 0;
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
+  /** Reused between frames; see `updateFocusCandidates`. */
+  private readonly focusScratch: MutableFocusCandidate[] = [];
   private readonly backgroundLayers: BackgroundLayerState[] = [];
   private parallaxStrength = 1;
   /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
@@ -219,7 +243,8 @@ class SpaceshipScene extends Phaser.Scene {
     this.reconcileCombatVisuals(tick, true);
   }
 
-  override update(_time: number, deltaMs: number): void {
+  override update(time: number, deltaMs: number): void {
+    this.recordFrameTime(time);
     this.updateBackground(deltaMs);
     this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
@@ -248,8 +273,11 @@ class SpaceshipScene extends Phaser.Scene {
     // a crew sees is the barrel that shoots, so the envelope and the ring start
     // on it rather than at the hull's centre.
     this.drawAimEnvelope(mount, this.turret.rotation);
-    this.drawFocusRing(mount, this.turret.rotation, playbackTick);
-    this.drawNoseFocus(spaceshipPosition, spaceshipHeading, playbackTick);
+    // One list, both rings: they ask the same question of the same ships, and
+    // building it twice was two objects per enemy per frame of pure garbage.
+    const candidates = this.updateFocusCandidates(playbackTick);
+    this.drawFocusRing(mount, this.turret.rotation, candidates);
+    this.drawNoseFocus(spaceshipPosition, spaceshipHeading, candidates);
     this.drawLaserBeams();
     this.focusCamera(spaceshipPosition);
 
@@ -260,6 +288,33 @@ class SpaceshipScene extends Phaser.Scene {
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }
+  }
+
+  /**
+   * Keeps the worst frame of the running second, and publishes it when the
+   * second is over.
+   *
+   * `rawDelta` rather than the smoothed delta the scene is handed: the
+   * smoothing is what makes the average readable, and it is exactly what would
+   * hide the spike. Published only on a closed window, so the number does not
+   * change underneath a sampler that reads it twice a second.
+   */
+  private recordFrameTime(time: number): void {
+    if (this.frameWindowEndsAt === 0) {
+      // The first frame carries boot work no later frame repeats.
+      this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
+      return;
+    }
+    const raw = this.game.loop.rawDelta;
+    if (raw > this.frameWindowWorstMs) this.frameWindowWorstMs = raw;
+    if (time < this.frameWindowEndsAt) return;
+    this.worstFrameMs = this.frameWindowWorstMs;
+    this.frameWindowWorstMs = 0;
+    this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
+  }
+
+  readWorstFrameMs(): number {
+    return this.worstFrameMs;
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
@@ -492,7 +547,7 @@ class SpaceshipScene extends Phaser.Scene {
   private drawFocusRing(
     origin: { readonly x: number; readonly y: number },
     bearing: number,
-    playbackTick: number
+    candidates: readonly MutableFocusCandidate[]
   ): void {
     const layer = this.focusRing;
     if (layer === undefined) return;
@@ -503,7 +558,7 @@ class SpaceshipScene extends Phaser.Scene {
       reach: this.snapshot.cannon.reach,
       speed: this.snapshot.cannon.speed,
       heldEntityId: this.focusedEntityId,
-      candidates: this.focusCandidates(playbackTick)
+      candidates
     });
     this.focusedEntityId = focus?.target.entityId;
     if (focus === undefined) return;
@@ -525,7 +580,7 @@ class SpaceshipScene extends Phaser.Scene {
   private drawNoseFocus(
     origin: { readonly x: number; readonly y: number },
     heading: number,
-    playbackTick: number
+    candidates: readonly MutableFocusCandidate[]
   ): void {
     const layer = this.noseFocus;
     if (layer === undefined) return;
@@ -536,7 +591,7 @@ class SpaceshipScene extends Phaser.Scene {
       reach: this.snapshot.machineGun.reach,
       speed: this.snapshot.machineGun.speed,
       heldEntityId: this.noseFocusedEntityId,
-      candidates: this.focusCandidates(playbackTick)
+      candidates
     });
     this.noseFocusedEntityId = focus?.target.entityId;
     if (focus?.firable !== true) return;
@@ -554,25 +609,18 @@ class SpaceshipScene extends Phaser.Scene {
     }
   }
 
-  private focusCandidates(playbackTick: number): readonly {
-    entityId: string;
-    x: number;
-    y: number;
-    radius: number;
-    velocityX: number;
-    velocityY: number;
-  }[] {
-    return this.snapshot.enemyShips.map((enemy) => {
+  /**
+   * The ships both rings are read against, at the positions being drawn rather
+   * than the ones last sent.
+   *
+   * Refills `focusScratch` instead of building a list, so a steady crowd costs
+   * nothing per frame. What makes that safe is that no candidate outlives the
+   * frame: both callers read the winner immediately and keep only its id.
+   */
+  private updateFocusCandidates(playbackTick: number): readonly MutableFocusCandidate[] {
+    return fillFocusCandidates(this.focusScratch, this.snapshot.enemyShips, (enemy) => {
       const visual = this.combatVisuals.get(enemy.entityId);
-      const at = visual === undefined ? enemy : samplePointTrack(visual.position, playbackTick);
-      return {
-        entityId: enemy.entityId,
-        x: at.x,
-        y: at.y,
-        radius: enemy.radius,
-        velocityX: enemy.velocityX,
-        velocityY: enemy.velocityY
-      };
+      return visual === undefined ? enemy : samplePointTrack(visual.position, playbackTick);
     });
   }
 
@@ -1154,6 +1202,12 @@ export interface SpaceshipRuntime {
    */
   readFps(): number;
   /**
+   * The longest frame of the last completed second, in milliseconds. A freeze
+   * and a low frame rate are different complaints with different causes, and
+   * the average above cannot tell them apart.
+   */
+  readWorstFrameMs(): number;
+  /**
    * Lowers the ceiling on how many device pixels the scene may draw, when the
    * frame counter says this machine cannot afford the one it has. Down only:
    * see `nextPixelRatioCap`.
@@ -1261,6 +1315,9 @@ export function createSpaceshipRuntime(
     },
     readFps() {
       return game.loop.actualFps;
+    },
+    readWorstFrameMs() {
+      return scene.readWorstFrameMs();
     },
     setPixelRatioCap(cap) {
       if (cap === currentCap) return;

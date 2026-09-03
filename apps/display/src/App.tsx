@@ -101,7 +101,7 @@ export function DisplayApp() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
-  const [fps, setFps] = useState(0);
+  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0 });
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -312,7 +312,9 @@ export function DisplayApp() {
           <span className="latency-indicator" aria-live="polite">
             Экран → сервер {formatLatency(view.displayLatencyMs)}
           </span>
-          {view.game !== null && <FpsReadout fps={fps} />}
+          {view.game !== null && (
+            <FpsReadout fps={frameStats.fps} worstFrameMs={frameStats.worstFrameMs} />
+          )}
           <button
             type="button"
             className="room-close-button"
@@ -369,7 +371,7 @@ export function DisplayApp() {
               runNumber={view.runNumber}
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
-              onFps={setFps}
+              onFrameStats={setFrameStats}
             />
           )}
           {view.game.encounter.phase === "combat" &&

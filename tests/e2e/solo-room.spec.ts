@@ -113,9 +113,7 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
 
     // The scene reports the loop it is running, which the snapshot cannot know.
     await expect
-      .poll(async () =>
-        Number(await display.getByTestId("fps-readout").locator("strong").innerText())
-      )
+      .poll(async () => Number(await display.getByTestId("fps-value").innerText()))
       .toBeGreaterThan(1);
 
     await expect(solo.locator(".connection")).toHaveText("В сети");
