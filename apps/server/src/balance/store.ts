@@ -204,8 +204,9 @@ export { migrateBalanceDocument };
  * from the console; the script reads them back rather than carrying its own.
  */
 export const DEFAULT_CAMPAIGN_AUTHORING = {
-  budgetBase: 10,
-  budgetGrowth: 2.2,
+  budgetBase: 14,
+  budgetGrowth: 2,
+  bossEscortShare: 0.5,
   asteroidEveryWaves: 3,
   hpPerCannonShot: 25,
   hpScale: 0.75,
@@ -216,7 +217,7 @@ export const DEFAULT_CAMPAIGN_AUTHORING = {
   shipReach: 1080,
   maxEngagementShare: 1.6,
   maxStandoffShare: 1.3,
-  groupStartStepSeconds: 34,
+  groupStartStepSeconds: 18,
   swarmIntervalSeconds: 7,
   lineIntervalSeconds: 14,
   heavyIntervalSeconds: 22,

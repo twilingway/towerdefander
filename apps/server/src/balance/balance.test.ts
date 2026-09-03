@@ -570,6 +570,53 @@ describe("version 1 migration", () => {
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });
 
+  it("gives a version 33 document the escort floor without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const campaign = tuning.waveCampaign as { authoring: Record<string, unknown> };
+    const authoring = { ...campaign.authoring };
+    // Version 33 paid for a boss on top of its wave, so it had no such knob.
+    delete authoring.bossEscortShare;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...campaign, authoring, waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 33,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    expect(saved?.waveCampaign.authoring.bossEscortShare).toBe(0.5);
+    // The point of the test: the authoring block is merged field by field, so
+    // one missing knob does not fail the strict schema and take the table with
+    // it. That is exactly how a hand-built campaign was lost once.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
   it("retires the fractional re-arm mark without touching an operator's waves", async () => {
     const filePath = await temporaryPresetPath();
     const tuning: Record<string, unknown> = { ...createDefaultTuning() };

@@ -49,6 +49,15 @@ export function AuthoringSection({ tuning, onChange }: AuthoringSectionProps) {
           }}
         />
         <NumberField
+          caption="Доля бюджета волне с боссом"
+          value={authoring.bossEscortShare}
+          step={0.05}
+          min={0.05}
+          onChange={(bossEscortShare) => {
+            patch({ bossEscortShare });
+          }}
+        />
+        <NumberField
           caption="Астероиды каждую N-ю волну"
           value={authoring.asteroidEveryWaves}
           min={1}

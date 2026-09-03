@@ -1354,7 +1354,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "interceptor",
-        count: 5,
+        count: 7,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["E"],
@@ -1363,8 +1363,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "wasp",
-        count: 5,
-        startDelayTicks: 340,
+        count: 7,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["S"],
         hpMultiplier: null,
@@ -1378,7 +1378,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "interceptor",
-        count: 6,
+        count: 8,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["S"],
@@ -1387,8 +1387,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "wasp",
-        count: 6,
-        startDelayTicks: 340,
+        count: 8,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["W"],
         hpMultiplier: null,
@@ -1402,7 +1402,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "wasp",
-        count: 7,
+        count: 9,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["W"],
@@ -1411,8 +1411,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "skirmisher",
-        count: 4,
-        startDelayTicks: 340,
+        count: 5,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -1435,7 +1435,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "wasp",
-        count: 4,
+        count: 5,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["NE"],
@@ -1444,8 +1444,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "skirmisher",
-        count: 2,
-        startDelayTicks: 340,
+        count: 3,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -1454,7 +1454,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "missileCarrier",
         count: 1,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -1462,8 +1462,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "sniper",
-        count: 1,
-        startDelayTicks: 1020,
+        count: 2,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1477,7 +1477,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "wasp",
-        count: 5,
+        count: 3,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["SW"],
@@ -1486,8 +1486,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "skirmisher",
-        count: 2,
-        startDelayTicks: 340,
+        count: 1,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1496,7 +1496,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "missileCarrier",
         count: 1,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1504,8 +1504,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "sniper",
-        count: 2,
-        startDelayTicks: 1020,
+        count: 1,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -1528,7 +1528,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "wasp",
-        count: 5,
+        count: 6,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["SE"],
@@ -1538,7 +1538,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -1547,7 +1547,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -1555,8 +1555,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "gunboat",
-        count: 1,
-        startDelayTicks: 1020,
+        count: 2,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["N"],
         hpMultiplier: null,
@@ -1579,7 +1579,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "wasp",
-        count: 6,
+        count: 7,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["NW"],
@@ -1589,7 +1589,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["N"],
         hpMultiplier: null,
@@ -1598,7 +1598,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["N"],
         hpMultiplier: null,
@@ -1606,8 +1606,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "gunboat",
-        count: 1,
-        startDelayTicks: 1020,
+        count: 2,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["E"],
         hpMultiplier: null,
@@ -1625,55 +1625,55 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["N"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "sparker",
+        count: 4,
+        startDelayTicks: 180,
+        spawnIntervalTicks: 140,
+        sectors: ["E"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "sniper",
+        count: 2,
+        startDelayTicks: 360,
+        spawnIntervalTicks: 280,
+        sectors: ["E"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "gunboat",
+        count: 2,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 280,
+        sectors: ["S"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ],
+    hpMultiplier: null,
+    tempoMultiplier: null
+  },
+  {
+    entries: [
+      {
+        kind: "lancer",
+        count: 2,
+        startDelayTicks: 0,
+        spawnIntervalTicks: 140,
+        sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
       },
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
-        spawnIntervalTicks: 140,
-        sectors: ["E"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "sniper",
-        count: 2,
-        startDelayTicks: 680,
-        spawnIntervalTicks: 280,
-        sectors: ["E"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "gunboat",
-        count: 2,
-        startDelayTicks: 1020,
-        spawnIntervalTicks: 280,
-        sectors: ["S"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      }
-    ],
-    hpMultiplier: null,
-    tempoMultiplier: null
-  },
-  {
-    entries: [
-      {
-        kind: "lancer",
-        count: 2,
-        startDelayTicks: 0,
-        spawnIntervalTicks: 140,
-        sectors: ["E"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "sparker",
-        count: 2,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["S"],
         hpMultiplier: null,
@@ -1682,7 +1682,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["S"],
         hpMultiplier: null,
@@ -1691,7 +1691,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "gunboat",
         count: 2,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["W"],
         hpMultiplier: null,
@@ -1700,7 +1700,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["W"],
         hpMultiplier: null,
@@ -1723,7 +1723,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "lancer",
-        count: 2,
+        count: 1,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["S"],
@@ -1732,8 +1732,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "sparker",
-        count: 3,
-        startDelayTicks: 340,
+        count: 1,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["W"],
         hpMultiplier: null,
@@ -1741,8 +1741,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "gunboat",
-        count: 2,
-        startDelayTicks: 680,
+        count: 1,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["W"],
         hpMultiplier: null,
@@ -1750,8 +1750,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "railer",
-        count: 2,
-        startDelayTicks: 1020,
+        count: 1,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -1760,7 +1760,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -1793,7 +1793,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -1802,7 +1802,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "railer",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -1810,8 +1810,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "warden",
-        count: 1,
-        startDelayTicks: 1020,
+        count: 2,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -1820,7 +1820,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -1844,7 +1844,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -1853,7 +1853,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "mortar",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -1862,7 +1862,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1871,7 +1871,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1904,7 +1904,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1913,7 +1913,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "mortar",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -1922,7 +1922,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -1931,7 +1931,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -1949,73 +1949,73 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["SE"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "sparker",
-        count: 3,
-        startDelayTicks: 340,
-        spawnIntervalTicks: 140,
-        sectors: ["NW"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "warden",
-        count: 2,
-        startDelayTicks: 680,
-        spawnIntervalTicks: 280,
-        sectors: ["NW"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "lantern",
-        count: 2,
-        startDelayTicks: 1020,
-        spawnIntervalTicks: 280,
-        sectors: ["N"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "bulwark",
-        count: 1,
-        startDelayTicks: 1360,
-        spawnIntervalTicks: 440,
-        sectors: ["N"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      },
-      {
-        kind: "dreadnought",
-        count: 1,
-        startDelayTicks: 1700,
-        spawnIntervalTicks: 440,
-        sectors: ["E"],
-        hpMultiplier: null,
-        tempoMultiplier: null
-      }
-    ],
-    hpMultiplier: null,
-    tempoMultiplier: null
-  },
-  {
-    entries: [
-      {
-        kind: "lancer",
-        count: 2,
-        startDelayTicks: 0,
-        spawnIntervalTicks: 140,
-        sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
       },
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
+        spawnIntervalTicks: 140,
+        sectors: ["NW"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "warden",
+        count: 2,
+        startDelayTicks: 360,
+        spawnIntervalTicks: 280,
+        sectors: ["NW"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "lantern",
+        count: 2,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 280,
+        sectors: ["N"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "bulwark",
+        count: 1,
+        startDelayTicks: 720,
+        spawnIntervalTicks: 440,
+        sectors: ["N"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "dreadnought",
+        count: 1,
+        startDelayTicks: 900,
+        spawnIntervalTicks: 440,
+        sectors: ["E"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ],
+    hpMultiplier: null,
+    tempoMultiplier: null
+  },
+  {
+    entries: [
+      {
+        kind: "lancer",
+        count: 1,
+        startDelayTicks: 0,
+        spawnIntervalTicks: 140,
+        sectors: ["NW"],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      },
+      {
+        kind: "sparker",
+        count: 2,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2023,8 +2023,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "warden",
-        count: 2,
-        startDelayTicks: 680,
+        count: 1,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2032,8 +2032,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "lantern",
-        count: 2,
-        startDelayTicks: 1020,
+        count: 1,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2042,7 +2042,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2051,7 +2051,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2093,7 +2093,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2102,7 +2102,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2111,7 +2111,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2120,7 +2120,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "siege",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2129,7 +2129,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2153,7 +2153,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2162,7 +2162,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2171,7 +2171,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2180,7 +2180,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "siege",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2189,7 +2189,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2213,7 +2213,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2222,7 +2222,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2231,7 +2231,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2240,7 +2240,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2249,7 +2249,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2282,7 +2282,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2291,7 +2291,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2299,8 +2299,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "lantern",
-        count: 2,
-        startDelayTicks: 1020,
+        count: 3,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2309,7 +2309,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2318,7 +2318,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2332,7 +2332,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "lancer",
-        count: 2,
+        count: 1,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["NE"],
@@ -2341,8 +2341,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "sparker",
-        count: 3,
-        startDelayTicks: 340,
+        count: 2,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2350,8 +2350,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "warden",
-        count: 2,
-        startDelayTicks: 680,
+        count: 1,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2359,8 +2359,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "lantern",
-        count: 3,
-        startDelayTicks: 1020,
+        count: 1,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2369,7 +2369,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2378,7 +2378,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2411,7 +2411,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2420,7 +2420,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2429,7 +2429,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2438,7 +2438,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2447,7 +2447,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2480,7 +2480,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2489,7 +2489,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2498,7 +2498,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2507,7 +2507,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2516,7 +2516,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2540,7 +2540,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2549,7 +2549,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2558,7 +2558,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2567,7 +2567,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 1,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2576,7 +2576,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 1,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2600,7 +2600,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2609,7 +2609,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["E"],
         hpMultiplier: null,
@@ -2618,7 +2618,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2627,7 +2627,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2636,7 +2636,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2659,7 +2659,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
     entries: [
       {
         kind: "lancer",
-        count: 2,
+        count: 1,
         startDelayTicks: 0,
         spawnIntervalTicks: 140,
         sectors: ["E"],
@@ -2668,8 +2668,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "sparker",
-        count: 3,
-        startDelayTicks: 340,
+        count: 2,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2677,8 +2677,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "warden",
-        count: 2,
-        startDelayTicks: 680,
+        count: 1,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["S"],
         hpMultiplier: null,
@@ -2686,8 +2686,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "lantern",
-        count: 3,
-        startDelayTicks: 1020,
+        count: 2,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2695,8 +2695,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "leviathan",
-        count: 2,
-        startDelayTicks: 1360,
+        count: 1,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2704,8 +2704,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "smelter",
-        count: 2,
-        startDelayTicks: 1700,
+        count: 1,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2738,7 +2738,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2747,7 +2747,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["W"],
         hpMultiplier: null,
@@ -2756,7 +2756,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2765,7 +2765,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2774,7 +2774,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2798,7 +2798,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2807,7 +2807,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["NE"],
         hpMultiplier: null,
@@ -2816,7 +2816,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2825,7 +2825,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2834,7 +2834,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2867,7 +2867,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2876,7 +2876,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 680,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SW"],
         hpMultiplier: null,
@@ -2885,7 +2885,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2894,7 +2894,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2903,7 +2903,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2927,7 +2927,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 340,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2935,8 +2935,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "warden",
-        count: 3,
-        startDelayTicks: 680,
+        count: 2,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["SE"],
         hpMultiplier: null,
@@ -2945,7 +2945,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 1020,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2954,7 +2954,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 1360,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2963,7 +2963,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 1700,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["N"],
         hpMultiplier: null,
@@ -2986,8 +2986,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "sparker",
-        count: 4,
-        startDelayTicks: 340,
+        count: 2,
+        startDelayTicks: 180,
         spawnIntervalTicks: 140,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -2995,8 +2995,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "warden",
-        count: 3,
-        startDelayTicks: 680,
+        count: 2,
+        startDelayTicks: 360,
         spawnIntervalTicks: 280,
         sectors: ["NW"],
         hpMultiplier: null,
@@ -3004,8 +3004,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "lantern",
-        count: 3,
-        startDelayTicks: 1020,
+        count: 2,
+        startDelayTicks: 540,
         spawnIntervalTicks: 280,
         sectors: ["N"],
         hpMultiplier: null,
@@ -3013,8 +3013,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "leviathan",
-        count: 2,
-        startDelayTicks: 1360,
+        count: 1,
+        startDelayTicks: 720,
         spawnIntervalTicks: 440,
         sectors: ["N"],
         hpMultiplier: null,
@@ -3022,8 +3022,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       },
       {
         kind: "smelter",
-        count: 2,
-        startDelayTicks: 1700,
+        count: 1,
+        startDelayTicks: 900,
         spawnIntervalTicks: 440,
         sectors: ["E"],
         hpMultiplier: null,
@@ -3054,7 +3054,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
 ];
 
 export const AUTHORED_DIRECTOR: SpaceshipSimulationConfig["waveCampaign"]["director"] = {
-  baseBudget: 16,
+  baseBudget: 14,
   budgetGrowth: 2,
   budgetCap: 120,
   hpGrowth: 0.04,

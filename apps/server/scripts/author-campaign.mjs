@@ -33,8 +33,9 @@ const TICKS_PER_SECOND = 20;
  * what stands here is only what a file written before them gets.
  */
 const FALLBACK_AUTHORING = {
-  budgetBase: 10,
-  budgetGrowth: 2.2,
+  budgetBase: 14,
+  budgetGrowth: 2,
+  bossEscortShare: 0.5,
   asteroidEveryWaves: 3,
   // What one cannon hit takes off, and it has to be the crew's actual damage:
   // health below is written as "how many hits does this take", and while this
@@ -50,7 +51,7 @@ const FALLBACK_AUTHORING = {
   shipReach: 680,
   maxEngagementShare: 1.6,
   maxStandoffShare: 1.3,
-  groupStartStepSeconds: 34,
+  groupStartStepSeconds: 18,
   swarmIntervalSeconds: 7,
   lineIntervalSeconds: 14,
   heavyIntervalSeconds: 22,
@@ -1344,7 +1345,17 @@ function bossForWave(waveNumber) {
 }
 
 function buildWave(waveNumber) {
-  const budget = authoring.budgetBase + authoring.budgetGrowth * (waveNumber - 1);
+  const waveBudget = authoring.budgetBase + authoring.budgetGrowth * (waveNumber - 1);
+  const boss = waveNumber % 5 === 0 ? bossForWave(waveNumber) : undefined;
+  // The boss is paid for out of the wave, not added on top of it. Added on top
+  // it made every fifth wave cost 1.4 to 1.8 times the one before it - wave 5
+  // stood at 34 against a budget of 18.8 - and every measured median landed on
+  // a multiple of five. Early bosses cost most of a wave by themselves, so the
+  // escort keeps a floor rather than being squeezed to nothing.
+  const budget =
+    boss === undefined
+      ? waveBudget
+      : Math.max(waveBudget * authoring.bossEscortShare, waveBudget - ARCHETYPES[boss].spawnCost);
   const shares = familyShares(waveNumber);
   const groups = [];
   let slot = 0;
@@ -1372,7 +1383,6 @@ function buildWave(waveNumber) {
   if (waveNumber % authoring.asteroidEveryWaves === 0) {
     groups.push(["asteroid", 2, 18, 12, []]);
   }
-  const boss = waveNumber % 5 === 0 ? bossForWave(waveNumber) : undefined;
   if (boss !== undefined) {
     // Late enough that the wave is a fight first and a boss second; it waits for
     // the field to clear anyway, so this only decides when it becomes possible.

@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 33 as const;
+export const BALANCE_FILE_VERSION = 34 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32
+  28, 29, 30, 31, 32, 33
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -337,6 +337,17 @@ export const campaignAuthoringSchema = z
     /** A wave may spend `base + growth * (n - 1)` on the ships it calls in. */
     budgetBase: positiveFinite,
     budgetGrowth: nonNegativeFinite,
+    /**
+     * The least of its own budget a boss wave still spends on the wave.
+     *
+     * A boss is paid for out of the wave's budget rather than added on top of
+     * it - added on top, wave five cost 34 against a budget of 18.8 and wave
+     * ten cost 52 against 29.8, and every measured run ended on a multiple of
+     * five. But the early bosses cost most of their wave on their own, so
+     * subtracting outright would leave an empty room with a boss in it; this
+     * is the floor under the escort.
+     */
+    bossEscortShare: z.number().gt(0).max(1),
     /** Every n-th wave also drops rocks; they cost nothing and read as weather. */
     asteroidEveryWaves: positiveInteger,
     /** Enemy health is authored in cannon shots, so a hull change moves it all. */

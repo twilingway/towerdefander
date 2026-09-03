@@ -174,6 +174,7 @@ function tuning(): BalanceTuning {
       authoring: {
         budgetBase: 5,
         budgetGrowth: 1.5,
+        bossEscortShare: 0.5,
         asteroidEveryWaves: 3,
         hpPerCannonShot: 25,
         hpScale: 0.75,

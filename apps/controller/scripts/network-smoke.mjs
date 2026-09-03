@@ -15,7 +15,60 @@ import {
 } from "@spaceship-defender/protocol";
 
 const STEP_MS = 50;
+/** How long the scripted gunner stays on one ship before looking again. */
+const GUNNER_LOCK_HOLD_MS = 4_000;
 const port = 35_677;
+/**
+ * The balance this run plays, instead of whatever the campaign happens to be.
+ *
+ * This harness proves the wire - schemas, sequence watermarks, the upgrade
+ * journal, reconnection - and the only way to the upgrade journal is through a
+ * cleared wave. While that wave came out of the shipped campaign, the wire test
+ * rose and fell with balance tuning: the first two waves grew from 22 ships to
+ * 30 and the scripted crew began dying on them, so the smoke reported the
+ * campaign getting denser as if the protocol had broken. Two small waves of its
+ * own keep the run short and make a red run mean what it says.
+ *
+ * Kept deliberately boring: the same light kinds the campaign opens with, thin
+ * enough to die quickly, and enough of them that a cleared wave pays for one
+ * team upgrade at `TEAM_UPGRADE_PRICE`. Rocks ride along because the arena
+ * assertions want entry sectors.
+ */
+const smokeWave = (shipSector, swarmSector) => ({
+  entries: [
+    {
+      kind: "interceptor",
+      count: 4,
+      startDelayTicks: 0,
+      spawnIntervalTicks: 30,
+      sectors: [shipSector],
+      hpMultiplier: null,
+      tempoMultiplier: null
+    },
+    {
+      kind: "wasp",
+      count: 3,
+      startDelayTicks: 60,
+      spawnIntervalTicks: 30,
+      sectors: [swarmSector],
+      hpMultiplier: null,
+      tempoMultiplier: null
+    },
+    {
+      kind: "asteroid",
+      count: 2,
+      startDelayTicks: 40,
+      spawnIntervalTicks: 60,
+      sectors: [],
+      hpMultiplier: null,
+      tempoMultiplier: null
+    }
+  ],
+  hpMultiplier: 0.4,
+  tempoMultiplier: null
+});
+const SMOKE_WAVES = [smokeWave("E", "S"), smokeWave("S", "W"), smokeWave("W", "N")];
+const balancePassword = "network-smoke";
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const protocolVersion = PROTOCOL_VERSION;
@@ -26,6 +79,9 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
     HOST: "127.0.0.1",
     PORT: String(port),
     RECONNECTION_GRACE_SECONDS: "0.25",
+    // Set rather than inherited, so the run authorises the same way on a
+    // machine that happens to export one and on a machine that does not.
+    ADMIN_BALANCE_PASSWORD: balancePassword,
     // Point at a path that never exists so the run uses built-in balance
     // defaults instead of whatever an operator saved from the console.
     BALANCE_PRESET_PATH: join(tmpdir(), `smoke-balance-${randomUUID()}.json`),
@@ -52,6 +108,9 @@ let shieldEnabled = false;
 let shieldLockedTargetId;
 let shieldOpposite = false;
 let shieldSurvivalMode = false;
+let pilotSurvivalMode = false;
+let gunnerStickyMode = false;
+let gunnerLockHeldUntil = 0;
 const schedulers = [];
 const observedAsteroidIds = new Set();
 const observedAsteroidEntrySectors = new Set();
@@ -77,6 +136,7 @@ watchdog.unref();
 
 try {
   await waitForServer();
+  await pinSmokeBalance();
   display = await new Client(endpoint).create(ROOM_TYPE, {
     role: "display",
     protocolVersion,
@@ -219,11 +279,16 @@ try {
 
   shieldOpposite = false;
   shieldSurvivalMode = true;
+  pilotSurvivalMode = true;
+  gunnerStickyMode = true;
   // One scripted gunner against a whole wave, on a machine that is also
   // building and running the browser suite. The room itself is given half an
   // hour above, so this only has to outlast the fight.
   await waitFor(() => encounter().phase === "intermission", 600_000);
   gunnerEnabled = false;
+  pilotSurvivalMode = false;
+  gunnerStickyMode = false;
+  gunnerLockedTargetId = undefined;
   pilot = await reconnectController(pilot, "intermission");
   const offer = await waitForTeamOffer();
   // Any card of the tier will do: a seat may vote for any of them, and a narrow
@@ -285,7 +350,36 @@ try {
 function startRoleSchedulers() {
   schedulers.push(
     setInterval(() => {
+      if (pilot === undefined || display === undefined || encounter().phase !== "combat") return;
+      if (!pilotSurvivalMode) return;
+      pilotSequence += 1;
+      pilot.send(clientMessage.pilotInput, {
+        ...envelope(pilot),
+        sequence: pilotSequence,
+        vector: evasionVector(),
+        mgFiring: false
+      });
+    }, STEP_MS)
+  );
+  schedulers.push(
+    setInterval(() => {
       if (gunner === undefined || display === undefined || encounter().phase !== "combat") return;
+      // Sticky while a wave is on: re-reading "closest" every fiftieth of a
+      // second spreads the fire across a crowd and finishes nothing. Measured
+      // on a wave of fourteen - the unsticky gunner killed three of them in
+      // sixty-eight seconds while the hull died.
+      //
+      // Held for a few seconds rather than until it dies, because a target that
+      // never dies is exactly the one worth dropping: a straggler out past the
+      // barrel's reach kept the whole wave alive while the gunner emptied into
+      // it, which read as the smoke being flaky rather than stuck.
+      if (
+        gunnerStickyMode &&
+        (findEntity(gunnerLockedTargetId ?? "") === undefined || Date.now() > gunnerLockHeldUntil)
+      ) {
+        gunnerLockedTargetId = closestTarget()?.entityId;
+        gunnerLockHeldUntil = Date.now() + GUNNER_LOCK_HOLD_MS;
+      }
       const target =
         (gunnerLockedTargetId === undefined ? undefined : findEntity(gunnerLockedTargetId)) ??
         closestTarget();
@@ -589,6 +683,32 @@ function closestTarget() {
   ].sort((a, b) => distance(a) - distance(b))[0];
 }
 
+/**
+ * Where the hull should be going while it holds a wave off.
+ *
+ * A stationary hull is one every barrel on the field is already zeroed on, and
+ * this crew is a script: it does not dodge unless told to. Crossing the nearest
+ * threat rather than running from it keeps the range - and so the shield sector
+ * - roughly where it was, and the pull back to the middle stops the crossing
+ * from walking the hull into the rim, where it would be pinned with nowhere
+ * left to cross to.
+ */
+function evasionVector() {
+  const game = display.state.game;
+  const centerX = game.worldWidth / 2;
+  const centerY = game.worldHeight / 2;
+  const outX = game.spaceship.x - centerX;
+  const outY = game.spaceship.y - centerY;
+  const fromCenter = Math.hypot(outX, outY);
+  if (fromCenter > game.arenaRadius * 0.6) {
+    return { x: -outX / (fromCenter || 1), y: -outY / (fromCenter || 1) };
+  }
+  const threat = closestThreat();
+  if (threat === undefined) return { x: 1, y: 0 };
+  const toward = unitFromSpaceship(threat);
+  return { x: -toward.y, y: toward.x };
+}
+
 function closestThreat() {
   return [
     ...world().hostileProjectiles.values(),
@@ -704,6 +824,34 @@ function attachLatencyResponder(room) {
       probeId: result.data.probeId
     });
   });
+}
+
+async function adminBalance(method, path, body) {
+  const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, {
+    method,
+    headers: {
+      authorization: `Basic ${Buffer.from(`admin:${balancePassword}`).toString("base64")}`,
+      ...(body === undefined ? {} : { "content-type": "application/json" })
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
+  });
+  if (!response.ok) {
+    throw new Error(`${method} ${path} answered ${String(response.status)}.`);
+  }
+  return response.json();
+}
+
+/**
+ * Replaces the wave table before anyone joins. A run keeps the balance it
+ * started with, and the room reads it when the crew is ready, so this has to
+ * land before the first controller connects - see `SMOKE_WAVES`.
+ */
+async function pinSmokeBalance() {
+  const document = await adminBalance("GET", "/admin/balance/defaults");
+  for (const preset of document.presets) {
+    preset.tuning.waveCampaign = { ...preset.tuning.waveCampaign, waves: SMOKE_WAVES };
+  }
+  await adminBalance("PUT", "/admin/balance", document);
 }
 
 async function waitForServer() {
