@@ -930,6 +930,20 @@ export const maintenanceStateSchema = z
   .object({ active: z.boolean(), secondsRemaining: maintenanceSecondsSchema })
   .strict();
 export type MaintenanceState = z.infer<typeof maintenanceStateSchema>;
+/**
+ * What `/health` answers. The version is there so a release can tell which
+ * build is actually being served through the public path rather than trusting
+ * that a reply means the new one; the window is there so a display can say what
+ * is coming before anyone has opened a room.
+ */
+export const healthResponseSchema = z
+  .object({
+    status: z.literal("ok"),
+    protocolVersion: z.number().int().positive(),
+    maintenance: maintenanceStateSchema
+  })
+  .strict();
+export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
 export const clientMessage = {
   ready: "controller:ready",
