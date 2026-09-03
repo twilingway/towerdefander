@@ -12,7 +12,13 @@ export default defineConfig({
   use: {
     channel: "chrome",
     headless: true,
-    trace: "retain-on-failure"
+    trace: "retain-on-failure",
+    // A hosted CI runner has no GPU, so Chrome falls back to SwiftShader and the
+    // display renders in software. Setting this locally reproduces that machine
+    // rather than guessing at it from a failed run's log.
+    ...(process.env.E2E_SOFTWARE_GL === "1"
+      ? { launchOptions: { args: ["--use-angle=swiftshader", "--disable-gpu"] } }
+      : {})
   },
   ...(externalServers
     ? {}
