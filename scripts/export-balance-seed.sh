@@ -58,5 +58,15 @@ console.log(
 
 mv "${temporary}" "${OUT}"
 trap - EXIT
+
+# The seed is committed, so it has to satisfy the same formatter as everything
+# else here; an export that fails `pnpm format:check` would turn a balance
+# change into a red gate.
+if (cd "${REPO_ROOT}" && pnpm exec prettier --write "${OUT}" >/dev/null 2>&1); then
+  echo "Formatted with Prettier."
+else
+  echo "Could not run Prettier; run 'pnpm exec prettier --write ${OUT}' before committing." >&2
+fi
+
 echo "Wrote ${OUT}"
 echo "Review it and commit; the next host without a balance volume will start on it."
