@@ -8,9 +8,27 @@ import {
   isVisibleDemoMode,
   parseVisibleDemoStatus,
   publishVisibleDemoWorld,
+  readStartWave,
   sendVisibleDemoCommand,
   visibleDemoWorldKey
 } from "./visibleDemo.js";
+
+describe("start wave from the address", () => {
+  it("takes a whole wave and clamps it to what the protocol accepts", () => {
+    expect(readStartWave("?wave=5", 50)).toBe(5);
+    expect(readStartWave("?demo=1&wave=12", 50)).toBe(12);
+    expect(readStartWave("?wave=999", 50)).toBe(50);
+  });
+
+  it("reads anything else as the opening wave", () => {
+    // A stray value must never turn into a run nobody asked for.
+    expect(readStartWave("", 50)).toBe(1);
+    expect(readStartWave("?wave=0", 50)).toBe(1);
+    expect(readStartWave("?wave=-3", 50)).toBe(1);
+    expect(readStartWave("?wave=2.5", 50)).toBe(1);
+    expect(readStartWave("?wave=boss", 50)).toBe(1);
+  });
+});
 
 describe("visible demo helpers", () => {
   it("requires the explicit development gate and query", () => {
@@ -151,6 +169,10 @@ function missile(entityId: string, spawnSequence: number, x: number, y: number) 
   return { ...moving(entityId, spawnSequence, x, y), heading: 0, visual: null };
 }
 
+function loot(entityId: string, spawnSequence: number, x: number, y: number) {
+  return { ...moving(entityId, spawnSequence, x, y), kind: "repair" as const, amount: 35 };
+}
+
 describe("visible demo world picture", () => {
   it("keeps every framed entity with the fields the bot needs", () => {
     const world = buildVisibleDemoWorld(worldGame(), 1_700);
@@ -172,6 +194,20 @@ describe("visible demo world picture", () => {
     expect(world.missiles[0]).toMatchObject({ entityId: "missile-near", heading: 0 });
     expect(world.bullets[0]).toMatchObject({ entityId: "bullet-near" });
     expect(world.asteroids[0]).toMatchObject({ entityId: "rock-near", maxHp: 10 });
+  });
+
+  it("shows the bot the salvage on screen and nothing beyond the frame", () => {
+    // Without this the bot cannot see the only hull it wins back inside a run,
+    // and every batch under-measures healing.
+    const world = buildVisibleDemoWorld(
+      worldGame({
+        lootDrops: [loot("salvage-near", 5, 2_260, 2_200), loot("salvage-far", 6, 2_200, 4_000)]
+      }),
+      1_700
+    );
+
+    expect(world.loot.map(({ entityId }) => entityId)).toEqual(["salvage-near"]);
+    expect(world.loot[0]).toMatchObject({ kind: "repair", amount: 35, radius: 10 });
   });
 
   it("drops every entity the camera never frames", () => {
@@ -223,6 +259,8 @@ function worldGame(overrides: Record<string, unknown> = {}) {
     tick: 42,
     cameraViewWidth: 1600,
     arenaRadius: 2200,
+    rimBandWidth: 260,
+    shieldPhase: "down",
     worldWidth: 4400,
     worldHeight: 4400,
     shieldRadius: 104,
@@ -237,14 +275,37 @@ function worldGame(overrides: Record<string, unknown> = {}) {
       hp: 400,
       maxHp: 500
     },
-    shield: { angle: 0.1, active: false, energy: 80, capacity: 100, arcHalfAngle: Math.PI / 4 },
-    cannon: { heat: 12, capacity: 100, overheated: false },
-    machineGun: { heat: 12, capacity: 100, overheated: false },
-    encounter: { phase: "combat" as const, waveNumber: 3 },
+    shield: {
+      angle: 0.1,
+      rearmRequired: false,
+      active: false,
+      energy: 80,
+      capacity: 100,
+      arcHalfAngle: Math.PI / 4
+    },
+    cannon: {
+      heat: 12,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic" as const,
+      reach: 1500,
+      speed: 1000,
+      acquireHalfAngle: 0
+    },
+    machineGun: {
+      heat: 12,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic" as const,
+      reach: 620,
+      speed: 900
+    },
+    encounter: { phase: "combat" as const, waveNumber: 3, lootWindowSecondsRemaining: 0 },
     enemyShips: [enemy("enemy-near", 1, 2_300, 2_200)],
     homingMissiles: [missile("missile-near", 2, 2_250, 2_200)],
     hostileProjectiles: [projectile("bullet-near", 3, 2_180, 2_200)],
     asteroids: [asteroid("rock-near", 4, 2_120, 2_200)],
+    lootDrops: [],
     ...overrides
   };
 }

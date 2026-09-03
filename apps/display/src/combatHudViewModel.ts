@@ -1,3 +1,11 @@
+import { getVisualAsset } from "@spaceship-defender/protocol";
+import type {
+  DisplayGameSnapshot,
+  PublicEnemyCatalogueEntry,
+  PublicEnemyView,
+  ShieldPhase
+} from "@spaceship-defender/protocol";
+
 export interface RadarPoint {
   readonly x: number;
   readonly y: number;
@@ -48,4 +56,67 @@ export function getCurrentWaveUpgrade<TSelection extends { readonly waveNumber: 
   waveNumber: number
 ): TSelection | null {
   return selection !== null && selection.waveNumber + 1 === waveNumber ? selection : null;
+}
+
+/**
+ * What the shield is doing, in the words the crew needs. The phase alone does
+ * not explain a shield that is down: after a full drain it also has to be
+ * re-armed, and both of those read as a dead button unless they are said out
+ * loud. Raising is the one that matters most - a shield that is on its way up
+ * looks broken to anyone who just pressed the key.
+ */
+export function getShieldStatusLabel(
+  phase: ShieldPhase,
+  rearmRequired: boolean,
+  energy: number
+): string {
+  if (phase === "up") return "АКТИВЕН";
+  if (phase === "raising") return "ПОДНИМАЕТСЯ";
+  if (phase === "cooling") return "ОСТЫВАЕТ";
+  if (rearmRequired) return "НАБИРАЕТ ЗАРЯД";
+  if (energy <= 0) return "РАЗРЯЖЕН";
+  return "выключен";
+}
+
+export interface BossView {
+  readonly entityId: string;
+  readonly label: string;
+  /** Name of the silhouette, when the archetype is called something generic. */
+  readonly name: string | undefined;
+  readonly hp: number;
+  readonly maxHp: number;
+}
+
+/**
+ * The boss the HUD names, or nothing.
+ *
+ * Which archetype is a boss comes from the catalogue the room publishes once
+ * per run, never from a guess about size or health: an operator is free to
+ * call a boss anything and give it any silhouette. With more than one alive the
+ * healthiest one is the one worth watching, and it is the one that keeps the
+ * bar when the other dies.
+ */
+export function selectBoss(game: DisplayGameSnapshot): BossView | undefined {
+  const bosses = new Map<string, PublicEnemyCatalogueEntry>();
+  for (const entry of game.enemyCatalogue satisfies readonly PublicEnemyCatalogueEntry[]) {
+    if (entry.isBoss) bosses.set(entry.kind, entry);
+  }
+  if (bosses.size === 0) return undefined;
+  let found: PublicEnemyView | undefined;
+  for (const enemy of game.enemyShips) {
+    if (!bosses.has(enemy.kind)) continue;
+    if (found === undefined || enemy.hp > found.hp) found = enemy;
+  }
+  if (found === undefined) return undefined;
+  const entry = bosses.get(found.kind);
+  // An operator usually calls the archetype something plain, so the silhouette
+  // is where the name lives; when the two agree there is nothing to add.
+  const name = entry === undefined ? undefined : getVisualAsset(entry.shape).name;
+  return {
+    entityId: found.entityId,
+    label: entry?.label ?? found.kind,
+    name: name === undefined || name === entry?.label ? undefined : name,
+    hp: found.hp,
+    maxHp: found.maxHp
+  };
 }

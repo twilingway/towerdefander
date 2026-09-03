@@ -1,52 +1,231 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  advancePlayback,
   backgroundTileOffset,
+  createPlaybackClock,
+  createPointTrack,
+  createPointTransition,
   createSnappedVisualTransitions,
+  getArenaRingRadii,
+  getRimBandStroke,
+  getArenaSpokes,
+  DEVICE_PIXEL_RATIO_CAP,
   getBackgroundCoverRect,
-  getBoundedCameraScroll,
-  getCameraOverscan,
-  getCircularGridSegments,
+  getBackingStoreSize,
+  getLetterboxBars,
+  nextPixelRatioCap,
+  PIXEL_RATIO_FALLBACK_SAMPLES,
   getPhaserCameraScroll,
   getResponsiveViewport,
+  getSegmentAlpha,
   getShieldArcRange,
   getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
-  getTimelineAlpha,
+  extendPointTrack,
+  fillFocusCandidates,
   interpolateAngle,
   interpolatePoint,
+  observePlaybackTick,
   reconcileStableIds,
-  SnapshotResetLatch
+  samplePointTrack,
+  SnapshotResetLatch,
+  type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 
-describe("spaceship view model", () => {
-  it("clips grid segments analytically to the circular arena", () => {
-    const segments = getCircularGridSegments(200, 200, 100, 50);
+describe("getLetterboxBars", () => {
+  const frameFor = (glassWidth: number, glassHeight: number) => {
+    const viewport = getResponsiveViewport(glassWidth, glassHeight, 2500, 2500 * (9 / 16));
+    return { width: viewport.screen.width, height: viewport.screen.height };
+  };
 
-    expect(segments.length).toBeGreaterThan(0);
-    for (const segment of segments) {
-      for (const point of [segment.from, segment.to]) {
-        expect(Math.hypot(point.x - 200, point.y - 200)).toBeCloseTo(100);
-      }
-    }
-    expect(segments).toContainEqual({ from: { x: 200, y: 100 }, to: { x: 200, y: 300 } });
+  it("finds the empty fifth of a phone held sideways", () => {
+    // 844x390 fits the frame by height, so what is left is a bar down each
+    // side - and it is where the readouts belong, not on top of the arena.
+    const bars = getLetterboxBars(844, 390, frameFor(844, 390));
+    expect(bars.placement).toBe("side");
+    expect(bars.thickness).toBeCloseTo((844 - 390 * (16 / 9)) / 2, 6);
   });
 
-  it("centers the camera on the circular arena midpoint", () => {
-    expect(getBoundedCameraScroll({ x: 2200, y: 2200 }, 4400, 4400, 1600, 900)).toEqual({
-      x: 1400,
-      y: 1750
+  it("finds the band a squarer screen leaves above and below", () => {
+    const bars = getLetterboxBars(1024, 768, frameFor(1024, 768));
+    expect(bars.placement).toBe("top");
+  });
+
+  it("says so when there is nothing worth using", () => {
+    // Exactly the frame's shape, and a hair off it: a two-pixel strip holds no
+    // readout, so the layout stays as it is on a screen with no bars at all.
+    expect(getLetterboxBars(1920, 1080, frameFor(1920, 1080)).placement).toBe("none");
+    expect(getLetterboxBars(1930, 1080, frameFor(1930, 1080)).placement).toBe("none");
+  });
+});
+
+describe("nextPixelRatioCap", () => {
+  const run = (fps: number, samples = PIXEL_RATIO_FALLBACK_SAMPLES) =>
+    Array.from({ length: samples }, () => fps);
+
+  it("gives up a step after a run of bad samples", () => {
+    expect(nextPixelRatioCap(3, run(24))).toBe(2);
+    expect(nextPixelRatioCap(2, run(24))).toBe(1);
+  });
+
+  it("holds while the machine is keeping up", () => {
+    expect(nextPixelRatioCap(3, run(52))).toBe(3);
+    // One bad wave is not a phone that cannot run the game.
+    expect(nextPixelRatioCap(3, [...run(19, 19), 55])).toBe(3);
+    expect(nextPixelRatioCap(3, run(24, 8))).toBe(3);
+  });
+
+  it("does not read a scene that has not started as one that is struggling", () => {
+    expect(nextPixelRatioCap(3, run(0))).toBe(3);
+  });
+
+  it("stops at the bottom of the ladder", () => {
+    expect(nextPixelRatioCap(1, run(12))).toBe(1);
+  });
+});
+
+describe("getBackingStoreSize", () => {
+  const glass = { cssWidth: 844, cssHeight: 390 };
+
+  it("draws a panel at its own density, up to the ceiling", () => {
+    // Under the ceiling the device gets exactly what it has - the phone this
+    // was measured on reports 2.75 and is drawn at 2.75.
+    const phone = getBackingStoreSize({ ...glass, devicePixelRatio: 2.75 });
+    expect(phone.ratio).toBe(2.75);
+    expect(phone).toMatchObject({ width: 2321, height: 1073 });
+
+    // Above it the ceiling holds, which is what keeps a denser panel on a
+    // weaker part from drowning in its own pixels.
+    const dense = getBackingStoreSize({ ...glass, devicePixelRatio: 5 });
+    expect(dense.ratio).toBe(DEVICE_PIXEL_RATIO_CAP);
+
+    const modest = getBackingStoreSize({ ...glass, devicePixelRatio: 1.5 });
+    expect(modest.ratio).toBe(1.5);
+    expect(modest).toMatchObject({ width: 1266, height: 585 });
+  });
+
+  it("leaves an ordinary screen exactly as it was", () => {
+    // The change has to be a no-op at density one, or every measurement taken
+    // before it stops meaning anything.
+    const desktop = getBackingStoreSize({ cssWidth: 1920, cssHeight: 1080, devicePixelRatio: 1 });
+    expect(desktop).toEqual({ width: 1920, height: 1080, ratio: 1 });
+  });
+
+  it("never asks the GPU for an edge it does not have", () => {
+    // The shield's glow allocates a target the size of the frame, and older
+    // mobile parts refuse past 4096.
+    const clamped = getBackingStoreSize({
+      cssWidth: 2560,
+      cssHeight: 1440,
+      devicePixelRatio: 3,
+      cap: 3,
+      maxDimension: 4096
     });
+    expect(clamped.width).toBeLessThanOrEqual(4096);
+    expect(clamped.ratio).toBeCloseTo(4096 / 2560, 12);
   });
 
-  it("preserves at least the distant 1600 by 900 logical view across screen shapes", () => {
-    expect(getResponsiveViewport(1920, 1080)).toEqual({ zoom: 1.2, width: 1600, height: 900 });
-    const wide = getResponsiveViewport(1366, 768);
-    expect(wide.zoom).toBeCloseTo(768 / 900);
-    expect(wide.width).toBeCloseTo(1366 / (768 / 900));
-    expect(wide.height).toBeCloseTo(900);
-    expect(getResponsiveViewport(1024, 768)).toEqual({ zoom: 0.64, width: 1600, height: 1200 });
+  it("falls back to the glass when the browser reports no density", () => {
+    // jsdom has none, and a browser can report zero in the middle of a resize.
+    for (const devicePixelRatio of [0, Number.NaN, -2]) {
+      expect(getBackingStoreSize({ ...glass, devicePixelRatio }).ratio).toBe(1);
+    }
+  });
+
+  it("keeps the slice of world the crew is shown", () => {
+    // The invariant the whole change rests on: more pixels, same arena.
+    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    const plain = getResponsiveViewport(844, 390, frame.width, frame.height);
+    const dense = getBackingStoreSize({ ...glass, devicePixelRatio: 2 });
+    const denser = getResponsiveViewport(dense.width, dense.height, frame.width, frame.height);
+    expect(denser.screen.width / denser.zoom).toBeCloseTo(plain.screen.width / plain.zoom, 6);
+    expect(denser.screen.height / denser.zoom).toBeCloseTo(plain.screen.height / plain.zoom, 6);
+  });
+});
+
+describe("spaceship view model", () => {
+  it("strokes the rim band as the ring the simulation slows a hull in", () => {
+    const band = getRimBandStroke(2200, 260);
+
+    // A stroke of width 260 centred on 2070 covers exactly 1940 to 2200, which
+    // is the band measured inward from the arena radius.
+    expect(band).toEqual({ radius: 2070, thickness: 260 });
+    expect((band?.radius ?? 0) - (band?.thickness ?? 0) / 2).toBe(1940);
+    expect((band?.radius ?? 0) + (band?.thickness ?? 0) / 2).toBe(2200);
+
+    expect(getRimBandStroke(2200, 0)).toBeNull();
+    expect(getRimBandStroke(0, 260)).toBeNull();
+    // A band wider than the arena fills it rather than reaching outside.
+    expect(getRimBandStroke(200, 900)).toEqual({ radius: 100, thickness: 200 });
+  });
+
+  it("spaces the distance rings inside the arena, leaving the rim to the border", () => {
+    expect(getArenaRingRadii(2200)).toEqual([550, 1100, 1650]);
+    // The count is fixed, so a larger arena reads the same instead of denser.
+    expect(getArenaRingRadii(4400)).toHaveLength(3);
+    expect(getArenaRingRadii(4400).at(-1)).toBeLessThan(4400);
+    expect(getArenaRingRadii(0)).toEqual([]);
+  });
+
+  it("runs the spokes from a centre clearing out to the rim", () => {
+    const spokes = getArenaSpokes(2200, 2200, 2200);
+
+    expect(spokes).toHaveLength(16);
+    for (const spoke of spokes) {
+      const inner = Math.hypot(spoke.from.x - 2200, spoke.from.y - 2200);
+      const outer = Math.hypot(spoke.to.x - 2200, spoke.to.y - 2200);
+      expect(inner).toBeCloseTo(2200 * 0.06, 6);
+      expect(outer).toBeCloseTo(2200, 6);
+    }
+    // The first spoke points along +X, and they go all the way round.
+    expect(spokes[0]?.to.y).toBeCloseTo(2200, 6);
+    expect(getArenaSpokes(2200, 2200, 0)).toEqual([]);
+  });
+
+  it("shows every device the same slice of the world", () => {
+    // The whole point: what a crew can see must not depend on the shape of the
+    // glass. Measured before this held, on a 2500 by 1406 frame, an ultrawide
+    // saw 34% more width than a laptop and a 4:3 tablet 33% more height - which
+    // is thirty per cent more warning about what is flying at you.
+    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    const devices: readonly (readonly [string, number, number])[] = [
+      ["1920x1080", 1920, 1080],
+      ["2560x1440", 2560, 1440],
+      ["3840x2160", 3840, 2160],
+      ["3440x1440 ultrawide", 3440, 1440],
+      ["iPhone 14 landscape", 844, 390],
+      ["iPhone SE landscape", 667, 375],
+      ["iPad", 1180, 820],
+      ["iPad mini 4:3", 1024, 768],
+      ["folding phone portrait", 1812, 2176]
+    ];
+    for (const [name, width, height] of devices) {
+      const viewport = getResponsiveViewport(width, height, frame.width, frame.height);
+      expect(viewport.width, `${name} sees a different width`).toBeCloseTo(frame.width, 6);
+      expect(viewport.height, `${name} sees a different height`).toBeCloseTo(frame.height, 6);
+    }
+  });
+
+  it("centres the frame in the glass and leaves the rest as bars", () => {
+    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    // Ultrawide: the frame is as tall as the screen, so the bars are at the sides.
+    const wide = getResponsiveViewport(3440, 1440, frame.width, frame.height);
+    expect(wide.screen.height).toBeCloseTo(1440, 6);
+    expect(wide.screen.width).toBeLessThan(3440);
+    expect(wide.screen.x).toBeCloseTo((3440 - wide.screen.width) / 2, 6);
+    expect(wide.screen.y).toBeCloseTo(0, 6);
+
+    // A 4:3 tablet is the other way round: full width, bars above and below.
+    const tall = getResponsiveViewport(1024, 768, frame.width, frame.height);
+    expect(tall.screen.width).toBeCloseTo(1024, 6);
+    expect(tall.screen.height).toBeLessThan(768);
+    expect(tall.screen.y).toBeCloseTo((768 - tall.screen.height) / 2, 6);
+
+    // And a 16:9 screen has no bars at all.
+    const exact = getResponsiveViewport(1920, 1080, frame.width, frame.height);
+    expect(exact.screen).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
   });
 
   it("frames the tuned camera width instead of the design default", () => {
@@ -128,13 +307,8 @@ describe("spaceship view model", () => {
     expect(
       getPhaserCameraScroll({
         focus: { x: 2200, y: 2200 },
-        worldWidth: 4400,
-        worldHeight: 4400,
         rendererWidth: 1920,
-        rendererHeight: 1080,
-        viewportWidth: 1600,
-        viewportHeight: 900,
-        overscan: 0
+        rendererHeight: 1080
       })
     ).toEqual({ x: 1240, y: 1660 });
   });
@@ -144,13 +318,12 @@ describe("spaceship view model", () => {
     [1366, 768],
     [1024, 768]
   ])(
-    "keeps cardinal and diagonal rim positions inside the safe edge at %ix%i",
+    "keeps the ship centred at cardinal and diagonal rim positions at %ix%i",
     (rendererWidth, rendererHeight) => {
       const viewport = getResponsiveViewport(rendererWidth, rendererHeight);
       const zoom = viewport.zoom;
       const radius = 52;
       const visualExtension = 42;
-      const overscan = getCameraOverscan(radius, zoom);
       const center = 2200;
       const legalRadius = 2200 - radius;
       const diagonalOffset = legalRadius / Math.sqrt(2);
@@ -164,14 +337,16 @@ describe("spaceship view model", () => {
       ];
 
       for (const focus of rimPositions) {
-        const worldView = getBoundedCameraScroll(
-          focus,
-          4400,
-          4400,
-          viewport.width,
-          viewport.height,
-          overscan
-        );
+        const scroll = getPhaserCameraScroll({ focus, rendererWidth, rendererHeight });
+        // Phaser zooms around the camera midpoint, so the visible world rect
+        // sits half the difference in from the raw scroll.
+        const worldView = {
+          x: scroll.x + (rendererWidth - viewport.width) / 2,
+          y: scroll.y + (rendererHeight - viewport.height) / 2
+        };
+        // Nothing clamps any more: the rim looks exactly like the middle.
+        expect(worldView.x + viewport.width / 2).toBeCloseTo(focus.x, 10);
+        expect(worldView.y + viewport.height / 2).toBeCloseTo(focus.y, 10);
         const visualLeft = (focus.x - radius - visualExtension - worldView.x) * zoom;
         const visualRight =
           (worldView.x + viewport.width - (focus.x + radius + visualExtension)) * zoom;
@@ -183,13 +358,6 @@ describe("spaceship view model", () => {
       }
     }
   );
-
-  it("centers an expanded world that is smaller than the visible viewport", () => {
-    expect(getBoundedCameraScroll({ x: 50, y: 50 }, 100, 100, 500, 300, 25)).toEqual({
-      x: -200,
-      y: -100
-    });
-  });
 
   it("uses distinct active and inactive shield styles", () => {
     expect(getShieldVisualStyle(true)).toEqual({
@@ -329,24 +497,117 @@ describe("spaceship view model", () => {
   });
 
   it("uses elapsed time rather than frame count", () => {
-    const trace = (framesPerSecond: number) =>
-      Array.from({ length: Math.round(framesPerSecond * 0.05) + 1 }, (_, index) => {
-        const elapsedMs = Math.min((index * 1000) / framesPerSecond, 50);
-        return interpolatePoint({ x: 0, y: 0 }, { x: 100, y: 40 }, getTimelineAlpha(elapsedMs, 50));
+    const trace = (framesPerSecond: number) => {
+      const frameMs = 1000 / framesPerSecond;
+      let clock = createPlaybackClock(0);
+      clock = observePlaybackTick(clock, 4, 200);
+      return Array.from({ length: Math.round(framesPerSecond * 0.05) }, () => {
+        clock = advancePlayback(clock, frameMs);
+        return interpolatePoint(
+          { x: 0, y: 0 },
+          { x: 100, y: 40 },
+          getSegmentAlpha(0, 4, clock.tick)
+        );
       });
+    };
     const sixtyHzTrace = trace(60);
     const oneTwentyHzTrace = trace(120);
 
     for (let index = 0; index < sixtyHzTrace.length; index += 1) {
       const sixtyHzPoint = sixtyHzTrace[index];
-      const oneTwentyHzPoint = oneTwentyHzTrace[index * 2];
+      const oneTwentyHzPoint = oneTwentyHzTrace[index * 2 + 1];
       if (sixtyHzPoint === undefined || oneTwentyHzPoint === undefined) {
         throw new Error("Expected matching 60 Hz and 120 Hz samples.");
       }
       expect(oneTwentyHzPoint.x).toBeCloseTo(sixtyHzPoint.x, 8);
       expect(oneTwentyHzPoint.y).toBeCloseTo(sixtyHzPoint.y, 8);
     }
-    expect(sixtyHzTrace.at(-1)).toEqual({ x: 100, y: 40 });
+  });
+
+  it("keeps playing when snapshots arrive slower than the nominal tick", () => {
+    const frameMs = 1000 / 60;
+    const snapshotMs = 62;
+    let clock = createPlaybackClock(0);
+    let latestTick = 0;
+    let nextSnapshotAt = snapshotMs;
+    let elapsedMs = 0;
+    let previousTick = -1;
+    const stalledFrames: number[] = [];
+
+    for (let frame = 0; frame < 240; frame += 1) {
+      elapsedMs += frameMs;
+      while (elapsedMs >= nextSnapshotAt) {
+        latestTick += 1;
+        clock = observePlaybackTick(clock, latestTick, snapshotMs);
+        nextSnapshotAt += snapshotMs;
+      }
+      clock = advancePlayback(clock, frameMs);
+      // The first second is the pace estimate settling; after that a stall
+      // would be the freeze this playback exists to remove.
+      if (frame > 60 && clock.tick === previousTick) stalledFrames.push(frame);
+      previousTick = clock.tick;
+    }
+
+    expect(stalledFrames).toEqual([]);
+    expect(clock.msPerTick).toBeCloseTo(snapshotMs, 1);
+    expect(latestTick - clock.tick).toBeLessThan(3);
+  });
+
+  it("keeps the drawn point moving, not just the playback clock", () => {
+    // The runtime holds one segment: previous authoritative sample to newest.
+    // Playback therefore has to stay inside it - lag it past the segment start
+    // and every frame draws the same point until the next patch lands, which
+    // reads as a frozen picture however fast the renderer runs.
+    const frameMs = 1000 / 165;
+    const snapshotMs = 62.5;
+    const positionAt = (tick: number) => ({ x: tick * 10, y: 0 });
+    let clock = createPlaybackClock(0);
+    let track = createPointTrack(positionAt(0), 0);
+    let latestTick = 0;
+    let elapsedMs = 0;
+    let nextSnapshotAt = snapshotMs;
+    let previousX = -1;
+    let frozenFrames = 0;
+
+    for (let frame = 0; frame < 1200; frame += 1) {
+      elapsedMs += frameMs;
+      while (elapsedMs >= nextSnapshotAt) {
+        // A 20 Hz room behind a 16 Hz patch timer: three singles, then a double.
+        const carried = latestTick % 4 === 3 ? 2 : 1;
+        const nextTick = latestTick + carried;
+        track = extendPointTrack(track, positionAt(nextTick), nextTick);
+        latestTick = nextTick;
+        clock = observePlaybackTick(clock, nextTick, snapshotMs);
+        nextSnapshotAt += snapshotMs;
+      }
+      clock = advancePlayback(clock, frameMs);
+      const drawn = samplePointTrack(track, clock.tick);
+      if (frame > 165 && drawn.x <= previousX) frozenFrames += 1;
+      previousX = drawn.x;
+    }
+
+    expect(frozenFrames).toBe(0);
+  });
+
+  it("re-anchors on a tick that moved backwards instead of freezing", () => {
+    let clock = createPlaybackClock(0);
+    clock = observePlaybackTick(clock, 400, 50);
+    clock = advancePlayback(clock, 16);
+
+    // A fresh run restarts the tick counter; playback has to follow it down.
+    clock = observePlaybackTick(clock, 3, 50);
+
+    expect(clock.latestTick).toBe(3);
+    expect(clock.tick).toBe(3);
+  });
+
+  it("walks through a patch that carried more than one tick", () => {
+    const segment = createPointTransition({ x: 0, y: 0 }, { x: 100, y: 0 }, 10, 12);
+
+    expect(getSegmentAlpha(segment.fromTick, segment.toTick, 11)).toBeCloseTo(0.5, 8);
+    expect(getSegmentAlpha(segment.fromTick, segment.toTick, 12)).toBe(1);
+    // A segment with no span at all - a snap - is simply finished.
+    expect(getSegmentAlpha(10, 10, 10)).toBe(1);
   });
 
   it("snaps delayed scene creation and hydration to the latest snapshot", () => {
@@ -357,13 +618,15 @@ describe("spaceship view model", () => {
     };
     const transitions = createSnappedVisualTransitions(latest, 375);
 
-    expect(transitions.spaceship).toEqual({
+    const snapped = { fromTick: 375, toTick: 375 };
+    expect(transitions.spaceship.current).toEqual({
       from: latest.spaceship,
       to: latest.spaceship,
-      startedAt: 375
+      ...snapped
     });
-    expect(transitions.turret).toEqual({ from: 1.2, to: 1.2, startedAt: 375 });
-    expect(transitions.shield).toEqual({ from: -0.8, to: -0.8, startedAt: 375 });
+    expect(transitions.spaceship.previous).toEqual(transitions.spaceship.current);
+    expect(transitions.turret.current).toEqual({ from: 1.2, to: 1.2, ...snapped });
+    expect(transitions.shield.current).toEqual({ from: -0.8, to: -0.8, ...snapped });
   });
 
   it("preserves a hydration reset through delayed scene creation until the next snapshot", () => {
@@ -405,8 +668,8 @@ describe("spaceship view model", () => {
     const to = -Math.PI * 0.88;
     const trace = (framesPerSecond: number) =>
       Array.from({ length: Math.round(framesPerSecond * 0.05) + 1 }, (_, index) => {
-        const elapsedMs = Math.min((index * 1000) / framesPerSecond, 50);
-        return interpolateAngle(from, to, getTimelineAlpha(elapsedMs, 50));
+        const playbackTick = Math.min((index * 1000) / framesPerSecond / 50, 1);
+        return interpolateAngle(from, to, getSegmentAlpha(0, 1, playbackTick));
       });
     const sixtyHzTrace = trace(60);
     const oneTwentyHzTrace = trace(120);
@@ -420,5 +683,56 @@ describe("spaceship view model", () => {
       expect(Math.abs(oneTwentyHzAngle - sixtyHzAngle)).toBeLessThanOrEqual(0.001);
     }
     expect(sixtyHzTrace.at(-1)).toBeCloseTo(from + Math.PI * 0.2);
+  });
+});
+
+describe("fillFocusCandidates", () => {
+  const enemy = (entityId: string, x: number) => ({
+    entityId,
+    x,
+    y: 0,
+    radius: 20,
+    velocityX: 5,
+    velocityY: -5
+  });
+
+  it("hands back the same array, so a steady crowd costs nothing per frame", () => {
+    const scratch: MutableFocusCandidate[] = [];
+    const ships = [enemy("a", 100), enemy("b", 200)];
+    const first = fillFocusCandidates(scratch, ships, (one) => ({ x: one.x, y: one.y }));
+    expect(first).toBe(scratch);
+    // Held before the refill, or the comparison reads the same array twice and
+    // passes however the objects inside it were made.
+    const heldSlots = [...first];
+    const second = fillFocusCandidates(scratch, ships, (one) => ({ x: one.x, y: one.y }));
+    expect(second).toBe(first);
+    // The objects inside it, which is the allocation that actually mattered.
+    expect(second[0]).toBe(heldSlots[0]);
+    expect(second[1]).toBe(heldSlots[1]);
+  });
+
+  it("places each ship where it is being drawn, not where it was last sent", () => {
+    const scratch: MutableFocusCandidate[] = [];
+    const filled = fillFocusCandidates(scratch, [enemy("a", 100)], () => ({ x: 140, y: 12 }));
+    expect(filled[0]).toEqual({
+      entityId: "a",
+      x: 140,
+      y: 12,
+      radius: 20,
+      velocityX: 5,
+      velocityY: -5
+    });
+  });
+
+  it("follows a crowd that thins and fills again", () => {
+    const scratch: MutableFocusCandidate[] = [];
+    const at = (one: { x: number; y: number }) => ({ x: one.x, y: one.y });
+    fillFocusCandidates(scratch, [enemy("a", 1), enemy("b", 2), enemy("c", 3)], at);
+    const thinned = fillFocusCandidates(scratch, [enemy("c", 3)], at);
+    // A dead ship must leave, or the ring keeps marking a hull that is gone.
+    expect(thinned).toHaveLength(1);
+    expect(thinned[0]?.entityId).toBe("c");
+    const refilled = fillFocusCandidates(scratch, [enemy("d", 4), enemy("e", 5)], at);
+    expect(refilled.map((one) => one.entityId)).toEqual(["d", "e"]);
   });
 });

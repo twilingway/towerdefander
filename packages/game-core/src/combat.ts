@@ -1,5 +1,6 @@
 import {
   type CombatConfig,
+  type CombatEnemyState,
   type CombatStateFields,
   type CombatStepResult,
   type CombatStepState,
@@ -7,19 +8,22 @@ import {
   type GameplayRole,
   type TerminalOutcome,
   type UpgradeCard,
-  type UpgradeId
+  type ModuleId
 } from "./combatTypes.ts";
 import {
   AMBIENT_ASTEROID_DOMAIN,
-  OFFER_DOMAIN,
+  LOOT_DOMAIN,
   ROLES,
   TEAM_UPGRADE_PRICE
 } from "./combatConstants.ts";
+import { computeShipStats, shipStatsFromConfig, type ShipStats } from "./shipStats.ts";
 import { deriveDomainSeed } from "./rng.ts";
 import { validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 import { createWavePlan } from "./waveDirector.ts";
 import { createTeamUpgradeOffer } from "./upgrades.ts";
-import { UPGRADE_CATALOGUE } from "./upgradeCatalogue.ts";
+import { addRunStats, createRunStats } from "./runStats.ts";
+import { advanceLootDrops, openOrTickLootWindow } from "./loot.ts";
+import { effectsOf } from "./upgradeCatalogue.ts";
 import { moveAndSpawnThreats } from "./threats.ts";
 import { scheduleAmbientAsteroid } from "./spawning.ts";
 import {
@@ -41,6 +45,9 @@ export type {
   EncounterPhase,
   EnemyArchetype,
   EnemyKind,
+  EnemySkillLevel,
+  EnemySkillProfile,
+  EnemySkillTuning,
   EnemySpawnPolicy,
   EnemyVisual,
   EnemyWeaponKind,
@@ -48,13 +55,11 @@ export type {
   EntityVisual,
   FriendlyProjectileLike,
   GameplayRole,
-  GunnerModifiers,
   HomingMissileState,
   HostileProjectileState,
+  LootDropState,
+  LootKind,
   PendingSpawn,
-  PilotModifiers,
-  RoleModifiers,
-  ShieldModifiers,
   SpawnKind,
   SpawnSector,
   TeamUpgradeOffer,
@@ -64,7 +69,8 @@ export type {
   TerminalOutcome,
   TurretVisual,
   UpgradeCard,
-  UpgradeId,
+  ModuleId,
+  ShipModuleDefinition,
   UpgradeVoteCommand,
   UpgradeVoteResult,
   WaveCampaign,
@@ -72,58 +78,90 @@ export type {
   WaveDifficulty,
   WaveSpawnEntry
 } from "./combatTypes.ts";
-export { ASTEROID_SPAWN_KIND, SPAWN_SECTORS } from "./combatTypes.ts";
+export { ASTEROID_SPAWN_KIND, ENEMY_SKILL_LEVELS, SPAWN_SECTORS } from "./combatTypes.ts";
+export { resolveEnemySkill } from "./enemySkill.ts";
 export { TEAM_UPGRADE_PRICE } from "./combatConstants.ts";
 export { getEnemyArchetype, validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
 export { deriveDomainSeed, nextUint32 } from "./rng.ts";
-export { createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
-export { UPGRADE_CATALOGUE, type UpgradeDefinition } from "./upgradeCatalogue.ts";
+export { availableTierIndex, createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
+export { effectsOf, findModule } from "./upgradeCatalogue.ts";
+export { DEFAULT_ENDLESS_TIER, DEFAULT_MODULE_TIERS } from "./moduleTree.ts";
+export { createRunStats, damageTaken, type CombatRunStats, type ThreatClass } from "./runStats.ts";
 export { createWavePlan, getWaveDifficulty } from "./waveDirector.ts";
 export { buildSpatialGrid, relativeSweptCircleTime, type SpatialGrid } from "./spatialGrid.ts";
+export {
+  computeShipStats,
+  MODULE_TARGET_FIELDS,
+  MODULE_TARGET_EXCLUSIONS,
+  SHIP_STAT_FIELDS,
+  SHIP_STAT_OPS,
+  shipStatsFromConfig,
+  type ModuleTargetField,
+  type ShipStatEffect,
+  type ShipStatField,
+  type ShipStatOp,
+  type ShipStats
+} from "./shipStats.ts";
 
-export function createInitialCombatState(config: CombatConfig, runSeed: number): CombatStateFields {
+/**
+ * `startWave` exists for testing a late wave without playing the ones before
+ * it. The run is otherwise clean — no credits and no upgrades — so a crew
+ * dropped straight onto wave five is weaker than one that fought its way there.
+ */
+export function createInitialCombatState(
+  config: CombatConfig & ShipStats,
+  runSeed: number,
+  startWave = 1
+): CombatStateFields {
   validateCombatConfig(config);
   validateRunSeed(runSeed);
-  const { plan, rngState } = createWavePlan(config, runSeed, 1);
+  if (!Number.isSafeInteger(startWave) || startWave < 1) {
+    throw new RangeError("startWave must be a positive safe integer");
+  }
+  const { plan, rngState } = createWavePlan(config, runSeed, startWave);
   const ambientSchedule = scheduleAmbientAsteroid(
-    deriveDomainSeed(runSeed, 1, AMBIENT_ASTEROID_DOMAIN),
+    deriveDomainSeed(runSeed, startWave, AMBIENT_ASTEROID_DOMAIN),
     0,
     config
   );
   return {
     runSeed,
     spawnRngState: rngState,
-    offerRngState: deriveDomainSeed(runSeed, 1, OFFER_DOMAIN),
     ambientAsteroidRngState: ambientSchedule.rngState,
+    lootRngState: deriveDomainSeed(runSeed, startWave, LOOT_DOMAIN),
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     spaceshipHp: config.spaceshipMaxHp,
-    spaceshipMaxHp: config.spaceshipMaxHp,
     encounterPhase: "combat",
     outcome: null,
     defeatReason: null,
-    waveNumber: 1,
+    waveNumber: startWave,
     encounterTick: 0,
+    stalemateTicks: 0,
     score: 0,
     credits: 0,
     nextSpawnSequence: 1,
-    nextWaveSpawnTick: 0,
     pendingSpawns: plan,
     enemies: [],
     asteroids: [],
+    lootDrops: [],
+    lootWindowTicksRemaining: 0,
+    laserBeams: [],
+    hostileBeams: [],
+    ship: computeShipStats(shipStatsFromConfig(config), []),
+    purchasedModules: [],
     hostileProjectiles: [],
     homingMissiles: [],
-    roleModifiers: {
-      pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-      gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-      shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
-    },
     teamUpgradeOffer: null,
     teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
-    teamUpgradeSelection: null
+    teamUpgradeSelection: null,
+    runStats: createRunStats()
   };
 }
 
-export function advanceCombat(state: CombatStepState, config: CombatConfig): CombatStepResult {
+export function advanceCombat(
+  state: CombatStepState,
+  config: CombatConfig & ShipStats
+): CombatStepResult {
   assertCombatResultInvariant(state);
   if (state.encounterPhase === "result") {
     return pickCombatResult(state);
@@ -134,9 +172,23 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
 
   const secondsPerStep = config.fixedStepMs / 1000;
   let next = moveAndSpawnThreats(state, config, secondsPerStep);
+  // Salvage moves and is caught before this tick's kills drop more, so a drop
+  // spends its first tick where the enemy died instead of jumping.
+  const salvage = advanceLootDrops(next, config, secondsPerStep, next.ship.shieldCapacity);
+  next = {
+    ...next,
+    lootDrops: salvage.lootDrops,
+    spaceshipHp: salvage.spaceshipHp,
+    shieldEnergy: salvage.shieldEnergy
+  };
   next = resolveFriendlyHits(next, config);
   next = resolveSpaceshipThreats(next, config);
   next = removeExpiredAndOutOfBounds(next, config);
+  // Reset the moment either side draws blood: the press exists for the fight
+  // that produces nothing, not for the one that is merely slow.
+  const traded =
+    next.spaceshipHp < state.spaceshipHp || enemiesWereHurt(state.enemies, next.enemies);
+  next = { ...next, stalemateTicks: traded ? 0 : state.stalemateTicks + 1 };
 
   if (next.spaceshipHp <= 0) {
     return createTerminalCombatState(pickCombatResult(next), "defeat");
@@ -146,18 +198,40 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
     next.enemies.length === 0 &&
     next.asteroids.every(({ origin }) => origin === "ambient")
   ) {
-    const offerResult = createTeamUpgradeOffer(next.runSeed, next.waveNumber);
+    // The wave is won, but it does not end while there is salvage to fly to.
+    const lootWindow = openOrTickLootWindow(state, next, config, next.clock.tick);
+    if (lootWindow !== null) {
+      return {
+        ...pickCombatResult({ ...next, ...lootWindow }),
+        // The shooters are dead, so their shots die with them, exactly as they
+        // did when the wave ended on this tick. The window is for collecting,
+        // not for eating the last volley and the missiles still chasing.
+        hostileProjectiles: [],
+        homingMissiles: [],
+        encounterTick: state.encounterTick + 1
+      };
+    }
+    const offer = createTeamUpgradeOffer(
+      config.moduleTiers,
+      config.endlessTier,
+      next.purchasedModules.length,
+      next.waveNumber
+    );
     return {
       ...pickCombatResult(next),
       encounterPhase: "intermission",
       outcome: null,
       defeatReason: null,
       encounterTick: 0,
-      offerRngState: offerResult.rngState,
-      teamUpgradeOffer: offerResult.offer,
+      stalemateTicks: 0,
+      teamUpgradeOffer: offer,
       teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
       teamUpgradeSelection: null,
       asteroids: [],
+      lootDrops: [],
+      lootWindowTicksRemaining: 0,
+      laserBeams: [],
+      hostileBeams: [],
       hostileProjectiles: [],
       homingMissiles: [],
       projectiles: [],
@@ -168,12 +242,31 @@ export function advanceCombat(state: CombatStepState, config: CombatConfig): Com
   return { ...pickCombatResult(next), encounterTick: state.encounterTick + 1 };
 }
 
-function advanceIntermission(state: CombatStepState, config: CombatConfig): CombatStepResult {
+/**
+ * An enemy only ever leaves the arena by dying, so a missing id counts as a
+ * hit the same way a lower hit-point total does.
+ */
+function enemiesWereHurt(
+  before: readonly CombatEnemyState[],
+  after: readonly CombatEnemyState[]
+): boolean {
+  const remaining = new Map(after.map((enemy) => [enemy.id, enemy.hp]));
+  for (const enemy of before) {
+    const hp = remaining.get(enemy.id);
+    if (hp === undefined || hp < enemy.hp) return true;
+  }
+  return false;
+}
+
+function advanceIntermission(
+  state: CombatStepState,
+  config: CombatConfig & ShipStats
+): CombatStepResult {
   const encounterTick = state.encounterTick + 1;
   if (encounterTick < config.intermissionTicks) {
     return { ...pickCombatResult(state), encounterTick, shieldActive: false };
   }
-  const selected = resolveTeamUpgrade(state);
+  const selected = resolveTeamUpgrade(state, config);
   const waveNumber = Math.min(Number.MAX_SAFE_INTEGER, selected.waveNumber + 1);
   const wave = createWavePlan(config, selected.runSeed, waveNumber);
   const ambientSchedule = scheduleAmbientAsteroid(selected.ambientAsteroidRngState, 0, config);
@@ -186,9 +279,9 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
     waveNumber,
     spawnRngState: wave.rngState,
     ambientAsteroidRngState: ambientSchedule.rngState,
+    lootRngState: deriveDomainSeed(selected.runSeed, waveNumber, LOOT_DOMAIN),
     ambientAsteroidSpawnDueTick: ambientSchedule.dueTick,
     pendingSpawns: wave.plan,
-    nextWaveSpawnTick: 0,
     teamUpgradeOffer: null,
     teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
     shieldActive: false,
@@ -198,10 +291,13 @@ function advanceIntermission(state: CombatStepState, config: CombatConfig): Comb
   };
 }
 
-function resolveTeamUpgrade<TState extends CombatStateFields>(state: TState): TState {
+function resolveTeamUpgrade<TState extends CombatStepState>(
+  state: TState,
+  config: CombatConfig & ShipStats
+): TState {
   const offer = state.teamUpgradeOffer;
   if (offer === null) return state;
-  const counts = new Map<UpgradeId, number>();
+  const counts = new Map<ModuleId, number>();
   for (const role of ROLES) {
     const vote = state.teamUpgradeVotes[role];
     if (vote !== null) counts.set(vote.upgradeId, (counts.get(vote.upgradeId) ?? 0) + 1);
@@ -216,25 +312,45 @@ function resolveTeamUpgrade<TState extends CombatStateFields>(state: TState): TS
     }
   }
   if (winner === undefined || state.credits < winner.price) return state;
-  return applyUpgrade(state, winner.role, offer.offerId, offer.waveNumber, winner.upgradeId);
+  return applyUpgrade(
+    state,
+    config,
+    winner.role,
+    offer.offerId,
+    offer.waveNumber,
+    winner.upgradeId
+  );
 }
 
-function applyUpgrade<TState extends CombatStateFields>(
+function applyUpgrade<TState extends CombatStepState>(
   state: TState,
+  config: CombatConfig & ShipStats,
   role: GameplayRole,
   offerId: string,
   waveNumber: number,
-  upgradeId: UpgradeId
+  upgradeId: ModuleId
 ): TState {
-  const { roleModifiers, maxHpBonus } = UPGRADE_CATALOGUE[upgradeId].apply(state.roleModifiers);
-  const spaceshipMaxHp = state.spaceshipMaxHp + maxHpBonus;
+  const purchasedModules = [...state.purchasedModules, upgradeId];
+  // From the run's base and everything bought, never from the previous result,
+  // so the same set of modules always makes the same ship.
+  const ship = computeShipStats(
+    shipStatsFromConfig(config),
+    effectsOf(purchasedModules, config.moduleTiers, config.endlessTier)
+  );
+  // A maximum that grows repairs by exactly what it added; one that shrinks
+  // trims the current value instead of killing the crew. Same for the battery.
+  const hullDelta = ship.spaceshipMaxHp - state.ship.spaceshipMaxHp;
   return {
     ...state,
-    // A hull upgrade repairs by what it adds; the others leave health alone.
-    spaceshipHp: Math.min(spaceshipMaxHp, state.spaceshipHp + maxHpBonus),
-    spaceshipMaxHp,
-    roleModifiers,
+    spaceshipHp:
+      hullDelta > 0
+        ? Math.min(ship.spaceshipMaxHp, state.spaceshipHp + hullDelta)
+        : Math.min(state.spaceshipHp, ship.spaceshipMaxHp),
+    shieldEnergy: Math.min(state.shieldEnergy, ship.shieldCapacity),
+    ship,
+    purchasedModules,
     credits: state.credits - TEAM_UPGRADE_PRICE,
+    runStats: addRunStats(state.runStats, { creditsSpent: TEAM_UPGRADE_PRICE }),
     teamUpgradeSelection: {
       offerId,
       waveNumber,
@@ -248,6 +364,7 @@ function applyUpgrade<TState extends CombatStateFields>(
 export function dynamicEntityCount(state: {
   readonly enemies: readonly unknown[];
   readonly asteroids: readonly unknown[];
+  readonly lootDrops: readonly unknown[];
   readonly hostileProjectiles: readonly unknown[];
   readonly homingMissiles: readonly unknown[];
   readonly projectiles: readonly unknown[];
@@ -255,6 +372,7 @@ export function dynamicEntityCount(state: {
   return (
     state.enemies.length +
     state.asteroids.length +
+    state.lootDrops.length +
     state.hostileProjectiles.length +
     state.homingMissiles.length +
     state.projectiles.length
@@ -265,29 +383,36 @@ function pickCombatResult(state: CombatStepState): CombatStepResult {
   return {
     runSeed: state.runSeed,
     spawnRngState: state.spawnRngState,
-    offerRngState: state.offerRngState,
     ambientAsteroidRngState: state.ambientAsteroidRngState,
+    lootRngState: state.lootRngState,
     ambientAsteroidSpawnDueTick: state.ambientAsteroidSpawnDueTick,
     spaceshipHp: state.spaceshipHp,
-    spaceshipMaxHp: state.spaceshipMaxHp,
     encounterPhase: state.encounterPhase,
     outcome: state.outcome,
     defeatReason: state.defeatReason,
     waveNumber: state.waveNumber,
     encounterTick: state.encounterTick,
+    stalemateTicks: state.stalemateTicks,
     score: state.score,
     credits: state.credits,
-    nextWaveSpawnTick: state.nextWaveSpawnTick,
     nextSpawnSequence: state.nextSpawnSequence,
     pendingSpawns: state.pendingSpawns,
     enemies: state.enemies,
     asteroids: state.asteroids,
+    lootDrops: state.lootDrops,
+    lootWindowTicksRemaining: state.lootWindowTicksRemaining,
+    laserBeams: state.laserBeams,
+    hostileBeams: state.hostileBeams,
+    ship: state.ship,
+    purchasedModules: state.purchasedModules,
     hostileProjectiles: state.hostileProjectiles,
     homingMissiles: state.homingMissiles,
-    roleModifiers: state.roleModifiers,
     teamUpgradeOffer: state.teamUpgradeOffer,
     teamUpgradeVotes: state.teamUpgradeVotes,
     teamUpgradeSelection: state.teamUpgradeSelection,
+    // This whitelist silently drops anything it does not name, so a counter
+    // missing here reads zero forever without failing a single existing test.
+    runStats: state.runStats,
     shieldActive: state.shieldActive,
     shieldEnergy: state.shieldEnergy,
     shieldRearmRequired: state.shieldRearmRequired,

@@ -2,6 +2,8 @@ import {
   type CombatConfig,
   type CombatStateFields,
   type EntityVisual,
+  type FriendlyWeaponKind,
+  type FriendlyWeaponSource,
   type TurretVisual
 } from "./combatTypes.ts";
 import { assertCombatResultInvariant, dynamicEntityCount } from "./combat.ts";
@@ -12,9 +14,13 @@ import {
   neutralizeCombatControls
 } from "./simulationCombatBridge.ts";
 import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
+import type { ShipStats } from "./shipStats.ts";
+import { shortestAngleDelta } from "./simulationMath.ts";
+import { addRunStats } from "./runStats.ts";
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 import {
   ZERO,
+  advanceAngularRate,
   advanceAngularTraverse,
   assertFiniteVector,
   clamp,
@@ -67,15 +73,40 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;
+  /**
+   * Share of the forward speed available in reverse. Backing up is a manoeuvre,
+   * not a second forward gear: at parity a pilot can fly a whole fight in
+   * reverse with the nose kept on the target, which is neither intended nor
+   * good to watch.
+   */
+  readonly spaceshipReverseSpeedFactor: number;
   readonly spaceshipRadius: number;
   readonly inputTimeoutTicks: number;
   readonly projectileSpeedPerSecond: number;
   readonly projectileLifetimeMs: number;
   readonly projectileRadius: number;
   readonly fireCooldownTicks: number;
-  readonly shieldCapacity: number;
   readonly shieldDrainPerSecond: number;
   readonly shieldRechargePerSecond: number;
+  /**
+   * Ticks the shield spends coming up, holding, and cooling down. They are what
+   * stop the shield from being free to flick: an autopilot with nothing to lose
+   * otherwise semaphores it every tick. Zero on all three restores the old
+   * instant toggle.
+   */
+  readonly shieldEngageTicks: number;
+  readonly shieldMinimumUpTicks: number;
+  readonly shieldCooldownTicks: number;
+  /**
+   * Energy a drained shield has to win back before it will hold again. It
+   * re-arms itself at that mark rather than waiting to be released and pressed:
+   * an operator who kept the button down through a depletion was left holding a
+   * shield that silently refused, with nothing on the panel saying why.
+   *
+   * Absolute rather than a share of the battery, so an upgrade that widens the
+   * battery shortens the wait instead of lengthening it.
+   */
+  readonly shieldRearmEnergy: number;
   readonly turretMaxAngularSpeedPerSecond: number;
   readonly turretAngularAccelerationPerSecondSquared: number;
   readonly turretAngularBrakingPerSecondSquared: number;
@@ -105,14 +136,35 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly mgHeatPerShot: number;
   readonly mgCoolingPerSecond: number;
   readonly mgRearmThreshold: number;
+  /** How each barrel delivers damage; the numbers above stay the same either way. */
+  readonly cannonWeaponKind: FriendlyWeaponKind;
+  readonly mgWeaponKind: FriendlyWeaponKind;
+  /** Laser: how far the beam reaches, and how thick it is for a hit. */
+  readonly cannonLaserRange: number;
+  readonly mgLaserRange: number;
+  readonly laserBeamRadius: number;
+  /** Missile: how hard it can turn, and the cone it picks a target from. */
+  readonly friendlyMissileTurnRatePerSecond: number;
+  readonly friendlyMissileAcquireConeRadians: number;
 }
 
-export type FriendlyWeaponSource = "cannon" | "machineGun";
+export type { FriendlyWeaponSource } from "./combatTypes.ts";
+export { FRIENDLY_WEAPON_KINDS, type FriendlyWeaponKind } from "./combatTypes.ts";
+
+/** Down, coming up, holding, or cooling off. Only `up` blocks damage. */
+export type ShieldPhase = "down" | "raising" | "up" | "cooling";
 
 export interface TrustedPilotInput {
   readonly vector: Vector2;
   readonly mgFiring: boolean;
   readonly receivedTick: number;
+  /**
+   * Tank helm: the requested spin in `[-1, 1]`, and thrust along the nose in
+   * the same range. Absent from a stick or absolute-scheme command, which
+   * names a bearing through `vector` instead.
+   */
+  readonly turn?: number | null;
+  readonly thrust?: number | null;
 }
 
 export interface TrustedGunnerInput {
@@ -148,6 +200,17 @@ export interface ProjectileState {
   readonly damage: number;
   readonly spawnedTick: number;
   readonly source: FriendlyWeaponSource;
+  /**
+   * Set only by a missile barrel: the target picked once at launch, and how
+   * hard the shot may turn after it. Null is an ordinary bullet.
+   */
+  readonly homing: ProjectileHoming | null;
+}
+
+export interface ProjectileHoming {
+  readonly targetId: string;
+  readonly turnRatePerSecond: number;
+  readonly heading: number;
 }
 
 export interface SpaceshipSimulationState extends CombatStateFields {
@@ -162,6 +225,9 @@ export interface SpaceshipSimulationState extends CombatStateFields {
   readonly shieldActive: boolean;
   readonly shieldEnergy: number;
   readonly shieldRearmRequired: boolean;
+  /** Where the shield is in its cycle, and how long it has been there. */
+  readonly shieldPhase: ShieldPhase;
+  readonly shieldPhaseTicks: number;
   readonly spaceshipHeading: number;
   readonly headingTargetAngle: number | null;
   readonly headingAngularVelocity: number;
@@ -184,6 +250,7 @@ export interface SpaceshipSimulationState extends CombatStateFields {
 
 export { validateSpaceshipSimulationConfig } from "./simulationValidation.ts";
 export {
+  advanceAngularRate,
   advanceAngularTraverse,
   canonicalizeAngle,
   moveScalarTowards,
@@ -204,9 +271,24 @@ export {
 export function createSpaceshipSimulationConfig(
   overrides: Partial<SpaceshipSimulationConfig> = {}
 ): SpaceshipSimulationConfig {
-  const config = { ...defaultSpaceshipSimulationConfig, ...overrides };
+  const config = { ...defaultSpaceshipSimulationConfig, ...overrides, ...derivedWorld(overrides) };
   validateSpaceshipSimulationConfig(config);
   return config;
+}
+
+/**
+ * The square world is a consequence of the arena radius, not a second setting.
+ * A radius that arrives from a preset would otherwise sit inside the default
+ * world and fail validation, and every caller that builds a config would have
+ * to remember the relation. An explicitly given world still wins, so a caller
+ * may state both.
+ */
+function derivedWorld(
+  overrides: Partial<SpaceshipSimulationConfig>
+): Partial<SpaceshipSimulationConfig> {
+  if (overrides.arenaRadius === undefined) return {};
+  if (overrides.worldWidth !== undefined || overrides.worldHeight !== undefined) return {};
+  return { worldWidth: overrides.arenaRadius * 2, worldHeight: overrides.arenaRadius * 2 };
 }
 
 export function normalizeVector(vector: Vector2): Vector2 {
@@ -220,6 +302,79 @@ export function normalizeVector(vector: Vector2): Vector2 {
     x: vector.x / length,
     y: vector.y / length
   };
+}
+
+/**
+ * The enemy a missile leaves the barrel after: the nearest one inside the
+ * acquisition cone. Picked once, at launch. Re-acquiring in flight would turn
+ * the barrel into an aimbot and take the pointing away from the crew.
+ */
+/**
+ * Where the turret is bolted, in world coordinates. The mount is stated as a
+ * share of the hull radius and turns with the hull, which is exactly how the
+ * display places the sprite - one rule, so the barrel a crew sees is the barrel
+ * that fires.
+ */
+function turretMount(
+  origin: Vector2,
+  heading: number,
+  ship: ShipStats,
+  visual: TurretVisual
+): Vector2 {
+  if (visual === null) return origin;
+  const offsetX = visual.mountX * ship.spaceshipRadius;
+  const offsetY = visual.mountY * ship.spaceshipRadius;
+  const cos = Math.cos(heading);
+  const sin = Math.sin(heading);
+  return {
+    x: origin.x + offsetX * cos - offsetY * sin,
+    y: origin.y + offsetX * sin + offsetY * cos
+  };
+}
+
+/**
+ * The barrel is converged, the way a pair of wing guns is.
+ *
+ * A shot leaves the mount, but every aiming solution in this game - the bot's
+ * lead, the display's focus ring, a gunner watching the turret - is drawn from
+ * the hull's own position. Firing straight along the barrel's angle out of a
+ * mount half a hull radius off centre therefore misses by the parallax: about
+ * two and a half degrees at seven hundred units, which on a small ship is every
+ * shot. So the shot is aimed at the point the turret designates from the hull,
+ * and leaves the barrel toward it.
+ */
+function convergedAngle(hull: Vector2, mount: Vector2, angle: number, convergence: number): number {
+  const targetX = hull.x + Math.cos(angle) * convergence;
+  const targetY = hull.y + Math.sin(angle) * convergence;
+  return Math.atan2(targetY - mount.y, targetX - mount.x);
+}
+
+function acquireMissileTarget(
+  enemies: readonly { readonly id: string; readonly x: number; readonly y: number }[],
+  origin: { readonly x: number; readonly y: number },
+  angle: number,
+  ship: ShipStats
+): ProjectileHoming | null {
+  let nearestId: string | undefined;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const enemy of enemies) {
+    const bearing = Math.atan2(enemy.y - origin.y, enemy.x - origin.x);
+    if (Math.abs(shortestAngleDelta(angle, bearing)) > ship.friendlyMissileAcquireConeRadians) {
+      continue;
+    }
+    const distance = Math.hypot(enemy.x - origin.x, enemy.y - origin.y);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestId = enemy.id;
+    }
+  }
+  return nearestId === undefined
+    ? null
+    : {
+        targetId: nearestId,
+        turnRatePerSecond: ship.friendlyMissileTurnRatePerSecond,
+        heading: angle
+      };
 }
 
 export function advanceSpaceshipSimulation(
@@ -242,11 +397,16 @@ export function advanceSpaceshipSimulation(
   const gunnerFresh = isFresh(clock.tick, state.inputs.gunner, config.inputTimeoutTicks);
   const shieldFresh = isFresh(clock.tick, state.inputs.shield, config.inputTimeoutTicks);
   const pilotVector = pilotFresh && state.inputs.pilot !== null ? state.inputs.pilot.vector : ZERO;
+  // The tank helm asks for a spin and a push along the nose; a stick still
+  // asks for a bearing. Only a fresh input counts, so a dropped pilot coasts
+  // to a stop instead of spinning on.
+  const pilotTurn = pilotFresh ? (state.inputs.pilot?.turn ?? null) : null;
+  const pilotThrust = pilotTurn === null ? null : (state.inputs.pilot?.thrust ?? 0);
   const inputs = {
     pilot:
       pilotFresh || state.inputs.pilot === null
         ? state.inputs.pilot
-        : { ...state.inputs.pilot, vector: ZERO, mgFiring: false },
+        : { ...state.inputs.pilot, vector: ZERO, mgFiring: false, turn: null, thrust: null },
     gunner:
       gunnerFresh || state.inputs.gunner === null
         ? state.inputs.gunner
@@ -254,22 +414,43 @@ export function advanceSpaceshipSimulation(
     shield: state.inputs.shield
   };
   const secondsPerStep = config.fixedStepMs / 1000;
-  const targetVelocity = {
-    x: pilotVector.x * config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier,
-    y: pilotVector.y * config.spaceshipSpeedPerSecond * state.roleModifiers.pilot.speedMultiplier
-  };
-  const velocityDelta =
-    pilotVector.x === 0 && pilotVector.y === 0
-      ? config.spaceshipBrakingPerSecondSquared * secondsPerStep
-      : config.spaceshipAccelerationPerSecondSquared *
-        state.roleModifiers.pilot.accelerationMultiplier *
-        secondsPerStep;
+  // The ship's own numbers come from the run, never from the config: a stat
+  // read off the config is a module that silently does nothing.
+  const ship = state.ship;
+  const pilotSpeed = ship.spaceshipSpeedPerSecond;
+  // With a turn intent the push runs along the nose, so reverse is the same
+  // burn with a negative sign and it never turns the hull.
+  // Reverse is deliberately the slower gear; see the config field.
+  const thrustSpeed =
+    pilotThrust !== null && pilotThrust < 0
+      ? pilotSpeed * ship.spaceshipReverseSpeedFactor
+      : pilotSpeed;
+  const targetVelocity =
+    pilotThrust === null
+      ? { x: pilotVector.x * pilotSpeed, y: pilotVector.y * pilotSpeed }
+      : {
+          x: Math.cos(state.spaceshipHeading) * thrustSpeed * pilotThrust,
+          y: Math.sin(state.spaceshipHeading) * thrustSpeed * pilotThrust
+        };
+  const coasting =
+    pilotThrust === null ? pilotVector.x === 0 && pilotVector.y === 0 : pilotThrust === 0;
+  const velocityDelta = coasting
+    ? ship.spaceshipBrakingPerSecondSquared * secondsPerStep
+    : ship.spaceshipAccelerationPerSecondSquared * secondsPerStep;
   const nextVelocity = moveVectorTowards(state.spaceship.velocity, targetVelocity, velocityDelta);
-  const spaceship = moveSpaceshipWithinWorld(state.spaceship, nextVelocity, secondsPerStep, config);
+  const spaceship = moveSpaceshipWithinWorld(
+    state.spaceship,
+    nextVelocity,
+    secondsPerStep,
+    config,
+    ship
+  );
 
   const turretTargetAngle = gunnerFresh ? state.turretTargetAngle : null;
   const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
-  const headingTargetAngle = pilotFresh ? state.headingTargetAngle : null;
+  // A spin remembers no bearing: keeping one would pull the hull back to it
+  // the moment the key comes up, which is the swing this helm exists to lose.
+  const headingTargetAngle = pilotTurn === null && pilotFresh ? state.headingTargetAngle : null;
   const turretTraverse = advanceAngularTraverse(
     {
       angle: state.turretAngle,
@@ -277,9 +458,9 @@ export function advanceSpaceshipSimulation(
       angularVelocity: state.turretAngularVelocity
     },
     {
-      maxAngularSpeed: config.turretMaxAngularSpeedPerSecond,
-      angularAcceleration: config.turretAngularAccelerationPerSecondSquared,
-      angularBraking: config.turretAngularBrakingPerSecondSquared,
+      maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
+      angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
+      angularBraking: ship.turretAngularBrakingPerSecondSquared,
       secondsPerStep
     }
   );
@@ -290,43 +471,79 @@ export function advanceSpaceshipSimulation(
       angularVelocity: state.shieldAngularVelocity
     },
     {
-      maxAngularSpeed: config.shieldMaxAngularSpeedPerSecond,
-      angularAcceleration: config.shieldAngularAccelerationPerSecondSquared,
-      angularBraking: config.shieldAngularBrakingPerSecondSquared,
+      maxAngularSpeed: ship.shieldMaxAngularSpeedPerSecond,
+      angularAcceleration: ship.shieldAngularAccelerationPerSecondSquared,
+      angularBraking: ship.shieldAngularBrakingPerSecondSquared,
       secondsPerStep
     }
   );
-  const headingTraverse = advanceAngularTraverse(
-    {
-      angle: state.spaceshipHeading,
-      targetAngle: headingTargetAngle,
-      angularVelocity: state.headingAngularVelocity
-    },
-    {
-      maxAngularSpeed: config.headingMaxAngularSpeedPerSecond,
-      angularAcceleration: config.headingAngularAccelerationPerSecondSquared,
-      angularBraking: config.headingAngularBrakingPerSecondSquared,
-      secondsPerStep
-    }
-  );
+  const headingConfig = {
+    maxAngularSpeed: ship.headingMaxAngularSpeedPerSecond,
+    angularAcceleration: ship.headingAngularAccelerationPerSecondSquared,
+    angularBraking: ship.headingAngularBrakingPerSecondSquared,
+    secondsPerStep
+  };
+  const headingTraverse =
+    pilotTurn === null
+      ? advanceAngularTraverse(
+          {
+            angle: state.spaceshipHeading,
+            targetAngle: headingTargetAngle,
+            angularVelocity: state.headingAngularVelocity
+          },
+          headingConfig
+        )
+      : advanceAngularRate(
+          { angle: state.spaceshipHeading, angularVelocity: state.headingAngularVelocity },
+          pilotTurn,
+          headingConfig
+        );
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
-  const shieldWasActive = shieldDesiredActive && shieldCanActivate;
-  const shieldCapacity = config.shieldCapacity + state.roleModifiers.shield.capacityBonus;
-  const shieldEnergy = shieldWasActive
-    ? clamp(state.shieldEnergy - config.shieldDrainPerSecond * secondsPerStep, 0, shieldCapacity)
-    : clamp(
-        state.shieldEnergy +
-          config.shieldRechargePerSecond *
-            state.roleModifiers.shield.rechargeMultiplier *
-            secondsPerStep,
-        0,
-        shieldCapacity
-      );
-  const shieldDepleted = shieldWasActive && shieldEnergy === 0;
-  const shieldActive = shieldWasActive && !shieldDepleted;
-  const shieldRearmRequired = state.shieldRearmRequired || shieldDepleted;
-  const movedProjectiles = moveProjectiles(state.projectiles, config);
+  // Sequential rather than switched, so that zero-length phases cascade inside
+  // one tick and the old instant toggle survives as a tuning value.
+  let shieldPhase = state.shieldPhase;
+  let shieldPhaseTicks = state.shieldPhaseTicks + 1;
+  if (shieldPhase === "down" && shieldDesiredActive && shieldCanActivate) {
+    shieldPhase = "raising";
+    shieldPhaseTicks = 0;
+  }
+  if (shieldPhase === "raising" && shieldPhaseTicks >= ship.shieldEngageTicks) {
+    shieldPhase = "up";
+    shieldPhaseTicks = 0;
+  }
+  // The hold is what the operator cannot cut short; letting go earlier is
+  // remembered by the request, not by the phase.
+  if (
+    shieldPhase === "up" &&
+    !shieldDesiredActive &&
+    shieldPhaseTicks >= ship.shieldMinimumUpTicks
+  ) {
+    shieldPhase = "cooling";
+    shieldPhaseTicks = 0;
+  }
+  if (shieldPhase === "cooling" && shieldPhaseTicks >= ship.shieldCooldownTicks) {
+    shieldPhase = "down";
+    shieldPhaseTicks = 0;
+  }
+  const shieldHolding = shieldPhase === "up";
+  const shieldCapacity = ship.shieldCapacity;
+  const shieldEnergy = shieldHolding
+    ? clamp(state.shieldEnergy - ship.shieldDrainPerSecond * secondsPerStep, 0, shieldCapacity)
+    : clamp(state.shieldEnergy + ship.shieldRechargePerSecond * secondsPerStep, 0, shieldCapacity);
+  const shieldDepleted = shieldHolding && shieldEnergy === 0;
+  // A drained shield drops whatever the hold says: the cooldown starts here.
+  if (shieldDepleted) {
+    shieldPhase = "cooling";
+    shieldPhaseTicks = 0;
+  }
+  const shieldActive = shieldHolding && !shieldDepleted;
+  // Locked out by the battery, not by the button: draining to nothing sets it,
+  // and winning back the mark clears it with no further input.
+  const shieldRearmRequired = shieldDepleted
+    ? true
+    : state.shieldRearmRequired && shieldEnergy < ship.shieldRearmEnergy;
+  const movedProjectiles = moveProjectiles(state.projectiles, config, state.enemies);
   const projectiles = [...movedProjectiles];
   let nextProjectileSequence = state.nextProjectileSequence;
   let nextSpawnSequence = state.nextSpawnSequence;
@@ -341,24 +558,41 @@ export function advanceSpaceshipSimulation(
     list.length < config.caps.friendlyProjectiles &&
     dynamicEntityCount({ ...state, projectiles: list }) < config.caps.dynamicEntities;
 
-  const gunnerCooldownTicks = Math.max(
-    1,
-    Math.ceil(config.fireCooldownTicks * state.roleModifiers.gunner.cooldownMultiplier)
-  );
+  // Whole ticks and a floor of one are the stat rule now, not this call site.
+  const gunnerCooldownTicks = ship.fireCooldownTicks;
   const gunnerEligible =
     !state.cannonOverheated &&
     (state.queuedFire || (gunnerFresh && state.inputs.gunner?.firing === true)) &&
     (state.lastFiredTick === null || clock.tick - state.lastFiredTick >= gunnerCooldownTicks);
 
+  const cannonMuzzle = turretMount(spaceship, state.spaceshipHeading, ship, config.turretVisual);
   const cannonShot = advanceFriendlyWeapon({
+    kind: config.cannonWeaponKind,
+    range: ship.cannonLaserRange,
+    beamRadius: ship.laserBeamRadius,
+    homing:
+      config.cannonWeaponKind === "missile" && gunnerEligible
+        ? acquireMissileTarget(state.enemies, spaceship, turretTraverse.angle, ship)
+        : null,
     eligible: gunnerEligible,
     canSpawn: canCreateFriendlyProjectile(projectiles),
-    origin: spaceship,
-    angle: turretTraverse.angle,
-    muzzleOffset: config.spaceshipRadius + config.projectileRadius,
-    speed: config.projectileSpeedPerSecond * state.roleModifiers.gunner.projectileSpeedMultiplier,
-    damage: config.friendlyProjectileDamage * state.roleModifiers.gunner.damageMultiplier,
-    radius: config.projectileRadius,
+    // The turret sits where it is drawn, and its shots leave from there. Fired
+    // from the hull's centre instead they crossed the barrel at an angle of
+    // their own - about three degrees at half the reach, which is wider than
+    // the aim tolerance, so the display marked ships the shot then missed.
+    origin: cannonMuzzle,
+    angle: convergedAngle(
+      spaceship,
+      cannonMuzzle,
+      turretTraverse.angle,
+      config.cannonWeaponKind === "laser"
+        ? ship.cannonLaserRange
+        : (ship.projectileSpeedPerSecond * ship.projectileLifetimeMs) / 1_000
+    ),
+    muzzleOffset: ship.spaceshipRadius + ship.projectileRadius,
+    speed: ship.projectileSpeedPerSecond,
+    damage: ship.friendlyProjectileDamage,
+    radius: ship.projectileRadius,
     source: "cannon",
     projectileSequence: nextProjectileSequence,
     spawnSequence: nextSpawnSequence,
@@ -367,14 +601,20 @@ export function advanceSpaceshipSimulation(
     heat: cannonHeat,
     overheated: state.cannonOverheated,
     heatTuning: {
-      capacity: config.cannonHeatCapacity,
-      perShot: config.cannonHeatPerShot,
-      coolingPerSecond: config.cannonCoolingPerSecond,
-      rearmThreshold: config.cannonRearmThreshold
+      capacity: ship.cannonHeatCapacity,
+      perShot: ship.cannonHeatPerShot,
+      coolingPerSecond: ship.cannonCoolingPerSecond,
+      rearmThreshold: ship.cannonRearmThreshold
     }
   });
+  const laserBeams = [...state.laserBeams];
   if (cannonShot.projectile !== null) {
     projectiles.push(cannonShot.projectile);
+    nextProjectileSequence += 1;
+    nextSpawnSequence += 1;
+  }
+  if (cannonShot.beam !== null) {
+    laserBeams.push(cannonShot.beam);
     nextProjectileSequence += 1;
     nextSpawnSequence += 1;
   }
@@ -385,21 +625,28 @@ export function advanceSpaceshipSimulation(
   cannonHeat = cannonShot.heat;
   const cannonOverheated = cannonShot.overheated;
 
-  const mgCooldownTicks = Math.max(1, config.mgFireCooldownTicks);
+  const mgCooldownTicks = Math.max(1, ship.mgFireCooldownTicks);
   const mgEligible =
     !state.mgOverheated &&
     (state.queuedMgFire || (pilotFresh && state.inputs.pilot?.mgFiring === true)) &&
     (state.lastMgFiredTick === null || clock.tick - state.lastMgFiredTick >= mgCooldownTicks);
 
   const mgShot = advanceFriendlyWeapon({
+    kind: config.mgWeaponKind,
+    range: ship.mgLaserRange,
+    beamRadius: ship.laserBeamRadius,
+    homing:
+      config.mgWeaponKind === "missile" && mgEligible
+        ? acquireMissileTarget(state.enemies, spaceship, headingTraverse.angle, ship)
+        : null,
     eligible: mgEligible,
     canSpawn: canCreateFriendlyProjectile(projectiles),
     origin: spaceship,
     angle: headingTraverse.angle,
-    muzzleOffset: config.spaceshipRadius + config.mgProjectileRadius,
-    speed: config.mgProjectileSpeedPerSecond,
-    damage: config.mgDamage,
-    radius: config.mgProjectileRadius,
+    muzzleOffset: ship.spaceshipRadius + ship.mgProjectileRadius,
+    speed: ship.mgProjectileSpeedPerSecond,
+    damage: ship.mgDamage,
+    radius: ship.mgProjectileRadius,
     source: "machineGun",
     projectileSequence: nextProjectileSequence,
     spawnSequence: nextSpawnSequence,
@@ -408,14 +655,19 @@ export function advanceSpaceshipSimulation(
     heat: mgHeat,
     overheated: state.mgOverheated,
     heatTuning: {
-      capacity: config.mgHeatCapacity,
-      perShot: config.mgHeatPerShot,
-      coolingPerSecond: config.mgCoolingPerSecond,
-      rearmThreshold: config.mgRearmThreshold
+      capacity: ship.mgHeatCapacity,
+      perShot: ship.mgHeatPerShot,
+      coolingPerSecond: ship.mgCoolingPerSecond,
+      rearmThreshold: ship.mgRearmThreshold
     }
   });
   if (mgShot.projectile !== null) {
     projectiles.push(mgShot.projectile);
+    nextProjectileSequence += 1;
+    nextSpawnSequence += 1;
+  }
+  if (mgShot.beam !== null) {
+    laserBeams.push(mgShot.beam);
     nextProjectileSequence += 1;
     nextSpawnSequence += 1;
   }
@@ -431,6 +683,7 @@ export function advanceSpaceshipSimulation(
     clock,
     spaceship,
     inputs,
+    laserBeams,
     turretAngle: turretTraverse.angle,
     turretTargetAngle,
     turretAngularVelocity: turretTraverse.angularVelocity,
@@ -440,6 +693,8 @@ export function advanceSpaceshipSimulation(
     shieldActive,
     shieldEnergy,
     shieldRearmRequired,
+    shieldPhase,
+    shieldPhaseTicks,
     spaceshipHeading: headingTraverse.angle,
     headingTargetAngle,
     headingAngularVelocity: headingTraverse.angularVelocity,
@@ -453,7 +708,15 @@ export function advanceSpaceshipSimulation(
     mgHeat,
     mgOverheated,
     queuedMgFire,
-    lastMgFiredTick
+    lastMgFiredTick,
+    // Counted here rather than by watching the projectile list, because a
+    // point-blank shot is created and resolved inside the same step.
+    runStats: addRunStats(state.runStats, {
+      // A shot is a shot whatever left the barrel, so accuracy stays comparable
+      // between a beam that cannot miss and a bullet that can.
+      shotsByCannon: cannonShot.projectile === null && cannonShot.beam === null ? 0 : 1,
+      shotsByMachineGun: mgShot.projectile === null && mgShot.beam === null ? 0 : 1
+    })
   };
   return advanceCombatInSpaceshipSimulation(baseState, config);
 }

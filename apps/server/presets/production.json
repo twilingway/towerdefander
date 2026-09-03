@@ -1,0 +1,5032 @@
+{
+  "version": 34,
+  "activePresetId": "default",
+  "presets": [
+    {
+      "id": "default",
+      "name": "Базовый баланс",
+      "tuning": {
+        "enemyArchetypes": {
+          "interceptor": {
+            "hp": 76,
+            "radius": 18,
+            "speedPerSecond": 260,
+            "preferredDistance": 201,
+            "turnRatePerSecond": 3.6,
+            "turnAccelerationPerSecondSquared": 9,
+            "turnBrakingPerSecondSquared": 9,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 20,
+                "damage": 4,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 520,
+                "projectileLifetimeTicks": 18,
+                "engagementRange": 368,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-dart",
+              "modelScale": 0.9,
+              "showHealthBar": true
+            },
+            "label": "Перехватчик",
+            "spawnPolicy": "standard",
+            "spawnCost": 1,
+            "unlockWave": 1,
+            "scoreReward": 12,
+            "creditReward": 1,
+            "lootChance": 0.15
+          },
+          "wasp": {
+            "hp": 91,
+            "radius": 16,
+            "speedPerSecond": 300,
+            "preferredDistance": 164,
+            "turnRatePerSecond": 4,
+            "turnAccelerationPerSecondSquared": 11,
+            "turnBrakingPerSecondSquared": 11,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 22,
+                "damage": 3,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 560,
+                "projectileLifetimeTicks": 16,
+                "engagementRange": 344,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-needle",
+              "modelScale": 0.85,
+              "showHealthBar": true
+            },
+            "label": "Оса",
+            "spawnPolicy": "standard",
+            "spawnCost": 1,
+            "unlockWave": 1,
+            "scoreReward": 14,
+            "creditReward": 1,
+            "lootChance": 0.15
+          },
+          "skirmisher": {
+            "hp": 114,
+            "radius": 22,
+            "speedPerSecond": 210,
+            "preferredDistance": 302,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 30,
+                "damage": 5,
+                "shieldHitCost": 3,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 620,
+                "projectileLifetimeTicks": 24,
+                "engagementRange": 586,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-arrowhead",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Застрельщик",
+            "spawnPolicy": "standard",
+            "spawnCost": 2,
+            "unlockWave": 3,
+            "scoreReward": 18,
+            "creditReward": 2,
+            "lootChance": 0.18
+          },
+          "lancer": {
+            "hp": 137,
+            "radius": 20,
+            "speedPerSecond": 320,
+            "preferredDistance": 189,
+            "turnRatePerSecond": 3.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "ace",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 21,
+                "damage": 3,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 700,
+                "projectileLifetimeTicks": 18,
+                "engagementRange": 496,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.2,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-spear",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Копейщик",
+            "spawnPolicy": "standard",
+            "spawnCost": 3,
+            "unlockWave": 8,
+            "scoreReward": 26,
+            "creditReward": 3,
+            "lootChance": 0.2
+          },
+          "sparker": {
+            "hp": 152,
+            "radius": 18,
+            "speedPerSecond": 240,
+            "preferredDistance": 189,
+            "turnRatePerSecond": 3.4,
+            "turnAccelerationPerSecondSquared": 9,
+            "turnBrakingPerSecondSquared": 9,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "laser",
+                "cooldownTicks": 32,
+                "damage": 7,
+                "shieldHitCost": 4,
+                "projectileRadius": 8,
+                "projectileSpeedPerSecond": 1,
+                "projectileLifetimeTicks": 1,
+                "engagementRange": 239,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-scissor",
+              "modelScale": 0.9,
+              "showHealthBar": true
+            },
+            "label": "Искра",
+            "spawnPolicy": "standard",
+            "spawnCost": 2,
+            "unlockWave": 8,
+            "scoreReward": 20,
+            "creditReward": 2,
+            "lootChance": 0.18
+          },
+          "gunship": {
+            "hp": 152,
+            "radius": 28,
+            "speedPerSecond": 150,
+            "preferredDistance": 409,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 10,
+                "damage": 3,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 640,
+                "projectileLifetimeTicks": 33,
+                "engagementRange": 831,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-delta",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Ганшип",
+            "spawnPolicy": "standard",
+            "spawnCost": 2,
+            "unlockWave": 2,
+            "scoreReward": 25,
+            "creditReward": 2,
+            "lootChance": 0.22
+          },
+          "escort": {
+            "hp": 182,
+            "radius": 30,
+            "speedPerSecond": 170,
+            "preferredDistance": 441,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 19,
+                "damage": 4,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 660,
+                "projectileLifetimeTicks": 33,
+                "engagementRange": 857,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.1,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-twinboom",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Эскорт",
+            "spawnPolicy": "standard",
+            "spawnCost": 3,
+            "unlockWave": 7,
+            "scoreReward": 28,
+            "creditReward": 3,
+            "lootChance": 0.22
+          },
+          "missileCarrier": {
+            "hp": 213,
+            "radius": 38,
+            "speedPerSecond": 95,
+            "preferredDistance": 567,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "missile",
+                "cooldownTicks": 70,
+                "damage": 26,
+                "shieldHitCost": 16,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 300,
+                "projectileLifetimeTicks": 130,
+                "engagementRange": 921,
+                "turnRatePerSecond": 1.8,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-broadwing",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Ракетоносец",
+            "spawnPolicy": "standard",
+            "spawnCost": 4,
+            "unlockWave": 3,
+            "scoreReward": 30,
+            "creditReward": 4,
+            "lootChance": 0.3
+          },
+          "sniper": {
+            "hp": 167,
+            "radius": 30,
+            "speedPerSecond": 70,
+            "preferredDistance": 881,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "ace",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 33,
+                "damage": 10,
+                "shieldHitCost": 6,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 900,
+                "projectileLifetimeTicks": 31,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-needle",
+              "modelScale": 1.1,
+              "showHealthBar": true
+            },
+            "label": "Снайпер",
+            "spawnPolicy": "standard",
+            "spawnCost": 3,
+            "unlockWave": 4,
+            "scoreReward": 30,
+            "creditReward": 3,
+            "lootChance": 0.25
+          },
+          "gunboat": {
+            "hp": 228,
+            "radius": 34,
+            "speedPerSecond": 130,
+            "preferredDistance": 472,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 17,
+                "damage": 3,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 600,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 850,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.22,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-blockfrigate",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Канонерка",
+            "spawnPolicy": "standard",
+            "spawnCost": 4,
+            "unlockWave": 6,
+            "scoreReward": 34,
+            "creditReward": 4,
+            "lootChance": 0.24
+          },
+          "railer": {
+            "hp": 190,
+            "radius": 26,
+            "speedPerSecond": 110,
+            "preferredDistance": 756,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "ace",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 38,
+                "damage": 13,
+                "shieldHitCost": 8,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 1100,
+                "projectileLifetimeTicks": 25,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-lancer",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Рельса",
+            "spawnPolicy": "standard",
+            "spawnCost": 4,
+            "unlockWave": 10,
+            "scoreReward": 36,
+            "creditReward": 4,
+            "lootChance": 0.24
+          },
+          "mortar": {
+            "hp": 258,
+            "radius": 36,
+            "speedPerSecond": 90,
+            "preferredDistance": 630,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 31,
+                "damage": 5,
+                "shieldHitCost": 3,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 480,
+                "projectileLifetimeTicks": 54,
+                "engagementRange": 1020,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 4,
+                "burstSpreadRadians": 0.35,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-hammer",
+              "modelScale": 1,
+              "showHealthBar": true
+            },
+            "label": "Мортира",
+            "spawnPolicy": "standard",
+            "spawnCost": 5,
+            "unlockWave": 12,
+            "scoreReward": 40,
+            "creditReward": 5,
+            "lootChance": 0.26
+          },
+          "warden": {
+            "hp": 334,
+            "radius": 40,
+            "speedPerSecond": 105,
+            "preferredDistance": 353,
+            "turnRatePerSecond": 1.8,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 13,
+                "damage": 4,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 620,
+                "projectileLifetimeTicks": 30,
+                "engagementRange": 732,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.14,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-hexcorvette",
+              "modelScale": 1.1,
+              "showHealthBar": true
+            },
+            "label": "Страж периметра",
+            "spawnPolicy": "standard",
+            "spawnCost": 5,
+            "unlockWave": 11,
+            "scoreReward": 42,
+            "creditReward": 5,
+            "lootChance": 0.28
+          },
+          "lantern": {
+            "hp": 304,
+            "radius": 32,
+            "speedPerSecond": 150,
+            "preferredDistance": 302,
+            "turnRatePerSecond": 2,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "laser",
+                "cooldownTicks": 45,
+                "damage": 15,
+                "shieldHitCost": 9,
+                "projectileRadius": 10,
+                "projectileSpeedPerSecond": 1,
+                "projectileLifetimeTicks": 1,
+                "engagementRange": 327,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-ringrunner",
+              "modelScale": 1.05,
+              "showHealthBar": true
+            },
+            "label": "Фонарь",
+            "spawnPolicy": "standard",
+            "spawnCost": 4,
+            "unlockWave": 14,
+            "scoreReward": 40,
+            "creditReward": 4,
+            "lootChance": 0.26
+          },
+          "bulwark": {
+            "hp": 395,
+            "radius": 46,
+            "speedPerSecond": 85,
+            "preferredDistance": 390,
+            "turnRatePerSecond": 1.4,
+            "turnAccelerationPerSecondSquared": 3,
+            "turnBrakingPerSecondSquared": 3,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 14,
+                "damage": 5,
+                "shieldHitCost": 3,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 560,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 793,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.16,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-blockfrigate",
+              "modelScale": 1.3,
+              "showHealthBar": true
+            },
+            "label": "Оплот",
+            "spawnPolicy": "standard",
+            "spawnCost": 6,
+            "unlockWave": 9,
+            "scoreReward": 55,
+            "creditReward": 6,
+            "lootChance": 0.32
+          },
+          "siege": {
+            "hp": 456,
+            "radius": 50,
+            "speedPerSecond": 60,
+            "preferredDistance": 724,
+            "turnRatePerSecond": 1.2,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "missile",
+                "cooldownTicks": 63,
+                "damage": 30,
+                "shieldHitCost": 18,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 280,
+                "projectileLifetimeTicks": 150,
+                "engagementRange": 992,
+                "turnRatePerSecond": 1.5,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              },
+              {
+                "kind": "bullet",
+                "cooldownTicks": 11,
+                "damage": 4,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 600,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 850,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "station-quad",
+              "modelScale": 1.2,
+              "showHealthBar": true
+            },
+            "label": "Осадная платформа",
+            "spawnPolicy": "standard",
+            "spawnCost": 7,
+            "unlockWave": 16,
+            "scoreReward": 65,
+            "creditReward": 7,
+            "lootChance": 0.34
+          },
+          "dreadnought": {
+            "hp": 517,
+            "radius": 54,
+            "speedPerSecond": 75,
+            "preferredDistance": 504,
+            "turnRatePerSecond": 1.1,
+            "turnAccelerationPerSecondSquared": 2.5,
+            "turnBrakingPerSecondSquared": 2.5,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 15,
+                "damage": 6,
+                "shieldHitCost": 4,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 620,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 878,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.18,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 145,
+                "damage": 22,
+                "shieldHitCost": 13,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 300,
+                "projectileLifetimeTicks": 130,
+                "engagementRange": 921,
+                "turnRatePerSecond": 1.6,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-manta",
+              "modelScale": 1.3,
+              "showHealthBar": true
+            },
+            "label": "Дредноут",
+            "spawnPolicy": "standard",
+            "spawnCost": 8,
+            "unlockWave": 14,
+            "scoreReward": 70,
+            "creditReward": 8,
+            "lootChance": 0.36
+          },
+          "hive": {
+            "hp": 426,
+            "radius": 48,
+            "speedPerSecond": 95,
+            "preferredDistance": 598,
+            "turnRatePerSecond": 2.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "missile",
+                "cooldownTicks": 70,
+                "damage": 16,
+                "shieldHitCost": 10,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 260,
+                "projectileLifetimeTicks": 150,
+                "engagementRange": 921,
+                "turnRatePerSecond": 1.4,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.4,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "station-hexhub",
+              "modelScale": 1.2,
+              "showHealthBar": true
+            },
+            "label": "Улей",
+            "spawnPolicy": "standard",
+            "spawnCost": 7,
+            "unlockWave": 18,
+            "scoreReward": 68,
+            "creditReward": 7,
+            "lootChance": 0.36
+          },
+          "leviathan": {
+            "hp": 608,
+            "radius": 58,
+            "speedPerSecond": 70,
+            "preferredDistance": 441,
+            "turnRatePerSecond": 1,
+            "turnAccelerationPerSecondSquared": 2,
+            "turnBrakingPerSecondSquared": 2,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 22,
+                "damage": 7,
+                "shieldHitCost": 4,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 640,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 907,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.2,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 217,
+                "damage": 26,
+                "shieldHitCost": 16,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 300,
+                "projectileLifetimeTicks": 140,
+                "engagementRange": 992,
+                "turnRatePerSecond": 1.7,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "ship-crescent",
+              "modelScale": 1.4,
+              "showHealthBar": true
+            },
+            "label": "Левиафан",
+            "spawnPolicy": "standard",
+            "spawnCost": 9,
+            "unlockWave": 22,
+            "scoreReward": 85,
+            "creditReward": 9,
+            "lootChance": 0.4
+          },
+          "smelter": {
+            "hp": 608,
+            "radius": 54,
+            "speedPerSecond": 80,
+            "preferredDistance": 327,
+            "turnRatePerSecond": 0.9,
+            "turnAccelerationPerSecondSquared": 2,
+            "turnBrakingPerSecondSquared": 2,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "laser",
+                "cooldownTicks": 45,
+                "damage": 24,
+                "shieldHitCost": 14,
+                "projectileRadius": 12,
+                "projectileSpeedPerSecond": 1,
+                "projectileLifetimeTicks": 1,
+                "engagementRange": 390,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "station-refinery",
+              "modelScale": 1.3,
+              "showHealthBar": true
+            },
+            "label": "Плавильня",
+            "spawnPolicy": "standard",
+            "spawnCost": 7,
+            "unlockWave": 22,
+            "scoreReward": 78,
+            "creditReward": 8,
+            "lootChance": 0.38
+          },
+          "boss": {
+            "hp": 760,
+            "radius": 90,
+            "speedPerSecond": 60,
+            "preferredDistance": 441,
+            "turnRatePerSecond": 1,
+            "turnAccelerationPerSecondSquared": 2,
+            "turnBrakingPerSecondSquared": 2,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "missile",
+                "cooldownTicks": 60,
+                "damage": 26,
+                "shieldHitCost": 16,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 300,
+                "projectileLifetimeTicks": 140,
+                "engagementRange": 992,
+                "turnRatePerSecond": 1.6,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.3,
+                "visual": null
+              },
+              {
+                "kind": "bullet",
+                "cooldownTicks": 12,
+                "damage": 5,
+                "shieldHitCost": 3,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 620,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 878,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-hammerhead",
+              "modelScale": 1.4,
+              "showHealthBar": true
+            },
+            "label": "Молот",
+            "spawnPolicy": "boss",
+            "spawnCost": 15,
+            "unlockWave": 5,
+            "scoreReward": 250,
+            "creditReward": 30,
+            "lootChance": 1
+          },
+          "bossCrab": {
+            "hp": 1216,
+            "radius": 96,
+            "speedPerSecond": 66,
+            "preferredDistance": 390,
+            "turnRatePerSecond": 1,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 17,
+                "damage": 6,
+                "shieldHitCost": 4,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 640,
+                "projectileLifetimeTicks": 33,
+                "engagementRange": 831,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.26,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 162,
+                "damage": 30,
+                "shieldHitCost": 18,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 290,
+                "projectileLifetimeTicks": 150,
+                "engagementRange": 1027,
+                "turnRatePerSecond": 1.7,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-crab",
+              "modelScale": 1.4,
+              "showHealthBar": true
+            },
+            "label": "Краб",
+            "spawnPolicy": "boss",
+            "spawnCost": 18,
+            "unlockWave": 10,
+            "scoreReward": 320,
+            "creditReward": 36,
+            "lootChance": 1
+          },
+          "bossSerpent": {
+            "hp": 1824,
+            "radius": 100,
+            "speedPerSecond": 78,
+            "preferredDistance": 353,
+            "turnRatePerSecond": 1.4,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 10,
+                "damage": 5,
+                "shieldHitCost": 3,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 700,
+                "projectileLifetimeTicks": 30,
+                "engagementRange": 827,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.18,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 126,
+                "damage": 26,
+                "shieldHitCost": 16,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 320,
+                "projectileLifetimeTicks": 150,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-serpent",
+              "modelScale": 1.45,
+              "showHealthBar": true
+            },
+            "label": "Змей",
+            "spawnPolicy": "boss",
+            "spawnCost": 21,
+            "unlockWave": 15,
+            "scoreReward": 400,
+            "creditReward": 42,
+            "lootChance": 1
+          },
+          "bossFortress": {
+            "hp": 2432,
+            "radius": 108,
+            "speedPerSecond": 48,
+            "preferredDistance": 567,
+            "turnRatePerSecond": 0.8,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 25,
+                "damage": 7,
+                "shieldHitCost": 4,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 620,
+                "projectileLifetimeTicks": 39,
+                "engagementRange": 951,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 4,
+                "burstSpreadRadians": 0.42,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 229,
+                "damage": 34,
+                "shieldHitCost": 20,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 280,
+                "projectileLifetimeTicks": 160,
+                "engagementRange": 1058,
+                "turnRatePerSecond": 1.5,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-fortress",
+              "modelScale": 1.5,
+              "showHealthBar": true
+            },
+            "label": "Крепость",
+            "spawnPolicy": "boss",
+            "spawnCost": 24,
+            "unlockWave": 20,
+            "scoreReward": 480,
+            "creditReward": 48,
+            "lootChance": 1
+          },
+          "bossPrism": {
+            "hp": 3192,
+            "radius": 108,
+            "speedPerSecond": 58,
+            "preferredDistance": 403,
+            "turnRatePerSecond": 0.9,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "laser",
+                "cooldownTicks": 64,
+                "damage": 26,
+                "shieldHitCost": 16,
+                "projectileRadius": 16,
+                "projectileSpeedPerSecond": 1,
+                "projectileLifetimeTicks": 1,
+                "engagementRange": 441,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              },
+              {
+                "kind": "bullet",
+                "cooldownTicks": 11,
+                "damage": 4,
+                "shieldHitCost": 2,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 660,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 935,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.2,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-obelisk",
+              "modelScale": 1.5,
+              "showHealthBar": true
+            },
+            "label": "Призма",
+            "spawnPolicy": "boss",
+            "spawnCost": 27,
+            "unlockWave": 25,
+            "scoreReward": 560,
+            "creditReward": 54,
+            "lootChance": 1
+          },
+          "bossDreadnought": {
+            "hp": 3192,
+            "radius": 112,
+            "speedPerSecond": 60,
+            "preferredDistance": 479,
+            "turnRatePerSecond": 0.9,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 22,
+                "damage": 7,
+                "shieldHitCost": 4,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 660,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 935,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.24,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 211,
+                "damage": 32,
+                "shieldHitCost": 19,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 300,
+                "projectileLifetimeTicks": 160,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 1.7,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.3,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-dreadnought",
+              "modelScale": 1.5,
+              "showHealthBar": true
+            },
+            "label": "Владыка",
+            "spawnPolicy": "boss",
+            "spawnCost": 27,
+            "unlockWave": 30,
+            "scoreReward": 560,
+            "creditReward": 54,
+            "lootChance": 1
+          },
+          "bossMothership": {
+            "hp": 4180,
+            "radius": 120,
+            "speedPerSecond": 52,
+            "preferredDistance": 516,
+            "turnRatePerSecond": 0.8,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 31,
+                "damage": 8,
+                "shieldHitCost": 5,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 660,
+                "projectileLifetimeTicks": 39,
+                "engagementRange": 1013,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 4,
+                "burstSpreadRadians": 0.4,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 278,
+                "damage": 34,
+                "shieldHitCost": 20,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 300,
+                "projectileLifetimeTicks": 170,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 1.8,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.32,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-mothership",
+              "modelScale": 1.6,
+              "showHealthBar": true
+            },
+            "label": "Материнский корабль",
+            "spawnPolicy": "boss",
+            "spawnCost": 30,
+            "unlockWave": 35,
+            "scoreReward": 700,
+            "creditReward": 66,
+            "lootChance": 1
+          },
+          "bossSplitter": {
+            "hp": 4940,
+            "radius": 116,
+            "speedPerSecond": 64,
+            "preferredDistance": 441,
+            "turnRatePerSecond": 1,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 24,
+                "damage": 9,
+                "shieldHitCost": 5,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 680,
+                "projectileLifetimeTicks": 36,
+                "engagementRange": 963,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 3,
+                "burstSpreadRadians": 0.26,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 219,
+                "damage": 36,
+                "shieldHitCost": 22,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 310,
+                "projectileLifetimeTicks": 170,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 1.9,
+                "burstCount": 1,
+                "burstSpreadRadians": 0,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-splitter",
+              "modelScale": 1.55,
+              "showHealthBar": true
+            },
+            "label": "Расщепитель",
+            "spawnPolicy": "boss",
+            "spawnCost": 33,
+            "unlockWave": 40,
+            "scoreReward": 780,
+            "creditReward": 72,
+            "lootChance": 1
+          },
+          "bossVoideye": {
+            "hp": 5700,
+            "radius": 118,
+            "speedPerSecond": 58,
+            "preferredDistance": 554,
+            "turnRatePerSecond": 0.9,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 34,
+                "damage": 9,
+                "shieldHitCost": 5,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 700,
+                "projectileLifetimeTicks": 39,
+                "engagementRange": 1074,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 4,
+                "burstSpreadRadians": 0.44,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 336,
+                "damage": 38,
+                "shieldHitCost": 23,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 320,
+                "projectileLifetimeTicks": 170,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 1.9,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.34,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-voideye",
+              "modelScale": 1.6,
+              "showHealthBar": true
+            },
+            "label": "Око пустоты",
+            "spawnPolicy": "boss",
+            "spawnCost": 36,
+            "unlockWave": 45,
+            "scoreReward": 860,
+            "creditReward": 78,
+            "lootChance": 1
+          },
+          "bossSolar": {
+            "hp": 6650,
+            "radius": 124,
+            "speedPerSecond": 54,
+            "preferredDistance": 592,
+            "turnRatePerSecond": 0.8,
+            "turnAccelerationPerSecondSquared": 6,
+            "turnBrakingPerSecondSquared": 6,
+            "combatSkill": "veteran",
+            "weapons": [
+              {
+                "kind": "bullet",
+                "cooldownTicks": 38,
+                "damage": 10,
+                "shieldHitCost": 6,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 720,
+                "projectileLifetimeTicks": 38,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 2.2,
+                "burstCount": 4,
+                "burstSpreadRadians": 0.46,
+                "visual": null
+              },
+              {
+                "kind": "missile",
+                "cooldownTicks": 357,
+                "damage": 40,
+                "shieldHitCost": 24,
+                "projectileRadius": 7,
+                "projectileSpeedPerSecond": 330,
+                "projectileLifetimeTicks": 165,
+                "engagementRange": 1088,
+                "turnRatePerSecond": 2,
+                "burstCount": 2,
+                "burstSpreadRadians": 0.36,
+                "visual": null
+              }
+            ],
+            "visual": {
+              "shape": "boss-solar",
+              "modelScale": 1.65,
+              "showHealthBar": true
+            },
+            "label": "Солнечный трон",
+            "spawnPolicy": "boss",
+            "spawnCost": 40,
+            "unlockWave": 50,
+            "scoreReward": 950,
+            "creditReward": 84,
+            "lootChance": 1
+          }
+        },
+        "waveCampaign": {
+          "waves": [
+            {
+              "entries": [
+                {
+                  "kind": "interceptor",
+                  "count": 7,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "wasp",
+                  "count": 7,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "interceptor",
+                  "count": 8,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "wasp",
+                  "count": 8,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "wasp",
+                  "count": 9,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "skirmisher",
+                  "count": 5,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "wasp",
+                  "count": 5,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "skirmisher",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "missileCarrier",
+                  "count": 1,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sniper",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "wasp",
+                  "count": 3,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "skirmisher",
+                  "count": 1,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "missileCarrier",
+                  "count": 1,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sniper",
+                  "count": 1,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "boss",
+                  "count": 1,
+                  "startDelayTicks": 600,
+                  "spawnIntervalTicks": 200,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "wasp",
+                  "count": 6,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "skirmisher",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sniper",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "gunboat",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "wasp",
+                  "count": 7,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "skirmisher",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sniper",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "gunboat",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 4,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sniper",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "gunboat",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sniper",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "gunboat",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 1,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 1,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "gunboat",
+                  "count": 1,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "railer",
+                  "count": 1,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bossCrab",
+                  "count": 1,
+                  "startDelayTicks": 600,
+                  "spawnIntervalTicks": 200,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "railer",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "mortar",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "mortar",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 4,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 1,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 2,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 1,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 1,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bulwark",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bossSerpent",
+                  "count": 1,
+                  "startDelayTicks": 600,
+                  "spawnIntervalTicks": 200,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "siege",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "siege",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "hive",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "hive",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 1,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 2,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 1,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 1,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "hive",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bossFortress",
+                  "count": 1,
+                  "startDelayTicks": 600,
+                  "spawnIntervalTicks": 200,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "dreadnought",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "hive",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 4,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 4,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 2,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 2,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 1,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 2,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 1,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bossPrism",
+                  "count": 1,
+                  "startDelayTicks": 600,
+                  "spawnIntervalTicks": 200,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "S"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 2,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 2,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "W"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 2,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 2,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 3,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 2,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 2,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 4,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 3,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 2,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 2,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            },
+            {
+              "entries": [
+                {
+                  "kind": "lancer",
+                  "count": 2,
+                  "startDelayTicks": 0,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "sparker",
+                  "count": 2,
+                  "startDelayTicks": 180,
+                  "spawnIntervalTicks": 140,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "warden",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "NW"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "lantern",
+                  "count": 2,
+                  "startDelayTicks": 540,
+                  "spawnIntervalTicks": 280,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "leviathan",
+                  "count": 1,
+                  "startDelayTicks": 720,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "N"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "smelter",
+                  "count": 1,
+                  "startDelayTicks": 900,
+                  "spawnIntervalTicks": 440,
+                  "sectors": [
+                    "E"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "asteroid",
+                  "count": 2,
+                  "startDelayTicks": 360,
+                  "spawnIntervalTicks": 240,
+                  "sectors": [],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                },
+                {
+                  "kind": "bossDreadnought",
+                  "count": 1,
+                  "startDelayTicks": 600,
+                  "spawnIntervalTicks": 200,
+                  "sectors": [
+                    "SE"
+                  ],
+                  "hpMultiplier": null,
+                  "tempoMultiplier": null
+                }
+              ],
+              "hpMultiplier": null,
+              "tempoMultiplier": null
+            }
+          ],
+          "director": {
+            "baseBudget": 14,
+            "budgetGrowth": 2,
+            "budgetCap": 120,
+            "hpGrowth": 0.04,
+            "hpMultiplierCap": 8,
+            "tempoGrowth": 0.02,
+            "tempoMultiplierCap": 3,
+            "bossWaveInterval": 5
+          },
+          "authoring": {
+            "budgetBase": 14,
+            "budgetGrowth": 2,
+            "bossEscortShare": 0.5,
+            "asteroidEveryWaves": 3,
+            "hpPerCannonShot": 38,
+            "hpScale": 1,
+            "damagePerSecondBase": 2,
+            "damagePerSecondPerSpawnCost": 2.2,
+            "bossDamagePerSecondCap": 26,
+            "laserDamageShare": 0.75,
+            "shipReach": 680,
+            "maxEngagementShare": 1.6,
+            "maxStandoffShare": 1.3,
+            "groupStartStepSeconds": 18,
+            "swarmIntervalSeconds": 7,
+            "lineIntervalSeconds": 14,
+            "heavyIntervalSeconds": 22,
+            "bossFloorSeconds": 30
+          }
+        },
+        "enemySpawnIntervalTicks": 12,
+        "intermissionTicks": 200,
+        "ambientAsteroidIntervalMinTicks": 40,
+        "ambientAsteroidIntervalMaxTicks": 100,
+        "asteroidHp": 65,
+        "asteroidRadius": 34,
+        "asteroidSpeedPerSecond": 190,
+        "asteroidLifetimeTicks": 500,
+        "asteroidDamage": 40,
+        "asteroidShieldHitCost": 20,
+        "asteroidSpawnCost": 1,
+        "asteroidScoreReward": 10,
+        "asteroidCreditReward": 1,
+        "lootRepairShare": 0.056451612903225805,
+        "lootShieldAmount": 30,
+        "lootBossRepairShare": 1,
+        "lootLifetimeTicks": 300,
+        "lootDropRadius": 18,
+        "lootMagnetRadius": 260,
+        "lootMagnetAccelerationPerSecondSquared": 900,
+        "lootDriftDampingPerSecond": 1.6,
+        "lootWindowTicks": 300,
+        "lootBossWindowTicks": 600,
+        "asteroidVisual": null,
+        "missileInterceptScoreReward": 5,
+        "arenaRadius": 4400,
+        "cameraViewWidth": 2500,
+        "background": {
+          "parallaxStrength": 1,
+          "driftSpeed": 0.5,
+          "nebulaAlpha": 0.7,
+          "nebulaPreset": "blue"
+        },
+        "autopilot": {
+          "level": "ace",
+          "profiles": {
+            "kinetic": {
+              "rookie": {
+                "reactionTicks": 12,
+                "retargetIntervalTicks": 40,
+                "aimJitterRadians": 0.18,
+                "leadFactor": 0.35,
+                "orbit": false,
+                "evadeMissiles": false,
+                "dodgeBullets": false,
+                "threatAwareShield": true,
+                "standoffShare": 0.6,
+                "standoffDistance": 250,
+                "evadeHorizonTicks": 0,
+                "mgConeRadians": 0.9,
+                "cannonConeRadians": 0.6,
+                "mgHeatCeiling": 1,
+                "cannonHeatCeiling": 1,
+                "shieldLeadTicks": 8,
+                "shieldMinEnergy": 0.5
+              },
+              "veteran": {
+                "reactionTicks": 16,
+                "retargetIntervalTicks": 36,
+                "aimJitterRadians": 0.12,
+                "leadFactor": 0.7,
+                "orbit": false,
+                "evadeMissiles": true,
+                "dodgeBullets": false,
+                "threatAwareShield": true,
+                "standoffShare": 0.5,
+                "standoffDistance": 400,
+                "evadeHorizonTicks": 12,
+                "mgConeRadians": 0.3,
+                "cannonConeRadians": 0.2,
+                "mgHeatCeiling": 0.5,
+                "cannonHeatCeiling": 0.6,
+                "shieldLeadTicks": 20,
+                "shieldMinEnergy": 0.35
+              },
+              "ace": {
+                "reactionTicks": 10,
+                "retargetIntervalTicks": 30,
+                "aimJitterRadians": 0,
+                "leadFactor": 1,
+                "orbit": false,
+                "evadeMissiles": true,
+                "dodgeBullets": true,
+                "threatAwareShield": true,
+                "standoffShare": 0.5,
+                "standoffDistance": 400,
+                "evadeHorizonTicks": 12,
+                "mgConeRadians": 0.25,
+                "cannonConeRadians": 0.06,
+                "mgHeatCeiling": 0.9,
+                "cannonHeatCeiling": 0.95,
+                "shieldLeadTicks": 20,
+                "shieldMinEnergy": 0.15
+              }
+            },
+            "laser": {
+              "rookie": {
+                "reactionTicks": 12,
+                "retargetIntervalTicks": 40,
+                "aimJitterRadians": 0.18,
+                "leadFactor": 0.35,
+                "orbit": false,
+                "evadeMissiles": false,
+                "dodgeBullets": false,
+                "threatAwareShield": true,
+                "standoffShare": 0.6,
+                "standoffDistance": 250,
+                "evadeHorizonTicks": 0,
+                "mgConeRadians": 0.9,
+                "cannonConeRadians": 0.6,
+                "mgHeatCeiling": 1,
+                "cannonHeatCeiling": 1,
+                "shieldLeadTicks": 8,
+                "shieldMinEnergy": 0.5
+              },
+              "veteran": {
+                "reactionTicks": 20,
+                "retargetIntervalTicks": 36,
+                "aimJitterRadians": 0.12,
+                "leadFactor": 0.8,
+                "orbit": false,
+                "evadeMissiles": true,
+                "dodgeBullets": false,
+                "threatAwareShield": true,
+                "standoffShare": 0.85,
+                "standoffDistance": 400,
+                "evadeHorizonTicks": 12,
+                "mgConeRadians": 0.35,
+                "cannonConeRadians": 0.2,
+                "mgHeatCeiling": 0.7,
+                "cannonHeatCeiling": 0.6,
+                "shieldLeadTicks": 20,
+                "shieldMinEnergy": 0.35
+              },
+              "ace": {
+                "reactionTicks": 20,
+                "retargetIntervalTicks": 30,
+                "aimJitterRadians": 0,
+                "leadFactor": 1,
+                "orbit": false,
+                "evadeMissiles": true,
+                "dodgeBullets": true,
+                "threatAwareShield": true,
+                "standoffShare": 0.85,
+                "standoffDistance": 400,
+                "evadeHorizonTicks": 12,
+                "mgConeRadians": 0.5,
+                "cannonConeRadians": 0.06,
+                "mgHeatCeiling": 0.95,
+                "cannonHeatCeiling": 0.95,
+                "shieldLeadTicks": 20,
+                "shieldMinEnergy": 0.15
+              }
+            },
+            "missile": {
+              "rookie": {
+                "reactionTicks": 12,
+                "retargetIntervalTicks": 40,
+                "aimJitterRadians": 0.18,
+                "leadFactor": 0.35,
+                "orbit": false,
+                "evadeMissiles": false,
+                "dodgeBullets": false,
+                "threatAwareShield": true,
+                "standoffShare": 0.6,
+                "standoffDistance": 250,
+                "evadeHorizonTicks": 0,
+                "mgConeRadians": 0.9,
+                "cannonConeRadians": 0.6,
+                "mgHeatCeiling": 1,
+                "cannonHeatCeiling": 1,
+                "shieldLeadTicks": 8,
+                "shieldMinEnergy": 0.5
+              },
+              "veteran": {
+                "reactionTicks": 20,
+                "retargetIntervalTicks": 36,
+                "aimJitterRadians": 0.12,
+                "leadFactor": 0.65,
+                "orbit": false,
+                "evadeMissiles": false,
+                "dodgeBullets": false,
+                "threatAwareShield": true,
+                "standoffShare": 0.75,
+                "standoffDistance": 450,
+                "evadeHorizonTicks": 0,
+                "mgConeRadians": 0.35,
+                "cannonConeRadians": 0.12,
+                "mgHeatCeiling": 0.5,
+                "cannonHeatCeiling": 0.6,
+                "shieldLeadTicks": 10,
+                "shieldMinEnergy": 0.35
+              },
+              "ace": {
+                "reactionTicks": 20,
+                "retargetIntervalTicks": 30,
+                "aimJitterRadians": 0,
+                "leadFactor": 0.9,
+                "orbit": false,
+                "evadeMissiles": false,
+                "dodgeBullets": true,
+                "threatAwareShield": true,
+                "standoffShare": 0.75,
+                "standoffDistance": 450,
+                "evadeHorizonTicks": 0,
+                "mgConeRadians": 0.5,
+                "cannonConeRadians": 0.12,
+                "mgHeatCeiling": 0.9,
+                "cannonHeatCeiling": 0.8,
+                "shieldLeadTicks": 10,
+                "shieldMinEnergy": 0.15
+              }
+            }
+          }
+        },
+        "enemySkill": {
+          "offset": 0,
+          "profiles": {
+            "rookie": {
+              "reactionTicks": 10,
+              "aimJitterRadians": 0.1,
+              "leadFactor": 0,
+              "orbitShare": 0.35,
+              "rangeBandUnits": 120,
+              "separationWeight": 0,
+              "flankSpread": 0,
+              "evadeHorizonTicks": 0,
+              "retreatHpFraction": 0,
+              "retreatStandoffFactor": 1
+            },
+            "veteran": {
+              "reactionTicks": 4,
+              "aimJitterRadians": 0.04,
+              "leadFactor": 0.6,
+              "orbitShare": 0.5,
+              "rangeBandUnits": 200,
+              "separationWeight": 0.4,
+              "flankSpread": 0.5,
+              "evadeHorizonTicks": 0,
+              "retreatHpFraction": 0.25,
+              "retreatStandoffFactor": 1.4
+            },
+            "ace": {
+              "reactionTicks": 1,
+              "aimJitterRadians": 0,
+              "leadFactor": 1,
+              "orbitShare": 0.6,
+              "rangeBandUnits": 280,
+              "separationWeight": 0.7,
+              "flankSpread": 1,
+              "evadeHorizonTicks": 14,
+              "retreatHpFraction": 0.35,
+              "retreatStandoffFactor": 1.6
+            }
+          }
+        },
+        "helm": {
+          "scheme": "tank",
+          "headingLeadRadians": 0.5,
+          "stopDampening": 1,
+          "rotateInPlaceThrottle": 0.02
+        },
+        "shipArchetypes": {
+          "guardian": {
+            "label": "Страж",
+            "description": "Кинетическая турель и носовой пулемёт. Ни в чём не лучший и ни в чём не худший — корпус, по которому меряют остальные.",
+            "visual": null,
+            "unlockedAtWave": 1,
+            "overrides": {
+              "stats": {},
+              "cannonWeaponKind": null,
+              "mgWeaponKind": null
+            },
+            "tiers": [
+              [
+                {
+                  "id": "hullPlating1",
+                  "label": "Броневые пластины",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 40
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "thrusters1",
+                  "label": "Маршевые двигатели",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.08
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.1
+                    }
+                  ]
+                },
+                {
+                  "id": "gunStabiliser",
+                  "label": "Стабилизатор орудия",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "turretMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "ammoFeed1",
+                  "label": "Усиленный боекомплект",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.12
+                    }
+                  ]
+                },
+                {
+                  "id": "capacitor1",
+                  "label": "Конденсатор",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldCapacity",
+                      "op": "add",
+                      "value": 25
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "gyroscopes1",
+                  "label": "Гироскопы",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "headingMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.15
+                    },
+                    {
+                      "target": "headingAngularAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                },
+                {
+                  "id": "emitterCoils1",
+                  "label": "Катушки эмиттера",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "noseCooling1",
+                  "label": "Обдув носового ствола",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "mgCoolingPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "barrelCooling1",
+                  "label": "Охлаждение пушки",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "cannonCoolingPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "hullPlating2",
+                  "label": "Композитный корпус",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 60
+                    }
+                  ]
+                },
+                {
+                  "id": "heavyRounds",
+                  "label": "Тяжёлые снаряды",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.18
+                    },
+                    {
+                      "target": "projectileRadius",
+                      "op": "percent",
+                      "value": 0.08
+                    }
+                  ]
+                },
+                {
+                  "id": "wideArc",
+                  "label": "Широкий сектор",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldArcRadians",
+                      "op": "add",
+                      "value": 0.3490658503988659
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "afterburner",
+                  "label": "Форсаж",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.14
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                },
+                {
+                  "id": "turretDrive",
+                  "label": "Привод башни",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "turretMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    },
+                    {
+                      "target": "turretAngularAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "capacitor2",
+                  "label": "Батарея повышенной ёмкости",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldCapacity",
+                      "op": "add",
+                      "value": 40
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "noseRadiator",
+                  "label": "Носовой радиатор",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "mgHeatCapacity",
+                      "op": "percent",
+                      "value": 0.3
+                    }
+                  ]
+                },
+                {
+                  "id": "highVelocity",
+                  "label": "Высокая начальная скорость",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "projectileSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "fastEngage",
+                  "label": "Быстрый подъём",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldEngageTicks",
+                      "op": "multiply",
+                      "value": 0.6
+                    },
+                    {
+                      "target": "shieldCooldownTicks",
+                      "op": "multiply",
+                      "value": 0.7
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "hullPlating3",
+                  "label": "Реактивная броня",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 90
+                    }
+                  ]
+                },
+                {
+                  "id": "noseCalibre",
+                  "label": "Крупный калибр носа",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "mgDamage",
+                      "op": "percent",
+                      "value": 0.3
+                    }
+                  ]
+                },
+                {
+                  "id": "cannonCalibre",
+                  "label": "Крупный калибр",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "drainControl",
+                  "label": "Контроль расхода",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldDrainPerSecond",
+                      "op": "multiply",
+                      "value": 0.75
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "reactorOverdrive",
+                  "label": "Разгон реактора",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                },
+                {
+                  "id": "rapidFire",
+                  "label": "Скорострельность",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "fireCooldownTicks",
+                      "op": "add",
+                      "value": -1
+                    }
+                  ]
+                },
+                {
+                  "id": "heatSink",
+                  "label": "Радиатор",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "cannonHeatCapacity",
+                      "op": "percent",
+                      "value": 0.4
+                    },
+                    {
+                      "target": "cannonHeatPerShot",
+                      "op": "multiply",
+                      "value": 0.85
+                    }
+                  ]
+                },
+                {
+                  "id": "fullDome",
+                  "label": "Полный купол",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldArcRadians",
+                      "op": "add",
+                      "value": 0.6981317007977318
+                    },
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                }
+              ]
+            ],
+            "endlessTier": [
+              {
+                "id": "endlessHull",
+                "label": "Ремонтные накладки",
+                "role": "pilot",
+                "effects": [
+                  {
+                    "target": "spaceshipMaxHp",
+                    "op": "add",
+                    "value": 60
+                  }
+                ]
+              },
+              {
+                "id": "endlessDamage",
+                "label": "Калибровка орудия",
+                "role": "gunner",
+                "effects": [
+                  {
+                    "target": "friendlyProjectileDamage",
+                    "op": "percent",
+                    "value": 0.12
+                  }
+                ]
+              },
+              {
+                "id": "endlessShield",
+                "label": "Подстройка эмиттера",
+                "role": "shield",
+                "effects": [
+                  {
+                    "target": "shieldCapacity",
+                    "op": "add",
+                    "value": 30
+                  }
+                ]
+              }
+            ]
+          },
+          "blade": {
+            "label": "Клинок",
+            "description": "Лазер в обоих стволах: не мажет, но не достаёт далеко. Быстрый и хрупкий — награждает того, кто подошёл и не стоит на месте.",
+            "visual": null,
+            "unlockedAtWave": 15,
+            "overrides": {
+              "stats": {
+                "spaceshipMaxHp": 400,
+                "spaceshipRadius": 44,
+                "shieldRadius": 92,
+                "spaceshipSpeedPerSecond": 420,
+                "spaceshipAccelerationPerSecondSquared": 900,
+                "shieldCapacity": 85,
+                "shieldArcRadians": 1.3089969389957472,
+                "friendlyProjectileDamage": 46,
+                "mgDamage": 14,
+                "fireCooldownTicks": 4
+              },
+              "cannonWeaponKind": "laser",
+              "mgWeaponKind": "laser"
+            },
+            "tiers": [
+              [
+                {
+                  "id": "blade-lightFrame",
+                  "label": "Лёгкий каркас",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 30
+                    },
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.1
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.12
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-vectorNozzles",
+                  "label": "Векторные сопла",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "headingMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    },
+                    {
+                      "target": "headingAngularAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-gunStabiliser",
+                  "label": "Стабилизатор орудия",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "turretMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-beamFocus",
+                  "label": "Фокусировка луча",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.12
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-quickEmitter",
+                  "label": "Скорый эмиттер",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldEngageTicks",
+                      "op": "multiply",
+                      "value": 0.7
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-inertialDamper",
+                  "label": "Инерционный демпфер",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipBrakingPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-emitterCoils1",
+                  "label": "Катушки эмиттера",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-noseBlower",
+                  "label": "Обдув носового излучателя",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "mgCoolingPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-emitterCooling",
+                  "label": "Охлаждение излучателя",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "cannonCoolingPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-compositeRibs",
+                  "label": "Композитные рёбра",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 65
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-focusedBeam",
+                  "label": "Сфокусированный луч",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-wideArc",
+                  "label": "Широкий сектор",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldArcRadians",
+                      "op": "add",
+                      "value": 0.3490658503988659
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-afterburner",
+                  "label": "Форсаж",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.14
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-turretDrive",
+                  "label": "Привод башни",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "turretMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    },
+                    {
+                      "target": "turretAngularAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-capacitor2",
+                  "label": "Батарея повышенной ёмкости",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldCapacity",
+                      "op": "add",
+                      "value": 40
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-noseOptics",
+                  "label": "Носовая оптика",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "mgLaserRange",
+                      "op": "percent",
+                      "value": 0.3
+                    },
+                    {
+                      "target": "laserBeamRadius",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-longOptics",
+                  "label": "Дальняя оптика",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "cannonLaserRange",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-fastEngage",
+                  "label": "Быстрый подъём",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldEngageTicks",
+                      "op": "multiply",
+                      "value": 0.6
+                    },
+                    {
+                      "target": "shieldCooldownTicks",
+                      "op": "multiply",
+                      "value": 0.7
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-ablativePlates",
+                  "label": "Абляционные щитки",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 95
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-boostLoop",
+                  "label": "Разгонный контур",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.16
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-beamDensity",
+                  "label": "Плотность луча",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-drainControl",
+                  "label": "Контроль расхода",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldDrainPerSecond",
+                      "op": "multiply",
+                      "value": 0.75
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "blade-reactorOverdrive",
+                  "label": "Разгон реактора",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-rapidFire",
+                  "label": "Скорострельность",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "fireCooldownTicks",
+                      "op": "add",
+                      "value": -1
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-cryoLoop",
+                  "label": "Криоконтур",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "cannonHeatCapacity",
+                      "op": "percent",
+                      "value": 0.4
+                    },
+                    {
+                      "target": "cannonHeatPerShot",
+                      "op": "multiply",
+                      "value": 0.85
+                    }
+                  ]
+                },
+                {
+                  "id": "blade-fullDome",
+                  "label": "Полный купол",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldArcRadians",
+                      "op": "add",
+                      "value": 0.6981317007977318
+                    },
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                }
+              ]
+            ],
+            "endlessTier": [
+              {
+                "id": "blade-endlessThrust",
+                "label": "Подстройка тяги",
+                "role": "pilot",
+                "effects": [
+                  {
+                    "target": "spaceshipSpeedPerSecond",
+                    "op": "percent",
+                    "value": 0.05
+                  },
+                  {
+                    "target": "spaceshipMaxHp",
+                    "op": "add",
+                    "value": 35
+                  }
+                ]
+              },
+              {
+                "id": "blade-endlessBeam",
+                "label": "Калибровка луча",
+                "role": "gunner",
+                "effects": [
+                  {
+                    "target": "friendlyProjectileDamage",
+                    "op": "percent",
+                    "value": 0.12
+                  }
+                ]
+              },
+              {
+                "id": "blade-endlessEmitter",
+                "label": "Подстройка эмиттера",
+                "role": "shield",
+                "effects": [
+                  {
+                    "target": "shieldCapacity",
+                    "op": "add",
+                    "value": 25
+                  }
+                ]
+              }
+            ]
+          },
+          "bastion": {
+            "label": "Бастион",
+            "description": "Ракеты догоняют сами, поэтому корпусу не нужно спешить. Медленный, но толстый, с широким щитом — держит там, где остальные отходят.",
+            "visual": null,
+            "unlockedAtWave": 20,
+            "overrides": {
+              "stats": {
+                "spaceshipMaxHp": 720,
+                "spaceshipRadius": 62,
+                "shieldRadius": 124,
+                "spaceshipSpeedPerSecond": 240,
+                "spaceshipAccelerationPerSecondSquared": 420,
+                "headingMaxAngularSpeedPerSecond": 2.199114857512855,
+                "shieldCapacity": 160,
+                "shieldArcRadians": 2.2689280275926285,
+                "fireCooldownTicks": 9
+              },
+              "cannonWeaponKind": "missile",
+              "mgWeaponKind": "missile"
+            },
+            "tiers": [
+              [
+                {
+                  "id": "bastion-bulkPlating",
+                  "label": "Толстые плиты",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 55
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-reserveCells",
+                  "label": "Резервные ячейки",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldCapacity",
+                      "op": "add",
+                      "value": 30
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-gunStabiliser",
+                  "label": "Стабилизатор орудия",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "turretMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-heavyWarhead",
+                  "label": "Тяжёлая боевая часть",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.14
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-capacitor1",
+                  "label": "Конденсатор",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldCapacity",
+                      "op": "add",
+                      "value": 25
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-mountGyros",
+                  "label": "Гироскопы установки",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "headingMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-emitterCoils1",
+                  "label": "Катушки эмиттера",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-launcherCooling",
+                  "label": "Охлаждение пусковой",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "cannonCoolingPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-emitterPriming",
+                  "label": "Разогрев эмиттера",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldEngageTicks",
+                      "op": "multiply",
+                      "value": 0.7
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-armourBelt",
+                  "label": "Броневой пояс",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 80
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-seekerHead",
+                  "label": "Головка самонаведения",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyMissileTurnRatePerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    },
+                    {
+                      "target": "friendlyMissileAcquireConeRadians",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-wideSector",
+                  "label": "Широкий сектор",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldArcRadians",
+                      "op": "add",
+                      "value": 0.4363323129985824
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-haulThrusters",
+                  "label": "Тяговые двигатели",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.1
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.12
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-turretDrive",
+                  "label": "Привод башни",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "turretMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    },
+                    {
+                      "target": "turretAngularAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-deepCells",
+                  "label": "Глубокая батарея",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldCapacity",
+                      "op": "add",
+                      "value": 50
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-noseSeeker",
+                  "label": "Носовая головка",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "friendlyMissileAcquireConeRadians",
+                      "op": "percent",
+                      "value": 0.3
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-longBurn",
+                  "label": "Долгий разгон",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "projectileLifetimeMs",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-fastEngage",
+                  "label": "Быстрый подъём",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldEngageTicks",
+                      "op": "multiply",
+                      "value": 0.6
+                    },
+                    {
+                      "target": "shieldCooldownTicks",
+                      "op": "multiply",
+                      "value": 0.7
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-reactiveBelt",
+                  "label": "Реактивная броня",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipMaxHp",
+                      "op": "add",
+                      "value": 110
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-sectorDrive",
+                  "label": "Привод сектора",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldMaxAngularSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.25
+                    },
+                    {
+                      "target": "shieldAngularAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-heavyCharge",
+                  "label": "Тяжёлый заряд",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "friendlyProjectileDamage",
+                      "op": "percent",
+                      "value": 0.25
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-drainControl",
+                  "label": "Контроль расхода",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldDrainPerSecond",
+                      "op": "multiply",
+                      "value": 0.75
+                    }
+                  ]
+                }
+              ],
+              [
+                {
+                  "id": "bastion-reactorOverdrive",
+                  "label": "Разгон реактора",
+                  "role": "pilot",
+                  "effects": [
+                    {
+                      "target": "spaceshipSpeedPerSecond",
+                      "op": "percent",
+                      "value": 0.18
+                    },
+                    {
+                      "target": "spaceshipAccelerationPerSecondSquared",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-rapidLaunch",
+                  "label": "Скорый пуск",
+                  "role": "gunner",
+                  "effects": [
+                    {
+                      "target": "fireCooldownTicks",
+                      "op": "add",
+                      "value": -2
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-drainRegulator",
+                  "label": "Регулятор расхода",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldDrainPerSecond",
+                      "op": "multiply",
+                      "value": 0.8
+                    },
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.15
+                    }
+                  ]
+                },
+                {
+                  "id": "bastion-fullDome",
+                  "label": "Полный купол",
+                  "role": "shield",
+                  "effects": [
+                    {
+                      "target": "shieldArcRadians",
+                      "op": "add",
+                      "value": 0.6981317007977318
+                    },
+                    {
+                      "target": "shieldRechargePerSecond",
+                      "op": "percent",
+                      "value": 0.2
+                    }
+                  ]
+                }
+              ]
+            ],
+            "endlessTier": [
+              {
+                "id": "bastion-endlessArmour",
+                "label": "Ремонтные накладки",
+                "role": "pilot",
+                "effects": [
+                  {
+                    "target": "spaceshipMaxHp",
+                    "op": "add",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "id": "bastion-endlessWarhead",
+                "label": "Калибровка заряда",
+                "role": "gunner",
+                "effects": [
+                  {
+                    "target": "friendlyProjectileDamage",
+                    "op": "percent",
+                    "value": 0.1
+                  }
+                ]
+              },
+              {
+                "id": "bastion-endlessCells",
+                "label": "Подстройка эмиттера",
+                "role": "shield",
+                "effects": [
+                  {
+                    "target": "shieldCapacity",
+                    "op": "add",
+                    "value": 35
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "defaultShipArchetypeId": "guardian",
+        "spaceshipVisual": {
+          "shape": "ship-dart",
+          "modelScale": 1
+        },
+        "spaceshipMaxHp": 620,
+        "spaceshipRadius": 52,
+        "spaceshipSpeedPerSecond": 380,
+        "spaceshipAccelerationPerSecondSquared": 640,
+        "spaceshipBrakingPerSecondSquared": 800,
+        "spaceshipReverseSpeedFactor": 0.4,
+        "headingMaxAngularSpeedPerSecond": 3.141592653589793,
+        "headingAngularAccelerationPerSecondSquared": 50.003683069637546,
+        "headingAngularBrakingPerSecondSquared": 50.003683069637546,
+        "friendlyProjectileDamage": 38,
+        "fireCooldownTicks": 3,
+        "projectileSpeedPerSecond": 1000,
+        "projectileRadius": 14,
+        "projectileLifetimeMs": 680,
+        "turretMaxAngularSpeedPerSecond": 1.3613568165555772,
+        "turretAngularAccelerationPerSecondSquared": 2.7227136331111543,
+        "turretAngularBrakingPerSecondSquared": 4.084070449666731,
+        "projectileVisual": {
+          "shape": "missile-plasma",
+          "modelScale": 1
+        },
+        "turretVisual": {
+          "shape": "weapon-railgun",
+          "modelScale": 0.6,
+          "mountX": 0.2,
+          "mountY": 0.55,
+          "pivotX": 0.2,
+          "pivotY": 0
+        },
+        "cannonHeatCapacity": 100,
+        "cannonHeatPerShot": 16,
+        "cannonCoolingPerSecond": 22,
+        "cannonRearmThreshold": 35,
+        "mgDamage": 10,
+        "mgFireCooldownTicks": 2,
+        "mgProjectileSpeedPerSecond": 900,
+        "mgProjectileRadius": 5,
+        "mgProjectileVisual": {
+          "shape": "drone-orb",
+          "modelScale": 1
+        },
+        "mgHeatCapacity": 100,
+        "mgHeatPerShot": 4,
+        "mgCoolingPerSecond": 30,
+        "mgRearmThreshold": 30,
+        "cannonWeaponKind": "kinetic",
+        "mgWeaponKind": "kinetic",
+        "cannonLaserRange": 440,
+        "mgLaserRange": 300,
+        "laserBeamRadius": 5,
+        "friendlyMissileTurnRatePerSecond": 0.8377580409572781,
+        "friendlyMissileAcquireConeRadians": 0.15707963267948966,
+        "shieldCapacity": 120,
+        "shieldDrainPerSecond": 20,
+        "shieldRechargePerSecond": 10,
+        "shieldEngageTicks": 10,
+        "shieldMinimumUpTicks": 40,
+        "shieldCooldownTicks": 20,
+        "shieldRearmEnergy": 25,
+        "shieldRadius": 104,
+        "shieldArcRadians": 1.5707963267948966,
+        "shieldMaxAngularSpeedPerSecond": 1.7016960206944713,
+        "shieldAngularAccelerationPerSecondSquared": 3.4033920413889427,
+        "shieldAngularBrakingPerSecondSquared": 5.105088062083414
+      }
+    }
+  ]
+}

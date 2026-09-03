@@ -1,6 +1,6 @@
 import type { Request, RequestHandler, Response } from "express";
 
-import { balancePresetsFileSchema } from "@spaceship-defender/protocol";
+import { balancePresetsFileSchema, type PublicShipCatalogue } from "@spaceship-defender/protocol";
 
 import { isStatsRequestAuthorized } from "../stats/access.js";
 import { assertTuningIsPlayable, createDefaultPresetsFile, type BalanceStore } from "./store.js";
@@ -150,10 +150,43 @@ export function createBalanceSaveHandler(options: BalanceRouteOptions): RequestH
   };
 }
 
+/**
+ * The one balance surface that answers without a password: the hulls a display
+ * offers before anyone joins a room. It carries names and looks, never stats
+ * and never the tree, so nothing about the balance leaks through it.
+ *
+ * It also carries a permissive origin header, unlike every other route here. A
+ * display is a separate origin from the game server in every deployment this
+ * repository has, the payload is public by construction, and the alternative --
+ * a proxy in front of each display build -- moves a deployment detail into
+ * three Vite configs.
+ */
+export function createShipCatalogueHandler(options: BalanceRouteOptions): RequestHandler {
+  return (_request: Request, response: Response): void => {
+    const tuning = options.store.getActiveTuning();
+    const catalogue: PublicShipCatalogue = {
+      ships: Object.entries(tuning.shipArchetypes).map(([id, hull]) => ({
+        id,
+        label: hull.label,
+        description: hull.description,
+        visual: hull.visual,
+        unlockedAtWave: hull.unlockedAtWave,
+        tiers: hull.tiers,
+        endlessTier: hull.endlessTier
+      })),
+      defaultShipId: tuning.defaultShipArchetypeId
+    };
+    applyNoStoreHeaders(response);
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.json(catalogue);
+  };
+}
+
 export function registerBalanceRoutes(
   app: BalanceRouteRegistrar,
   options: BalanceRouteOptions
 ): void {
+  app.get("/ships", createShipCatalogueHandler(options));
   app.get("/admin/balance", createBalanceStateHandler(options));
   app.get("/admin/balance/defaults", createBalanceDefaultsHandler(options));
   app.post("/admin/balance/validate", readJsonBody(), createBalanceValidateHandler(options));

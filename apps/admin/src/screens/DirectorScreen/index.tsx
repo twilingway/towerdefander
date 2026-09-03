@@ -1,6 +1,8 @@
 import {
   BACKGROUND_DRIFT_SPEED_MAX,
   BACKGROUND_PARALLAX_STRENGTH_MAX,
+  ARENA_RADIUS_MAX,
+  ARENA_RADIUS_MIN,
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
@@ -220,6 +222,26 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
         по-прежнему берётся из радиуса астероида.
       </p>
 
+      <h3 className="card__subtitle">Размер арены</h3>
+      <div className="card__grid">
+        <NumberField
+          caption="Радиус арены, мировых единиц"
+          min={ARENA_RADIUS_MIN}
+          step={100}
+          value={tuning.arenaRadius}
+          onChange={(arenaRadius) => {
+            onChange({ ...tuning, arenaRadius: clampArenaRadius(arenaRadius) });
+          }}
+        />
+      </div>
+      <p className="screen__hint">
+        Мир — квадрат со стороной в два радиуса, то есть {tuning.arenaRadius * 2} единиц, а корабль
+        стартует в его центре. Больший радиус разносит врагов дальше и удлиняет волны: спавн и
+        зачистка считаются от этой же окружности. Декорации следуют за размером. Арена применяется
+        со следующего запуска боя, допустимый диапазон — от {ARENA_RADIUS_MIN} до {ARENA_RADIUS_MAX}
+        .
+      </p>
+
       <h3 className="card__subtitle">Камера мира</h3>
       <div className="card__grid">
         <NumberField
@@ -322,6 +344,10 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
  * The frame is 16:9, so its shorter half is what a target is guaranteed to be
  * inside; a shooter further out opens fire from beyond the screen edge.
  */
+function clampArenaRadius(value: number): number {
+  return Math.min(ARENA_RADIUS_MAX, Math.max(ARENA_RADIUS_MIN, Math.round(value)));
+}
+
 function clampCameraViewWidth(value: number): number {
   return Math.min(CAMERA_VIEW_WIDTH_MAX, Math.max(CAMERA_VIEW_WIDTH_MIN, Math.round(value)));
 }

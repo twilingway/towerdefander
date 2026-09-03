@@ -146,6 +146,19 @@ button:disabled {
   background: #132d2a;
 }
 
+.ship-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+
+.ship-pitch {
+  margin-block: 0 1rem;
+  color: #b9d3ce;
+  font-size: clamp(0.9rem, 1.2vw, 1.15rem);
+}
+
 .eyebrow {
   margin: 0;
   color: #e6b85c;
@@ -398,6 +411,9 @@ p {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
+/* The dial owns the middle of the bottom edge, so the readouts flank it: two
+   cards to the left, two to the right, and a reserved column between them the
+   width of the radar. */
 .display-shell--battle .spaceship-hud {
   position: absolute;
   z-index: 25;
@@ -405,7 +421,15 @@ p {
   bottom: max(0.75rem, env(safe-area-inset-bottom));
   left: max(0.75rem, env(safe-area-inset-left));
   gap: 0.5rem;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr))
+    calc(var(--radar-size) + 4rem)
+    repeat(2, minmax(0, 1fr));
   pointer-events: none;
+}
+
+.display-shell--battle .spaceship-hud > div:nth-child(3) {
+  grid-column: 4;
 }
 
 .display-shell--battle .spaceship-hud > div {
@@ -484,10 +508,16 @@ p {
   box-shadow: 0 0 0.8rem rgb(255 73 60 / 85%);
 }
 
+/* Half the size it was: four digits do not need a nine-rem disc, and the band
+   under it belongs to the boss bar. */
+.display-shell--battle {
+  --wave-clock-size: clamp(3.5rem, 4.5vw, 4.5rem);
+}
+
 .wave-countdown {
   display: grid;
-  width: clamp(7rem, 9vw, 9rem);
-  padding: 0.8rem;
+  width: var(--wave-clock-size, clamp(3.5rem, 4.5vw, 4.5rem));
+  padding: 0.35rem;
   border: 2px solid rgb(117 216 255 / 68%);
   border-radius: 50%;
   color: #c9f5ff;
@@ -503,16 +533,64 @@ p {
   backdrop-filter: blur(6px);
 }
 
+/* The caption no longer fits and no longer has to: the timer carries its own
+   aria-label, so the words are still there for a screen reader. */
 .wave-countdown span {
-  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  display: none;
 }
 
 .wave-countdown strong {
   color: #ffd783;
-  font-size: clamp(1.4rem, 2.2vw, 2.1rem);
+  font-size: clamp(0.95rem, 1.4vw, 1.3rem);
+}
+
+/* Directly under the clock, and only while a boss is alive. */
+.boss-health {
+  position: absolute;
+  z-index: 25;
+  top: calc(max(0.75rem, env(safe-area-inset-top)) + var(--wave-clock-size) + 0.5rem);
+  left: 50%;
+  display: grid;
+  width: min(26rem, 38vw);
+  gap: 0.2rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid rgb(255 93 79 / 45%);
+  border-radius: 0.75rem;
+  color: #ffd7cf;
+  background: rgb(30 8 10 / 78%);
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  backdrop-filter: blur(6px);
+}
+
+.boss-health span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.boss-health small {
+  color: #ffb8af;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.boss-health__bar {
+  width: 100%;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 10%);
+}
+
+.boss-health__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff5d4f, #ffb54a);
+  transition: width 120ms linear;
 }
 
 .wave-countdown--warning {
@@ -527,6 +605,18 @@ p {
   color: #ff796e;
 }
 
+.wave-countdown--salvage {
+  border-color: rgb(126 255 173 / 75%);
+  color: #cdffe0;
+  box-shadow:
+    inset 0 0 1.6rem rgb(96 255 158 / 16%),
+    0 0 1.4rem rgb(96 255 158 / 22%);
+}
+
+.wave-countdown--salvage strong {
+  color: #7effad;
+}
+
 .display-wave-countdown {
   position: absolute;
   z-index: 25;
@@ -535,13 +625,21 @@ p {
   transform: translateX(-50%);
 }
 
+/* One number for the dial, because the HUD reserves a column of exactly this
+   width for it. */
+.display-shell--battle {
+  --radar-size: clamp(11rem, 17vw, 16rem);
+}
+
 .combat-radar {
   position: absolute;
   z-index: 25;
-  bottom: max(8rem, calc(env(safe-area-inset-bottom) + 7.2rem));
+  /* Flat on the bottom edge: the hull and shield cards it replaced used to sit
+     above it, and nothing needs that band any more. */
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
   left: 50%;
   display: grid;
-  width: clamp(10rem, 15vw, 14rem);
+  width: var(--radar-size);
   padding: 0.45rem;
   border: 1px solid rgb(71 224 233 / 35%);
   border-radius: 50%;
@@ -554,18 +652,6 @@ p {
   aspect-ratio: 1;
   transform: translateX(-50%);
   backdrop-filter: blur(3px);
-}
-
-.combat-radar__title {
-  position: absolute;
-  z-index: 1;
-  top: 8%;
-  left: 50%;
-  color: rgb(156 245 250 / 72%);
-  font-size: clamp(0.55rem, 0.7vw, 0.7rem);
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  transform: translateX(-50%);
 }
 
 .combat-radar svg {
@@ -595,6 +681,16 @@ p {
   fill: rgb(196 206 222 / 90%);
 }
 
+/* Salvage is the one marker the pilot chases rather than avoids, so it is the
+   only green thing on the radar and it keeps its own shape. */
+.combat-radar__loot {
+  fill: rgb(126 242 164 / 90%);
+}
+
+.combat-radar__loot[data-loot-kind="shieldCell"] {
+  fill: rgb(126 200 242 / 90%);
+}
+
 .combat-radar__enemy {
   fill: #ff625e;
   stroke: #ffd0ca;
@@ -611,6 +707,91 @@ p {
 
 .combat-radar__spaceship path {
   fill: #b9fff8;
+}
+
+.combat-radar__ring-track {
+  fill: none;
+  stroke: rgb(255 255 255 / 9%);
+  stroke-width: 4;
+}
+
+/* The colour of the hull ring is a value, not a state, so it is painted from
+   the component; the stylesheet owns only the shape. */
+.combat-radar__ring-value {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 120ms linear;
+}
+
+/* Thinner, colder and set well outside the hull ring, so the pair reads as two
+   gauges instead of one double line. */
+.combat-radar__ring--shield .combat-radar__ring-track,
+.combat-radar__ring--shield .combat-radar__ring-value {
+  stroke-width: 3;
+}
+
+.combat-radar__ring--hull .combat-radar__ring-value {
+  filter: drop-shadow(0 0 3px rgb(0 0 0 / 55%));
+}
+
+.combat-radar__speed-plate {
+  fill: rgb(3 20 29 / 88%);
+  stroke: rgb(86 235 240 / 45%);
+  stroke-width: 1;
+}
+
+.combat-radar__speed {
+  fill: #bdfaff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  paint-order: stroke;
+  stroke: rgb(3 20 29 / 85%);
+  stroke-width: 3;
+}
+
+/* The shield word the HUD card used to carry, in the gap under the dial. */
+.combat-radar__shield-state {
+  fill: #9ad7ff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  paint-order: stroke;
+  stroke: rgb(3 20 29 / 85%);
+  stroke-width: 3;
+}
+
+.combat-radar__shield-state[data-shield-phase="up"] {
+  fill: #75d8ff;
+}
+
+.combat-radar__shield-state[data-shield-phase="cooling"] {
+  fill: #ffd783;
+}
+
+/* Ends of the two arcs: nothing but 0 and the pair the ring is filling to. */
+.combat-radar__scale {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: rgb(3 20 29 / 85%);
+  stroke-width: 3.5;
+}
+
+/* The pair carries the number the HUD card used to, so it is the loud one. */
+.combat-radar__scale--value {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.combat-radar__scale--hull {
+  fill: #cfe6d8;
+}
+
+.combat-radar__scale--shield {
+  fill: #9ad7ff;
 }
 
 .combat-radar__frame {
@@ -669,12 +850,42 @@ p {
   color: #ffd783;
 }
 
+.tier-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-block: 0.6rem;
+}
+
+.tier-ribbon__step {
+  width: 1.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 18%);
+}
+
+.tier-ribbon__step.is-done {
+  background: #78d39c;
+}
+
+.tier-ribbon__step.is-current {
+  background: #ffd783;
+  box-shadow: 0 0 0 2px rgb(255 215 131 / 35%);
+}
+
+.tier-ribbon small {
+  margin-inline-start: 0.5rem;
+  color: #b9d3ce;
+}
+
 .intermission-cards {
   display: grid;
   margin: 0;
   padding: 0;
   gap: 0.6rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* A tier is one to four cards wide, so the columns follow the tier. */
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   list-style: none;
 }
 
@@ -705,6 +916,48 @@ p {
   justify-self: center;
   color: #fff4f2;
   background: #9e3f3a;
+}
+
+/* Offered in the lobby, where the room is being set up and nobody is flying. */
+.fullscreen-button {
+  min-height: 2.6rem;
+  margin-top: 0.75rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  color: #d8efe9;
+  background: rgb(255 255 255 / 8%);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Beside the ping, because both answer "is this display keeping up". */
+.fps-readout {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  color: #8fb3ad;
+  background: rgb(8 19 19 / 72%);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fps-readout strong {
+  color: #d8efe9;
+}
+
+/* Dropping frames badly enough to see, so the number says so on its own. */
+.fps-readout--strained strong {
+  color: #ffb27a;
+}
+
+/* The longest single frame of the last second, shown only when there was one
+   worth naming: a stall reads as a freeze, which the average never shows. */
+.frame-spike {
+  color: #8fb3ad;
+}
+
+.frame-spike--alarming strong {
+  color: #ff8f6a;
 }
 
 .visible-demo-overlay {
@@ -794,14 +1047,182 @@ p {
   pointer-events: auto;
 }
 
+/* Too narrow to flank anything: the readouts go back to two columns across the
+   bottom and the dial sits above them, as it did before. */
 @media (width <= 900px) {
-  .spaceship-hud {
+  .display-shell--battle {
+    --radar-size: clamp(8.5rem, 22vw, 10rem);
+  }
+
+  .spaceship-hud,
+  .display-shell--battle .spaceship-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .display-shell--battle .spaceship-hud > div:nth-child(3) {
+    grid-column: auto;
   }
 
   .combat-radar {
     bottom: max(12.5rem, calc(env(safe-area-inset-bottom) + 11.7rem));
-    width: clamp(8.5rem, 22vw, 10rem);
+  }
+}
+
+/*
+ * A phone standing in for the display.
+ *
+ * Keyed on height, not width: a phone held sideways is 844 points across and
+ * 390 tall, so a width rule reads it as roomy while the cards stacked two deep
+ * eat three quarters of it. Short is the thing that hurts.
+ *
+ * Everything but the battlefield gets out of the way. The readouts go back to
+ * flanking the dial in one strip along the bottom edge and drop their second
+ * lines, which are the sentences rather than the numbers. The crew's per-seat
+ * pings go with them: the header carries the display's own, and the rest is a
+ * diagnostic nobody reads mid-fight. What is left of the room controls is sized
+ * for a thumb and no larger.
+ */
+@media (height <= 520px) {
+  .display-shell--battle {
+    --radar-size: clamp(4.5rem, 13vw, 6.5rem);
+  }
+
+  .display-shell--battle .spaceship-hud {
+    right: max(0.4rem, env(safe-area-inset-right));
+    bottom: max(0.4rem, env(safe-area-inset-bottom));
+    left: max(0.4rem, env(safe-area-inset-left));
+    gap: 0.3rem;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr))
+      calc(var(--radar-size) + 2rem)
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .display-shell--battle .spaceship-hud > div:nth-child(3) {
+    grid-column: 4;
+  }
+
+  .display-shell--battle .spaceship-hud > div {
+    padding: 0.25rem 0.45rem;
+    border-radius: 0.5rem;
+  }
+
+  /*
+   * A phone held sideways fits the frame by height, so what is left is a bar
+   * down each side - a fifth of the screen that used to sit empty while these
+   * readouts lay across the battlefield. They go in the bars instead, two to a
+   * side, and the arena is left alone. `--bar-thickness` is measured by the
+   * shell with the camera's own arithmetic; `data-bars` says there is enough of
+   * one to be worth it.
+   */
+  .display-shell--battle[data-bars="side"] .spaceship-hud {
+    top: max(2.2rem, calc(env(safe-area-inset-top) + 1.8rem));
+    right: 0;
+    bottom: max(0.4rem, env(safe-area-inset-bottom));
+    left: 0;
+    gap: 0.3rem;
+    grid-template-columns: var(--bar-thickness) 1fr var(--bar-thickness);
+    grid-template-rows: repeat(2, auto);
+    align-content: end;
+  }
+
+  .display-shell--battle[data-bars="side"] .spaceship-hud > div:nth-child(1) {
+    grid-area: 1 / 1;
+  }
+
+  .display-shell--battle[data-bars="side"] .spaceship-hud > div:nth-child(2) {
+    grid-area: 2 / 1;
+  }
+
+  .display-shell--battle[data-bars="side"] .spaceship-hud > div:nth-child(3) {
+    grid-area: 1 / 3;
+  }
+
+  .display-shell--battle[data-bars="side"] .spaceship-hud > div:nth-child(4) {
+    grid-area: 2 / 3;
+  }
+
+  /* In a bar this narrow the label goes above the number, not beside it. */
+  .display-shell--battle[data-bars="side"] .spaceship-hud > div {
+    padding: 0.2rem 0.3rem;
+  }
+
+  .display-shell--battle[data-bars="side"] .spaceship-hud span {
+    font-size: 0.52rem;
+  }
+
+  .display-shell--battle[data-bars="side"] .spaceship-hud strong {
+    font-size: 0.85rem;
+  }
+
+  .display-shell--battle .spaceship-hud small {
+    display: none;
+  }
+
+  .display-shell--battle .spaceship-hud span {
+    font-size: 0.58rem;
+  }
+
+  .display-shell--battle .spaceship-hud strong {
+    font-size: 1rem;
+  }
+
+  .display-shell--battle .crew-latency-overlay {
+    display: none;
+  }
+
+  .display-shell--battle > .room-header {
+    top: max(0.4rem, env(safe-area-inset-top));
+    right: max(0.4rem, env(safe-area-inset-right));
+    left: max(0.4rem, env(safe-area-inset-left));
+    align-items: start;
+  }
+
+  .display-shell--battle .room-code {
+    font-size: 0.95rem;
+  }
+
+  .display-shell--battle .room-network {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .display-shell--battle .phase-badge {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+  }
+
+  .display-shell--battle .latency-indicator,
+  .display-shell--battle .fps-readout {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.62rem;
+  }
+
+  .display-shell--battle .room-close-button {
+    min-height: 1.75rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+  }
+
+  .display-shell--battle .module-tree--collapsed {
+    top: max(2.4rem, calc(env(safe-area-inset-top) + 2rem));
+    left: max(0.4rem, env(safe-area-inset-left));
+    padding: 0.2rem;
+  }
+
+  .display-shell--battle .module-tree__toggle {
+    /* Buttons carry a thumb-sized minimum height across the app; on a screen
+       this short that alone is a tenth of the battlefield. */
+    min-height: 1.5rem;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.58rem;
+  }
+
+  /* Back onto the bottom edge, in the column the strip keeps for it. */
+  .combat-radar {
+    bottom: max(0.4rem, env(safe-area-inset-bottom));
   }
 }
 
@@ -897,4 +1318,341 @@ p {
 .preview-controls__toggle {
   font-size: 0.85rem;
   line-height: 1;
+}
+
+/* The tree as a tank line: tiers left to right, the modules of a tier stacked
+   under its numeral, taken ones lit and the open tier outlined. It is a window
+   over the stage rather than part of the HUD, because it answers a question the
+   crew asks between waves, not during one — above every other overlay, and
+   collapsible for exactly the same reason. */
+.module-tree {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 60;
+  display: grid;
+  /* Toggle, tree, ship facts. Only the middle row gives way when the screen is
+     short, and it gives way by scrolling: capped by max-height alone the cards
+     simply ran out past the bottom of the window and off the glass, so on a
+     phone in landscape the last two tiers could not be read or reached. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(96vw, 120rem);
+  max-height: 88vh;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1rem;
+  background: rgb(6 16 20 / 92%);
+  transform: translate(-50%, -50%);
+}
+
+/* Collapsed, the aside is one button and the three-row template would leave the
+   rows it no longer has holding space above and below it. */
+.module-tree--collapsed {
+  grid-template-rows: auto;
+}
+
+.module-tree__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* Collapsed it is just its own toggle, and it leaves the middle of the screen:
+   centred is where the window belongs, not the button that reopens it. */
+.module-tree--collapsed {
+  top: max(13rem, calc(env(safe-area-inset-top) + 12rem));
+  left: max(1.25rem, env(safe-area-inset-left));
+  width: auto;
+  max-height: none;
+  padding: 0.35rem;
+  transform: none;
+}
+
+.module-tree__toggle {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 8%);
+  color: #cfe6e1;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.module-tree__header small {
+  color: #b9d3ce;
+}
+
+.module-tree__grid {
+  display: flex;
+  min-height: 0;
+  gap: 0.35rem;
+  overflow: auto;
+}
+
+/* Eleven columns share the width instead of demanding it: the window is the one
+   place the whole tree has to be visible at once, and a horizontal scrollbar
+   hides exactly the tiers the crew has not reached yet. */
+.module-tree__tier {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  align-content: start;
+  gap: 0.3rem;
+}
+
+.module-tree__numeral {
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  color: #7f9c97;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+.module-tree__tier.is-open > .module-tree__numeral {
+  border-bottom-color: #ffd783;
+  color: #ffd783;
+}
+
+.module-tree__cells {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 0.3rem;
+  list-style: none;
+}
+
+.module-tree__cell {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-inline-start-width: 3px;
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 4%);
+  color: #7f9c97;
+  font-size: 0.7rem;
+  line-height: 1.15;
+}
+
+.module-tree__cell strong {
+  font-weight: 700;
+}
+
+.module-tree__cell small {
+  color: inherit;
+  font-size: 0.62rem;
+  opacity: 0.85;
+}
+
+.module-tree__cell .module-tree__seat {
+  opacity: 0.55;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* What the ship is now, and what the tree has already given it. */
+.module-tree__stats {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+
+.module-tree__facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  gap: 0.35rem 0.9rem;
+}
+
+.module-tree__facts dt {
+  color: #7f9c97;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.module-tree__facts dd {
+  margin: 0;
+  color: #eef7f4;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.module-tree__gains {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.5rem;
+}
+
+.module-tree__gains-caption {
+  color: #7f9c97;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.module-tree__gains ul {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  gap: 0.3rem;
+  list-style: none;
+}
+
+.module-tree__gains li {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid rgb(120 211 156 / 35%);
+  border-radius: 999px;
+  background: rgb(120 211 156 / 12%);
+  color: #dff3e9;
+  font-size: 0.65rem;
+}
+
+.module-tree__gains em {
+  color: #7f9c97;
+  font-size: 0.68rem;
+}
+
+/* Taken: full contrast and a white edge, the way a picked node reads in a tank
+   line. Open: the tier the crew can buy from right now. */
+.module-tree__cell.is-taken {
+  border-color: rgb(255 255 255 / 75%);
+  background: rgb(120 211 156 / 16%);
+  color: #eef7f4;
+}
+
+.module-tree__cell.is-open {
+  border-color: #ffd783;
+  background: rgb(255 215 131 / 10%);
+  color: #f6efdc;
+}
+
+.module-tree__cell[data-role="pilot"] {
+  border-inline-start-color: #e0563f;
+}
+
+.module-tree__cell[data-role="gunner"] {
+  border-inline-start-color: #ffb54a;
+}
+
+.module-tree__cell[data-role="shield"] {
+  border-inline-start-color: #4da9d8;
+}
+
+/*
+ * The display is a landscape instrument: its frame is 16:9 and every crew is
+ * given the same slice of arena out of it. Portrait cannot hold that frame, so
+ * the screen asks to be turned rather than playing a worse game.
+ */
+.rotate-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 60vh;
+  padding: 2rem;
+  text-align: center;
+  color: #cfe6ff;
+  background: radial-gradient(circle at 50% 40%, #12203a 0%, #060a14 70%);
+}
+
+.rotate-notice__icon {
+  font-size: 3.5rem;
+  line-height: 1;
+  color: #7ef0ff;
+  animation: rotate-notice-turn 2.4s ease-in-out infinite;
+}
+
+.rotate-notice h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.rotate-notice p {
+  margin: 0;
+  max-width: 28ch;
+  opacity: 0.75;
+}
+
+@keyframes rotate-notice-turn {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-notice__icon {
+    animation: none;
+  }
+}
+
+/*
+ * The tree on a short screen, and last in the file on purpose: these override
+ * the tree's own rules above, which win on order at equal specificity.
+ *
+ * Eleven tiers sharing a phone's width give each card fifty-five points, which
+ * fits no card. The columns keep a width a card can be read at and the row
+ * scrolls sideways instead - the one gesture a phone is good at - and the open
+ * tier scrolls itself into view, so the swipe is only for looking around.
+ */
+@media (height <= 520px) {
+  /* The open window only: collapsed, this aside is one chip, and a width rule
+     this late in the file would stretch it across the whole screen. */
+  .module-tree:not(.module-tree--collapsed) {
+    width: min(98vw, 120rem);
+    max-height: 94vh;
+    gap: 0.35rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .module-tree__grid {
+    gap: 0.3rem;
+  }
+
+  .module-tree__tier {
+    flex: 0 0 8.5rem;
+  }
+
+  .module-tree__numeral {
+    font-size: 0.65rem;
+  }
+
+  .module-tree__cell {
+    padding: 0.22rem 0.35rem;
+    font-size: 0.62rem;
+  }
+
+  .module-tree__header small {
+    display: none;
+  }
+
+  .module-tree__stats {
+    gap: 0.3rem;
+    padding-top: 0.35rem;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The cards already say what has been taken; this is the same list again. */
+  .module-tree__gains {
+    display: none;
+  }
 }

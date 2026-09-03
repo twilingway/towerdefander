@@ -8,20 +8,22 @@ import { validateSpaceshipSimulationConfig } from "./simulationValidation.ts";
 
 export function createSpaceshipSimulationState(
   config: SpaceshipSimulationConfig,
-  runSeed: number
+  runSeed: number,
+  startWave = 1
 ): SpaceshipSimulationState {
-  return createCleanSpaceshipRun(config, runSeed);
+  return createCleanSpaceshipRun(config, runSeed, startWave);
 }
 
 export function createCleanSpaceshipRun(
   config: SpaceshipSimulationConfig,
-  runSeed: number
+  runSeed: number,
+  startWave = 1
 ): SpaceshipSimulationState {
   validateSpaceshipSimulationConfig(config);
   validateRunSeed(runSeed);
 
   return {
-    ...createInitialCombatState(config, runSeed),
+    ...createInitialCombatState(config, runSeed, startWave),
     clock: { tick: 0, elapsedMs: 0 },
     spaceship: {
       x: config.worldWidth / 2,
@@ -37,6 +39,8 @@ export function createCleanSpaceshipRun(
     shieldTargetAngle: null,
     shieldAngularVelocity: 0,
     shieldActive: false,
+    shieldPhase: "down",
+    shieldPhaseTicks: 0,
     shieldEnergy: config.shieldCapacity,
     shieldRearmRequired: false,
     spaceshipHeading: 0,

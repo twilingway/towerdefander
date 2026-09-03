@@ -1,13 +1,18 @@
+import { useState } from "react";
+
 import {
   AUTOPILOT_LEVELS,
+  FRIENDLY_WEAPON_KINDS,
   type AutopilotLevel,
   type AutopilotProfile,
-  type BalanceTuning
+  type BalanceTuning,
+  type FriendlyWeaponKind
 } from "@spaceship-defender/protocol";
 
 import {
   DegreesField,
   DelayField,
+  FRIENDLY_WEAPON_KIND_LABELS,
   NumberField,
   PercentField,
   SecondsField
@@ -25,9 +30,11 @@ const AUTOPILOT_LEVEL_LABELS: Record<AutopilotLevel, string> = {
 };
 
 const AUTOPILOT_LEVEL_HINTS: Record<AutopilotLevel, string> = {
-  rookie: "Кружит по арене, палит во всё подряд и держит щит, пока есть энергия.",
-  veteran: "Держит дистанцию, уходит от ракет, бережёт нагрев и энергию.",
-  ace: "Стреляет с полным упреждением, уклоняется от пуль и поднимает щит заранее."
+  rookie:
+    "Кружит по арене, палит во всё подряд и держит щит, пока есть энергия. Замерено: медиана 7 волны.",
+  veteran:
+    "Летает как ас, но целится хуже, не уходит от пуль и бережёт нагрев. Замерено: медиана 9 волны.",
+  ace: "Стреляет с полным упреждением, уклоняется от пуль и поднимает щит заранее. Замерено: медиана 10 волны."
 };
 
 /**
@@ -36,6 +43,11 @@ const AUTOPILOT_LEVEL_HINTS: Record<AutopilotLevel, string> = {
  * through a weaker or a sharper pilot.
  */
 export function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
+  // Which set is on screen. The bot flies differently with each turret, so the
+  // profiles are per kind; the run picks the set by the turret it is carrying.
+  const [kind, setKind] = useState<FriendlyWeaponKind>(tuning.cannonWeaponKind);
+  const profiles = tuning.autopilot.profiles[kind];
+
   const patchProfile = (level: AutopilotLevel, values: Partial<AutopilotProfile>): void => {
     onChange({
       ...tuning,
@@ -43,7 +55,7 @@ export function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
         ...tuning.autopilot,
         profiles: {
           ...tuning.autopilot.profiles,
-          [level]: { ...tuning.autopilot.profiles[level], ...values }
+          [kind]: { ...profiles, [level]: { ...profiles[level], ...values } }
         }
       }
     });
@@ -59,16 +71,56 @@ export function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
         </p>
       </header>
 
+      <article className="card">
+        <h3 className="card__subtitle">Профили под ствол</h3>
+        <p className="screen__hint">
+          У каждого вида турели свой набор профилей: перебор показал, что при смене ствола меняются
+          одиннадцать полей из шестнадцати — вплоть до того, кружить вокруг цели или закрываться.
+          Прогон берёт набор по турели, которая на корабле; здесь выбирается только то, какой набор
+          вы сейчас правите. Сейчас на корабле:{" "}
+          <b>{FRIENDLY_WEAPON_KIND_LABELS[tuning.cannonWeaponKind]}</b>.
+        </p>
+        <div className="card__grid">
+          <label className="field">
+            <span className="field__caption">Редактируемый набор</span>
+            <select
+              className="field__input"
+              value={kind}
+              onChange={(event) => {
+                setKind(event.target.value as FriendlyWeaponKind);
+              }}
+            >
+              {FRIENDLY_WEAPON_KINDS.map((option) => (
+                <option key={option} value={option}>
+                  {FRIENDLY_WEAPON_KIND_LABELS[option]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </article>
+
+      <p className="screen__hint">
+        Числа в профилях не выдуманы: их подобрал перебор по каждому полю — сто прогонов на значение
+        и проверка на двух других блоках сидов. Замеры записаны в подсказки полей ниже; где
+        подсказки нет, текущее значение и есть лучшее из проверенных. Мерилось на этом пресете и на
+        этой турели, поэтому после смены вида оружия перебор стоит повторить.
+      </p>
+
       <details className="legend">
         <summary>Что значат поля</summary>
         <dl className="legend__list">
           <dt>Задержка реакции</dt>
           <dd>
             сколько новая цель должна продержаться лучшей, прежде чем бот на неё переключится; без
-            задержки нос мечется между равными целями
+            задержки нос мечется между равными целями. <b>Замерено:</b> 1.0 с — лучшее; 0.05 с стоит
+            около волны, 2.0 с уже чуть хуже 1.0 с
           </dd>
           <dt>Пересмотр цели</dt>
-          <dd>как часто бот вообще готов сменить цель, даже если появилась более важная</dd>
+          <dd>
+            как часто бот вообще готов сменить цель, даже если появилась более важная.
+            <b> Замерено:</b> 1.5 с — лучшее; 0.1 с стоит около волны, дальше 1.5 с прибавки нет
+          </dd>
           <dt>Разброс прицела</dt>
           <dd>случайная ошибка наведения; она сеяная, поэтому прогон воспроизводится</dd>
           <dt>Доля упреждения</dt>
@@ -135,7 +187,7 @@ export function AutopilotScreen({ tuning, onChange }: AutopilotScreenProps) {
       </article>
 
       {AUTOPILOT_LEVELS.map((level) => {
-        const profile = tuning.autopilot.profiles[level];
+        const profile = profiles[level];
         return (
           <article className="card" key={level}>
             <h3 className="card__subtitle">{AUTOPILOT_LEVEL_LABELS[level]}</h3>

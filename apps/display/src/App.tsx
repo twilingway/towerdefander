@@ -3,6 +3,7 @@ import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
+  MAX_START_WAVE,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
   ROOM_TYPE,
@@ -10,7 +11,9 @@ import {
   roomClosingSchema,
   serverLatencyProbeSchema,
   serverMessage,
-  type DisplayRoomView
+  type CrewSize,
+  type DisplayRoomView,
+  type PublicShipCatalogue
 } from "@spaceship-defender/protocol";
 import {
   createDefaultGameServerUrl,
@@ -22,18 +25,23 @@ import {
   roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
+import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
 import { CrewLatency } from "./components/CrewLatency/index.js";
+import { useLetterboxBars } from "./useLetterboxBars.js";
+import { FpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
+import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
+import { SalvageCountdown } from "./SalvageCountdown.js";
 import { WaveCountdown } from "./WaveCountdown.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import {
@@ -41,9 +49,16 @@ import {
   confirmDisplayRoomClose,
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
-import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
+import {
+  createPreviewRoomView,
+  PREVIEW_CAMERA_VIEW_WIDTH,
+  PREVIEW_ENDLESS_TIER,
+  PREVIEW_MODULE_TIERS
+} from "./previewMode.js";
+import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
-import { isVisibleDemoMode } from "./visibleDemo.js";
+import { fetchShipCatalogue } from "./shipCatalogue.js";
+import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -58,10 +73,22 @@ const controllerUrl = readStringEnvironment(
 );
 
 export function DisplayApp() {
+  const portrait = useIsPortrait();
   const visibleDemo = isVisibleDemoMode(
     typeof window === "undefined" ? "" : window.location.search,
     import.meta.env.DEV,
     import.meta.env.VITE_VISIBLE_DEMO
+  );
+  // Development builds only. The server refuses the wave without its own flag,
+  // so this control never promises more than the server will do.
+  const allowStartWave = import.meta.env.DEV;
+  const initialStartWave = allowStartWave
+    ? readStartWave(typeof window === "undefined" ? "" : window.location.search, MAX_START_WAVE)
+    : 1;
+  // Lets a demo or a bookmark open the run on a named hull; the picker below
+  // still wins when someone touches it.
+  const urlShipArchetypeId = readShipArchetypeId(
+    typeof window === "undefined" ? "" : window.location.search
   );
   const preview = isPreviewMode(
     typeof window === "undefined" ? "" : window.location.search,
@@ -74,7 +101,10 @@ export function DisplayApp() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0 });
+  const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
+  const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
   // and the Phaser frame all render through the production path.
   const previewView = useMemo(
@@ -82,11 +112,40 @@ export function DisplayApp() {
     [preview, previewPhase, previewCameraViewWidth]
   );
   const view = previewView ?? networkView;
+  // The readouts move into the letterbox on glass that leaves enough of one;
+  // the frame is the camera's, so the arithmetic is the camera's too.
+  const bars = useLetterboxBars(
+    shellReference,
+    view?.game?.cameraViewWidth ?? PREVIEW_CAMERA_VIEW_WIDTH,
+    view?.game != null
+  );
   const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
   const joinUrl = useMemo(
     () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
     [view]
   );
+  // Which tree the crew is walking: this run's hull out of the catalogue, or
+  // the fixture when the preview has no server to ask.
+  const runHull = shipCatalogue?.ships.find((ship) => ship.id === view?.shipArchetypeId);
+  const moduleTree =
+    runHull !== undefined
+      ? { tiers: runHull.tiers, endlessTier: runHull.endlessTier }
+      : previewView === undefined
+        ? undefined
+        : { tiers: PREVIEW_MODULE_TIERS, endlessTier: PREVIEW_ENDLESS_TIER };
+
+  // The hulls a room can be opened on. Fetched once, and only informative: a
+  // display that cannot reach the route still creates rooms, on the preset's
+  // own default hull.
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchShipCatalogue(gameServerUrl, controller.signal).then((catalogue) => {
+      if (!controller.signal.aborted) setShipCatalogue(catalogue);
+    });
+    return () => {
+      controller.abort();
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -100,14 +159,25 @@ export function DisplayApp() {
     []
   );
 
-  async function createRoom(): Promise<void> {
+  async function createRoom(
+    crewSize: CrewSize,
+    shipArchetypeId: string | undefined,
+    startWave: number
+  ): Promise<void> {
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
     try {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
         role: "display",
-        protocolVersion: PROTOCOL_VERSION
+        protocolVersion: PROTOCOL_VERSION,
+        crewSize,
+        // Absent means the preset's own hull, so a display that could not reach
+        // the catalogue still opens a room.
+        ...(shipArchetypeId === undefined ? {} : { shipArchetypeId }),
+        // Sent only when a tester asked for one, so an ordinary create carries
+        // exactly what it always did.
+        ...(startWave > 1 ? { startWave } : {})
       });
       roomReference.current = room;
       room.onStateChange((state) => {
@@ -195,7 +265,13 @@ export function DisplayApp() {
         status={status}
         error={error}
         visibleDemo={visibleDemo}
-        onCreate={() => void createRoom()}
+        allowStartWave={allowStartWave}
+        initialStartWave={initialStartWave}
+        ships={shipCatalogue?.ships ?? []}
+        defaultShipId={urlShipArchetypeId ?? shipCatalogue?.defaultShipId}
+        onCreate={(crewSize, shipArchetypeId, startWave) =>
+          void createRoom(crewSize, shipArchetypeId, startWave)
+        }
       />
     );
   }
@@ -210,7 +286,12 @@ export function DisplayApp() {
     view.game?.asteroids.filter(({ origin }) => origin === "wave").length ?? 0;
 
   return (
-    <main className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}>
+    <main
+      ref={shellReference}
+      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}
+      data-bars={bars.placement}
+      style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
+    >
       {previewView !== undefined && (
         <PreviewControls
           phase={previewPhase}
@@ -231,6 +312,9 @@ export function DisplayApp() {
           <span className="latency-indicator" aria-live="polite">
             Экран → сервер {formatLatency(view.displayLatencyMs)}
           </span>
+          {view.game !== null && (
+            <FpsReadout fps={frameStats.fps} worstFrameMs={frameStats.worstFrameMs} />
+          )}
           <button
             type="button"
             className="room-close-button"
@@ -257,33 +341,9 @@ export function DisplayApp() {
               <strong>{view.game.encounter.waveNumber}</strong>
               <small>{encounterLabel(view.game.encounter.phase)}</small>
             </div>
-            <div>
-              <span>Корпус</span>
-              <strong>
-                {Math.ceil(view.game.spaceship.hp)} / {Math.ceil(view.game.spaceship.maxHp)}
-              </strong>
-              <div className="hud-energy hud-energy--hull" aria-label="Прочность корпуса">
-                <i
-                  style={{
-                    width: `${String((view.game.spaceship.hp / view.game.spaceship.maxHp) * 100)}%`
-                  }}
-                />
-              </div>
-            </div>
-            <div>
-              <span>Щит</span>
-              <strong>{view.game.shield.active ? "АКТИВЕН" : "выключен"}</strong>
-              <div className="hud-energy" aria-label="Энергия щита">
-                <i
-                  style={{
-                    width: `${String((view.game.shield.energy / view.game.shield.capacity) * 100)}%`
-                  }}
-                />
-              </div>
-              <small>
-                {Math.round(view.game.shield.energy)} / {Math.round(view.game.shield.capacity)}
-              </small>
-            </div>
+            {/* Hull and shield moved onto the radar dial: two rings, their end
+                labels and the shield state word say everything these two cards
+                did, in the place the pilot is already looking. */}
             <div>
               <span>Счёт</span>
               <strong>{view.game.encounter.score}</strong>
@@ -303,18 +363,27 @@ export function DisplayApp() {
             </div>
             <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
           </header>
-          <SpaceshipCanvas
-            game={view.game}
-            runNumber={view.runNumber}
-            connectionEpoch={connectionEpoch}
-            visibleDemo={visibleDemo}
-          />
-          {view.game.encounter.phase === "combat" && (
-            <WaveCountdown
-              className="display-wave-countdown"
-              secondsRemaining={view.game.encounter.waveSecondsRemaining}
+          {portrait ? (
+            <RotateNotice />
+          ) : (
+            <SpaceshipCanvas
+              game={view.game}
+              runNumber={view.runNumber}
+              connectionEpoch={connectionEpoch}
+              visibleDemo={visibleDemo}
+              onFrameStats={setFrameStats}
             />
           )}
+          {view.game.encounter.phase === "combat" &&
+            (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
+              <SalvageCountdown secondsRemaining={view.game.encounter.lootWindowSecondsRemaining} />
+            ) : (
+              <WaveCountdown
+                className="display-wave-countdown"
+                secondsRemaining={view.game.encounter.waveSecondsRemaining}
+              />
+            ))}
+          {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
           <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
             <TeamUpgradeOverlay
@@ -323,6 +392,7 @@ export function DisplayApp() {
               score={view.game.encounter.score}
               waveNumber={view.game.encounter.waveNumber}
               phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
+              purchasedModules={view.game.purchasedModules}
             />
           )}
           {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
@@ -334,6 +404,22 @@ export function DisplayApp() {
               readyCount={view.players.filter(({ ready }) => ready).length}
               closing={closingRoom}
               onClose={() => void handleCloseRoom()}
+            />
+          )}
+          {/* The run's own hull, straight from the catalogue; the fixture is
+              the preview's stand-in when no server answered. */}
+          {moduleTree !== undefined && (
+            <ModuleTreeWindow
+              tiers={moduleTree.tiers}
+              endlessTier={moduleTree.endlessTier}
+              purchased={view.game.purchasedModules}
+              initiallyShown={previewView !== undefined}
+              ship={{
+                maxHp: view.game.spaceship.maxHp,
+                shieldCapacity: view.game.shield.capacity,
+                shieldArcRadians: view.game.shield.arcHalfAngle * 2,
+                shieldRadius: view.game.shieldRadius
+              }}
             />
           )}
           <CrewLatency view={view} game={view.game} />

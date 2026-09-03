@@ -1,12 +1,5 @@
 import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 
-const TURN_MS = 18_000;
-
-export function pilotVector(elapsedMs) {
-  const angle = ((elapsedMs % TURN_MS) / TURN_MS) * Math.PI * 2;
-  return normalize({ x: Math.cos(angle), y: Math.sin(angle) });
-}
-
 export function interceptAim(spaceship, target, projectileSpeed = 720) {
   if (target === undefined) return { x: 1, y: 0 };
   const relativeX = target.x - spaceship.x;
@@ -55,6 +48,57 @@ export function normalize(vector) {
   return { x: vector.x / length, y: vector.y / length };
 }
 
+/**
+ * Stand-in muzzle velocity for a barrel that hits the instant it fires. The
+ * lead solution is written in terms of a projectile speed, and this is what
+ * "do not lead at all" looks like in those terms: fast enough that the lead
+ * collapses onto the bearing, finite enough to stay arithmetic.
+ */
+export const HITSCAN_SPEED = 1_000_000;
+
+/**
+ * What speed the lead solution should use for a barrel of this kind. A laser
+ * led like a bullet aims where the target will be and misses everything that
+ * moves — measured on the stand as the difference between a median wave of 5
+ * and one of 8.
+ */
+/**
+ * The profile the bot flies with: a set per turret kind, a profile per level.
+ * The kind matters as much as the level - a sweep moved eleven of the sixteen
+ * fields when the turret changed - so picking one without the other silently
+ * flies a laser profile with a bullet.
+ */
+export function resolveAutopilotProfile(autopilot, level, turretKind) {
+  const byKind = autopilot?.profiles?.[turretKind ?? "kinetic"] ?? autopilot?.profiles?.kinetic;
+  return byKind?.[level];
+}
+
+export function leadSpeedFor(kind, projectileSpeed) {
+  return kind === "laser" ? HITSCAN_SPEED : projectileSpeed;
+}
+
+/**
+ * How far off the bearing a barrel may fire and still expect to connect.
+ *
+ * A bullet has travel time and a body of its own, so the profile's cone is a
+ * reasonable gamble. A beam either crosses the target this instant or does not,
+ * so its cone is the angle the target actually subtends - anything wider is a
+ * shot spent on empty space, and on screen it reads as a barrel that cannot
+ * shoot straight.
+ */
+function firingCone(speed, target, world, profileCone, traverseReach) {
+  if (speed < HITSCAN_SPEED) return Math.max(profileCone, traverseReach);
+  const distance = Math.max(1, distanceBetween(world.ship, target));
+  return Math.max(Math.atan2(target.radius, distance), HITSCAN_AIM_FLOOR);
+}
+
+/**
+ * The tightest cone a hitscan barrel will wait for. Small enough to matter at
+ * the ranges a beam reaches, wide enough that a settling turret still crosses
+ * it instead of hunting forever.
+ */
+const HITSCAN_AIM_FLOOR = 0.02;
+
 const TICK_MS = 50;
 /**
  * Stock muzzle velocities, used only when the caller does not know better.
@@ -69,8 +113,65 @@ const MISSILE_TURN_RATE_PER_SECOND = Math.PI / 2;
 const MAX_EXTRAPOLATION_SECONDS = 0.2;
 /** Fraction of the stand-off distance treated as "on station". */
 const STANDOFF_BAND = 0.15;
+/**
+ * How far a band has to be left before the manoeuvre it gates is abandoned.
+ * A predicate that flips on its own threshold makes the pilot alternate
+ * between two near-opposite courses every other tick: measured over three
+ * runs of the veteran bot, the orbit/close pair alone reversed the requested
+ * course by more than 1.5 rad 192 times, and the stand-off pair 66 more.
+ */
+const BAND_RELEASE = 0.7;
+/**
+ * Bearing error the hull may carry before the helm asks for a full-rate spin.
+ * A tick of hull rotation is about 0.157 rad at the stock rate, so a narrower
+ * band would demand full deflection and overshoot inside a single step.
+ */
+const HELM_SETTLE_RADIANS = 0.25;
+/**
+ * How far astern a course has to sit before the helm commits to backing up.
+ * Well past the beam, because reverse is the slower gear: swinging the hull
+ * round costs about a second and then pays full speed, while backing up pays a
+ * fraction of it for as long as it lasts. At the beam the bot spent 36% of the
+ * fight in reverse, which is neither intended nor good to watch.
+ */
+const HELM_REVERSE_RADIANS = (3 * Math.PI) / 4;
+/**
+ * How far the decision has to swing back before it is given up. Without the gap
+ * the reverse decision chatters on its own threshold and flips the thrust end
+ * for end every other tick, a harder jerk than the one this helm removed:
+ * measured, it tripled the course changes past 0.3 rad.
+ */
+const HELM_REVERSE_MARGIN = 0.35;
 /** Fraction of the arena radius past which the orbit turns back inward. */
 const RIM_FRACTION = 0.8;
+/**
+ * How long the bot keeps going after a shooter it never saw. Several archetypes
+ * out-range the camera frame, and a shot crosses that frame in under a second,
+ * so without a memory the only evidence of the sniper is gone before the pilot
+ * can act on it — which is how the bot ended up sweeping the middle of the
+ * arena farming rocks while it was being shot at.
+ */
+const FIRE_MEMORY_MS = 8_000;
+/** Close enough to the guessed source to call the guess spent. */
+const FIRE_SOURCE_ARRIVAL = 200;
+/**
+ * How much of the frame has to be between the ship and its guess before the
+ * guess can be checked against what is actually there. Inside this the bot can
+ * see the place it is walking to; outside it, an out-ranging shooter would
+ * still be invisible and the guess is all the evidence there is.
+ */
+const FIRE_SOURCE_VISIBLE_SHARE = 0.5;
+/**
+ * How far off course the pilot will go for salvage while a fight is still on.
+ * About two seconds of cruise: far enough to take what fell in the fight the
+ * crew is already in, short enough not to leave it.
+ */
+const SALVAGE_DETOUR_UNITS = 700;
+/**
+ * Share of a drop's value that must actually land for the detour to be worth
+ * it. A repair is not worth a course change for the last few points of hull.
+ */
+const SALVAGE_WORTH_SHARE = 0.5;
 /** Inside this fraction of the arena the search sweeps instead of closing in. */
 const SEARCH_CENTRE_FRACTION = 0.35;
 /** Share of the frame's short side the stand-off ring may occupy. */
@@ -89,8 +190,50 @@ const MAX_TRAVERSE_LEAD_SECONDS = 1.5;
 const TRAVERSE_SETTLE_RADIANS = 0.25;
 /** How much better a new target must rank to be worth abandoning the traverse. */
 const DECISIVE_SCORE_RATIO = 1.5;
+/**
+ * What the shield arc is for. Aimed fire outranks a rock: a rock flies a
+ * straight line, can be shot, and can be stepped off; a shot is pointed at you
+ * and arrives whatever you do. The economics agree on the archetype that made
+ * this obvious — a sniper round costs ten energy and saves thirty-five hull,
+ * a rock costs twenty and saves forty.
+ */
+const THREAT_WEIGHTS = { missile: 3, bullet: 2, beam: 2, asteroid: 1 };
 /** Threat weight from `nextShieldContact` worth spending the last energy on. */
-const COSTLY_THREAT_WEIGHT = 2;
+const COSTLY_THREAT_WEIGHT = THREAT_WEIGHTS.bullet;
+/**
+ * Inside this much time to contact the arc covers what hurts most rather than
+ * what merely arrives first. Beyond it nothing is being blocked yet, so the
+ * arc simply tracks the nearest contact.
+ */
+const SHIELD_PRIORITY_SECONDS = 1;
+/**
+ * How far ahead a homing missile is flown to find where it will arrive, and at
+ * what step. A straight line is the wrong question to ask of a missile that
+ * turns: this preset's boss fires its burst wide of the ship, so at launch the
+ * line says the missile never arrives at all, and the arc learns about it only
+ * once it has curved back in — by which time it is seconds too late. Six
+ * seconds is a fifth of a stock missile's life; a tenth-of-a-second step is
+ * twice the simulation's own and costs sixty cheap iterations per missile.
+ */
+const MISSILE_FORECAST_SECONDS = 6;
+const MISSILE_FORECAST_STEP = 0.1;
+/**
+ * How stale a guessed firing position may be before the arc stops facing it.
+ * Shorter than the pilot's memory of the same guess, because the arc has to
+ * commit its facing to one bearing and a stale one is worse than none.
+ */
+const SHIELD_SOURCE_MEMORY_MS = 3_000;
+/**
+ * How soon a missile has to land before it is worth the cannon while its
+ * launcher is on the field. A boss puts missiles up faster than the mount can
+ * clear them — this catalogue fires two every two seconds — so a gunner that
+ * services every one of them never touches the launcher: measured over forty
+ * runs opening on the boss wave, the boss topped the ranking on 9.8% of ticks
+ * and the fight ended with it at 61% health. Beyond the window an escorted
+ * missile is the hull's problem, which is the better place for it: the ship is
+ * a third faster than the missile and the missile expires.
+ */
+const ESCORTED_MISSILE_SECONDS = 2;
 
 const ZERO_VECTOR = { x: 0, y: 0 };
 
@@ -119,6 +262,15 @@ export function createAutopilotMemory(seed = 1) {
     committedAtMs: 0,
     decidedAtMs: undefined,
     orbitSign: 1,
+    // Which manoeuvre is being held, and for which target it was chosen.
+    closing: false,
+    closingTargetId: undefined,
+    reversing: false,
+    // Where the last shot the bot could see appears to have come from.
+    firedFrom: undefined,
+    firedFromAtMs: 0,
+    holding: false,
+    holdingTargetId: undefined,
     shieldActive: false
   };
 }
@@ -193,6 +345,24 @@ function steerMissile(missile, ship, seconds) {
 }
 
 /**
+ * Where a homing missile will cross the shield ring, found by flying it rather
+ * than by intersecting its current course. The ship is held still for the
+ * forecast: it is the missile that does the chasing, and a guess that also
+ * predicted the helm would need the pilot's plan, which is decided after this.
+ */
+function forecastMissileContact(ship, reach, missile) {
+  const range = reach + missile.radius;
+  let flown = missile;
+  for (let step = 0; step * MISSILE_FORECAST_STEP <= MISSILE_FORECAST_SECONDS; step += 1) {
+    if (Math.hypot(flown.x - ship.x, flown.y - ship.y) <= range) {
+      return { seconds: step * MISSILE_FORECAST_STEP, arrival: flown };
+    }
+    flown = advanceEntity(steerMissile(flown, ship, MISSILE_FORECAST_STEP), MISSILE_FORECAST_STEP);
+  }
+  return undefined;
+}
+
+/**
  * Angular speed of the turret and the hull between two telemetry frames. Only
  * consecutive raw frames may be passed: an extrapolated picture carries these
  * angles forward itself, so measuring off one would compound its own estimate.
@@ -254,38 +424,59 @@ export function extrapolateWorld(world, nowMs, options = {}) {
   };
 }
 
-/**
- * Already past the rim and still heading out. Enemies are held inside the
- * arena by the simulation, but asteroids drift through it and then despawn, so
- * one that is on its way out is not worth a shot or a turret traverse.
- */
-function isLeavingArena(world, entity) {
-  const offsetX = entity.x - world.worldWidth / 2;
-  const offsetY = entity.y - world.worldHeight / 2;
-  if (Math.hypot(offsetX, offsetY) <= world.arenaRadius) return false;
-  return offsetX * entity.velocityX + offsetY * entity.velocityY >= 0;
-}
-
 function maxEngagementRange(archetype) {
   return archetype.weapons.reduce((widest, weapon) => Math.max(widest, weapon.engagementRange), 0);
+}
+
+/**
+ * How far this archetype's beams carry, or zero when it has none. A beam is
+ * the one shot that cannot be outrun once it is fired, so being inside this
+ * ring is not a risk the bot can wait out - only close and kill, or leave.
+ */
+function beamReach(archetype) {
+  return archetype.weapons.reduce(
+    (widest, weapon) =>
+      weapon.kind === "laser" ? Math.max(widest, weapon.engagementRange) : widest,
+    0
+  );
 }
 
 /**
  * One ranking shared by both gunners. Interceptable missiles outrank everything
  * because they are lethal and destructible; a boss outranks ordinary ships; an
  * enemy already inside its own engagement range outranks one still approaching.
+ *
+ * Rocks are not ranked at all. They are the one threat the shield answers on
+ * its own, and every second the guns spent on them was a second taken from the
+ * ships that do the killing or from salvage on a timer.
  */
 export function rankTargets(world, options = {}) {
   const archetypes = options.archetypes ?? {};
   const frameRadius = Math.max(world.cameraViewWidth / 2, 1);
   const scored = [];
+  const escortedByBoss = world.enemies.some(
+    (enemy) => enemy.kind === "boss" || archetypes[enemy.kind]?.spawnPolicy === "boss"
+  );
 
   for (const missile of world.missiles) {
     const seconds = timeToContact(world.ship, world.shieldRadius, missile);
+    // A missile the shield is already facing is the shield's problem. Shooting
+    // it anyway is how a launcher wins without being fought: it feeds the
+    // turret a target a second, the crew intercepts all of them, and the ship
+    // that keeps firing them is never shot at.
+    const covered =
+      seconds !== undefined &&
+      shieldAlreadyCovers(world, Math.atan2(missile.y - world.ship.y, missile.x - world.ship.x));
+    const urgent =
+      seconds !== undefined && !covered && (!escortedByBoss || seconds <= ESCORTED_MISSILE_SECONDS);
     scored.push({
       entity: missile,
       role: "missile",
-      score: seconds === undefined ? 40 : 100 - seconds * 10
+      // Forty for one that is simply not on an intercept course - still lethal,
+      // still destructible, worth the gun when nothing else wants it. Below an
+      // ordinary ship for one the sector is holding, because that one is
+      // already answered.
+      score: urgent ? 100 - seconds * 10 : covered ? 15 : 40
     });
   }
 
@@ -296,20 +487,26 @@ export function rankTargets(world, options = {}) {
     const engaging = archetype !== undefined && distance <= maxEngagementRange(archetype);
     const proximity = 10 * Math.max(0, 1 - distance / frameRadius);
     const finishable = enemy.hp / enemy.maxHp <= 0.3 ? 8 : 0;
+    // Something shooting from beyond the frame is the one thing proximity alone
+    // will never answer: the swarm in your face always scored higher, so a
+    // sniper parked outside plinked for free and the pilot never closed on it.
+    // Ranked above the swarm, the standoff the pilot keeps to its target is
+    // what carries the ship into range.
+    const outranging = engaging && distance > frameRadius;
+    // Above `engaging`, because a shell in the air can be dodged and a beam
+    // already landed. While one of these is in reach the hull is losing health
+    // on a timer no manoeuvre touches.
+    const burning = archetype !== undefined && distance <= beamReach(archetype);
     scored.push({
       entity: enemy,
       role: "enemy",
-      score: (isBoss ? 60 : 30) + (engaging ? 12 : 0) + proximity + finishable
-    });
-  }
-
-  for (const rock of world.asteroids) {
-    if (isLeavingArena(world, rock)) continue;
-    const seconds = timeToContact(world.ship, world.shieldRadius, rock);
-    scored.push({
-      entity: rock,
-      role: "asteroid",
-      score: seconds === undefined ? 4 : 25 - seconds * 2
+      score:
+        (isBoss ? 60 : 30) +
+        (engaging ? 12 : 0) +
+        (outranging ? 18 : 0) +
+        (burning ? 20 : 0) +
+        proximity +
+        finishable
     });
   }
 
@@ -362,15 +559,19 @@ export function commitTarget(ranked, profile, memory, nowMs, world) {
   // switching on every reshuffle leaves the turret permanently in transit and
   // never on target. Spend the traverse already invested unless the newcomer is
   // decisively more dangerous.
+  //
+  // The guard used to hold only while the mount was still crossing, which let
+  // it go at the moment it mattered most: on a screen full of small ships the
+  // proximity score reshuffles every second, so the turret arrived, found the
+  // ranking had moved on, and set off again - a hull surrounded by wreckers
+  // that shot at none of them. It holds whatever the traverse is doing now, and
+  // the ratio is what still lets a boss or an interceptable missile take the
+  // mount: those outscore a swarm ship by far more than half again.
   if (world !== undefined) {
     const committedScore =
       ranked.find(({ entity }) => entity.entityId === memory.target.entityId)?.score ?? 0;
     const bestScore = ranked[0]?.score ?? 0;
-    const aim = directAim(world.ship, memory.target);
-    const pending = Math.abs(shortestAngleDelta(world.turretAngle, Math.atan2(aim.y, aim.x)));
-    if (bestScore <= committedScore * DECISIVE_SCORE_RATIO && pending > TRAVERSE_SETTLE_RADIANS) {
-      return memory.target;
-    }
+    if (bestScore <= committedScore * DECISIVE_SCORE_RATIO) return memory.target;
   }
   if (memory.candidateId !== best.entityId) {
     memory.candidateId = best.entityId;
@@ -401,33 +602,75 @@ export function aimBearing(world, target, projectileSpeed, profile, memory) {
  * Soonest threat to reach the shield ring, with the bearing it will arrive on.
  * Ordered by time, not by distance: a slow rock further out can beat a bullet.
  */
-export function nextShieldContact(world) {
-  let soonest;
-  const threats = [
-    ...world.missiles.map((entity) => ({ entity, weight: 3 })),
-    ...world.asteroids.map((entity) => ({ entity, weight: 2 })),
-    ...world.bullets.map((entity) => ({ entity, weight: 1 }))
-  ];
+export function nextShieldContact(world, options = {}) {
+  const contacts = [];
+  const bearingOf = (arrival) => Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x);
 
-  for (const { entity, weight } of threats) {
-    const seconds = timeToContact(world.ship, world.shieldRadius, entity);
-    if (seconds === undefined) continue;
-    if (
-      soonest === undefined ||
-      seconds < soonest.seconds ||
-      (seconds === soonest.seconds && weight > soonest.weight)
-    ) {
-      const arrival = advanceEntity(entity, seconds);
-      soonest = {
-        entity,
-        weight,
-        seconds,
-        bearing: Math.atan2(arrival.y - world.ship.y, arrival.x - world.ship.x)
-      };
-    }
+  // Missiles are flown rather than extended, because they steer; the rest hold
+  // a course, so intersecting it is exact and costs nothing.
+  for (const entity of world.missiles) {
+    const forecast = forecastMissileContact(world.ship, world.shieldRadius, entity);
+    if (forecast === undefined) continue;
+    contacts.push({
+      entity,
+      weight: THREAT_WEIGHTS.missile,
+      seconds: forecast.seconds,
+      bearing: bearingOf(forecast.arrival)
+    });
   }
 
-  return soonest;
+  const straight = [
+    ...world.bullets.map((entity) => ({ entity, weight: THREAT_WEIGHTS.bullet })),
+    ...world.asteroids.map((entity) => ({ entity, weight: THREAT_WEIGHTS.asteroid }))
+  ];
+
+  // A beam has no flight to forecast: by the time it exists it has already hit.
+  // The only thing the arc can answer is the ship that is about to fire one, so
+  // an enemy standing inside its own beam reach is treated as a contact at zero
+  // seconds - it wins among equals precisely because it is landing now.
+  for (const enemy of world.enemies) {
+    const reach = beamReach(options.archetypes?.[enemy.kind] ?? { weapons: [] });
+    if (reach <= 0 || distanceBetween(world.ship, enemy) > reach) continue;
+    contacts.push({
+      entity: enemy,
+      weight: THREAT_WEIGHTS.beam,
+      seconds: 0,
+      bearing: bearingOf(enemy)
+    });
+  }
+
+  for (const { entity, weight } of straight) {
+    const seconds = timeToContact(world.ship, world.shieldRadius, entity);
+    if (seconds === undefined) continue;
+    contacts.push({
+      entity,
+      weight,
+      seconds,
+      bearing: bearingOf(advanceEntity(entity, seconds))
+    });
+  }
+  if (contacts.length === 0) return undefined;
+
+  const imminent = contacts.filter(({ seconds }) => seconds <= SHIELD_PRIORITY_SECONDS);
+  if (imminent.length === 0) return contacts.reduce(sooner);
+  // Ordered by what it costs to let through, then by how little time is left,
+  // then by spawn order so two identical threats resolve the same way twice.
+  return imminent.reduce((best, contact) =>
+    contact.weight > best.weight ||
+    (contact.weight === best.weight && contact.seconds < best.seconds) ||
+    (contact.weight === best.weight &&
+      contact.seconds === best.seconds &&
+      compareEntities(contact.entity, best.entity) < 0)
+      ? contact
+      : best
+  );
+}
+
+function sooner(best, contact) {
+  return contact.seconds < best.seconds ||
+    (contact.seconds === best.seconds && compareEntities(contact.entity, best.entity) < 0)
+    ? contact
+    : best;
 }
 
 function shieldAlreadyCovers(world, bearing) {
@@ -435,10 +678,40 @@ function shieldAlreadyCovers(world, bearing) {
   return Math.abs(shortestAngleDelta(world.shield.angle, bearing)) <= world.shield.arcHalfAngle;
 }
 
-export function planShield(world, profile, memory) {
-  const contact = nextShieldContact(world);
-  const aim =
-    contact === undefined ? bearingVector(world.shield.angle) : bearingVector(contact.bearing);
+/**
+ * Where fire is expected from while none of it exists yet. The arc crosses the
+ * hull at about 1.7 rad/s, so a half turn costs the better part of two seconds
+ * — longer than a bullet takes to cross the whole camera frame. Pointed only at
+ * what is already flying, the arc arrives after the hit; pointed at whoever is
+ * about to fire, it is already there when the round appears. The nearest enemy
+ * is the guess, and with the frame empty it is the position the pilot walked
+ * the last shots back to, which is where an out-ranging sniper sits.
+ */
+function expectedThreatBearing(world, memory) {
+  let nearest;
+  for (const enemy of world.enemies) {
+    const distance = distanceBetween(world.ship, enemy);
+    if (nearest === undefined || distance < nearest.distance) nearest = { enemy, distance };
+  }
+  if (nearest !== undefined) {
+    return Math.atan2(nearest.enemy.y - world.ship.y, nearest.enemy.x - world.ship.x);
+  }
+
+  const source = memory.firedFrom;
+  if (source === undefined || world.sampledAtMs - memory.firedFromAtMs > SHIELD_SOURCE_MEMORY_MS) {
+    return undefined;
+  }
+  return Math.atan2(source.y - world.ship.y, source.x - world.ship.x);
+}
+
+export function planShield(world, profile, memory, options = {}) {
+  const contact = nextShieldContact(world, options);
+  // Facing is decided ahead of the threat; raising is still the operator's
+  // number from the console. The arc may sit on an enemy for a whole magazine
+  // without the shield ever coming up, and that is the intended shape: turning
+  // costs nothing, holding costs the battery.
+  const expected = contact === undefined ? expectedThreatBearing(world, memory) : contact.bearing;
+  const aim = bearingVector(expected ?? world.shield.angle);
 
   if (!profile.threatAwareShield) {
     memory.shieldActive = nextShieldActive(memory.shieldActive, world.shield.energy);
@@ -509,10 +782,8 @@ export function planGunner(world, profile, memory, options = {}) {
   const cool =
     cannon === undefined ||
     (!cannon.overheated && cannon.heat <= cannon.capacity * (profile.cannonHeatCeiling ?? 1));
-  const firing =
-    cool &&
-    Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <=
-      Math.max(profile.cannonConeRadians, reach);
+  const cone = firingCone(speed, target, world, profile.cannonConeRadians, reach);
+  const firing = cool && Math.abs(shortestAngleDelta(world.turretAngle, bearing)) <= cone;
   return { aim: bearingVector(bearing), firing };
 }
 
@@ -525,15 +796,32 @@ function escapeVector(world, profile) {
   const horizonSeconds = profile.evadeHorizonTicks * (TICK_MS / 1000);
   if (horizonSeconds <= 0) return undefined;
 
+  // A missile is flown, a bullet is extended: the straight line a missile is not
+  // yet on blinks in and out of an intercept as it turns, and the break blinks
+  // with it. Measured over forty runs opening on the boss wave, the pilot
+  // alternated between breaking and holding station 7213 times, the requested
+  // course swung 0.57 rad every tick, and the ship averaged 134 units per second
+  // of a possible 320 — slower than the missiles chasing it.
   const threats = [];
-  if (profile.evadeMissiles) threats.push(...world.missiles);
-  if (profile.dodgeBullets) threats.push(...world.bullets, ...world.asteroids);
+  if (profile.evadeMissiles) {
+    for (const missile of world.missiles) {
+      const forecast = forecastMissileContact(world.ship, world.ship.radius, missile);
+      if (forecast !== undefined) {
+        threats.push({ threat: missile, seconds: forecast.seconds, kind: "missile" });
+      }
+    }
+  }
+  if (profile.dodgeBullets) {
+    for (const bullet of world.bullets) {
+      const seconds = timeToContact(world.ship, world.ship.radius, bullet);
+      if (seconds !== undefined) threats.push({ threat: bullet, seconds, kind: "bullet" });
+    }
+  }
 
   let soonest;
-  for (const threat of threats) {
-    const seconds = timeToContact(world.ship, world.ship.radius, threat);
-    if (seconds === undefined || seconds > horizonSeconds) continue;
-    if (soonest === undefined || seconds < soonest.seconds) soonest = { threat, seconds };
+  for (const candidate of threats) {
+    if (candidate.seconds > horizonSeconds) continue;
+    if (soonest === undefined || candidate.seconds < soonest.seconds) soonest = candidate;
   }
   if (soonest === undefined) return undefined;
 
@@ -546,9 +834,26 @@ function escapeVector(world, profile) {
     x: world.worldWidth / 2 - world.ship.x,
     y: world.worldHeight / 2 - world.ship.y
   });
-  return left.x * inward.x + left.y * inward.y >= right.x * inward.x + right.y * inward.y
-    ? left
-    : right;
+  const vector =
+    left.x * inward.x + left.y * inward.y >= right.x * inward.x + right.y * inward.y ? left : right;
+  return { vector, kind: soonest.kind };
+}
+
+/**
+ * The same point, pulled back onto the arena if it fell outside. The simulation
+ * holds every ship inside that circle, so a guess beyond it is one no shooter
+ * can occupy — and walking to it means walking into the wall and sitting there
+ * until the guess times out.
+ */
+function insideArena(world, point) {
+  const centreX = world.worldWidth / 2;
+  const centreY = world.worldHeight / 2;
+  const offsetX = point.x - centreX;
+  const offsetY = point.y - centreY;
+  const distance = Math.hypot(offsetX, offsetY);
+  if (distance <= world.arenaRadius) return point;
+  const scale = world.arenaRadius / distance;
+  return { x: centreX + offsetX * scale, y: centreY + offsetY * scale };
 }
 
 /**
@@ -557,7 +862,20 @@ function escapeVector(world, profile) {
  * launches from beyond it too, so their shots are the only evidence of them
  * the bot ever gets. Walking one back points at whatever fired it.
  */
-export function huntVector(world) {
+/**
+ * A guess that has come into view with nothing standing on it. A shot outlives
+ * the ship that fired it, so the last round from a wing that is already dead
+ * arms a guess nobody is left to occupy - and the bot used to fly at it for the
+ * full eight seconds, into an empty corner or into the rim.
+ */
+function sourceIsSpent(world, point) {
+  if (distanceBetween(world.ship, point) > world.cameraViewWidth * FIRE_SOURCE_VISIBLE_SHARE) {
+    return false;
+  }
+  return !world.enemies.some((enemy) => distanceBetween(enemy, point) <= FIRE_SOURCE_ARRIVAL);
+}
+
+export function huntVector(world, memory, nowMs) {
   let nearest;
   for (const shot of [...world.bullets, ...world.missiles]) {
     if (Math.hypot(shot.velocityX, shot.velocityY) <= Number.EPSILON) continue;
@@ -565,7 +883,39 @@ export function huntVector(world) {
     if (nearest !== undefined && distance >= nearest.distance) continue;
     nearest = { distance, bearing: Math.atan2(-shot.velocityY, -shot.velocityX) };
   }
-  return nearest === undefined ? undefined : bearingVector(nearest.bearing);
+
+  if (nearest !== undefined) {
+    // A point rather than a bearing, so the guess stays geometrically true as
+    // the ship moves. One frame out is where an out-ranging archetype sits, and
+    // never past the rim, where none can be. The course is read off the point
+    // for the same reason, so a guess that was pulled in is also flown to where
+    // it now is rather than along the bearing it came from.
+    memory.firedFrom = insideArena(world, {
+      x: world.ship.x + Math.cos(nearest.bearing) * world.cameraViewWidth,
+      y: world.ship.y + Math.sin(nearest.bearing) * world.cameraViewWidth
+    });
+    memory.firedFromAtMs = nowMs;
+    return normalize({
+      x: memory.firedFrom.x - world.ship.x,
+      y: memory.firedFrom.y - world.ship.y
+    });
+  }
+
+  if (memory.firedFrom === undefined) return undefined;
+  const toSource = {
+    x: memory.firedFrom.x - world.ship.x,
+    y: memory.firedFrom.y - world.ship.y
+  };
+  // Spent when it goes stale or when the bot gets there and finds nothing.
+  if (
+    nowMs - memory.firedFromAtMs > FIRE_MEMORY_MS ||
+    Math.hypot(toSource.x, toSource.y) < FIRE_SOURCE_ARRIVAL ||
+    sourceIsSpent(world, memory.firedFrom)
+  ) {
+    memory.firedFrom = undefined;
+    return undefined;
+  }
+  return normalize(toSource);
 }
 
 /**
@@ -576,6 +926,36 @@ export function huntVector(world) {
  * to their source; with the screen truly empty it heads for the middle of the
  * arena and sweeps there, which is where the frame covers the most ground.
  */
+/**
+ * The closest drop worth breaking off for, with a stable tie-break like every
+ * other pick. A repair on a full hull returns nothing and a cell on a full
+ * battery the same, so neither is worth a course change; inside the collection
+ * window the wave is already won and everything on the field is taken.
+ */
+function chooseSalvage(world) {
+  const windowOpen = (world.salvageWindowSeconds ?? 0) > 0;
+  let nearest;
+  for (const drop of world.loot ?? []) {
+    const distance = distanceBetween(world.ship, drop);
+    if (!windowOpen && (distance > SALVAGE_DETOUR_UNITS || !worthTaking(world, drop))) continue;
+    const closer =
+      nearest === undefined ||
+      distance < nearest.distance ||
+      (distance === nearest.distance && compareEntities(drop, nearest.drop) < 0);
+    if (closer) nearest = { distance, drop };
+  }
+  return nearest?.drop;
+}
+
+/** Whether the drop would return most of what it carries. */
+function worthTaking(world, drop) {
+  const missing =
+    drop.kind === "repair"
+      ? world.ship.maxHp - world.ship.hp
+      : world.shield.capacity - world.shield.energy;
+  return missing >= drop.amount * SALVAGE_WORTH_SHARE;
+}
+
 function searchVector(world, memory) {
   const inwardX = world.worldWidth / 2 - world.ship.x;
   const inwardY = world.worldHeight / 2 - world.ship.y;
@@ -587,14 +967,38 @@ function searchVector(world, memory) {
 }
 
 /**
- * The ring the pilot actually holds. A ring wider than the camera frames
- * pushes the target off the screen, and what the bot cannot see it drops, so
- * the operator's number is capped by what a viewer has in front of them. The
- * frame's short side is its height, so that is what bounds it.
+ * The ring the pilot actually holds, measured against the gun rather than
+ * written down.
+ *
+ * A share of the barrel's own reach, because the distance worth holding is a
+ * property of the weapon: a beam that carries nine hundred wants to be fought
+ * at the edge of nine hundred, and a shell that flies fifteen hundred does not
+ * want to be fought at four. A written-down number knows neither, and it knows
+ * nothing at all about the reach the crew bought during the run - the Blade
+ * took a quarter more beam range and went on fighting at the same four hundred.
+ *
+ * The profile's own distance survives as the floor: closer than this the hull
+ * does not want to be, whatever the arithmetic says.
+ *
+ * The frame caps it by its height, which is the short way out of the picture
+ * and so the only distance that holds whichever way the target sits. Bounding
+ * it that way used to flatten every barrel onto one number - the beam wanted
+ * seven hundred and sixty and the launcher eleven hundred, and both came back
+ * capped to five hundred and sixty - but that was a fleet whose guns carried
+ * past the frame. Now that no barrel reaches further than the frame does, the
+ * cap binds nothing that the weapon itself had not already decided, and a
+ * target held straight above the hull stays on screen.
+ *
+ * The gun is the last word: a written-down distance further out than the barrel
+ * carries would park the hull where it cannot answer, and a floor is meant to
+ * keep it out of the swarm, not out of the fight.
  */
-export function effectiveStandoff(world, profile) {
-  const halfHeight = (world.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2;
-  return Math.min(profile.standoffDistance, halfHeight * STANDOFF_FRAME_FRACTION);
+export function effectiveStandoff(world, profile, reach) {
+  const frame = ((world.cameraViewWidth * CAMERA_VIEW_ASPECT) / 2) * STANDOFF_FRAME_FRACTION;
+  const share = profile.standoffShare ?? 0;
+  const wanted = reach !== undefined && share > 0 ? reach * share : profile.standoffDistance;
+  const ceiling = reach === undefined ? frame : Math.min(frame, reach);
+  return Math.min(Math.max(wanted, profile.standoffDistance), ceiling);
 }
 
 /**
@@ -623,13 +1027,36 @@ export function bearingRate(world, target) {
  * the target on a constant bearing, which drives the sweep to nothing and hands
  * the fight to the hull — it turns twice as fast as the turret does.
  */
-function traverseLosing(world, target, options) {
+function traverseLosing(world, target, options, memory) {
   const rate = options.turretRate ?? TURRET_RATE_PER_SECOND;
-  return Math.abs(bearingRate(world, target)) > rate * TRAVERSE_MARGIN;
+  const sweep = Math.abs(bearingRate(world, target));
+  const enter = rate * TRAVERSE_MARGIN;
+  // Held per target: the geometry that made the call belongs to that target,
+  // so a new one is judged from scratch rather than inheriting the verdict.
+  const held = memory.closingTargetId === target.entityId && memory.closing === true;
+  const closing = sweep > enter * (held ? BAND_RELEASE : 1);
+  memory.closingTargetId = target.entityId;
+  memory.closing = closing;
+  return closing;
 }
 
-function orbitVector(world, target, profile, memory, distance) {
-  const standoff = effectiveStandoff(world, profile);
+/**
+ * On station means inside the stand-off band, and once on station it takes a
+ * wider excursion to be off it again. Same reason as `traverseLosing`: without
+ * the widening, holding and orbiting trade places on the band edge and the
+ * requested course swings across the target every other tick.
+ */
+function onStation(distance, standoff, target, memory) {
+  const band = standoff * STANDOFF_BAND;
+  const held = memory.holdingTargetId === target.entityId && memory.holding === true;
+  const holding = Math.abs(distance - standoff) <= (held ? band / BAND_RELEASE : band);
+  memory.holdingTargetId = target.entityId;
+  memory.holding = holding;
+  return holding;
+}
+
+function orbitVector(world, target, profile, memory, distance, reach) {
+  const standoff = effectiveStandoff(world, profile, reach);
   const radial = normalize({ x: target.x - world.ship.x, y: target.y - world.ship.y });
   let tangential = { x: -radial.y * memory.orbitSign, y: radial.x * memory.orbitSign };
 
@@ -645,8 +1072,16 @@ function orbitVector(world, target, profile, memory, distance) {
   }
 
   // Positive closes the range, negative opens it; the rest goes sideways.
+  //
+  // Without the orbit skill nothing goes sideways: the ship bores straight in
+  // or straight out and never circles its target. That is the whole of what the
+  // skill withholds now. It used to withhold the entire ladder - a profile
+  // without it flew a fixed circle and never looked at a target at all, so two
+  // of the three hulls only ever engaged when the circle happened to carry them
+  // into range, which read on screen as a bot ignoring the fight for laps at a
+  // time.
   const closing = Math.max(-1, Math.min(1, (distance - standoff) / standoff));
-  const sideways = 1 - Math.abs(closing);
+  const sideways = profile.orbit ? 1 - Math.abs(closing) : 0;
   return normalize({
     x: radial.x * closing + tangential.x * sideways,
     y: radial.y * closing + tangential.y * sideways
@@ -659,61 +1094,141 @@ function orbitVector(world, target, profile, memory, distance) {
  * range, then aim, then coast. Coasting is the only way to fire from a settled
  * heading, because a zero vector brakes but keeps the course.
  */
+/**
+ * Turns a desired course into the spin and push a live pilot's keyboard sends.
+ * The core takes a different branch for each: given an intent the hull spins at
+ * the requested rate and thrust runs along the nose, and without one it chases
+ * an absolute bearing and drifts sideways to the hull. Flying the bot on a
+ * bearing therefore put it on a control model no player has — the hull settled
+ * onto a course and swung back through it, which is the doubling-back the
+ * demonstration showed and the live game does not.
+ */
+export function helmIntent(vector, heading, memory, mayReverse = true) {
+  if (Math.hypot(vector.x, vector.y) <= Number.EPSILON) return { turn: 0, thrust: 0 };
+  const bearing = Math.atan2(vector.y, vector.x);
+  const ahead = shortestAngleDelta(heading, bearing);
+  // Past the beam it is quicker to back up than to swing the hull all the way
+  // round, and it leaves the nose gun pointed at what was being circled. Held
+  // once taken, for the same reason the manoeuvre bands are held.
+  //
+  // What it is never worth is a crossing. Reverse is two fifths of the speed,
+  // so it pays back the second the hull spends turning only over a couple of
+  // hundred units; a run to the far side of the arena flown backwards costs
+  // more than the turn several times over. With nothing on the screen there is
+  // also no nose to keep pointed at anything, which was the whole reason to
+  // back up. Measured over forty runs, the bot flew 26.5% of the fight in
+  // reverse and 58.1% of that was one manoeuvre: the crossing to the middle of
+  // the arena, begun at the rim with the nose pointing off it.
+  const reversing =
+    mayReverse &&
+    (memory.reversing === true
+      ? Math.abs(ahead) > HELM_REVERSE_RADIANS - HELM_REVERSE_MARGIN
+      : Math.abs(ahead) > HELM_REVERSE_RADIANS);
+  memory.reversing = reversing;
+  const error = reversing ? shortestAngleDelta(heading, bearing + Math.PI) : ahead;
+  return {
+    turn: Math.max(-1, Math.min(1, error / HELM_SETTLE_RADIANS)),
+    // Proportional to how well the nose is lined up, so a broadside course
+    // spends the tick turning rather than flying off at an angle to its own aim.
+    thrust: (reversing ? -1 : 1) * Math.max(0, Math.cos(error))
+  };
+}
+
 export function planPilot(world, profile, memory, options = {}) {
+  const plan = planPilotCourse(world, profile, memory, options);
+  return {
+    ...plan,
+    ...helmIntent(plan.vector, world.ship.heading, memory, plan.crossing !== true)
+  };
+}
+
+function planPilotCourse(world, profile, memory, options) {
   const nowMs = options.nowMs ?? world.sampledAtMs;
   const ranked = rankTargets(world, options);
-  const target = commitTarget(ranked, profile, memory, nowMs, world);
+  // The turret keeps the crew's commitment, which may well be a missile — it
+  // traverses on its own and owes the hull nothing. The pilot presses ships,
+  // because on this hull the nose is the engine as well as a gun: aiming it at
+  // a missile is flying at a missile, and while it did that the boss went
+  // untouched from full health to half and no further.
+  const committed = commitTarget(ranked, profile, memory, nowMs, world);
+  const committedRole = ranked.find(({ entity }) => entity.entityId === committed?.entityId)?.role;
+  const target =
+    committedRole === "enemy" ? committed : ranked.find(({ role }) => role === "enemy")?.entity;
   const escape = escapeVector(world, profile);
 
   const speed = options.mgSpeed ?? MG_PROJECTILE_SPEED;
   // The nose gun fires along the hull, which swings at twice the turret rate,
   // so the same allowance for getting there applies with a doubled rate.
-  const bearing =
-    target === undefined
+  const noseRate = (options.turretRate ?? TURRET_RATE_PER_SECOND) * 2;
+  const solve = (entity) =>
+    entity === undefined
       ? undefined
-      : leadWithTraverse(
-          world,
-          target,
-          speed,
-          profile,
-          memory,
-          world.ship.heading,
-          (options.turretRate ?? TURRET_RATE_PER_SECOND) * 2
-        );
-  const onAxis =
-    bearing !== undefined &&
-    Math.abs(shortestAngleDelta(world.ship.heading, bearing)) <= profile.mgConeRadians;
+      : leadWithTraverse(world, entity, speed, profile, memory, world.ship.heading, noseRate);
+  // Where the hull is being flown. The ladder below steers by this.
+  const bearing = solve(target);
+  // What the gun would hit right now, which is not always what is being flown
+  // at: a missile crossing the bore is free damage and costs the course nothing.
+  const noseBearing = committed === target ? bearing : solve(committed);
+  const noseCone = (entity) =>
+    entity === undefined
+      ? profile.mgConeRadians
+      : firingCone(speed, entity, world, profile.mgConeRadians, profile.mgConeRadians);
+  const withinCone = (angle, entity) =>
+    angle !== undefined &&
+    Math.abs(shortestAngleDelta(world.ship.heading, angle)) <= noseCone(entity);
+  const onAxis = withinCone(bearing, target);
   const mgFiring =
-    onAxis &&
+    withinCone(noseBearing, committed === target ? target : committed) &&
     !world.machineGun.overheated &&
     world.machineGun.heat <= world.machineGun.capacity * profile.mgHeatCeiling;
 
+  // Salvage is the only hull a crew wins back inside a run, so it outranks the
+  // hunt whenever it actually returns something. Mid-fight the detour is capped
+  // and the drop has to be worth taking; once the wave is won the window is all
+  // the time there is, so everything on the field counts.
+  const drop = chooseSalvage(world);
+
   // The break outranks every manoeuvre, but the gun does not stop: firing is a
   // question of where the nose already points, and a long evasion swings it
-  // across targets that are worth the burst.
-  if (escape !== undefined) return { vector: escape, mgFiring };
+  // across targets that are worth the burst. Rocks never raise a break at all
+  // - the shield is what answers them - so nothing here has to hold the course
+  // against them any more.
+  if (escape !== undefined) {
+    return { vector: escape.vector, mgFiring };
+  }
 
-  // Without the orbit skill the pilot keeps the old circular patrol.
-  if (!profile.orbit) return { vector: pilotVector(nowMs), mgFiring };
+  if (drop !== undefined) {
+    return {
+      vector: normalize({ x: drop.x - world.ship.x, y: drop.y - world.ship.y }),
+      mgFiring,
+      crossing: true
+    };
+  }
 
-  // A rock on screen is work for the guns, never a reason to stop hunting: the
-  // ships that actually kill the crew shoot from outside the camera frame, and
-  // the turret keeps servicing the rock while the pilot goes after them.
-  const role = ranked.find(({ entity }) => entity.entityId === target?.entityId)?.role;
-  if (role !== "enemy" && role !== "missile") {
-    return { vector: huntVector(world) ?? searchVector(world, memory), mgFiring };
+  // Nothing to press: walk the shots back to whoever is firing them.
+  // Nothing to press and nothing to keep in the bore: whatever this course is,
+  // it is a crossing rather than a manoeuvre, so the hull turns onto it.
+  if (target === undefined) {
+    return {
+      vector: huntVector(world, memory, nowMs) ?? searchVector(world, memory),
+      mgFiring,
+      crossing: true
+    };
   }
 
   // Holding a ring around a target the turret cannot track is the stalemate:
   // close on the intercept point instead and let the nose gun finish it.
-  if (traverseLosing(world, target, options)) {
+  if (traverseLosing(world, target, options, memory)) {
     return { vector: bearingVector(bearing), mgFiring };
   }
 
   const distance = distanceBetween(world.ship, target);
-  const standoff = effectiveStandoff(world, profile);
-  if (Math.abs(distance - standoff) <= standoff * STANDOFF_BAND) {
+  // The gun's own reach, which grows with what the crew bought, so the ring
+  // moves out with it instead of staying where the profile was written.
+  const reach = world.cannon?.reach;
+  const standoff = effectiveStandoff(world, profile, reach);
+  if (onStation(distance, standoff, target, memory)) {
     return { vector: onAxis ? ZERO_VECTOR : bearingVector(bearing), mgFiring };
   }
-  return { vector: orbitVector(world, target, profile, memory, distance), mgFiring };
+  return { vector: orbitVector(world, target, profile, memory, distance, reach), mgFiring };
 }

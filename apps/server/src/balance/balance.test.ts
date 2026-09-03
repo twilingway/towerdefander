@@ -5,11 +5,20 @@ import { join } from "node:path";
 import type { Request, RequestHandler, Response } from "express";
 import {
   BALANCE_FILE_VERSION,
+  MODULE_TARGET_FIELDS,
+  MODULE_TIER_COUNT,
+  MODULE_TIER_WIDTHS,
+  SHIP_STAT_FIELDS,
   balancePresetsFileSchema,
+  publicShipCatalogueSchema,
   type BalancePresetsFile,
   type BalanceTuning
 } from "@spaceship-defender/protocol";
-import { getEnemyArchetype } from "@spaceship-defender/game-core";
+import {
+  getEnemyArchetype,
+  MODULE_TARGET_FIELDS as CORE_MODULE_TARGET_FIELDS,
+  SHIP_STAT_FIELDS as CORE_SHIP_STAT_FIELDS
+} from "@spaceship-defender/game-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { Readable } from "node:stream";
@@ -18,6 +27,7 @@ import {
   createBalanceSaveHandler,
   createBalanceStateHandler,
   createBalanceValidateHandler,
+  createShipCatalogueHandler,
   readJsonBody
 } from "./routes.js";
 import {
@@ -117,6 +127,34 @@ function tunedPresetsFile(hp: number): BalancePresetsFile {
 describe("balance store", () => {
   it("publishes built-in defaults that satisfy the shared schema", () => {
     expect(balancePresetsFileSchema.safeParse(createDefaultPresetsFile()).success).toBe(true);
+  });
+
+  it("keeps the two module target lists identical", () => {
+    // The stat engine owns its list in game-core; the balance schema needs the
+    // same list to refuse a mistyped target on the path it sits on. They are
+    // written twice because the packages do not depend on each other, so this
+    // is what stops them drifting.
+    expect([...MODULE_TARGET_FIELDS]).toEqual([...CORE_MODULE_TARGET_FIELDS]);
+    // The hull list is the same set plus the two a module may not touch, so it
+    // must hold every field the stat engine knows and nothing else.
+    expect([...SHIP_STAT_FIELDS].sort()).toEqual([...CORE_SHIP_STAT_FIELDS].sort());
+  });
+
+  it("ships a hull tree of the declared shape with a base hull that changes nothing", () => {
+    const defaults = createDefaultTuning();
+    const base = defaults.shipArchetypes[defaults.defaultShipArchetypeId];
+    expect(base).toBeDefined();
+    // An empty diff is the promise that a run on the base hull is the run the
+    // game had before hulls existed.
+    expect(base?.overrides).toEqual({ stats: {}, cannonWeaponKind: null, mgWeaponKind: null });
+    for (const [id, hull] of Object.entries(defaults.shipArchetypes)) {
+      expect(
+        hull.tiers.map((tier) => tier.length),
+        id
+      ).toEqual([...MODULE_TIER_WIDTHS]);
+      const ids = hull.tiers.flatMap((tier) => tier.map((module) => module.id));
+      expect(new Set(ids).size, id).toBe(ids.length);
+    }
   });
 
   it("falls back to defaults and warns when the file is missing", async () => {
@@ -280,7 +318,7 @@ describe("version 1 migration", () => {
     expect(wave?.entries.map(({ sectors }) => sectors)).toEqual([["SE"], []]);
     // The v1 document carried no visual at all, so the built-in default fills in.
     expect(getEnemyArchetype(store.getActiveSimulationConfig(), "interceptor").visual.shape).toBe(
-      "ship-spear"
+      "ship-dart"
     );
   });
 
@@ -332,8 +370,319 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2200);
-    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2200);
+    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2500);
+    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2500);
+  });
+
+  it("gives a version 18 document the default arena without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    delete tuning.arenaRadius;
+    // The operator's own campaign: the point of the test is that adding a field
+    // does not take this down with it.
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 3,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 40,
+            sectors: ["N"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 18,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+    expect(store.getState().presets[0]?.tuning.arenaRadius).toBe(2200);
+    expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
+    // The world is derived, so the circle stays inscribed by construction.
+    const config = store.getActiveSimulationConfig();
+    expect(config.arenaRadius).toBe(2200);
+    expect(config.worldWidth).toBe(4400);
+    expect(config.worldHeight).toBe(4400);
+  });
+
+  it("gives a version 19 document the shield timings without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    delete tuning.shieldEngageTicks;
+    delete tuning.shieldMinimumUpTicks;
+    delete tuning.shieldCooldownTicks;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 19,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().presets[0]?.tuning.shieldEngageTicks).toBe(10);
+    expect(store.getState().presets[0]?.tuning.shieldMinimumUpTicks).toBe(40);
+    expect(store.getState().presets[0]?.tuning.shieldCooldownTicks).toBe(20);
+    // The point of the test: the operator's campaign survived the new fields.
+    expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
+  });
+
+  it("gives a version 20 document enemy skill without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    // A profile saved before a knob existed: the level must gain the missing
+    // field, not be carried over whole and fail the strict schema.
+    const partialVeteran: Record<string, unknown> = {
+      ...createDefaultTuning().enemySkill.profiles.veteran,
+      leadFactor: 0.9
+    };
+    delete partialVeteran.flankSpread;
+    tuning.enemySkill = { profiles: { veteran: partialVeteran } };
+    tuning.enemyArchetypes = Object.fromEntries(
+      Object.entries(createDefaultTuning().enemyArchetypes).map(([kind, archetype]) => {
+        const legacy: Record<string, unknown> = { ...archetype };
+        delete legacy.combatSkill;
+        return [kind, legacy];
+      })
+    );
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 20,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    expect(saved?.enemyArchetypes.gunship?.combatSkill).toBe("veteran");
+    expect(saved?.enemySkill.offset).toBe(0);
+    // Kept what the operator set, gained only what was missing.
+    expect(saved?.enemySkill.profiles.veteran.leadFactor).toBe(0.9);
+    expect(saved?.enemySkill.profiles.veteran.flankSpread).toBe(0.5);
+    expect(saved?.enemySkill.profiles.ace.leadFactor).toBe(1);
+    // The point of the test: the operator's campaign survived the new fields.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
+  it("gives a version 21 document the reverse gear without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    delete tuning.spaceshipReverseSpeedFactor;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 21,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    expect(saved?.spaceshipReverseSpeedFactor).toBe(0.4);
+    // The point of the test: the operator's campaign survived the new field.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
+  it("gives a version 33 document the escort floor without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const campaign = tuning.waveCampaign as { authoring: Record<string, unknown> };
+    const authoring = { ...campaign.authoring };
+    // Version 33 paid for a boss on top of its wave, so it had no such knob.
+    delete authoring.bossEscortShare;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...campaign, authoring, waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 33,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    expect(saved?.waveCampaign.authoring.bossEscortShare).toBe(0.5);
+    // The point of the test: the authoring block is merged field by field, so
+    // one missing knob does not fail the strict schema and take the table with
+    // it. That is exactly how a hand-built campaign was lost once.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
+  it("retires the fractional re-arm mark without touching an operator's waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    // Version 23 stated it as a share of the battery, so an upgrade to the
+    // battery lengthened the wait. The retired key has to go, or the strict
+    // schema rejects the document and the campaign goes with it.
+    delete tuning.shieldRearmEnergy;
+    tuning.shieldRearmEnergyFraction = 0.25;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 23,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    expect(saved?.shieldRearmEnergy).toBe(25);
+    expect(saved).not.toHaveProperty("shieldRearmEnergyFraction");
+    // The point of the test: the operator's campaign survived the new field.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
+  it("derives the world from an operator's larger arena", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning = { ...createDefaultTuning(), arenaRadius: 4400 };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: BALANCE_FILE_VERSION,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
+    await store.load();
+
+    const config = store.getActiveSimulationConfig();
+    expect(config.arenaRadius).toBe(4400);
+    expect(config.worldWidth).toBe(8800);
+    expect(config.worldHeight).toBe(8800);
   });
 
   it("gives a version 6 weapon most of its own reach as a firing range", async () => {
@@ -373,10 +722,11 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    // Gunship bullets reach 440 * 180 * 0.05 = 3960 world units.
+    // Gunship bullets reach 640 * 33 * 0.05 = 1056 world units, and seven tenths
+    // of that is where the barrel is allowed to open.
     expect(
       getEnemyArchetype(store.getActiveSimulationConfig(), "gunship").weapons[0]
-    ).toMatchObject({ engagementRange: 2772 });
+    ).toMatchObject({ engagementRange: 739 });
   });
 
   it("turns version 7 silhouettes into catalogue assets and drops their colours", async () => {
@@ -438,13 +788,25 @@ describe("version 1 migration", () => {
     const tuning = store.getState().presets[0]?.tuning;
     if (tuning === undefined) throw new Error("Expected the migrated preset.");
     // Every old silhouette lands on the asset the mapping table names.
-    expect(kinds.map((kind) => tuning.enemyArchetypes[kind]?.visual.shape)).toEqual([
-      "ship-spear",
-      "ship-blockfrigate",
-      "ship-diamond",
-      "ship-arrowhead",
-      "ship-hexcorvette"
-    ]);
+    // Every old silhouette lands on the asset the mapping table names, and the
+    // catalogue is thirty kinds now, so the expectation is the mapping applied
+    // to the same cycle rather than five names typed out.
+    const migratedShapes = {
+      arrowhead: "ship-spear",
+      block: "ship-blockfrigate",
+      diamond: "ship-diamond",
+      dart: "ship-arrowhead",
+      hexagon: "ship-hexcorvette",
+      cross: "station-crossdock",
+      ring: "station-ring",
+      spike: "station-starrelay"
+    } as const;
+    expect(kinds.map((kind) => tuning.enemyArchetypes[kind]?.visual.shape)).toEqual(
+      kinds.map((_kind, index) => {
+        const legacy = legacyShapes[index % legacyShapes.length];
+        return legacy === undefined ? undefined : migratedShapes[legacy];
+      })
+    );
     for (const kind of kinds) {
       const visual = tuning.enemyArchetypes[kind]?.visual;
       expect(visual, kind).not.toHaveProperty("color");
@@ -550,6 +912,145 @@ describe("version 1 migration", () => {
     const config = store.getActiveSimulationConfig();
     expect(config.spaceshipSpeedPerSecond).toBe(defaults.spaceshipSpeedPerSecond);
     expect(config.shieldCapacity).toBe(defaults.shieldCapacity);
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("gives a version 24 document the salvage defaults without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 24 had no salvage at all: nothing repaired the hull inside a run.
+    const legacyTuning: Partial<BalanceTuning> = {
+      ...defaults,
+      // A hand-built wave table is what a bad migration takes down with it.
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 7,
+                startDelayTicks: 0,
+                spawnIntervalTicks: 11,
+                sectors: ["N"],
+                hpMultiplier: 1.5,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      },
+      enemyArchetypes: Object.fromEntries(
+        Object.entries(defaults.enemyArchetypes).map(([kind, archetype]) => {
+          const legacy: Partial<typeof archetype> = { ...archetype };
+          delete legacy.lootChance;
+          return [kind, legacy];
+        })
+      ) as BalanceTuning["enemyArchetypes"]
+    };
+    delete legacyTuning.lootRepairShare;
+    delete legacyTuning.lootShieldAmount;
+    delete legacyTuning.lootBossRepairShare;
+    delete legacyTuning.lootLifetimeTicks;
+    delete legacyTuning.lootDropRadius;
+    delete legacyTuning.lootMagnetRadius;
+    delete legacyTuning.lootMagnetAccelerationPerSecondSquared;
+    delete legacyTuning.lootDriftDampingPerSecond;
+    delete legacyTuning.lootWindowTicks;
+    delete legacyTuning.lootBossWindowTicks;
+    const document = {
+      version: 24,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.lootRepairShare).toBe(defaults.lootRepairShare);
+    expect(tuning.lootMagnetRadius).toBe(defaults.lootMagnetRadius);
+    expect(tuning.lootWindowTicks).toBe(defaults.lootWindowTicks);
+    expect(tuning.lootBossWindowTicks).toBe(defaults.lootBossWindowTicks);
+    expect(tuning.enemyArchetypes.gunship?.lootChance).toBe(
+      defaults.enemyArchetypes.gunship?.lootChance
+    );
+
+    // The hand-built wave survives intact; that is the whole point of the test.
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    expect(tuning.waveCampaign.waves[0]?.entries[0]).toMatchObject({
+      kind: "gunship",
+      count: 7,
+      hpMultiplier: 1.5
+    });
+
+    const migratedOnce = migrateBalanceDocument(document);
+    expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("gives a version 28 document the hull catalogue without touching its waves", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    // Version 28 had one hull and nine hardcoded upgrade cards.
+    const legacyTuning: Partial<BalanceTuning> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "sniper",
+                count: 4,
+                startDelayTicks: 0,
+                spawnIntervalTicks: 9,
+                sectors: ["SW"],
+                hpMultiplier: 2.25,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    delete legacyTuning.shipArchetypes;
+    delete legacyTuning.defaultShipArchetypeId;
+    const document = {
+      version: 28,
+      activePresetId: "operator",
+      presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+    };
+    await writeFile(filePath, JSON.stringify(document), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.defaultShipArchetypeId).toBe(defaults.defaultShipArchetypeId);
+    expect(Object.keys(tuning.shipArchetypes)).toEqual(Object.keys(defaults.shipArchetypes));
+    // The flat player-ship block is the base every hull is a diff against, so
+    // the migration must leave it exactly where the operator had it.
+    expect(tuning.spaceshipMaxHp).toBe(legacyTuning.spaceshipMaxHp);
+
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    expect(tuning.waveCampaign.waves[0]?.entries[0]).toMatchObject({
+      kind: "sniper",
+      count: 4,
+      hpMultiplier: 2.25
+    });
 
     const migratedOnce = migrateBalanceDocument(document);
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
@@ -766,6 +1267,57 @@ describe("version 1 migration", () => {
     expect(turret?.mountY).toBe(0);
   });
 
+  it("keeps a campaign when a preset predates the current helm section", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const tuning: Record<string, unknown> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 2,
+                startDelayTicks: 0,
+                spawnIntervalTicks: 40,
+                sectors: [],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    // Version 17 carried the retired counter angle, and a leftover key fails the
+    // strict schema just as loudly as a missing one.
+    const legacyHelm: Record<string, unknown> = { ...defaults.helm, stopCounterRadians: 0.12 };
+    delete legacyHelm.stopDampening;
+    delete legacyHelm.scheme;
+    tuning.helm = legacyHelm;
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 17,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getActiveTuning().waveCampaign.waves).toHaveLength(1);
+    expect(store.getActiveTuning().helm).toEqual(defaults.helm);
+    expect(store.getActiveTuning().helm.scheme).toBe("tank");
+  });
+
   it("keeps a campaign when a saved profile predates a new profile knob", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
@@ -773,7 +1325,7 @@ describe("version 1 migration", () => {
     // profile schema, the whole saved profile was carried over unchanged, it
     // failed the strict schema, and the silent fallback to built-in defaults
     // put an empty campaign in front of the console — which the next save kept.
-    const dated: Record<string, unknown> = { ...defaults.autopilot.profiles.ace };
+    const dated: Record<string, unknown> = { ...defaults.autopilot.profiles.laser.ace };
     delete dated.cannonHeatCeiling;
     const waves = [
       {
@@ -781,6 +1333,7 @@ describe("version 1 migration", () => {
           {
             kind: "gunship",
             count: 3,
+            startDelayTicks: 0,
             spawnIntervalTicks: 40,
             sectors: [],
             hpMultiplier: null,
@@ -818,19 +1371,19 @@ describe("version 1 migration", () => {
     // The campaign is the thing that must survive.
     expect(store.getActiveTuning().waveCampaign.waves).toHaveLength(1);
     // And the missing knob is filled rather than fatal.
-    expect(store.getActiveTuning().autopilot.profiles.ace.cannonHeatCeiling).toBe(
-      defaults.autopilot.profiles.ace.cannonHeatCeiling
+    expect(store.getActiveTuning().autopilot.profiles.laser.ace.cannonHeatCeiling).toBe(
+      defaults.autopilot.profiles.laser.ace.cannonHeatCeiling
     );
     // A hand-tuned value in the same profile is not trampled by the defaults.
-    expect(store.getActiveTuning().autopilot.profiles.ace.leadFactor).toBe(
-      defaults.autopilot.profiles.ace.leadFactor
+    expect(store.getActiveTuning().autopilot.profiles.laser.ace.leadFactor).toBe(
+      defaults.autopilot.profiles.laser.ace.leadFactor
     );
   });
 
   it("keeps a hand-tuned autopilot profile and fills only the missing ones", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
-    const handTuned = { ...defaults.autopilot.profiles.ace, mgConeRadians: 0.05 };
+    const handTuned = { ...defaults.autopilot.profiles.laser.ace, mgConeRadians: 0.05 };
     const document = {
       version: 9,
       activePresetId: "operator",
@@ -848,9 +1401,12 @@ describe("version 1 migration", () => {
 
     const { autopilot } = store.getActiveTuning();
     expect(autopilot.level).toBe("ace");
-    expect(autopilot.profiles.ace.mgConeRadians).toBe(0.05);
-    expect(autopilot.profiles.rookie).toEqual(defaults.autopilot.profiles.rookie);
-    expect(autopilot.profiles.veteran).toEqual(defaults.autopilot.profiles.veteran);
+    // The document predates the split by turret kind, so its one set of levels
+    // is what every kind now starts from.
+    expect(autopilot.profiles.laser.ace.mgConeRadians).toBe(0.05);
+    expect(autopilot.profiles.kinetic.ace.mgConeRadians).toBe(0.05);
+    expect(autopilot.profiles.laser.rookie).toEqual(defaults.autopilot.profiles.laser.rookie);
+    expect(autopilot.profiles.missile.veteran).toEqual(defaults.autopilot.profiles.missile.veteran);
   });
 
   it("keeps the autopilot section out of the simulation config", () => {
@@ -945,6 +1501,163 @@ describe("balance routes", () => {
     expect(output.state.status).toBe(200);
     expect(output.state.headers["cache-control"]).toBe("no-store");
     expect(balancePresetsFileSchema.safeParse(output.state.body).success).toBe(true);
+  });
+
+  it("serves the hull catalogue to anyone, with the tree but without the stats", async () => {
+    const store = storeFor(await temporaryPresetPath());
+    const output = response();
+    // A stranger's address, and no password configured: every other balance
+    // route refuses this, and this one must not.
+    await invoke(
+      createShipCatalogueHandler({ password: undefined, store }),
+      request("203.0.113.7"),
+      output.response
+    );
+    expect(output.state.status).toBe(200);
+    const parsed = publicShipCatalogueSchema.safeParse(output.state.body);
+    expect(parsed.success).toBe(true);
+    const body = JSON.stringify(output.state.body);
+    // The tree is what a display draws its window from; the ship's numbers are
+    // not, and neither is anything else the preset holds.
+    for (const leaked of ["overrides", "waveCampaign", "enemyArchetypes", "autopilot"]) {
+      expect(body).not.toContain(leaked);
+    }
+    const hull = parsed.data?.ships[0];
+    expect(hull?.tiers).toHaveLength(MODULE_TIER_COUNT);
+    expect(hull?.endlessTier.length).toBeGreaterThan(0);
+    expect(hull?.tiers[0]?.[0]?.effects.length).toBeGreaterThan(0);
+    expect(parsed.data?.defaultShipId).toBe(createDefaultTuning().defaultShipArchetypeId);
+  });
+
+  it("lets a display on another origin read the hull catalogue", async () => {
+    const store = storeFor(await temporaryPresetPath());
+    const output = response();
+    await invoke(
+      createShipCatalogueHandler({ password: undefined, store }),
+      request("203.0.113.7"),
+      output.response
+    );
+    // The public deployment puts the display and the game server on separate
+    // hosts, so the browser drops this answer without the header. Losing it is
+    // not a crash -- the create screen falls back to unnamed hulls -- which is
+    // exactly why it needs a test rather than a live report.
+    expect(output.state.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("does not widen the balance routes to another origin itself", async () => {
+    const store = storeFor(await temporaryPresetPath());
+    const output = response();
+    await invoke(
+      createBalanceStateHandler({ password: undefined, store }),
+      request("127.0.0.1"),
+      output.response
+    );
+    expect(output.state.status).toBe(200);
+    // Only what this handler does. Colyseus puts a permissive origin on every
+    // express route it hosts, so the boundary that keeps the console off the
+    // public API host is the reverse proxy refusing /admin there, not this
+    // header -- see docs/DEPLOYMENT.md.
+    expect(output.state.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("keeps the waves when a version 29 preset still sizes the boss repair in hit points", async () => {
+    const path = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const legacyTuning: Record<string, unknown> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 3,
+                startDelayTicks: 0,
+                spawnIntervalTicks: 40,
+                sectors: ["N"],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    // Exactly what the operator's file carried: the old absolute amount, and no
+    // share at all. A leftover key used to fail the strict schema and take the
+    // wave table with it.
+    delete legacyTuning.lootBossRepairShare;
+    legacyTuning.lootBossRepairAmount = 200;
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 29,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Оператор", tuning: legacyTuning }]
+      }),
+      "utf8"
+    );
+
+    const store = storeFor(path);
+    await store.load();
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    expect(tuning.lootBossRepairShare).toBe(defaults.lootBossRepairShare);
+    expect(Object.hasOwn(tuning, "lootBossRepairAmount")).toBe(false);
+  });
+
+  it("keeps the waves when a version 31 preset still sizes the repair in hit points", async () => {
+    const path = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const legacyTuning: Record<string, unknown> = {
+      ...defaults,
+      waveCampaign: {
+        ...defaults.waveCampaign,
+        waves: [
+          {
+            entries: [
+              {
+                kind: "gunship",
+                count: 3,
+                startDelayTicks: 0,
+                spawnIntervalTicks: 40,
+                sectors: ["N"],
+                hpMultiplier: null,
+                tempoMultiplier: null
+              }
+            ],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ]
+      }
+    };
+    // The same trap the boss repair set in version 29: the old absolute key
+    // left behind fails the strict schema and takes the wave table with it.
+    delete legacyTuning.lootRepairShare;
+    legacyTuning.lootRepairAmount = 35;
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 31,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Оператор", tuning: legacyTuning }]
+      }),
+      "utf8"
+    );
+
+    const store = storeFor(path);
+    await store.load();
+
+    const tuning = store.getActiveTuning();
+    expect(tuning.waveCampaign.waves).toHaveLength(1);
+    // Converted against the hull it was tuned on, not dropped for the default.
+    expect(tuning.lootRepairShare).toBeCloseTo(35 / defaults.spaceshipMaxHp, 6);
+    expect(Object.hasOwn(tuning, "lootRepairAmount")).toBe(false);
   });
 
   it("rejects a non-loopback client when no password is set", async () => {

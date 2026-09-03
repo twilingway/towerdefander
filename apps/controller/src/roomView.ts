@@ -5,6 +5,7 @@ import {
   type CrewRole,
   type DefeatReason,
   type EncounterPhase,
+  type HelmScheme,
   type PublicPlayerView,
   type PublicSpaceshipView,
   type PublicUpgradeVote,
@@ -25,11 +26,17 @@ interface NetworkPlayerState {
   latencyMs: number;
 }
 
+interface NetworkShipStatEffectState {
+  target: string;
+  op: string;
+  value: number;
+}
+
 interface NetworkUpgradeCardState {
   upgradeId: UpgradeId;
   role: CrewRole;
   label: string;
-  value: number;
+  effects: ValueCollection<NetworkShipStatEffectState>;
   price: number;
 }
 
@@ -44,6 +51,7 @@ interface NetworkTeamUpgradeState {
   offer: {
     offerId: string;
     waveNumber: number;
+    tier: number;
     cards: ValueCollection<NetworkUpgradeCardState>;
   };
   votes: ValueCollection<NetworkUpgradeVoteState>;
@@ -69,6 +77,7 @@ interface NetworkGameState {
     angle: number;
     arcHalfAngle: number;
     active: boolean;
+    rearmRequired: boolean;
     energy: number;
     capacity: number;
   };
@@ -76,11 +85,26 @@ interface NetworkGameState {
     heat: number;
     capacity: number;
     overheated: boolean;
+    /** Drawn by the display, not the panel; carried so the view stays whole. */
+    kind: string;
+    reach: number;
+    speed: number;
+    acquireHalfAngle: number;
   };
   machineGun: {
     heat: number;
     capacity: number;
     overheated: boolean;
+    kind: string;
+    reach: number;
+    speed: number;
+  };
+  helm?: {
+    scheme: HelmScheme;
+    headingLeadRadians: number;
+    stopDampening: number;
+    rotateInPlaceThrottle: number;
+    hullAngularBrakingPerSecondSquared: number;
   };
   encounter: {
     phase: EncounterPhase;
@@ -92,16 +116,8 @@ interface NetworkGameState {
     encounterTick: number;
     phaseTicksRemaining: number;
     waveSecondsRemaining: number;
+    lootWindowSecondsRemaining: number;
     score: number;
-  };
-  roleModifiers: {
-    pilot: { speedMultiplier: number; accelerationMultiplier: number; maxHpBonus: number };
-    gunner: {
-      damageMultiplier: number;
-      cooldownMultiplier: number;
-      projectileSpeedMultiplier: number;
-    };
-    shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
   };
   credits: number;
   teamUpgrade?: NetworkTeamUpgradeState;
@@ -111,6 +127,8 @@ export interface NetworkRoomState {
   roomId?: string;
   phase?: ControllerRoomView["phase"];
   runNumber?: number;
+  crewSize?: number;
+  shipArchetypeId?: string;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -127,6 +145,8 @@ export function toControllerRoomView(
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
     typeof state.runNumber !== "number" ||
+    typeof state.crewSize !== "number" ||
+    typeof state.shipArchetypeId !== "string" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -151,6 +171,8 @@ export function toControllerRoomView(
     roomId: state.roomId,
     phase: state.phase,
     runNumber: state.runNumber,
+    crewSize: state.crewSize,
+    shipArchetypeId: state.shipArchetypeId,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
@@ -182,15 +204,12 @@ export function toControllerRoomView(
               encounterTick: game.encounter.encounterTick,
               phaseTicksRemaining: game.encounter.phaseTicksRemaining,
               waveSecondsRemaining: game.encounter.waveSecondsRemaining,
+              lootWindowSecondsRemaining: game.encounter.lootWindowSecondsRemaining,
               score: game.encounter.score
             },
-            roleModifiers: {
-              pilot: { ...game.roleModifiers.pilot },
-              gunner: { ...game.roleModifiers.gunner },
-              shield: { ...game.roleModifiers.shield }
-            },
             credits: game.credits,
-            teamUpgrade: toTeamUpgradeView(game.teamUpgrade)
+            teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
+            helm: game.helm
           }
         : null
   });
@@ -217,7 +236,11 @@ function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
         ? {
             offerId: teamUpgrade.offer.offerId,
             waveNumber: teamUpgrade.offer.waveNumber,
-            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
+            tier: teamUpgrade.offer.tier,
+            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({
+              ...card,
+              effects: [...card.effects.values()].map((effect) => ({ ...effect }))
+            }))
           }
         : null,
     votes,

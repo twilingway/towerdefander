@@ -24,9 +24,7 @@ export function CrewLatency({ view, game }: CrewLatencyProps) {
         );
       })}
       <span>
-        Модификаторы: P ×{game.roleModifiers.pilot.speedMultiplier.toFixed(2)} · G ×
-        {game.roleModifiers.gunner.damageMultiplier.toFixed(2)} · S +
-        {Math.round(game.roleModifiers.shield.capacityBonus)}
+        Куплено: {game.purchasedModules.length === 0 ? "ничего" : game.purchasedModules.join(", ")}
       </span>
     </aside>
   );

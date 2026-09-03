@@ -1,3 +1,10 @@
+/**
+ * The world these positions were laid out against. A run with another arena
+ * radius scales them by its own world, so the composition follows the arena
+ * instead of bunching into one corner of a larger one.
+ */
+export const DECORATION_REFERENCE_WORLD = 4400;
+
 /** Static scenery published once per run; purely decorative, never simulated. */
 export const DECORATIVE_OBSTACLES = [
   { obstacleId: "island-northwest", kind: "circle" as const, x: 760, y: 760, radius: 105 },

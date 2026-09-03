@@ -46,6 +46,56 @@ export function isCircleContainedInArena(
 }
 
 /**
+ * How far inside the arena the rim stays soft, measured from `arena.radius` so
+ * that the ring the simulation uses is the ring the display draws. Wide enough
+ * that a hull at full speed sheds its speed inside the band rather than
+ * against the hard edge.
+ */
+export const ARENA_CUSHION_BAND = 260;
+/** Inward pull per unit of depth into the band, in units per second squared. */
+export const ARENA_CUSHION_STIFFNESS = 3.2;
+/** Extra inward pull per unit of outward speed: the faster in, the harder back. */
+export const ARENA_CUSHION_DAMPING = 2.2;
+
+/**
+ * Velocity after one step against the elastic rim.
+ *
+ * Projecting a hull onto the circle is correct but arrives as a single step of
+ * zero: the picture stops dead the moment the rim is touched, and a camera that
+ * follows the hull has nothing left to move. A band that pushes back - harder
+ * the deeper the hull is in it and the faster it was heading out - spends that
+ * speed over several ticks instead, so the hull turns around rather than
+ * stopping, and the hard projection stays a guarantee rather than a routine.
+ */
+export function applyArenaCushion(
+  circle: MovingCircle,
+  arena: ArenaCircle,
+  secondsPerStep: number,
+  band = ARENA_CUSHION_BAND,
+  stiffness = ARENA_CUSHION_STIFFNESS,
+  damping = ARENA_CUSHION_DAMPING
+): MovingCircle["velocity"] {
+  const legalRadius = arena.radius - circle.radius;
+  if (!Number.isFinite(legalRadius) || legalRadius <= 0 || band <= 0) return circle.velocity;
+
+  const deltaX = circle.x - arena.centerX;
+  const deltaY = circle.y - arena.centerY;
+  const distance = Math.hypot(deltaX, deltaY);
+  const depth = distance - (arena.radius - band);
+  // Outside the band, or exactly at the centre where there is no normal.
+  if (depth <= 0 || distance === 0) return circle.velocity;
+
+  const normalX = deltaX / distance;
+  const normalY = deltaY / distance;
+  const outwardSpeed = circle.velocity.x * normalX + circle.velocity.y * normalY;
+  const push = stiffness * depth + damping * Math.max(0, outwardSpeed);
+  return {
+    x: circle.velocity.x - normalX * push * secondsPerStep,
+    y: circle.velocity.y - normalY * push * secondsPerStep
+  };
+}
+
+/**
  * Constrains a moving circle without changing its tangential or inward velocity.
  * The zero-distance branch avoids inventing a normal at the arena center.
  */

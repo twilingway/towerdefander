@@ -13,7 +13,22 @@ export interface ServerConfig {
   statsPassword: string | undefined;
   balancePassword: string | undefined;
   balancePresetPath: string;
+  /** Where finished balance-batch reports are kept. */
+  statsBatchDirectory: string;
+  /** How many reports survive rotation; older ones are deleted after a write. */
+  statsBatchKeep: number;
+  /** Wall-clock ceiling on one batch, after which the child is stopped. */
+  statsBatchTimeoutSeconds: number;
+  /** The batch harness and the guard that ties its lifetime to this process. */
+  statsHarnessPath: string;
+  statsProcessGuardUrl: string;
   gracefullyShutdown: boolean;
+  /**
+   * Whether a display may ask a room to open on a late wave. A testing aid,
+   * off unless the operator turns it on, so a public server cannot be told to
+   * drop a crew onto a boss.
+   */
+  allowStartWave: boolean;
 }
 
 const MAX_PHASE_TTL_SECONDS = 86_400;
@@ -31,6 +46,30 @@ const DEFAULT_MAX_CONCURRENT_ROOMS = 30;
 // the server from apps/server while the visible demo starts it from the repo
 // root, and both must read the same presets.
 const DEFAULT_BALANCE_PRESET_PATH = fileURLToPath(new URL("../data/balance.json", import.meta.url));
+// Same reasoning as the preset path: resolved against this package so the
+// console and the CLI look in one place whatever the working directory is.
+const DEFAULT_STATS_BATCH_DIRECTORY = fileURLToPath(
+  new URL("../data/stats-batches", import.meta.url)
+);
+/**
+ * Resolved from this module rather than from wherever the caller sits: `src`
+ * and the bundled `dist` are the same depth inside the package, so one relative
+ * URL is right in development and in a build. A module one directory deeper
+ * would resolve differently once tsup collapses it into `dist/index.js`.
+ */
+const STATS_HARNESS_PATH = fileURLToPath(
+  new URL("../scripts/run-balance-batch.mjs", import.meta.url)
+);
+const STATS_PROCESS_GUARD_URL = new URL("../../../scripts/owned-process-guard.mjs", import.meta.url)
+  .href;
+const DEFAULT_STATS_BATCH_KEEP = 50;
+const MAX_STATS_BATCH_KEEP = 500;
+/**
+ * A batch is CPU-bound and shares the machine with live rooms, so a mistyped
+ * matrix must not be able to hold a core for an hour.
+ */
+const DEFAULT_STATS_BATCH_TIMEOUT_SECONDS = 30 * 60;
+const MAX_STATS_BATCH_TIMEOUT_SECONDS = 6 * 60 * 60;
 
 function readPositiveInteger(
   environment: NodeJS.ProcessEnv,
@@ -79,7 +118,9 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const rawStatsPassword = environment.ROOM_STATS_PASSWORD;
   const rawBalancePassword = environment.ADMIN_BALANCE_PASSWORD;
   const configuredBalancePath = environment.BALANCE_PRESET_PATH?.trim();
+  const configuredBatchDirectory = environment.STATS_BATCH_DIR?.trim();
   const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
+  const allowStartWave = environment.ALLOW_START_WAVE === "true";
   const host =
     configuredHost === undefined || configuredHost.length === 0 ? "0.0.0.0" : configuredHost;
   const rawPort =
@@ -104,10 +145,14 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     5 * 60,
     MAX_PHASE_TTL_SECONDS
   );
+  // A wave that cannot be cleared is a lost run, not a longer one. Twenty
+  // minutes was set when a wave dumped its ships in the first thirty seconds
+  // and was over inside a minute; a wave is a two-minute schedule now, so the
+  // deadline has to be close enough to it to mean something.
   const waveTtlSeconds = readIntegerSeconds(
     environment,
     "ROOM_WAVE_TTL_SECONDS",
-    20 * 60,
+    5 * 60,
     MAX_PHASE_TTL_SECONDS
   );
   const absoluteTtlSeconds = readIntegerSeconds(
@@ -132,6 +177,22 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     configuredBalancePath === undefined || configuredBalancePath.length === 0
       ? DEFAULT_BALANCE_PRESET_PATH
       : configuredBalancePath;
+  const statsBatchDirectory =
+    configuredBatchDirectory === undefined || configuredBatchDirectory.length === 0
+      ? DEFAULT_STATS_BATCH_DIRECTORY
+      : configuredBatchDirectory;
+  const statsBatchKeep = readPositiveInteger(
+    environment,
+    "STATS_BATCH_KEEP",
+    DEFAULT_STATS_BATCH_KEEP,
+    MAX_STATS_BATCH_KEEP
+  );
+  const statsBatchTimeoutSeconds = readIntegerSeconds(
+    environment,
+    "STATS_BATCH_TIMEOUT_SECONDS",
+    DEFAULT_STATS_BATCH_TIMEOUT_SECONDS,
+    MAX_STATS_BATCH_TIMEOUT_SECONDS
+  );
 
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
     throw new Error(`PORT must be an integer between 1 and 65535; received "${rawPort}".`);
@@ -176,6 +237,12 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     statsPassword,
     balancePassword,
     balancePresetPath,
-    gracefullyShutdown
+    statsBatchDirectory,
+    statsBatchKeep,
+    statsBatchTimeoutSeconds,
+    statsHarnessPath: STATS_HARNESS_PATH,
+    statsProcessGuardUrl: STATS_PROCESS_GUARD_URL,
+    gracefullyShutdown,
+    allowStartWave
   };
 }

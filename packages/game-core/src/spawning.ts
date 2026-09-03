@@ -5,13 +5,14 @@ import {
   type CombatEnemyState,
   type EnemyWeaponTuning,
   type HomingMissileState,
+  type HostileBeamState,
   type HostileProjectileState,
   type SpawnKind,
   type SpawnSector,
   type WaveDifficulty
 } from "./combatTypes.ts";
-import { UINT32_MAX } from "./combatConstants.ts";
-import { nextUint32 } from "./rng.ts";
+import { AIM_DOMAIN, UINT32_MAX } from "./combatConstants.ts";
+import { deriveDomainSeed, nextUint32 } from "./rng.ts";
 import { arenaFromConfig, pointOnCircle, unitDirection } from "./combatMath.ts";
 import { archetypeOf } from "./combatValidation.ts";
 import { getWaveDifficulty } from "./waveDirector.ts";
@@ -22,15 +23,16 @@ export function burstAimOffset(weapon: EnemyWeaponTuning, shot: number): number 
   return -weapon.burstSpreadRadians / 2 + step * shot;
 }
 
+/** `target` is the point being aimed at, which is not always where the ship is. */
 export function createHostileBullet(
   enemy: CombatEnemyState,
-  spaceship: { readonly x: number; readonly y: number },
+  target: { readonly x: number; readonly y: number },
   weapon: EnemyWeaponTuning,
   aimOffset: number,
   spawnSequence: number,
   tick: number
 ): HostileProjectileState {
-  const heading = Math.atan2(spaceship.y - enemy.y, spaceship.x - enemy.x) + aimOffset;
+  const heading = Math.atan2(target.y - enemy.y, target.x - enemy.x) + aimOffset;
   return {
     id: `hostile-${String(spawnSequence)}`,
     spawnSequence,
@@ -51,17 +53,49 @@ export function createHostileBullet(
   };
 }
 
+/**
+ * A beam is the whole reach of the barrel travelled inside one tick: the muzzle
+ * in `previous`, the far end in `x`/`y`, and no velocity. The swept-circle test
+ * that resolves every other shot answers this shape too, so the beam needs no
+ * geometry of its own - only the reach, which is the distance the barrel opens
+ * fire at.
+ */
+export function createHostileBeam(
+  enemy: CombatEnemyState,
+  target: { readonly x: number; readonly y: number },
+  weapon: EnemyWeaponTuning,
+  aimOffset: number,
+  spawnSequence: number,
+  tick: number
+): HostileBeamState {
+  const heading = Math.atan2(target.y - enemy.y, target.x - enemy.x) + aimOffset;
+  return {
+    // Not `beam-`: friendly pulses number themselves off a different counter
+    // and both sides share one keyed collection on the wire.
+    id: `enemy-beam-${String(spawnSequence)}`,
+    spawnSequence,
+    previousX: enemy.x,
+    previousY: enemy.y,
+    x: enemy.x + Math.cos(heading) * weapon.engagementRange,
+    y: enemy.y + Math.sin(heading) * weapon.engagementRange,
+    velocity: { x: 0, y: 0 },
+    radius: weapon.projectileRadius,
+    spawnedTick: tick,
+    damage: weapon.damage,
+    shieldHitCost: weapon.shieldHitCost,
+    visual: weapon.visual
+  };
+}
+
 export function createMissile(
   enemy: CombatEnemyState,
-  spaceship: { readonly x: number; readonly y: number },
+  target: { readonly x: number; readonly y: number },
   weapon: EnemyWeaponTuning,
   aimOffset: number,
   spawnSequence: number,
   tick: number
 ): HomingMissileState {
-  const heading = canonicalizeAngle(
-    Math.atan2(spaceship.y - enemy.y, spaceship.x - enemy.x) + aimOffset
-  );
+  const heading = canonicalizeAngle(Math.atan2(target.y - enemy.y, target.x - enemy.x) + aimOffset);
   return {
     id: `missile-${String(spawnSequence)}`,
     spawnSequence,
@@ -186,7 +220,16 @@ export function spawnEntity(
       maxHp: hp,
       weaponCooldownTicks: archetype.weapons.map((weapon) =>
         Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier))
-      )
+      ),
+      // Never looked yet, so the first step refreshes whatever the reaction
+      // window is — otherwise a slow archetype would steer at its own spawn
+      // point for half a second after it arrives.
+      perception: { tick: -1, x: point.x, y: point.y, velocityX: 0, velocityY: 0 },
+      // Folded off the spawn stream rather than drawn from it, so adding the
+      // spread did not shift every seeded spawn that came before it. The
+      // sequence separates the enemies, so two spawned in one wave do not fire
+      // the same errors.
+      aimRngState: deriveDomainSeed(rngState, waveNumber, AIM_DOMAIN ^ spawnSequence)
     }
   };
 }

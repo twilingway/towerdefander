@@ -5,16 +5,23 @@ import {
   BALANCE_FILE_VERSION,
   balancePresetsFileSchema,
   balanceTuningSchema,
+  type AutopilotLevel,
+  type AutopilotLevelProfiles,
+  type AutopilotProfile,
   type AutopilotTuning,
+  type HelmTuning,
   type BalancePreset,
   type BalancePresetsFile,
-  type BalanceTuning
+  type BalanceTuning,
+  type ShipArchetype
 } from "@spaceship-defender/protocol";
 import {
   createSpaceshipSimulationConfig,
   validateSpaceshipSimulationConfig,
   type SpaceshipSimulationConfig
 } from "@spaceship-defender/game-core";
+
+import { DEFAULT_SHIP_ARCHETYPES, DEFAULT_SHIP_ARCHETYPE_ID } from "./shipCatalogue.js";
 
 const DEFAULT_PRESET_ID = "default";
 
@@ -24,63 +31,167 @@ const DEFAULT_PRESET_ID = "default";
  * has a baseline to compare against; `ace` is the ceiling of what the policy
  * can do. Nothing here reaches the simulation.
  */
+/**
+ * Ships the helm the keyboard was tuned to in the browser: about 2.3 rad/s of
+ * spin, roughly 0.16 rad of coast after the key comes up, and a nudge small
+ * enough that turning in place drifts a handful of units per second.
+ */
+const DEFAULT_HELM: HelmTuning = {
+  scheme: "tank",
+  // Wide enough that the request stays ahead of the nose across a network
+  // round trip — a lead shorter than the angle the hull covers between updates
+  // lands behind it and brakes the spin. The coast is short anyway, because the
+  // release aims at the predicted stopping point.
+  headingLeadRadians: 0.45,
+  stopDampening: 1,
+  rotateInPlaceThrottle: 0.02
+};
+
+/**
+ * How the demo bot flies, per turret kind and per level.
+ *
+ * Both dimensions are real and they are not separable: a sweep of every field,
+ * a hundred runs per value, verified on further seed blocks, moved eleven of
+ * the sixteen fields when the turret changed — including whether to orbit at
+ * all. The level decides how well that flying is aimed and defended.
+ *
+ * The laser set is the measured baseline; the other two kinds are written as
+ * the deltas measured against it, so the reason for every number stays visible.
+ * The rookie keeps the bot that predated the profiles in every kind: no orbit,
+ * no evasion, wide spray, slow hands.
+ */
+const LASER_PROFILES: AutopilotLevelProfiles = {
+  rookie: {
+    reactionTicks: 12,
+    retargetIntervalTicks: 40,
+    aimJitterRadians: 0.18,
+    leadFactor: 0,
+    orbit: false,
+    evadeMissiles: false,
+    dodgeBullets: false,
+    threatAwareShield: false,
+    // Choosing the distance is part of the craft, so the beginner does not:
+    // it wanders inside its own reach, where more of the field can answer it.
+    standoffShare: 0.6,
+    standoffDistance: 250,
+    evadeHorizonTicks: 0,
+    mgConeRadians: Math.PI,
+    cannonConeRadians: Math.PI,
+    mgHeatCeiling: 1,
+    cannonHeatCeiling: 1,
+    shieldLeadTicks: 0,
+    shieldMinEnergy: 0
+  },
+  veteran: {
+    reactionTicks: 20,
+    retargetIntervalTicks: 30,
+    aimJitterRadians: 0.06,
+    leadFactor: 0.65,
+    orbit: true,
+    evadeMissiles: true,
+    dodgeBullets: false,
+    threatAwareShield: true,
+    standoffShare: 0.85,
+    standoffDistance: 400,
+    evadeHorizonTicks: 12,
+    mgConeRadians: 0.35,
+    cannonConeRadians: 0.2,
+    mgHeatCeiling: 0.75,
+    cannonHeatCeiling: 0.8,
+    shieldLeadTicks: 20,
+    shieldMinEnergy: 0.15
+  },
+  ace: {
+    reactionTicks: 20,
+    retargetIntervalTicks: 30,
+    aimJitterRadians: 0,
+    leadFactor: 1,
+    orbit: true,
+    evadeMissiles: true,
+    dodgeBullets: true,
+    threatAwareShield: true,
+    standoffShare: 0.85,
+    standoffDistance: 400,
+    evadeHorizonTicks: 12,
+    mgConeRadians: 0.5,
+    cannonConeRadians: 0.06,
+    mgHeatCeiling: 0.95,
+    cannonHeatCeiling: 0.95,
+    shieldLeadTicks: 20,
+    shieldMinEnergy: 0.15
+  }
+};
+
+/** What a kind changes, applied to the levels that fly well enough to notice. */
+type ProfileDelta = Partial<Record<AutopilotLevel, Partial<AutopilotProfile>>>;
+
+/**
+ * A bullet has flight time, so the pilot stops circling and closes in, leads
+ * less than fully, and sprays a wider nose cone while keeping it cooler.
+ */
+const KINETIC_DELTA: ProfileDelta = {
+  veteran: {
+    reactionTicks: 10,
+    leadFactor: 0.6,
+    orbit: false,
+    standoffShare: 0.5,
+    mgConeRadians: 0.25,
+    mgHeatCeiling: 0.6
+  },
+  ace: {
+    reactionTicks: 10,
+    leadFactor: 0.6,
+    orbit: false,
+    standoffShare: 0.5,
+    mgConeRadians: 0.25,
+    mgHeatCeiling: 0.6
+  }
+};
+
+/**
+ * A missile chases on its own, so the pilot stands further off, stops orbiting,
+ * stops breaking from incoming missiles at all — its own shot is already away —
+ * and spends less of the barrel's heat.
+ */
+const MISSILE_DELTA: ProfileDelta = {
+  veteran: {
+    leadFactor: 0.6,
+    orbit: false,
+    evadeMissiles: false,
+    standoffShare: 0.75,
+    standoffDistance: 450,
+    evadeHorizonTicks: 0,
+    cannonConeRadians: 0.12,
+    cannonHeatCeiling: 0.8,
+    shieldLeadTicks: 10
+  },
+  ace: {
+    leadFactor: 0.6,
+    orbit: false,
+    evadeMissiles: false,
+    standoffShare: 0.75,
+    standoffDistance: 450,
+    evadeHorizonTicks: 0,
+    cannonConeRadians: 0.12,
+    cannonHeatCeiling: 0.8,
+    shieldLeadTicks: 10
+  }
+};
+
+function withDelta(base: AutopilotLevelProfiles, delta: ProfileDelta): AutopilotLevelProfiles {
+  return {
+    rookie: { ...base.rookie, ...delta.rookie },
+    veteran: { ...base.veteran, ...delta.veteran },
+    ace: { ...base.ace, ...delta.ace }
+  };
+}
+
 const DEFAULT_AUTOPILOT: AutopilotTuning = {
   level: "veteran",
   profiles: {
-    rookie: {
-      reactionTicks: 12,
-      retargetIntervalTicks: 40,
-      aimJitterRadians: 0.18,
-      leadFactor: 0,
-      orbit: false,
-      evadeMissiles: false,
-      dodgeBullets: false,
-      threatAwareShield: false,
-      standoffDistance: 900,
-      evadeHorizonTicks: 0,
-      mgConeRadians: Math.PI,
-      cannonConeRadians: Math.PI,
-      mgHeatCeiling: 1,
-      cannonHeatCeiling: 1,
-      shieldLeadTicks: 0,
-      shieldMinEnergy: 0
-    },
-    veteran: {
-      reactionTicks: 5,
-      retargetIntervalTicks: 10,
-      aimJitterRadians: 0.06,
-      leadFactor: 0.65,
-      orbit: true,
-      evadeMissiles: true,
-      dodgeBullets: false,
-      threatAwareShield: true,
-      standoffDistance: 620,
-      evadeHorizonTicks: 12,
-      mgConeRadians: 0.35,
-      cannonConeRadians: 0.2,
-      mgHeatCeiling: 0.75,
-      cannonHeatCeiling: 0.8,
-      shieldLeadTicks: 8,
-      shieldMinEnergy: 0.15
-    },
-    ace: {
-      reactionTicks: 1,
-      retargetIntervalTicks: 2,
-      aimJitterRadians: 0,
-      leadFactor: 1,
-      orbit: true,
-      evadeMissiles: true,
-      dodgeBullets: true,
-      threatAwareShield: true,
-      standoffDistance: 700,
-      evadeHorizonTicks: 20,
-      mgConeRadians: 0.12,
-      cannonConeRadians: 0.06,
-      mgHeatCeiling: 0.7,
-      cannonHeatCeiling: 0.7,
-      shieldLeadTicks: 14,
-      shieldMinEnergy: 0.25
-    }
+    laser: LASER_PROFILES,
+    kinetic: withDelta(LASER_PROFILES, KINETIC_DELTA),
+    missile: withDelta(LASER_PROFILES, MISSILE_DELTA)
   }
 };
 
@@ -88,11 +199,39 @@ import { migrateBalanceDocument } from "./migrations.js";
 
 export { migrateBalanceDocument };
 
+/**
+ * What the campaign generator was built with. Numbers an operator can now turn
+ * from the console; the script reads them back rather than carrying its own.
+ */
+export const DEFAULT_CAMPAIGN_AUTHORING = {
+  budgetBase: 14,
+  budgetGrowth: 2,
+  bossEscortShare: 0.5,
+  asteroidEveryWaves: 3,
+  hpPerCannonShot: 25,
+  hpScale: 0.75,
+  damagePerSecondBase: 2,
+  damagePerSecondPerSpawnCost: 2.2,
+  bossDamagePerSecondCap: 26,
+  laserDamageShare: 0.75,
+  shipReach: 1080,
+  maxEngagementShare: 1.6,
+  maxStandoffShare: 1.3,
+  groupStartStepSeconds: 18,
+  swarmIntervalSeconds: 7,
+  lineIntervalSeconds: 14,
+  heavyIntervalSeconds: 22,
+  bossFloorSeconds: 30
+} as const;
+
 export function createDefaultTuning(): BalanceTuning {
   const config = createSpaceshipSimulationConfig();
   return balanceTuningSchema.parse({
     enemyArchetypes: config.enemyArchetypes,
-    waveCampaign: config.waveCampaign,
+    // The authoring block is the generator's, not the simulation's: the core
+    // knows nothing about it, so the defaults are stated here beside the rest
+    // of the balance file.
+    waveCampaign: { ...config.waveCampaign, authoring: DEFAULT_CAMPAIGN_AUTHORING },
     enemySpawnIntervalTicks: config.enemySpawnIntervalTicks,
     intermissionTicks: config.intermissionTicks,
     ambientAsteroidIntervalMinTicks: config.ambientAsteroidIntervalMinTicks,
@@ -106,17 +245,40 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidSpawnCost: config.asteroidSpawnCost,
     asteroidScoreReward: config.asteroidScoreReward,
     asteroidCreditReward: config.asteroidCreditReward,
+    lootRepairShare: config.lootRepairShare,
+    lootShieldAmount: config.lootShieldAmount,
+    lootBossRepairShare: config.lootBossRepairShare,
+    lootLifetimeTicks: config.lootLifetimeTicks,
+    lootDropRadius: config.lootDropRadius,
+    lootMagnetRadius: config.lootMagnetRadius,
+    lootMagnetAccelerationPerSecondSquared: config.lootMagnetAccelerationPerSecondSquared,
+    lootDriftDampingPerSecond: config.lootDriftDampingPerSecond,
+    cannonWeaponKind: config.cannonWeaponKind,
+    mgWeaponKind: config.mgWeaponKind,
+    cannonLaserRange: config.cannonLaserRange,
+    mgLaserRange: config.mgLaserRange,
+    laserBeamRadius: config.laserBeamRadius,
+    friendlyMissileTurnRatePerSecond: config.friendlyMissileTurnRatePerSecond,
+    friendlyMissileAcquireConeRadians: config.friendlyMissileAcquireConeRadians,
+    lootWindowTicks: config.lootWindowTicks,
+    lootBossWindowTicks: config.lootBossWindowTicks,
     asteroidVisual: config.asteroidVisual,
     missileInterceptScoreReward: config.missileInterceptScoreReward,
+    arenaRadius: config.arenaRadius,
     cameraViewWidth: config.cameraViewWidth,
     background: config.background,
     autopilot: DEFAULT_AUTOPILOT,
+    enemySkill: config.enemySkill,
+    helm: DEFAULT_HELM,
+    shipArchetypes: DEFAULT_SHIP_ARCHETYPES,
+    defaultShipArchetypeId: DEFAULT_SHIP_ARCHETYPE_ID,
     spaceshipVisual: config.spaceshipVisual,
     spaceshipMaxHp: config.spaceshipMaxHp,
     spaceshipRadius: config.spaceshipRadius,
     spaceshipSpeedPerSecond: config.spaceshipSpeedPerSecond,
     spaceshipAccelerationPerSecondSquared: config.spaceshipAccelerationPerSecondSquared,
     spaceshipBrakingPerSecondSquared: config.spaceshipBrakingPerSecondSquared,
+    spaceshipReverseSpeedFactor: config.spaceshipReverseSpeedFactor,
     headingMaxAngularSpeedPerSecond: config.headingMaxAngularSpeedPerSecond,
     headingAngularAccelerationPerSecondSquared: config.headingAngularAccelerationPerSecondSquared,
     headingAngularBrakingPerSecondSquared: config.headingAngularBrakingPerSecondSquared,
@@ -146,6 +308,10 @@ export function createDefaultTuning(): BalanceTuning {
     shieldCapacity: config.shieldCapacity,
     shieldDrainPerSecond: config.shieldDrainPerSecond,
     shieldRechargePerSecond: config.shieldRechargePerSecond,
+    shieldEngageTicks: config.shieldEngageTicks,
+    shieldMinimumUpTicks: config.shieldMinimumUpTicks,
+    shieldCooldownTicks: config.shieldCooldownTicks,
+    shieldRearmEnergy: config.shieldRearmEnergy,
     shieldRadius: config.shieldRadius,
     shieldArcRadians: config.shieldArcRadians,
     shieldMaxAngularSpeedPerSecond: config.shieldMaxAngularSpeedPerSecond,
@@ -164,14 +330,54 @@ export function createDefaultPresetsFile(): BalancePresetsFile {
 
 /** Throws a RangeError when the tuning cannot drive a simulation. */
 export function assertTuningIsPlayable(tuning: BalanceTuning): void {
-  validateSpaceshipSimulationConfig(toSimulationConfig(tuning));
+  for (const hullId of Object.keys(tuning.shipArchetypes)) {
+    validateSpaceshipSimulationConfig(toSimulationConfig(tuning, hullId));
+  }
 }
 
-export function toSimulationConfig(tuning: BalanceTuning): SpaceshipSimulationConfig {
-  // The autopilot section drives the demo harness, never the simulation.
+/**
+ * The preset plus one chosen hull, as the simulation sees it.
+ *
+ * This is where a hull stops being a catalogue entry: its sparse diff lands on
+ * the flat ship block and its tree becomes the tiers the offer is built from,
+ * so the simulation is handed a ship and never learns that a choice was made.
+ */
+export function toSimulationConfig(
+  tuning: BalanceTuning,
+  shipArchetypeId?: string
+): SpaceshipSimulationConfig {
+  // The autopilot section drives the demo harness and the helm section drives
+  // the controller's keyboard; neither reaches the simulation.
   const simulation: Partial<BalanceTuning> = { ...tuning };
   delete simulation.autopilot;
-  return createSpaceshipSimulationConfig(simulation);
+  delete simulation.helm;
+  delete simulation.shipArchetypes;
+  delete simulation.defaultShipArchetypeId;
+  const hull = resolveShipArchetype(tuning, shipArchetypeId);
+  // The world follows the arena radius inside the factory, so every caller that
+  // builds a config from a preset gets the same geometry.
+  return createSpaceshipSimulationConfig({
+    ...simulation,
+    ...hull.overrides.stats,
+    ...(hull.overrides.cannonWeaponKind === null
+      ? {}
+      : { cannonWeaponKind: hull.overrides.cannonWeaponKind }),
+    ...(hull.overrides.mgWeaponKind === null ? {} : { mgWeaponKind: hull.overrides.mgWeaponKind }),
+    moduleTiers: hull.tiers,
+    endlessTier: hull.endlessTier
+  });
+}
+
+/** The named hull, or the preset's own default when the name is not a hull. */
+export function resolveShipArchetype(
+  tuning: BalanceTuning,
+  shipArchetypeId?: string
+): ShipArchetype {
+  const chosen = shipArchetypeId === undefined ? undefined : tuning.shipArchetypes[shipArchetypeId];
+  const fallback = tuning.shipArchetypes[tuning.defaultShipArchetypeId];
+  const hull = chosen ?? fallback;
+  if (hull === undefined) throw new RangeError("Preset has no hull to play on");
+  return hull;
 }
 
 function findActivePreset(file: BalancePresetsFile): BalancePreset {
@@ -271,8 +477,8 @@ export class BalanceStore {
     return findActivePreset(this.file).tuning;
   }
 
-  getActiveSimulationConfig(): SpaceshipSimulationConfig {
-    return toSimulationConfig(this.getActiveTuning());
+  getActiveSimulationConfig(shipArchetypeId?: string): SpaceshipSimulationConfig {
+    return toSimulationConfig(this.getActiveTuning(), shipArchetypeId);
   }
 
   /** Validates, writes atomically and only then swaps the in-memory state. */

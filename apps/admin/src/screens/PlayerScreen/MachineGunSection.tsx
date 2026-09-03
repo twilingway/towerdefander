@@ -1,18 +1,25 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { NumberField, SecondsField } from "../../components/fields.js";
+import { NumberField, SecondsField, WeaponKindField } from "../../components/fields.js";
 
 interface MachineGunSectionProps {
   readonly tuning: BalanceTuning;
   readonly patch: (values: Partial<BalanceTuning>) => void;
 }
 
-/** Носовой пулемёт. */
+/** Носовой ствол пилота: он же ось тяги, поэтому целится всем корпусом. */
 export function MachineGunSection({ tuning, patch }: MachineGunSectionProps) {
   return (
     <>
-      <h3 className="card__subtitle">Носовой пулемёт</h3>
+      <h3 className="card__subtitle">Носовой ствол пилота</h3>
       <div className="card__grid">
+        <WeaponKindField
+          caption="Способ доставки"
+          value={tuning.mgWeaponKind}
+          onChange={(mgWeaponKind) => {
+            patch({ mgWeaponKind });
+          }}
+        />
         <NumberField
           caption="Урон"
           value={tuning.mgDamage}
@@ -28,8 +35,17 @@ export function MachineGunSection({ tuning, patch }: MachineGunSectionProps) {
           }}
         />
         <NumberField
+          caption="Дальность луча"
+          value={tuning.mgLaserRange}
+          disabled={tuning.mgWeaponKind !== "laser"}
+          onChange={(mgLaserRange) => {
+            patch({ mgLaserRange });
+          }}
+        />
+        <NumberField
           caption="Скорость снаряда"
           value={tuning.mgProjectileSpeedPerSecond}
+          disabled={tuning.mgWeaponKind === "laser"}
           onChange={(mgProjectileSpeedPerSecond) => {
             patch({ mgProjectileSpeedPerSecond: mgProjectileSpeedPerSecond });
           }}
@@ -37,6 +53,7 @@ export function MachineGunSection({ tuning, patch }: MachineGunSectionProps) {
         <NumberField
           caption="Радиус снаряда"
           value={tuning.mgProjectileRadius}
+          disabled={tuning.mgWeaponKind === "laser"}
           onChange={(mgProjectileRadius) => {
             patch({ mgProjectileRadius: mgProjectileRadius });
           }}

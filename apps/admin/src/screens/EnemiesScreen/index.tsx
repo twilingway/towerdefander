@@ -33,6 +33,7 @@ export function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           turnRatePerSecond: (2 * Math.PI) / 3,
           turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
           turnBrakingPerSecondSquared: 2 * Math.PI,
+          combatSkill: "veteran",
           weapons: [
             {
               kind: "bullet",
@@ -59,7 +60,8 @@ export function EnemiesScreen({ tuning, onChange }: EnemiesScreenProps) {
           spawnCost: 2,
           unlockWave: 1,
           scoreReward: 20,
-          creditReward: 2
+          creditReward: 2,
+          lootChance: 0.2
         }
       }
     });

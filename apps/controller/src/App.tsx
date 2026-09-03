@@ -1,5 +1,6 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  CREW_ROLES,
   PROTOCOL_VERSION,
   clientMessage,
   roomClosingSchema,
@@ -8,6 +9,7 @@ import {
   serverMessage,
   type ControllerRoomView,
   type CrewRole,
+  type CrewSize,
   type UpgradeId
 } from "@spaceship-defender/protocol";
 import {
@@ -73,18 +75,24 @@ export function ControllerApp() {
   const [errorEpoch, setErrorEpoch] = useState(0);
   const [previewRole, setPreviewRole] = useState<CrewRole>("pilot");
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
+  const [previewCrewSize, setPreviewCrewSize] = useState<CrewSize>(3);
   const preview = isPreviewMode(readBrowserSearch(), import.meta.env.DEV);
+  // Dropping to a smaller crew takes the later seats away, so the role follows
+  // the fixture back to the pilot instead of pointing at a player who is gone.
+  const previewSeat = CREW_ROLES.slice(0, previewCrewSize).includes(previewRole)
+    ? previewRole
+    : "pilot";
   // Layout preview feeds the same view state the network fills, so every screen
   // renders through the production components instead of a second copy.
   const previewView = useMemo(
-    () => (preview ? createPreviewRoomView(previewRole, previewPhase) : undefined),
-    [preview, previewPhase, previewRole]
+    () => (preview ? createPreviewRoomView(previewSeat, previewPhase, previewCrewSize) : undefined),
+    [preview, previewCrewSize, previewPhase, previewSeat]
   );
   const activeView = previewView ?? view;
   const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
   const currentPlayer = findCurrentPlayer(
     activeView,
-    previewView === undefined ? playerId : previewPlayerId(previewRole)
+    previewView === undefined ? playerId : previewPlayerId(previewSeat)
   );
   const connectedToRoom = status === "connected" || status === "reconnecting";
   const inLobby = activeView?.phase === "lobby";
@@ -255,7 +263,13 @@ export function ControllerApp() {
     requestImmersiveMode();
   }
 
-  function sendControl(sequence: number, control: ControlState): void {
+  function sendControl(
+    sequence: number,
+    control: ControlState,
+    // A solo player drives two streams from one connection, so the panel names
+    // the channel instead of the room deriving it from the seated role.
+    channel: CrewRole = currentPlayer?.role ?? "pilot"
+  ): void {
     const room = roomReference.current;
     if (room === undefined || view === undefined || currentPlayer === undefined) return;
     const envelope = {
@@ -265,13 +279,16 @@ export function ControllerApp() {
       runNumber: view.runNumber,
       sequence
     } as const;
-    if (currentPlayer.role === "pilot") {
+    if (channel === "pilot") {
       room.send(clientMessage.pilotInput, {
         ...envelope,
         vector: control.vector,
-        mgFiring: control.mgFiring
+        mgFiring: control.mgFiring,
+        // Only the tank helm carries an intent; a stick command stays exactly
+        // the shape it has always been.
+        ...(control.turn === null ? {} : { turn: control.turn, thrust: control.thrust ?? 0 })
       });
-    } else if (currentPlayer.role === "gunner") {
+    } else if (channel === "gunner") {
       room.send(clientMessage.gunnerInput, {
         ...envelope,
         aim: control.vector,
@@ -371,10 +388,12 @@ export function ControllerApp() {
     >
       {previewView !== undefined && (
         <PreviewControls
-          role={previewRole}
+          role={previewSeat}
           phase={previewPhase}
+          crewSize={previewCrewSize}
           onRoleChange={setPreviewRole}
           onPhaseChange={setPreviewPhase}
+          onCrewSizeChange={setPreviewCrewSize}
         />
       )}
       <section
@@ -440,6 +459,8 @@ export function ControllerApp() {
               )}
             <RoleScreen
               role={currentPlayer.role}
+              crewSize={activeView.crewSize}
+              helm={activeView.game?.helm}
               shield={activeView.game?.shield}
               cannon={activeView.game?.cannon}
               machineGun={activeView.game?.machineGun}

@@ -3,6 +3,7 @@ import {
   NEBULA_PRESETS,
   displayRoomViewSchema,
   type AsteroidOrigin,
+  type LootKind,
   type CrewRole,
   type DefeatReason,
   type DisplayRoomView,
@@ -12,6 +13,7 @@ import {
   type ProjectileKind,
   type PublicSpaceshipView,
   type PublicUpgradeVote,
+  type ShieldPhase,
   type TerminalOutcome,
   type UpgradeId
 } from "@spaceship-defender/protocol";
@@ -62,6 +64,20 @@ interface NetworkAsteroidState extends NetworkCombatEntityState {
   origin: AsteroidOrigin;
 }
 
+interface NetworkLaserBeamState {
+  entityId: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  source: "cannon" | "machineGun";
+}
+
+interface NetworkLootDropState extends NetworkCombatEntityState {
+  kind: LootKind;
+  amount: number;
+}
+
 interface NetworkProjectileState extends NetworkCombatEntityState {
   kind: ProjectileKind;
   source?: string;
@@ -75,11 +91,17 @@ interface NetworkHomingMissileState extends NetworkCombatEntityState {
   visualScale?: number;
 }
 
+interface NetworkShipStatEffectState {
+  target: string;
+  op: string;
+  value: number;
+}
+
 interface NetworkUpgradeCardState {
   upgradeId: UpgradeId;
   role: CrewRole;
   label: string;
-  value: number;
+  effects: ValueCollection<NetworkShipStatEffectState>;
   price: number;
 }
 
@@ -94,6 +116,7 @@ interface NetworkTeamUpgradeState {
   offer: {
     offerId: string;
     waveNumber: number;
+    tier: number;
     cards: ValueCollection<NetworkUpgradeCardState>;
   };
   votes: ValueCollection<NetworkUpgradeVoteState>;
@@ -113,12 +136,14 @@ interface NetworkGameState {
   worldWidth: number;
   worldHeight: number;
   arenaRadius: number;
+  rimBandWidth: number;
   spaceship: PublicSpaceshipView;
   turretAngle: number;
   shield: {
     angle: number;
     arcHalfAngle: number;
     active: boolean;
+    rearmRequired: boolean;
     energy: number;
     capacity: number;
   };
@@ -126,11 +151,19 @@ interface NetworkGameState {
     heat: number;
     capacity: number;
     overheated: boolean;
+    /** The aiming envelope: what the barrel is, how far, and its lock cone. */
+    kind: string;
+    reach: number;
+    speed: number;
+    acquireHalfAngle: number;
   };
   machineGun: {
     heat: number;
     capacity: number;
     overheated: boolean;
+    kind: string;
+    reach: number;
+    speed: number;
   };
   encounter: {
     phase: EncounterPhase;
@@ -142,16 +175,8 @@ interface NetworkGameState {
     encounterTick: number;
     phaseTicksRemaining: number;
     waveSecondsRemaining: number;
+    lootWindowSecondsRemaining: number;
     score: number;
-  };
-  roleModifiers: {
-    pilot: { speedMultiplier: number; accelerationMultiplier: number; maxHpBonus: number };
-    gunner: {
-      damageMultiplier: number;
-      cooldownMultiplier: number;
-      projectileSpeedMultiplier: number;
-    };
-    shield: { capacityBonus: number; rechargeMultiplier: number; arcWidthBonus: number };
   };
   credits: number;
   teamUpgrade?: NetworkTeamUpgradeState;
@@ -172,10 +197,14 @@ interface NetworkGameState {
     turretPivotX?: number;
     turretPivotY?: number;
     shieldRadius?: number;
+    shieldPhase?: ShieldPhase;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;
+    purchasedModules: readonly string[];
+    lootDrops: ValueCollection<NetworkLootDropState>;
+    laserBeams: ValueCollection<NetworkLaserBeamState>;
     friendlyProjectiles: ValueCollection<NetworkProjectileState>;
     hostileProjectiles: ValueCollection<NetworkProjectileState>;
     homingMissiles: ValueCollection<NetworkHomingMissileState>;
@@ -188,12 +217,15 @@ interface NetworkEnemyVisualState {
   shape: string;
   modelScale: number;
   showHealthBar: boolean;
+  isBoss: boolean;
 }
 
 export interface NetworkRoomState {
   roomId?: string;
   phase?: DisplayRoomView["phase"];
   runNumber?: number;
+  crewSize?: number;
+  shipArchetypeId?: string;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -209,6 +241,8 @@ export function toDisplayRoomView(
     typeof state.roomId !== "string" ||
     state.phase === undefined ||
     typeof state.runNumber !== "number" ||
+    typeof state.crewSize !== "number" ||
+    typeof state.shipArchetypeId !== "string" ||
     typeof state.displayConnected !== "boolean" ||
     state.players === undefined
   ) {
@@ -232,6 +266,8 @@ export function toDisplayRoomView(
     roomId: state.roomId,
     phase: state.phase,
     runNumber: state.runNumber,
+    crewSize: state.crewSize,
+    shipArchetypeId: state.shipArchetypeId,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,
@@ -243,6 +279,8 @@ export function toDisplayRoomView(
             worldWidth: game.worldWidth,
             worldHeight: game.worldHeight,
             arenaRadius: game.arenaRadius,
+            rimBandWidth: game.rimBandWidth,
+            shieldPhase: display.shieldPhase ?? "down",
             spaceship: { ...game.spaceship },
             turretAngle: game.turretAngle,
             shield: { ...game.shield },
@@ -262,12 +300,8 @@ export function toDisplayRoomView(
               encounterTick: game.encounter.encounterTick,
               phaseTicksRemaining: game.encounter.phaseTicksRemaining,
               waveSecondsRemaining: game.encounter.waveSecondsRemaining,
+              lootWindowSecondsRemaining: game.encounter.lootWindowSecondsRemaining,
               score: game.encounter.score
-            },
-            roleModifiers: {
-              pilot: { ...game.roleModifiers.pilot },
-              gunner: { ...game.roleModifiers.gunner },
-              shield: { ...game.roleModifiers.shield }
             },
             credits: game.credits,
             teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
@@ -321,10 +355,14 @@ export function toDisplayRoomView(
               label: entry.label,
               shape: entry.shape,
               modelScale: entry.modelScale,
-              showHealthBar: entry.showHealthBar
+              showHealthBar: entry.showHealthBar,
+              isBoss: entry.isBoss
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),
+            purchasedModules: [...display.purchasedModules],
+            lootDrops: toSpawnOrder(display.lootDrops),
+            laserBeams: [...display.laserBeams.values()].map((beam) => ({ ...beam })),
             friendlyProjectiles: toSpawnOrder(display.friendlyProjectiles).map(toPublicProjectile),
             hostileProjectiles: toSpawnOrder(display.hostileProjectiles).map(toPublicProjectile),
             homingMissiles: toSpawnOrder(display.homingMissiles).map(toPublicHomingMissile)
@@ -354,7 +392,11 @@ function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {
         ? {
             offerId: teamUpgrade.offer.offerId,
             waveNumber: teamUpgrade.offer.waveNumber,
-            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({ ...card }))
+            tier: teamUpgrade.offer.tier,
+            cards: [...teamUpgrade.offer.cards.values()].map((card) => ({
+              ...card,
+              effects: [...card.effects.values()].map((effect) => ({ ...effect }))
+            }))
           }
         : null,
     votes,

@@ -8,6 +8,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState,
   type HomingMissileState,
+  type LootDropState,
   type HostileProjectileState,
   type ProjectileState
 } from "@spaceship-defender/game-core";
@@ -50,6 +51,8 @@ export function createWorstCaseCombatFixture(
       heading: 0.2,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       hp: 10_000,
       maxHp: 10_000,
       weaponCooldownTicks: [10_000]
@@ -125,8 +128,35 @@ export function createWorstCaseCombatFixture(
       ...movingEntity(id, sequence, position, { x: 16, y: 0 }, 8),
       projectileId: id,
       damage: config.friendlyProjectileDamage,
-      source: "cannon"
+      source: "cannon",
+      homing: null
     } satisfies ProjectileState;
+  });
+
+  // Salvage is part of the worst case now: every drop is distance-checked
+  // against the hull each tick, and a wave that ends in a massacre leaves the
+  // field full of it.
+  const lootDrops = Array.from({ length: config.caps.lootDrops }, (_, index) => {
+    const position = ringPosition(
+      index,
+      config.caps.lootDrops,
+      config,
+      config.arenaRadius * 0.35,
+      0.15
+    );
+    const sequence = spawnSequence++;
+    return {
+      ...movingEntity(
+        `loot-${String(sequence)}`,
+        sequence,
+        position,
+        { x: 4, y: 2 },
+        config.lootDropRadius
+      ),
+      kind: "repair",
+      amount: config.lootRepairShare * config.spaceshipMaxHp,
+      lifetimeTicks: config.lootLifetimeTicks
+    } satisfies LootDropState;
   });
 
   const fixture: SpaceshipSimulationState = {
@@ -137,6 +167,7 @@ export function createWorstCaseCombatFixture(
     nextSpawnSequence: spawnSequence,
     enemies,
     asteroids,
+    lootDrops,
     hostileProjectiles,
     homingMissiles,
     projectiles,
@@ -144,7 +175,9 @@ export function createWorstCaseCombatFixture(
     lastFiredTick: 100
   };
   if (dynamicEntityCount(fixture) !== config.caps.dynamicEntities) {
-    throw new Error("Worst-case combat fixture must fill the 196-entity dynamic cap exactly.");
+    throw new Error(
+      `Worst-case combat fixture must fill the ${String(config.caps.dynamicEntities)}-entity dynamic cap exactly.`
+    );
   }
   return fixture;
 }

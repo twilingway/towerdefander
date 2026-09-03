@@ -1,11 +1,13 @@
 import {
   CAMERA_VIEW_ASPECT,
+  ENEMY_BEAM_SOURCE,
   FALLBACK_VISUAL_ASSET_ID,
   getVisualAsset
 } from "@spaceship-defender/protocol";
 import type {
   DisplayGameSnapshot,
   PublicAsteroidView,
+  PublicLootDropView,
   PublicEnemyCatalogueEntry,
   PublicEnemyView,
   PublicHomingMissileView,
@@ -14,29 +16,41 @@ import type {
 import Phaser from "phaser";
 
 import {
+  advancePlayback,
   backgroundTileOffset,
-  createAngleTransition,
-  createPointTransition,
+  createAngleTrack,
+  createPlaybackClock,
+  createPointTrack,
   createSnappedVisualTransitions,
+  extendAngleTrack,
+  extendPointTrack,
+  fillFocusCandidates,
+  getArenaRingRadii,
+  getArenaSpokes,
+  getRimBandStroke,
+  BACKGROUND_COVER_MARGIN_PX,
   getBackgroundCoverRect,
-  getCameraOverscan,
-  getCircularGridSegments,
+  getBackingStoreSize,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getShieldArcRange,
   getShieldCrescentPoints,
   getShieldDashSegments,
   getShieldVisualStyle,
-  getTimelineAlpha,
-  interpolateAngle,
-  interpolatePoint,
+  observePlaybackTick,
   reconcileStableIds,
+  sampleAngleTrack,
+  samplePointTrack,
   SnapshotResetLatch,
-  type AngleTransition,
+  type AngleTrack,
   type BackgroundCoverRect,
+  type MutableFocusCandidate,
+  type PlaybackClock,
   type Point,
-  type PointTransition
+  type PointTrack
 } from "./spaceshipViewModel.js";
+import { watchDevicePixelRatio } from "./devicePixels.js";
+import { pickFocusedTarget } from "../combatFocus.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 import {
   BACKGROUND_LAYERS,
@@ -49,15 +63,41 @@ import {
   type BackgroundLayerConfig
 } from "./spaceBackground.js";
 
+/**
+ * What the viewport spec reads: the camera's pixel rect and its zoom, both in
+ * the pixels the scene draws into rather than the CSS pixels the page is laid
+ * out in. The two differ by `pixelRatio` on a dense panel, and the slice of
+ * world - `width / zoom` - is the same number either way, which is the point.
+ */
+interface DisplayCameraSlice {
+  readonly width: number;
+  readonly height: number;
+  readonly zoom: number;
+  readonly pixelRatio: number;
+  /** The whole glass, letterbox bars included. */
+  readonly canvasWidth: number;
+  readonly canvasHeight: number;
+}
+
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
-const SNAPSHOT_TRANSITION_MS = 50;
 const OUTSIDE_SPACE_COLOR = 0x02070d;
 /** Drawn when a preset picks no hull of its own. */
 const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
 const ARENA_SPACE_COLOR = 0x07171f;
+/** The elastic rim band: visible enough to read as ground, not as an object. */
+const RIM_BAND_COLOR = 0xf2c14e;
+const RIM_BAND_ALPHA = 0.12;
 /** The parallax background shows through the arena disc. */
 const ARENA_FILL_ALPHA = 0.5;
+
+/**
+ * How long the worst frame is gathered over before it is published. A second,
+ * because that is the unit the frame counter beside it already speaks in, and
+ * because a shorter window makes the reading flicker faster than it can be
+ * read.
+ */
+const FRAME_WINDOW_MS = 1000;
 
 interface BackgroundLayerState {
   readonly sprite: Phaser.GameObjects.TileSprite;
@@ -67,14 +107,15 @@ interface BackgroundLayerState {
 type CombatEntity =
   | (PublicEnemyView & { readonly visualKind: "enemy" })
   | (PublicAsteroidView & { readonly visualKind: "asteroid" })
+  | (PublicLootDropView & { readonly visualKind: "loot" })
   | (PublicProjectileView & { readonly visualKind: "projectile" })
   | (PublicHomingMissileView & { readonly visualKind: "missile" });
 
 interface CombatVisual {
   readonly object: Phaser.GameObjects.Container;
   readonly healthBar: Phaser.GameObjects.Graphics | undefined;
-  position: PointTransition;
-  angle: AngleTransition;
+  position: PointTrack;
+  angle: AngleTrack;
 }
 
 class SpaceshipScene extends Phaser.Scene {
@@ -83,14 +124,38 @@ class SpaceshipScene extends Phaser.Scene {
   private noseMarker: Phaser.GameObjects.Graphics | undefined;
   private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
+  private beams: Phaser.GameObjects.Graphics | undefined;
+  private aimEnvelope: Phaser.GameObjects.Graphics | undefined;
+  private focusRing: Phaser.GameObjects.Graphics | undefined;
+  /** What the ring held last frame, so it does not jump on every wobble. */
+  private focusedEntityId: string | undefined;
+  private noseFocus: Phaser.GameObjects.Graphics | undefined;
+  private noseFocusedEntityId: string | undefined;
   private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
-  private spaceshipTransition: PointTransition;
-  private headingTransition: AngleTransition;
-  private turretTransition: AngleTransition;
-  private shieldTransition: AngleTransition;
+  private spaceshipTrack: PointTrack;
+  private headingTrack: AngleTrack;
+  private turretTrack: AngleTrack;
+  private shieldTrack: AngleTrack;
+  private playback: PlaybackClock;
+  /** Arrival of the last snapshot that carried a new tick, for pace measuring. */
+  private lastSnapshotAt: number | undefined;
+  /**
+   * The longest frame of the last completed second, in milliseconds.
+   *
+   * The frame counter beside it is an average smoothed across seconds, so one
+   * stalled frame never moves it at all - and a stall is precisely what a
+   * player calls a freeze. This is the other half of the same question, and it
+   * is collected here because the scene is the only thing that sees every
+   * frame.
+   */
+  private worstFrameMs = 0;
+  private frameWindowWorstMs = 0;
+  private frameWindowEndsAt = 0;
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
+  /** Reused between frames; see `updateFocusCandidates`. */
+  private readonly focusScratch: MutableFocusCandidate[] = [];
   private readonly backgroundLayers: BackgroundLayerState[] = [];
   private parallaxStrength = 1;
   /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
@@ -102,22 +167,30 @@ class SpaceshipScene extends Phaser.Scene {
     BASE_VIEWPORT_HEIGHT,
     1
   );
+  /**
+   * Device pixels per CSS pixel, handed in by whoever sized the buffer. Only
+   * the numbers measured in absolute pixels care - the background's cover
+   * margin - because everything else is world space multiplied by the camera
+   * zoom, and the zoom scaled with the buffer.
+   */
+  private pixelRatio = 1;
+  /** The glass, in the same pixels the scene draws into. */
+  private canvasWidth = BASE_VIEWPORT_WIDTH;
+  private canvasHeight = Math.round(BASE_VIEWPORT_WIDTH * CAMERA_VIEW_ASPECT);
+  /** The camera's own pixel rect, which is the frame centred inside the glass. */
   private rendererWidth = BASE_VIEWPORT_WIDTH;
   private rendererHeight = BASE_VIEWPORT_HEIGHT;
-  private cameraOverscan = 0;
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("spaceship");
     this.snapshot = snapshot;
     this.visualShieldAngle = snapshot.shield.angle;
-    this.spaceshipTransition = createPointTransition(snapshot.spaceship, snapshot.spaceship, 0);
-    this.headingTransition = createAngleTransition(
-      snapshot.spaceship.heading,
-      snapshot.spaceship.heading,
-      0
-    );
-    this.turretTransition = createAngleTransition(snapshot.turretAngle, snapshot.turretAngle, 0);
-    this.shieldTransition = createAngleTransition(snapshot.shield.angle, snapshot.shield.angle, 0);
+    const tick = snapshot.tick;
+    this.playback = createPlaybackClock(tick);
+    this.spaceshipTrack = createPointTrack(snapshot.spaceship, tick);
+    this.headingTrack = createAngleTrack(snapshot.spaceship.heading, tick);
+    this.turretTrack = createAngleTrack(snapshot.turretAngle, tick);
+    this.shieldTrack = createAngleTrack(snapshot.shield.angle, tick);
   }
 
   preload(): void {
@@ -155,19 +228,30 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret = createTurret(this, this.snapshot);
     this.shield = this.add.graphics().setDepth(14);
     this.shieldGlow = attachShieldGlow(this.shield);
-    const now = performance.now();
-    this.snapToSnapshot(this.snapshot, now);
+    // Above the arena, below the shield: a pulse is over before it can hide
+    // anything that matters.
+    this.beams = this.add.graphics().setDepth(13);
+    // Under everything that matters: it is a hint about where the gun can
+    // reach, and it must never sit on top of what is being aimed at.
+    this.aimEnvelope = this.add.graphics().setDepth(4);
+    // Above the ships it marks, below the shield and the pulses.
+    this.focusRing = this.add.graphics().setDepth(12);
+    this.noseFocus = this.add.graphics().setDepth(12);
+    const tick = this.snapshot.tick;
+    this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
-    this.reconcileCombatVisuals(now, true);
+    this.reconcileCombatVisuals(tick, true);
   }
 
-  override update(_time: number, deltaMs: number): void {
+  override update(time: number, deltaMs: number): void {
+    this.recordFrameTime(time);
     this.updateBackground(deltaMs);
+    this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
-    const now = performance.now();
-    const spaceshipPosition = interpolateTransition(this.spaceshipTransition, now);
-    const spaceshipHeading = interpolateAngleTransition(this.headingTransition, now);
+    const playbackTick = this.playback.tick;
+    const spaceshipPosition = samplePointTrack(this.spaceshipTrack, playbackTick);
+    const spaceshipHeading = sampleAngleTrack(this.headingTrack, playbackTick);
     this.spaceshipBody
       .setPosition(spaceshipPosition.x, spaceshipPosition.y)
       .setRotation(spaceshipHeading);
@@ -182,23 +266,61 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.turretVisual
     );
     this.turret.setPosition(mount.x, mount.y);
-    this.turret.rotation = interpolateAngleTransition(this.turretTransition, now);
-    this.visualShieldAngle = interpolateAngleTransition(this.shieldTransition, now);
+    this.turret.rotation = sampleAngleTrack(this.turretTrack, playbackTick);
+    this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     this.drawShield();
+    // From the mount, which is where the simulation fires from too: the barrel
+    // a crew sees is the barrel that shoots, so the envelope and the ring start
+    // on it rather than at the hull's centre.
+    this.drawAimEnvelope(mount, this.turret.rotation);
+    // One list, both rings: they ask the same question of the same ships, and
+    // building it twice was two objects per enemy per frame of pure garbage.
+    const candidates = this.updateFocusCandidates(playbackTick);
+    this.drawFocusRing(mount, this.turret.rotation, candidates);
+    this.drawNoseFocus(spaceshipPosition, spaceshipHeading, candidates);
+    this.drawLaserBeams();
     this.focusCamera(spaceshipPosition);
 
     for (const visual of this.combatVisuals.values()) {
-      const position = interpolateTransition(visual.position, now);
+      const position = samplePointTrack(visual.position, playbackTick);
       visual.object.setPosition(position.x, position.y);
-      visual.object.rotation = interpolateAngleTransition(visual.angle, now);
+      visual.object.rotation = sampleAngleTrack(visual.angle, playbackTick);
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }
   }
 
+  /**
+   * Keeps the worst frame of the running second, and publishes it when the
+   * second is over.
+   *
+   * `rawDelta` rather than the smoothed delta the scene is handed: the
+   * smoothing is what makes the average readable, and it is exactly what would
+   * hide the spike. Published only on a closed window, so the number does not
+   * change underneath a sampler that reads it twice a second.
+   */
+  private recordFrameTime(time: number): void {
+    if (this.frameWindowEndsAt === 0) {
+      // The first frame carries boot work no later frame repeats.
+      this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
+      return;
+    }
+    const raw = this.game.loop.rawDelta;
+    if (raw > this.frameWindowWorstMs) this.frameWindowWorstMs = raw;
+    if (time < this.frameWindowEndsAt) return;
+    this.worstFrameMs = this.frameWindowWorstMs;
+    this.frameWindowWorstMs = 0;
+    this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
+  }
+
+  readWorstFrameMs(): number {
+    return this.worstFrameMs;
+  }
+
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
     const previousBackground = this.snapshot.background;
+    const previousTick = this.snapshot.tick;
     this.snapshot = snapshot;
     if (hasBackgroundChanged(previousBackground, snapshot.background)) {
       this.applyBackgroundSettings(snapshot.background);
@@ -208,30 +330,37 @@ class SpaceshipScene extends Phaser.Scene {
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.
     if (snapshot.cameraViewWidth !== framedWidth) {
-      this.configureViewport(this.rendererWidth, this.rendererHeight);
+      this.configureViewport(this.canvasWidth, this.canvasHeight);
     }
-    const now = performance.now();
     if (shouldSnap || this.spaceshipBody === undefined || this.turret === undefined) {
-      this.snapToSnapshot(snapshot, now);
-    } else {
-      this.spaceshipTransition = createPointTransition(this.spaceshipBody, snapshot.spaceship, now);
-      this.headingTransition = createAngleTransition(
-        this.noseMarker?.rotation ?? snapshot.spaceship.heading,
-        snapshot.spaceship.heading,
-        now
-      );
-      this.turretTransition = createAngleTransition(
-        this.turret.rotation,
-        snapshot.turretAngle,
-        now
-      );
-      this.shieldTransition = createAngleTransition(
-        this.visualShieldAngle,
-        snapshot.shield.angle,
-        now
-      );
+      this.snapToSnapshot(snapshot, snapshot.tick);
+      // The measured pace survives a hydration: the room did not change its
+      // rate just because this client lost the thread of it.
+      this.playback = createPlaybackClock(snapshot.tick, this.playback.msPerTick);
+      this.lastSnapshotAt = performance.now();
+      this.reconcileCombatVisuals(snapshot.tick, true);
+      return;
     }
-    this.reconcileCombatVisuals(now, shouldSnap);
+    // A patch with no new tick - telemetry, an offer, a reframed camera -
+    // carries no movement, so restarting a segment on it would only nudge the
+    // world sideways.
+    if (snapshot.tick === previousTick) return;
+    const arrivedAt = performance.now();
+    const gapMs = this.lastSnapshotAt === undefined ? 0 : arrivedAt - this.lastSnapshotAt;
+    this.lastSnapshotAt = arrivedAt;
+    this.playback = observePlaybackTick(this.playback, snapshot.tick, gapMs);
+    // Segments run authoritative sample to authoritative sample, and the track
+    // keeps the displaced one, so playback - which deliberately runs behind -
+    // always has a segment under it to draw.
+    this.spaceshipTrack = extendPointTrack(this.spaceshipTrack, snapshot.spaceship, snapshot.tick);
+    this.headingTrack = extendAngleTrack(
+      this.headingTrack,
+      snapshot.spaceship.heading,
+      snapshot.tick
+    );
+    this.turretTrack = extendAngleTrack(this.turretTrack, snapshot.turretAngle, snapshot.tick);
+    this.shieldTrack = extendAngleTrack(this.shieldTrack, snapshot.shield.angle, snapshot.tick);
+    this.reconcileCombatVisuals(snapshot.tick, false);
   }
 
   prepareHydration(): void {
@@ -248,14 +377,23 @@ class SpaceshipScene extends Phaser.Scene {
     const graphics = this.add.graphics().setDepth(0);
     graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
     graphics.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
+    // The band the rim slows a hull in, under the rings so those stay readable.
+    const band = getRimBandStroke(this.snapshot.arenaRadius, this.snapshot.rimBandWidth);
+    if (band !== null) {
+      graphics.lineStyle(band.thickness, RIM_BAND_COLOR, RIM_BAND_ALPHA);
+      graphics.strokeCircle(centerX, centerY, band.radius);
+    }
+
+    // Rings and spokes rather than a square grid: on a round arena what a pilot
+    // reads off the floor is the distance to the rim and the bearing, and a
+    // square mesh states neither.
     graphics.lineStyle(2, 0x163746, 0.75);
-    for (const segment of getCircularGridSegments(
-      centerX,
-      centerY,
-      this.snapshot.arenaRadius,
-      100
-    )) {
-      graphics.lineBetween(segment.from.x, segment.from.y, segment.to.x, segment.to.y);
+    for (const radius of getArenaRingRadii(this.snapshot.arenaRadius)) {
+      graphics.strokeCircle(centerX, centerY, radius);
+    }
+    graphics.lineStyle(2, 0x14303d, 0.5);
+    for (const spoke of getArenaSpokes(centerX, centerY, this.snapshot.arenaRadius)) {
+      graphics.lineBetween(spoke.from.x, spoke.from.y, spoke.to.x, spoke.to.y);
     }
 
     const border = this.add.graphics().setDepth(3);
@@ -344,6 +482,148 @@ class SpaceshipScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Laser pulses, drawn straight from the authoritative endpoints. They are not
+   * entities and have no track to interpolate: the server says a beam existed
+   * for these two ticks, and the display shows exactly that.
+   */
+  private drawLaserBeams(): void {
+    if (this.beams === undefined) return;
+    this.beams.clear();
+    for (const beam of this.snapshot.laserBeams) {
+      const style = beamStyle(beam.source);
+      this.beams.lineStyle(style.width, style.color, style.alpha);
+      this.beams.beginPath();
+      this.beams.moveTo(beam.fromX, beam.fromY);
+      this.beams.lineTo(beam.toX, beam.toY);
+      this.beams.strokePath();
+      this.beams.fillStyle(style.color, style.alpha);
+      this.beams.fillCircle(beam.fromX, beam.fromY, style.width);
+    }
+  }
+
+  /**
+   * Where the turret can reach, and - for a barrel that locks on - how far off
+   * the bore it will still take a lock. The fill says "inside here"; the two
+   * rays say where the edge is, because a wash of colour alone reads as glow
+   * rather than as a boundary.
+   *
+   * A barrel that locks onto nothing still gets a sliver, so the reach stays
+   * readable: the gunner's question is as often "does it even carry that far"
+   * as "am I on it".
+   */
+  private drawAimEnvelope(origin: { readonly x: number; readonly y: number }, angle: number): void {
+    const layer = this.aimEnvelope;
+    if (layer === undefined) return;
+    layer.clear();
+    const { reach, acquireHalfAngle } = this.snapshot.cannon;
+    if (reach <= 0) return;
+    const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
+    layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
+    layer.slice(origin.x, origin.y, reach, angle - half, angle + half);
+    layer.fillPath();
+    layer.lineStyle(
+      AIM_ENVELOPE_STYLE.width,
+      AIM_ENVELOPE_STYLE.color,
+      AIM_ENVELOPE_STYLE.edgeAlpha
+    );
+    for (const edge of [angle - half, angle + half]) {
+      layer.beginPath();
+      layer.moveTo(origin.x, origin.y);
+      layer.lineTo(origin.x + Math.cos(edge) * reach, origin.y + Math.sin(edge) * reach);
+      layer.strokePath();
+    }
+  }
+
+  /**
+   * A ring around the ship a shot would hit right now, breathing so it reads as
+   * live rather than as decoration. There is no lock in this game - the gunner
+   * turns a barrel - so the ring is read off the geometry every frame, and it
+   * moves the moment the bore does.
+   *
+   * Drawn at the interpolated positions, not the snapshot's, or it would sit a
+   * frame behind the ship it is marking.
+   */
+  private drawFocusRing(
+    origin: { readonly x: number; readonly y: number },
+    bearing: number,
+    candidates: readonly MutableFocusCandidate[]
+  ): void {
+    const layer = this.focusRing;
+    if (layer === undefined) return;
+    layer.clear();
+    const focus = pickFocusedTarget({
+      origin,
+      bearing,
+      reach: this.snapshot.cannon.reach,
+      speed: this.snapshot.cannon.speed,
+      heldEntityId: this.focusedEntityId,
+      candidates
+    });
+    this.focusedEntityId = focus?.target.entityId;
+    if (focus === undefined) return;
+    const { target, firable } = focus;
+    const alpha = firable ? 0.9 : 0.55 + 0.45 * Math.sin(this.time.now / FOCUS_RING_BREATH_MS);
+    layer.lineStyle(
+      firable ? FOCUS_RING_FIRABLE_WIDTH : FOCUS_RING_WIDTH,
+      firable ? FOCUS_RING_FIRABLE_COLOR : FOCUS_RING_HELD_COLOR,
+      alpha
+    );
+    layer.strokeCircle(target.x, target.y, target.radius + FOCUS_RING_MARGIN);
+  }
+
+  /**
+   * The ship the nose gun is about to be fired into. Same question as the ring
+   * asks of the turret, put to the other barrel: the hull is this one's mount,
+   * so the bearing is the ship's own heading.
+   */
+  private drawNoseFocus(
+    origin: { readonly x: number; readonly y: number },
+    heading: number,
+    candidates: readonly MutableFocusCandidate[]
+  ): void {
+    const layer = this.noseFocus;
+    if (layer === undefined) return;
+    layer.clear();
+    const focus = pickFocusedTarget({
+      origin,
+      bearing: heading,
+      reach: this.snapshot.machineGun.reach,
+      speed: this.snapshot.machineGun.speed,
+      heldEntityId: this.noseFocusedEntityId,
+      candidates
+    });
+    this.noseFocusedEntityId = focus?.target.entityId;
+    if (focus?.firable !== true) return;
+    const { target } = focus;
+    const radius = target.radius + NOSE_FOCUS_MARGIN;
+    const bearing = Math.atan2(target.y - origin.y, target.x - origin.x);
+    layer.lineStyle(NOSE_FOCUS_WIDTH, NOSE_FOCUS_COLOR, 0.85);
+    // Two arcs across the line of fire, so the brackets open toward the shooter
+    // however the pair happens to be turned.
+    for (const side of [Math.PI / 2, -Math.PI / 2]) {
+      const centre = bearing + side;
+      layer.beginPath();
+      layer.arc(target.x, target.y, radius, centre - NOSE_FOCUS_SWEEP, centre + NOSE_FOCUS_SWEEP);
+      layer.strokePath();
+    }
+  }
+
+  /**
+   * The ships both rings are read against, at the positions being drawn rather
+   * than the ones last sent.
+   *
+   * Refills `focusScratch` instead of building a list, so a steady crowd costs
+   * nothing per frame. What makes that safe is that no candidate outlives the
+   * frame: both callers read the winner immediately and keep only its id.
+   */
+  private updateFocusCandidates(playbackTick: number): readonly MutableFocusCandidate[] {
+    return fillFocusCandidates(this.focusScratch, this.snapshot.enemyShips, (enemy) => {
+      const visual = this.combatVisuals.get(enemy.entityId);
+      return visual === undefined ? enemy : samplePointTrack(visual.position, playbackTick);
+    });
+  }
+
   private drawShield(): void {
     if (this.shield === undefined || this.spaceshipBody === undefined) return;
     this.shield.clear();
@@ -352,6 +632,19 @@ class SpaceshipScene extends Phaser.Scene {
     const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
     // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
     const radius = this.snapshot.shieldRadius;
+    // A filtered object is composited by a camera of its own, and one that
+    // focuses on the drawing context is told the main camera's size, scroll and
+    // zoom but never where the letterboxed frame sits in the glass - so the
+    // glow was laid down from the canvas corner while the hull was drawn from
+    // the frame's, and the raised shield drifted off the ship by the width of
+    // the bars. Focused on the arc itself, it travels with the hull instead.
+    const filterExtent = (radius + style.lineWidth + SHIELD_GLOW_DISTANCE) * 2;
+    this.shield.focusFiltersOverride(
+      filterExtent / 2,
+      filterExtent / 2,
+      filterExtent,
+      filterExtent
+    );
     this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
     if (style.crescentThickness !== null) {
       const crescent = getShieldCrescentPoints(arc.start, arc.end, radius, style.crescentThickness);
@@ -377,7 +670,7 @@ class SpaceshipScene extends Phaser.Scene {
     if (this.shieldGlow !== undefined) this.shieldGlow.active = this.snapshot.shield.active;
   }
 
-  private snapToSnapshot(snapshot: DisplayGameSnapshot, now: number): void {
+  private snapToSnapshot(snapshot: DisplayGameSnapshot, tick: number): void {
     if (this.spaceshipBody === undefined || this.turret === undefined) return;
     this.spaceshipBody.setPosition(snapshot.spaceship.x, snapshot.spaceship.y);
     if (this.noseMarker !== undefined) {
@@ -393,15 +686,19 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret.setPosition(snappedMount.x, snappedMount.y);
     this.turret.setRotation(snapshot.turretAngle);
     this.visualShieldAngle = snapshot.shield.angle;
-    const transitions = createSnappedVisualTransitions(snapshot, now);
-    this.spaceshipTransition = transitions.spaceship;
-    this.headingTransition = createAngleTransition(
-      snapshot.spaceship.heading,
-      snapshot.spaceship.heading,
-      now
-    );
-    this.turretTransition = transitions.turret;
-    this.shieldTransition = transitions.shield;
+    const tracks = createSnappedVisualTransitions(snapshot, tick);
+    this.spaceshipTrack = tracks.spaceship;
+    this.headingTrack = createAngleTrack(snapshot.spaceship.heading, tick);
+    this.turretTrack = tracks.turret;
+    this.shieldTrack = tracks.shield;
+  }
+
+  /**
+   * Told, not derived: the factory owns the ratio because it owns the buffer,
+   * and a scene that recomputed it would be a second opinion about one number.
+   */
+  setPixelRatio(ratio: number): void {
+    this.pixelRatio = ratio;
   }
 
   private readonly handleResize = (gameSize: Phaser.Structs.Size): void => {
@@ -415,44 +712,65 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.cameraViewWidth,
       this.snapshot.cameraViewWidth * CAMERA_VIEW_ASPECT
     );
-    this.rendererWidth = actualWidth;
-    this.rendererHeight = actualHeight;
+    this.canvasWidth = actualWidth;
+    this.canvasHeight = actualHeight;
+    // Phaser centres a camera on its own pixel size, and the camera is the
+    // letterboxed frame now rather than the whole canvas - so the scroll and the
+    // background cover are measured against the frame, not the glass.
+    this.rendererWidth = viewport.screen.width;
+    this.rendererHeight = viewport.screen.height;
     this.viewportWidth = viewport.width;
     this.viewportHeight = viewport.height;
-    this.cameraOverscan = getCameraOverscan(this.snapshot.spaceship.radius, viewport.zoom);
     this.cameras.main.setZoom(viewport.zoom);
-    this.cameras.main.setBounds(
-      -this.cameraOverscan,
-      -this.cameraOverscan,
-      this.snapshot.worldWidth + this.cameraOverscan * 2,
-      this.snapshot.worldHeight + this.cameraOverscan * 2
+    // The frame is centred in the glass and nothing is drawn outside it, so the
+    // slice of arena a crew sees is the same on an ultrawide monitor, a laptop
+    // and a tablet - the difference between them is the width of the bars.
+    this.cameras.main.setViewport(
+      viewport.screen.x,
+      viewport.screen.y,
+      viewport.screen.width,
+      viewport.screen.height
     );
     // Scroll-factor-0 layers still get zoomed around the camera origin, so their world rect is
     // not the viewport window; keep both size and position in sync with it.
-    this.backgroundCover = getBackgroundCoverRect(actualWidth, actualHeight, viewport.zoom);
+    this.backgroundCover = getBackgroundCoverRect(
+      viewport.screen.width,
+      viewport.screen.height,
+      viewport.zoom,
+      // The only number here measured in pixels rather than world units, so the
+      // only one that has to be told the buffer got denser: left alone, the
+      // slack behind the edge would shrink by the ratio.
+      BACKGROUND_COVER_MARGIN_PX * this.pixelRatio
+    );
     for (const layer of this.backgroundLayers) {
       layer.sprite
         .setPosition(this.backgroundCover.x, this.backgroundCover.y)
         .setSize(this.backgroundCover.width, this.backgroundCover.height);
     }
+    // Published for the viewport spec, which has no other way to ask what the
+    // camera is actually showing. Inert otherwise: a plain object, written once
+    // per resize.
+    (globalThis as { __spaceshipDisplayCamera?: DisplayCameraSlice }).__spaceshipDisplayCamera = {
+      width: viewport.screen.width,
+      height: viewport.screen.height,
+      zoom: viewport.zoom,
+      pixelRatio: this.pixelRatio,
+      canvasWidth: actualWidth,
+      canvasHeight: actualHeight
+    };
     this.focusCamera(this.spaceshipBody ?? this.snapshot.spaceship);
   }
 
   private focusCamera(focus: Point): void {
     const scroll = getPhaserCameraScroll({
       focus,
-      worldWidth: this.snapshot.worldWidth,
-      worldHeight: this.snapshot.worldHeight,
       rendererWidth: this.rendererWidth,
-      rendererHeight: this.rendererHeight,
-      viewportWidth: this.viewportWidth,
-      viewportHeight: this.viewportHeight,
-      overscan: this.cameraOverscan
+      rendererHeight: this.rendererHeight
     });
     this.cameras.main.setScroll(scroll.x, scroll.y);
   }
 
-  private reconcileCombatVisuals(now: number, snap: boolean): void {
+  private reconcileCombatVisuals(toTick: number, snap: boolean): void {
     const incoming = collectCombatEntities(this.snapshot);
     const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
     const plan = reconcileStableIds(this.combatVisuals.keys(), incomingById.keys());
@@ -472,15 +790,20 @@ class SpaceshipScene extends Phaser.Scene {
         this.combatVisuals.set(entityId, {
           object: created.object,
           healthBar: created.healthBar,
-          position: createPointTransition(entity, entity, now),
-          angle: createAngleTransition(heading, heading, now)
+          // An entity appears already formed at the newest tick; there is no
+          // earlier authoritative sample to walk it out of.
+          position: createPointTrack(entity, toTick),
+          angle: createAngleTrack(heading, toTick)
         });
       } else {
-        const fromPoint = snap ? entity : visual.object;
-        const fromHeading = snap ? heading : visual.object.rotation;
-        if (snap) visual.object.setPosition(entity.x, entity.y).setRotation(heading);
-        visual.position = createPointTransition(fromPoint, entity, now);
-        visual.angle = createAngleTransition(fromHeading, heading, now);
+        if (snap) {
+          visual.object.setPosition(entity.x, entity.y).setRotation(heading);
+          visual.position = createPointTrack(entity, toTick);
+          visual.angle = createAngleTrack(heading, toTick);
+        } else {
+          visual.position = extendPointTrack(visual.position, entity, toTick);
+          visual.angle = extendAngleTrack(visual.angle, heading, toTick);
+        }
         if (visual.healthBar !== undefined && entity.visualKind === "enemy") {
           drawEnemyHealthBar(visual.healthBar, entity);
         }
@@ -520,6 +843,38 @@ class SpaceshipScene extends Phaser.Scene {
         );
         container.add([rock, crater]);
       }
+    } else if (entity.visualKind === "loot") {
+      // Salvage has to read at a glance from across the arena: a bright ring
+      // the hull colour of what it gives back, with a cross for repair and a
+      // bar for a shield cell, so the pilot decides without reading a label.
+      const repair = entity.kind === "repair";
+      const tint = repair ? 0x7ef2a4 : 0x7ec8f2;
+      const halo = this.add.circle(0, 0, entity.radius * 1.6, tint, 0.18);
+      const shell = this.add.circle(0, 0, entity.radius, 0x0d1b24, 0.9).setStrokeStyle(3, tint, 1);
+      const mark = this.add.graphics();
+      mark.fillStyle(tint, 1);
+      if (repair) {
+        mark.fillRect(
+          -entity.radius * 0.55,
+          -entity.radius * 0.18,
+          entity.radius * 1.1,
+          entity.radius * 0.36
+        );
+        mark.fillRect(
+          -entity.radius * 0.18,
+          -entity.radius * 0.55,
+          entity.radius * 0.36,
+          entity.radius * 1.1
+        );
+      } else {
+        mark.fillRect(
+          -entity.radius * 0.5,
+          -entity.radius * 0.3,
+          entity.radius,
+          entity.radius * 0.6
+        );
+      }
+      container.add([halo, shell, mark]);
     } else if (entity.visual !== null) {
       const shot = this.add.graphics();
       drawCatalogAssetById(shot, entity.visual.shape, entity.radius * entity.visual.modelScale);
@@ -580,6 +935,7 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
   return [
     ...snapshot.enemyShips.map((entity) => ({ ...entity, visualKind: "enemy" as const })),
     ...snapshot.asteroids.map((entity) => ({ ...entity, visualKind: "asteroid" as const })),
+    ...snapshot.lootDrops.map((entity) => ({ ...entity, visualKind: "loot" as const })),
     ...snapshot.friendlyProjectiles.map((entity) => ({
       ...entity,
       visualKind: "projectile" as const
@@ -597,7 +953,8 @@ const FALLBACK_ENEMY_VISUAL: PublicEnemyCatalogueEntry = {
   label: "Unknown",
   shape: FALLBACK_VISUAL_ASSET_ID,
   modelScale: 1,
-  showHealthBar: false
+  showHealthBar: false,
+  isBoss: false
 };
 
 /** An archetype the display has no entry for still gets drawn, just generically. */
@@ -611,8 +968,14 @@ export function resolveEnemyVisual(
 const SHIELD_GLOW_COLOR = 0x65baff;
 /** Gentle bloom: the crescent already carries the shape, the glow only softens it. */
 const SHIELD_GLOW_OUTER_STRENGTH = 2.4;
-/** Fixed at creation by Phaser; a wider distance at higher quality falls off smoothly. */
-const SHIELD_GLOW_QUALITY = 16;
+/**
+ * Sample count of the glow shader, fixed at creation by Phaser. Ten is Phaser's
+ * own default and this stood at sixteen; the shield is the only filtered object
+ * in the scene, which makes it the one pass whose cost grows with the square of
+ * the render resolution, and a sixty per cent surcharge on it is not something
+ * the bloom shows off.
+ */
+const SHIELD_GLOW_QUALITY = 10;
 const SHIELD_GLOW_DISTANCE = 24;
 
 /**
@@ -620,11 +983,85 @@ const SHIELD_GLOW_DISTANCE = 24;
  * game object never gets a filter list. The arc still has to be drawn, so the
  * glow is treated as an enhancement that may simply be unavailable.
  */
+/**
+ * The aiming envelope. Faint enough to read the arena through it, with edges
+ * solid enough to be a line rather than a glow.
+ */
+const AIM_ENVELOPE_STYLE = {
+  color: 0x7ef0ff,
+  fillAlpha: 0.05,
+  edgeAlpha: 0.28,
+  width: 2
+} as const;
+/**
+ * The ring says two things in two colours. White while the target is merely the
+ * one being held - breathing, so a still frame still reads as "this one, now".
+ * Green the moment the barrel is actually on it and inside its reach, which is
+ * the only moment a shot connects; that one holds steady, because a light that
+ * means "fire" should not be blinking.
+ */
+const FOCUS_RING_HELD_COLOR = 0xffffff;
+const FOCUS_RING_FIRABLE_COLOR = 0x62ff9b;
+const FOCUS_RING_WIDTH = 2;
+const FOCUS_RING_FIRABLE_WIDTH = 3;
+const FOCUS_RING_MARGIN = 10;
+const FOCUS_RING_BREATH_MS = 220;
+
+/**
+ * The nose gun's mark: two brackets rather than a ring, and yellow rather than
+ * white, because it is a different barrel with a different bore. The pilot flies
+ * this one - the hull is the mount - so the ship it is about to be fired into is
+ * worth saying out loud even though no envelope is drawn for it.
+ */
+const NOSE_FOCUS_COLOR = 0xffd24a;
+const NOSE_FOCUS_WIDTH = 2;
+const NOSE_FOCUS_MARGIN = 16;
+/** Half the span of each bracket, so the pair reads as "( )" around the hull. */
+const NOSE_FOCUS_SWEEP = Math.PI / 5;
+
+/** A barrel with no lock cone still shows this much, so its reach is legible. */
+const AIM_MIN_HALF_ANGLE = 0.03;
+
+/** Turret and nose beams read apart the way their projectiles already do. */
+const LASER_CANNON_STYLE = { width: 3, color: 0x7ef0ff, alpha: 0.9 } as const;
+const LASER_NOSE_STYLE = { width: 2, color: 0xffd783, alpha: 0.85 } as const;
+/**
+ * Hostile fire is red on this display and ours is not, so the beam follows the
+ * same rule. Thicker than either of ours, because a hit that cannot be dodged
+ * has to be the thing you see first.
+ */
+const LASER_ENEMY_STYLE = { width: 4, color: 0xff5a4a, alpha: 0.9 } as const;
+
+function beamStyle(source: string) {
+  if (source === ENEMY_BEAM_SOURCE) return LASER_ENEMY_STYLE;
+  return source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
+}
+
 function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.Glow | undefined {
   shield.enableFilters();
+  // Graphics carries no width or height, so Phaser calls it poorly bounded and
+  // focuses its filters on the drawing context - the one path that drops the
+  // camera's own position. `drawShield` hands it the bounds instead, every
+  // frame, because the shield radius is bought and sold during a run.
+  shield.setFiltersFocusContext(false);
   const filters = shield.filters;
   if (filters === null) return undefined;
-  const glow = filters.external.addGlow(
+  /**
+   * Internal, not external, and the difference is the whole cost of the shield.
+   *
+   * An external filter is applied to the drawing context - the entire canvas -
+   * so a bloom around an arc that covers a hundredth of the screen was running
+   * a ten-sample shader over every pixel of it, plus two full-screen copies,
+   * on every frame the sector was up. On a phone at three device pixels per
+   * point that is three million pixels of shader for a shield, and it showed:
+   * sixty frames with the sector down, twenty-five with it up.
+   *
+   * An internal filter runs on the object's own target instead, which is the
+   * box `drawShield` sizes to the arc plus the bloom - a few hundred pixels
+   * square. Phaser pads that target by the glow's own distance, so the bloom
+   * still spreads rather than being clipped at the edge.
+   */
+  const glow = filters.internal.addGlow(
     SHIELD_GLOW_COLOR,
     SHIELD_GLOW_OUTER_STRENGTH,
     0,
@@ -745,7 +1182,10 @@ function getProjectileStyle(entity: PublicProjectileView): { fill: number; strok
 }
 
 function getEntityDepth(entity: CombatEntity): number {
-  return entity.visualKind === "asteroid" ? 5 : entity.visualKind === "enemy" ? 7 : 11;
+  if (entity.visualKind === "asteroid") return 5;
+  // Above the rocks so it is never lost behind one, below the ships.
+  if (entity.visualKind === "loot") return 6;
+  return entity.visualKind === "enemy" ? 7 : 11;
 }
 
 function getEntityHeading(entity: CombatEntity): number {
@@ -753,43 +1193,119 @@ function getEntityHeading(entity: CombatEntity): number {
   return Math.atan2(entity.velocityY, entity.velocityX);
 }
 
-function interpolateTransition(transition: PointTransition, now: number): Point {
-  return interpolatePoint(
-    transition.from,
-    transition.to,
-    getTimelineAlpha(now - transition.startedAt, SNAPSHOT_TRANSITION_MS)
-  );
-}
-
-function interpolateAngleTransition(transition: AngleTransition, now: number): number {
-  return interpolateAngle(
-    transition.from,
-    transition.to,
-    getTimelineAlpha(now - transition.startedAt, SNAPSHOT_TRANSITION_MS)
-  );
-}
-
 export interface SpaceshipRuntime {
   update(snapshot: DisplayGameSnapshot): void;
   prepareHydration(): void;
+  /**
+   * Frames a second as the game loop measures them, not as the browser paints
+   * them: what the scene manages to draw is the number worth showing.
+   */
+  readFps(): number;
+  /**
+   * The longest frame of the last completed second, in milliseconds. A freeze
+   * and a low frame rate are different complaints with different causes, and
+   * the average above cannot tell them apart.
+   */
+  readWorstFrameMs(): number;
+  /**
+   * Lowers the ceiling on how many device pixels the scene may draw, when the
+   * frame counter says this machine cannot afford the one it has. Down only:
+   * see `nextPixelRatioCap`.
+   */
+  setPixelRatioCap(cap: number): void;
   destroy(): void;
+}
+
+export interface SpaceshipRuntimeOptions {
+  /**
+   * Device pixels per CSS pixel the scene may draw at. Overridable so the
+   * ceiling can be chosen on the device that pays for it - see `?dpr=`.
+   */
+  readonly pixelRatioCap?: number;
 }
 
 export function createSpaceshipRuntime(
   host: HTMLElement,
-  initialSnapshot: DisplayGameSnapshot
+  initialSnapshot: DisplayGameSnapshot,
+  options: SpaceshipRuntimeOptions = {}
 ): SpaceshipRuntime {
   const scene = new SpaceshipScene(initialSnapshot);
+  /**
+   * What to draw into, for the glass we have right now.
+   *
+   * `Scale.RESIZE` sized the buffer in CSS pixels, which on a phone is a third
+   * of the panel in each direction - the arena was rasterised at a ninth of the
+   * pixels it was shown at and blown back up, while the HUD beside it was drawn
+   * by the browser at full density. Phaser 4 has no setting for this, so the
+   * mode goes to `NONE` and the sizing becomes ours: one observer, one call to
+   * `scale.resize`, and the engine resizes the renderer, the cameras and the
+   * filter targets off the back of it.
+   */
+  let currentCap = options.pixelRatioCap;
+  const target = () => {
+    const cssWidth = host.clientWidth > 0 ? host.clientWidth : BASE_VIEWPORT_WIDTH;
+    const cssHeight = host.clientHeight > 0 ? host.clientHeight : BASE_VIEWPORT_HEIGHT;
+    return getBackingStoreSize({
+      cssWidth,
+      cssHeight,
+      devicePixelRatio: globalThis.devicePixelRatio,
+      ...(currentCap === undefined ? {} : { cap: currentCap }),
+      // The glow allocates a target the size of the frame, and older mobile
+      // parts refuse past this; before boot there is nobody to ask.
+      maxDimension: 4096
+    });
+  };
+  const initial = target();
+  scene.setPixelRatio(initial.ratio);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: host,
-    width: host.clientWidth > 0 ? host.clientWidth : BASE_VIEWPORT_WIDTH,
-    height: host.clientHeight > 0 ? host.clientHeight : BASE_VIEWPORT_HEIGHT,
+    width: initial.width,
+    height: initial.height,
     backgroundColor: "#07171f",
     scene,
-    render: { antialias: true, roundPixels: false },
-    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH }
+    render: {
+      antialias: true,
+      roundPixels: false,
+      /**
+       * The background is drawn far smaller than it is stored: the frame is
+       * 2500 world units across and the tiles are 512 and 1024 texels, so a
+       * texel lands on a third of a pixel on a phone. Sampled one level deep
+       * that is undersampling, and it reads as the starfield crawling and
+       * sparkling whenever the camera moves. Every one of the six textures is a
+       * power of two, so the whole chain is legal - and trilinear minification
+       * is cheaper than the aliasing it replaces, not dearer.
+       */
+      mipmapFilter: "LINEAR_MIPMAP_LINEAR",
+      /** Free on a phone, and picks the discrete GPU on a laptop that has two. */
+      powerPreference: "high-performance"
+    },
+    // Ours to size, and ours alone: `RESIZE` would overwrite the buffer with the
+    // CSS box on every parent poll, and centring is the stylesheet's job - the
+    // canvas is pinned to its box there, so Phaser's margins would be zeroes it
+    // recomputed on every refresh.
+    scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.NO_CENTER }
   });
+
+  const applyTarget = (): void => {
+    if (!game.isBooted) return;
+    const next = target();
+    // Guarded, because the observer also fires for changes that leave the box
+    // where it was, and `resize` re-emits the event the scene listens to.
+    if (next.width === game.scale.gameSize.width && next.height === game.scale.gameSize.height) {
+      return;
+    }
+    scene.setPixelRatio(next.ratio);
+    game.scale.resize(next.width, next.height);
+  };
+  // Two watchers, and they are not the same one twice: the observer hears the
+  // box change - rotation, fullscreen, the HUD reflowing around it - and the
+  // media query hears the density change under a box that did not move, which
+  // is a window dragged to another monitor or the browser zoomed.
+  const observer = new ResizeObserver(applyTarget);
+  observer.observe(host);
+  const unwatchRatio = watchDevicePixelRatio(applyTarget);
+
   return {
     update(snapshot) {
       scene.applySnapshot(snapshot);
@@ -797,7 +1313,20 @@ export function createSpaceshipRuntime(
     prepareHydration() {
       scene.prepareHydration();
     },
+    readFps() {
+      return game.loop.actualFps;
+    },
+    readWorstFrameMs() {
+      return scene.readWorstFrameMs();
+    },
+    setPixelRatioCap(cap) {
+      if (cap === currentCap) return;
+      currentCap = cap;
+      applyTarget();
+    },
     destroy() {
+      observer.disconnect();
+      unwatchRatio();
       game.destroy(true);
     }
   };

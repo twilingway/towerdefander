@@ -16,6 +16,31 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     }
   }
 
+  // Zero is a legal setting for these: it means the shield keeps the instant
+  // toggle it had before the phases existed.
+  const nonNegativeSafeIntegers: readonly (readonly [string, number])[] = [
+    ["shieldEngageTicks", config.shieldEngageTicks],
+    ["shieldMinimumUpTicks", config.shieldMinimumUpTicks],
+    ["shieldCooldownTicks", config.shieldCooldownTicks]
+  ];
+
+  for (const [name, value] of nonNegativeSafeIntegers) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new RangeError(`${name} must be a non-negative safe integer`);
+    }
+  }
+
+  // Zero would re-arm a drained shield the instant it starts charging, which is
+  // the behaviour the lockout exists to replace. Past the battery it could never
+  // be reached, and the shield would be gone for the rest of the run.
+  if (
+    !Number.isFinite(config.shieldRearmEnergy) ||
+    config.shieldRearmEnergy <= 0 ||
+    config.shieldRearmEnergy > config.shieldCapacity
+  ) {
+    throw new RangeError("shieldRearmEnergy must be above 0 and no more than shieldCapacity");
+  }
+
   const positiveFiniteNumbers: readonly (readonly [string, number])[] = [
     ["worldWidth", config.worldWidth],
     ["worldHeight", config.worldHeight],
@@ -24,6 +49,7 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     ["spaceshipAccelerationPerSecondSquared", config.spaceshipAccelerationPerSecondSquared],
     ["spaceshipBrakingPerSecondSquared", config.spaceshipBrakingPerSecondSquared],
     ["spaceshipRadius", config.spaceshipRadius],
+    ["spaceshipReverseSpeedFactor", config.spaceshipReverseSpeedFactor],
     ["projectileSpeedPerSecond", config.projectileSpeedPerSecond],
     ["projectileRadius", config.projectileRadius],
     ["shieldCapacity", config.shieldCapacity],
@@ -60,7 +86,12 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
     ["cannonCoolingPerSecond", config.cannonCoolingPerSecond],
     ["cannonRearmThreshold", config.cannonRearmThreshold],
     ["mgCoolingPerSecond", config.mgCoolingPerSecond],
-    ["mgRearmThreshold", config.mgRearmThreshold]
+    ["mgRearmThreshold", config.mgRearmThreshold],
+    ["cannonLaserRange", config.cannonLaserRange],
+    ["mgLaserRange", config.mgLaserRange],
+    ["laserBeamRadius", config.laserBeamRadius],
+    ["friendlyMissileTurnRatePerSecond", config.friendlyMissileTurnRatePerSecond],
+    ["friendlyMissileAcquireConeRadians", config.friendlyMissileAcquireConeRadians]
   ];
 
   for (const [name, value] of nonNegativeFiniteNumbers) {

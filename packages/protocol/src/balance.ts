@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CREW_ROLES, crewRoleSchema } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
@@ -7,17 +8,22 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 16 as const;
+export const BALANCE_FILE_VERSION = 34 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+  28, 29, 30, 31, 32, 33
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 export const spawnSectorSchema = z.enum(SPAWN_SECTORS);
 export type SpawnSector = z.infer<typeof spawnSectorSchema>;
 
-export const ENEMY_WEAPON_KINDS = ["bullet", "missile"] as const;
+export const FRIENDLY_WEAPON_KINDS = ["kinetic", "laser", "missile"] as const;
+export const friendlyWeaponKindSchema = z.enum(FRIENDLY_WEAPON_KINDS);
+export type FriendlyWeaponKind = z.infer<typeof friendlyWeaponKindSchema>;
+
+export const ENEMY_WEAPON_KINDS = ["bullet", "missile", "laser"] as const;
 export const enemyWeaponKindSchema = z.enum(ENEMY_WEAPON_KINDS);
 export type EnemyWeaponKind = z.infer<typeof enemyWeaponKindSchema>;
 
@@ -39,6 +45,14 @@ export const cameraViewWidthSchema = z
   .number()
   .min(CAMERA_VIEW_WIDTH_MIN)
   .max(CAMERA_VIEW_WIDTH_MAX);
+
+/**
+ * Half the side of the square world, and the only geometry knob: the world is
+ * derived from it, so the circle cannot drift out of the square it is drawn in.
+ */
+export const ARENA_RADIUS_MIN = 1100;
+export const ARENA_RADIUS_MAX = 8800;
+export const arenaRadiusSchema = z.number().min(ARENA_RADIUS_MIN).max(ARENA_RADIUS_MAX);
 
 /**
  * Parallax space background of the display. Presentation-only, like
@@ -124,9 +138,16 @@ export const turretVisualSchema = z
   .nullable();
 export type TurretVisual = z.infer<typeof turretVisualSchema>;
 
+const finite = z.number();
 const positiveFinite = z.number().positive();
 const nonNegativeFinite = z.number().nonnegative();
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+/** Zero is legal for the shield timings: it restores the old instant toggle. */
+const nonNegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+
+function issue(context: z.RefinementCtx, path: PropertyKey[], message: string): void {
+  context.addIssue({ code: "custom", path, message });
+}
 
 export const enemyWeaponTuningSchema = z
   .object({
@@ -148,6 +169,65 @@ export const enemyWeaponTuningSchema = z
   .strict();
 export type EnemyWeaponTuning = z.infer<typeof enemyWeaponTuningSchema>;
 
+/**
+ * How well an enemy plays, as opposed to what it is. One algorithm reads the
+ * profile, so levels differ by numbers and never by branches — an operator can
+ * put two of them side by side and compare.
+ */
+export const ENEMY_SKILL_LEVELS = ["rookie", "veteran", "ace"] as const;
+export const enemySkillLevelSchema = z.enum(ENEMY_SKILL_LEVELS);
+export type EnemySkillLevel = z.infer<typeof enemySkillLevelSchema>;
+
+export const enemySkillProfileSchema = z
+  .object({
+    // --- Perception and aim ---
+    /** Ticks between refreshes of the remembered ship position and velocity. */
+    reactionTicks: z.number().int().min(0).max(40),
+    /** Seeded spread on the barrel, in radians. */
+    aimJitterRadians: z.number().min(0).max(0.6),
+    /** 0 fires where the ship is, 1 where it is going to be. */
+    leadFactor: z.number().min(0).max(1),
+
+    // --- Manoeuvre ---
+    /** Share of the speed budget spent circling rather than closing. */
+    orbitShare: z.number().min(0).max(1),
+    /** Width of the band over which closing blends into circling. */
+    rangeBandUnits: z.number().min(20).max(1200),
+    /** Weight of the push away from neighbours that crowd in too close. */
+    separationWeight: z.number().min(0).max(1),
+    /** How far the swarm spreads around the ship instead of massing on one side. */
+    flankSpread: z.number().min(0).max(1),
+    /** Ticks ahead an incoming friendly shot is dodged; 0 never dodges. */
+    evadeHorizonTicks: z.number().int().min(0).max(40),
+
+    // --- Discipline ---
+    /** HP fraction below which the enemy backs off; 0 never retreats. */
+    retreatHpFraction: z.number().min(0).max(1),
+    /** Multiplier on the fighting distance while retreating. */
+    retreatStandoffFactor: z.number().min(1).max(4)
+  })
+  .strict();
+export type EnemySkillProfile = z.infer<typeof enemySkillProfileSchema>;
+
+export const enemySkillTuningSchema = z
+  .object({
+    /**
+     * Whole-step difficulty shift applied to every archetype at once, so the
+     * spread the operator laid out across the catalogue survives it. A future
+     * in-game control overrides this on the run's own config.
+     */
+    offset: z.number().int().min(-2).max(2),
+    profiles: z
+      .object({
+        rookie: enemySkillProfileSchema,
+        veteran: enemySkillProfileSchema,
+        ace: enemySkillProfileSchema
+      })
+      .strict()
+  })
+  .strict();
+export type EnemySkillTuning = z.infer<typeof enemySkillTuningSchema>;
+
 export const enemyArchetypeSchema = z
   .object({
     hp: positiveFinite,
@@ -162,6 +242,8 @@ export const enemyArchetypeSchema = z
     turnRatePerSecond: positiveFinite,
     turnAccelerationPerSecondSquared: positiveFinite,
     turnBrakingPerSecondSquared: positiveFinite,
+    /** Which profile this archetype plays at, before the global offset. */
+    combatSkill: enemySkillLevelSchema,
     weapons: z.array(enemyWeaponTuningSchema).min(1).max(MAX_ENEMY_WEAPONS).readonly(),
     visual: enemyVisualSchema,
     label: z.string().min(1).max(48),
@@ -169,7 +251,13 @@ export const enemyArchetypeSchema = z
     spawnCost: positiveFinite,
     unlockWave: positiveInteger,
     scoreReward: nonNegativeFinite,
-    creditReward: nonNegativeFinite
+    creditReward: nonNegativeFinite,
+    /**
+     * Chance this archetype leaves salvage behind. Per archetype rather than
+     * global because an interceptor arrives eight at a time and a boss once:
+     * one probability cannot serve both.
+     */
+    lootChance: z.number().min(0).max(1)
   })
   .strict();
 export type EnemyArchetype = z.infer<typeof enemyArchetypeSchema>;
@@ -199,6 +287,12 @@ export const waveSpawnEntrySchema = z
   .object({
     kind: spawnKindSchema,
     count: positiveInteger.max(200),
+    /**
+     * Ticks from the start of the wave to this group's first arrival. The wave
+     * is a schedule: two groups with different starts arrive interleaved, and
+     * the order they are written in decides nothing.
+     */
+    startDelayTicks: nonNegativeInteger.max(20_000),
     spawnIntervalTicks: positiveInteger.max(20_000),
     // Empty means the whole circumference; several sectors are picked between per spawn.
     sectors: z.array(spawnSectorSchema).max(SPAWN_SECTORS.length).readonly(),
@@ -232,10 +326,63 @@ export const directorTuningSchema = z
   .strict();
 export type DirectorTuning = z.infer<typeof directorTuningSchema>;
 
+/**
+ * How the wave table is authored, as opposed to what it says. The server never
+ * reads any of this: the generator does, and it lives here so an operator can
+ * turn the campaign from the console instead of editing a script and waiting
+ * for someone to run it.
+ */
+export const campaignAuthoringSchema = z
+  .object({
+    /** A wave may spend `base + growth * (n - 1)` on the ships it calls in. */
+    budgetBase: positiveFinite,
+    budgetGrowth: nonNegativeFinite,
+    /**
+     * The least of its own budget a boss wave still spends on the wave.
+     *
+     * A boss is paid for out of the wave's budget rather than added on top of
+     * it - added on top, wave five cost 34 against a budget of 18.8 and wave
+     * ten cost 52 against 29.8, and every measured run ended on a multiple of
+     * five. But the early bosses cost most of their wave on their own, so
+     * subtracting outright would leave an empty room with a boss in it; this
+     * is the floor under the escort.
+     */
+    bossEscortShare: z.number().gt(0).max(1),
+    /** Every n-th wave also drops rocks; they cost nothing and read as weather. */
+    asteroidEveryWaves: positiveInteger,
+    /** Enemy health is authored in cannon shots, so a hull change moves it all. */
+    hpPerCannonShot: positiveFinite,
+    hpScale: positiveFinite,
+    /** Damage-a-second ceiling: `base + perSpawnCost * cost`, and a flat one for bosses. */
+    damagePerSecondBase: nonNegativeFinite,
+    damagePerSecondPerSpawnCost: nonNegativeFinite,
+    bossDamagePerSecondCap: positiveFinite,
+    /** Share of a beam's paper output that actually lands; it does not miss. */
+    laserDamageShare: z.number().gt(0).max(1),
+    /** How far the ship's own gun reaches, and what enemies may have against it. */
+    shipReach: positiveFinite,
+    maxEngagementShare: positiveFinite,
+    maxStandoffShare: positiveFinite,
+    /** Seconds between one group's arrival window and the next inside a wave. */
+    groupStartStepSeconds: nonNegativeFinite,
+    /** Seconds between two ships of one group, per family. */
+    swarmIntervalSeconds: positiveFinite,
+    lineIntervalSeconds: positiveFinite,
+    heavyIntervalSeconds: positiveFinite,
+    /**
+     * Earliest the boss may appear. Only a floor: it waits for the field to be
+     * cleared whatever this says.
+     */
+    bossFloorSeconds: nonNegativeFinite
+  })
+  .strict();
+export type CampaignAuthoring = z.infer<typeof campaignAuthoringSchema>;
+
 export const waveCampaignSchema = z
   .object({
     waves: z.array(waveDefinitionSchema).max(200).readonly(),
-    director: directorTuningSchema
+    director: directorTuningSchema,
+    authoring: campaignAuthoringSchema
   })
   .strict();
 export type WaveCampaign = z.infer<typeof waveCampaignSchema>;
@@ -266,6 +413,14 @@ export const autopilotProfileSchema = z
     dodgeBullets: z.boolean(),
     threatAwareShield: z.boolean(),
     /** World units the pilot keeps between the hull and its target. */
+    /**
+     * Where the pilot wants to stand, as a share of how far its own barrel
+     * carries. The distance below is the floor under it: closer than that the
+     * hull does not want to be, whatever the share works out to. Zero leaves
+     * the floor in charge, which is how every profile behaved before the share
+     * existed.
+     */
+    standoffShare: z.number().min(0).max(1.5),
     standoffDistance: z.number().min(200).max(2000),
     /** How far ahead the pilot looks for a hit the shield will not cover. */
     evadeHorizonTicks: z.number().int().min(0).max(40),
@@ -287,19 +442,412 @@ export const autopilotProfileSchema = z
   .strict();
 export type AutopilotProfile = z.infer<typeof autopilotProfileSchema>;
 
+/**
+ * Feel of the keyboard helm. The lead angle alone sets the turn rate, because
+ * the hull chases a target at `sqrt(2 * braking * delta)`; the counter angle is
+ * how hard the release brakes against network lag; the nudge is the thrust a
+ * turn in place rides on, since the core reads the course from the direction of
+ * the pilot vector and ignores a strictly zero one. Presentation-only, like
+ * `autopilot`: the simulation never reads this section.
+ */
+export const HELM_SCHEMES = ["tank", "absolute"] as const;
+export const helmSchemeSchema = z.enum(HELM_SCHEMES);
+export type HelmScheme = z.infer<typeof helmSchemeSchema>;
+
+export const helmTuningSchema = z
+  .object({
+    /**
+     * `tank` turns the hull with the turn keys and burns along the nose;
+     * `absolute` sends the direction the keys point, the way a twin-stick
+     * shooter does.
+     */
+    scheme: helmSchemeSchema,
+    /** How far ahead of the nose the requested course sits while turning. */
+    headingLeadRadians: z.number().min(0.05).max(1.5),
+    /**
+     * Multiplies the predicted stopping angle when a turn key comes up. 1 aims
+     * exactly where the hull would coast to a halt; below 1 stops it short and
+     * can rock it back, above 1 lets it drift a little further.
+     */
+    stopDampening: z.number().min(0.5).max(1.5),
+    /** Share of full thrust a turn without the engine rides on. */
+    rotateInPlaceThrottle: z.number().min(0.005).max(0.2)
+  })
+  .strict();
+export type HelmTuning = z.infer<typeof helmTuningSchema>;
+
+const autopilotLevelProfilesSchema = z
+  .object({
+    rookie: autopilotProfileSchema,
+    veteran: autopilotProfileSchema,
+    ace: autopilotProfileSchema
+  })
+  .strict();
+export type AutopilotLevelProfiles = z.infer<typeof autopilotLevelProfilesSchema>;
+
+/**
+ * A set of level profiles per turret kind, because how the bot flies depends on
+ * both and the two are not separable. Measured over three sweeps: eleven of the
+ * sixteen fields want different values for a laser, a bullet and a missile -
+ * including whether to orbit at all - while the level decides how well the same
+ * flying is aimed and defended.
+ */
 export const autopilotTuningSchema = z
   .object({
     level: autopilotLevelSchema,
     profiles: z
       .object({
-        rookie: autopilotProfileSchema,
-        veteran: autopilotProfileSchema,
-        ace: autopilotProfileSchema
+        kinetic: autopilotLevelProfilesSchema,
+        laser: autopilotLevelProfilesSchema,
+        missile: autopilotLevelProfilesSchema
       })
       .strict()
   })
   .strict();
 export type AutopilotTuning = z.infer<typeof autopilotTuningSchema>;
+
+// --- Ship archetypes: the hull a run is played on, and its module tree ---
+
+/**
+ * Fields a module may address. It mirrors `MODULE_TARGET_FIELDS` in
+ * `game-core`, which owns the stat engine; a test in the server package, which
+ * sees both, asserts the two lists are identical.
+ *
+ * Duplicated rather than imported because the two packages do not depend on
+ * each other, and the duplication buys something: a target the operator
+ * mistyped is refused at the path it sits on, in the console, instead of
+ * quietly doing nothing for a whole run.
+ */
+export const MODULE_TARGET_FIELDS = [
+  "spaceshipMaxHp",
+  "spaceshipRadius",
+  "spaceshipSpeedPerSecond",
+  "spaceshipAccelerationPerSecondSquared",
+  "spaceshipBrakingPerSecondSquared",
+  "spaceshipReverseSpeedFactor",
+  "headingMaxAngularSpeedPerSecond",
+  "headingAngularAccelerationPerSecondSquared",
+  "friendlyProjectileDamage",
+  "fireCooldownTicks",
+  "projectileSpeedPerSecond",
+  "projectileRadius",
+  "projectileLifetimeMs",
+  "turretMaxAngularSpeedPerSecond",
+  "turretAngularAccelerationPerSecondSquared",
+  "turretAngularBrakingPerSecondSquared",
+  "cannonHeatCapacity",
+  "cannonHeatPerShot",
+  "cannonCoolingPerSecond",
+  "cannonRearmThreshold",
+  "mgDamage",
+  "mgFireCooldownTicks",
+  "mgProjectileSpeedPerSecond",
+  "mgProjectileRadius",
+  "mgHeatCapacity",
+  "mgHeatPerShot",
+  "mgCoolingPerSecond",
+  "mgRearmThreshold",
+  "cannonLaserRange",
+  "mgLaserRange",
+  "laserBeamRadius",
+  "friendlyMissileTurnRatePerSecond",
+  "friendlyMissileAcquireConeRadians",
+  "shieldCapacity",
+  "shieldDrainPerSecond",
+  "shieldRechargePerSecond",
+  "shieldEngageTicks",
+  "shieldMinimumUpTicks",
+  "shieldCooldownTicks",
+  "shieldRearmEnergy",
+  "shieldArcRadians",
+  "shieldMaxAngularSpeedPerSecond",
+  "shieldAngularAccelerationPerSecondSquared",
+  "shieldAngularBrakingPerSecondSquared"
+] as const;
+export const moduleTargetFieldSchema = z.enum(MODULE_TARGET_FIELDS);
+export type ModuleTargetField = z.infer<typeof moduleTargetFieldSchema>;
+
+/**
+ * Every numeric field of the ship, including the two a module may not touch.
+ *
+ * A hull may: the two are excluded from modules because clients receive them
+ * once per run and a mid-run change would leave the published value stale, and
+ * a hull is resolved before the run starts. A bigger hull that could not carry
+ * a bigger shield would be a hull with the shield drawn inside it.
+ */
+export const SHIP_STAT_FIELDS = [
+  ...MODULE_TARGET_FIELDS,
+  "shieldRadius",
+  "headingAngularBrakingPerSecondSquared"
+] as const;
+export const shipStatFieldSchema = z.enum(SHIP_STAT_FIELDS);
+export type ShipStatField = z.infer<typeof shipStatFieldSchema>;
+
+/** Additions sum, percents sum with each other, multipliers multiply. */
+export const SHIP_STAT_OPS = ["add", "percent", "multiply"] as const;
+export const shipStatOpSchema = z.enum(SHIP_STAT_OPS);
+export type ShipStatOp = z.infer<typeof shipStatOpSchema>;
+
+export const shipStatEffectSchema = z
+  .object({
+    target: moduleTargetFieldSchema,
+    op: shipStatOpSchema,
+    /** Free-signed: a module is allowed to cost something to gain something. */
+    value: z.number()
+  })
+  .strict();
+export type ShipStatEffectTuning = z.infer<typeof shipStatEffectSchema>;
+
+/**
+ * What each target is called where a person reads it: on an intermission card
+ * and in the console's module editor. The caption a crew sees is assembled from
+ * these and the effect's own number, so the preset never states a number twice
+ * and a label can never promise something the effect does not do.
+ */
+export const MODULE_TARGET_LABELS: Readonly<Record<ModuleTargetField, string>> = {
+  spaceshipMaxHp: "Прочность корпуса",
+  spaceshipRadius: "Радиус корпуса",
+  spaceshipSpeedPerSecond: "Скорость",
+  spaceshipAccelerationPerSecondSquared: "Ускорение",
+  spaceshipBrakingPerSecondSquared: "Торможение",
+  spaceshipReverseSpeedFactor: "Задний ход",
+  headingMaxAngularSpeedPerSecond: "Скорость разворота",
+  headingAngularAccelerationPerSecondSquared: "Отзывчивость разворота",
+  friendlyProjectileDamage: "Урон пушки",
+  fireCooldownTicks: "Перезарядка пушки",
+  projectileSpeedPerSecond: "Скорость снаряда",
+  projectileRadius: "Калибр снаряда",
+  projectileLifetimeMs: "Дальность снаряда",
+  turretMaxAngularSpeedPerSecond: "Скорость поворота башни",
+  turretAngularAccelerationPerSecondSquared: "Отзывчивость башни",
+  turretAngularBrakingPerSecondSquared: "Торможение башни",
+  cannonHeatCapacity: "Запас нагрева пушки",
+  cannonHeatPerShot: "Нагрев пушки за выстрел",
+  cannonCoolingPerSecond: "Охлаждение пушки",
+  cannonRearmThreshold: "Порог готовности пушки",
+  mgDamage: "Урон носового ствола",
+  mgFireCooldownTicks: "Перезарядка носового ствола",
+  mgProjectileSpeedPerSecond: "Скорость носовой пули",
+  mgProjectileRadius: "Калибр носовой пули",
+  mgHeatCapacity: "Запас нагрева носа",
+  mgHeatPerShot: "Нагрев носа за выстрел",
+  mgCoolingPerSecond: "Охлаждение носа",
+  mgRearmThreshold: "Порог готовности носа",
+  cannonLaserRange: "Дальность луча пушки",
+  mgLaserRange: "Дальность носового луча",
+  laserBeamRadius: "Толщина луча",
+  friendlyMissileTurnRatePerSecond: "Доворот ракеты",
+  friendlyMissileAcquireConeRadians: "Конус захвата ракеты",
+  shieldCapacity: "Ёмкость щита",
+  shieldDrainPerSecond: "Расход щита",
+  shieldRechargePerSecond: "Восстановление щита",
+  shieldEngageTicks: "Подъём щита",
+  shieldMinimumUpTicks: "Минимальная выдержка щита",
+  shieldCooldownTicks: "Пауза щита",
+  shieldRearmEnergy: "Энергия повторного подъёма",
+  shieldArcRadians: "Сектор щита",
+  shieldMaxAngularSpeedPerSecond: "Скорость поворота щита",
+  shieldAngularAccelerationPerSecondSquared: "Отзывчивость щита",
+  shieldAngularBrakingPerSecondSquared: "Торможение щита"
+};
+
+const TICK_SECONDS = 0.05;
+/** Targets whose stored unit would read as noise on a card. */
+const DEGREE_TARGETS: readonly ModuleTargetField[] = [
+  "shieldArcRadians",
+  "friendlyMissileAcquireConeRadians"
+];
+const TICK_TARGETS: readonly ModuleTargetField[] = [
+  "fireCooldownTicks",
+  "mgFireCooldownTicks",
+  "shieldEngageTicks",
+  "shieldMinimumUpTicks",
+  "shieldCooldownTicks"
+];
+
+function signed(value: number, unit: string): string {
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded > 0 ? "+" : "−"}${String(Math.abs(rounded))}${unit}`;
+}
+
+/** One effect as a person reads it. A share always reads as a percentage. */
+export function formatShipStatEffect(effect: ShipStatEffectTuning): string {
+  const name = MODULE_TARGET_LABELS[effect.target];
+  if (effect.op === "percent") return `${name} ${signed(effect.value * 100, "%")}`;
+  // A multiplier is a share of what was there: 0.9 is a tenth off.
+  if (effect.op === "multiply") return `${name} ${signed((effect.value - 1) * 100, "%")}`;
+  if (DEGREE_TARGETS.includes(effect.target))
+    return `${name} ${signed((effect.value * 180) / Math.PI, "°")}`;
+  if (TICK_TARGETS.includes(effect.target))
+    return `${name} ${signed(effect.value * TICK_SECONDS, " с")}`;
+  if (effect.target === "projectileLifetimeMs")
+    return `${name} ${signed(effect.value / 1000, " с")}`;
+  return `${name} ${signed(effect.value, "")}`;
+}
+
+/** What a module does, in one line, for the card and for the console preview. */
+export function summariseModuleEffects(effects: readonly ShipStatEffectTuning[]): string {
+  return effects.map(formatShipStatEffect).join(", ");
+}
+
+export const MAX_MODULE_EFFECTS = 4;
+export const shipModuleIdSchema = z
+  .string()
+  .min(1)
+  .max(48)
+  .regex(ENEMY_ARCHETYPE_ID_PATTERN, "Module id must start with a lowercase letter.");
+export type ShipModuleId = z.infer<typeof shipModuleIdSchema>;
+
+/**
+ * One card of the tree. The operator names it and says what it does; the number
+ * in the caption clients show is assembled from the effects, so the two cannot
+ * drift apart on the second day of authoring.
+ */
+export const shipModuleSchema = z
+  .object({
+    id: shipModuleIdSchema,
+    label: z.string().min(1).max(48),
+    /** Whose card this is. Authoring metadata: any seat may vote for any card. */
+    role: crewRoleSchema,
+    effects: z.array(shipStatEffectSchema).min(1).max(MAX_MODULE_EFFECTS).readonly()
+  })
+  .strict();
+export type ShipModule = z.infer<typeof shipModuleSchema>;
+
+/**
+ * The shape of the tree belongs to the code, not to the preset: the operator
+ * decides what stands in a tier, never how many tiers there are or how wide
+ * they get. Narrow early tiers make the first waves readable to a new crew;
+ * the width arrives once the crew knows what the ship is short of.
+ */
+export const MODULE_TIER_WIDTHS = [1, 2, 2, 2, 2, 3, 3, 3, 4, 4] as const;
+export const MODULE_TIER_COUNT = MODULE_TIER_WIDTHS.length;
+export const MAX_MODULE_TIER_WIDTH = 4;
+export const MODULES_PER_ARCHETYPE = MODULE_TIER_WIDTHS.reduce((sum, width) => sum + width, 0);
+
+const shipModuleTierSchema = z.array(shipModuleSchema).min(1).max(MAX_MODULE_TIER_WIDTH).readonly();
+export type ShipModuleTier = z.infer<typeof shipModuleTierSchema>;
+
+/**
+ * What a hull changes about the base ship. Sparse on purpose: an archetype
+ * states its differences, so a base value edited in the flat block reaches
+ * every hull that did not deliberately override it.
+ */
+export const shipArchetypeOverridesSchema = z
+  .object({
+    stats: z.partialRecord(shipStatFieldSchema, finite),
+    cannonWeaponKind: friendlyWeaponKindSchema.nullable(),
+    mgWeaponKind: friendlyWeaponKindSchema.nullable()
+  })
+  .strict();
+export type ShipArchetypeOverrides = z.infer<typeof shipArchetypeOverridesSchema>;
+
+export const MAX_SHIP_ARCHETYPES = 6;
+export const shipArchetypeIdSchema = z
+  .string()
+  .min(1)
+  .max(48)
+  .regex(ENEMY_ARCHETYPE_ID_PATTERN, "Ship id must start with a lowercase letter.");
+export type ShipArchetypeId = z.infer<typeof shipArchetypeIdSchema>;
+
+export const shipArchetypeSchema = z
+  .object({
+    label: z.string().min(1).max(48),
+    description: z.string().min(1).max(240),
+    /** Look of the hull; null keeps the display's own default silhouette. */
+    visual: entityVisualSchema,
+    /**
+     * Informational until runs remember anything between themselves: shown
+     * beside the hull so a locked ship does not appear out of nowhere later.
+     */
+    unlockedAtWave: positiveInteger,
+    overrides: shipArchetypeOverridesSchema,
+    tiers: z.array(shipModuleTierSchema).length(MODULE_TIER_COUNT).readonly(),
+    /**
+     * What a crew that bought the whole tree is offered from then on. Its
+     * modules are repeatable, so they carry percentages and additions only.
+     */
+    endlessTier: shipModuleTierSchema
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const seen = new Set<string>();
+    const tiers = [...value.tiers, value.endlessTier];
+    tiers.forEach((tier, index) => {
+      const width = MODULE_TIER_WIDTHS[index];
+      if (width !== undefined && tier.length !== width) {
+        issue(
+          context,
+          ["tiers", index],
+          `Tier ${String(index + 1)} must hold exactly ${String(width)} modules.`
+        );
+      }
+      const roles = new Set(tier.map(({ role }) => role));
+      const requiredRoles = tier.length >= 3 ? CREW_ROLES.length : Math.min(2, tier.length);
+      if (roles.size < requiredRoles) {
+        issue(
+          context,
+          ["tiers", index],
+          `A tier of ${String(tier.length)} must cover ${String(requiredRoles)} roles, not ${String(roles.size)}.`
+        );
+      }
+      tier.forEach((module, moduleIndex) => {
+        if (seen.has(module.id))
+          issue(context, ["tiers", index, moduleIndex, "id"], "Module ids must be unique.");
+        seen.add(module.id);
+      });
+    });
+  });
+export type ShipArchetype = z.infer<typeof shipArchetypeSchema>;
+
+/**
+ * What a display is told about the hulls before it joins a room.
+ *
+ * Deliberately narrow: a name, a look and the wave the hull is meant to open
+ * at. No stats and no tree, because this is the only balance surface that
+ * answers without a password, and picking a ship does not require knowing how
+ * strong it is.
+ */
+export const publicShipSchema = z
+  .object({
+    id: shipArchetypeIdSchema,
+    label: z.string().min(1).max(48),
+    description: z.string().min(1).max(240),
+    visual: entityVisualSchema,
+    unlockedAtWave: positiveInteger,
+    /**
+     * The hull's tree, so a display can draw the whole path a crew is walking.
+     * It is published here rather than on the wire because it never changes
+     * inside a run: one fetch a page, not one field a tick.
+     */
+    tiers: z.array(z.array(shipModuleSchema).readonly()).readonly(),
+    endlessTier: z.array(shipModuleSchema).readonly()
+  })
+  .strict();
+export type PublicShip = z.infer<typeof publicShipSchema>;
+
+export const publicShipCatalogueSchema = z
+  .object({
+    ships: z.array(publicShipSchema).min(1).max(MAX_SHIP_ARCHETYPES),
+    defaultShipId: shipArchetypeIdSchema
+  })
+  .strict();
+export type PublicShipCatalogue = z.infer<typeof publicShipCatalogueSchema>;
+
+export const shipArchetypeTableSchema = z
+  .record(shipArchetypeIdSchema, shipArchetypeSchema)
+  .superRefine((value, context) => {
+    const ids = Object.keys(value);
+    if (ids.length === 0) {
+      context.addIssue({ code: "custom", message: "Catalogue must hold at least one hull." });
+    }
+    if (ids.length > MAX_SHIP_ARCHETYPES) {
+      context.addIssue({
+        code: "custom",
+        message: `Catalogue cannot hold more than ${String(MAX_SHIP_ARCHETYPES)} hulls.`
+      });
+    }
+  });
 
 export const balanceTuningSchema = z
   .object({
@@ -318,14 +866,50 @@ export const balanceTuningSchema = z
     asteroidSpawnCost: positiveInteger,
     asteroidScoreReward: nonNegativeFinite,
     asteroidCreditReward: nonNegativeFinite,
+
+    // --- Salvage: the only hull a crew wins back inside a run ---
+    lootRepairShare: z.number().min(0).max(1),
+    lootShieldAmount: positiveFinite,
+    /**
+     * A boss always leaves a repair instead of rolling, sized as a share of the
+     * hull it is repairing rather than as a flat number: the reward for a boss
+     * wave has to mean the same thing on a 400-hp hull and on a 720-hp one, and
+     * a hull grown by modules must not outgrow it. One is a full repair.
+     */
+    lootBossRepairShare: z.number().min(0).max(1),
+    lootLifetimeTicks: positiveInteger,
+    lootDropRadius: positiveFinite,
+    /** Inside this distance salvage stops drifting and comes to the ship. */
+    lootMagnetRadius: positiveFinite,
+    lootMagnetAccelerationPerSecondSquared: positiveFinite,
+    /** How fast the dead enemy's inherited motion bleeds off the drop. */
+    lootDriftDampingPerSecond: nonNegativeFinite,
+    /**
+     * How long a cleared wave stays open while salvage is still on the field,
+     * and the longer window a boss wave gets for its own repair.
+     */
+    lootWindowTicks: positiveInteger,
+    lootBossWindowTicks: positiveInteger,
     /** Look of the ambient hazard; null keeps the display's own rock. */
     asteroidVisual: entityVisualSchema,
     missileInterceptScoreReward: nonNegativeFinite,
+    /** The world size follows this; see `arenaRadiusSchema`. */
+    arenaRadius: arenaRadiusSchema,
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background; the simulation never reads this section. */
     background: backgroundTuningSchema,
     /** Demo autopilot skill levels; the simulation never reads this section. */
     autopilot: autopilotTuningSchema,
+    /** Enemy skill profiles. Unlike the autopilot, the simulation does read these. */
+    enemySkill: enemySkillTuningSchema,
+    /** Keyboard helm feel; the simulation never reads this section either. */
+    helm: helmTuningSchema,
+
+    // --- Ship archetypes: which hull a run is played on ---
+    /** Hulls a room may be created with, each with its own ten-tier tree. */
+    shipArchetypes: shipArchetypeTableSchema,
+    /** The hull a room gets when its creator names none. */
+    defaultShipArchetypeId: shipArchetypeIdSchema,
 
     // --- Player ship: hull and movement ---
     /** Look of the player hull; null keeps the display's own default silhouette. */
@@ -335,6 +919,8 @@ export const balanceTuningSchema = z
     spaceshipSpeedPerSecond: positiveFinite,
     spaceshipAccelerationPerSecondSquared: positiveFinite,
     spaceshipBrakingPerSecondSquared: positiveFinite,
+    /** Share of the forward speed available in reverse; 1 makes it a second gear. */
+    spaceshipReverseSpeedFactor: z.number().gt(0).max(1),
     headingMaxAngularSpeedPerSecond: positiveFinite,
     headingAngularAccelerationPerSecondSquared: positiveFinite,
     headingAngularBrakingPerSecondSquared: positiveFinite,
@@ -372,11 +958,31 @@ export const balanceTuningSchema = z
     mgCoolingPerSecond: nonNegativeFinite,
     /** Heat the gun must cool below before it fires again; core caps it by capacity. */
     mgRearmThreshold: nonNegativeFinite,
+    /** How each barrel delivers damage; the numbers above are the same either way. */
+    cannonWeaponKind: friendlyWeaponKindSchema,
+    mgWeaponKind: friendlyWeaponKindSchema,
+    /** Laser: how far the beam reaches, and how thick it is for a hit. */
+    cannonLaserRange: positiveFinite,
+    mgLaserRange: positiveFinite,
+    laserBeamRadius: positiveFinite,
+    /** Missile: how hard it turns, and the cone it picks a target from. */
+    friendlyMissileTurnRatePerSecond: positiveFinite,
+    friendlyMissileAcquireConeRadians: positiveFinite,
 
     // --- Player ship: shield ---
     shieldCapacity: positiveFinite,
     shieldDrainPerSecond: positiveFinite,
     shieldRechargePerSecond: positiveFinite,
+    /**
+     * Ticks the shield spends coming up, holding, and cooling. They are what
+     * stop it being free to flick; zero on all three brings back the instant
+     * toggle it had before.
+     */
+    shieldEngageTicks: nonNegativeInteger,
+    shieldMinimumUpTicks: nonNegativeInteger,
+    shieldCooldownTicks: nonNegativeInteger,
+    /** Energy a drained shield wins back before it holds again. */
+    shieldRearmEnergy: positiveFinite,
     shieldRadius: positiveFinite,
     shieldArcRadians: positiveFinite.max(Math.PI * 2),
     shieldMaxAngularSpeedPerSecond: positiveFinite,
@@ -391,6 +997,13 @@ export const balanceTuningSchema = z
         path: ["ambientAsteroidIntervalMinTicks"],
         message: "Ambient asteroid minimum interval cannot exceed the maximum."
       });
+    }
+    if (!Object.hasOwn(value.shipArchetypes, value.defaultShipArchetypeId)) {
+      issue(
+        context,
+        ["defaultShipArchetypeId"],
+        "Default hull must be one of the catalogue hulls."
+      );
     }
   });
 export type BalanceTuning = z.infer<typeof balanceTuningSchema>;

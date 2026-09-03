@@ -12,16 +12,28 @@ export function applyPilotInput(
 ): SpaceshipSimulationState {
   assertReceivedTick(state, input.receivedTick);
   const vector = normalizeVector(input.vector);
+  const turn = input.turn ?? null;
   const isRisingMgEdge = input.mgFiring && state.inputs.pilot?.mgFiring !== true;
   return {
     ...state,
     queuedMgFire: state.queuedMgFire || isRisingMgEdge,
-    headingTargetAngle: isZeroVector(vector)
-      ? state.headingTargetAngle
-      : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
+    // A spin names no bearing, so the remembered one is dropped rather than
+    // left behind for the hull to be pulled back to.
+    headingTargetAngle:
+      turn !== null
+        ? null
+        : isZeroVector(vector)
+          ? state.headingTargetAngle
+          : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
     inputs: {
       ...state.inputs,
-      pilot: { vector, mgFiring: input.mgFiring, receivedTick: input.receivedTick }
+      pilot: {
+        vector,
+        mgFiring: input.mgFiring,
+        receivedTick: input.receivedTick,
+        turn,
+        thrust: input.thrust ?? null
+      }
     }
   };
 }
@@ -59,7 +71,7 @@ export function applyShieldInput(
   const vector = normalizeVector(input.vector);
   return {
     ...state,
-    shieldRearmRequired: input.active && (state.shieldRearmRequired || state.shieldEnergy <= 0),
+
     shieldTargetAngle: isZeroVector(vector)
       ? state.shieldTargetAngle
       : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
@@ -107,6 +119,10 @@ export function cancelShieldControl(state: SpaceshipSimulationState): SpaceshipS
     shieldTargetAngle: null,
     shieldActive: false,
     shieldRearmRequired: false,
+    // The phase has to go down with the flag, or the next step reads the stale
+    // phase and puts the shield straight back up.
+    shieldPhase: "down",
+    shieldPhaseTicks: 0,
     inputs: {
       ...state.inputs,
       shield:

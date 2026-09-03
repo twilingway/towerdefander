@@ -187,6 +187,7 @@ export function AdminApp() {
         ) : (
           SCREENS[tab]({
             document: balanceDocument,
+            password,
             tuning: active.tuning,
             onTuningChange: updateTuning,
             onDocumentChange: updateDocument,

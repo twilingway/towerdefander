@@ -1,11 +1,12 @@
+import { ARENA_CUSHION_BAND } from "@spaceship-defender/game-core";
 import type {
   AsteroidState as CoreAsteroidState,
   CombatEnemyState,
   EntityVisual,
   HomingMissileState as CoreHomingMissileState,
   HostileProjectileState,
+  LootDropState as CoreLootDropState,
   ProjectileState as CoreProjectileState,
-  RoleModifiers,
   SpaceshipSimulationConfig,
   SpaceshipSimulationState,
   TeamUpgradeOffer,
@@ -13,13 +14,16 @@ import type {
   TeamUpgradeVote
 } from "@spaceship-defender/game-core";
 
-import { CREW_ROLES, type CrewRole } from "@spaceship-defender/protocol";
+import { CREW_ROLES, ENEMY_BEAM_SOURCE, type CrewRole } from "@spaceship-defender/protocol";
 
 import {
   AsteroidState,
   EnemyState,
   HomingMissileState,
+  LaserBeamState,
+  LootDropState,
   ProjectileState,
+  ShipStatEffectState,
   UpgradeCardState,
   UpgradeVoteState,
   type SpaceshipDefenderState,
@@ -42,6 +46,7 @@ export function projectGameState(
   target.worldWidth = config.worldWidth;
   target.worldHeight = config.worldHeight;
   target.arenaRadius = config.arenaRadius;
+  target.rimBandWidth = ARENA_CUSHION_BAND;
   target.display.cameraViewWidth = config.cameraViewWidth;
   target.display.backgroundParallaxStrength = config.background.parallaxStrength;
   target.display.backgroundDriftSpeed = config.background.driftSpeed;
@@ -53,21 +58,50 @@ export function projectGameState(
   target.spaceship.velocityY = game.spaceship.velocity.y;
   target.spaceship.radius = config.spaceshipRadius;
   target.spaceship.hp = game.spaceshipHp;
-  target.spaceship.maxHp = game.spaceshipMaxHp;
+  target.spaceship.maxHp = game.ship.spaceshipMaxHp;
   target.spaceship.heading = game.spaceshipHeading;
   target.turretAngle = game.turretAngle;
   target.shield.angle = game.shieldAngle;
   target.shield.active = game.shieldActive;
+  target.shield.rearmRequired = game.shieldRearmRequired;
   target.shield.energy = game.shieldEnergy;
-  target.shield.capacity = config.shieldCapacity + game.roleModifiers.shield.capacityBonus;
-  target.shield.arcHalfAngle =
-    Math.min(Math.PI * 2, config.shieldArcRadians + game.roleModifiers.shield.arcWidthBonus) / 2;
+  target.shield.capacity = game.ship.shieldCapacity;
+  // Already held at a full circle by the stat rule, and the same number the
+  // collision test uses, so the drawn arc is the blocking arc.
+  target.shield.arcHalfAngle = game.ship.shieldArcRadians / 2;
   target.cannon.heat = game.cannonHeat;
-  target.cannon.capacity = config.cannonHeatCapacity;
+  target.cannon.capacity = game.ship.cannonHeatCapacity;
   target.cannon.overheated = game.cannonOverheated;
+  // The envelope the gunner aims inside. A beam ends where its own range does;
+  // anything that flies ends where its lifetime does. Only a barrel that locks
+  // on has a cone, and only the turret is drawn one: the pilot flies the bore.
+  target.cannon.kind = config.cannonWeaponKind;
+  // Both numbers come off the run's own stats rather than the preset: a shot
+  // lives by `ship.projectileLifetimeMs`, and a module that buys a longer burn
+  // has to move the envelope with it.
+  target.cannon.reach =
+    config.cannonWeaponKind === "laser"
+      ? game.ship.cannonLaserRange
+      : (game.ship.projectileSpeedPerSecond * game.ship.projectileLifetimeMs) / 1_000;
+  // A beam does not travel, so nothing leads it; everything else is led by the
+  // speed the shell actually leaves at.
+  target.cannon.speed =
+    config.cannonWeaponKind === "laser" ? 0 : game.ship.projectileSpeedPerSecond;
+  target.cannon.acquireHalfAngle =
+    config.cannonWeaponKind === "missile" ? game.ship.friendlyMissileAcquireConeRadians : 0;
   target.machineGun.heat = game.mgHeat;
-  target.machineGun.capacity = config.mgHeatCapacity;
+  target.machineGun.capacity = game.ship.mgHeatCapacity;
   target.machineGun.overheated = game.mgOverheated;
+  // Same two numbers as the turret's, read off the nose barrel: what it is, how
+  // far it throws, and how fast, so the display can mark the ship a burst from
+  // it would meet.
+  target.machineGun.kind = config.mgWeaponKind;
+  target.machineGun.reach =
+    config.mgWeaponKind === "laser"
+      ? game.ship.mgLaserRange
+      : (game.ship.mgProjectileSpeedPerSecond * game.ship.projectileLifetimeMs) / 1_000;
+  target.machineGun.speed =
+    config.mgWeaponKind === "laser" ? 0 : game.ship.mgProjectileSpeedPerSecond;
   target.encounter.phase = game.encounterPhase;
   target.encounter.hasOutcome = game.outcome !== null;
   target.encounter.outcome = game.outcome ?? "defeat";
@@ -83,12 +117,41 @@ export function projectGameState(
     game.encounterPhase === "combat" && waveDeadlineAtMs !== undefined
       ? Math.max(1, Math.ceil((waveDeadlineAtMs - Date.now()) / 1_000))
       : 0;
+  target.encounter.lootWindowSecondsRemaining =
+    game.encounterPhase === "combat"
+      ? Math.ceil((game.lootWindowTicksRemaining * config.fixedStepMs) / 1_000)
+      : 0;
   target.encounter.score = game.score;
   target.credits = game.credits;
-  syncRoleModifiers(target.roleModifiers, game.roleModifiers);
 
+  target.display.shieldPhase = game.shieldPhase;
+  // Grows by one entry a wave at most, so a rewrite costs nothing and the
+  // display never has to diff it.
+  if (target.display.purchasedModules.length !== game.purchasedModules.length) {
+    target.display.purchasedModules.splice(0, target.display.purchasedModules.length);
+    target.display.purchasedModules.push(...game.purchasedModules);
+  }
   reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
   reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
+  reconcileKeyed(target.display.lootDrops, game.lootDrops, () => new LootDropState(), syncLootDrop);
+  // Both sides' pulses ride one collection: a beam is a beam to the display,
+  // and the source is what tells it which way to paint the line.
+  reconcileKeyed(
+    target.display.laserBeams,
+    [
+      ...game.laserBeams,
+      ...game.hostileBeams.map((beam) => ({ ...beam, source: ENEMY_BEAM_SOURCE }))
+    ],
+    () => new LaserBeamState(),
+    (state, beam) => {
+      state.entityId = beam.id;
+      state.fromX = beam.previousX;
+      state.fromY = beam.previousY;
+      state.toX = beam.x;
+      state.toY = beam.y;
+      state.source = beam.source;
+    }
+  );
   reconcileKeyed(
     target.display.friendlyProjectiles,
     game.projectiles,
@@ -152,21 +215,6 @@ function reconcileKeyed<TCore extends { readonly id: string }, TState>(
   }
 }
 
-function syncRoleModifiers(
-  target: SpaceshipDefenderState["game"]["roleModifiers"],
-  source: RoleModifiers
-) {
-  target.pilot.speedMultiplier = source.pilot.speedMultiplier;
-  target.pilot.accelerationMultiplier = source.pilot.accelerationMultiplier;
-  target.pilot.maxHpBonus = source.pilot.maxHpBonus;
-  target.gunner.damageMultiplier = source.gunner.damageMultiplier;
-  target.gunner.cooldownMultiplier = source.gunner.cooldownMultiplier;
-  target.gunner.projectileSpeedMultiplier = source.gunner.projectileSpeedMultiplier;
-  target.shield.capacityBonus = source.shield.capacityBonus;
-  target.shield.rechargeMultiplier = source.shield.rechargeMultiplier;
-  target.shield.arcWidthBonus = source.shield.arcWidthBonus;
-}
-
 function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
   target.entityId = source.id;
   target.spawnSequence = source.spawnSequence;
@@ -192,6 +240,18 @@ function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
   target.radius = source.radius;
   target.hp = source.hp;
   target.maxHp = source.maxHp;
+}
+
+function syncLootDrop(target: LootDropState, source: CoreLootDropState): void {
+  target.entityId = source.id;
+  target.kind = source.kind;
+  target.spawnSequence = source.spawnSequence;
+  target.x = source.x;
+  target.y = source.y;
+  target.velocityX = source.velocity.x;
+  target.velocityY = source.velocity.y;
+  target.radius = source.radius;
+  target.amount = source.amount;
 }
 
 function syncProjectile(
@@ -238,13 +298,21 @@ function syncTeamUpgrade(
   if (offer !== null) {
     target.offer.offerId = offer.offerId;
     target.offer.waveNumber = offer.waveNumber;
+    target.offer.tier = offer.tier;
     for (const [index, source] of offer.cards.entries()) {
       while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
       const card = target.offer.cards.at(index);
       card.upgradeId = source.upgradeId;
       card.role = source.role;
       card.label = source.label;
-      card.value = source.value;
+      card.effects.splice(0, card.effects.length);
+      for (const effect of source.effects) {
+        const mirrored = new ShipStatEffectState();
+        mirrored.target = effect.target;
+        mirrored.op = effect.op;
+        mirrored.value = effect.value;
+        card.effects.push(mirrored);
+      }
       card.price = source.price;
     }
     while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();

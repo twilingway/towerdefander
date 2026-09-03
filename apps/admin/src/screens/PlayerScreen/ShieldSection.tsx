@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { NumberField } from "../../components/fields.js";
+import { AngularRateField, DelayField, NumberField } from "../../components/fields.js";
 
 interface ShieldSectionProps {
   readonly tuning: BalanceTuning;
@@ -12,6 +12,11 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
   return (
     <>
       <h3 className="card__subtitle">Щит</h3>
+      <p className="screen__hint">
+        Такт симуляции — 20 в секунду, так что 20 тиков это секунда. На подъёме щит ещё не защищает
+        и не тратит энергию; минимум работы нельзя оборвать раньше срока, а остывание не пускает
+        включить его снова. Три нуля возвращают мгновенное переключение.
+      </p>
       <div className="card__grid">
         <NumberField
           caption="Ёмкость"
@@ -34,6 +39,34 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
             patch({ shieldRechargePerSecond: shieldRechargePerSecond });
           }}
         />
+        <DelayField
+          caption="Подъём, с"
+          ticks={tuning.shieldEngageTicks}
+          onChange={(shieldEngageTicks) => {
+            patch({ shieldEngageTicks });
+          }}
+        />
+        <NumberField
+          caption="Минимум работы, тиков"
+          value={tuning.shieldMinimumUpTicks}
+          onChange={(shieldMinimumUpTicks) => {
+            patch({ shieldMinimumUpTicks: Math.max(0, Math.round(shieldMinimumUpTicks)) });
+          }}
+        />
+        <NumberField
+          caption="Остывание, тиков"
+          value={tuning.shieldCooldownTicks}
+          onChange={(shieldCooldownTicks) => {
+            patch({ shieldCooldownTicks: Math.max(0, Math.round(shieldCooldownTicks)) });
+          }}
+        />
+        <NumberField
+          caption="Порог перевзвода, энергии"
+          value={tuning.shieldRearmEnergy}
+          onChange={(shieldRearmEnergy) => {
+            patch({ shieldRearmEnergy: Math.max(1, shieldRearmEnergy) });
+          }}
+        />
         <NumberField
           caption="Радиус"
           value={tuning.shieldRadius}
@@ -41,38 +74,34 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
             patch({ shieldRadius: shieldRadius });
           }}
         />
-        <NumberField
-          caption="Ширина сектора, рад"
-          step={0.05}
-          value={tuning.shieldArcRadians}
+        <AngularRateField
+          caption="Ширина сектора, °"
+          radians={tuning.shieldArcRadians}
           onChange={(shieldArcRadians) => {
-            patch({ shieldArcRadians: shieldArcRadians });
+            patch({ shieldArcRadians });
           }}
         />
-        <NumberField
-          caption="Поворот сектора, рад/с"
-          step={0.05}
-          value={tuning.shieldMaxAngularSpeedPerSecond}
+        <AngularRateField
+          caption="Поворот сектора, °/с"
+          radians={tuning.shieldMaxAngularSpeedPerSecond}
           onChange={(shieldMaxAngularSpeedPerSecond) => {
-            patch({ shieldMaxAngularSpeedPerSecond: shieldMaxAngularSpeedPerSecond });
+            patch({ shieldMaxAngularSpeedPerSecond });
           }}
         />
-        <NumberField
-          caption="Разгон поворота, рад/с²"
-          step={0.05}
-          value={tuning.shieldAngularAccelerationPerSecondSquared}
+        <AngularRateField
+          caption="Разгон поворота, °/с²"
+          step={10}
+          radians={tuning.shieldAngularAccelerationPerSecondSquared}
           onChange={(shieldAngularAccelerationPerSecondSquared) => {
-            patch({
-              shieldAngularAccelerationPerSecondSquared: shieldAngularAccelerationPerSecondSquared
-            });
+            patch({ shieldAngularAccelerationPerSecondSquared });
           }}
         />
-        <NumberField
-          caption="Торможение поворота, рад/с²"
-          step={0.05}
-          value={tuning.shieldAngularBrakingPerSecondSquared}
+        <AngularRateField
+          caption="Торможение поворота, °/с²"
+          step={10}
+          radians={tuning.shieldAngularBrakingPerSecondSquared}
           onChange={(shieldAngularBrakingPerSecondSquared) => {
-            patch({ shieldAngularBrakingPerSecondSquared: shieldAngularBrakingPerSecondSquared });
+            patch({ shieldAngularBrakingPerSecondSquared });
           }}
         />
       </div>

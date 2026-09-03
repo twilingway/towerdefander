@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Deploy agent, run on an interval by launchd.
+
+  Install as a user agent, because the Docker runtime on this host belongs to the
+  logged-in user rather than to the system:
+
+    cp deploy/com.twiling.space-deploy.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.twiling.space-deploy.plist
+
+  Adjust the paths below if $SPACE_PROD_DIR is not ~/space-prod.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.twiling.space-deploy</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/bash</string>
+      <string>-lc</string>
+      <string>exec "$HOME/space-prod/repo/scripts/watch-main-and-deploy.sh"</string>
+    </array>
+
+    <!-- One minute. The agent exits immediately when the branch has not moved,
+         so the cost of a short interval is a git ls-remote. -->
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- The agent takes its own lock, but there is no reason for launchd to
+         stack copies of it behind a long release either. -->
+    <key>AbandonProcessGroup</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/space-deploy.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/space-deploy.err.log</string>
+  </dict>
+</plist>

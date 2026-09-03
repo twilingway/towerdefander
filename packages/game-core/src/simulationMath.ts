@@ -1,4 +1,9 @@
-import { constrainMovingCircleToArena, isWithinCircularEnvelope } from "./arenaGeometry.ts";
+import type { ShipStats } from "./shipStats.ts";
+import {
+  applyArenaCushion,
+  constrainMovingCircleToArena,
+  isWithinCircularEnvelope
+} from "./arenaGeometry.ts";
 import {
   type ProjectileState,
   type SpaceshipKinematics,
@@ -127,26 +132,70 @@ export function advanceAngularTraverse(
   };
 }
 
+/**
+ * Rate control for the hull: the pilot asks for a spin, not for a bearing.
+ * Nothing here remembers a target angle, and that is the point - a released
+ * turn decays to a stop wherever it stops, instead of being pulled back to
+ * the last angle anybody named.
+ */
+export function advanceAngularRate(
+  state: { readonly angle: number; readonly angularVelocity: number },
+  turn: number,
+  config: AngularTraverseConfig
+): AngularTraverseState {
+  const desiredVelocity = clampToUnit(turn) * config.maxAngularSpeed;
+  const accelerating =
+    desiredVelocity !== 0 &&
+    (state.angularVelocity === 0 ||
+      (Math.sign(state.angularVelocity) === Math.sign(desiredVelocity) &&
+        Math.abs(desiredVelocity) > Math.abs(state.angularVelocity)));
+  const velocityRate = accelerating ? config.angularAcceleration : config.angularBraking;
+  const angularVelocity = moveScalarTowards(
+    state.angularVelocity,
+    desiredVelocity,
+    velocityRate * config.secondsPerStep
+  );
+  return {
+    angle: canonicalizeAngle(state.angle + angularVelocity * config.secondsPerStep),
+    targetAngle: null,
+    angularVelocity
+  };
+}
+
+function clampToUnit(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-1, Math.min(1, value));
+}
+
 export function moveSpaceshipWithinWorld(
   spaceship: SpaceshipKinematics,
   velocity: Vector2,
   secondsPerStep: number,
-  config: SpaceshipSimulationConfig
+  config: SpaceshipSimulationConfig,
+  ship: ShipStats
 ): SpaceshipKinematics {
-  const candidateX = spaceship.x + velocity.x * secondsPerStep;
-  const candidateY = spaceship.y + velocity.y * secondsPerStep;
+  const arena = {
+    centerX: config.worldWidth / 2,
+    centerY: config.worldHeight / 2,
+    radius: config.arenaRadius
+  };
+  // The rim pushes back before it holds, so the hull spends its outward speed
+  // across several steps instead of losing all of it against the circle in one.
+  const cushioned = applyArenaCushion(
+    { x: spaceship.x, y: spaceship.y, radius: ship.spaceshipRadius, velocity },
+    arena,
+    secondsPerStep
+  );
+  const candidateX = spaceship.x + cushioned.x * secondsPerStep;
+  const candidateY = spaceship.y + cushioned.y * secondsPerStep;
   const constrained = constrainMovingCircleToArena(
     {
       x: candidateX,
       y: candidateY,
-      radius: config.spaceshipRadius,
-      velocity
+      radius: ship.spaceshipRadius,
+      velocity: cushioned
     },
-    {
-      centerX: config.worldWidth / 2,
-      centerY: config.worldHeight / 2,
-      radius: config.arenaRadius
-    }
+    arena
   );
 
   return {
@@ -160,27 +209,61 @@ export function moveSpaceshipWithinWorld(
 
 export function moveProjectiles(
   projectiles: readonly ProjectileState[],
-  config: SpaceshipSimulationConfig
+  config: SpaceshipSimulationConfig,
+  targets: readonly { readonly id: string; readonly x: number; readonly y: number }[] = []
 ): readonly ProjectileState[] {
   const secondsPerStep = config.fixedStepMs / 1000;
 
-  return projectiles.map((projectile) => ({
+  return projectiles.map((projectile) => {
+    const steered = steerHomingProjectile(projectile, targets, secondsPerStep);
+    return {
+      ...steered,
+      previousX: steered.x,
+      previousY: steered.y,
+      x: steered.x + steered.velocity.x * secondsPerStep,
+      y: steered.y + steered.velocity.y * secondsPerStep
+    };
+  });
+}
+
+/**
+ * A missile turns toward the target it picked at launch, at its own rate. A
+ * target that is gone leaves it flying straight: re-acquiring would make the
+ * barrel an aimbot, and the pilot's pointing worthless.
+ */
+function steerHomingProjectile(
+  projectile: ProjectileState,
+  targets: readonly { readonly id: string; readonly x: number; readonly y: number }[],
+  secondsPerStep: number
+): ProjectileState {
+  const homing = projectile.homing;
+  if (homing === null) return projectile;
+  const target = targets.find(({ id }) => id === homing.targetId);
+  if (target === undefined) return projectile;
+  const speed = Math.hypot(projectile.velocity.x, projectile.velocity.y);
+  const bearing = Math.atan2(target.y - projectile.y, target.x - projectile.x);
+  const turn = clamp(
+    shortestAngleDelta(homing.heading, bearing),
+    -homing.turnRatePerSecond * secondsPerStep,
+    homing.turnRatePerSecond * secondsPerStep
+  );
+  const heading = canonicalizeAngle(homing.heading + turn);
+  return {
     ...projectile,
-    previousX: projectile.x,
-    previousY: projectile.y,
-    x: projectile.x + projectile.velocity.x * secondsPerStep,
-    y: projectile.y + projectile.velocity.y * secondsPerStep
-  }));
+    velocity: { x: Math.cos(heading) * speed, y: Math.sin(heading) * speed },
+    homing: { ...homing, heading }
+  };
 }
 
 export function removeExpiredProjectiles(
   projectiles: readonly ProjectileState[],
   currentTick: number,
-  config: SpaceshipSimulationConfig
+  config: SpaceshipSimulationConfig,
+  ship: ShipStats
 ): readonly ProjectileState[] {
   return projectiles.filter(
     (projectile) =>
-      (currentTick - projectile.spawnedTick) * config.fixedStepMs < config.projectileLifetimeMs &&
+      (currentTick - projectile.spawnedTick) * config.fixedStepMs < ship.projectileLifetimeMs &&
       isWithinCircularEnvelope(
         projectile.x,
         projectile.y,

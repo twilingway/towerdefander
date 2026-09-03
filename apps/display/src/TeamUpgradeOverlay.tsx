@@ -1,7 +1,9 @@
 import { roleLabel } from "@spaceship-defender/client-shared";
 import {
   CREW_ROLES,
+  MODULE_TIER_COUNT,
   TEAM_UPGRADE_PRICE,
+  summariseModuleEffects,
   type PublicTeamUpgradeView
 } from "@spaceship-defender/protocol";
 
@@ -11,6 +13,8 @@ interface TeamUpgradeOverlayProps {
   readonly score: number;
   readonly waveNumber: number;
   readonly phaseTicksRemaining: number;
+  /** Modules bought so far; the ribbon reads the crew's depth from its length. */
+  readonly purchasedModules: readonly string[];
 }
 
 export function TeamUpgradeOverlay({
@@ -18,7 +22,8 @@ export function TeamUpgradeOverlay({
   credits,
   score,
   waveNumber,
-  phaseTicksRemaining
+  phaseTicksRemaining,
+  purchasedModules
 }: TeamUpgradeOverlayProps) {
   const offer = teamUpgrade.offer;
   const price = TEAM_UPGRADE_PRICE;
@@ -27,6 +32,7 @@ export function TeamUpgradeOverlay({
       <p className="eyebrow">Волна {waveNumber} завершена</p>
       <h2>Голосование за общее улучшение</h2>
       <strong>Следующая волна через {formatCountdown(phaseTicksRemaining)}</strong>
+      <TierRibbon bought={purchasedModules.length} tier={offer?.tier ?? 0} />
       <p className="intermission-economy">
         Очки экипажа: {score} · кредиты: {credits} · цена улучшения: {price}
       </p>
@@ -44,6 +50,7 @@ export function TeamUpgradeOverlay({
                 key={card.upgradeId}
               >
                 <strong>{card.label}</strong>
+                <small>{summariseModuleEffects(card.effects)}</small>
                 <small>{roleLabel(card.role)}</small>
                 <small>
                   {voters.length === 0
@@ -58,8 +65,35 @@ export function TeamUpgradeOverlay({
       <p>
         {credits < price
           ? "Кредитов не хватает — улучшение не купится."
-          : "Побеждает большинство голосов, при равенстве — первая карточка по порядку ролей."}
+          : "Побеждает большинство голосов, при равенстве — карточка левее в этом ряду."}
       </p>
+    </div>
+  );
+}
+
+/**
+ * Where the crew is in the tree: what is behind them, what is on screen, and
+ * how much is still ahead. The tree is the whole point of the choice, and it is
+ * unreadable if the only thing shown is this wave's cards.
+ */
+function TierRibbon({ bought, tier }: { readonly bought: number; readonly tier: number }) {
+  const steps = Array.from({ length: MODULE_TIER_COUNT }, (_unused, index) => index + 1);
+  const spent = tier === 0;
+  return (
+    <div className="tier-ribbon" aria-label="Путь по дереву модулей">
+      {steps.map((step) => (
+        <span
+          key={step}
+          className={`tier-ribbon__step${step <= bought ? " is-done" : ""}${
+            step === tier ? " is-current" : ""
+          }`}
+        />
+      ))}
+      <small>
+        {spent
+          ? `Дерево пройдено: ${String(bought)} модулей, дальше повторяемые`
+          : `Тир ${String(tier)} из ${String(MODULE_TIER_COUNT)} · куплено ${String(bought)}`}
+      </small>
     </div>
   );
 }

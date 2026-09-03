@@ -1,6 +1,6 @@
 import { type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { NumberField } from "../../components/fields.js";
+import { AngularRateField, NumberField, PercentField } from "../../components/fields.js";
 
 interface HullSectionProps {
   readonly tuning: BalanceTuning;
@@ -50,32 +50,36 @@ export function HullSection({ tuning, patch }: HullSectionProps) {
             patch({ spaceshipBrakingPerSecondSquared: spaceshipBrakingPerSecondSquared });
           }}
         />
-        <NumberField
-          caption="Поворот носа, рад/с"
-          step={0.05}
-          value={tuning.headingMaxAngularSpeedPerSecond}
+        <PercentField
+          caption="Задний ход, % от скорости"
+          fraction={tuning.spaceshipReverseSpeedFactor}
+          onChange={(spaceshipReverseSpeedFactor) => {
+            patch({
+              spaceshipReverseSpeedFactor: Math.min(1, Math.max(0.01, spaceshipReverseSpeedFactor))
+            });
+          }}
+        />
+        <AngularRateField
+          caption="Поворот носа, °/с"
+          radians={tuning.headingMaxAngularSpeedPerSecond}
           onChange={(headingMaxAngularSpeedPerSecond) => {
-            patch({ headingMaxAngularSpeedPerSecond: headingMaxAngularSpeedPerSecond });
+            patch({ headingMaxAngularSpeedPerSecond });
           }}
         />
-        <NumberField
-          caption="Разгон поворота, рад/с²"
-          step={0.05}
-          value={tuning.headingAngularAccelerationPerSecondSquared}
+        <AngularRateField
+          caption="Разгон поворота, °/с²"
+          step={50}
+          radians={tuning.headingAngularAccelerationPerSecondSquared}
           onChange={(headingAngularAccelerationPerSecondSquared) => {
-            patch({
-              headingAngularAccelerationPerSecondSquared: headingAngularAccelerationPerSecondSquared
-            });
+            patch({ headingAngularAccelerationPerSecondSquared });
           }}
         />
-        <NumberField
-          caption="Торможение поворота, рад/с²"
-          step={0.05}
-          value={tuning.headingAngularBrakingPerSecondSquared}
+        <AngularRateField
+          caption="Торможение поворота, °/с²"
+          step={50}
+          radians={tuning.headingAngularBrakingPerSecondSquared}
           onChange={(headingAngularBrakingPerSecondSquared) => {
-            patch({
-              headingAngularBrakingPerSecondSquared: headingAngularBrakingPerSecondSquared
-            });
+            patch({ headingAngularBrakingPerSecondSquared });
           }}
         />
       </div>

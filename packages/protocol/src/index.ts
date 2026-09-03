@@ -1,29 +1,45 @@
 import { z } from "zod";
 
+export * from "./crewRoles.ts";
 export * from "./enemyKinds.ts";
 export * from "./visualCatalog.ts";
+import { CREW_ROLES, crewRoleSchema, type CrewRole } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 import {
+  MAX_MODULE_EFFECTS,
+  MAX_MODULE_TIER_WIDTH,
+  MODULE_TIER_COUNT,
   backgroundTuningSchema,
   cameraViewWidthSchema,
   entityVisualSchema,
+  friendlyWeaponKindSchema,
+  helmSchemeSchema,
+  shipArchetypeIdSchema,
+  shipModuleIdSchema,
+  shipStatEffectSchema,
   turretVisualSchema,
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 26 as const;
+export const PROTOCOL_VERSION = 45 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
-export const CREW_ROLES = ["pilot", "gunner", "shield"] as const;
+/** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
+export const CREW_SIZES = [1, 2, 3] as const;
 export const ENCOUNTER_PHASES = ["combat", "intermission", "result"] as const;
 export const TERMINAL_OUTCOMES = ["defeat", "victory"] as const;
 export const DEFEAT_REASONS = ["spaceship_destroyed", "wave_timeout"] as const;
 export const WAVE_TTL_SECONDS = 20 * 60;
 export const MAX_WAVE_TTL_SECONDS = 24 * 60 * 60;
+/**
+ * Ceiling for the salvage window a won wave stays open for. The window itself
+ * is a preset knob; this only keeps an absurd value off the wire.
+ */
+export const MAX_LOOT_WINDOW_SECONDS = 120 as const;
 export const PROJECTILE_KINDS = ["friendly", "hostile"] as const;
 export const ROOM_CLOSING_REASONS = [
   "display_left",
@@ -35,34 +51,28 @@ export const ROOM_CLOSING_REASONS = [
 ] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
 export const INTERMISSION_DURATION_TICKS = 600 as const;
-export const UPGRADE_OFFER_COUNT = 3 as const;
 export const TEAM_UPGRADE_PRICE = 5 as const;
 export const COMBAT_ENTITY_CAPS = {
   enemyShips: 40,
   asteroids: 16,
+  lootDrops: 12,
   hostileProjectiles: 96,
   homingMissiles: 12,
   friendlyProjectiles: 32,
-  dynamicEntities: 196
+  dynamicEntities: 208
 } as const;
-
-export const PILOT_UPGRADE_IDS = ["pilot_speed", "pilot_acceleration", "pilot_hull"] as const;
-export const GUNNER_UPGRADE_IDS = [
-  "gunner_damage",
-  "gunner_cooldown",
-  "gunner_projectile_speed"
-] as const;
-export const SHIELD_UPGRADE_IDS = ["shield_capacity", "shield_recharge", "shield_arc"] as const;
-export const UPGRADE_IDS = [
-  ...PILOT_UPGRADE_IDS,
-  ...GUNNER_UPGRADE_IDS,
-  ...SHIELD_UPGRADE_IDS
-] as const;
 
 export const clientRoleSchema = z.enum(["display", "controller"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
-export const crewRoleSchema = z.enum(CREW_ROLES);
-export type CrewRole = z.infer<typeof crewRoleSchema>;
+export const crewSizeSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+/**
+ * Highest wave a room may be asked to open on. A testing aid: the server
+ * refuses it unless it was started with the flag, so nothing production-facing
+ * can be dropped straight onto a boss.
+ */
+export const MAX_START_WAVE = 50;
+export const startWaveSchema = z.number().int().min(1).max(MAX_START_WAVE);
+export type CrewSize = z.infer<typeof crewSizeSchema>;
 export const roomPhaseSchema = z.enum(["lobby", "active"]);
 export type RoomPhase = z.infer<typeof roomPhaseSchema>;
 export const encounterPhaseSchema = z.enum(ENCOUNTER_PHASES);
@@ -83,15 +93,41 @@ export type ProjectileKind = z.infer<typeof projectileKindSchema>;
 export const ASTEROID_ORIGINS = ["wave", "ambient"] as const;
 export const asteroidOriginSchema = z.enum(ASTEROID_ORIGINS);
 export type AsteroidOrigin = z.infer<typeof asteroidOriginSchema>;
-export const PROJECTILE_SOURCES = ["cannon", "machineGun"] as const;
+/** What a salvage drop gives back when the hull touches it. */
+export const LOOT_KINDS = ["repair", "shieldCell"] as const;
+export const lootKindSchema = z.enum(LOOT_KINDS);
+export type LootKind = z.infer<typeof lootKindSchema>;
+/**
+ * Who fired a shot or a pulse. The friendly ones name a barrel; every hostile
+ * beam shares one source, because the display only has to tell it from ours.
+ */
+export const PROJECTILE_SOURCES = ["cannon", "machineGun", "enemy"] as const;
+export const ENEMY_BEAM_SOURCE = "enemy" as const;
 export const projectileSourceSchema = z.enum(PROJECTILE_SOURCES);
 export type ProjectileSource = z.infer<typeof projectileSourceSchema>;
-export const upgradeIdSchema = z.enum(UPGRADE_IDS);
+/** A module id is a catalogue id, like an enemy kind: the preset owns the list. */
+export const upgradeIdSchema = shipModuleIdSchema;
 export type UpgradeId = z.infer<typeof upgradeIdSchema>;
 
 // Zod numbers reject NaN and infinities by default.
 const finite = z.number();
 const CIRCULAR_GEOMETRY_EPSILON = 1e-6;
+/**
+ * Positions ride the wire as float32, so a body the simulation clamped exactly
+ * to the arena rim can arrive a fraction outside it. The tolerance therefore
+ * has to scale with the world rather than sit at a double-precision constant:
+ * at an arena of 4400 the rounding alone reaches 2.5e-4, and a snapshot
+ * rejected over that blinds the client that parsed it — the adapter throws
+ * inside the state handler and the view stops updating entirely.
+ *
+ * Two to the minus twenty-one leaves roughly eight float32 steps of headroom
+ * and is still four thousand times smaller than the smallest hull.
+ */
+const WIRE_PRECISION_RELATIVE = 2 ** -21;
+
+function arenaTolerance(worldWidth: number): number {
+  return Math.max(CIRCULAR_GEOMETRY_EPSILON, worldWidth * WIRE_PRECISION_RELATIVE);
+}
 const safeNonnegativeInteger = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const safePositiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const entityId = z.string().min(1).max(64);
@@ -136,10 +172,22 @@ export const publicSpaceshipViewSchema = z
   });
 export type PublicSpaceshipView = z.infer<typeof publicSpaceshipViewSchema>;
 
+/** Down, coming up, holding, cooling. Only `up` protects. */
+export const SHIELD_PHASES = ["down", "raising", "up", "cooling"] as const;
+export const shieldPhaseSchema = z.enum(SHIELD_PHASES);
+export type ShieldPhase = z.infer<typeof shieldPhaseSchema>;
+
 export const publicShieldViewSchema = z
   .object({
     angle: finite,
     active: z.boolean(),
+    /**
+     * Drained, and locked out until the battery wins back its mark. The
+     * operator's panel needs it as much as the shared screen does: the button
+     * is dead while it is set, and a dead button with no reason is what the
+     * old manual re-arm felt like.
+     */
+    rearmRequired: z.boolean(),
     energy: finite.nonnegative(),
     capacity: finite.nonnegative(),
     arcHalfAngle: finite.positive().max(Math.PI)
@@ -151,21 +199,66 @@ export const publicShieldViewSchema = z
   });
 export type PublicShieldView = z.infer<typeof publicShieldViewSchema>;
 
+const weaponHeatShape = {
+  heat: finite.nonnegative(),
+  capacity: finite.nonnegative(),
+  overheated: z.boolean()
+} satisfies z.ZodRawShape;
+
+function refineHeat(value: { heat: number; capacity: number }, context: z.RefinementCtx): void {
+  if (value.heat > value.capacity)
+    issue(context, ["heat"], "Weapon heat must not exceed capacity.");
+}
+
 export const publicWeaponHeatViewSchema = z
+  .object(weaponHeatShape)
+  .strict()
+  .superRefine(refineHeat);
+export type PublicWeaponHeatView = z.infer<typeof publicWeaponHeatViewSchema>;
+
+/**
+ * The turret says more than its heat: what kind of barrel it is, how far it
+ * carries, and - for a barrel that locks on - how far off the bore it will
+ * still take a lock. That is the envelope the display draws around the gunner's
+ * aim. The nose gun carries none of it: the pilot flies the bore, so there is
+ * no envelope to read.
+ *
+ * All three are fixed for the run unless a module moves them, so they cost a
+ * patch on purchase rather than one every tick.
+ */
+export const publicCannonViewSchema = z
   .object({
-    heat: finite.nonnegative(),
-    capacity: finite.nonnegative(),
-    overheated: z.boolean()
+    ...weaponHeatShape,
+    kind: friendlyWeaponKindSchema,
+    reach: finite.nonnegative(),
+    /**
+     * How fast a shot travels, so a client can work out where a shot fired now
+     * would meet a moving ship. Zero means it does not travel at all: a beam
+     * arrives in the tick it is fired, and is aimed at the target rather than
+     * ahead of it.
+     */
+    speed: finite.nonnegative(),
+    acquireHalfAngle: finite.nonnegative()
   })
   .strict()
-  .superRefine((value, context) => {
-    if (value.heat > value.capacity)
-      issue(context, ["heat"], "Weapon heat must not exceed capacity.");
-  });
-export type PublicWeaponHeatView = z.infer<typeof publicWeaponHeatViewSchema>;
-/** Kept as the old name so existing display and controller code reads the same. */
-export const publicMachineGunViewSchema = publicWeaponHeatViewSchema;
-export type PublicMachineGunView = PublicWeaponHeatView;
+  .superRefine(refineHeat);
+export type PublicCannonView = z.infer<typeof publicCannonViewSchema>;
+
+/**
+ * The nose gun says what it is and how far it throws, but nothing about a cone:
+ * the pilot flies the bore, so there is no envelope to read - only the ship it
+ * is about to be fired into, which the display marks.
+ */
+export const publicMachineGunViewSchema = z
+  .object({
+    ...weaponHeatShape,
+    kind: friendlyWeaponKindSchema,
+    reach: finite.nonnegative(),
+    speed: finite.nonnegative()
+  })
+  .strict()
+  .superRefine(refineHeat);
+export type PublicMachineGunView = z.infer<typeof publicMachineGunViewSchema>;
 
 export const publicEncounterViewSchema = z
   .object({
@@ -176,6 +269,8 @@ export const publicEncounterViewSchema = z
     encounterTick: safeNonnegativeInteger,
     phaseTicksRemaining: z.number().int().min(0).max(INTERMISSION_DURATION_TICKS),
     waveSecondsRemaining: z.number().int().min(0).max(MAX_WAVE_TTL_SECONDS),
+    /** Seconds left to collect salvage from a wave that is already won. */
+    lootWindowSecondsRemaining: z.number().int().min(0).max(MAX_LOOT_WINDOW_SECONDS),
     score: safeNonnegativeInteger
   })
   .strict()
@@ -188,6 +283,8 @@ export const publicEncounterViewSchema = z
       issue(context, ["waveSecondsRemaining"], "Combat requires a positive wave countdown.");
     if (value.phase !== "combat" && value.waveSecondsRemaining !== 0)
       issue(context, ["waveSecondsRemaining"], "Only combat may publish a wave countdown.");
+    if (value.phase !== "combat" && value.lootWindowSecondsRemaining !== 0)
+      issue(context, ["lootWindowSecondsRemaining"], "Only combat may publish a salvage window.");
     if ((value.phase === "result") !== (value.outcome !== null))
       issue(context, ["outcome"], "Only a terminal result requires an outcome.");
     if ((value.outcome === "defeat") !== (value.defeatReason !== null))
@@ -195,56 +292,20 @@ export const publicEncounterViewSchema = z
   });
 export type PublicEncounterView = z.infer<typeof publicEncounterViewSchema>;
 
-const multiplier = finite.positive();
-export const pilotRoleModifiersSchema = z
-  .object({
-    speedMultiplier: multiplier,
-    accelerationMultiplier: multiplier,
-    maxHpBonus: finite.nonnegative()
-  })
-  .strict();
-export type PilotRoleModifiers = z.infer<typeof pilotRoleModifiersSchema>;
-export const gunnerRoleModifiersSchema = z
-  .object({
-    damageMultiplier: multiplier,
-    cooldownMultiplier: multiplier,
-    projectileSpeedMultiplier: multiplier
-  })
-  .strict();
-export type GunnerRoleModifiers = z.infer<typeof gunnerRoleModifiersSchema>;
-export const shieldRoleModifiersSchema = z
-  .object({
-    capacityBonus: finite.nonnegative(),
-    rechargeMultiplier: multiplier,
-    arcWidthBonus: finite.nonnegative()
-  })
-  .strict();
-export type ShieldRoleModifiers = z.infer<typeof shieldRoleModifiersSchema>;
-export const publicRoleModifiersViewSchema = z
-  .object({
-    pilot: pilotRoleModifiersSchema,
-    gunner: gunnerRoleModifiersSchema,
-    shield: shieldRoleModifiersSchema
-  })
-  .strict();
-export type PublicRoleModifiersView = z.infer<typeof publicRoleModifiersViewSchema>;
-
-function upgradeBelongsToRole(upgradeId: UpgradeId, role: CrewRole): boolean {
-  const ids =
-    role === "pilot"
-      ? PILOT_UPGRADE_IDS
-      : role === "gunner"
-        ? GUNNER_UPGRADE_IDS
-        : SHIELD_UPGRADE_IDS;
-  return (ids as readonly string[]).includes(upgradeId);
-}
-
 export const publicUpgradeCardSchema = z
   .object({
     upgradeId: upgradeIdSchema,
+    /** Whose card it is. Authoring metadata: any seat may vote for any card. */
     role: crewRoleSchema,
+    /** The module's name, as the operator wrote it. */
     label: z.string().min(1).max(96),
-    value: finite,
+    /**
+     * What it does. The card carries the effects rather than a written caption
+     * so the number a crew reads is the number that gets applied, and so the
+     * demo bot can weigh a card it has never seen — clients render them with
+     * `summariseModuleEffects`.
+     */
+    effects: z.array(shipStatEffectSchema).min(1).max(MAX_MODULE_EFFECTS),
     price: z.literal(TEAM_UPGRADE_PRICE)
   })
   .strict();
@@ -253,16 +314,14 @@ export const publicTeamUpgradeOfferSchema = z
   .object({
     offerId: z.string().min(1).max(64),
     waveNumber: safePositiveInteger,
-    cards: z.array(publicUpgradeCardSchema).length(UPGRADE_OFFER_COUNT)
+    /** Which tier of the tree these came from; 1-based, 0 once the tree is spent. */
+    tier: z.number().int().min(0).max(MODULE_TIER_COUNT),
+    cards: z.array(publicUpgradeCardSchema).min(1).max(MAX_MODULE_TIER_WIDTH)
   })
   .strict()
   .superRefine((value, context) => {
     const upgradeIds = new Set<UpgradeId>();
     value.cards.forEach((card, index) => {
-      if (card.role !== CREW_ROLES[index])
-        issue(context, ["cards", index, "role"], "Cards must use pilot, gunner, shield order.");
-      if (!upgradeBelongsToRole(card.upgradeId, card.role))
-        issue(context, ["cards", index, "upgradeId"], "Upgrade must belong to its offer role.");
       if (upgradeIds.has(card.upgradeId))
         issue(context, ["cards", index, "upgradeId"], "Offer cards must be distinct.");
       upgradeIds.add(card.upgradeId);
@@ -293,11 +352,7 @@ export const publicTeamUpgradeSelectionSchema = z
     role: crewRoleSchema,
     price: z.literal(TEAM_UPGRADE_PRICE)
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (!upgradeBelongsToRole(value.upgradeId, value.role))
-      issue(context, ["upgradeId"], "Upgrade must belong to its selection role.");
-  });
+  .strict();
 export type PublicTeamUpgradeSelection = z.infer<typeof publicTeamUpgradeSelectionSchema>;
 export const publicTeamUpgradeViewSchema = z
   .object({
@@ -367,6 +422,29 @@ export const publicAsteroidViewSchema = z
     if (value.hp > value.maxHp) issue(context, ["hp"], "Asteroid HP must not exceed max HP.");
   });
 export type PublicAsteroidView = z.infer<typeof publicAsteroidViewSchema>;
+export const publicLootDropViewSchema = z
+  .object({
+    ...entityShape,
+    kind: lootKindSchema,
+    amount: finite.positive()
+  })
+  .strict();
+export type PublicLootDropView = z.infer<typeof publicLootDropViewSchema>;
+/**
+ * A laser pulse the display draws for a couple of ticks. Not an entity: it has
+ * no velocity, no lifetime of its own and no room in the entity caps.
+ */
+export const publicLaserBeamViewSchema = z
+  .object({
+    entityId: z.string().min(1).max(64),
+    fromX: finite,
+    fromY: finite,
+    toX: finite,
+    toY: finite,
+    source: projectileSourceSchema
+  })
+  .strict();
+export type PublicLaserBeamView = z.infer<typeof publicLaserBeamViewSchema>;
 export const publicProjectileViewSchema = z
   .object({
     ...entityShape,
@@ -391,10 +469,9 @@ const gameShape = {
   spaceship: publicSpaceshipViewSchema,
   turretAngle: finite,
   shield: publicShieldViewSchema,
-  cannon: publicWeaponHeatViewSchema,
+  cannon: publicCannonViewSchema,
   machineGun: publicMachineGunViewSchema,
   encounter: publicEncounterViewSchema,
-  roleModifiers: publicRoleModifiersViewSchema,
   credits: safeNonnegativeInteger,
   teamUpgrade: publicTeamUpgradeViewSchema
 } satisfies z.ZodRawShape;
@@ -434,10 +511,11 @@ function circleFitsArena(
   arenaRadius: number,
   padding = 0
 ): boolean {
+  const tolerance = arenaTolerance(worldWidth);
   const legalCenterRadius = arenaRadius + padding - entityRadius;
-  if (legalCenterRadius < -CIRCULAR_GEOMETRY_EPSILON) return false;
+  if (legalCenterRadius < -tolerance) return false;
   const distance = Math.hypot(x - worldWidth / 2, y - worldHeight / 2);
-  return distance <= Math.max(0, legalCenterRadius) + CIRCULAR_GEOMETRY_EPSILON;
+  return distance <= Math.max(0, legalCenterRadius) + tolerance;
 }
 
 function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
@@ -563,7 +641,30 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
   }
 }
 
-export const controllerGameSnapshotSchema = z.object(gameShape).strict().superRefine(refineWorld);
+/**
+ * Feel of the keyboard helm, straight from the active preset. Only the
+ * controller drives with it, so the display never carries these three.
+ */
+export const publicHelmViewSchema = z
+  .object({
+    scheme: helmSchemeSchema,
+    headingLeadRadians: finite.positive(),
+    stopDampening: finite.positive(),
+    rotateInPlaceThrottle: finite.positive(),
+    /**
+     * How hard the hull brakes its spin, straight from the run's config. The
+     * helm predicts where a released turn comes to rest, and a guess that does
+     * not match the hull overshoots and swings back.
+     */
+    hullAngularBrakingPerSecondSquared: finite.positive()
+  })
+  .strict();
+export type PublicHelmView = z.infer<typeof publicHelmViewSchema>;
+
+export const controllerGameSnapshotSchema = z
+  .object({ ...gameShape, helm: publicHelmViewSchema })
+  .strict()
+  .superRefine(refineWorld);
 export type ControllerGameSnapshot = z.infer<typeof controllerGameSnapshotSchema>;
 /** Per-run enemy catalogue: the display draws silhouettes from data, not from code. */
 export const publicEnemyCatalogueEntrySchema = z
@@ -572,7 +673,9 @@ export const publicEnemyCatalogueEntrySchema = z
     label: z.string().min(1).max(48),
     shape: visualAssetIdSchema,
     modelScale: z.number().min(0.2).max(4),
-    showHealthBar: z.boolean()
+    showHealthBar: z.boolean(),
+    /** Sent once per run: the display names the boss, it never guesses one. */
+    isBoss: z.boolean()
   })
   .strict();
 export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;
@@ -580,6 +683,13 @@ export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntry
 export const displayGameSnapshotSchema = z
   .object({
     ...gameShape,
+    /** Width of the elastic rim band, measured inward from `arenaRadius`. */
+    rimBandWidth: finite.nonnegative(),
+    /**
+     * Why the shield is or is not protecting. Display-only: the shared screen
+     * spells the cycle out, while the panel needs no more than the lock.
+     */
+    shieldPhase: shieldPhaseSchema,
     /** Narrowest slice of the world the display frames; height follows as 9/16. */
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background for this run; fixed at run start like the silhouettes. */
@@ -595,6 +705,13 @@ export const displayGameSnapshotSchema = z
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
+    lootDrops: z.array(publicLootDropViewSchema).max(COMBAT_ENTITY_CAPS.lootDrops),
+    // Both sides fire into this one collection, and a busy wave can light up
+    // several beams in a tick. Past the cap a pulse is simply not drawn: the
+    // damage was resolved on the server either way.
+    laserBeams: z.array(publicLaserBeamViewSchema).max(24),
+    /** What the crew has bought, in purchase order; the ship stats follow from it. */
+    purchasedModules: z.array(upgradeIdSchema).max(200),
     friendlyProjectiles: z
       .array(publicProjectileViewSchema)
       .max(COMBAT_ENTITY_CAPS.friendlyProjectiles),
@@ -610,6 +727,7 @@ export type DisplayGameSnapshot = z.infer<typeof displayGameSnapshotSchema>;
 interface RoomProjection {
   phase: RoomPhase;
   runNumber: number;
+  crewSize: CrewSize;
   players: PublicPlayerView[];
   game: ControllerGameSnapshot | DisplayGameSnapshot | null;
   assignedRole?: CrewRole;
@@ -625,6 +743,8 @@ function refineRoom(room: RoomProjection, context: z.RefinementCtx): void {
     playerIds.add(player.playerId);
     roles.add(player.role);
   });
+  if (room.players.length > room.crewSize)
+    issue(context, ["players"], "A room holds no more players than its crew size.");
   if (room.phase === "lobby") {
     if (room.runNumber !== 0) issue(context, ["runNumber"], "Lobby requires run number zero.");
     if (room.game !== null) issue(context, ["game"], "Lobby requires a null game.");
@@ -641,6 +761,9 @@ const roomShape = {
   runNumber: runNumberSchema,
   displayConnected: z.boolean(),
   displayLatencyMs: latencyMsSchema,
+  crewSize: crewSizeSchema,
+  /** The hull this run is played on; a room keeps it across a rematch. */
+  shipArchetypeId: shipArchetypeIdSchema,
   players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
 } satisfies z.ZodRawShape;
 export const controllerRoomViewSchema = z
@@ -659,11 +782,33 @@ export const displayRoomViewSchema = z
 export type DisplayRoomView = z.infer<typeof displayRoomViewSchema>;
 
 export const displayCreateOptionsSchema = z
-  .object({ role: z.literal("display"), protocolVersion: z.literal(PROTOCOL_VERSION) })
+  .object({
+    role: z.literal("display"),
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    crewSize: crewSizeSchema,
+    /** Which hull to fly. Absent means the preset's own default hull. */
+    shipArchetypeId: shipArchetypeIdSchema.optional(),
+    /** Testing aid; the server ignores it unless it was started with it on. */
+    startWave: startWaveSchema.optional()
+  })
   .strict();
 export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
-export const displayJoinOptionsSchema = displayCreateOptionsSchema;
-export type DisplayJoinOptions = DisplayCreateOptions;
+/**
+ * A display rejoins a room whose crew size is already fixed, and Colyseus
+ * replays the create options on that first join, so the seat count is accepted
+ * but ignored here.
+ */
+export const displayJoinOptionsSchema = z
+  .object({
+    role: z.literal("display"),
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    crewSize: crewSizeSchema.optional(),
+    /** Accepted and ignored on a rejoin, like the crew size beside it. */
+    shipArchetypeId: shipArchetypeIdSchema.optional(),
+    startWave: startWaveSchema.optional()
+  })
+  .strict();
+export type DisplayJoinOptions = z.infer<typeof displayJoinOptionsSchema>;
 export const controllerJoinOptionsSchema = z
   .object({
     role: z.literal("controller"),
@@ -672,7 +817,7 @@ export const controllerJoinOptionsSchema = z
   })
   .strict();
 export type ControllerJoinOptions = z.infer<typeof controllerJoinOptionsSchema>;
-export const joinOptionsSchema = z.union([displayCreateOptionsSchema, controllerJoinOptionsSchema]);
+export const joinOptionsSchema = z.union([displayJoinOptionsSchema, controllerJoinOptionsSchema]);
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
 
 export const commandEnvelopeSchema = z
@@ -691,7 +836,19 @@ export type ContinuousInputEnvelope = z.infer<typeof continuousInputEnvelopeSche
 export const readyCommandSchema = commandEnvelopeSchema;
 export type ReadyCommand = CommandEnvelope;
 export const pilotInputCommandSchema = continuousInputEnvelopeSchema
-  .extend({ vector: vector2Schema, mgFiring: z.boolean() })
+  .extend({
+    vector: vector2Schema,
+    mgFiring: z.boolean(),
+    /**
+     * Tank helm: the sign of the requested spin, and thrust along the nose.
+     * A bearing cannot express "keep turning" - the client would have to name
+     * an angle, and the only angle it knows is a nose that is a patch and a
+     * round trip old, which is what made a released turn swing back. Absent
+     * from a stick or absolute-scheme command, which still send a bearing.
+     */
+    turn: finite.min(-1).max(1).optional(),
+    thrust: finite.min(-1).max(1).optional()
+  })
   .strict();
 export type PilotInputCommand = z.infer<typeof pilotInputCommandSchema>;
 export const gunnerInputCommandSchema = continuousInputEnvelopeSchema
@@ -773,3 +930,4 @@ export const serverErrorSchema = z
 export type ServerError = z.infer<typeof serverErrorSchema>;
 
 export * from "./balance.ts";
+export * from "./balanceStats.ts";

@@ -1,8 +1,12 @@
 import {
   BUILTIN_ENEMY_KINDS,
+  CREW_ROLES,
+  MODULE_TIER_WIDTHS,
   type AutopilotProfile,
   type BalanceTuning,
-  type EnemyArchetype
+  type EnemyArchetype,
+  type EnemySkillProfile,
+  type ShipArchetype
 } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
@@ -26,6 +30,7 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
     turnRatePerSecond: (2 * Math.PI) / 3,
     turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
     turnBrakingPerSecondSquared: 2 * Math.PI,
+    combatSkill: "rookie",
     weapons: [
       {
         kind: "bullet",
@@ -52,7 +57,23 @@ function archetype(spawnCost: number, unlockWave = 1): EnemyArchetype {
     spawnCost,
     unlockWave,
     scoreReward: 25,
-    creditReward: 2
+    creditReward: 2,
+    lootChance: 0.2
+  };
+}
+
+function enemySkillProfile(): EnemySkillProfile {
+  return {
+    reactionTicks: 10,
+    aimJitterRadians: 0.1,
+    leadFactor: 0,
+    orbitShare: 0.35,
+    rangeBandUnits: 120,
+    separationWeight: 0,
+    flankSpread: 0,
+    evadeHorizonTicks: 0,
+    retreatHpFraction: 0,
+    retreatStandoffFactor: 1
   };
 }
 
@@ -66,6 +87,7 @@ function autopilotProfile(): AutopilotProfile {
     evadeMissiles: true,
     dodgeBullets: false,
     threatAwareShield: true,
+    standoffShare: 0.7,
     standoffDistance: 620,
     evadeHorizonTicks: 12,
     mgConeRadians: 0.35,
@@ -74,6 +96,33 @@ function autopilotProfile(): AutopilotProfile {
     cannonHeatCeiling: 0.8,
     shieldLeadTicks: 8,
     shieldMinEnergy: 0.15
+  };
+}
+
+function autopilotLevels() {
+  return { rookie: autopilotProfile(), veteran: autopilotProfile(), ace: autopilotProfile() };
+}
+
+/** A hull of the exact shape the schema demands; the numbers do not matter here. */
+function shipArchetype(): ShipArchetype {
+  const card = (id: string, slot: number) => ({
+    id,
+    label: `Module ${id}`,
+    role: CREW_ROLES[slot % CREW_ROLES.length] ?? ("pilot" as const),
+    effects: [{ target: "spaceshipMaxHp" as const, op: "add" as const, value: 5 }]
+  });
+  return {
+    label: "Hull",
+    description: "Test hull",
+    visual: null,
+    unlockedAtWave: 1,
+    overrides: { stats: {}, cannonWeaponKind: null, mgWeaponKind: null },
+    tiers: MODULE_TIER_WIDTHS.map((width, tier) =>
+      Array.from({ length: width }, (_unused, slot) =>
+        card(`t${String(tier)}m${String(slot)}`, slot)
+      )
+    ),
+    endlessTier: [card("endless", 0)]
   };
 }
 
@@ -92,6 +141,7 @@ function tuning(): BalanceTuning {
             {
               kind: "gunship",
               count: 3,
+              startDelayTicks: 0,
               spawnIntervalTicks: 20,
               sectors: ["N"],
               hpMultiplier: null,
@@ -100,6 +150,7 @@ function tuning(): BalanceTuning {
             {
               kind: "asteroid",
               count: 2,
+              startDelayTicks: 30,
               spawnIntervalTicks: 10,
               sectors: [],
               hpMultiplier: null,
@@ -119,6 +170,26 @@ function tuning(): BalanceTuning {
         tempoGrowth: 0.05,
         tempoMultiplierCap: 3,
         bossWaveInterval: 5
+      },
+      authoring: {
+        budgetBase: 5,
+        budgetGrowth: 1.5,
+        bossEscortShare: 0.5,
+        asteroidEveryWaves: 3,
+        hpPerCannonShot: 25,
+        hpScale: 0.75,
+        damagePerSecondBase: 2,
+        damagePerSecondPerSpawnCost: 2.2,
+        bossDamagePerSecondCap: 26,
+        laserDamageShare: 0.75,
+        shipReach: 1080,
+        maxEngagementShare: 1.6,
+        maxStandoffShare: 1.3,
+        groupStartStepSeconds: 7,
+        swarmIntervalSeconds: 3,
+        lineIntervalSeconds: 7,
+        heavyIntervalSeconds: 11,
+        bossFloorSeconds: 30
       }
     },
     enemySpawnIntervalTicks: 12,
@@ -134,16 +205,29 @@ function tuning(): BalanceTuning {
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
+    lootRepairShare: 0.06,
+    lootShieldAmount: 30,
+    lootBossRepairShare: 1,
+    lootLifetimeTicks: 300,
+    lootDropRadius: 18,
+    lootMagnetRadius: 260,
+    lootMagnetAccelerationPerSecondSquared: 900,
+    lootDriftDampingPerSecond: 1.6,
+    lootWindowTicks: 300,
+    lootBossWindowTicks: 600,
     projectileVisual: null,
     turretVisual: null,
     mgProjectileVisual: null,
     asteroidVisual: null,
     spaceshipVisual: null,
+    shipArchetypes: { guardian: shipArchetype() },
+    defaultShipArchetypeId: "guardian",
     spaceshipMaxHp: 500,
     spaceshipRadius: 52,
     spaceshipSpeedPerSecond: 320,
     spaceshipAccelerationPerSecondSquared: 640,
     spaceshipBrakingPerSecondSquared: 800,
+    spaceshipReverseSpeedFactor: 0.4,
     headingMaxAngularSpeedPerSecond: 2.72,
     headingAngularAccelerationPerSecondSquared: 5.44,
     headingAngularBrakingPerSecondSquared: 8.16,
@@ -167,23 +251,49 @@ function tuning(): BalanceTuning {
     mgHeatPerShot: 4,
     mgCoolingPerSecond: 30,
     mgRearmThreshold: 30,
+    cannonWeaponKind: "kinetic",
+    mgWeaponKind: "kinetic",
+    cannonLaserRange: 900,
+    mgLaserRange: 620,
+    laserBeamRadius: 5,
+    friendlyMissileTurnRatePerSecond: Math.PI / 2,
+    friendlyMissileAcquireConeRadians: Math.PI / 6,
     shieldCapacity: 100,
     shieldDrainPerSecond: 20,
     shieldRechargePerSecond: 10,
+    shieldEngageTicks: 20,
+    shieldMinimumUpTicks: 40,
+    shieldCooldownTicks: 20,
+    shieldRearmEnergy: 25,
     shieldRadius: 104,
     shieldArcRadians: Math.PI / 2,
     shieldMaxAngularSpeedPerSecond: 1.7,
     shieldAngularAccelerationPerSecondSquared: 3.4,
     shieldAngularBrakingPerSecondSquared: 5.1,
     missileInterceptScoreReward: 5,
+    arenaRadius: 2200,
     cameraViewWidth: 1600,
     background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
+    helm: {
+      scheme: "tank",
+      headingLeadRadians: 0.5,
+      stopDampening: 1,
+      rotateInPlaceThrottle: 0.02
+    },
+    enemySkill: {
+      offset: 0,
+      profiles: {
+        rookie: enemySkillProfile(),
+        veteran: enemySkillProfile(),
+        ace: enemySkillProfile()
+      }
+    },
     autopilot: {
       level: "veteran",
       profiles: {
-        rookie: autopilotProfile(),
-        veteran: autopilotProfile(),
-        ace: autopilotProfile()
+        kinetic: autopilotLevels(),
+        laser: autopilotLevels(),
+        missile: autopilotLevels()
       }
     }
   };
@@ -215,7 +325,9 @@ describe("wave summary", () => {
     const summary = summariseWave(value, wave, 1);
     expect(summary.threatCount).toBe(5);
     expect(summary.spawnCost).toBe(3 * 2 + 2 * 1);
-    expect(summary.spawnSeconds).toBeCloseTo((3 * 20 + 2 * 10) * 0.05);
+    // The wave lasts as long as its last arrival, not as the sum of both waits:
+    // the first group ends at tick 40, the second starts at 30 and ends at 40.
+    expect(summary.spawnSeconds).toBeCloseTo(40 * 0.05);
   });
 
   it("flags a wave that costs more than the director budget of the same number", () => {

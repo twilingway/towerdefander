@@ -1,4 +1,5 @@
 import {
+  ENEMY_WEAPON_KINDS,
   MAX_ENEMY_WEAPONS,
   type BalanceTuning,
   type EnemyArchetype,
@@ -6,7 +7,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
-import { NumberField, SecondsField } from "../../components/fields.js";
+import { AngularRateField, NumberField, SecondsField } from "../../components/fields.js";
 import { rangeHint, scaleEntityVisual } from "../../model/tuning.js";
 
 interface WeaponEditorProps {
@@ -20,6 +21,12 @@ interface WeaponEditorProps {
     weaponIndex: number,
     patch: Partial<EnemyWeaponTuning>
   ) => void;
+}
+
+/** The select hands back a plain string; the catalogue decides what is legal. */
+function readWeaponKind(value: string): EnemyWeaponTuning["kind"] {
+  const known = ENEMY_WEAPON_KINDS.find((kind) => kind === value);
+  return known ?? "bullet";
 }
 
 /** The weapon list of one archetype: add, remove and tune each barrel. */
@@ -68,13 +75,12 @@ export function WeaponEditor({
                 className="field__input"
                 value={weapon.kind}
                 onChange={(event) => {
-                  patchWeapon(kind, weaponIndex, {
-                    kind: event.target.value === "missile" ? "missile" : "bullet"
-                  });
+                  patchWeapon(kind, weaponIndex, { kind: readWeaponKind(event.target.value) });
                 }}
               >
                 <option value="bullet">пуля</option>
                 <option value="missile">ракета</option>
+                <option value="laser">луч</option>
               </select>
             </label>
             <SecondsField
@@ -98,13 +104,15 @@ export function WeaponEditor({
                 patchWeapon(kind, weaponIndex, { shieldHitCost });
               }}
             />
-            <NumberField
-              caption="Скорость снаряда"
-              value={weapon.projectileSpeedPerSecond}
-              onChange={(projectileSpeedPerSecond) => {
-                patchWeapon(kind, weaponIndex, { projectileSpeedPerSecond });
-              }}
-            />
+            {weapon.kind !== "laser" && (
+              <NumberField
+                caption="Скорость снаряда"
+                value={weapon.projectileSpeedPerSecond}
+                onChange={(projectileSpeedPerSecond) => {
+                  patchWeapon(kind, weaponIndex, { projectileSpeedPerSecond });
+                }}
+              />
+            )}
             <NumberField
               caption="Радиус снаряда"
               value={weapon.projectileRadius}
@@ -112,13 +120,15 @@ export function WeaponEditor({
                 patchWeapon(kind, weaponIndex, { projectileRadius });
               }}
             />
-            <SecondsField
-              caption="Жизнь снаряда, с"
-              ticks={weapon.projectileLifetimeTicks}
-              onChange={(projectileLifetimeTicks) => {
-                patchWeapon(kind, weaponIndex, { projectileLifetimeTicks });
-              }}
-            />
+            {weapon.kind !== "laser" && (
+              <SecondsField
+                caption="Жизнь снаряда, с"
+                ticks={weapon.projectileLifetimeTicks}
+                onChange={(projectileLifetimeTicks) => {
+                  patchWeapon(kind, weaponIndex, { projectileLifetimeTicks });
+                }}
+              />
+            )}
             <NumberField
               caption="Дальность огня"
               min={1}
@@ -140,18 +150,16 @@ export function WeaponEditor({
                 });
               }}
             />
-            <NumberField
-              caption="Разброс залпа, рад"
-              step={0.05}
-              value={weapon.burstSpreadRadians}
+            <AngularRateField
+              caption="Разброс залпа, °"
+              radians={weapon.burstSpreadRadians}
               onChange={(burstSpreadRadians) => {
                 patchWeapon(kind, weaponIndex, { burstSpreadRadians });
               }}
             />
-            <NumberField
-              caption="Поворот ракеты, рад/с"
-              step={0.05}
-              value={weapon.turnRatePerSecond}
+            <AngularRateField
+              caption="Поворот ракеты, °/с"
+              radians={weapon.turnRatePerSecond}
               onChange={(turnRatePerSecond) => {
                 patchWeapon(kind, weaponIndex, { turnRatePerSecond });
               }}

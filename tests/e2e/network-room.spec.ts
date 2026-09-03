@@ -95,12 +95,26 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     const startX = Number(
       await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x")
     );
-    await pilot.keyboard.down("KeyD");
+    // The throttle is what moves the ship, and it burns along the nose, which
+    // starts out pointing at +X.
+    await pilot.keyboard.down("KeyW");
     await expect
       .poll(async () =>
         Number(await display.getByTestId("spaceship-world").getAttribute("data-spaceship-x"))
       )
       .toBeGreaterThan(startX);
+    await pilot.keyboard.up("KeyW");
+    // A turn key spins the hull where it stands: the course moves and the ship
+    // no longer creeps, because turning stopped costing thrust.
+    const headingBeforeTurn = Number(
+      await display.getByTestId("spaceship-world").getAttribute("data-spaceship-heading")
+    );
+    await pilot.keyboard.down("KeyD");
+    await expect
+      .poll(async () =>
+        Number(await display.getByTestId("spaceship-world").getAttribute("data-spaceship-heading"))
+      )
+      .not.toBe(headingBeforeTurn);
     await pilot.keyboard.up("KeyD");
     await assertSpaceshipInsideCircularArena(display.getByTestId("spaceship-world"));
 
@@ -163,6 +177,26 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       .poll(async () => Number(await world.getAttribute("data-turret-angle")))
       .toBeLessThan(-0.5);
 
+    // Inside the commit threshold the stick asks for nothing: the barrel keeps
+    // the bearing it was given, and the tap is read as a round instead. Pushed
+    // to the rim it aims, nudged it fires - which is what stopped the turret
+    // chasing every twitch of the thumb.
+    // The barrel is still swinging onto the bearing the push named, and a
+    // traverse in flight would read as the tap having moved it. Let it arrive.
+    await expect
+      .poll(async () => Number(await world.getAttribute("data-turret-angle")))
+      .toBeCloseTo(-Math.PI / 2, 1);
+    const heldBearing = Number(await world.getAttribute("data-turret-angle"));
+    const shotBeforeTap = await world.getAttribute("data-latest-projectile-id");
+    await gunner.mouse.click(
+      gunnerStickBounds.x + gunnerStickBounds.width / 2,
+      gunnerStickBounds.y + gunnerStickBounds.height * 0.44
+    );
+    await expect
+      .poll(async () => world.getAttribute("data-latest-projectile-id"))
+      .not.toBe(shotBeforeTap);
+    expect(Number(await world.getAttribute("data-turret-angle"))).toBeCloseTo(heldBearing, 1);
+
     await assertFireStopsAfter(gunner, world, fireBounds, "pointercancel");
     await assertFireStopsAfter(gunner, world, fireBounds, "lostpointercapture");
     await assertFireStopsAfter(gunner, world, fireBounds, "blur");
@@ -187,11 +221,13 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     await expect(world).toHaveAttribute("data-shield-active", "false", { timeout: 7000 });
     const depletedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
     expect(depletedShieldEnergy).toBeLessThan(20);
-    await expect
-      .poll(async () => Number(await world.getAttribute("data-shield-energy")), { timeout: 3000 })
-      .toBeGreaterThan(Math.max(10, depletedShieldEnergy));
+    // A drained shield is locked out until the battery wins back its mark, and
+    // the button is dead for that whole stretch. Waiting for it to come alive
+    // is the precondition; polling the energy only guessed at it, and the guess
+    // is what made this spec flake.
+    await expect(shield.getByTestId("shield-button")).toBeEnabled({ timeout: 10_000 });
     await shield.getByTestId("shield-button").click();
-    await expect(world).toHaveAttribute("data-shield-active", "true");
+    await expect(world).toHaveAttribute("data-shield-active", "true", { timeout: 5_000 });
     const drainedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
     await shield.getByTestId("shield-button").click();
     await expect(world).toHaveAttribute("data-shield-active", "false");
@@ -285,6 +321,9 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     // Wave state lives on the shared display now; controllers keep only their
     // controls.
     await expect(world).toHaveAttribute("data-wave-number", "1");
+    // A whole hull, whatever the campaign says a whole hull is: the rematch has
+    // to hand back the hull the run started with, not five hundred points.
+    const wholeHull = Number(await world.getAttribute("data-spaceship-max-hp"));
     await expect
       .poll(async () => ({
         hp: Number(await world.getAttribute("data-spaceship-hp")),
@@ -296,8 +335,8 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
         latestProjectileId: await world.getAttribute("data-latest-projectile-id")
       }))
       .toEqual({
-        hp: 500,
-        maxHp: 500,
+        hp: wholeHull,
+        maxHp: wholeHull,
         score: 0,
         friendlyProjectiles: 0,
         hostileProjectiles: 0,
@@ -357,7 +396,8 @@ test("crew votes one shared upgrade and pays for it once", async ({ browser }) =
 
     const intermission = display.locator(".encounter-overlay--intermission");
     await expect(intermission).toContainText("Голосование за общее улучшение");
-    await expect(intermission.locator(".intermission-card")).toHaveCount(3);
+    // The first tier of the tree is one card wide; the tier widens with depth.
+    await expect(intermission.locator(".intermission-card")).toHaveCount(1);
     // An encounter window must sit above the combat telemetry, and the whole
     // ballot must fit a landscape phone: a card below the fold reads as a
     // controller that simply ignores the vote.
@@ -423,7 +463,18 @@ async function assertResponsiveBattlefield(display: Page): Promise<void> {
     expect(radarBounds.x).toBeGreaterThanOrEqual(0);
     expect(radarBounds.y).toBeGreaterThanOrEqual(0);
     expect(radarBounds.x + radarBounds.width).toBeLessThanOrEqual(viewport.width);
-    expect(radarBounds.y + radarBounds.height).toBeLessThanOrEqual(hudBounds.y);
+    // The dial owns the middle of the bottom edge and the readouts flank it, so
+    // the invariant is that no card is under it — not that it sits above them.
+    for (const card of await display.locator(".spaceship-hud > div").all()) {
+      const cardBounds = await card.boundingBox();
+      if (cardBounds === null) continue;
+      const overlaps =
+        cardBounds.x < radarBounds.x + radarBounds.width &&
+        radarBounds.x < cardBounds.x + cardBounds.width &&
+        cardBounds.y < radarBounds.y + radarBounds.height &&
+        radarBounds.y < cardBounds.y + cardBounds.height;
+      expect(overlaps, "the radar must not cover a HUD card").toBe(false);
+    }
   }
 
   await expect(canvas).toHaveCount(1);

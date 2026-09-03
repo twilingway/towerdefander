@@ -1,4 +1,9 @@
-import { SPAWN_SECTORS, type SpawnSector } from "@spaceship-defender/protocol";
+import {
+  FRIENDLY_WEAPON_KINDS,
+  SPAWN_SECTORS,
+  type FriendlyWeaponKind,
+  type SpawnSector
+} from "@spaceship-defender/protocol";
 
 import { TICK_SECONDS, secondsToTicks, ticksToSeconds } from "../waveSummary.js";
 
@@ -41,6 +46,65 @@ export function SectorPicker({ value, onChange }: SectorPickerProps) {
       })}
     </div>
   );
+}
+
+interface WeaponKindFieldProps {
+  readonly caption: string;
+  readonly value: FriendlyWeaponKind;
+  readonly onChange: (value: FriendlyWeaponKind) => void;
+}
+
+/** Как ствол доставляет урон. Стоит в разделе самого ствола, потому что от него
+ * зависит, какие из остальных чисел этого раздела вообще читаются. */
+export function WeaponKindField({ caption, value, onChange }: WeaponKindFieldProps) {
+  return (
+    <label className="field">
+      <span className="field__caption">{caption}</span>
+      <select
+        className="field__input"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value as FriendlyWeaponKind);
+        }}
+      >
+        {FRIENDLY_WEAPON_KINDS.map((kind) => (
+          <option key={kind} value={kind}>
+            {FRIENDLY_WEAPON_KIND_LABELS[kind]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export const FRIENDLY_WEAPON_KIND_LABELS: Record<FriendlyWeaponKind, string> = {
+  kinetic: "кинетика — снаряд летит, нужно упреждение",
+  laser: "лазер — не мажет, но не достаёт далеко",
+  missile: "ракета — догоняет сама, но медленная"
+};
+
+/**
+ * The preset counts in fixed steps and the console edits seconds, so every
+ * seconds field also says what it is in ticks. Otherwise the value on screen
+ * and the value in the file are two different numbers with the same name.
+ */
+function tickHint(ticks: number): string {
+  return `· ${String(Math.round(ticks))} ${tickWord(Math.round(ticks))}`;
+}
+
+function tickWord(ticks: number): string {
+  const tail = ticks % 100;
+  if (tail >= 11 && tail <= 14) return "тиков";
+  switch (ticks % 10) {
+    case 1:
+      return "тик";
+    case 2:
+    case 3:
+    case 4:
+      return "тика";
+    default:
+      return "тиков";
+  }
 }
 
 interface NumberFieldProps {
@@ -89,7 +153,9 @@ interface SecondsFieldProps {
 export function SecondsField({ caption, ticks, onChange }: SecondsFieldProps) {
   return (
     <label className="field">
-      <span className="field__caption">{caption}</span>
+      <span className="field__caption">
+        {caption} <span className="field__unit">{tickHint(ticks)}</span>
+      </span>
       <input
         className="field__input"
         type="number"
@@ -120,7 +186,9 @@ interface DelayFieldProps {
 export function DelayField({ caption, ticks, disabled = false, onChange }: DelayFieldProps) {
   return (
     <label className={disabled ? "field field--off" : "field"}>
-      <span className="field__caption">{caption}</span>
+      <span className="field__caption">
+        {caption} <span className="field__unit">{tickHint(ticks)}</span>
+      </span>
       <input
         className="field__input"
         type="number"
@@ -154,6 +222,38 @@ export function DegreesField({ caption, radians, onChange }: DegreesFieldProps) 
         className="field__input"
         type="number"
         step={1}
+        min={1}
+        value={Math.round((radians * 180) / Math.PI)}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          if (Number.isFinite(next)) onChange((next * Math.PI) / 180);
+        }}
+      />
+    </label>
+  );
+}
+
+interface AngularRateFieldProps {
+  readonly caption: string;
+  readonly radians: number;
+  /** Step in degrees; a rate needs a coarser one than an acceleration. */
+  readonly step?: number;
+  readonly onChange: (radians: number) => void;
+}
+
+/**
+ * Angular rates and accelerations, in degrees the way the rest of the console
+ * shows angles. The preset keeps radians because the simulation does its maths
+ * in them; nothing outside this file should have to convert.
+ */
+export function AngularRateField({ caption, radians, step = 5, onChange }: AngularRateFieldProps) {
+  return (
+    <label className="field">
+      <span className="field__caption">{caption}</span>
+      <input
+        className="field__input"
+        type="number"
+        step={step}
         min={1}
         value={Math.round((radians * 180) / Math.PI)}
         onChange={(event) => {

@@ -17,18 +17,45 @@ import { chromium } from "@playwright/test";
 import {
   createAutopilotMemory,
   extrapolateWorld,
+  leadSpeedFor,
+  resolveAutopilotProfile,
   measureAngularRates,
   planGunner,
   planPilot,
   planShield,
   runWaveKey
 } from "./visible-demo-policy.mjs";
+import { planUpgradeVotes } from "./upgrade-vote-policy.mjs";
 
 const STEP_MS = 50;
 const TELEMETRY_MS = 50;
 const VERIFY_TIMEOUT_MS = 150_000;
 const STATUS_EVENT = "spaceship-visible-demo-status";
-const displayUrl = process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1";
+/**
+ * The page reads the wave from its own address, so a demo of the boss is a URL
+ * rather than five cleared waves. Applied to whatever base is in play, because
+ * the launcher always passes an explicit `DEMO_DISPLAY_URL` — appending it only
+ * to the fallback meant the option was silently dropped on every real run.
+ */
+function withQuery(base, key, value) {
+  if (value === undefined || value.trim().length === 0) return base;
+  const url = new URL(base);
+  url.searchParams.set(key, value.trim());
+  return url.toString();
+}
+
+// `DEMO_SHIP=blade` opens the run on a named hull, which is the only way to
+// watch one of the other two play rather than read its numbers.
+const displayUrl = withQuery(
+  withQuery(
+    process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1",
+    "wave",
+    process.env.DEMO_START_WAVE
+  ),
+  "ship",
+  process.env.DEMO_SHIP
+);
+console.log(`Visible demo display: ${displayUrl}`);
 const gameServerUrl = process.env.DEMO_GAME_SERVER_URL ?? "ws://127.0.0.1:36567";
 const balanceUrl = process.env.DEMO_BALANCE_URL ?? "http://127.0.0.1:36567";
 const levelOverride = process.env.DEMO_BOT_LEVEL;
@@ -64,6 +91,14 @@ let autopilotMemory;
 let autopilotMemoryKey;
 let latestTelemetry;
 let latestWorld;
+/**
+ * How long the wave that just ended took, in seconds. One of the signals the
+ * upgrade policy weighs - a dragging wave asks for guns - and the headless
+ * stand has always passed it. Measured off the world picture, so both harnesses
+ * measure the same thing.
+ */
+let waveStartTick;
+let waveSeconds = 0;
 /** Turret and hull angular speed measured between the last two raw frames. */
 let angularRates = { turret: 0, heading: 0 };
 let lastTelemetryAt = 0;
@@ -486,6 +521,10 @@ function sendCombatInputs(expectedGeneration) {
     ...envelope(pilotRoom()),
     sequence: pilotSequence,
     vector: pilot.vector,
+    // The same spin and push a live pilot's keyboard sends, so the bot flies
+    // the helm the crew flies rather than an absolute course of its own.
+    turn: pilot.turn,
+    thrust: pilot.thrust,
     mgFiring: pilot.mgFiring
   });
   const gunner = planGunner(world, profile, memory, options);
@@ -496,7 +535,7 @@ function sendCombatInputs(expectedGeneration) {
     aim: gunner.aim,
     firing: gunner.firing
   });
-  const shield = planShield(world, profile, memory);
+  const shield = planShield(world, profile, memory, options);
   shieldActive = shield.active;
   shieldSequence += 1;
   shieldRoom().send(clientMessage.shieldInput, {
@@ -559,7 +598,7 @@ async function loadAutopilot() {
     throw new Error(`Balance preset from ${endpoint} carries no autopilot section.`);
   }
   const requested = levelOverride ?? tuning.autopilot.level;
-  const profile = tuning.autopilot.profiles[requested];
+  const profile = resolveAutopilotProfile(tuning.autopilot, requested, tuning.cannonWeaponKind);
   if (profile === undefined) {
     throw new Error(`Balance preset has no autopilot profile named "${String(requested)}".`);
   }
@@ -569,9 +608,10 @@ async function loadAutopilot() {
     profile,
     archetypes: tuning.enemyArchetypes ?? {},
     // Both muzzle velocities are preset values, so the lead solution has to
-    // use the ones this run will actually fire with.
-    cannonSpeed: tuning.projectileSpeedPerSecond,
-    mgSpeed: tuning.mgProjectileSpeedPerSecond,
+    // use the ones this run will actually fire with - and a beam is not led at
+    // all, whatever the preset says its projectiles fly at.
+    cannonSpeed: leadSpeedFor(tuning.cannonWeaponKind, tuning.projectileSpeedPerSecond),
+    mgSpeed: leadSpeedFor(tuning.mgWeaponKind, tuning.mgProjectileSpeedPerSecond),
     // How fast the turret can actually swing decides whether a crossing target
     // is winnable at all, so the bot has to read it rather than assume it.
     turretRate: tuning.turretMaxAngularSpeedPerSecond
@@ -638,33 +678,63 @@ async function neutralizeForPhase(currentEncounter) {
 async function voteAllUpgrades(waveNumber) {
   const upgradeKey = runWaveKey(pilotRoom().state.runNumber, waveNumber);
   if (stopRequested || upgradedRunWaves.has(upgradeKey)) return;
+  // A tier is one to four cards wide, not always three: the tree widens with
+  // depth, so waiting for exactly three would hang on the first intermission.
   await waitFor(
-    () => teamUpgrade()?.hasOffer === true && teamUpgrade().offer.cards.length === 3,
+    () => teamUpgrade()?.hasOffer === true && teamUpgrade().offer.cards.length > 0,
     3_000
   );
   if (stopRequested) return;
   // Copy the offer out of the schema: the server reuses those instances for the
   // next offer, so live references would mutate between the three votes.
   const state = teamUpgrade();
-  const firstCard = state.offer.cards.at(0);
-  if (firstCard === undefined) throw new Error("Team upgrade offer has no cards.");
+  if (state.offer.cards.length === 0) throw new Error("Team upgrade offer has no cards.");
   const offer = {
     offerId: state.offer.offerId,
     waveNumber: state.offer.waveNumber,
-    upgradeId: firstCard.upgradeId
+    cards: [...state.offer.cards].map((card) => ({
+      upgradeId: card.upgradeId,
+      role: card.role,
+      // The effects come along because the vote policy weighs a card by what it
+      // changes, not by its id: ids are preset data now, and a card without its
+      // effects leaves the bot picking at random here while the headless stand
+      // picks well. Same policy, same inputs, or the two stands disagree.
+      effects: [...card.effects].map((effect) => ({
+        target: effect.target,
+        op: effect.op,
+        value: effect.value
+      }))
+    }))
   };
-  // The crew votes unanimously so the demo always shows one paid upgrade.
-  for (const [role, room] of roomsByRole) {
+  // The seats no longer send one id between them: two agree on the drawn card
+  // and the last votes its own role, which is what a real crew looks like.
+  // The run seed belongs to the server, so the run number stands in for it.
+  const votes = planUpgradeVotes(offer, {
+    seed: pilotRoom().state.runNumber,
+    waveNumber: offer.waveNumber,
+    crewSize: roomsByRole.size,
+    level: autopilot?.level,
+    ship: {
+      hp: latestWorld?.ship?.hp,
+      maxHp: latestWorld?.ship?.maxHp,
+      shieldEnergy: latestWorld?.shield?.energy,
+      shieldCapacity: latestWorld?.shield?.capacity,
+      waveSeconds
+    }
+  });
+  for (const { role, upgradeId } of votes) {
     if (stopRequested) return;
+    const room = roomsByRole.get(role);
+    if (room === undefined) continue;
     room.send(clientMessage.upgradeVote, {
       ...envelope(room),
       actionId: randomUUID(),
       waveNumber: offer.waveNumber,
       offerId: offer.offerId,
-      upgradeId: offer.upgradeId,
+      upgradeId,
       revision: 1
     });
-    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === offer.upgradeId, 3_000);
+    await waitFor(() => teamUpgrade().votes.get(role)?.upgradeId === upgradeId, 3_000);
   }
   upgradedRunWaves.add(upgradeKey);
   verification.upgrades = true;
@@ -727,10 +797,22 @@ async function refreshTelemetry() {
     if (observed !== undefined && observed.sampledAtMs !== latestWorld?.sampledAtMs) {
       angularRates = measureAngularRates(latestWorld, observed);
     }
+    trackWaveClock(latestWorld, observed);
     latestWorld = observed;
   } catch (error) {
     if (stopRequested || page.isClosed()) return;
     throw error;
+  }
+}
+
+/** The wave clock, kept at the phase edges exactly as the stand keeps it. */
+function trackWaveClock(previous, observed) {
+  if (observed === undefined) return;
+  if (waveStartTick === undefined) waveStartTick = observed.tick;
+  if (previous?.phase === "combat" && observed.phase === "intermission") {
+    waveSeconds = ((observed.tick - waveStartTick) * STEP_MS) / 1000;
+  } else if (previous?.phase === "intermission" && observed.phase === "combat") {
+    waveStartTick = observed.tick;
   }
 }
 

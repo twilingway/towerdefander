@@ -29,6 +29,9 @@ describe("SpaceshipCanvas", () => {
     const runtime: SpaceshipRuntime = {
       prepareHydration,
       update,
+      readFps: () => 60,
+      readWorstFrameMs: () => 0,
+      setPixelRatioCap: vi.fn(),
       destroy: vi.fn()
     };
     const snapshot = { tick: 42 } as DisplayGameSnapshot;
@@ -106,6 +109,9 @@ const testGame = {
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   worldHeight: 4400,
   arenaRadius: 2200,
+  rimBandWidth: 260,
+  shieldPhase: "down",
+  purchasedModules: [],
   spaceship: {
     x: 100,
     y: 100,
@@ -117,9 +123,31 @@ const testGame = {
     heading: Math.PI / 4
   },
   turretAngle: 0,
-  shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: 0.72 },
-  cannon: { heat: 0, capacity: 100, overheated: false },
-  machineGun: { heat: 0, capacity: 100, overheated: false },
+  shield: {
+    angle: 0,
+    rearmRequired: false,
+    active: false,
+    energy: 100,
+    capacity: 100,
+    arcHalfAngle: 0.72
+  },
+  cannon: {
+    heat: 0,
+    capacity: 100,
+    overheated: false,
+    kind: "kinetic",
+    reach: 1500,
+    speed: 1000,
+    acquireHalfAngle: 0
+  },
+  machineGun: {
+    heat: 0,
+    capacity: 100,
+    overheated: false,
+    kind: "kinetic",
+    reach: 620,
+    speed: 900
+  },
   encounter: {
     phase: "combat",
     outcome: null,
@@ -128,12 +156,8 @@ const testGame = {
     encounterTick: 1,
     phaseTicksRemaining: 0,
     waveSecondsRemaining: 1200,
+    lootWindowSecondsRemaining: 0,
     score: 0
-  },
-  roleModifiers: {
-    pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-    gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-    shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
   },
   credits: 0,
   teamUpgrade: {
@@ -148,6 +172,8 @@ const testGame = {
   shieldRadius: 104,
   obstacles: [],
   enemyShips: [],
+  lootDrops: [],
+  laserBeams: [],
   asteroids: [
     {
       entityId: "asteroid-near",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARENA_CUSHION_BAND,
   advanceSpaceshipSimulation,
   applyGunnerInput,
   applyPilotInput,
@@ -54,6 +55,26 @@ function holdPilot(
   return current;
 }
 
+function holdHelm(
+  state: SpaceshipSimulationState,
+  config: SpaceshipSimulationConfig,
+  intent: { turn: number; thrust: number },
+  steps: number
+) {
+  let current = state;
+  for (let step = 0; step < steps; step += 1) {
+    current = applyPilotInput(current, {
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      receivedTick: current.clock.tick,
+      turn: intent.turn,
+      thrust: intent.thrust
+    });
+    current = advanceSpaceshipSimulation(current, config);
+  }
+  return current;
+}
+
 describe("spaceship configuration", () => {
   it("creates the explicit smooth-flight defaults deterministically", () => {
     const config = createSpaceshipSimulationConfig();
@@ -63,16 +84,16 @@ describe("spaceship configuration", () => {
       worldWidth: 4400,
       worldHeight: 4400,
       arenaRadius: 2200,
-      spaceshipSpeedPerSecond: 320,
+      spaceshipSpeedPerSecond: 380,
       spaceshipAccelerationPerSecondSquared: 640,
       spaceshipBrakingPerSecondSquared: 800,
       spaceshipRadius: 52,
       inputTimeoutTicks: 5,
-      projectileSpeedPerSecond: 720,
-      projectileLifetimeMs: 1500,
-      projectileRadius: 8,
-      fireCooldownTicks: 5,
-      shieldCapacity: 100,
+      projectileSpeedPerSecond: 1000,
+      projectileLifetimeMs: 680,
+      projectileRadius: 14,
+      fireCooldownTicks: 3,
+      shieldCapacity: 120,
       shieldDrainPerSecond: 20,
       shieldRechargePerSecond: 10,
       turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
@@ -88,7 +109,7 @@ describe("spaceship configuration", () => {
       createSpaceshipSimulationState(config, 1)
     );
     expect(createSpaceshipSimulationState(config, 1)).toMatchObject({
-      shieldEnergy: 100,
+      shieldEnergy: 120,
       shieldRearmRequired: false,
       queuedFire: false,
       turretTargetAngle: null,
@@ -161,6 +182,24 @@ describe("spaceship configuration", () => {
   });
 });
 
+/**
+ * A world small enough to reach the rim in a step. The catalogue comes with it,
+ * because the built-in one carries the whole campaign now and its heaviest hull
+ * does not fit inside a hundred units.
+ */
+function smallArenaConfig(overrides: Partial<SpaceshipSimulationConfig> = {}) {
+  const base = createSpaceshipSimulationConfig();
+  const gunship = getEnemyArchetype(base, "gunship");
+  return createSpaceshipSimulationConfig({
+    worldWidth: 200,
+    worldHeight: 200,
+    arenaRadius: 100,
+    enemyArchetypes: { gunship: { ...gunship, radius: 10 } },
+    waveCampaign: { waves: [], director: base.waveCampaign.director },
+    ...overrides
+  });
+}
+
 describe("pilot movement", () => {
   it("accelerates to max speed in ten equal fixed steps", () => {
     const config = createSpaceshipSimulationConfig();
@@ -209,11 +248,7 @@ describe("pilot movement", () => {
   });
 
   it("projects at the circular rim and clears only the outward velocity component", () => {
-    const config = createSpaceshipSimulationConfig({
-      worldWidth: 200,
-      worldHeight: 200,
-      arenaRadius: 100
-    });
+    const config = smallArenaConfig();
     const nearRight: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       spaceship: { x: 147, y: 100, velocity: { x: 100, y: 100 } }
@@ -583,7 +618,8 @@ describe("gunner simulation", () => {
   });
 
   it("continues cooldown cadence while fire remains held", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: this measures the cadence, not what the campaign is tuned to.
+    const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 5 });
     let state = createSpaceshipSimulationState(config, 1);
     for (let step = 0; step < 11; step += 1) {
       state = applyGunnerInput(state, {
@@ -695,7 +731,7 @@ describe("gunner simulation", () => {
   });
 
   it("stops held cadence when input becomes stale but preserves turret angle", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 5 });
     const firing = applyGunnerInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: 1 },
       firing: true,
@@ -721,12 +757,7 @@ describe("gunner simulation", () => {
     state = advance(state, lifetimeConfig, 30);
     expect(state.projectiles).toEqual([]);
 
-    const smallWorld = createSpaceshipSimulationConfig({
-      worldWidth: 200,
-      worldHeight: 200,
-      arenaRadius: 100,
-      projectileSpeedPerSecond: 4000
-    });
+    const smallWorld = smallArenaConfig({ projectileSpeedPerSecond: 4000 });
     let escaping = applyGunnerInput(createSpaceshipSimulationState(smallWorld, 1), {
       vector: { x: 1, y: 0 },
       firing: true,
@@ -741,7 +772,8 @@ describe("gunner simulation", () => {
 
 describe("shield simulation", () => {
   it("keeps manual active state after input becomes stale and preserves angle", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     const state = advance(
       applyShieldInput(createSpaceshipSimulationState(config, 1), {
         vector: { x: -1, y: 0 },
@@ -755,9 +787,17 @@ describe("shield simulation", () => {
     expect(state.shieldAngle).toBeCloseTo((117 * Math.PI) / 3200);
     expect(state.shieldTargetAngle).toBeNull();
     expect(state.shieldAngularVelocity).toBeCloseTo((13 * Math.PI) / 240);
-    expect(state.shieldActive).toBe(true);
+    // Six ticks in the shield is still coming up, so it neither blocks nor
+    // spends yet; what survives the stale input is the request itself.
+    expect(state.shieldPhase).toBe("raising");
+    expect(state.shieldActive).toBe(false);
     expect(state.inputs.shield?.active).toBe(true);
-    expect(state.shieldEnergy).toBe(94);
+    expect(state.shieldEnergy).toBe(100);
+
+    // And it does come up on its own once the engage window is served.
+    const raised = advance(state, config, config.shieldEngageTicks);
+    expect(raised.shieldPhase).toBe("up");
+    expect(raised.shieldActive).toBe(true);
   });
 
   it("accelerates faster than the turret and traverses while inactive and recharging", () => {
@@ -820,11 +860,14 @@ describe("shield simulation", () => {
 
   it("trusted shield disconnect turns it off and cancels target without changing energy", () => {
     const config = createSpaceshipSimulationConfig();
-    let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
-      vector: { x: 0, y: -1 },
-      active: true,
-      receivedTick: 0
-    });
+    let state = applyShieldInput(
+      { ...createSpaceshipSimulationState(config, 1), shieldEnergy: 90 },
+      {
+        vector: { x: 0, y: -1 },
+        active: true,
+        receivedTick: 0
+      }
+    );
     state = advance(state, config, 2);
     const energyAtDisconnect = state.shieldEnergy;
     const velocityAtDisconnect = state.shieldAngularVelocity;
@@ -841,14 +884,17 @@ describe("shield simulation", () => {
     expect(state.shieldEnergy).toBe(energyAtDisconnect + 0.5);
   });
 
-  it("drains a full shield in five seconds and requires re-arming", () => {
-    const config = createSpaceshipSimulationConfig();
+  it("drains a full shield in five seconds of holding and requires re-arming", () => {
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: 1 },
       active: true,
       receivedTick: 0
     });
-    state = advance(state, config, 100);
+    // The engage window comes first and spends nothing, so a full drain now
+    // takes it plus the same five seconds of holding.
+    state = advance(state, config, config.shieldEngageTicks + 100);
 
     expect(state.shieldEnergy).toBe(0);
     expect(state.shieldActive).toBe(false);
@@ -866,7 +912,8 @@ describe("shield simulation", () => {
   });
 
   it("recharges an inactive empty shield in ten seconds and clamps at capacity", () => {
-    const config = createSpaceshipSimulationConfig();
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       shieldEnergy: 0,
@@ -885,64 +932,51 @@ describe("shield simulation", () => {
     expect(advance(state, config, 10).shieldEnergy).toBe(100);
   });
 
-  it("requires an accepted false then a new true after depletion", () => {
-    const config = createSpaceshipSimulationConfig();
+  it("re-arms itself once the battery wins back the mark", () => {
+    // Pinned: a hundred points is what the seconds below are counted against.
+    const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: -1 },
       active: true,
       receivedTick: 0
     });
-    state = advance(state, config, 100);
+    state = advance(state, config, config.shieldEngageTicks + 100);
     state = advance(state, config, 4);
     expect(state.shieldEnergy).toBe(2);
     expect(state.shieldActive).toBe(false);
+    // Draining put the shield into its cooldown and locked it out.
+    expect(state.shieldPhase).toBe("cooling");
+    expect(state.shieldRearmRequired).toBe(true);
 
-    state = applyShieldInput(state, {
-      vector: { x: 0, y: -1 },
-      active: false,
-      receivedTick: state.clock.tick
-    });
-    state = advanceSpaceshipSimulation(state, config);
+    // No release and no second press: the old rule left an operator holding a
+    // shield that refused for ever with nothing saying why.
+    const mark = config.shieldRearmEnergy;
+    while (state.shieldEnergy < mark) state = advanceSpaceshipSimulation(state, config);
     expect(state.shieldRearmRequired).toBe(false);
-    expect(state.shieldActive).toBe(false);
-
-    state = applyShieldInput(state, {
-      vector: { x: 0, y: -1 },
-      active: true,
-      receivedTick: state.clock.tick
-    });
-    state = advanceSpaceshipSimulation(state, config);
-    expect(state.shieldActive).toBe(true);
-    expect(state.shieldEnergy).toBe(1.5);
+    expect(state.shieldEnergy).toBeGreaterThanOrEqual(mark);
   });
 
-  it("does not arm a true intent accepted while energy is still empty", () => {
+  it("refuses to hold until the mark, however hard the button is pressed", () => {
     const config = createSpaceshipSimulationConfig();
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       shieldEnergy: 0,
-      shieldRearmRequired: true,
-      inputs: {
-        ...createSpaceshipSimulationState(config, 1).inputs,
-        shield: { vector: { x: 1, y: 0 }, active: true, receivedTick: 0 }
-      }
+      shieldRearmRequired: true
     };
 
-    state = applyShieldInput(state, {
-      vector: { x: 1, y: 0 },
-      active: false,
-      receivedTick: 0
-    });
-    state = applyShieldInput(state, {
-      vector: { x: 1, y: 0 },
-      active: true,
-      receivedTick: 0
-    });
-    state = advance(state, config, 10);
-
-    expect(state.shieldEnergy).toBe(5);
-    expect(state.shieldActive).toBe(false);
-    expect(state.shieldRearmRequired).toBe(true);
+    const mark = config.shieldRearmEnergy;
+    while (state.shieldEnergy < mark) {
+      state = applyShieldInput(state, {
+        vector: { x: 1, y: 0 },
+        active: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+      if (state.shieldEnergy < mark) expect(state.shieldActive).toBe(false);
+    }
+    // And the moment it has the charge, the same held request is honoured.
+    state = advance(state, config, config.shieldEngageTicks + 1);
+    expect(state.shieldActive).toBe(true);
   });
 });
 
@@ -1315,5 +1349,265 @@ describe("gunner cannon heat", () => {
 
     for (let index = 0; index < 6; index += 1) state = holdTrigger(state, config, false);
     expect(state.cannonHeat).toBeLessThan(hot);
+  });
+});
+
+describe("arena geometry", () => {
+  it("derives the square world from a radius that came from a preset", () => {
+    // Without the derivation this throws: the radius would sit inside the
+    // default world and validation rejects a circle that is not inscribed.
+    const config = createSpaceshipSimulationConfig({ arenaRadius: 4400 });
+
+    expect(config.arenaRadius).toBe(4400);
+    expect(config.worldWidth).toBe(8800);
+    expect(config.worldHeight).toBe(8800);
+  });
+
+  it("keeps a world the caller states for itself", () => {
+    const config = createSpaceshipSimulationConfig({
+      arenaRadius: 1200,
+      worldWidth: 2400,
+      worldHeight: 2400
+    });
+
+    expect(config.worldWidth).toBe(2400);
+  });
+});
+
+describe("shield timing", () => {
+  const raise = (config: SpaceshipSimulationConfig, state: SpaceshipSimulationState) =>
+    advance(
+      applyShieldInput(state, {
+        vector: { x: 0, y: 1 },
+        active: true,
+        receivedTick: state.clock.tick
+      }),
+      config,
+      config.shieldEngageTicks + 1
+    );
+
+  it("holds the shield up for its minimum even when the operator lets go at once", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = raise(config, createSpaceshipSimulationState(config, 1));
+    expect(state.shieldPhase).toBe("up");
+
+    // The flick an autopilot makes for free: on and straight back off.
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, config.shieldMinimumUpTicks - 1);
+    expect(state.shieldActive).toBe(true);
+
+    state = advance(state, config, 2);
+    expect(state.shieldPhase).toBe("cooling");
+    expect(state.shieldActive).toBe(false);
+  });
+
+  it("ignores a request made while the shield is cooling", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = raise(config, createSpaceshipSimulationState(config, 1));
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, config.shieldMinimumUpTicks + 1);
+    expect(state.shieldPhase).toBe("cooling");
+
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: true,
+      receivedTick: state.clock.tick
+    });
+    state = advance(state, config, config.shieldCooldownTicks - 2);
+    expect(state.shieldPhase).toBe("cooling");
+    expect(state.shieldActive).toBe(false);
+  });
+
+  it("keeps the instant toggle when every duration is zero", () => {
+    const config = createSpaceshipSimulationConfig({
+      shieldEngageTicks: 0,
+      shieldMinimumUpTicks: 0,
+      shieldCooldownTicks: 0
+    });
+    let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
+      vector: { x: 0, y: 1 },
+      active: true,
+      receivedTick: 0
+    });
+
+    state = advanceSpaceshipSimulation(state, config);
+    expect(state.shieldActive).toBe(true);
+
+    state = applyShieldInput(state, {
+      vector: { x: 0, y: 1 },
+      active: false,
+      receivedTick: state.clock.tick
+    });
+    state = advanceSpaceshipSimulation(state, config);
+    expect(state.shieldActive).toBe(false);
+    expect(state.shieldPhase).toBe("down");
+  });
+});
+
+describe("elastic rim", () => {
+  it("turns a full-throttle run around inside the band, never on the circle", () => {
+    // Pinned at the speed the cushion was tuned for. The campaign's hull runs at
+    // 380 and covers nineteen units a step, which overshoots the point where the
+    // band balances thrust and takes the hard projection once in four hundred
+    // steps - the band wants widening for it, and that is a change to how the
+    // rim feels rather than a fixture detail.
+    const config = createSpaceshipSimulationConfig({ spaceshipSpeedPerSecond: 320 });
+    const legalRadius = config.arenaRadius - config.spaceshipRadius;
+    const center = config.worldWidth / 2;
+    let state = createSpaceshipSimulationState(config, 5);
+    let furthest = 0;
+
+    // Long enough to cross half the arena at full thrust and meet the rim.
+    for (let step = 0; step < 400; step += 1) {
+      state = holdHelm(state, config, { turn: 0, thrust: 1 }, 1);
+      furthest = Math.max(
+        furthest,
+        Math.hypot(state.spaceship.x - center, state.spaceship.y - center)
+      );
+    }
+
+    // Without the band the hull parks exactly on the legal circle, which is the
+    // single zero step that stops the whole picture.
+    expect(furthest).toBeLessThan(legalRadius);
+    expect(furthest).toBeGreaterThan(legalRadius - ARENA_CUSHION_BAND);
+
+    // Holding the throttle into the rubber settles against it rather than
+    // stopping on the circle: the spring and the engine balance out.
+    const distanceHeld = Math.hypot(state.spaceship.x - center, state.spaceship.y - center);
+    const outward =
+      ((state.spaceship.x - center) * state.spaceship.velocity.x +
+        (state.spaceship.y - center) * state.spaceship.velocity.y) /
+      distanceHeld;
+    expect(Math.abs(outward)).toBeLessThan(1);
+
+    // Let go and the band gives the hull back: that is the rubber, not a wall.
+    const released = holdHelm(state, config, { turn: 0, thrust: 0 }, 20);
+    expect(Math.hypot(released.spaceship.x - center, released.spaceship.y - center)).toBeLessThan(
+      distanceHeld
+    );
+  });
+});
+
+describe("tank helm", () => {
+  it("spins while a turn is asked for and then stays where it stopped", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 1);
+
+    const spinning = holdHelm(state, config, { turn: 1, thrust: 0 }, 8);
+    expect(spinning.headingAngularVelocity).toBeGreaterThan(0);
+    expect(spinning.headingTargetAngle).toBeNull();
+
+    const stopped = holdHelm(spinning, config, { turn: 0, thrust: 0 }, 20);
+    expect(stopped.headingAngularVelocity).toBe(0);
+
+    // Stopping means staying. A remembered bearing would pull the nose back
+    // here, which is exactly the swing this helm exists to lose.
+    const settled = holdHelm(stopped, config, { turn: 0, thrust: 0 }, 20);
+    expect(settled.spaceshipHeading).toBe(stopped.spaceshipHeading);
+  });
+
+  it("drops a bearing the stick named instead of snapping back to it", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 2);
+
+    const aimed = applyPilotInput(state, {
+      vector: { x: 0, y: 1 },
+      mgFiring: false,
+      receivedTick: state.clock.tick
+    });
+    expect(aimed.headingTargetAngle).not.toBeNull();
+
+    const spinning = applyPilotInput(aimed, {
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      receivedTick: aimed.clock.tick,
+      turn: -1,
+      thrust: 0
+    });
+    expect(spinning.headingTargetAngle).toBeNull();
+  });
+
+  it("burns along the nose and backs up along it without turning", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 3);
+    const turned = holdHelm(state, config, { turn: 1, thrust: 0 }, 10);
+    const resting = holdHelm(turned, config, { turn: 0, thrust: 0 }, 20);
+    const heading = resting.spaceshipHeading;
+
+    const forward = holdHelm(resting, config, { turn: 0, thrust: 1 }, 10);
+    expect(Math.hypot(forward.spaceship.velocity.x, forward.spaceship.velocity.y)).toBeGreaterThan(
+      0
+    );
+    expect(
+      Math.abs(
+        shortestAngleDelta(
+          Math.atan2(forward.spaceship.velocity.y, forward.spaceship.velocity.x),
+          heading
+        )
+      )
+    ).toBeLessThan(0.01);
+    expect(forward.spaceshipHeading).toBe(heading);
+
+    const back = holdHelm(resting, config, { turn: 0, thrust: -1 }, 10);
+    expect(
+      Math.abs(
+        shortestAngleDelta(
+          Math.atan2(back.spaceship.velocity.y, back.spaceship.velocity.x),
+          canonicalizeAngle(heading + Math.PI)
+        )
+      )
+    ).toBeLessThan(0.01);
+    expect(back.spaceshipHeading).toBe(heading);
+  });
+
+  it("keeps reverse the slower gear", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 3);
+    // Long enough for either direction to have reached its own ceiling.
+    const forward = holdHelm(state, config, { turn: 0, thrust: 1 }, 60);
+    const back = holdHelm(state, config, { turn: 0, thrust: -1 }, 60);
+    const forwardSpeed = Math.hypot(forward.spaceship.velocity.x, forward.spaceship.velocity.y);
+    const backSpeed = Math.hypot(back.spaceship.velocity.x, back.spaceship.velocity.y);
+
+    expect(backSpeed).toBeCloseTo(forwardSpeed * config.spaceshipReverseSpeedFactor, 5);
+    // The point of the knob: backing up must not be a second forward gear, or
+    // a pilot flies the whole fight in reverse with the nose on the target.
+    expect(backSpeed).toBeLessThan(forwardSpeed);
+  });
+
+  it("leaves the stick untouched, which has no nose to reverse along", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 3);
+    let stick = state;
+    for (let step = 0; step < 60; step += 1) {
+      stick = applyPilotInput(stick, {
+        vector: { x: -1, y: 0 },
+        mgFiring: false,
+        receivedTick: stick.clock.tick
+      });
+      stick = advanceSpaceshipSimulation(stick, config);
+    }
+    expect(Math.hypot(stick.spaceship.velocity.x, stick.spaceship.velocity.y)).toBeCloseTo(
+      config.spaceshipSpeedPerSecond,
+      5
+    );
+  });
+
+  it("leaves a command without a turn intent driving the bearing as before", () => {
+    const config = createSpaceshipSimulationConfig();
+    const state = createSpaceshipSimulationState(config, 4);
+
+    const steered = holdPilot(state, config, { x: 0, y: 1 }, 12);
+
+    expect(steered.headingTargetAngle).toBeCloseTo(Math.PI / 2, 10);
+    expect(steered.spaceshipHeading).toBeGreaterThan(0);
   });
 });

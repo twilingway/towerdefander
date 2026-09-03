@@ -22,8 +22,11 @@ export function secondsToTicks(seconds: number): number {
 /**
  * How far a shot from this weapon can travel before its lifetime runs out. A
  * homing missile spends part of that on turning, so its useful range is lower.
+ * A beam has neither speed nor lifetime: it reaches exactly as far as the
+ * distance the barrel opens fire at, inside the tick it fired.
  */
 export function weaponReach(weapon: EnemyWeaponTuning): number {
+  if (weapon.kind === "laser") return Math.round(weapon.engagementRange);
   return Math.round(
     weapon.projectileSpeedPerSecond * weapon.projectileLifetimeTicks * TICK_SECONDS
   );
@@ -115,7 +118,13 @@ export function summariseWave(
   for (const entry of wave.entries) {
     threatCount += entry.count;
     spawnCost += spawnCostOf(tuning, entry.kind) * entry.count;
-    spawnTicks += entry.spawnIntervalTicks * entry.count;
+    // The wave is a schedule, so its length is the last arrival on it, not the
+    // sum of every group's waits: two groups running side by side take as long
+    // as the longer one.
+    spawnTicks = Math.max(
+      spawnTicks,
+      entry.startDelayTicks + entry.spawnIntervalTicks * Math.max(0, entry.count - 1)
+    );
   }
   const directorBudget = directorBudgetAt(tuning, waveNumber);
   return {

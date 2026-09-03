@@ -6,6 +6,12 @@ import {
   BACKGROUND_PARALLAX_STRENGTH_MAX,
   BALANCE_FILE_VERSION,
   BUILTIN_ENEMY_KINDS,
+  CREW_ROLES,
+  MODULES_PER_ARCHETYPE,
+  MODULE_TIER_COUNT,
+  MODULE_TIER_WIDTHS,
+  ARENA_RADIUS_MAX,
+  ARENA_RADIUS_MIN,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
   autopilotProfileSchema,
@@ -15,7 +21,10 @@ import {
   type AutopilotProfile,
   type AutopilotTuning,
   type BalanceTuning,
-  type EnemyArchetype
+  type EnemyArchetype,
+  type EnemySkillProfile,
+  type ShipArchetype,
+  type ShipModule
 } from "./index.js";
 
 function autopilotProfile(overrides: Partial<AutopilotProfile> = {}): AutopilotProfile {
@@ -28,6 +37,7 @@ function autopilotProfile(overrides: Partial<AutopilotProfile> = {}): AutopilotP
     evadeMissiles: true,
     dodgeBullets: false,
     threatAwareShield: true,
+    standoffShare: 0.7,
     standoffDistance: 620,
     evadeHorizonTicks: 12,
     mgConeRadians: 0.35,
@@ -40,14 +50,34 @@ function autopilotProfile(overrides: Partial<AutopilotProfile> = {}): AutopilotP
   };
 }
 
+function autopilotLevels() {
+  return { rookie: autopilotProfile(), veteran: autopilotProfile(), ace: autopilotProfile() };
+}
+
 function autopilotTuning(level: AutopilotLevel = "veteran"): AutopilotTuning {
   return {
     level,
     profiles: {
-      rookie: autopilotProfile(),
-      veteran: autopilotProfile(),
-      ace: autopilotProfile()
+      kinetic: autopilotLevels(),
+      laser: autopilotLevels(),
+      missile: autopilotLevels()
     }
+  };
+}
+
+function enemySkillProfile(overrides: Partial<EnemySkillProfile> = {}): EnemySkillProfile {
+  return {
+    reactionTicks: 4,
+    aimJitterRadians: 0.04,
+    leadFactor: 0.6,
+    orbitShare: 0.5,
+    rangeBandUnits: 200,
+    separationWeight: 0.4,
+    flankSpread: 0.5,
+    evadeHorizonTicks: 0,
+    retreatHpFraction: 0.25,
+    retreatStandoffFactor: 1.4,
+    ...overrides
   };
 }
 
@@ -60,6 +90,7 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
     turnRatePerSecond: (2 * Math.PI) / 3,
     turnAccelerationPerSecondSquared: (4 * Math.PI) / 3,
     turnBrakingPerSecondSquared: 2 * Math.PI,
+    combatSkill: "rookie",
     weapons: [
       {
         kind: "bullet",
@@ -87,6 +118,34 @@ function archetype(overrides: Partial<EnemyArchetype> = {}): EnemyArchetype {
     unlockWave: 1,
     scoreReward: 25,
     creditReward: 2,
+    lootChance: 0.2,
+    ...overrides
+  };
+}
+
+function shipModule(id: string, index: number): ShipModule {
+  return {
+    id,
+    label: `Module ${id}`,
+    role: CREW_ROLES[index % CREW_ROLES.length] ?? "pilot",
+    effects: [{ target: "spaceshipMaxHp", op: "add", value: 5 }]
+  };
+}
+
+/** A tree of the exact shape the schema demands, with roles spread across each tier. */
+function shipArchetype(overrides: Partial<ShipArchetype> = {}): ShipArchetype {
+  return {
+    label: "Test hull",
+    description: "A hull for tests",
+    visual: null,
+    unlockedAtWave: 1,
+    overrides: { stats: {}, cannonWeaponKind: null, mgWeaponKind: null },
+    tiers: MODULE_TIER_WIDTHS.map((width, tier) =>
+      Array.from({ length: width }, (_unused, slot) =>
+        shipModule(`t${String(tier)}m${String(slot)}`, slot)
+      )
+    ),
+    endlessTier: [shipModule("endless", 0)],
     ...overrides
   };
 }
@@ -101,6 +160,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
             {
               kind: "gunship",
               count: 2,
+              startDelayTicks: 0,
               spawnIntervalTicks: 12,
               sectors: ["N"],
               hpMultiplier: null,
@@ -120,6 +180,26 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
         tempoGrowth: 0.05,
         tempoMultiplierCap: 3,
         bossWaveInterval: 5
+      },
+      authoring: {
+        budgetBase: 5,
+        budgetGrowth: 1.5,
+        bossEscortShare: 0.5,
+        asteroidEveryWaves: 3,
+        hpPerCannonShot: 25,
+        hpScale: 0.75,
+        damagePerSecondBase: 2,
+        damagePerSecondPerSpawnCost: 2.2,
+        bossDamagePerSecondCap: 26,
+        laserDamageShare: 0.75,
+        shipReach: 1080,
+        maxEngagementShare: 1.6,
+        maxStandoffShare: 1.3,
+        groupStartStepSeconds: 7,
+        swarmIntervalSeconds: 3,
+        lineIntervalSeconds: 7,
+        heavyIntervalSeconds: 11,
+        bossFloorSeconds: 30
       }
     },
     enemySpawnIntervalTicks: 12,
@@ -135,17 +215,30 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,
+    lootRepairShare: 0.06,
+    lootShieldAmount: 30,
+    lootBossRepairShare: 1,
+    lootLifetimeTicks: 300,
+    lootDropRadius: 18,
+    lootMagnetRadius: 260,
+    lootMagnetAccelerationPerSecondSquared: 900,
+    lootDriftDampingPerSecond: 1.6,
+    lootWindowTicks: 300,
+    lootBossWindowTicks: 600,
     projectileVisual: null,
     turretVisual: null,
     mgProjectileVisual: null,
     asteroidVisual: null,
     missileInterceptScoreReward: 5,
     spaceshipVisual: null,
+    shipArchetypes: { guardian: shipArchetype() },
+    defaultShipArchetypeId: "guardian",
     spaceshipMaxHp: 500,
     spaceshipRadius: 52,
     spaceshipSpeedPerSecond: 320,
     spaceshipAccelerationPerSecondSquared: 640,
     spaceshipBrakingPerSecondSquared: 800,
+    spaceshipReverseSpeedFactor: 0.4,
     headingMaxAngularSpeedPerSecond: 2.72,
     headingAngularAccelerationPerSecondSquared: 5.44,
     headingAngularBrakingPerSecondSquared: 8.16,
@@ -169,14 +262,26 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     mgHeatPerShot: 4,
     mgCoolingPerSecond: 30,
     mgRearmThreshold: 30,
+    cannonWeaponKind: "kinetic",
+    mgWeaponKind: "kinetic",
+    cannonLaserRange: 900,
+    mgLaserRange: 620,
+    laserBeamRadius: 5,
+    friendlyMissileTurnRatePerSecond: Math.PI / 2,
+    friendlyMissileAcquireConeRadians: Math.PI / 6,
     shieldCapacity: 100,
     shieldDrainPerSecond: 20,
     shieldRechargePerSecond: 10,
+    shieldEngageTicks: 20,
+    shieldMinimumUpTicks: 40,
+    shieldCooldownTicks: 20,
+    shieldRearmEnergy: 25,
     shieldRadius: 104,
     shieldArcRadians: Math.PI / 2,
     shieldMaxAngularSpeedPerSecond: 1.7,
     shieldAngularAccelerationPerSecondSquared: 3.4,
     shieldAngularBrakingPerSecondSquared: 5.1,
+    arenaRadius: 2200,
     cameraViewWidth: 1600,
     background: {
       parallaxStrength: 1,
@@ -184,12 +289,19 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       nebulaAlpha: 0.72,
       nebulaPreset: "blue"
     },
-    autopilot: {
-      level: "veteran",
+    helm: {
+      scheme: "tank",
+      headingLeadRadians: 0.5,
+      stopDampening: 1,
+      rotateInPlaceThrottle: 0.02
+    },
+    autopilot: autopilotTuning(),
+    enemySkill: {
+      offset: 0,
       profiles: {
-        rookie: autopilotProfile(),
-        veteran: autopilotProfile(),
-        ace: autopilotProfile()
+        rookie: enemySkillProfile(),
+        veteran: enemySkillProfile(),
+        ace: enemySkillProfile()
       }
     },
     ...overrides
@@ -218,6 +330,16 @@ describe("balance tuning schema", () => {
     expect(
       balanceTuningSchema.safeParse({ ...tuning(), cameraViewWidth: CAMERA_VIEW_WIDTH_MAX + 1 })
         .success
+    ).toBe(false);
+  });
+
+  it("keeps the arena radius inside its playable bounds", () => {
+    expect(balanceTuningSchema.safeParse(tuning({ arenaRadius: 4400 })).success).toBe(true);
+    expect(
+      balanceTuningSchema.safeParse({ ...tuning(), arenaRadius: ARENA_RADIUS_MIN - 1 }).success
+    ).toBe(false);
+    expect(
+      balanceTuningSchema.safeParse({ ...tuning(), arenaRadius: ARENA_RADIUS_MAX + 1 }).success
     ).toBe(false);
   });
 
@@ -318,6 +440,7 @@ describe("balance tuning schema", () => {
               {
                 kind,
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 12,
                 sectors: [],
                 hpMultiplier: null,
@@ -346,6 +469,7 @@ describe("balance tuning schema", () => {
               {
                 kind: "gunship",
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 12,
                 sectors: ["UP"],
                 hpMultiplier: null,
@@ -448,12 +572,12 @@ describe("autopilot tuning schema", () => {
     expect(balanceTuningSchema.safeParse({ ...tuning(), autopilot: broken }).success).toBe(false);
   });
 
-  it("requires a profile for every level", () => {
-    const { rookie, veteran } = tuning().autopilot.profiles;
+  it("requires a profile for every level of every weapon kind", () => {
+    const { kinetic, laser } = tuning().autopilot.profiles;
     expect(
       balanceTuningSchema.safeParse({
         ...tuning(),
-        autopilot: { level: "veteran", profiles: { rookie, veteran } }
+        autopilot: { level: "veteran", profiles: { kinetic, laser } }
       }).success
     ).toBe(false);
   });
@@ -529,5 +653,100 @@ describe("autopilot tuning schema", () => {
     expect(
       autopilotProfileSchema.safeParse(autopilotProfile({ standoffDistance: 2001 })).success
     ).toBe(false);
+  });
+});
+
+describe("ship archetypes", () => {
+  const withHull = (hull: ShipArchetype): BalanceTuning =>
+    tuning({ shipArchetypes: { guardian: hull }, defaultShipArchetypeId: "guardian" });
+
+  it("accepts a tree of the declared shape", () => {
+    expect(balanceTuningSchema.safeParse(withHull(shipArchetype())).success).toBe(true);
+    expect(MODULE_TIER_WIDTHS.reduce((sum, width) => sum + width, 0)).toBe(MODULES_PER_ARCHETYPE);
+    expect(MODULE_TIER_COUNT).toBe(10);
+  });
+
+  it("refuses a tier of the wrong width", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 2 ? [...tier, shipModule("extra", 2)] : tier
+    );
+    expect(balanceTuningSchema.safeParse(withHull({ ...hull, tiers })).success).toBe(false);
+  });
+
+  it("refuses a tier that leaves a role out", () => {
+    const hull = shipArchetype();
+    // The seventh tier is three wide, so it owes all three roles.
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 6 ? tier.map((module) => ({ ...module, role: "pilot" as const })) : tier
+    );
+    expect(balanceTuningSchema.safeParse(withHull({ ...hull, tiers })).success).toBe(false);
+  });
+
+  it("refuses a module id used twice in one hull", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 1 ? tier.map((module) => ({ ...module, id: "twice" })) : tier
+    );
+    expect(balanceTuningSchema.safeParse(withHull({ ...hull, tiers })).success).toBe(false);
+  });
+
+  it("refuses an effect aimed at a field the ship does not have", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 0
+        ? tier.map((module) => ({
+            ...module,
+            effects: [{ target: "spaceshipTeleport", op: "add", value: 1 }]
+          }))
+        : tier
+    );
+    expect(
+      balanceTuningSchema.safeParse(withHull({ ...hull, tiers } as unknown as ShipArchetype))
+        .success
+    ).toBe(false);
+  });
+
+  it("refuses an effect aimed at a field the clients only receive once", () => {
+    const hull = shipArchetype();
+    const tiers = hull.tiers.map((tier, index) =>
+      index === 0
+        ? tier.map((module) => ({
+            ...module,
+            effects: [{ target: "shieldRadius", op: "add", value: 1 }]
+          }))
+        : tier
+    );
+    expect(
+      balanceTuningSchema.safeParse(withHull({ ...hull, tiers } as unknown as ShipArchetype))
+        .success
+    ).toBe(false);
+  });
+
+  it("refuses a default hull that is not in the catalogue", () => {
+    expect(
+      balanceTuningSchema.safeParse(
+        tuning({ shipArchetypes: { guardian: shipArchetype() }, defaultShipArchetypeId: "blade" })
+      ).success
+    ).toBe(false);
+  });
+
+  it("keeps hull overrides sparse and typed", () => {
+    const hull = shipArchetype({
+      overrides: {
+        stats: { spaceshipMaxHp: 340, spaceshipSpeedPerSecond: 420 },
+        cannonWeaponKind: "laser",
+        mgWeaponKind: null
+      }
+    });
+    expect(balanceTuningSchema.safeParse(withHull(hull)).success).toBe(true);
+    const bad = shipArchetype({
+      overrides: {
+        stats: { nonsense: 1 },
+        cannonWeaponKind: null,
+        mgWeaponKind: null
+      }
+    } as unknown as Partial<ShipArchetype>);
+    expect(balanceTuningSchema.safeParse(withHull(bad)).success).toBe(false);
   });
 });

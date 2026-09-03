@@ -12,6 +12,8 @@ describe("display room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 2,
+      crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: 18,
       players: collection([
@@ -39,6 +41,7 @@ describe("display room view", () => {
         worldWidth: 4400,
         worldHeight: 4400,
         arenaRadius: 2200,
+        rimBandWidth: 260,
         spaceship: {
           x: 2200,
           y: 2200,
@@ -53,12 +56,28 @@ describe("display room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          rearmRequired: false,
           active: false,
           energy: 75,
           capacity: 100
         },
-        cannon: { heat: 30, capacity: 100, overheated: false },
-        machineGun: { heat: 30, capacity: 100, overheated: false },
+        cannon: {
+          heat: 30,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 1500,
+          speed: 1000,
+          acquireHalfAngle: 0
+        },
+        machineGun: {
+          heat: 30,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "combat",
           hasOutcome: false,
@@ -69,16 +88,14 @@ describe("display room view", () => {
           encounterTick: 12,
           phaseTicksRemaining: 0,
           waveSecondsRemaining: 1188,
+          lootWindowSecondsRemaining: 0,
           score: 240
-        },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
         },
         credits: 6,
         display: {
           cameraViewWidth: 1600,
+          purchasedModules: [],
+          laserBeams: [],
           backgroundParallaxStrength: 0.8,
           backgroundDriftSpeed: 2,
           backgroundNebulaAlpha: 0.5,
@@ -86,6 +103,7 @@ describe("display room view", () => {
           spaceshipVisualShape: "ship-lancer",
           spaceshipVisualScale: 1.25,
           shieldRadius: 140,
+          shieldPhase: "raising",
           enemyCatalogue: [],
           obstacles: collection([
             {
@@ -127,6 +145,7 @@ describe("display room view", () => {
             }
           ]),
           asteroids: collection([]),
+          lootDrops: collection([]),
           friendlyProjectiles: collection([
             {
               entityId: "projectile-0",
@@ -179,7 +198,14 @@ describe("display room view", () => {
     expect(view?.game?.hostileProjectiles).toHaveLength(1);
     expect(view?.game?.hostileProjectiles[0]).not.toHaveProperty("source");
     expect(view?.game?.spaceship.heading).toBe(Math.PI / 3);
-    expect(view?.game?.machineGun).toEqual({ heat: 30, capacity: 100, overheated: false });
+    expect(view?.game?.machineGun).toEqual({
+      heat: 30,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
     expect(view?.game?.enemyShips.map(({ entityId }) => entityId)).toEqual(["enemy-1", "enemy-2"]);
     expect(view?.game?.encounter).toMatchObject({ phase: "combat", waveNumber: 3, score: 240 });
     expect(view?.game?.encounter.outcome).toBeNull();
@@ -197,6 +223,8 @@ describe("display room view", () => {
     expect(view?.game?.shield.energy).toBe(75);
     expect(view?.game?.shield.arcHalfAngle).toBe(0.72);
     expect(view?.game?.shieldRadius).toBe(140);
+    // Display-gated, so it has to survive the trip through the display branch.
+    expect(view?.game?.shieldPhase).toBe("raising");
     expect(view?.game?.spaceshipVisual).toEqual({ shape: "ship-lancer", modelScale: 1.25 });
     expect(view?.displayLatencyMs).toBe(18);
     expect(view?.game?.credits).toBe(6);

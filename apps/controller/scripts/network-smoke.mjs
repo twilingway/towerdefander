@@ -15,7 +15,60 @@ import {
 } from "@spaceship-defender/protocol";
 
 const STEP_MS = 50;
+/** How long the scripted gunner stays on one ship before looking again. */
+const GUNNER_LOCK_HOLD_MS = 4_000;
 const port = 35_677;
+/**
+ * The balance this run plays, instead of whatever the campaign happens to be.
+ *
+ * This harness proves the wire - schemas, sequence watermarks, the upgrade
+ * journal, reconnection - and the only way to the upgrade journal is through a
+ * cleared wave. While that wave came out of the shipped campaign, the wire test
+ * rose and fell with balance tuning: the first two waves grew from 22 ships to
+ * 30 and the scripted crew began dying on them, so the smoke reported the
+ * campaign getting denser as if the protocol had broken. Two small waves of its
+ * own keep the run short and make a red run mean what it says.
+ *
+ * Kept deliberately boring: the same light kinds the campaign opens with, thin
+ * enough to die quickly, and enough of them that a cleared wave pays for one
+ * team upgrade at `TEAM_UPGRADE_PRICE`. Rocks ride along because the arena
+ * assertions want entry sectors.
+ */
+const smokeWave = (shipSector, swarmSector) => ({
+  entries: [
+    {
+      kind: "interceptor",
+      count: 4,
+      startDelayTicks: 0,
+      spawnIntervalTicks: 30,
+      sectors: [shipSector],
+      hpMultiplier: null,
+      tempoMultiplier: null
+    },
+    {
+      kind: "wasp",
+      count: 3,
+      startDelayTicks: 60,
+      spawnIntervalTicks: 30,
+      sectors: [swarmSector],
+      hpMultiplier: null,
+      tempoMultiplier: null
+    },
+    {
+      kind: "asteroid",
+      count: 2,
+      startDelayTicks: 40,
+      spawnIntervalTicks: 60,
+      sectors: [],
+      hpMultiplier: null,
+      tempoMultiplier: null
+    }
+  ],
+  hpMultiplier: 0.4,
+  tempoMultiplier: null
+});
+const SMOKE_WAVES = [smokeWave("E", "S"), smokeWave("S", "W"), smokeWave("W", "N")];
+const balancePassword = "network-smoke";
 const endpoint = `ws://127.0.0.1:${String(port)}`;
 const healthEndpoint = `http://127.0.0.1:${String(port)}/health`;
 const protocolVersion = PROTOCOL_VERSION;
@@ -26,9 +79,17 @@ const serverProcess = spawn(process.execPath, [serverEntry], {
     HOST: "127.0.0.1",
     PORT: String(port),
     RECONNECTION_GRACE_SECONDS: "0.25",
+    // Set rather than inherited, so the run authorises the same way on a
+    // machine that happens to export one and on a machine that does not.
+    ADMIN_BALANCE_PASSWORD: balancePassword,
     // Point at a path that never exists so the run uses built-in balance
     // defaults instead of whatever an operator saved from the console.
-    BALANCE_PRESET_PATH: join(tmpdir(), `smoke-balance-${randomUUID()}.json`)
+    BALANCE_PRESET_PATH: join(tmpdir(), `smoke-balance-${randomUUID()}.json`),
+    // The game gives a crew five minutes to clear a wave. This harness has one
+    // scripted gunner and has to clear two of them to bank a team upgrade, so
+    // it buys itself room: at the product's own deadline the run would end in
+    // defeat before the smoke ever reached its second intermission.
+    ROOM_WAVE_TTL_SECONDS: "1800"
   },
   stdio: "ignore",
   windowsHide: true
@@ -47,16 +108,39 @@ let shieldEnabled = false;
 let shieldLockedTargetId;
 let shieldOpposite = false;
 let shieldSurvivalMode = false;
+let pilotSurvivalMode = false;
+let gunnerStickyMode = false;
+let gunnerLockHeldUntil = 0;
 const schedulers = [];
 const observedAsteroidIds = new Set();
 const observedAsteroidEntrySectors = new Set();
 let arenaViolation;
 
+/**
+ * A hard stop for the whole run.
+ *
+ * Every wait in here carries its own deadline, but the SDK's calls do not: when
+ * the server dies mid-run its clients simply never settle, and this held a gate
+ * for two hours on a promise that was never going to resolve. Nothing the smoke
+ * does legitimately takes ten minutes - a full pass is under two - so past that
+ * the run is not slow, it is stuck.
+ */
+const RUN_DEADLINE_MS = 600_000;
+const watchdog = setTimeout(() => {
+  console.error(`Network smoke gave up after ${String(RUN_DEADLINE_MS)} ms without finishing.`);
+  serverProcess.kill();
+  process.exit(1);
+}, RUN_DEADLINE_MS);
+// Unreferenced so a finished run exits on its own rather than waiting this out.
+watchdog.unref();
+
 try {
   await waitForServer();
+  await pinSmokeBalance();
   display = await new Client(endpoint).create(ROOM_TYPE, {
     role: "display",
-    protocolVersion
+    protocolVersion,
+    crewSize: 3
   });
   attachLatencyResponder(display);
   pilot = await joinController(display.roomId, "Pilot");
@@ -115,7 +199,12 @@ try {
     active: false
   });
   await waitFor(() => display.state.game.shield.angle > 0);
-  if (display.state.game.shield.active || display.state.game.shield.energy !== 100)
+  // Full is read off the battery rather than typed: the campaign sets the
+  // capacity, and a retuned one must not read as a leaking shield.
+  if (
+    display.state.game.shield.active ||
+    display.state.game.shield.energy !== display.state.game.shield.capacity
+  )
     throw new Error("Inactive shield pre-aim consumed energy.");
 
   const roleError = nextServerError(shield);
@@ -141,21 +230,21 @@ try {
 
   gunner = await reconnectController(gunner, "combat");
 
-  const gunship = await waitForEnemy("gunship", 35_000);
-  shieldLockedTargetId = gunship.entityId;
-  shieldEnabled = false;
-  shieldOpposite = false;
-  await waitFor(() => {
-    const current = findEntity(gunship.entityId);
-    if (current === undefined) return false;
-    return (
-      distance(current) < 900 &&
-      Math.abs(angleDelta(display.state.game.shield.angle, bearing(current))) < 0.18
-    );
-  }, 35_000);
-  shieldEnabled = true;
-  const shieldBlock = await waitForShieldBlock(8_000);
+  await waitForEnemy(undefined, 35_000);
+  // Whatever is nearest, held for as long as the battery allows.
+  //
+  // Locked to one ship and raised once, this depended on that ship staying
+  // alive, in range and shooting inside a single charge - and a charge is six
+  // seconds at a hundred and twenty points against twenty a second, so most of
+  // the window was spent with the sector already down. Tracking the nearest
+  // threat and cycling the sector the way the survival policy does gives the
+  // wave several passes to land a shot on it.
   shieldLockedTargetId = undefined;
+  shieldOpposite = false;
+  shieldSurvivalMode = true;
+  shieldEnabled = true;
+  const shieldBlock = await waitForShieldBlock(45_000);
+  shieldSurvivalMode = false;
 
   shieldEnabled = false;
   shieldOpposite = true;
@@ -190,12 +279,22 @@ try {
 
   shieldOpposite = false;
   shieldSurvivalMode = true;
-  await waitFor(() => encounter().phase === "intermission", 90_000);
+  pilotSurvivalMode = true;
+  gunnerStickyMode = true;
+  // One scripted gunner against a whole wave, on a machine that is also
+  // building and running the browser suite. The room itself is given half an
+  // hour above, so this only has to outlast the fight.
+  await waitFor(() => encounter().phase === "intermission", 600_000);
   gunnerEnabled = false;
+  pilotSurvivalMode = false;
+  gunnerStickyMode = false;
+  gunnerLockedTargetId = undefined;
   pilot = await reconnectController(pilot, "intermission");
   const offer = await waitForTeamOffer();
-  const pilotCard = offer.cards.find((card) => card.role === "pilot");
-  if (pilotCard === undefined) throw new Error("Team offer has no pilot card.");
+  // Any card of the tier will do: a seat may vote for any of them, and a narrow
+  // tier need not carry one of its own role.
+  const pilotCard = offer.cards[0];
+  if (pilotCard === undefined) throw new Error("Team offer has no cards.");
   const duplicateCommand = makeVoteCommand(pilot, offer, pilotCard.upgradeId, 1);
   pilot.send(clientMessage.upgradeVote, duplicateCommand);
   await waitFor(() => teamUpgrade().votes.get("pilot")?.upgradeId === pilotCard.upgradeId);
@@ -242,6 +341,7 @@ try {
     })
   );
 } finally {
+  clearTimeout(watchdog);
   for (const scheduler of schedulers) clearInterval(scheduler);
   await Promise.allSettled([pilot?.leave(), gunner?.leave(), shield?.leave(), display?.leave()]);
   serverProcess.kill();
@@ -250,7 +350,36 @@ try {
 function startRoleSchedulers() {
   schedulers.push(
     setInterval(() => {
+      if (pilot === undefined || display === undefined || encounter().phase !== "combat") return;
+      if (!pilotSurvivalMode) return;
+      pilotSequence += 1;
+      pilot.send(clientMessage.pilotInput, {
+        ...envelope(pilot),
+        sequence: pilotSequence,
+        vector: evasionVector(),
+        mgFiring: false
+      });
+    }, STEP_MS)
+  );
+  schedulers.push(
+    setInterval(() => {
       if (gunner === undefined || display === undefined || encounter().phase !== "combat") return;
+      // Sticky while a wave is on: re-reading "closest" every fiftieth of a
+      // second spreads the fire across a crowd and finishes nothing. Measured
+      // on a wave of fourteen - the unsticky gunner killed three of them in
+      // sixty-eight seconds while the hull died.
+      //
+      // Held for a few seconds rather than until it dies, because a target that
+      // never dies is exactly the one worth dropping: a straggler out past the
+      // barrel's reach kept the whole wave alive while the gunner emptied into
+      // it, which read as the smoke being flaky rather than stuck.
+      if (
+        gunnerStickyMode &&
+        (findEntity(gunnerLockedTargetId ?? "") === undefined || Date.now() > gunnerLockHeldUntil)
+      ) {
+        gunnerLockedTargetId = closestTarget()?.entityId;
+        gunnerLockHeldUntil = Date.now() + GUNNER_LOCK_HOLD_MS;
+      }
       const target =
         (gunnerLockedTargetId === undefined ? undefined : findEntity(gunnerLockedTargetId)) ??
         closestTarget();
@@ -347,11 +476,17 @@ async function waitForShieldBlock(timeoutMs) {
     );
     const passiveDrain = tickDelta * 20 * (STEP_MS / 1000);
     const collisionCost = previous.energy - current.energy - passiveDrain;
+    // A point beyond the passive drain. It used to want three and a half, which
+    // was the cheapest block in the catalogue back when a barrel fired one big
+    // shot; the campaign splits its heavy barrels into three small ones now and
+    // the block costs the sector two - so the check was reading a real block as
+    // no block at all. What proves it is the pair above: a shot vanished at the
+    // sector and the hull took nothing.
     if (
       previous.active &&
       removedNearShield &&
       current.hp === previous.hp &&
-      collisionCost >= 3.5
+      collisionCost >= 0.9
     ) {
       return { collisionCost, hp: current.hp, tick: current.tick };
     }
@@ -385,17 +520,25 @@ async function waitForShootableTarget(timeoutMs) {
   return snapshot(target);
 }
 
+/**
+ * The nearest enemy of a kind, or of any kind when none is named. Named, this
+ * waited for a gunship and the campaign does not call one in until wave two -
+ * the smoke is about the wire, not about who is flying, so it takes whoever
+ * arrives.
+ */
 async function waitForEnemy(kind, timeoutMs) {
   await waitFor(() => hasEnemy(kind), timeoutMs);
   const enemy = [...world().enemyShips.values()]
-    .filter((candidate) => candidate.kind === kind)
+    .filter((candidate) => kind === undefined || candidate.kind === kind)
     .sort((a, b) => distance(a) - distance(b))[0];
-  if (enemy === undefined) throw new Error(`No ${kind} was found.`);
+  if (enemy === undefined) throw new Error(`No ${kind ?? "enemy"} was found.`);
   return snapshot(enemy);
 }
 
 function hasEnemy(kind) {
-  return [...world().enemyShips.values()].some((enemy) => enemy.kind === kind);
+  return [...world().enemyShips.values()].some(
+    (enemy) => kind === undefined || enemy.kind === kind
+  );
 }
 
 async function reconnectController(room, expectedPhase) {
@@ -455,11 +598,19 @@ async function resolveTeamPurchase(firstOffer, firstCard) {
       throw new Error("An unaffordable offer still published a selection.");
 
     gunnerEnabled = true;
-    await waitFor(() => encounter().phase === "intermission", 150_000);
+    // A wave is a schedule now, and its last arrival is a minute or more in.
+    // This is also the one place the smoke has to fight a whole wave down with
+    // a single scripted gunner rather than a crew, so it is given room: the
+    // transport is what is under test here, not the marksmanship. The ceiling
+    // is generous because the room runs in real time and this step shares the
+    // machine with the rest of the gate: it passed at six hundred seconds alone
+    // and timed out at the same number with a build and the browser suite
+    // beside it.
+    await waitFor(() => encounter().phase === "intermission", 900_000);
     gunnerEnabled = false;
     offer = await waitForTeamOffer();
-    card = offer.cards.find((entry) => entry.role === "pilot");
-    if (card === undefined) throw new Error("Team offer has no pilot card.");
+    card = offer.cards[0];
+    if (card === undefined) throw new Error("Team offer has no cards.");
     await voteForUpgrade(pilot, "pilot", offer, card.upgradeId);
     await voteForUpgrade(gunner, "gunner", offer, card.upgradeId);
     await voteForUpgrade(shield, "shield", offer, card.upgradeId);
@@ -472,7 +623,8 @@ function teamUpgrade() {
 }
 
 async function waitForTeamOffer() {
-  await waitFor(() => teamUpgrade().hasOffer && teamUpgrade().offer.cards.length === 3);
+  // A tier is one to four cards wide; the first one is a single card.
+  await waitFor(() => teamUpgrade().hasOffer && teamUpgrade().offer.cards.length > 0);
   const offer = teamUpgrade().offer;
   return {
     offerId: offer.offerId,
@@ -497,13 +649,9 @@ function makeVoteCommand(room, offer, upgradeId, revision) {
   };
 }
 
+/** What the crew has bought: the published proof that a purchase landed. */
 function pilotModifierSnapshot() {
-  const value = display.state.game.roleModifiers.pilot;
-  return {
-    speedMultiplier: value.speedMultiplier,
-    accelerationMultiplier: value.accelerationMultiplier,
-    maxHpBonus: value.maxHpBonus
-  };
+  return [...display.state.game.display.purchasedModules];
 }
 
 function world() {
@@ -533,6 +681,32 @@ function closestTarget() {
     ...world().enemyShips.values(),
     ...world().asteroids.values()
   ].sort((a, b) => distance(a) - distance(b))[0];
+}
+
+/**
+ * Where the hull should be going while it holds a wave off.
+ *
+ * A stationary hull is one every barrel on the field is already zeroed on, and
+ * this crew is a script: it does not dodge unless told to. Crossing the nearest
+ * threat rather than running from it keeps the range - and so the shield sector
+ * - roughly where it was, and the pull back to the middle stops the crossing
+ * from walking the hull into the rim, where it would be pinned with nowhere
+ * left to cross to.
+ */
+function evasionVector() {
+  const game = display.state.game;
+  const centerX = game.worldWidth / 2;
+  const centerY = game.worldHeight / 2;
+  const outX = game.spaceship.x - centerX;
+  const outY = game.spaceship.y - centerY;
+  const fromCenter = Math.hypot(outX, outY);
+  if (fromCenter > game.arenaRadius * 0.6) {
+    return { x: -outX / (fromCenter || 1), y: -outY / (fromCenter || 1) };
+  }
+  const threat = closestThreat();
+  if (threat === undefined) return { x: 1, y: 0 };
+  const toward = unitFromSpaceship(threat);
+  return { x: -toward.y, y: toward.x };
 }
 
 function closestThreat() {
@@ -650,6 +824,34 @@ function attachLatencyResponder(room) {
       probeId: result.data.probeId
     });
   });
+}
+
+async function adminBalance(method, path, body) {
+  const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, {
+    method,
+    headers: {
+      authorization: `Basic ${Buffer.from(`admin:${balancePassword}`).toString("base64")}`,
+      ...(body === undefined ? {} : { "content-type": "application/json" })
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
+  });
+  if (!response.ok) {
+    throw new Error(`${method} ${path} answered ${String(response.status)}.`);
+  }
+  return response.json();
+}
+
+/**
+ * Replaces the wave table before anyone joins. A run keeps the balance it
+ * started with, and the room reads it when the crew is ready, so this has to
+ * land before the first controller connects - see `SMOKE_WAVES`.
+ */
+async function pinSmokeBalance() {
+  const document = await adminBalance("GET", "/admin/balance/defaults");
+  for (const preset of document.presets) {
+    preset.tuning.waveCampaign = { ...preset.tuning.waveCampaign, waves: SMOKE_WAVES };
+  }
+  await adminBalance("PUT", "/admin/balance", document);
 }
 
 async function waitForServer() {

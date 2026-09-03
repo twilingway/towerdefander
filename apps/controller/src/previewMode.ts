@@ -1,8 +1,10 @@
 import type { PreviewPhase } from "@spaceship-defender/client-shared";
+import { CREW_ROLES } from "@spaceship-defender/protocol";
 import type {
   ControllerGameSnapshot,
   ControllerRoomView,
   CrewRole,
+  CrewSize,
   PublicPlayerView
 } from "@spaceship-defender/protocol";
 
@@ -59,12 +61,15 @@ const PREVIEW_WORLD = {
     maxHp: 1000,
     heading: Math.PI / 4
   },
-  turretAngle: Math.PI / 3,
-  roleModifiers: {
-    pilot: { speedMultiplier: 1.1, accelerationMultiplier: 1, maxHpBonus: 0 },
-    gunner: { damageMultiplier: 1.15, cooldownMultiplier: 0.9, projectileSpeedMultiplier: 1 },
-    shield: { capacityBonus: 20, rechargeMultiplier: 1, arcWidthBonus: 0 }
-  }
+  turretAngle: Math.PI / 3
+} as const;
+
+const PREVIEW_HELM = {
+  scheme: "tank",
+  headingLeadRadians: 0.5,
+  stopDampening: 1,
+  rotateInPlaceThrottle: 0.02,
+  hullAngularBrakingPerSecondSquared: 50
 } as const;
 
 const EMPTY_TEAM_UPGRADE = {
@@ -73,91 +78,156 @@ const EMPTY_TEAM_UPGRADE = {
   selection: null
 } as const;
 
-export function createPreviewRoomView(role: CrewRole, phase: PreviewPhase): ControllerRoomView {
-  const players = PREVIEW_PLAYERS.map((player) =>
-    phase === "result" && player.role === role ? { ...player, ready: false } : player
+export function createPreviewRoomView(
+  role: CrewRole,
+  phase: PreviewPhase,
+  crewSize: CrewSize = 3
+): ControllerRoomView {
+  // A smaller crew fills seats in CREW_ROLES order, the way the room assigns
+  // them; a role without a seat falls back to the pilot, who always has one.
+  const seats = CREW_ROLES.slice(0, crewSize);
+  const seat = seats.includes(role) ? role : "pilot";
+  const players = PREVIEW_PLAYERS.filter(({ role: candidate }) => seats.includes(candidate)).map(
+    (player) => (phase === "result" && player.role === seat ? { ...player, ready: false } : player)
   );
   return {
     roomId: "PREVIEW",
     phase: phase === "lobby" ? "lobby" : "active",
     runNumber: phase === "lobby" ? 0 : 1,
+    crewSize,
+    shipArchetypeId: "guardian",
     displayConnected: true,
     displayLatencyMs: 18,
     players,
-    assignedRole: role,
-    game: phase === "lobby" ? null : createPreviewGame(phase)
+    assignedRole: seat,
+    game: phase === "lobby" ? null : createPreviewGame(phase, seats)
   };
 }
 
-function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGameSnapshot {
+function createPreviewGame(
+  phase: Exclude<PreviewPhase, "lobby">,
+  seats: readonly CrewRole[]
+): ControllerGameSnapshot {
   if (phase === "combat") {
     return {
       ...PREVIEW_WORLD,
-      shield: { angle: Math.PI / 2, arcHalfAngle: 0.8, active: true, energy: 64, capacity: 120 },
-      cannon: { heat: 62, capacity: 100, overheated: false },
-      machineGun: { heat: 46, capacity: 100, overheated: false },
+      shield: {
+        angle: Math.PI / 2,
+        arcHalfAngle: 0.8,
+        rearmRequired: false,
+        active: true,
+        energy: 64,
+        capacity: 120
+      },
+      cannon: {
+        heat: 62,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 1500,
+        speed: 1000,
+        acquireHalfAngle: 0
+      },
+      machineGun: {
+        heat: 46,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 620,
+        speed: 900
+      },
       encounter: {
         phase: "combat",
         outcome: null,
         defeatReason: null,
-        waveNumber: 3,
+        waveNumber: 7,
         encounterTick: 240,
         phaseTicksRemaining: 0,
         waveSecondsRemaining: 47,
+        lootWindowSecondsRemaining: 0,
         score: 320
       },
       credits: 6,
+      helm: PREVIEW_HELM,
       teamUpgrade: EMPTY_TEAM_UPGRADE
     };
   }
   if (phase === "intermission") {
     return {
       ...PREVIEW_WORLD,
-      shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 120, capacity: 120 },
-      cannon: { heat: 0, capacity: 100, overheated: false },
-      machineGun: { heat: 0, capacity: 100, overheated: false },
+      shield: {
+        angle: 0,
+        arcHalfAngle: 0.8,
+        rearmRequired: false,
+        active: false,
+        energy: 120,
+        capacity: 120
+      },
+      cannon: {
+        heat: 0,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 1500,
+        speed: 1000,
+        acquireHalfAngle: 0
+      },
+      machineGun: {
+        heat: 0,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 620,
+        speed: 900
+      },
       encounter: {
         phase: "intermission",
         outcome: null,
         defeatReason: null,
-        waveNumber: 3,
+        waveNumber: 7,
         encounterTick: 260,
         phaseTicksRemaining: 180,
         waveSecondsRemaining: 0,
+        lootWindowSecondsRemaining: 0,
         score: 320
       },
       credits: 6,
+      helm: PREVIEW_HELM,
       teamUpgrade: {
         offer: {
-          offerId: "preview-offer-w3",
-          waveNumber: 3,
+          offerId: "preview-offer-w7",
+          waveNumber: 7,
+          tier: 7,
           cards: [
             {
-              upgradeId: "pilot_speed",
+              upgradeId: "afterburner",
               role: "pilot",
-              label: "Скорость +10%",
-              value: 0.1,
+              label: "Форсаж",
+              effects: [{ target: "spaceshipSpeedPerSecond", op: "percent", value: 0.14 }],
               price: 5
             },
             {
-              upgradeId: "gunner_damage",
+              upgradeId: "turretDrive",
               role: "gunner",
-              label: "Урон +15%",
-              value: 0.15,
+              label: "Привод башни",
+              effects: [{ target: "turretMaxAngularSpeedPerSecond", op: "percent", value: 0.25 }],
               price: 5
             },
             {
-              upgradeId: "shield_capacity",
+              upgradeId: "capacitor2",
               role: "shield",
-              label: "Ёмкость +20",
-              value: 20,
+              label: "Батарея повышенной ёмкости",
+              effects: [{ target: "shieldCapacity", op: "add", value: 40 }],
               price: 5
             }
           ]
         },
         votes: {
-          pilot: { role: "pilot", upgradeId: "gunner_damage", revision: 2 },
-          gunner: { role: "gunner", upgradeId: "gunner_damage", revision: 1 },
+          // A seat the crew size does not have cannot have voted.
+          pilot: { role: "pilot", upgradeId: "turretDrive", revision: 2 },
+          gunner: seats.includes("gunner")
+            ? { role: "gunner", upgradeId: "turretDrive", revision: 1 }
+            : null,
           shield: null
         },
         selection: null
@@ -167,20 +237,44 @@ function createPreviewGame(phase: Exclude<PreviewPhase, "lobby">): ControllerGam
   return {
     ...PREVIEW_WORLD,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
-    shield: { angle: 0, arcHalfAngle: 0.8, active: false, energy: 0, capacity: 120 },
-    cannon: { heat: 100, capacity: 100, overheated: true },
-    machineGun: { heat: 100, capacity: 100, overheated: true },
+    shield: {
+      angle: 0,
+      arcHalfAngle: 0.8,
+      rearmRequired: false,
+      active: false,
+      energy: 0,
+      capacity: 120
+    },
+    cannon: {
+      heat: 100,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 1500,
+      speed: 1000,
+      acquireHalfAngle: 0
+    },
+    machineGun: {
+      heat: 100,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    },
     encounter: {
       phase: "result",
       outcome: "defeat",
       defeatReason: "spaceship_destroyed",
-      waveNumber: 4,
+      waveNumber: 8,
       encounterTick: 520,
       phaseTicksRemaining: 0,
       waveSecondsRemaining: 0,
+      lootWindowSecondsRemaining: 0,
       score: 610
     },
     credits: 11,
+    helm: PREVIEW_HELM,
     teamUpgrade: EMPTY_TEAM_UPGRADE
   };
 }

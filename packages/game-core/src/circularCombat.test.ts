@@ -13,6 +13,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
 } from "./index.ts";
+import { ENEMY_PRESS_TICKS } from "./combatConstants.ts";
 
 function combatStep(
   state: SpaceshipSimulationState,
@@ -51,6 +52,8 @@ function quietEnemy(
     heading: 0,
     angularVelocity: 0,
     orbitSign: 1,
+    perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+    aimRngState: 1,
     hp: 1_000_000,
     maxHp: 1_000_000,
     weaponCooldownTicks: [1_000_000],
@@ -106,6 +109,8 @@ function runRimPinnedEnemy(
         kind,
         spawnSequence,
         orbitSign: spawnSequence % 2 === 0 ? 1 : -1,
+        perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+        aimRngState: 1,
         radius: archetype.radius,
         x: enemyX,
         previousX: enemyX,
@@ -155,9 +160,17 @@ function rimPinDistanceFloor(config: SpaceshipSimulationConfig, kind: string): n
 }
 
 function quietArenaConfig(): SpaceshipSimulationConfig {
+  const base = createSpaceshipSimulationConfig();
   return createSpaceshipSimulationConfig({
     ambientAsteroidIntervalMinTicks: 100_000,
-    ambientAsteroidIntervalMaxTicks: 100_000
+    ambientAsteroidIntervalMaxTicks: 100_000,
+    // The beginner's blend, which is what the rim tests below measure. The
+    // campaign flies its gunships as veterans, and a veteran spends half its
+    // course sideways - a different question from whether the wall lets go.
+    enemyArchetypes: {
+      ...base.enemyArchetypes,
+      gunship: { ...getEnemyArchetype(base, "gunship"), combatSkill: "rookie" }
+    }
   });
 }
 
@@ -203,7 +216,7 @@ describe("circular combat spawning and movement", () => {
           {
             kind: "gunship" as const,
             planSequence: 0,
-            spawnIntervalTicks: 12,
+            dueTick: 0,
             sectors: [],
             hpMultiplier: null,
             tempoMultiplier: null
@@ -235,7 +248,7 @@ describe("circular combat spawning and movement", () => {
           {
             kind: "asteroid",
             planSequence: 0,
-            spawnIntervalTicks: 12,
+            dueTick: 0,
             sectors: [],
             hpMultiplier: null,
             tempoMultiplier: null
@@ -347,7 +360,11 @@ describe("circular combat spawning and movement", () => {
     const config = quietArenaConfig();
     const centerX = config.worldWidth / 2;
     const centerY = config.worldHeight / 2;
-    const enemyX = centerX + 900;
+    // A quarter of a kilometre outside the distance this archetype wants to
+    // hold, so the sixty steps below cover the closing and the first of the
+    // circling. Written as an offset from the hold rather than an absolute,
+    // because the hold moves whenever the crew's own reach does.
+    const enemyX = centerX + getEnemyArchetype(config, "gunship").preferredDistance + 250;
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 73),
       pendingSpawns: [],
@@ -362,7 +379,9 @@ describe("circular combat spawning and movement", () => {
     };
 
     for (let step = 0; step < 60; step += 1) {
-      state = advanceSpaceshipSimulation(state, config);
+      // Pinned: this measures the closing-and-circling blend, and a fight where
+      // nothing lands would otherwise have the press shrinking the range too.
+      state = { ...advanceSpaceshipSimulation(state, config), stalemateTicks: 0 };
       const enemy = state.enemies[0];
       expect(enemy).toBeDefined();
       if (enemy === undefined) break;
@@ -372,9 +391,103 @@ describe("circular combat spawning and movement", () => {
       );
     }
 
-    // Golden values recorded from the blend before the rim rule was added.
-    expect(state.enemies[0]?.x).toBeCloseTo(2853.9148503025867, 6);
-    expect(state.enemies[0]?.y).toBeCloseTo(2129.5418583681662, 6);
+    // Golden values recorded from the blend before the rim rule was added, and
+    // re-recorded when the archetype's hold distance followed the crew's reach
+    // down: the blend is the same, the ring it settles on is closer.
+    expect(state.enemies[0]?.x).toBeCloseTo(2610.9488059723653, 6);
+    expect(state.enemies[0]?.y).toBeCloseTo(2130.8283632441126, 6);
+  });
+});
+
+describe("starting on a later wave", () => {
+  const config = createSpaceshipSimulationConfig();
+
+  it("opens on the wave asked for, with its own difficulty and plan", () => {
+    const late = createSpaceshipSimulationState(config, 17, 5);
+    expect(late.waveNumber).toBe(5);
+    expect(late.pendingSpawns.length).toBeGreaterThan(0);
+    // Wave five is a boss wave in the built-in campaign, and its budget is the
+    // director's for that wave rather than the opening one.
+    const first = createSpaceshipSimulationState(config, 17, 1);
+    expect(late.pendingSpawns).not.toEqual(first.pendingSpawns);
+  });
+
+  it("still opens a clean run: no credits and no upgrades bought on the way", () => {
+    const late = createSpaceshipSimulationState(config, 17, 5);
+    expect(late.credits).toBe(0);
+    expect(late.teamUpgradeSelection).toBeNull();
+    expect(late.spaceshipHp).toBe(late.ship.spaceshipMaxHp);
+  });
+
+  it("refuses a wave that is not a positive whole number", () => {
+    expect(() => createSpaceshipSimulationState(config, 17, 0)).toThrow(RangeError);
+    expect(() => createSpaceshipSimulationState(config, 17, 1.5)).toThrow(RangeError);
+  });
+
+  it("replays the same way twice", () => {
+    expect(createSpaceshipSimulationState(config, 17, 5).pendingSpawns).toEqual(
+      createSpaceshipSimulationState(config, 17, 5).pendingSpawns
+    );
+  });
+});
+
+describe("a fight that produces nothing closes itself", () => {
+  const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+  const centerX = config.worldWidth / 2;
+  const centerY = config.worldHeight / 2;
+  const archetype = getEnemyArchetype(config, "sniper");
+
+  function standoffFight(stalemateTicks: number): SpaceshipSimulationState {
+    const start = centerX + archetype.preferredDistance;
+    return {
+      ...createSpaceshipSimulationState(config, 91),
+      pendingSpawns: [],
+      stalemateTicks,
+      spaceship: {
+        x: centerX,
+        y: centerY,
+        previousX: centerX,
+        previousY: centerY,
+        velocity: { x: 0, y: 0 }
+      },
+      // Silent on purpose: a shot landing would reset the very counter this
+      // measures, and the point is the fight where nothing lands.
+      enemies: [
+        quietEnemy(config, {
+          kind: "sniper",
+          radius: archetype.radius,
+          x: start,
+          previousX: start,
+          y: centerY,
+          previousY: centerY
+        })
+      ]
+    };
+  }
+
+  function rangeOf(state: SpaceshipSimulationState): number {
+    const enemy = state.enemies[0];
+    return enemy === undefined ? 0 : Math.hypot(enemy.x - centerX, enemy.y - centerY);
+  }
+
+  /** Pinned, so each arm is measured at a fixed point of the press. */
+  function stepAt(stalemateTicks: number, ticks: number): SpaceshipSimulationState {
+    let state = standoffFight(stalemateTicks);
+    for (let step = 0; step < ticks; step += 1) {
+      state = { ...advanceSpaceshipSimulation(state, config), stalemateTicks };
+    }
+    return state;
+  }
+
+  it("holds the stand-off while the fight is still producing", () => {
+    // Within a hull of where it started: the sniper is doing its job.
+    expect(Math.abs(rangeOf(stepAt(0, 60)) - archetype.preferredDistance)).toBeLessThan(120);
+  });
+
+  it("gives up the stand-off once neither side can land a hit", () => {
+    // The stalemate the operator watched: a sniper the ship cannot see and a
+    // ship the sniper cannot lead, circling until the wave clock ran out.
+    expect(rangeOf(stepAt(ENEMY_PRESS_TICKS, 60))).toBeLessThan(rangeOf(stepAt(0, 60)) - 150);
   });
 });
 
@@ -387,7 +500,7 @@ describe("ambient asteroid scheduler", () => {
         {
           kind: "gunship",
           planSequence: 0,
-          spawnIntervalTicks: 12,
+          dueTick: 0,
           sectors: [],
           hpMultiplier: null,
           tempoMultiplier: null
@@ -466,7 +579,7 @@ describe("ambient asteroid scheduler", () => {
         {
           kind: "asteroid",
           planSequence: 0,
-          spawnIntervalTicks: 12,
+          dueTick: 0,
           sectors: [],
           hpMultiplier: null,
           tempoMultiplier: null
@@ -512,7 +625,8 @@ describe("ambient asteroid scheduler", () => {
   });
 
   it("does not let ambient asteroids block intermission and gives defeat precedence", () => {
-    const config = createSpaceshipSimulationConfig({ asteroidDamage: 500 });
+    // Lethal to any hull the campaign ships, which is the point of the test.
+    const config = createSpaceshipSimulationConfig({ asteroidDamage: 10_000 });
     const initial = createSpaceshipSimulationState(config, 71);
     const harmless = ambientAsteroid(config, 0);
     const intermission = combatStep(
@@ -585,6 +699,7 @@ describe("circular transient cleanup", () => {
       radius: config.projectileRadius,
       damage: config.friendlyProjectileDamage,
       source: "cannon",
+      homing: null,
       spawnedTick: 0
     };
     const result = combatStep(

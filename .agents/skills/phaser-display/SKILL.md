@@ -59,8 +59,15 @@ Follow `apps/display/src/game/SpaceshipRuntime.ts` + `apps/display/src/Spaceship
 - Prefer `Graphics` for vector shapes and redraw with `clear()` per frame instead of creating new
   objects; use one `Container` per combat entity so position/rotation apply to the whole unit.
 - Camera: follow the spaceship via `getPhaserCameraScroll` with overscan, set zoom from
-  `getResponsiveViewport`, keep bounds in sync on resize (`Phaser.Scale.Events.RESIZE`). Scale mode
-  is `RESIZE` + `CENTER_BOTH`.
+  `getResponsiveViewport`, keep bounds in sync on resize (`Phaser.Scale.Events.RESIZE`).
+- Scale mode is `NONE` + `NO_CENTER`, and the buffer is sized by us. `RESIZE` sizes it in CSS
+  pixels, which on a phone is a third of the panel each way — the arena was rasterised at a ninth of
+  the pixels it was shown at. Phaser 4 has no setting for this, so `createSpaceshipRuntime` owns a
+  `ResizeObserver` plus a density watcher and calls `game.scale.resize` itself;
+  `getBackingStoreSize` decides how big, `DEVICE_PIXEL_RATIO_CAP` is the ceiling, `?dpr=` overrides
+  it for measurement. The scene's own numbers are therefore device pixels, not CSS pixels —
+  `getResponsiveViewport` is homogeneous, so the slice of world does not move, and that invariant is
+  what `viewport.spec.ts` asserts.
 - All interpolation/reconciliation math (point/angle transitions, camera scroll, viewport sizing,
   shield arcs) belongs in pure functions in `spaceshipViewModel.ts`, not inline in the scene. That
   keeps it unit-testable without Phaser (`spaceshipViewModel.test.ts`).
@@ -72,8 +79,10 @@ Follow `apps/display/src/game/SpaceshipRuntime.ts` + `apps/display/src/Spaceship
   into snapshot interpretation.
 - Avoid per-frame allocations: reuse buffers/objects, cache property access in loops, destroy game
   objects when reconciliation removes them.
-- Renderer settings stay `antialias: true`, `roundPixels: false` unless an accepted change says
-  otherwise.
+- Renderer settings stay `antialias: true`, `roundPixels: false`,
+  `mipmapFilter: "LINEAR_MIPMAP_LINEAR"` (the background tiles are power-of-two and drawn far
+  smaller than they are stored) and `powerPreference: "high-performance"`, unless an accepted change
+  says otherwise.
 
 ## Verification
 

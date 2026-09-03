@@ -174,7 +174,7 @@ function hydrateSchema(source: SpaceshipSimulationState): SpaceshipDefenderState
   state.game.spaceship.x = source.spaceship.x;
   state.game.spaceship.y = source.spaceship.y;
   state.game.spaceship.hp = source.spaceshipHp;
-  state.game.spaceship.maxHp = source.spaceshipMaxHp;
+  state.game.spaceship.maxHp = source.ship.spaceshipMaxHp;
   hydrateDynamicEntities(state, source);
   return state;
 }

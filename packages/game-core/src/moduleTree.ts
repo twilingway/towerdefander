@@ -1,0 +1,160 @@
+import type { GameplayRole, ShipModuleDefinition } from "./combatTypes.ts";
+import type { ModuleTargetField, ShipStatEffect } from "./shipStats.ts";
+
+/**
+ * The tree the base hull offers, and the default every preset starts from.
+ *
+ * A tree is data, not code: 26 modules over ten tiers is authoring, and the
+ * preset owns it so an operator can edit it. What the code owns is the shape —
+ * ten tiers of widths 1, 2, 2, 2, 2, 3, 3, 3, 4, 4, every tier of three or more
+ * covering all three seats — and the balance schema refuses a preset that
+ * breaks it, so a tier that leaves the shield operator with nothing to want is
+ * caught when the file loads rather than on the seventh wave.
+ *
+ * A module carries a name and what it does. The caption clients show is
+ * assembled from the effects, so the number is never written twice.
+ *
+ * Every card is a straight gain. A tier is a choice because its cards pull in
+ * different directions and only one can be bought, not because one of them
+ * takes something away.
+ */
+
+const add = (target: ModuleTargetField, value: number): ShipStatEffect => ({
+  target,
+  op: "add",
+  value
+});
+const percent = (target: ModuleTargetField, value: number): ShipStatEffect => ({
+  target,
+  op: "percent",
+  value
+});
+const multiply = (target: ModuleTargetField, value: number): ShipStatEffect => ({
+  target,
+  op: "multiply",
+  value
+});
+
+const DEGREES = Math.PI / 180;
+
+function card(
+  id: string,
+  role: GameplayRole,
+  label: string,
+  effects: readonly ShipStatEffect[]
+): ShipModuleDefinition {
+  return { id, role, label, effects };
+}
+
+/**
+ * Guardian: the ship the game shipped with. Kinetic turret, machine-gun nose,
+ * nothing it is bad at — the hull the other two are measured against, so its
+ * overrides are deliberately empty and its tree spreads evenly over the seats.
+ * The two free cards, in tiers nine and ten, go to different seats for the same
+ * reason: this hull leans nowhere.
+ */
+const GUARDIAN_TIERS: readonly (readonly ShipModuleDefinition[])[] = [
+  [card("hullPlating1", "pilot", "Броневые пластины", [add("spaceshipMaxHp", 40)])],
+  [
+    card("thrusters1", "pilot", "Маршевые двигатели", [
+      percent("spaceshipSpeedPerSecond", 0.08),
+      percent("spaceshipAccelerationPerSecondSquared", 0.1)
+    ]),
+    // Not a cadence card: at three to five ticks a nine-percent cut rounds
+    // straight back to where it started. Cadence is a whole tick or nothing,
+    // and a whole tick on the second tier is half again the rate of fire.
+    card("gunStabiliser", "gunner", "Стабилизатор орудия", [
+      percent("turretMaxAngularSpeedPerSecond", 0.15)
+    ])
+  ],
+  [
+    card("ammoFeed1", "gunner", "Усиленный боекомплект", [
+      percent("friendlyProjectileDamage", 0.12)
+    ]),
+    card("capacitor1", "shield", "Конденсатор", [add("shieldCapacity", 25)])
+  ],
+  [
+    card("gyroscopes1", "pilot", "Гироскопы", [
+      percent("headingMaxAngularSpeedPerSecond", 0.15),
+      percent("headingAngularAccelerationPerSecondSquared", 0.15)
+    ]),
+    card("emitterCoils1", "shield", "Катушки эмиттера", [percent("shieldRechargePerSecond", 0.18)])
+  ],
+  [
+    card("noseCooling1", "pilot", "Обдув носового ствола", [percent("mgCoolingPerSecond", 0.25)]),
+    card("barrelCooling1", "gunner", "Охлаждение пушки", [percent("cannonCoolingPerSecond", 0.25)])
+  ],
+  [
+    card("hullPlating2", "pilot", "Композитный корпус", [add("spaceshipMaxHp", 60)]),
+    // A heavier shell, which is also a fatter one: the same hit is harder to
+    // miss with. The tier's choice is armour against reach against the arc.
+    card("heavyRounds", "gunner", "Тяжёлые снаряды", [
+      percent("friendlyProjectileDamage", 0.18),
+      percent("projectileRadius", 0.08)
+    ]),
+    card("wideArc", "shield", "Широкий сектор", [add("shieldArcRadians", 20 * DEGREES)])
+  ],
+  [
+    card("afterburner", "pilot", "Форсаж", [
+      percent("spaceshipSpeedPerSecond", 0.14),
+      percent("spaceshipAccelerationPerSecondSquared", 0.18)
+    ]),
+    card("turretDrive", "gunner", "Привод башни", [
+      percent("turretMaxAngularSpeedPerSecond", 0.25),
+      percent("turretAngularAccelerationPerSecondSquared", 0.25)
+    ]),
+    card("capacitor2", "shield", "Батарея повышенной ёмкости", [add("shieldCapacity", 40)])
+  ],
+  [
+    card("noseRadiator", "pilot", "Носовой радиатор", [percent("mgHeatCapacity", 0.3)]),
+    card("highVelocity", "gunner", "Высокая начальная скорость", [
+      percent("projectileSpeedPerSecond", 0.25)
+    ]),
+    card("fastEngage", "shield", "Быстрый подъём", [
+      multiply("shieldEngageTicks", 0.6),
+      multiply("shieldCooldownTicks", 0.7)
+    ])
+  ],
+  [
+    card("hullPlating3", "pilot", "Реактивная броня", [add("spaceshipMaxHp", 90)]),
+    card("noseCalibre", "pilot", "Крупный калибр носа", [percent("mgDamage", 0.3)]),
+    card("cannonCalibre", "gunner", "Крупный калибр", [percent("friendlyProjectileDamage", 0.25)]),
+    card("drainControl", "shield", "Контроль расхода", [multiply("shieldDrainPerSecond", 0.75)])
+  ],
+  [
+    card("reactorOverdrive", "pilot", "Разгон реактора", [
+      percent("spaceshipSpeedPerSecond", 0.18),
+      percent("spaceshipAccelerationPerSecondSquared", 0.2)
+    ]),
+    // The one place cadence is bought, and it is bought a tick at a time.
+    card("rapidFire", "gunner", "Скорострельность", [add("fireCooldownTicks", -1)]),
+    card("heatSink", "gunner", "Радиатор", [
+      percent("cannonHeatCapacity", 0.4),
+      multiply("cannonHeatPerShot", 0.85)
+    ]),
+    card("fullDome", "shield", "Полный купол", [
+      add("shieldArcRadians", 40 * DEGREES),
+      percent("shieldRechargePerSecond", 0.2)
+    ])
+  ]
+];
+
+/**
+ * What a crew that bought the whole tree keeps buying. Additions and percents
+ * only: a multiplier bought ten times compounds into a different game, and the
+ * point of the tail is that credits stay worth earning, not that wave thirty
+ * plays by other rules.
+ *
+ * The numbers are the measured ones: at anything smaller the tail stopped being
+ * worth the credits by the twentieth wave, and the hull it grows is what a run
+ * past the tree actually runs out of.
+ */
+const GUARDIAN_ENDLESS: readonly ShipModuleDefinition[] = [
+  card("endlessHull", "pilot", "Ремонтные накладки", [add("spaceshipMaxHp", 60)]),
+  card("endlessDamage", "gunner", "Калибровка орудия", [percent("friendlyProjectileDamage", 0.12)]),
+  card("endlessShield", "shield", "Подстройка эмиттера", [add("shieldCapacity", 30)])
+];
+
+/** The ten tiers the base hull offers, and the tail that follows them. */
+export const DEFAULT_MODULE_TIERS = GUARDIAN_TIERS;
+export const DEFAULT_ENDLESS_TIER = GUARDIAN_ENDLESS;

@@ -2,6 +2,8 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
+import { readPixelRatioCap } from "./game/devicePixels.js";
+import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "./game/spaceshipViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
 import {
   buildVisibleDemoWorld,
@@ -15,13 +17,23 @@ interface SpaceshipCanvasProps {
   readonly runNumber: number;
   readonly connectionEpoch: number;
   readonly visibleDemo?: boolean;
+  /**
+   * How the scene is running, sampled here because this is where the loop is,
+   * and read out in the header because that is where a player looks for it.
+   * The average and the worst frame answer different questions, so both travel.
+   */
+  readonly onFrameStats?: (stats: { readonly fps: number; readonly worstFrameMs: number }) => void;
 }
+
+/** Twice a second: faster than this and the digits blur into noise. */
+const FPS_SAMPLE_INTERVAL_MS = 500;
 
 export function SpaceshipCanvas({
   game,
   runNumber,
   connectionEpoch,
-  visibleDemo = false
+  visibleDemo = false,
+  onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<SpaceshipRuntime | undefined>(undefined);
@@ -47,7 +59,9 @@ export function SpaceshipCanvas({
     void import("./game/SpaceshipRuntime.js")
       .then(({ createSpaceshipRuntime }) => {
         if (!disposed) {
-          runtimeReference.current = createSpaceshipRuntime(host, latestGame.current);
+          runtimeReference.current = createSpaceshipRuntime(host, latestGame.current, {
+            pixelRatioCap: pixelRatioCap.current
+          });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
@@ -92,6 +106,39 @@ export function SpaceshipCanvas({
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, runNumber]);
 
+  const onFrameStatsReference = useRef(onFrameStats);
+  onFrameStatsReference.current = onFrameStats;
+  const fpsWindow = useRef<number[]>([]);
+  // Read at render, and the component tests render without a document at all -
+  // the types say `location` is always there, the renderer says otherwise.
+  const pixelRatioCap = useRef(
+    readPixelRatioCap((globalThis as { location?: { search?: string } }).location?.search ?? "")
+  );
+  useEffect(() => {
+    const sample = () => {
+      const fps = runtimeReference.current?.readFps() ?? 0;
+      onFrameStatsReference.current?.({
+        fps,
+        worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0
+      });
+      // Down only, and only on a run of samples: a wave that briefly puts forty
+      // ships on the field is not a phone that cannot run the game.
+      const window = fpsWindow.current;
+      window.push(fps);
+      if (window.length > PIXEL_RATIO_FALLBACK_SAMPLES) window.shift();
+      const next = nextPixelRatioCap(pixelRatioCap.current, window);
+      if (next !== pixelRatioCap.current) {
+        pixelRatioCap.current = next;
+        window.length = 0;
+        runtimeReference.current?.setPixelRatioCap(next);
+      }
+    };
+    const timer = globalThis.setInterval(sample, FPS_SAMPLE_INTERVAL_MS);
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     // Demo-only: the Node bot reads this instead of scraping the render path.
     if (!visibleDemo) return;
@@ -110,6 +157,7 @@ export function SpaceshipCanvas({
       data-spaceship-y={game.spaceship.y}
       data-spaceship-radius={game.spaceship.radius}
       data-spaceship-velocity-x={game.spaceship.velocityX}
+      data-spaceship-heading={game.spaceship.heading}
       data-spaceship-hp={game.spaceship.hp}
       data-spaceship-max-hp={game.spaceship.maxHp}
       data-score={game.encounter.score}

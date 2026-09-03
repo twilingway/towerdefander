@@ -7,6 +7,7 @@ import {
   MAX_WAVE_TTL_SECONDS,
   PLAYER_CAPACITY,
   PROJECTILE_WORLD_PADDING,
+  CREW_SIZES,
   PROTOCOL_VERSION,
   ROOM_TYPE,
   WAVE_TTL_SECONDS,
@@ -58,12 +59,11 @@ function item<T>(values: readonly T[], index: number): T {
   return value;
 }
 
-function roleModifiers() {
-  return {
-    pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-    gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-    shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
-  };
+/** Everything a controller snapshot carries except the helm the display lacks. */
+function withoutHelm(game: NonNullable<ControllerRoomView["game"]>) {
+  const { helm, ...rest } = game;
+  void helm;
+  return rest;
 }
 
 function controllerRoom(): ControllerRoomView {
@@ -71,6 +71,8 @@ function controllerRoom(): ControllerRoomView {
     roomId: ROOM_ID,
     phase: "active",
     runNumber: 1,
+    crewSize: 3,
+    shipArchetypeId: "guardian",
     assignedRole: "pilot",
     displayConnected: true,
     displayLatencyMs: 18,
@@ -94,13 +96,29 @@ function controllerRoom(): ControllerRoomView {
       turretAngle: 0,
       shield: {
         angle: Math.PI,
+        rearmRequired: false,
         active: true,
         energy: 75,
         capacity: 100,
         arcHalfAngle: Math.PI / 4
       },
-      cannon: { heat: 20, capacity: 100, overheated: false },
-      machineGun: { heat: 40, capacity: 100, overheated: false },
+      cannon: {
+        heat: 20,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 1500,
+        speed: 1000,
+        acquireHalfAngle: 0
+      },
+      machineGun: {
+        heat: 40,
+        capacity: 100,
+        overheated: false,
+        kind: "kinetic",
+        reach: 620,
+        speed: 900
+      },
       encounter: {
         phase: "combat",
         outcome: null,
@@ -109,10 +127,17 @@ function controllerRoom(): ControllerRoomView {
         encounterTick: 10,
         phaseTicksRemaining: 0,
         waveSecondsRemaining: WAVE_TTL_SECONDS,
+        lootWindowSecondsRemaining: 0,
         score: 100
       },
-      roleModifiers: roleModifiers(),
       credits: 0,
+      helm: {
+        scheme: "tank",
+        headingLeadRadians: 0.5,
+        stopDampening: 1,
+        rotateInPlaceThrottle: 0.02,
+        hullAngularBrakingPerSecondSquared: 50
+      },
       teamUpgrade: {
         offer: null,
         votes: { pilot: null, gunner: null, shield: null },
@@ -125,15 +150,23 @@ function controllerRoom(): ControllerRoomView {
 function displayRoom(): DisplayRoomView {
   const controller = controllerRoom();
   if (controller.game === null) throw new Error("Expected active game.");
+  // The helm rides on the controller snapshot only; the display never sees it.
+  const controllerGame = withoutHelm(controller.game);
   return {
     roomId: ROOM_ID,
     phase: "active",
     runNumber: controller.runNumber,
+    crewSize: 3,
+    shipArchetypeId: "guardian",
     displayConnected: true,
     displayLatencyMs: 18,
     players: players(),
     game: {
-      ...controller.game,
+      ...controllerGame,
+      rimBandWidth: 260,
+      shieldPhase: "down",
+      purchasedModules: [],
+      laserBeams: [],
       cameraViewWidth: 1600,
       background: {
         parallaxStrength: 1,
@@ -176,6 +209,19 @@ function displayRoom(): DisplayRoomView {
           maxHp: 60
         }
       ],
+      lootDrops: [
+        {
+          kind: "repair",
+          entityId: "loot-1",
+          spawnSequence: 3,
+          x: 1150,
+          y: 880,
+          velocityX: 4,
+          velocityY: -2,
+          radius: 18,
+          amount: 35
+        }
+      ],
       friendlyProjectiles: [projectile("friendly-1", 3, "friendly")],
       hostileProjectiles: [projectile("hostile-1", 4, "hostile")],
       homingMissiles: [
@@ -214,16 +260,29 @@ function teamUpgrade(): PublicTeamUpgradeView {
     offer: {
       offerId: "team-1",
       waveNumber: 1,
+      tier: 6,
       cards: [
         {
-          upgradeId: "pilot_speed",
+          upgradeId: "afterburner",
           role: "pilot",
-          label: "Maximum speed +10%",
-          value: 0.1,
+          label: "Форсаж",
+          effects: [{ target: "spaceshipSpeedPerSecond", op: "percent", value: 0.14 }],
           price: 5
         },
-        { upgradeId: "gunner_damage", role: "gunner", label: "Damage +15%", value: 0.15, price: 5 },
-        { upgradeId: "shield_capacity", role: "shield", label: "Capacity +20", value: 20, price: 5 }
+        {
+          upgradeId: "turretDrive",
+          role: "gunner",
+          label: "Привод башни",
+          effects: [{ target: "turretMaxAngularSpeedPerSecond", op: "percent", value: 0.25 }],
+          price: 5
+        },
+        {
+          upgradeId: "capacitor2",
+          role: "shield",
+          label: "Батарея",
+          effects: [{ target: "shieldCapacity", op: "add", value: 40 }],
+          price: 5
+        }
       ]
     },
     votes: { pilot: null, gunner: null, shield: null },
@@ -242,6 +301,7 @@ function intermissionController(): ControllerRoomView {
     encounterTick: 40,
     phaseTicksRemaining: INTERMISSION_DURATION_TICKS,
     waveSecondsRemaining: 0,
+    lootWindowSecondsRemaining: 0,
     score: 500
   };
   room.game.shield.active = false;
@@ -249,48 +309,75 @@ function intermissionController(): ControllerRoomView {
   return room;
 }
 
-describe("protocol v26 handshake and messages", () => {
-  it("publishes the fixed crew and v26", () => {
-    expect(PROTOCOL_VERSION).toBe(26);
+describe("protocol v33 handshake and messages", () => {
+  it("publishes the fixed crew and v45", () => {
+    expect(PROTOCOL_VERSION).toBe(45);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v26 create/join and rejects v25 and unknown fields", () => {
+  it("accepts v45 create/join and rejects v44 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 26 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 45, crewSize: 3 })
+        .success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 25 }).success
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 44, crewSize: 3 })
+        .success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 26,
+        protocolVersion: 45,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 25,
+        protocolVersion: 44,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 26,
+        protocolVersion: 45,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v26 and the active run", () => {
+  it("requires a known crew size when a display creates a room", () => {
+    for (const crewSize of CREW_SIZES) {
+      expect(
+        displayCreateOptionsSchema.safeParse({
+          role: "display",
+          protocolVersion: PROTOCOL_VERSION,
+          crewSize
+        }).success
+      ).toBe(true);
+    }
+    expect(
+      displayCreateOptionsSchema.safeParse({
+        role: "display",
+        protocolVersion: PROTOCOL_VERSION
+      }).success
+    ).toBe(false);
+    expect(
+      displayCreateOptionsSchema.safeParse({
+        role: "display",
+        protocolVersion: PROTOCOL_VERSION,
+        crewSize: 4
+      }).success
+    ).toBe(false);
+  });
+
+  it("keeps continuous role messages strict on v45 and the active run", () => {
     const envelope = {
-      protocolVersion: 26,
+      protocolVersion: 45,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -366,7 +453,7 @@ describe("protocol v26 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 25,
+        protocolVersion: 44,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -376,9 +463,9 @@ describe("protocol v26 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v26 pilot input", () => {
+  it("requires the machine gun trigger on v45 pilot input", () => {
     const envelope = {
-      protocolVersion: 26,
+      protocolVersion: 45,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -393,12 +480,35 @@ describe("protocol v26 handshake and messages", () => {
     );
   });
 
+  it("carries an optional turn intent on pilot input", () => {
+    const envelope = {
+      protocolVersion: 45,
+      roomId: ROOM_ID,
+      playerId: PLAYER_ID,
+      runNumber: 2,
+      sequence: 1,
+      vector: { x: 0, y: 0 },
+      mgFiring: false
+    } as const;
+    // A stick command carries no intent at all, and must stay valid.
+    expect(pilotInputCommandSchema.safeParse(envelope).success).toBe(true);
+    expect(pilotInputCommandSchema.safeParse({ ...envelope, turn: -1, thrust: 1 }).success).toBe(
+      true
+    );
+    expect(pilotInputCommandSchema.safeParse({ ...envelope, turn: 0, thrust: -1 }).success).toBe(
+      true
+    );
+    expect(pilotInputCommandSchema.safeParse({ ...envelope, turn: 1.5 }).success).toBe(false);
+    expect(pilotInputCommandSchema.safeParse({ ...envelope, thrust: -2 }).success).toBe(false);
+    expect(pilotInputCommandSchema.safeParse({ ...envelope, turn: "left" }).success).toBe(false);
+  });
+
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 26, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 45, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 25, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 44, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -441,14 +551,14 @@ describe("protocol v26 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 26,
+    protocolVersion: 45,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
     actionId: ACTION_ID,
     waveNumber: 1,
     offerId: "team-1",
-    upgradeId: "pilot_speed",
+    upgradeId: "afterburner",
     revision: 1
   } as const;
 
@@ -461,6 +571,7 @@ describe("upgrade:vote", () => {
       { ...command, protocolVersion: 12 },
       { ...command, runNumber: 0 },
       { ...command, revision: 0 },
+      { ...command, upgradeId: "Not A Module Id" },
       { ...command, selectedIndex: 0 }
     ]) {
       expect(upgradeVoteCommandSchema.safeParse(invalid).success).toBe(false);
@@ -487,12 +598,26 @@ describe("upgrade:vote", () => {
 });
 
 describe("shared team upgrade projection", () => {
-  it("requires three distinct cards in stable role order", () => {
+  it("takes a tier of one to four distinct cards in any role order", () => {
     expect(publicTeamUpgradeViewSchema.safeParse(teamUpgrade()).success).toBe(true);
-    const wrongRole = teamUpgrade();
-    if (wrongRole.offer === null) throw new Error("offer");
-    wrongRole.offer.cards[0] = { ...item(wrongRole.offer.cards, 0), role: "gunner" };
-    expect(publicTeamUpgradeViewSchema.safeParse(wrongRole).success).toBe(false);
+
+    // A role no longer owns a slot: the tier decides what is on offer, and the
+    // seats vote for whichever card they want.
+    const reordered = teamUpgrade();
+    if (reordered.offer === null) throw new Error("offer");
+    reordered.offer.cards = [...reordered.offer.cards].reverse();
+    expect(publicTeamUpgradeViewSchema.safeParse(reordered).success).toBe(true);
+
+    const narrow = teamUpgrade();
+    if (narrow.offer === null) throw new Error("offer");
+    narrow.offer.cards = [item(narrow.offer.cards, 0)];
+    narrow.offer.tier = 1;
+    expect(publicTeamUpgradeViewSchema.safeParse(narrow).success).toBe(true);
+
+    const empty = teamUpgrade();
+    if (empty.offer === null) throw new Error("offer");
+    empty.offer.cards = [];
+    expect(publicTeamUpgradeViewSchema.safeParse(empty).success).toBe(false);
 
     const duplicate = teamUpgrade();
     if (duplicate.offer === null) throw new Error("offer");
@@ -515,22 +640,26 @@ describe("shared team upgrade projection", () => {
     expect(publicTeamUpgradeViewSchema.safeParse(selected).success).toBe(true);
   });
 
-  it("rejects an upgrade ID assigned to another role", () => {
+  it("refuses a tier wider than the widest the tree can hold", () => {
+    const card = (id: string) => ({
+      upgradeId: id,
+      role: "pilot" as const,
+      label: id,
+      effects: [{ target: "spaceshipMaxHp", op: "add", value: 5 }],
+      price: 5 as const
+    });
     expect(
       publicTeamUpgradeOfferSchema.safeParse({
-        offerId: "wrong",
+        offerId: "too-wide",
         waveNumber: 1,
-        cards: [
-          { upgradeId: "shield_capacity", role: "pilot", label: "Wrong", value: 1, price: 5 },
-          { upgradeId: "gunner_damage", role: "gunner", label: "Damage", value: 0.1, price: 5 },
-          { upgradeId: "shield_arc", role: "shield", label: "Arc", value: 0.1, price: 5 }
-        ]
+        tier: 10,
+        cards: ["a", "b", "c", "d", "e"].map(card)
       }).success
     ).toBe(false);
   });
 });
 
-describe("strict v26 room projections", () => {
+describe("strict v33 room projections", () => {
   it("accepts valid combat display and compact controller views", () => {
     expect(controllerRoomViewSchema.safeParse(controllerRoom()).success).toBe(true);
     expect(displayRoomViewSchema.safeParse(displayRoom()).success).toBe(true);
@@ -539,25 +668,62 @@ describe("strict v26 room projections", () => {
   it("publishes the machine gun view in both snapshots with heat inside capacity", () => {
     const controller = controllerRoom();
     if (controller.game === null) throw new Error("Expected active game.");
-    expect(controller.game.machineGun).toEqual({ heat: 40, capacity: 100, overheated: false });
+    expect(controller.game.machineGun).toEqual({
+      heat: 40,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
 
     const display = displayRoom();
     if (display.game === null) throw new Error("Expected active game.");
-    expect(display.game.machineGun).toEqual({ heat: 40, capacity: 100, overheated: false });
+    expect(display.game.machineGun).toEqual({
+      heat: 40,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
 
     const overheated = controllerRoom();
     if (overheated.game === null) throw new Error("Expected active game.");
-    overheated.game.machineGun = { heat: 100, capacity: 100, overheated: true };
+    overheated.game.machineGun = {
+      heat: 100,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    };
     expect(controllerRoomViewSchema.safeParse(overheated).success).toBe(true);
 
     const overCapacity = controllerRoom();
     if (overCapacity.game === null) throw new Error("Expected active game.");
-    overCapacity.game.machineGun = { heat: 101, capacity: 100, overheated: true };
+    overCapacity.game.machineGun = {
+      heat: 101,
+      capacity: 100,
+      overheated: true,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    };
     expect(controllerRoomViewSchema.safeParse(overCapacity).success).toBe(false);
 
     const missing = controllerRoom() as unknown as Record<string, unknown>;
     delete (missing.game as Record<string, unknown>).machineGun;
     expect(controllerRoomViewSchema.safeParse(missing).success).toBe(false);
+  });
+
+  it("holds no more players than the crew size", () => {
+    const solo = controllerRoom();
+    solo.crewSize = 1;
+    expect(controllerRoomViewSchema.safeParse(solo).success).toBe(false);
+
+    solo.players = solo.players.slice(0, 1);
+    expect(controllerRoomViewSchema.safeParse(solo).success).toBe(true);
   });
 
   it("keeps the spaceship heading strict and present", () => {
@@ -701,7 +867,9 @@ describe("strict v26 room projections", () => {
       spaceshipEdge.game.spaceship.radius +
       0.5e-6;
     expect(controllerRoomViewSchema.safeParse(spaceshipEdge).success).toBe(true);
-    spaceshipEdge.game.spaceship.x += 1e-6;
+    // A whole unit, not a millionth: the tolerance now covers the float32 the
+    // wire publishes in, and a body actually outside is still outside.
+    spaceshipEdge.game.spaceship.x += 1;
     expect(controllerRoomViewSchema.safeParse(spaceshipEdge).success).toBe(false);
 
     const enemyEdge = displayRoom();
@@ -710,8 +878,29 @@ describe("strict v26 room projections", () => {
     enemy.x = enemyEdge.game.worldWidth / 2 + enemyEdge.game.arenaRadius - enemy.radius + 0.5e-6;
     enemy.y = enemyEdge.game.worldHeight / 2;
     expect(displayRoomViewSchema.safeParse(enemyEdge).success).toBe(true);
-    enemy.x += 1e-6;
+    enemy.x += 1;
     expect(displayRoomViewSchema.safeParse(enemyEdge).success).toBe(false);
+  });
+
+  it("takes a body pinned to the rim through the float32 the wire publishes", () => {
+    const room = displayRoom();
+    if (room.game === null) throw new Error("Expected active game.");
+    const enemy = item(room.game.enemyShips, 0);
+    const centre = room.game.worldWidth / 2;
+    // Exactly where the simulation clamps a pinned enemy, rounded the way the
+    // wire publishes it. On this bearing the rounding alone lands 1.3e-4
+    // outside, which a double-precision tolerance rejects — and a rejected
+    // snapshot stops the client's view dead. Of a full turn sampled every
+    // hundredth of a radian, 304 bearings out of 629 land outside.
+    const legal = room.game.arenaRadius - enemy.radius;
+    enemy.x = Math.fround(centre + Math.cos(0.1) * legal);
+    enemy.y = Math.fround(centre + Math.sin(0.1) * legal);
+    expect(displayRoomViewSchema.safeParse(room).success).toBe(true);
+
+    // Still a guard: a body a whole unit out is out, at any world size.
+    enemy.x = centre + Math.cos(0.1) * (legal + 1);
+    enemy.y = centre + Math.sin(0.1) * (legal + 1);
+    expect(displayRoomViewSchema.safeParse(room).success).toBe(false);
   });
 
   it("requires every transient body to remain in the padded circular envelope", () => {
@@ -768,7 +957,7 @@ describe("strict v26 room projections", () => {
       expect(displayRoomViewSchema.safeParse(edge).success).toBe(true);
 
       const outside = displayRoom();
-      mutate(outside, 1.5e-6);
+      mutate(outside, 1);
       expect(displayRoomViewSchema.safeParse(outside).success).toBe(false);
     }
   });
@@ -788,6 +977,7 @@ describe("strict v26 room projections", () => {
         encounterTick: 1,
         phaseTicksRemaining: 10,
         waveSecondsRemaining: WAVE_TTL_SECONDS,
+        lootWindowSecondsRemaining: 0,
         score: 0
       }).success
     ).toBe(false);
@@ -872,21 +1062,21 @@ describe("strict v26 room projections", () => {
   });
 });
 
-describe("v26 latency diagnostics", () => {
+describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 26, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 45, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 26,
+        protocolVersion: 45,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 26,
+        protocolVersion: 45,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -894,13 +1084,13 @@ describe("v26 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 25,
+        protocolVersion: 44,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 25, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 44, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

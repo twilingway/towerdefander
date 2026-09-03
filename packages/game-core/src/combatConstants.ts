@@ -17,8 +17,20 @@ export const ENEMY_ORBIT_SHARE = 0.35;
 export const ENEMY_RIM_START = 0.8;
 /** Post-clamp speed below this share of the archetype speed counts as pinned. */
 export const ENEMY_STALL_SPEED_FRACTION = 0.05;
+/**
+ * Ticks of neither side landing a hit before enemies have given up their whole
+ * stand-off and come to knife range. A range stalemate is the one shape of
+ * fight that never resolves itself: a sniper that cannot lead a moving ship
+ * and a ship that cannot see past its own camera frame will circle each other
+ * until the wave clock runs out. Like the rim unstick, this is correctness
+ * rather than difficulty, so it is the same for every skill level.
+ */
+export const ENEMY_PRESS_TICKS = 200;
+/** Share of the fighting distance given up once the press is at full. */
+export const ENEMY_PRESS_SHARE = 0.75;
 export const SPAWN_DOMAIN = 0x5350_4157;
-export const OFFER_DOMAIN = 0x4f46_4652;
 export const AMBIENT_ASTEROID_DOMAIN = 0x414d_4254;
+export const AIM_DOMAIN = 0x414d_5f41;
+export const LOOT_DOMAIN = 0x4c4f_4f54;
 export const MAX_PUBLIC_TRANSIENT_PADDING = 256;
 export const TEAM_UPGRADE_PRICE = 5 as const;

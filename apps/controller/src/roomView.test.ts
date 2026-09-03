@@ -17,6 +17,8 @@ describe("controller room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 2,
+      crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: -1,
       players: collection([
@@ -58,12 +60,28 @@ describe("controller room view", () => {
         shield: {
           angle: Math.PI,
           arcHalfAngle: 0.8,
+          rearmRequired: false,
           active: true,
           energy: 64,
           capacity: 100
         },
-        cannon: { heat: 0, capacity: 100, overheated: false },
-        machineGun: { heat: 0, capacity: 100, overheated: false },
+        cannon: {
+          heat: 0,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 1500,
+          speed: 1000,
+          acquireHalfAngle: 0
+        },
+        machineGun: {
+          heat: 0,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "combat",
           hasOutcome: false,
@@ -74,12 +92,15 @@ describe("controller room view", () => {
           encounterTick: 14,
           phaseTicksRemaining: 0,
           waveSecondsRemaining: 1186,
+          lootWindowSecondsRemaining: 0,
           score: 120
         },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1.1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 25, rechargeMultiplier: 1, arcWidthBonus: 0 }
+        helm: {
+          scheme: "tank",
+          headingLeadRadians: 0.5,
+          stopDampening: 1,
+          rotateInPlaceThrottle: 0.02,
+          hullAngularBrakingPerSecondSquared: 50
         },
         credits: 4
       }
@@ -91,10 +112,19 @@ describe("controller room view", () => {
       angle: Math.PI,
       arcHalfAngle: 0.8,
       active: true,
+      // The panel needs the lockout to know when its button is dead.
+      rearmRequired: false,
       energy: 64,
       capacity: 100
     });
-    expect(view?.game?.machineGun).toEqual({ heat: 0, capacity: 100, overheated: false });
+    expect(view?.game?.machineGun).toEqual({
+      heat: 0,
+      capacity: 100,
+      overheated: false,
+      kind: "kinetic",
+      reach: 620,
+      speed: 900
+    });
     expect(view?.game?.spaceship.heading).toBe(0);
     expect(findCurrentPlayer(view, "p2")?.role).toBe("shield");
     expect(findCurrentPlayer(view, "p2")?.latencyMs).toBe(62);
@@ -114,6 +144,8 @@ describe("controller room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 1,
+      crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([
@@ -147,12 +179,28 @@ describe("controller room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          rearmRequired: false,
           active: false,
           energy: 100,
           capacity: 100
         },
-        cannon: { heat: 40, capacity: 100, overheated: false },
-        machineGun: { heat: 40, capacity: 100, overheated: false },
+        cannon: {
+          heat: 40,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 1500,
+          speed: 1000,
+          acquireHalfAngle: 0
+        },
+        machineGun: {
+          heat: 40,
+          capacity: 100,
+          overheated: false,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "intermission",
           outcome: null,
@@ -161,52 +209,56 @@ describe("controller room view", () => {
           encounterTick: 40,
           phaseTicksRemaining: 200,
           waveSecondsRemaining: 0,
+          lootWindowSecondsRemaining: 0,
           score: 100
         },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
-        },
         credits: 7,
+        helm: {
+          scheme: "tank",
+          headingLeadRadians: 0.5,
+          stopDampening: 1,
+          rotateInPlaceThrottle: 0.02,
+          hullAngularBrakingPerSecondSquared: 50
+        },
         teamUpgrade: {
           hasOffer: true,
           offer: {
             offerId: "offer-w1",
             waveNumber: 1,
+            tier: 6,
             cards: collection([
               {
-                upgradeId: "pilot_speed",
+                upgradeId: "afterburner",
                 role: "pilot",
-                label: "Скорость +10%",
-                value: 0.1,
+                label: "Форсаж",
+                effects: [{ target: "spaceshipSpeedPerSecond", op: "percent", value: 0.14 }],
                 price: 5
               },
               {
-                upgradeId: "gunner_damage",
+                upgradeId: "turretDrive",
                 role: "gunner",
-                label: "Урон +15%",
-                value: 0.15,
+                label: "Привод башни",
+                effects: [{ target: "turretMaxAngularSpeedPerSecond", op: "percent", value: 0.25 }],
                 price: 5
               },
               {
-                upgradeId: "shield_capacity",
+                upgradeId: "capacitor2",
                 role: "shield",
-                label: "Ёмкость +20",
-                value: 20,
+                label: "Батарея",
+                effects: [{ target: "shieldCapacity", op: "add", value: 40 }],
                 price: 5
               }
             ])
           },
           votes: collection([
-            { role: "shield", upgradeId: "pilot_speed", revision: 1 },
-            { role: "pilot", upgradeId: "pilot_speed", revision: 2 }
+            { role: "shield", upgradeId: "afterburner", revision: 1 },
+            { role: "pilot", upgradeId: "afterburner", revision: 2 }
           ]),
           hasSelection: false,
           selection: {
             offerId: "",
             waveNumber: 1,
-            upgradeId: "pilot_speed",
+            upgradeId: "afterburner",
             role: "pilot",
             price: 5
           }
@@ -224,7 +276,7 @@ describe("controller room view", () => {
     ]);
     expect(view?.game?.teamUpgrade.votes.pilot).toEqual({
       role: "pilot",
-      upgradeId: "pilot_speed",
+      upgradeId: "afterburner",
       revision: 2
     });
     expect(view?.game?.teamUpgrade.votes.shield?.revision).toBe(1);
@@ -238,6 +290,8 @@ describe("controller room view", () => {
       roomId: "ROOM123",
       phase: "active",
       runNumber: 3,
+      crewSize: 3,
+      shipArchetypeId: "guardian",
       displayConnected: true,
       displayLatencyMs: 20,
       players: collection([
@@ -271,12 +325,28 @@ describe("controller room view", () => {
         shield: {
           angle: 0,
           arcHalfAngle: 0.72,
+          rearmRequired: false,
           active: false,
           energy: 0,
           capacity: 100
         },
-        cannon: { heat: 100, capacity: 100, overheated: true },
-        machineGun: { heat: 100, capacity: 100, overheated: true },
+        cannon: {
+          heat: 100,
+          capacity: 100,
+          overheated: true,
+          kind: "kinetic",
+          reach: 1500,
+          speed: 1000,
+          acquireHalfAngle: 0
+        },
+        machineGun: {
+          heat: 100,
+          capacity: 100,
+          overheated: true,
+          kind: "kinetic",
+          reach: 620,
+          speed: 900
+        },
         encounter: {
           phase: "result",
           hasOutcome: true,
@@ -287,12 +357,15 @@ describe("controller room view", () => {
           encounterTick: 400,
           phaseTicksRemaining: 0,
           waveSecondsRemaining: 0,
+          lootWindowSecondsRemaining: 0,
           score: 900
         },
-        roleModifiers: {
-          pilot: { speedMultiplier: 1, accelerationMultiplier: 1, maxHpBonus: 0 },
-          gunner: { damageMultiplier: 1, cooldownMultiplier: 1, projectileSpeedMultiplier: 1 },
-          shield: { capacityBonus: 0, rechargeMultiplier: 1, arcWidthBonus: 0 }
+        helm: {
+          scheme: "tank",
+          headingLeadRadians: 0.5,
+          stopDampening: 1,
+          rotateInPlaceThrottle: 0.02,
+          hullAngularBrakingPerSecondSquared: 50
         },
         credits: 12
       }

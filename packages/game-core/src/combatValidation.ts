@@ -1,4 +1,5 @@
 import {
+  ENEMY_SKILL_LEVELS,
   SPAWN_SECTORS,
   type CombatConfig,
   type EnemyArchetype,
@@ -26,11 +27,15 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["waveCampaign.director.budgetCap", config.waveCampaign.director.budgetCap],
     ["asteroidLifetimeTicks", config.asteroidLifetimeTicks],
     ["asteroidSpawnCost", config.asteroidSpawnCost],
+    ["lootLifetimeTicks", config.lootLifetimeTicks],
+    ["lootWindowTicks", config.lootWindowTicks],
+    ["lootBossWindowTicks", config.lootBossWindowTicks],
     ["caps.enemyShips", config.caps.enemyShips],
     ["caps.asteroids", config.caps.asteroids],
     ["caps.hostileProjectiles", config.caps.hostileProjectiles],
     ["caps.homingMissiles", config.caps.homingMissiles],
     ["caps.friendlyProjectiles", config.caps.friendlyProjectiles],
+    ["caps.lootDrops", config.caps.lootDrops],
     ["caps.dynamicEntities", config.caps.dynamicEntities]
   ];
   for (const [name, value] of positiveIntegers) {
@@ -56,6 +61,11 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["asteroidHp", config.asteroidHp],
     ["asteroidRadius", config.asteroidRadius],
     ["asteroidSpeedPerSecond", config.asteroidSpeedPerSecond],
+    ["shieldCapacity", config.shieldCapacity],
+    ["lootShieldAmount", config.lootShieldAmount],
+    ["lootDropRadius", config.lootDropRadius],
+    ["lootMagnetRadius", config.lootMagnetRadius],
+    ["lootMagnetAccelerationPerSecondSquared", config.lootMagnetAccelerationPerSecondSquared],
     ["worldPadding", config.worldPadding],
     ["spatialCellSize", config.spatialCellSize]
   ];
@@ -64,7 +74,22 @@ export function validateCombatConfig(config: CombatConfig): void {
       throw new RangeError(`${name} must be a positive finite number`);
     }
   }
+  if (
+    !Number.isFinite(config.lootRepairShare) ||
+    config.lootRepairShare < 0 ||
+    config.lootRepairShare > 1
+  ) {
+    throw new RangeError("lootRepairShare must be a fraction of the hull between 0 and 1");
+  }
+  if (
+    !Number.isFinite(config.lootBossRepairShare) ||
+    config.lootBossRepairShare < 0 ||
+    config.lootBossRepairShare > 1
+  ) {
+    throw new RangeError("lootBossRepairShare must be a fraction of the hull between 0 and 1");
+  }
   const nonNegativeFinite: readonly (readonly [string, number])[] = [
+    ["lootDriftDampingPerSecond", config.lootDriftDampingPerSecond],
     ["asteroidScoreReward", config.asteroidScoreReward],
     ["asteroidCreditReward", config.asteroidCreditReward],
     ["missileInterceptScoreReward", config.missileInterceptScoreReward]
@@ -103,9 +128,67 @@ export function validateCombatConfig(config: CombatConfig): void {
     config.caps.asteroids +
     config.caps.hostileProjectiles +
     config.caps.homingMissiles +
-    config.caps.friendlyProjectiles;
+    config.caps.friendlyProjectiles +
+    config.caps.lootDrops;
   if (config.caps.dynamicEntities > typedCapTotal) {
     throw new RangeError("dynamicEntities cap cannot exceed the sum of typed caps");
+  }
+  validateEnemySkill(config);
+}
+
+/**
+ * Every knob is bounded, because a profile arrives from an operator's preset
+ * and the behaviour pass divides by the range band and normalises by the
+ * weights. An unbounded value there is a NaN in the enemy's course.
+ */
+function validateEnemySkill(config: CombatConfig): void {
+  const { offset, profiles } = config.enemySkill;
+  if (!Number.isSafeInteger(offset) || offset < -2 || offset > 2) {
+    throw new RangeError("enemySkill.offset must be a whole step between -2 and 2");
+  }
+  for (const level of ENEMY_SKILL_LEVELS) {
+    const profile = profiles[level];
+    const wholeTicks: readonly (readonly [string, number])[] = [
+      ["reactionTicks", profile.reactionTicks],
+      ["evadeHorizonTicks", profile.evadeHorizonTicks]
+    ];
+    for (const [name, value] of wholeTicks) {
+      if (!Number.isSafeInteger(value) || value < 0 || value > 40) {
+        throw new RangeError(`enemySkill.${level}.${name} must be 0 to 40 whole ticks`);
+      }
+    }
+    const unitFractions: readonly (readonly [string, number])[] = [
+      ["leadFactor", profile.leadFactor],
+      ["orbitShare", profile.orbitShare],
+      ["separationWeight", profile.separationWeight],
+      ["flankSpread", profile.flankSpread],
+      ["retreatHpFraction", profile.retreatHpFraction]
+    ];
+    for (const [name, value] of unitFractions) {
+      if (!Number.isFinite(value) || value < 0 || value > 1) {
+        throw new RangeError(`enemySkill.${level}.${name} must be a fraction between 0 and 1`);
+      }
+    }
+    if (!Number.isFinite(profile.aimJitterRadians) || profile.aimJitterRadians < 0) {
+      throw new RangeError(`enemySkill.${level}.aimJitterRadians must not be negative`);
+    }
+    if (profile.aimJitterRadians > 0.6) {
+      throw new RangeError(`enemySkill.${level}.aimJitterRadians must not exceed 0.6`);
+    }
+    if (
+      !Number.isFinite(profile.rangeBandUnits) ||
+      profile.rangeBandUnits < 20 ||
+      profile.rangeBandUnits > 1200
+    ) {
+      throw new RangeError(`enemySkill.${level}.rangeBandUnits must be 20 to 1200 units`);
+    }
+    if (
+      !Number.isFinite(profile.retreatStandoffFactor) ||
+      profile.retreatStandoffFactor < 1 ||
+      profile.retreatStandoffFactor > 4
+    ) {
+      throw new RangeError(`enemySkill.${level}.retreatStandoffFactor must be 1 to 4`);
+    }
   }
 }
 
@@ -145,6 +228,9 @@ export function validateEnemyArchetypes(config: CombatConfig): void {
       archetype.visual.modelScale > 4
     ) {
       throw new RangeError(`${kind}.visual.modelScale must be between 0.2 and 4`);
+    }
+    if (!ENEMY_SKILL_LEVELS.includes(archetype.combatSkill)) {
+      throw new RangeError(`${kind}.combatSkill must name a known skill level`);
     }
     if (archetype.label.length === 0) {
       throw new RangeError(`${kind}.label must not be empty`);
@@ -201,6 +287,13 @@ export function validateEnemyArchetypes(config: CombatConfig): void {
         throw new RangeError(`${kind}.${name} must be a non-negative finite number`);
       }
     }
+    if (
+      !Number.isFinite(archetype.lootChance) ||
+      archetype.lootChance < 0 ||
+      archetype.lootChance > 1
+    ) {
+      throw new RangeError(`${kind}.lootChance must be a probability between 0 and 1`);
+    }
     for (const [index, weapon] of archetype.weapons.entries()) {
       if (weapon.burstSpreadRadians > Math.PI * 2) {
         throw new RangeError(
@@ -242,6 +335,9 @@ export function validateWaveCampaign(config: CombatConfig): void {
       }
       if (!Number.isSafeInteger(entry.spawnIntervalTicks) || entry.spawnIntervalTicks <= 0) {
         throw new RangeError(`${entryLabel}.spawnIntervalTicks must be a positive safe integer`);
+      }
+      if (!Number.isSafeInteger(entry.startDelayTicks) || entry.startDelayTicks < 0) {
+        throw new RangeError(`${entryLabel}.startDelayTicks must be a non-negative safe integer`);
       }
       for (const sector of entry.sectors) {
         if (!SPAWN_SECTORS.includes(sector)) {

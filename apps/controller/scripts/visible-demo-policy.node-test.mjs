@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
+
 import {
   createAutopilotMemory,
+  HITSCAN_SPEED,
+  leadSpeedFor,
+  helmIntent,
+  huntVector,
   directAim,
   bearingRate,
   commitTarget,
@@ -12,7 +18,7 @@ import {
   extrapolateWorld,
   interceptAim,
   nextShieldActive,
-  pilotVector,
+  nextShieldContact,
   planGunner,
   planPilot,
   planShield,
@@ -20,13 +26,6 @@ import {
   runWaveKey,
   timeToContact
 } from "./visible-demo-policy.mjs";
-
-test("pilot policy traces a normalized loop", () => {
-  assert.deepEqual(pilotVector(0), { x: 1, y: 0 });
-  const quarter = pilotVector(4_500);
-  assert.ok(Math.abs(quarter.x) < 1e-12);
-  assert.ok(Math.abs(quarter.y - 1) < 1e-12);
-});
 
 test("intercept aim leads a moving target", () => {
   const aim = interceptAim({ x: 0, y: 0 }, { x: 100, y: 0, velocityX: 0, velocityY: 100 }, 200);
@@ -144,6 +143,171 @@ function enemyAt(entityId, spawnSequence, x, y, overrides = {}) {
   });
 }
 
+test("the helm asks for a spin and a push, not a course", () => {
+  const memory = createAutopilotMemory();
+  // Dead ahead: no spin wanted, full burn along the nose.
+  const ahead = helmIntent({ x: 1, y: 0 }, 0, memory);
+  assert.equal(ahead.turn, 0);
+  assert.ok(Math.abs(ahead.thrust - 1) < 1e-9);
+
+  // Off to port: full deflection, and almost nothing to the engine until the
+  // nose has caught up, because thrust runs along the hull.
+  const toPort = helmIntent({ x: 0, y: 1 }, 0, createAutopilotMemory());
+  assert.equal(toPort.turn, 1);
+  assert.ok(toPort.thrust < 0.001);
+
+  // A stopped pilot asks for nothing at all rather than holding a course.
+  const idle = helmIntent({ x: 0, y: 0 }, 0, createAutopilotMemory());
+  assert.deepEqual(idle, { turn: 0, thrust: 0 });
+});
+
+test("the helm turns for a crossing instead of backing across it", () => {
+  // Dead astern, which is the course the bot gets the moment it reaches the rim
+  // and is told to go back to the middle. Backing up is two fifths of the speed,
+  // so flying half the arena that way costs far more than the second the hull
+  // spends turning — and with nothing on the screen there is no nose to keep
+  // pointed at anything, which was the only reason to back up at all.
+  const crossing = helmIntent({ x: -1, y: 0 }, 0, createAutopilotMemory(), false);
+  assert.ok(crossing.thrust >= 0, "no thrust into the crossing until the nose is round");
+  assert.ok(Math.abs(crossing.turn) === 1, "full deflection to bring the nose round");
+
+  // The same course while a target is being held stays a reverse.
+  const manoeuvre = helmIntent({ x: -1, y: 0 }, 0, createAutopilotMemory());
+  assert.ok(Math.abs(manoeuvre.thrust + 1) < 1e-9);
+});
+
+test("with nothing on the screen the bot turns rather than backs", () => {
+  // Out at the rim, nose pointing off it, nothing in frame: the search course
+  // is inward, which is almost dead astern. This is the manoeuvre that was 58%
+  // of all the reverse flying in the run.
+  const empty = world({
+    ship: { ...world().ship, x: 4000, y: 2200, heading: 0 }
+  });
+  const plan = planPilot(empty, ACE, createAutopilotMemory());
+  assert.ok(plan.vector.x < -0.9, "the course is back toward the middle");
+  assert.ok(plan.thrust >= 0);
+});
+
+test("a shot from a ship already dead stops being hunted once its guess is in view", () => {
+  const memory = createAutopilotMemory();
+  const incoming = world({
+    bullets: [entity("stray", 1, { x: 2200 + 300, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  assert.notEqual(huntVector(incoming, memory, 0), undefined);
+  assert.notEqual(memory.firedFrom, undefined);
+
+  // The wing that fired it is gone: nothing on screen, and the guess is now
+  // half a frame away, which is close enough to see that nobody is standing on
+  // it. It used to be flown at for the full eight seconds - into an empty
+  // corner, or into the rim.
+  const inView = world({
+    ship: { ...world().ship, x: memory.firedFrom.x - 600, y: memory.firedFrom.y }
+  });
+  assert.equal(huntVector(inView, memory, 100), undefined);
+  assert.equal(memory.firedFrom, undefined);
+});
+
+test("the fighting ring is measured against the gun, not written down", () => {
+  // Same profile, two barrels: the one that carries twice as far is fought at
+  // twice the distance. A written-down number cannot tell the two apart, and
+  // that is why a hull that bought a quarter more beam range went on fighting
+  // at the four hundred its profile named.
+  // Wide enough that the frame is not what decides either answer.
+  const scene = world({ cameraViewWidth: 8_000 });
+  const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 200 };
+  assert.equal(effectiveStandoff(scene, profile, 1_000), 800);
+  assert.equal(effectiveStandoff(scene, profile, 2_000), 1_600);
+});
+
+test("the profile distance is the floor under the ring, and the frame is the ceiling", () => {
+  const scene = world({ cameraViewWidth: 6_000 });
+  const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 900 };
+  // A short barrel does not drag the pilot into the swarm: the floor holds,
+  // for as long as the floor is somewhere the barrel can still reach.
+  assert.equal(effectiveStandoff(scene, { ...profile, standoffShare: 0.2 }, 2_000), 900);
+
+  // And nothing is held further out than the crew can see it happen.
+  const narrow = world({ cameraViewWidth: 1_600 });
+  const framed = effectiveStandoff(narrow, { ...profile, standoffDistance: 200 }, 5_000);
+  assert.ok(framed <= 640, `the frame did not cap the ring: ${String(framed)}`);
+});
+
+test("a profile with no share keeps the distance it names", () => {
+  const scene = world({ cameraViewWidth: 6_000 });
+  const profile = { ...ACE, standoffShare: 0, standoffDistance: 640 };
+  assert.equal(effectiveStandoff(scene, profile, 2_000), 640);
+});
+
+test("an empty screen is searched nose first", () => {
+  // Nose pointing the opposite way to the course, which is where a fight leaves
+  // it. Read as a manoeuvre this is a reverse, the latch holds it while the
+  // course keeps turning, and the ship crosses the arena tail first at two
+  // fifths of its speed - which is what it looked like on screen.
+  const scene = world({ ship: { ...world().ship, heading: Math.PI } });
+  const plan = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
+  assert.ok(plan.thrust >= 0, "the search was flown in reverse");
+});
+
+test("the helm backs up only for a course well astern", () => {
+  const memory = createAutopilotMemory();
+  const behind = helmIntent({ x: -1, y: 0 }, 0, memory);
+  assert.ok(Math.abs(behind.thrust + 1) < 1e-9);
+  assert.ok(Math.abs(behind.turn) < 1e-9);
+
+  // Abeam is a turn, not a reverse: reverse is the slower gear, so swinging the
+  // hull round pays for itself. At the beam the bot flew a third of the fight
+  // backwards.
+  assert.ok(helmIntent({ x: 0, y: 1 }, 0, createAutopilotMemory()).thrust >= 0);
+  assert.ok(
+    helmIntent({ x: Math.cos(1.3), y: Math.sin(1.3) }, 0, createAutopilotMemory()).thrust > 0
+  );
+
+  // Held once taken: a course drifting back towards the beam does not flip the
+  // thrust end for end, which is a harder jerk than the one this helm removes.
+  const insideTheGap = { x: Math.cos(2.1), y: Math.sin(2.1) };
+  assert.ok(helmIntent(insideTheGap, 0, memory).thrust < 0);
+  assert.equal(helmIntent(insideTheGap, 0, createAutopilotMemory()).thrust, 0);
+});
+
+test("a manoeuvre is held until its band is properly left", () => {
+  // The bands are shares of the ring - it ends at 1.15 of it and only releases
+  // at 1.21 - so the samples are written as shares too, and the frame is left
+  // to decide how many units that is. The second sample is a tick later,
+  // because the pilot re-reads a target only once per tick.
+  const ring = effectiveStandoff(world(), ACE);
+  const onStation = world({ enemies: [enemyAt("target", 1, 2_200 + ring * 1.06, 2_200)] });
+  const justOutside = world({
+    sampledAtMs: 1_050,
+    enemies: [enemyAt("target", 1, 2_200 + ring * 1.17, 2_200)]
+  });
+
+  // Judged from scratch, twenty units past the edge is a different manoeuvre:
+  // the pilot leaves the ring and orbits.
+  const fresh = planPilot(justOutside, ACE, createAutopilotMemory());
+  assert.ok(Math.hypot(fresh.vector.x, fresh.vector.y) > 0.5);
+
+  // Held: a pilot already on station stays on station, so the requested course
+  // stops swinging across the target every other tick on the band edge.
+  const memory = createAutopilotMemory();
+  const settled = planPilot(onStation, ACE, memory);
+  assert.equal(Math.hypot(settled.vector.x, settled.vector.y), 0);
+  const held = planPilot(justOutside, ACE, memory);
+  assert.equal(Math.hypot(held.vector.x, held.vector.y), 0);
+});
+
+test("the held manoeuvre belongs to the target it was chosen for", () => {
+  const memory = createAutopilotMemory();
+  planPilot(world({ enemies: [enemyAt("first", 1, 2_600, 2_200)] }), ACE, memory);
+  // A different target is judged on its own geometry, not on the verdict the
+  // previous one earned.
+  const other = planPilot(
+    world({ sampledAtMs: 1_050, enemies: [enemyAt("second", 2, 2_620, 2_200)] }),
+    ACE,
+    memory
+  );
+  assert.ok(Math.hypot(other.vector.x, other.vector.y) > 0.5);
+});
+
 test("the nose gun holds fire until the target enters the cone", () => {
   // Dead ahead: both levels shoot.
   const ahead = world({ enemies: [enemyAt("ahead", 1, 2900, 2200)] });
@@ -200,6 +364,34 @@ test("an enemy inside its own engagement range outranks one still approaching", 
   assert.equal(rankTargets(scene, { archetypes })[0].entity.entityId, "shooting");
 });
 
+test("an enemy inside its beam reach outranks a closer one firing shells", () => {
+  // The shell can be dodged and the beam cannot, so the further ship wins even
+  // though proximity is on the closer one's side.
+  const archetypes = {
+    gunship: { spawnPolicy: "standard", weapons: [{ kind: "bullet", engagementRange: 900 }] },
+    burner: { spawnPolicy: "standard", weapons: [{ kind: "laser", engagementRange: 420 }] }
+  };
+  const scene = world({
+    enemies: [
+      enemyAt("shelling", 1, 2200 + 300, 2200),
+      enemyAt("burning", 2, 2200 + 400, 2200, { kind: "burner" })
+    ]
+  });
+  assert.equal(rankTargets(scene, { archetypes })[0].entity.entityId, "burning");
+});
+
+test("the shield faces a beam already in reach over a shell still flying", () => {
+  const archetypes = {
+    burner: { spawnPolicy: "standard", weapons: [{ kind: "laser", engagementRange: 420 }] }
+  };
+  const scene = world({
+    enemies: [enemyAt("burning", 1, 2200, 2200 - 380, { kind: "burner" })],
+    bullets: [entity("shot", 2, { x: 2200 + 600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const facing = planShield(scene, ACE, createAutopilotMemory(), { archetypes });
+  assert.ok(facing.aim.y < -0.9, "the arc turned onto the shell instead of the beam");
+});
+
 test("the cannon waits out the turret traverse", () => {
   // Target abeam, turret still pointing along +x.
   const abeam = world({ enemies: [enemyAt("abeam", 1, 2200, 2900)] });
@@ -239,6 +431,208 @@ test("the shield rides the predicted contact instead of the energy meter", () =>
   assert.equal(planShield(quiet, ROOKIE, createAutopilotMemory()).active, true);
 });
 
+test("the bot keeps going after a shooter it never saw", () => {
+  const memory = createAutopilotMemory();
+  // A round crossing right to left: its source lies off to the right, beyond
+  // what the frame shows.
+  const underFire = world({
+    bullets: [entity("shot", 1, { x: 2600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const answering = huntVector(underFire, memory, 1_000);
+  assert.ok(answering !== undefined && answering.x > 0.9);
+
+  // The round is gone a tick later, and without a memory this is where the bot
+  // gave up and went back to sweeping the middle of the arena.
+  const quiet = world();
+  const still = huntVector(quiet, memory, 1_400);
+  assert.ok(still !== undefined && still.x > 0.9);
+
+  // It does not chase forever: a guess nothing confirmed goes stale.
+  assert.equal(huntVector(quiet, memory, 1_000 + 9_000), undefined);
+  assert.equal(huntVector(quiet, memory, 1_000 + 9_100), undefined);
+});
+
+test("the guessed shooter never sits outside the arena", () => {
+  const memory = createAutopilotMemory();
+  // Already out toward the rim and shot at from further out still. One camera
+  // frame back along that round lands well past the wall, and the simulation
+  // holds every ship inside it, so nothing can be standing there.
+  const underFire = world({
+    ship: { ...world().ship, x: 3400, y: 2200 },
+    bullets: [entity("shot", 1, { x: 3800, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const answering = huntVector(underFire, memory, 1_000);
+  assert.ok(answering !== undefined && answering.x > 0.9);
+
+  const source = memory.firedFrom;
+  assert.ok(source !== undefined);
+  const fromCentre = Math.hypot(source.x - 2200, source.y - 2200);
+  assert.ok(
+    fromCentre <= underFire.arenaRadius + 1e-9,
+    `guess sits ${String(Math.round(fromCentre))} out of ${String(underFire.arenaRadius)}`
+  );
+
+  // Pulled in, the guess is somewhere the bot can actually reach, so it gets
+  // spent on arrival instead of pinning the ship against the wall until it
+  // times out.
+  const arrived = world({ ship: { ...world().ship, x: source.x, y: source.y } });
+  assert.equal(huntVector(arrived, memory, 1_200), undefined);
+});
+
+test("the guess is spent once the bot arrives and finds nothing", () => {
+  const memory = createAutopilotMemory();
+  const underFire = world({
+    bullets: [entity("shot", 1, { x: 2600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  huntVector(underFire, memory, 1_000);
+  const source = memory.firedFrom;
+  assert.ok(source !== undefined);
+
+  const arrived = world({ ship: { ...world().ship, x: source.x, y: source.y } });
+  assert.equal(huntVector(arrived, memory, 1_200), undefined);
+});
+
+test("the shield covers the shot before the rock", () => {
+  // Both connect, the rock a touch sooner. The old arc followed whatever
+  // arrived first, which in a field of drifting rocks meant the operator
+  // watched it face the scenery while a sniper worked on the hull.
+  const both = world({
+    asteroids: [entity("rock", 1, { x: 2200, y: 1900, velocityY: 240, radius: 26 })],
+    bullets: [entity("shot", 2, { x: 2600, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  const covering = planShield(both, ACE, createAutopilotMemory());
+  assert.ok(covering.aim.x > 0.9, "the arc faces the shot, not the rock");
+
+  // Beyond the arming window nothing is being blocked yet, so the arc simply
+  // tracks the nearest contact and the rock wins on time.
+  const distantShot = world({
+    asteroids: [entity("rock", 1, { x: 2200, y: 1900, velocityY: 240, radius: 26 })],
+    bullets: [entity("shot", 2, { x: 5000, y: 2200, velocityX: -900, radius: 7 })]
+  });
+  assert.ok(planShield(distantShot, ACE, createAutopilotMemory()).aim.y < -0.9);
+});
+
+test("an escorted missile does not outrank its launcher", () => {
+  // The cannon cannot clear missiles faster than a boss puts them up, so a
+  // gunner that services every one of them never touches the launcher: the
+  // boss topped the ranking on 9.8% of ticks and the fight ended with it at
+  // 61% health. Past the window an escorted missile is the hull's problem.
+  const boss = enemyAt("boss", 1, 2200, 2600, { kind: "boss", hp: 900, maxHp: 900 });
+  const far = world({
+    enemies: [boss],
+    missiles: [entity("missile", 2, { x: 3034, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(rankTargets(far)[0].entity.entityId, "boss");
+
+  // Inside the window it is about to land, and nothing else is worth the mount.
+  const near = world({
+    enemies: [boss],
+    missiles: [entity("missile", 2, { x: 2554, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(rankTargets(near)[0].entity.entityId, "missile");
+
+  // Without a launcher on the field a missile keeps the priority it had: there
+  // is nothing better for the cannon to be doing.
+  const alone = world({
+    missiles: [entity("missile", 2, { x: 3034, y: 2200, velocityX: -240, heading: Math.PI })]
+  });
+  assert.equal(rankTargets(alone)[0].role, "missile");
+});
+
+test("the break follows the missile's course, not its current line", () => {
+  // Crossing ahead of the ship: its line misses, so the old reading saw no
+  // threat and the pilot went back to holding station — then saw one again a
+  // tick later. That alternation ran 7213 times over forty runs and left the
+  // ship averaging 134 units per second of a possible 320.
+  const crossing = world({
+    missiles: [
+      entity("missile", 1, {
+        x: 2400,
+        y: 2200,
+        velocityX: -169.7,
+        velocityY: 169.7,
+        heading: 2.356
+      })
+    ]
+  });
+  assert.equal(timeToContact(crossing.ship, crossing.ship.radius, crossing.missiles[0]), undefined);
+
+  // The missile bears due east, so the break is across that bearing.
+  const broken = planPilot(crossing, ACE, createAutopilotMemory());
+  assert.ok(Math.abs(broken.vector.x) < 0.2);
+  assert.ok(Math.abs(broken.vector.y) > 0.9);
+});
+
+test("the arc reads a missile that has not turned in yet", () => {
+  // Launched away from the ship, which is what this catalogue's boss does: the
+  // burst leaves wide of the target and curves back. Its current line never
+  // reaches the ship, so a straight-line reading says there is nothing there.
+  const launched = world({
+    shield: {
+      angle: Math.PI,
+      active: false,
+      energy: 100,
+      capacity: 100,
+      arcHalfAngle: Math.PI / 4
+    },
+    missiles: [entity("missile", 1, { x: 2600, y: 2200, velocityX: 240, heading: 0 })]
+  });
+  assert.equal(
+    timeToContact(launched.ship, launched.shieldRadius, launched.missiles[0]),
+    undefined
+  );
+
+  const contact = nextShieldContact(launched);
+  assert.ok(contact !== undefined, "flying the missile finds the arrival its line hides");
+  assert.ok(contact.seconds > 0);
+
+  // The arc leaves the bearing it was parked on and faces where the missile
+  // will come back from, rather than holding while the line says nothing.
+  const facing = planShield(launched, ACE, createAutopilotMemory());
+  assert.ok(facing.aim.x > 0.5);
+});
+
+test("the arc faces the shooter before the shot exists", () => {
+  // Nothing in the air, one enemy on the beam. The arc crosses the hull slower
+  // than a round crosses the frame, so waiting for the round means arriving
+  // after it.
+  const watched = world({
+    shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    enemies: [enemyAt("shooter", 1, 2200, 1400)]
+  });
+  const early = planShield(watched, ACE, createAutopilotMemory());
+  assert.ok(early.aim.y < -0.9, "the sector faces the enemy");
+  assert.equal(early.active, false, "facing is free, holding is not");
+
+  // With the frame empty the guess is where the pilot walked the last shots
+  // back to — the one case where the threat is something nobody can see.
+  const memory = createAutopilotMemory();
+  huntVector(
+    world({ bullets: [entity("shot", 1, { x: 2600, y: 2200, velocityX: -900, radius: 7 })] }),
+    memory,
+    1_000
+  );
+  const remembered = planShield(world(), ACE, memory);
+  assert.ok(remembered.aim.x > 0.9);
+  assert.equal(remembered.active, false);
+
+  // A guess nobody confirmed stops being worth a facing: the arc holds where it
+  // is instead of committing to a position that may no longer have anything on
+  // it. Parked off the guessed bearing, so holding and facing differ.
+  const parked = {
+    ...world(),
+    sampledAtMs: 1_000 + 4_000,
+    shield: {
+      angle: Math.PI / 2,
+      active: false,
+      energy: 100,
+      capacity: 100,
+      arcHalfAngle: Math.PI / 4
+    }
+  };
+  assert.ok(planShield(parked, ACE, memory).aim.y > 0.9);
+});
+
 test("a drained shield is told to drop so the rearm latch clears", () => {
   const drained = world({
     shield: { angle: 0, active: true, energy: 0, capacity: 100, arcHalfAngle: Math.PI / 4 },
@@ -251,12 +645,20 @@ test("a drained shield is told to drop so the rearm latch clears", () => {
 test("below its reserve the shield spends only on what actually hurts", () => {
   const battery = { angle: 0, active: false, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 };
 
-  // A bullet is cheap to eat, so the last of the battery is not spent on it.
+  // A rock is dodgeable and shootable, so the last of the battery is not spent
+  // on it — the ship can answer a rock with the guns or with the helm.
+  const drifting = world({
+    shield: battery,
+    asteroids: [entity("rock", 1, { x: 2400, y: 2200, velocityX: -240, radius: 26 })]
+  });
+  assert.equal(planShield(drifting, ACE, createAutopilotMemory()).active, false);
+
+  // Aimed fire is neither: it is pointed at the ship and arrives regardless.
   const grazed = world({
     shield: battery,
     bullets: [entity("shot", 1, { x: 2400, y: 2200, velocityX: -900, radius: 7 })]
   });
-  assert.equal(planShield(grazed, ACE, createAutopilotMemory()).active, false);
+  assert.equal(planShield(grazed, ACE, createAutopilotMemory()).active, true);
 
   // A missile is not: refusing to raise here is how the ace used to die in a
   // swarm, because under fire the energy never climbs back over the floor.
@@ -347,7 +749,8 @@ test("the orbiting pilot closes an open range and coasts on station", () => {
 });
 
 test("the stand-off ring never grows past what the camera frames", () => {
-  // The frame is 9/16 of its width, so its short side bounds the ring.
+  // Bounded by the frame's height, which is the short way out of the picture:
+  // a ring inside it holds whichever way the target sits.
   const narrow = world({ cameraViewWidth: 800 });
   assert.ok(effectiveStandoff(narrow, ACE) < ACE.standoffDistance);
   assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 180) < 1e-9);
@@ -356,10 +759,22 @@ test("the stand-off ring never grows past what the camera frames", () => {
   const wide = world({ cameraViewWidth: 4400 });
   assert.equal(effectiveStandoff(wide, ACE), ACE.standoffDistance);
 
-  // A target held on the clamped ring stays inside the frame.
+  // A target held on the clamped ring stays inside the frame, top to bottom.
   const framed = world({ cameraViewWidth: 2200 });
-  const halfHeight = (2200 * 9) / 16 / 2;
-  assert.ok(effectiveStandoff(framed, ACE) < halfHeight);
+  assert.ok(effectiveStandoff(framed, ACE) < (2200 * CAMERA_VIEW_ASPECT) / 2);
+});
+
+test("the ring is never held further out than the barrel carries", () => {
+  // A floor is there to keep the hull out of the swarm. Left above the reach
+  // after the guns were cut it did the opposite: the bot parked at six hundred
+  // with a shell that dies at four hundred and ninety, and fired at nothing.
+  const scene = world({ cameraViewWidth: 4_000 });
+  const stubborn = { ...ACE, standoffShare: 0.75, standoffDistance: 600 };
+  assert.equal(effectiveStandoff(scene, stubborn, 490), 490);
+
+  // With the reach unknown - a barrel the telemetry did not carry - the frame
+  // is still the only ceiling there is.
+  assert.equal(effectiveStandoff(scene, stubborn), 600);
 });
 
 test("the orbit turns back inward at the arena rim", () => {
@@ -381,6 +796,28 @@ test("the orbit turns back inward at the arena rim", () => {
   assert.equal(memory.orbitSign, -1);
 });
 
+test("a missile the shield is facing does not take the turret off its launcher", () => {
+  // What a launcher would otherwise do to a crew: feed it one interceptable
+  // missile a second, take the turret for every one of them, and never be shot
+  // at itself. The sector is already pointed at this one, so it is the shield's
+  // to stop and the gun stays on the ship that fired it.
+  const inbound = entity("inbound", 2, { x: 2_200 + 400, y: 2_200, velocityX: -240, radius: 12 });
+  const launcher = enemyAt("launcher", 1, 2_900, 2_200);
+  const uncovered = world({
+    enemies: [launcher],
+    missiles: [inbound],
+    shield: { angle: 0, active: false, energy: 100, capacity: 100, arcHalfAngle: Math.PI / 4 }
+  });
+  assert.equal(rankTargets(uncovered)[0]?.role, "missile");
+
+  const covered = world({
+    enemies: [launcher],
+    missiles: [inbound],
+    shield: { angle: 0, active: true, energy: 100, capacity: 100, arcHalfAngle: Math.PI / 4 }
+  });
+  assert.equal(rankTargets(covered)[0]?.role, "enemy");
+});
+
 test("a committed target is held through the retarget interval", () => {
   const memory = createAutopilotMemory();
   const first = world({ enemies: [enemyAt("first", 1, 2500, 2200)] });
@@ -393,10 +830,22 @@ test("a committed target is held through the retarget interval", () => {
   planGunner(better, ROOKIE, memory, { nowMs: 1_100 });
   assert.equal(memory.target.entityId, "first");
 
-  // Past the interval plus the reaction delay the better target is taken.
+  // And it is still held long past the interval: a nearer ship of the same
+  // class is not a reason to abandon one already being shot at. This is what a
+  // hull surrounded by small ships used to fail at - it crossed the arc to
+  // whoever was nearest this second and never finished any of them.
   planGunner(better, ROOKIE, memory, { nowMs: 4_000 });
   planGunner(better, ROOKIE, memory, { nowMs: 5_000 });
-  assert.equal(memory.target.entityId, "closer");
+  assert.equal(memory.target.entityId, "first");
+
+  // A boss outscores a swarm ship by far more than half again, so it takes the
+  // mount even though the first is alive and under the bore.
+  const withBoss = world({
+    enemies: [enemyAt("first", 1, 2500, 2200), enemyAt("boss", 3, 2600, 2200, { kind: "boss" })]
+  });
+  planGunner(withBoss, ROOKIE, memory, { nowMs: 6_000 });
+  planGunner(withBoss, ROOKIE, memory, { nowMs: 7_000 });
+  assert.equal(memory.target.entityId, "boss");
 });
 
 test("a vanished target is dropped without waiting out the interval", () => {
@@ -480,46 +929,31 @@ function rockAt(entityId, spawnSequence, x, y, velocityX, velocityY) {
   return entity(entityId, spawnSequence, { x, y, velocityX, velocityY, hp: 65, maxHp: 65 });
 }
 
-test("a rock already past the rim and still heading out is not a target", () => {
-  // Arena centre is 2200,2200 with radius 2200: 4300 on x is outside it.
-  const leaving = world({
-    cameraViewWidth: 4400,
-    ship: {
-      x: 4000,
-      y: 2200,
-      heading: 0,
-      velocityX: 0,
-      velocityY: 0,
-      radius: 52,
-      hp: 500,
-      maxHp: 500
-    },
-    asteroids: [rockAt("outbound", 1, 4500, 2200, 190, 0)]
-  });
-  assert.deepEqual(rankTargets(leaving), []);
-  assert.equal(planGunner(leaving, ACE, createAutopilotMemory()).firing, false);
-
-  // The same rock on its way back in is still worth shooting.
-  const returning = world({
-    cameraViewWidth: 4400,
-    ship: {
-      x: 4000,
-      y: 2200,
-      heading: 0,
-      velocityX: 0,
-      velocityY: 0,
-      radius: 52,
-      hp: 500,
-      maxHp: 500
-    },
-    asteroids: [rockAt("inbound", 1, 4500, 2200, -190, 0)]
-  });
-  assert.equal(rankTargets(returning).length, 1);
+test("a rock is never a target, wherever it is and whichever way it drifts", () => {
+  // Arena centre is 2200,2200 with radius 2200, so these three cover the lot:
+  // outside and leaving, outside and coming back, and drifting inside.
+  const rocks = [
+    rockAt("outbound", 1, 4500, 2200, 190, 0),
+    rockAt("inbound", 1, 4500, 2200, -190, 0),
+    rockAt("drifting", 1, 2600, 2200, 190, 0)
+  ];
+  for (const rock of rocks) {
+    const scene = world({ asteroids: [rock] });
+    assert.deepEqual(rankTargets(scene), [], `${rock.entityId} was ranked`);
+    assert.equal(planGunner(scene, ACE, createAutopilotMemory()).firing, false);
+  }
 });
 
-test("a rock inside the arena stays a target whichever way it drifts", () => {
-  const inside = world({ asteroids: [rockAt("drifting", 1, 2600, 2200, 190, 0)] });
-  assert.equal(rankTargets(inside).length, 1);
+test("a rock never breaks the course either: the shield is what answers it", () => {
+  // A rock closing head-on from +x while the ship is closing on an enemy that
+  // way. A break would throw the course sideways; the rock raises none, so the
+  // pilot keeps pressing.
+  const scene = world({
+    enemies: [enemyAt("target", 1, 2200 + 1500, 2200)],
+    asteroids: [rockAt("incoming", 2, 2200 + 300, 2200, -300, 0)]
+  });
+  const pilot = planPilot(scene, { ...ACE, evadeMissiles: false }, createAutopilotMemory());
+  assert.ok(pilot.vector.x > 0.5, "the rock threw the pilot off its approach");
 });
 
 test("an empty screen never leaves the pilot parked", () => {
@@ -567,12 +1001,28 @@ test("a visible target still outranks the search", () => {
   assert.equal(memory.target.entityId, "visible");
 });
 
-test("the rookie patrol is untouched by the search behaviour", () => {
-  const empty = world();
-  assert.deepEqual(
-    planPilot(empty, ROOKIE, createAutopilotMemory(), { nowMs: 0 }).vector,
-    pilotVector(0)
-  );
+test("a profile without the orbit skill still fights", () => {
+  // It used to fly a fixed circle and never look at a target at all, so two of
+  // the three hulls engaged only when the circle happened to carry them into
+  // range - laps of ignoring the fight, which is what it looked like on screen.
+  // Abeam of where the old patrol circle points at this instant, so a course
+  // that merely happens to agree with the circle cannot pass this.
+  const scene = world({ enemies: [enemyAt("target", 1, 2200, 2200 + 1200)] });
+  const plan = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
+  assert.ok(plan.vector.y > 0.9, "the course is not on the target");
+  assert.ok(plan.thrust >= 0, "and it is flown nose first");
+});
+
+test("without the orbit skill the ship bores in instead of circling", () => {
+  // Inside twice the stand-off the orbiting profile spends most of the course
+  // sideways; the one without the skill spends none of it. That difference is
+  // the whole of what the skill withholds now.
+  const inside = 2200 + effectiveStandoff(world(), ACE) * 1.4;
+  const scene = world({ enemies: [enemyAt("target", 1, 2200, inside)] });
+  const straight = planPilot(scene, ROOKIE, createAutopilotMemory(), { nowMs: 0 });
+  const circling = planPilot(scene, ACE, createAutopilotMemory(), { nowMs: 0 });
+  assert.ok(straight.vector.y > 0.999, "a course without the skill went sideways");
+  assert.ok(circling.vector.y < 0.95, "the orbiting course did not");
 });
 
 test("a rock on screen does not call off the hunt for an unseen shooter", () => {
@@ -586,12 +1036,10 @@ test("a rock on screen does not call off the hunt for an unseen shooter", () => 
   const pilot = planPilot(scene, { ...ACE, dodgeBullets: false }, memory);
   assert.ok(pilot.vector.x > 0.9);
 
-  // The gunner still has a target: the rock is worth credits.
-  assert.equal(
-    planGunner(scene, { ...ACE, dodgeBullets: false }, memory).firing !== undefined,
-    true
-  );
-  assert.equal(memory.target.entityId, "rock");
+  // The gunner has nothing to hold: a rock is not a target, so the mount waits
+  // for the ship the pilot is closing on instead of spending its traverse.
+  assert.equal(planGunner(scene, { ...ACE, dodgeBullets: false }, memory).firing, false);
+  assert.equal(memory.target, undefined);
 });
 
 test("a visible enemy outranks the hunt", () => {
@@ -621,6 +1069,27 @@ test("a boss firing from beyond the frame is hunted through its missiles", () =>
   assert.notDeepEqual(hunting.vector, { x: 0, y: 0 });
 });
 
+test("the pilot presses ships while the turret keeps the threat", () => {
+  const steady = { ...ACE, evadeMissiles: false, dodgeBullets: false };
+  const scene = world({
+    enemies: [enemyAt("gunship", 1, 3_200, 2_200)],
+    missiles: [
+      entity("inbound", 2, { x: 2_200, y: 1_400, velocityX: 0, velocityY: 240, radius: 12 })
+    ]
+  });
+
+  // The crew's commitment is the missile — it is the more urgent thing to shoot
+  // and the turret traverses on its own.
+  const memory = createAutopilotMemory();
+  const flown = planPilot(scene, steady, memory);
+  assert.equal(memory.target.entityId, "inbound");
+
+  // The hull is flown at the ship anyway, because on this hull the nose is the
+  // engine: aiming it at a missile is flying at a missile, and the boss went
+  // untouched while it did that.
+  assert.ok(flown.vector.x > 0.5, "flies towards the ship, not up at the missile");
+});
+
 test("a target sweeping faster than the turret ends the orbit", () => {
   // Inside the ring the orbit backs away, so the sign of the closing component
   // is what separates holding station from breaking the stalemate. This target
@@ -647,12 +1116,12 @@ test("a slow-crossing target still gets the orbit", () => {
   const ring = effectiveStandoff(world(), ACE);
   const first = world({
     sampledAtMs: 0,
-    enemies: [enemyAt("drifting", 1, 2200 + ring + 100, 2200, { velocityY: 10 })]
+    enemies: [enemyAt("drifting", 1, 2200 + ring + 200, 2200, { velocityY: 10 })]
   });
   planPilot(first, ACE, memory);
   const second = world({
     sampledAtMs: 100,
-    enemies: [enemyAt("drifting", 1, 2200 + ring + 100, 2200 + 1, { velocityY: 10 })]
+    enemies: [enemyAt("drifting", 1, 2200 + ring + 200, 2200 + 1, { velocityY: 10 })]
   });
   const orbiting = planPilot(second, ACE, memory);
 
@@ -824,4 +1293,110 @@ test("the lead solution waits out the swing as well as the flight", () => {
   const far = planGunner(swung, ACE, createAutopilotMemory()).aim;
 
   assert.ok(far.y > near.y);
+});
+
+function repairAt(x, y, amount = 35) {
+  return {
+    entityId: "salvage-1",
+    spawnSequence: 40,
+    x,
+    y,
+    velocityX: 0,
+    velocityY: 0,
+    radius: 18,
+    kind: "repair",
+    amount
+  };
+}
+
+/** How far the requested course points at the drop, as a cosine. */
+function aimAtDrop(plan, from, drop) {
+  const toDrop = normalize({ x: drop.x - from.x, y: drop.y - from.y });
+  return plan.vector.x * toDrop.x + plan.vector.y * toDrop.y;
+}
+
+test("the pilot leaves the fight for a repair it can actually use", () => {
+  // The bug this covers: salvage fell while the hull was hurt and the bot flew
+  // past it, because it only collected after the wave was already won.
+  const hurt = world({
+    ship: { ...world().ship, hp: 300 },
+    enemies: [enemyAt("gunship-near", 1, 2600, 2200)],
+    loot: [repairAt(2200, 2500)]
+  });
+  const plan = planPilot(hurt, ACE, createAutopilotMemory());
+  assert.ok(aimAtDrop(plan, hurt.ship, hurt.loot[0]) > 0.9, "the course points at the repair");
+});
+
+test("a repair the hull has no room for is not worth a course change", () => {
+  const full = world({
+    enemies: [enemyAt("gunship-near", 1, 2600, 2200)],
+    loot: [repairAt(2200, 2500)]
+  });
+  const plan = planPilot(full, ACE, createAutopilotMemory());
+  assert.ok(aimAtDrop(plan, full.ship, full.loot[0]) < 0.9, "the course stays on the enemy");
+});
+
+test("the detour is capped while the fight is on and lifted once it is won", () => {
+  const far = repairAt(2200, 2200 + 900);
+  const fighting = world({
+    ship: { ...world().ship, hp: 200 },
+    enemies: [enemyAt("gunship-near", 1, 2600, 2200)],
+    loot: [far]
+  });
+  assert.ok(
+    aimAtDrop(planPilot(fighting, ACE, createAutopilotMemory()), fighting.ship, far) < 0.9,
+    "too far to leave a fight for"
+  );
+
+  const won = world({
+    ship: { ...world().ship, hp: 200 },
+    loot: [far],
+    salvageWindowSeconds: 12
+  });
+  assert.ok(
+    aimAtDrop(planPilot(won, ACE, createAutopilotMemory()), won.ship, far) > 0.9,
+    "inside the window there is nothing else to do with the time"
+  );
+});
+
+test("a beam is never led, whatever the preset says its projectiles fly at", () => {
+  // Both harnesses feed the lead solution from here. Leading a laser is what
+  // made it the weakest of the three kinds on the stand and made it miss
+  // everything that moved on screen.
+  assert.equal(leadSpeedFor("kinetic", 720), 720);
+  assert.equal(leadSpeedFor("missile", 720), 720);
+  assert.equal(leadSpeedFor(undefined, 720), 720);
+  assert.equal(leadSpeedFor("laser", 720), HITSCAN_SPEED);
+});
+
+test("a rock does not outrank the repair, but a bullet does", () => {
+  // What the operator watched: on a field of ambient asteroids the break fired
+  // over and over and the drop was never reached, so the bot looked like it was
+  // chasing rocks.
+  const closing = (entityId, overrides) =>
+    entity(entityId, 9, { x: 2200 + 150, y: 2200, velocityX: -300, velocityY: 0, ...overrides });
+  const hurt = {
+    ship: { ...world().ship, hp: 200 },
+    loot: [repairAt(2200 - 180, 2200)]
+  };
+
+  const dodgingRock = world({ ...hurt, asteroids: [closing("rock-1", { radius: 24 })] });
+  assert.ok(
+    aimAtDrop(
+      planPilot(dodgingRock, ACE, createAutopilotMemory()),
+      dodgingRock.ship,
+      dodgingRock.loot[0]
+    ) > 0.9,
+    "the repair wins against a rock"
+  );
+
+  const dodgingBullet = world({ ...hurt, bullets: [closing("bullet-1", { radius: 6 })] });
+  assert.ok(
+    aimAtDrop(
+      planPilot(dodgingBullet, ACE, createAutopilotMemory()),
+      dodgingBullet.ship,
+      dodgingBullet.loot[0]
+    ) < 0.9,
+    "aimed fire still outranks the repair"
+  );
 });

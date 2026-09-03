@@ -1,14 +1,17 @@
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
+  ENEMY_SKILL_LEVELS,
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_WEAPONS,
   type BalanceTuning,
-  type EnemyArchetype
+  type EnemyArchetype,
+  type EnemySkillLevel
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
 import { EnemyPreview } from "../../EnemyPreview.js";
-import { DegreesField, NumberField } from "../../components/fields.js";
+import { DegreesField, NumberField, PercentField } from "../../components/fields.js";
+import { ENEMY_SKILL_LEVEL_LABELS } from "../../model/enemySkillLabels.js";
 import { nextArchetypeId, usageOf } from "./catalogue.js";
 import { WeaponEditor } from "./WeaponEditor.js";
 
@@ -276,6 +279,22 @@ export function ArchetypeCard({ kind, archetype, tuning, onChange }: ArchetypeCa
             <option value="boss">после зачистки волны</option>
           </select>
         </label>
+        <label className="field">
+          <span className="field__caption">Мастерство</span>
+          <select
+            className="field__input"
+            value={archetype.combatSkill}
+            onChange={(event) => {
+              patchArchetype(kind, { combatSkill: event.target.value as EnemySkillLevel });
+            }}
+          >
+            {ENEMY_SKILL_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {ENEMY_SKILL_LEVEL_LABELS[level]}
+              </option>
+            ))}
+          </select>
+        </label>
         <NumberField
           caption="Очки"
           value={archetype.scoreReward}
@@ -288,6 +307,13 @@ export function ArchetypeCard({ kind, archetype, tuning, onChange }: ArchetypeCa
           value={archetype.creditReward}
           onChange={(creditReward) => {
             patchArchetype(kind, { creditReward });
+          }}
+        />
+        <PercentField
+          caption="Шанс лута"
+          fraction={archetype.lootChance}
+          onChange={(lootChance) => {
+            patchArchetype(kind, { lootChance });
           }}
         />
       </div>

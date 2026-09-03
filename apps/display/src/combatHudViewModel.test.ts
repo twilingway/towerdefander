@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createRadarProjection,
   getCurrentWaveUpgrade,
+  getShieldStatusLabel,
   getResourcePercent,
   projectWorldToRadar
 } from "./combatHudViewModel.js";
@@ -47,5 +48,20 @@ describe("current wave upgrade", () => {
 
   it("has nothing to present without a selection", () => {
     expect(getCurrentWaveUpgrade(null, 2)).toBeNull();
+  });
+});
+
+describe("shield status label", () => {
+  it("names the phase the crew is looking at", () => {
+    expect(getShieldStatusLabel("up", false, 40)).toBe("АКТИВЕН");
+    // The one that matters: a shield on its way up looks broken otherwise.
+    expect(getShieldStatusLabel("raising", false, 100)).toBe("ПОДНИМАЕТСЯ");
+    expect(getShieldStatusLabel("cooling", false, 12)).toBe("ОСТЫВАЕТ");
+  });
+
+  it("explains a shield that is down rather than calling it off", () => {
+    expect(getShieldStatusLabel("down", true, 30)).toBe("НАБИРАЕТ ЗАРЯД");
+    expect(getShieldStatusLabel("down", false, 0)).toBe("РАЗРЯЖЕН");
+    expect(getShieldStatusLabel("down", false, 80)).toBe("выключен");
   });
 });

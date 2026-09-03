@@ -43,6 +43,10 @@ try {
       PORT: String(serverPort),
       GRACEFUL_SHUTDOWN: "false",
       RECONNECTION_GRACE_SECONDS: "1",
+      // The harness owns this server on its own port, and DEMO_START_WAVE is
+      // useless without it: the page asks for the wave and the server refuses
+      // it, so the demo opened on wave one whatever was asked for.
+      ALLOW_START_WAVE: "true",
       ...(presetPath === undefined ? {} : { BALANCE_PRESET_PATH: presetPath })
     }
   );

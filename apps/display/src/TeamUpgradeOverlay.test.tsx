@@ -8,22 +8,35 @@ const teamUpgrade: PublicTeamUpgradeView = {
   offer: {
     offerId: "offer-w3",
     waveNumber: 3,
+    tier: 6,
     cards: [
-      { upgradeId: "pilot_hull", role: "pilot", label: "Корпус +25", value: 25, price: 5 },
       {
-        upgradeId: "gunner_cooldown",
-        role: "gunner",
-        label: "Перезарядка -10%",
-        value: 0.1,
+        upgradeId: "hullPlating2",
+        role: "pilot",
+        label: "Композитный корпус",
+        effects: [{ target: "spaceshipMaxHp", op: "add", value: 60 }],
         price: 5
       },
-      { upgradeId: "shield_arc", role: "shield", label: "Дуга +10°", value: 0.17, price: 5 }
+      {
+        upgradeId: "heavyRounds",
+        role: "gunner",
+        label: "Тяжёлые снаряды",
+        effects: [{ target: "friendlyProjectileDamage", op: "percent", value: 0.18 }],
+        price: 5
+      },
+      {
+        upgradeId: "wideArc",
+        role: "shield",
+        label: "Широкий сектор",
+        effects: [{ target: "shieldArcRadians", op: "add", value: Math.PI / 9 }],
+        price: 5
+      }
     ]
   },
   votes: {
-    pilot: { role: "pilot", upgradeId: "shield_arc", revision: 1 },
+    pilot: { role: "pilot", upgradeId: "wideArc", revision: 1 },
     gunner: null,
-    shield: { role: "shield", upgradeId: "shield_arc", revision: 4 }
+    shield: { role: "shield", upgradeId: "wideArc", revision: 4 }
   },
   selection: null
 };
@@ -37,6 +50,13 @@ describe("TeamUpgradeOverlay", () => {
         score={480}
         waveNumber={3}
         phaseTicksRemaining={600}
+        purchasedModules={[
+          "hullPlating1",
+          "thrusters1",
+          "ammoFeed1",
+          "gyroscopes1",
+          "noseCooling1"
+        ]}
       />
     );
 
@@ -58,6 +78,13 @@ describe("TeamUpgradeOverlay", () => {
         score={40}
         waveNumber={3}
         phaseTicksRemaining={120}
+        purchasedModules={[
+          "hullPlating1",
+          "thrusters1",
+          "ammoFeed1",
+          "gyroscopes1",
+          "noseCooling1"
+        ]}
       />
     );
 
@@ -76,6 +103,13 @@ describe("TeamUpgradeOverlay", () => {
         score={0}
         waveNumber={1}
         phaseTicksRemaining={600}
+        purchasedModules={[
+          "hullPlating1",
+          "thrusters1",
+          "ammoFeed1",
+          "gyroscopes1",
+          "noseCooling1"
+        ]}
       />
     );
 

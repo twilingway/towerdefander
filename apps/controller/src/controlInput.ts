@@ -20,6 +20,55 @@ export function normalizeControlVector(vector: ControlVector): ControlVector {
   return { x: x / length, y: y / length };
 }
 
+/**
+ * How far the stick has to be pushed before it names a new bearing for the
+ * barrel.
+ *
+ * Reported raw, every twitch inside the ring was a fresh bearing and the turret
+ * chased the thumb: the barrel has real angular inertia, so a stream of small
+ * corrections reads as shaking rather than as aiming. Past the threshold the
+ * stick means "go there"; short of it the barrel keeps the bearing it was last
+ * given, which is what `applyGunnerInput` does with a neutral vector.
+ */
+export const AIM_COMMIT_SHARE = 0.6;
+
+/**
+ * The bearing a stick position commands, or neutral when it commands nothing.
+ * A pointer that never commits is a tap - which the gunner's stick reads as a
+ * shot rather than as a turn.
+ */
+export function commitAim(
+  vector: ControlVector,
+  commitShare = AIM_COMMIT_SHARE
+): ControlVector | null {
+  const committed = normalizeControlVector(vector);
+  return Math.hypot(committed.x, committed.y) >= commitShare ? committed : null;
+}
+
+/**
+ * How far the stick has to be pushed for full speed.
+ *
+ * The hull's target velocity is the vector times its top speed, so the length
+ * of the push was the throttle: flying anywhere at full speed meant holding the
+ * thumb against the rim for the whole trip, and the last two thirds of the
+ * stick were the only part that moved the ship properly. Saturating early
+ * leaves the inner third for crawling into position and gives the rest of the
+ * ring back to steering, which is what a thumb is good at.
+ */
+export const FULL_THROTTLE_SHARE = 0.3;
+
+/**
+ * The push a stick position asks for, with the throttle saturating early. The
+ * bearing is whatever the stick names; only the length is rescaled.
+ */
+export function throttleAim(vector: ControlVector, fullShare = FULL_THROTTLE_SHARE): ControlVector {
+  const pushed = normalizeControlVector(vector);
+  const length = Math.hypot(pushed.x, pushed.y);
+  if (length === 0 || fullShare <= 0) return pushed;
+  const scale = Math.min(1, length / fullShare) / length;
+  return { x: pushed.x * scale, y: pushed.y * scale };
+}
+
 export function getKeyboardVector(keys: ReadonlySet<string>): ControlVector {
   const x =
     Number(keys.has("KeyD") || keys.has("ArrowRight")) -

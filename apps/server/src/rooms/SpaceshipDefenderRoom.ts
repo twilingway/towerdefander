@@ -51,10 +51,11 @@ import { randomUUID } from "node:crypto";
 import { getBalanceStore } from "../balance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
-import { DECORATIVE_OBSTACLES } from "./decorations.js";
+import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
 import { createRunSeed } from "./runSeed.js";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
+import { nextShieldIntent } from "./shieldAutopilot.js";
 import { projectGameState } from "./stateProjection.js";
 import {
   upgradeErrorMessage,
@@ -87,17 +88,48 @@ const {
   zeroControllerTtlSeconds,
   waveTtlSeconds,
   absoluteTtlSeconds,
+  allowStartWave,
   maxConcurrentRooms
 } = readServerConfig();
 
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
+
+/**
+ * One continuous stream is capped at 20 messages per second on the client, so a
+ * crew of one — who drives the ship and the turret from a single connection —
+ * legitimately sends twice that. Colyseus force-closes a client that crosses
+ * this ceiling, so the limit follows the number of streams a seat can own,
+ * plus room for ready, votes and latency pongs.
+ */
+const CREW_MESSAGE_CEILING = 25;
+const SOLO_MESSAGE_CEILING = 50;
+/**
+ * How often the room wakes to spend elapsed real time in whole fixed steps.
+ * Asking for the step itself does not work: a host timer quantised to 15.625 ms
+ * turns a 50 ms interval into 62.5 ms, and the whole game then runs at four
+ * fifths speed with nothing in the code to show for it. Waking far more often
+ * than the step leaves the pace to the accumulator instead of to the timer.
+ */
+const SIMULATION_WAKE_MS = 10;
+/**
+ * Steps a single wake-up may run. A long stall - GC, a heavy encode, a laptop
+ * coming back from sleep - is dropped rather than replayed: catching up costs
+ * exactly the time the room does not have.
+ */
+const MAX_CATCHUP_STEPS = 4;
+/**
+ * Head room between the end of the salvage window and the wave deadline it
+ * pushes: the window closes on a simulation tick, the deadline on a host timer,
+ * and the deadline must never be the one that lands first.
+ */
+const SALVAGE_DEADLINE_SLACK_MS = 2_000;
 
 export class SpaceshipDefenderRoom extends Room<{
   state: SpaceshipDefenderState;
   metadata: RoomStatsMetadata;
 }> {
   override maxClients = PLAYER_CAPACITY + 2;
-  override maxMessagesPerSecond = 25;
+  override maxMessagesPerSecond = CREW_MESSAGE_CEILING;
   override state = new SpaceshipDefenderState();
 
   private readonly connectionRoles = new Map<string, ConnectionRole>();
@@ -119,7 +151,8 @@ export class SpaceshipDefenderRoom extends Room<{
   private displaySessionId: string | undefined;
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
   private gameState: SpaceshipSimulationState | undefined;
-  private simulationTimer: RoomTimer | undefined;
+  /** Real time received from the loop that no whole fixed step has claimed yet. */
+  private stepAccumulatorMs = 0;
   private readonly lifecycle = new LifecycleSchedule({
     schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
     now: () => Date.now(),
@@ -136,6 +169,8 @@ export class SpaceshipDefenderRoom extends Room<{
   private statusChangedAtMs = 0;
   private firstControllerJoined = false;
   private disposing = false;
+  /** Wave every run in this room opens on; 1 unless a tester asked otherwise. */
+  private startWave = 1;
   private statsId = "";
   private pendingMetadata: RoomStatsMetadata | undefined;
   private metadataWritePromise: Promise<void> | undefined;
@@ -168,7 +203,8 @@ export class SpaceshipDefenderRoom extends Room<{
     if (this.hasProtocolMismatch(unsafeOptions)) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "protocol_mismatch");
     }
-    if (!displayCreateOptionsSchema.safeParse(unsafeOptions).success) {
+    const options = displayCreateOptionsSchema.safeParse(unsafeOptions);
+    if (!options.success) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_message");
     }
     // Every room in this process shares one event loop, so accepting a room past
@@ -182,6 +218,30 @@ export class SpaceshipDefenderRoom extends Room<{
       throw new ServerError(ErrorCode.APPLICATION_ERROR, ROOM_REFUSED_AT_CAPACITY);
     }
     this.state.roomId = this.roomId;
+    this.state.crewSize = options.data.crewSize;
+    // A hull the preset does not carry is refused rather than swapped for the
+    // default: a crew that picked a ship must not be given another one silently.
+    const tuning = getBalanceStore().getActiveTuning();
+    const requestedHull = options.data.shipArchetypeId;
+    if (requestedHull !== undefined && !Object.hasOwn(tuning.shipArchetypes, requestedHull)) {
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_message");
+    }
+    this.state.shipArchetypeId = requestedHull ?? tuning.defaultShipArchetypeId;
+    // A testing aid, so it is refused rather than honoured quietly: an operator
+    // who sees waves being skipped on a public server should be able to find
+    // out why from the log.
+    const requestedWave = options.data.startWave;
+    if (requestedWave !== undefined && requestedWave > 1) {
+      if (allowStartWave) {
+        this.startWave = requestedWave;
+      } else {
+        console.warn(
+          `Ignoring startWave ${String(requestedWave)}: start ALLOW_START_WAVE=true to use it.`
+        );
+      }
+    }
+    this.maxMessagesPerSecond =
+      options.data.crewSize === 1 ? SOLO_MESSAGE_CEILING : CREW_MESSAGE_CEILING;
     const now = Date.now();
     this.createdAtMs = now;
     this.statusChangedAtMs = now;
@@ -212,7 +272,7 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
 
-    if (this.state.players.size >= PLAYER_CAPACITY) {
+    if (this.state.players.size >= this.state.crewSize) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "room_full");
     }
     const role = this.findAvailableRole();
@@ -335,7 +395,10 @@ export class SpaceshipDefenderRoom extends Room<{
     this.gameState = applyPilotInput(this.gameState, {
       vector: command.vector,
       mgFiring: command.mgFiring,
-      receivedTick: this.gameState.clock.tick
+      receivedTick: this.gameState.clock.tick,
+      // Absent from a stick command, which names a bearing instead.
+      turn: command.turn ?? null,
+      thrust: command.thrust ?? null
     });
   }
 
@@ -344,7 +407,7 @@ export class SpaceshipDefenderRoom extends Room<{
       client,
       unsafePayload,
       gunnerInputCommandSchema,
-      "gunner",
+      this.inputOwner("gunner"),
       clientMessage.gunnerInput
     );
     if (command === undefined || this.gameState === undefined) {
@@ -463,13 +526,17 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
     const previousEncounterPhase = this.gameState.encounterPhase;
+    const previousLootWindow = this.gameState.lootWindowTicksRemaining;
     const projectionWasResult = this.state.game.encounter.phase === "result";
+    this.gameState = this.applyShieldAutopilot(this.gameState);
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
       this.clearWaveDeadline();
       this.neutralizeAllRoles();
     } else if (previousEncounterPhase !== "combat" && this.gameState.encounterPhase === "combat") {
       this.armWaveDeadline();
+    } else if (previousLootWindow === 0 && this.gameState.lootWindowTicksRemaining > 0) {
+      this.extendWaveDeadlineForSalvage(this.gameState.lootWindowTicksRemaining);
     }
     this.syncGameState();
     if (
@@ -556,7 +623,7 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private tryStartRun(): void {
     const canStart = this.state.phase === "lobby" || this.gameState?.encounterPhase === "result";
-    if (!canStart || this.state.players.size !== PLAYER_CAPACITY || this.disposing) {
+    if (!canStart || this.state.players.size !== this.state.crewSize || this.disposing) {
       return;
     }
     const players = [...this.state.players.values()];
@@ -565,8 +632,22 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     const previousSeed = this.gameState?.runSeed;
     // A run keeps the balance it started with; console edits land on the next run.
-    this.gameConfig = getBalanceStore().getActiveSimulationConfig();
-    this.gameState = createCleanSpaceshipRun(this.gameConfig, createRunSeed(previousSeed));
+    const balance = getBalanceStore();
+    this.gameConfig = balance.getActiveSimulationConfig(this.state.shipArchetypeId);
+    // The helm is input feel, not physics, so it rides beside the config rather
+    // than inside it — and like the config, a run keeps what it started with.
+    const helm = balance.getActiveTuning().helm;
+    this.state.game.helm.scheme = helm.scheme;
+    this.state.game.helm.headingLeadRadians = helm.headingLeadRadians;
+    this.state.game.helm.stopDampening = helm.stopDampening;
+    this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
+    this.state.game.helm.hullAngularBrakingPerSecondSquared =
+      this.gameConfig.headingAngularBrakingPerSecondSquared;
+    this.gameState = createCleanSpaceshipRun(
+      this.gameConfig,
+      createRunSeed(previousSeed),
+      this.startWave
+    );
     this.state.runNumber += 1;
     this.state.phase = "active";
     this.state.hasGame = true;
@@ -608,21 +689,23 @@ export class SpaceshipDefenderRoom extends Room<{
       entry.shape = archetype.visual.shape;
       entry.modelScale = archetype.visual.modelScale;
       entry.showHealthBar = archetype.visual.showHealthBar;
+      entry.isBoss = archetype.spawnPolicy === "boss";
       catalogue.set(kind, entry);
     }
   }
 
   private initializeDecorations(): void {
     this.state.game.display.obstacles.clear();
+    const scale = this.gameConfig.worldWidth / DECORATION_REFERENCE_WORLD;
     for (const obstacle of DECORATIVE_OBSTACLES) {
       const state = new ObstacleState();
       state.obstacleId = obstacle.obstacleId;
       state.kind = obstacle.kind;
-      state.x = obstacle.x;
-      state.y = obstacle.y;
-      state.width = "width" in obstacle ? obstacle.width : 0;
-      state.height = "height" in obstacle ? obstacle.height : 0;
-      state.radius = "radius" in obstacle ? obstacle.radius : 0;
+      state.x = obstacle.x * scale;
+      state.y = obstacle.y * scale;
+      state.width = "width" in obstacle ? obstacle.width * scale : 0;
+      state.height = "height" in obstacle ? obstacle.height * scale : 0;
+      state.radius = "radius" in obstacle ? obstacle.radius * scale : 0;
       state.rotation = 0;
       this.state.game.display.obstacles.push(state);
     }
@@ -707,7 +790,22 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private findAvailableRole(): CrewRole | undefined {
     const occupied = new Set([...this.state.players.values()].map((player) => player.role));
-    return CREW_ROLES.find((role) => !occupied.has(role));
+    return this.crewRoles().find((role) => !occupied.has(role));
+  }
+
+  /** The roles this room has seats for; a smaller crew keeps the CREW_ROLES order. */
+  private crewRoles(): readonly CrewRole[] {
+    return CREW_ROLES.slice(0, this.state.crewSize);
+  }
+
+  /**
+   * Who owns an input in this room. A solo player flies and mans the turret, so
+   * the gunner stream belongs to the pilot; every other crew keeps one role per
+   * input. An input nobody owns keeps its own role and therefore never matches
+   * a seated player.
+   */
+  private inputOwner(role: CrewRole): CrewRole {
+    return role === "gunner" && this.state.crewSize === 1 ? "pilot" : role;
   }
 
   private removeController(playerId: string): void {
@@ -722,22 +820,63 @@ export class SpaceshipDefenderRoom extends Room<{
     this.queueMetadataUpdate();
   }
 
+  /**
+   * A crew without a shield operator still needs the sector up, so the room
+   * feeds the same trusted intent a player would have sent.
+   */
+  private applyShieldAutopilot(game: SpaceshipSimulationState): SpaceshipSimulationState {
+    if (this.crewRoles().includes("shield") || this.gameState?.encounterPhase !== "combat") {
+      return game;
+    }
+    return applyShieldInput(game, nextShieldIntent(game, this.gameConfig));
+  }
+
   private startSimulation(): void {
     this.stopSimulation();
-    this.simulationTimer = this.clock.setInterval(() => {
-      this.advanceGameStep();
-    }, this.gameConfig.fixedStepMs);
+    this.setSimulationInterval((deltaMs) => {
+      this.advanceElapsedTime(deltaMs);
+    }, SIMULATION_WAKE_MS);
   }
 
   private stopSimulation(): void {
-    this.simulationTimer?.clear();
-    this.simulationTimer = undefined;
+    this.setSimulationInterval(undefined);
+    this.stepAccumulatorMs = 0;
+  }
+
+  /**
+   * Spends elapsed real time in whole fixed steps, so game time tracks the wall
+   * clock rather than the number of times the host timer happened to fire.
+   */
+  advanceElapsedTime(deltaMs: number): void {
+    const stepMs = this.gameConfig.fixedStepMs;
+    this.stepAccumulatorMs = Math.min(
+      this.stepAccumulatorMs + Math.max(0, deltaMs),
+      stepMs * MAX_CATCHUP_STEPS
+    );
+    while (this.stepAccumulatorMs >= stepMs) {
+      this.stepAccumulatorMs -= stepMs;
+      this.advanceGameStep();
+    }
   }
 
   private armWaveDeadline(now = Date.now()): void {
     this.clearWaveDeadline();
     if (this.state.phase !== "active" || this.gameState?.encounterPhase !== "combat") return;
     this.waveDeadlineAtMs = now + waveTtlSeconds * 1_000;
+    this.scheduleWaveDeadline(this.waveDeadlineGeneration);
+  }
+
+  /**
+   * A won wave stays in combat while the crew collects salvage, so the deadline
+   * has to move with it: without this a wave cleared at the wire would be lost
+   * to a timeout after it was already won.
+   */
+  private extendWaveDeadlineForSalvage(ticksRemaining: number): void {
+    const until =
+      Date.now() + ticksRemaining * this.gameConfig.fixedStepMs + SALVAGE_DEADLINE_SLACK_MS;
+    if (this.waveDeadlineAtMs !== undefined && this.waveDeadlineAtMs >= until) return;
+    this.clearWaveDeadline();
+    this.waveDeadlineAtMs = until;
     this.scheduleWaveDeadline(this.waveDeadlineGeneration);
   }
 

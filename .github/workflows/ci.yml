@@ -1,0 +1,50 @@
+name: CI
+
+# The quality gate, and nothing else. Releases are pulled by an agent on the
+# host, so no job here has access to the deployment: this repository is public,
+# and a self-hosted runner would let a fork's pull request execute its own
+# workflow file on that machine.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # x64 on purpose. `playwright.config.ts` asks for `channel: "chrome"`, and
+    # Google Chrome has no Linux ARM64 build, so an arm runner cannot run
+    # `pnpm check`. The release images are built natively on the target host, so
+    # the gate's own architecture does not matter.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        # The version comes from `packageManager` in package.json.
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          # The same major the API image runs, and the same one development
+          # uses: `pnpm check` runs the built server, which imports the protocol
+          # package as TypeScript source and needs Node's type stripping.
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chrome for Playwright
+        run: pnpm exec playwright install --with-deps chrome
+
+      # Format, lint, typecheck, unit tests, build, network smoke, Playwright.
+      - name: Check
+        run: pnpm check
+
+      - name: Validate specifications
+        run: pnpm spec:validate

@@ -4,25 +4,46 @@ import type { BalancePresetsFile, BalanceTuning } from "@spaceship-defender/prot
 import { AutopilotScreen } from "./AutopilotScreen/index.js";
 import { DirectorScreen } from "./DirectorScreen/index.js";
 import { EnemiesScreen } from "./EnemiesScreen/index.js";
+import { EnemySkillScreen } from "./EnemySkillScreen/index.js";
+import { HelmScreen } from "./HelmScreen/index.js";
 import { PlayerScreen } from "./PlayerScreen/index.js";
 import { PresetsScreen } from "./PresetsScreen/index.js";
+import { ShipsScreen } from "./ShipsScreen/index.js";
+import { StatsScreen } from "./StatsScreen/index.js";
 import { WavesScreen } from "./WavesScreen/index.js";
 
-export const TABS = ["waves", "enemies", "player", "autopilot", "director", "presets"] as const;
+export const TABS = [
+  "waves",
+  "enemies",
+  "enemySkill",
+  "player",
+  "ships",
+  "helm",
+  "autopilot",
+  "director",
+  "stats",
+  "presets"
+] as const;
 export type Tab = (typeof TABS)[number];
 
 export const TAB_LABELS: Record<Tab, string> = {
   waves: "Волны",
   enemies: "Враги",
+  enemySkill: "ИИ врага",
   player: "Игрок",
+  ships: "Корабли",
+  helm: "Управление",
   autopilot: "Автопилот",
   director: "Директор",
+  stats: "Статистика",
   presets: "Пресеты"
 };
 
 /** Everything a tab may need; each entry below takes only its own slice. */
 export interface ScreenContext {
   readonly document: BalancePresetsFile;
+  /** The console's own credentials; the statistics tab calls the server itself. */
+  readonly password: string;
   readonly tuning: BalanceTuning;
   readonly onTuningChange: (tuning: BalanceTuning) => void;
   readonly onDocumentChange: (document: BalancePresetsFile) => void;
@@ -38,15 +59,21 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
   enemies: ({ tuning, onTuningChange }) => (
     <EnemiesScreen tuning={tuning} onChange={onTuningChange} />
   ),
+  enemySkill: ({ tuning, onTuningChange }) => (
+    <EnemySkillScreen tuning={tuning} onChange={onTuningChange} />
+  ),
   player: ({ tuning, onTuningChange }) => (
     <PlayerScreen tuning={tuning} onChange={onTuningChange} />
   ),
+  ships: ({ tuning, onTuningChange }) => <ShipsScreen tuning={tuning} onChange={onTuningChange} />,
+  helm: ({ tuning, onTuningChange }) => <HelmScreen tuning={tuning} onChange={onTuningChange} />,
   autopilot: ({ tuning, onTuningChange }) => (
     <AutopilotScreen tuning={tuning} onChange={onTuningChange} />
   ),
   director: ({ tuning, onTuningChange }) => (
     <DirectorScreen tuning={tuning} onChange={onTuningChange} />
   ),
+  stats: ({ document, password }) => <StatsScreen document={document} password={password} />,
   presets: ({ document, onDocumentChange, onImportError }) => (
     <PresetsScreen document={document} onChange={onDocumentChange} onImportError={onImportError} />
   )

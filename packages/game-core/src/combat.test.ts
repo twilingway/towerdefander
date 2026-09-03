@@ -42,6 +42,7 @@ function bossAfterEscortConfig() {
             {
               kind: "gunship",
               count: 1,
+              startDelayTicks: 0,
               spawnIntervalTicks: 1,
               sectors: [],
               hpMultiplier: null,
@@ -50,6 +51,7 @@ function bossAfterEscortConfig() {
             {
               kind: "boss",
               count: 1,
+              startDelayTicks: 0,
               spawnIntervalTicks: 1,
               sectors: [],
               hpMultiplier: null,
@@ -64,6 +66,22 @@ function bossAfterEscortConfig() {
   });
 }
 
+/**
+ * The built-in campaign with its wave table taken away and its catalogue cut to
+ * the handful these tests name. What they measure is the director's own rules -
+ * unlock gating, boss placement, budget - and with the whole authored campaign
+ * in place they would be reading the thirty waves that are written out instead.
+ */
+function directorOnlyConfig(overrides: Partial<SpaceshipSimulationConfig> = {}) {
+  const base = createSpaceshipSimulationConfig();
+  const kinds = ["interceptor", "gunship", "missileCarrier", "sniper", "boss"];
+  return createSpaceshipSimulationConfig({
+    enemyArchetypes: Object.fromEntries(kinds.map((kind) => [kind, getEnemyArchetype(base, kind)])),
+    waveCampaign: { waves: [], director: base.waveCampaign.director },
+    ...overrides
+  });
+}
+
 function scriptedCampaignConfig() {
   const base = createSpaceshipSimulationConfig();
   return createSpaceshipSimulationConfig({
@@ -75,6 +93,7 @@ function scriptedCampaignConfig() {
             {
               kind: "gunship",
               count: 3,
+              startDelayTicks: 0,
               spawnIntervalTicks: 3,
               sectors: ["N"],
               hpMultiplier: null,
@@ -83,6 +102,7 @@ function scriptedCampaignConfig() {
             {
               kind: "asteroid",
               count: 1,
+              startDelayTicks: 4,
               spawnIntervalTicks: 9,
               sectors: ["SE"],
               hpMultiplier: null,
@@ -97,6 +117,7 @@ function scriptedCampaignConfig() {
             {
               kind: "asteroid",
               count: 2,
+              startDelayTicks: 0,
               spawnIntervalTicks: 5,
               sectors: [],
               hpMultiplier: null,
@@ -159,18 +180,57 @@ describe("deterministic combat foundation", () => {
     ).toThrow(RangeError);
   });
 
-  it("keeps spawn and offer streams deterministic and independent", () => {
+  it("builds the offer from the tier alone, with no seed in it", () => {
     const config = createSpaceshipSimulationConfig();
     expect(createWavePlan(config, 123, 8)).toEqual(createWavePlan(config, 123, 8));
-    expect(createTeamUpgradeOffer(123, 8)).toEqual(createTeamUpgradeOffer(123, 8));
-    const offers = createTeamUpgradeOffer(123, 8);
+    const offer = (purchased: number) =>
+      createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, purchased, 8);
+    // Two runs that bought the same number of modules see the same cards, and
+    // nothing the spawn stream did in between can move them.
+    expect(offer(3)).toEqual(offer(3));
     createWavePlan(config, 123, 8);
     createWavePlan(config, 123, 9);
-    expect(createTeamUpgradeOffer(123, 8)).toEqual(offers);
+    expect(offer(3)).toEqual(offer(3));
+    expect(offer(0)?.cards).toHaveLength(1);
+    expect(offer(0)?.tier).toBe(1);
+  });
+
+  it("walks the tiers by purchases and then repeats the tail", () => {
+    const config = createSpaceshipSimulationConfig();
+    const offer = (purchased: number) =>
+      createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, purchased, 12);
+    const widths = config.moduleTiers.map((tier) => tier.length);
+    widths.forEach((width, index) => {
+      expect(offer(index)?.cards).toHaveLength(width);
+      expect(offer(index)?.tier).toBe(index + 1);
+    });
+    // Past the last tier the tail comes up, and it comes up again after that.
+    const spent = config.moduleTiers.length;
+    expect(offer(spent)?.cards.map((card) => card.upgradeId)).toEqual(
+      config.endlessTier.map((module) => module.id)
+    );
+    expect(offer(spent + 5)?.tier).toBe(0);
+  });
+
+  it("never offers a module the crew already bought", () => {
+    const config = createSpaceshipSimulationConfig();
+    const seen = new Set<string>();
+    for (let purchased = 0; purchased < config.moduleTiers.length; purchased += 1) {
+      const cards = createTeamUpgradeOffer(
+        config.moduleTiers,
+        config.endlessTier,
+        purchased,
+        purchased + 1
+      )?.cards;
+      for (const card of cards ?? []) {
+        expect(seen.has(card.upgradeId)).toBe(false);
+        seen.add(card.upgradeId);
+      }
+    }
   });
 
   it("unlocks a kind at its configured wave and scales difficulty monotonically", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = directorOnlyConfig();
     expect(getEnemyArchetype(config, "missileCarrier").unlockWave).toBe(3);
     expect(createWavePlan(config, 91, 1).plan.some(({ kind }) => kind === "missileCarrier")).toBe(
       false
@@ -191,8 +251,8 @@ describe("deterministic combat foundation", () => {
   });
 
   it("moves a kind unlock by reconfiguring the archetype", () => {
-    const base = createSpaceshipSimulationConfig();
-    const config = createSpaceshipSimulationConfig({
+    const base = directorOnlyConfig();
+    const config = directorOnlyConfig({
       enemyArchetypes: {
         ...base.enemyArchetypes,
         missileCarrier: { ...getEnemyArchetype(base, "missileCarrier"), unlockWave: 6 }
@@ -208,38 +268,93 @@ describe("deterministic combat foundation", () => {
     );
   });
 
-  it("builds a scripted wave exactly as configured and keeps it seed independent", () => {
+  it("builds a scripted wave as a schedule and keeps it seed independent", () => {
     const config = scriptedCampaignConfig();
     const plan = createWavePlan(config, 91, 1).plan;
-    expect(plan.map(({ kind }) => kind)).toEqual(["gunship", "gunship", "gunship", "asteroid"]);
+    // Three gunships every three ticks from zero, one rock at four: the rock
+    // lands between the second and the third, where the schedule puts it, and
+    // not after the whole group the way the queue used to play it.
+    expect(plan.map(({ kind }) => kind)).toEqual(["gunship", "gunship", "asteroid", "gunship"]);
+    expect(plan.map(({ dueTick }) => dueTick)).toEqual([0, 3, 4, 6]);
     expect(createWavePlan(config, 4242, 1).plan).toEqual(plan);
-    expect(plan.map(({ spawnIntervalTicks }) => spawnIntervalTicks)).toEqual([3, 3, 3, 9]);
-    expect(plan.map(({ sectors }) => sectors)).toEqual([["N"], ["N"], ["N"], ["SE"]]);
+    expect(plan.map(({ sectors }) => sectors)).toEqual([["N"], ["N"], ["SE"], ["N"]]);
   });
 
-  it("falls back to the director past the last scripted wave", () => {
+  it("stages one of the authored waves past the last scripted one", () => {
     const config = scriptedCampaignConfig();
     const scripted = createWavePlan(config, 91, 2).plan;
     expect(scripted.map(({ kind }) => kind)).toEqual(["asteroid", "asteroid"]);
+
+    // Past the table the director re-stages a wave that was written rather than
+    // inventing one: the kinds, the sectors and the schedule are the campaign's,
+    // and only how many arrive is its own call. Invented, it played as a dump -
+    // a shuffled bag one spawn interval apart, forty deep on a late wave.
+    const authored = config.waveCampaign.waves.flatMap(({ entries }) => entries);
+    const shapes = new Map(
+      authored.map((entry) => [
+        entry.kind,
+        `${String(entry.startDelayTicks)}/${entry.sectors.join()}`
+      ])
+    );
     const directed = createWavePlan(config, 91, 3);
     expect(directed.plan.length).toBeGreaterThan(0);
-    expect(directed.plan.every(({ sectors }) => sectors.length === 0)).toBe(true);
+    for (const spawn of directed.plan) {
+      expect(shapes.has(spawn.kind), `${spawn.kind} is not in the campaign`).toBe(true);
+      const first = directed.plan.find(({ kind }) => kind === spawn.kind);
+      expect(`${String(first?.dueTick ?? -1)}/${spawn.sectors.join()}`).toBe(
+        shapes.get(spawn.kind)
+      );
+    }
     expect(createWavePlan(config, 91, 3)).toEqual(directed);
   });
 
-  it("honours per-entry spawn intervals when draining a scripted wave", () => {
+  it("sizes a staged wave by the director's budget", () => {
+    const config = scriptedCampaignConfig();
+    const richer = createSpaceshipSimulationConfig({
+      waveCampaign: {
+        ...config.waveCampaign,
+        director: { ...config.waveCampaign.director, baseBudget: 200, budgetCap: 400 }
+      }
+    });
+    const lean = createWavePlan(config, 91, 3).plan.length;
+    const rich = createWavePlan(richer, 91, 3).plan.length;
+    expect(rich).toBeGreaterThan(lean);
+  });
+
+  it("improvises when there is no campaign to stage", () => {
+    // How the built-in defaults ship: a director and an empty table.
+    const config = createSpaceshipSimulationConfig({
+      waveCampaign: { ...createSpaceshipSimulationConfig().waveCampaign, waves: [] }
+    });
+    const plan = createWavePlan(config, 91, 3).plan;
+    expect(plan.length).toBeGreaterThan(0);
+    expect(plan.every(({ sectors }) => sectors.length === 0)).toBe(true);
+  });
+
+  it("releases a scripted wave on its schedule, interleaving the groups", () => {
     const config = scriptedCampaignConfig();
     let state = createSpaceshipSimulationState(config, 12);
-    const spawnTicks: number[] = [];
+    const arrivals: { readonly tick: number; readonly kinds: readonly string[] }[] = [];
     let previousPending = state.pendingSpawns.length;
+    let previousKinds = 0;
     for (let step = 0; step < 12; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
       if (state.pendingSpawns.length < previousPending) {
-        spawnTicks.push(state.encounterTick);
+        const spawned = [
+          ...state.enemies.map(({ kind }) => kind),
+          ...state.asteroids.map(() => "asteroid")
+        ];
+        arrivals.push({ tick: state.encounterTick, kinds: spawned.slice(previousKinds) });
+        previousKinds = spawned.length;
         previousPending = state.pendingSpawns.length;
       }
     }
-    expect(spawnTicks).toEqual([1, 4, 7, 10]);
+    // Gunships at 0, 3 and 6, the rock at 4: it arrives between the second and
+    // the third, not after the whole group the way a queue used to play it.
+    expect(arrivals.map(({ tick }) => tick)).toEqual([1, 4, 5, 7]);
+    expect(arrivals.some(({ kinds }) => kinds.includes("asteroid"))).toBe(true);
+    const asteroidAt = arrivals.findIndex(({ kinds }) => kinds.includes("asteroid"));
+    expect(asteroidAt).toBe(2);
   });
 
   it("keeps scripted spawns inside their configured sector", () => {
@@ -269,11 +384,11 @@ describe("deterministic combat foundation", () => {
   });
 
   it("spawns a boss only on configured boss waves", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = directorOnlyConfig();
     const bossInterval = config.waveCampaign.director.bossWaveInterval;
     expect(bossInterval).toBe(5);
-    expect(getEnemyArchetype(config, "boss").unlockWave).toBe(10);
-    for (const wave of [1, 5, 9, 11, 12]) {
+    expect(getEnemyArchetype(config, "boss").unlockWave).toBe(5);
+    for (const wave of [1, 4, 9, 11, 12]) {
       expect(createWavePlan(config, 91, wave).plan.some(({ kind }) => kind === "boss")).toBe(false);
     }
     for (const wave of [10, 15, 20]) {
@@ -282,7 +397,7 @@ describe("deterministic combat foundation", () => {
   });
 
   it("closes the directed plan with the boss instead of shuffling it in", () => {
-    const config = createSpaceshipSimulationConfig();
+    const config = directorOnlyConfig();
     for (const seed of [7, 91, 4242, 90_001]) {
       const plan = createWavePlan(config, seed, 10).plan;
       expect(plan.filter(({ kind }) => kind === "boss")).toHaveLength(1);
@@ -313,7 +428,7 @@ describe("deterministic combat foundation", () => {
     expect(state.pendingSpawns).toHaveLength(0);
   });
 
-  it("lets an ambient asteroid coexist with the boss release", () => {
+  it("lets an asteroid of either origin coexist with the boss release", () => {
     const config = bossAfterEscortConfig();
     let state = createSpaceshipSimulationState(config, 21);
     for (let step = 0; step < 10; step += 1) {
@@ -340,12 +455,14 @@ describe("deterministic combat foundation", () => {
     );
     expect(released.enemies.map(({ kind }) => kind)).toEqual(["boss"]);
 
-    const blocked = advanceSpaceshipSimulation(
-      { ...state, enemies: [], asteroids: [{ ...drifting, origin: "wave" }] },
+    // A wave rock is weather too. Holding the boss behind one meant a single
+    // slow stone crossing the arena added its whole flight to the wave, which
+    // is dead time nobody asked for.
+    const fromTheWave = advanceSpaceshipSimulation(
+      { ...state, enemies: [], asteroids: [{ ...drifting, id: "wave-1", origin: "wave" }] },
       config
     );
-    expect(blocked.enemies).toHaveLength(0);
-    expect(blocked.pendingSpawns.map(({ kind }) => kind)).toEqual(["boss"]);
+    expect(fromTheWave.enemies.map(({ kind }) => kind)).toEqual(["boss"]);
   });
 
   it("keeps the wave in combat while the boss is still queued", () => {
@@ -372,6 +489,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "gunship",
                 count: 12,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: ["N", "S"],
                 hpMultiplier: null,
@@ -427,6 +545,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "eliteGunship",
                 count: 2,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: [],
                 hpMultiplier: null,
@@ -457,8 +576,9 @@ describe("deterministic combat foundation", () => {
             {
               entries: [
                 {
-                  kind: "dreadnought",
+                  kind: "phantom",
                   count: 1,
+                  startDelayTicks: 0,
                   spawnIntervalTicks: 12,
                   sectors: [],
                   hpMultiplier: null,
@@ -506,14 +626,16 @@ describe("deterministic combat foundation", () => {
       id: "twin-1",
       spawnSequence: 1,
       kind: "twinGun",
-      previousX: initial.spaceship.x + 600,
+      previousX: initial.spaceship.x + 300,
       previousY: initial.spaceship.y,
-      x: initial.spaceship.x + 600,
+      x: initial.spaceship.x + 300,
       y: initial.spaceship.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       radius: twinGun.radius,
       spawnedTick: 0,
       hp: twinGun.hp,
@@ -567,14 +689,16 @@ describe("deterministic combat foundation", () => {
       id: "mixed-1",
       spawnSequence: 1,
       kind: "mixedGun",
-      previousX: initial.spaceship.x + 600,
+      previousX: initial.spaceship.x + 300,
       previousY: initial.spaceship.y,
-      x: initial.spaceship.x + 600,
+      x: initial.spaceship.x + 300,
       y: initial.spaceship.y,
       velocity: { x: 0, y: 0 },
       heading: 0,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       radius: mixedGun.radius,
       spawnedTick: 0,
       hp: mixedGun.hp,
@@ -659,6 +783,8 @@ describe("deterministic combat foundation", () => {
       heading: 0,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       radius: sentry.radius,
       spawnedTick: 0,
       hp: sentry.hp,
@@ -695,6 +821,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "gunship",
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: [],
                 hpMultiplier: 4,
@@ -703,6 +830,7 @@ describe("deterministic combat foundation", () => {
               {
                 kind: "gunship",
                 count: 1,
+                startDelayTicks: 0,
                 spawnIntervalTicks: 1,
                 sectors: [],
                 hpMultiplier: null,
@@ -737,9 +865,11 @@ describe("deterministic combat foundation", () => {
   });
 
   it("never picks a boss as ordinary director filler", () => {
-    const config = createSpaceshipSimulationConfig({
+    // With no table to stage and no boss interval, every wave is the director's
+    // own bag - and a boss must never be in it.
+    const config = directorOnlyConfig({
       waveCampaign: {
-        ...createSpaceshipSimulationConfig().waveCampaign,
+        waves: [],
         director: {
           ...createSpaceshipSimulationConfig().waveCampaign.director,
           bossWaveInterval: null
@@ -768,6 +898,8 @@ describe("deterministic combat foundation", () => {
       heading: 0,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       radius: boss.radius,
       spawnedTick: 0,
       hp: boss.hp,
@@ -829,11 +961,8 @@ describe("deterministic combat foundation", () => {
       score: 999,
       waveNumber: 8,
       encounterTick: 77,
-      roleModifiers: {
-        pilot: { speedMultiplier: 2, accelerationMultiplier: 2, maxHpBonus: 100 },
-        gunner: { damageMultiplier: 2, cooldownMultiplier: 0.5, projectileSpeedMultiplier: 2 },
-        shield: { capacityBonus: 100, rechargeMultiplier: 2, arcWidthBonus: 1 }
-      },
+      purchasedModules: ["pilot_hull", "gunner_damage", "shield_capacity"],
+      ship: { ...createSpaceshipSimulationState(config, 100).ship, spaceshipMaxHp: 9_999 },
       inputs: {
         pilot: { vector: { x: 1, y: 0 }, mgFiring: false, receivedTick: 5 },
         gunner: { vector: { x: 1, y: 0 }, firing: true, receivedTick: 5 },
@@ -847,7 +976,7 @@ describe("deterministic combat foundation", () => {
     expect(clean.runSeed).toBe(200);
     expect(clean.clock).toEqual({ tick: 0, elapsedMs: 0 });
     expect(clean.spaceshipHp).toBe(config.spaceshipMaxHp);
-    expect(clean.spaceshipMaxHp).toBe(config.spaceshipMaxHp);
+    expect(clean.ship.spaceshipMaxHp).toBe(config.spaceshipMaxHp);
     expect(clean.encounterPhase).toBe("combat");
     expect(clean.outcome).toBeNull();
     expect(clean.waveNumber).toBe(1);
@@ -865,7 +994,8 @@ describe("deterministic combat foundation", () => {
     expect(clean.teamUpgradeVotes).toEqual({ pilot: null, gunner: null, shield: null });
     expect(clean.teamUpgradeSelection).toBeNull();
     expect(clean.inputs).toEqual({ pilot: null, gunner: null, shield: null });
-    expect(clean.roleModifiers).toEqual(createSpaceshipSimulationState(config, 200).roleModifiers);
+    expect(clean.purchasedModules).toEqual([]);
+    expect(clean.ship).toEqual(createSpaceshipSimulationState(config, 200).ship);
   });
 });
 
@@ -937,7 +1067,9 @@ describe("combat motion and collision", () => {
       ...state,
       shieldAngle: -Math.PI,
       shieldActive: true,
-      shieldEnergy: 2,
+      // Under the cheapest block in the catalogue: the campaign's barrels were
+      // split into smaller shots, and a two-point battery can pay for one now.
+      shieldEnergy: 1,
       pendingSpawns: []
     };
     const bullet: HostileProjectileState = {
@@ -1051,7 +1183,8 @@ describe("combat motion and collision", () => {
       radius: config.projectileRadius,
       spawnedTick: 0,
       damage: config.friendlyProjectileDamage,
-      source: "cannon"
+      source: "cannon",
+      homing: null
     };
     const result = advanceCombat(
       {
@@ -1122,6 +1255,8 @@ describe("combat motion and collision", () => {
   it("suppresses capped friendly fire while consuming the ordinary cooldown", () => {
     const baseConfig = createSpaceshipSimulationConfig();
     const config = createSpaceshipSimulationConfig({
+      // Pinned: seven steps are counted against this cadence, not the campaign's.
+      fireCooldownTicks: 5,
       caps: { ...baseConfig.caps, friendlyProjectiles: 1, dynamicEntities: 165 }
     });
     let state = createSpaceshipSimulationState(config, 53);
@@ -1145,9 +1280,9 @@ describe("combat motion and collision", () => {
       spawnSequence: index + 1,
       kind: "gunship",
       // Inside gunship engagement range, so the ready ones actually shoot.
-      previousX: 3000,
+      previousX: 2600,
       previousY: 2200 + index * 4,
-      x: 3000,
+      x: 2600,
       y: 2200 + index * 4,
       velocity: { x: 0, y: 0 },
       radius: getEnemyArchetype(config, "gunship").radius,
@@ -1155,6 +1290,8 @@ describe("combat motion and collision", () => {
       heading: 0,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       hp: getEnemyArchetype(config, "gunship").hp,
       maxHp: getEnemyArchetype(config, "gunship").hp,
       weaponCooldownTicks: [index < 3 ? 0 : 20]
@@ -1204,6 +1341,7 @@ describe("combat motion and collision", () => {
       radius: config.projectileRadius,
       damage: config.friendlyProjectileDamage,
       source: "cannon",
+      homing: null,
       spawnedTick: 0
     }));
     const state: SpaceshipSimulationState = {
@@ -1246,13 +1384,14 @@ describe("team upgrades", () => {
   it("accepts a newer role vote and rejects a stale revision", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 42);
-    const generated = createTeamUpgradeOffer(initial.runSeed, 1);
+    const generated = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 4, 1);
+    if (generated === null) throw new Error("expected an offer");
     const intermission: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
-      teamUpgradeOffer: generated.offer
+      teamUpgradeOffer: generated
     };
-    const offer = generated.offer;
+    const offer = generated;
     const firstCard = offer.cards[0];
     if (firstCard === undefined) throw new Error("expected offer card");
     const first = voteForTeamUpgrade(intermission, {
@@ -1282,15 +1421,16 @@ describe("team upgrades", () => {
   it("resolves majority atomically at the 600-tick deadline", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 24);
-    const generated = createTeamUpgradeOffer(initial.runSeed, 1);
-    const gunnerCard = generated.offer.cards[1];
+    const generated = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 4, 1);
+    if (generated === null) throw new Error("expected an offer");
+    const gunnerCard = generated.cards[1];
     if (gunnerCard === undefined) throw new Error("expected gunner card");
     const beforeDeadline: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
       encounterTick: 599,
       credits: 7,
-      teamUpgradeOffer: generated.offer,
+      teamUpgradeOffer: generated,
       teamUpgradeVotes: {
         pilot: { role: "pilot", upgradeId: gunnerCard.upgradeId, revision: 1 },
         gunner: { role: "gunner", upgradeId: gunnerCard.upgradeId, revision: 1 },
@@ -1308,14 +1448,17 @@ describe("team upgrades", () => {
       price: 5
     });
     expect(nextWave.credits).toBe(2);
-    expect(nextWave.roleModifiers).not.toEqual(initial.roleModifiers);
+    expect(nextWave.ship).not.toEqual(initial.ship);
     expect(nextWave.inputs).toEqual(initial.inputs);
   });
 
   it("uses stable card order for ties and skips no-vote or unaffordable purchases", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 31);
-    const offer = createTeamUpgradeOffer(initial.runSeed, 1).offer;
+    // The sixth tier is the first one three cards wide, so it is the first that
+    // can produce a 1-1-1 ballot at all.
+    const offer = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 5, 1);
+    if (offer === null) throw new Error("expected an offer");
     const [pilot, gunner, shield] = offer.cards;
     if (pilot === undefined || gunner === undefined || shield === undefined)
       throw new Error("cards");
@@ -1359,7 +1502,7 @@ describe("team upgrades", () => {
       );
       expect(skipped.credits).toBe(credits);
       expect(skipped.teamUpgradeSelection).toBeNull();
-      expect(skipped.roleModifiers).toEqual(initial.roleModifiers);
+      expect(skipped.ship).toEqual(initial.ship);
     }
   });
 });
@@ -1384,6 +1527,8 @@ describe("enemy turn inertia", () => {
       heading,
       angularVelocity: 0,
       orbitSign: 1,
+      perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+      aimRngState: 1,
       radius: getEnemyArchetype(config, kind).radius,
       spawnedTick: 0,
       hp: getEnemyArchetype(config, kind).hp,
@@ -1448,7 +1593,18 @@ describe("enemy turn inertia", () => {
   });
 
   it("settles onto its preferred range without a jump in course", () => {
-    const config = createSpaceshipSimulationConfig({ enemySpawnIntervalTicks: 1_000_000 });
+    // Pinned to the beginner's blend, which is what this measures. The campaign
+    // flies its gunships as veterans, and a veteran crosses into its range with
+    // half its course sideways - whether that crossing is as smooth is a
+    // question this test never asked.
+    const base = createSpaceshipSimulationConfig();
+    const config = createSpaceshipSimulationConfig({
+      enemySpawnIntervalTicks: 1_000_000,
+      enemyArchetypes: {
+        ...base.enemyArchetypes,
+        gunship: { ...getEnemyArchetype(base, "gunship"), combatSkill: "rookie" }
+      }
+    });
     const state = createSpaceshipSimulationState(config, 93);
     const archetype = getEnemyArchetype(config, "gunship");
     // Starts outside the range it wants and crosses into it. This crossing is

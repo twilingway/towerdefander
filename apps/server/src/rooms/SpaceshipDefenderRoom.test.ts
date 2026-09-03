@@ -2,6 +2,7 @@ import {
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  type CrewSize,
   roomClosingSchema,
   serverLatencyProbeSchema,
   serverErrorSchema,
@@ -16,9 +17,10 @@ import {
 } from "@spaceship-defender/game-core";
 import { Decoder, Encoder, type StateView } from "@colyseus/schema";
 import { CloseCode, type Client } from "colyseus";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
+import { getBalanceStore } from "../balance/index.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
@@ -34,10 +36,25 @@ function createClient(sessionId: string): TestClient {
   return { client: { sessionId, send } as unknown as Client, send };
 }
 
-function createRoom(): SpaceshipDefenderRoom {
+/**
+ * The simulation loop is a real host timer, so a room left running keeps
+ * ticking its clock after the test that made it and fires lifecycle deadlines
+ * into a torn-down fixture. Every room built here is therefore stopped.
+ */
+const openRooms: SpaceshipDefenderRoom[] = [];
+
+afterEach(() => {
+  for (const room of openRooms.splice(0)) {
+    room.setSimulationInterval(undefined);
+    room.clock.clear();
+  }
+});
+
+function createRoom(crewSize: CrewSize = 3): SpaceshipDefenderRoom {
   const room = new SpaceshipDefenderRoom();
   room.roomId = "ROOM123";
-  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize });
+  openRooms.push(room);
   return room;
 }
 
@@ -77,6 +94,49 @@ function startGame(room = createRoom()): {
     ready(room, controller);
   });
   return { room, controllers };
+}
+
+/** Delays of the calls that armed the loop; a stop passes no callback at all. */
+/**
+ * The balance the room is actually running, read rather than typed. A full
+ * battery and a whole hull are events in these tests - "it starts full", "it
+ * lost one point" - and typing the numbers made a retuned campaign read as a
+ * broken shield.
+ */
+function activeBalance() {
+  const config = getBalanceStore().getActiveSimulationConfig();
+  return { capacity: config.shieldCapacity, maxHp: config.spaceshipMaxHp };
+}
+
+function armedLoops(spy: {
+  mock: { calls: readonly (readonly unknown[])[] };
+}): (number | undefined)[] {
+  return spy.mock.calls
+    .filter((call) => call[0] !== undefined)
+    .map((call) => call[1] as number | undefined);
+}
+
+/**
+ * Steps until the room says so, and reports how many ticks it took. Timings
+ * that follow from balance numbers — a battery draining, a lock clearing — are
+ * read as events here, so a retuned drain rate never reads as a broken shield.
+ */
+function advanceUntil(
+  room: SpaceshipDefenderRoom,
+  reached: () => boolean,
+  limitTicks = 600
+): number {
+  for (let ticks = 1; ticks <= limitTicks; ticks += 1) {
+    room.advanceGameStep();
+    if (reached()) return ticks;
+  }
+  throw new Error(`Room never reached the expected state within ${String(limitTicks)} ticks.`);
+}
+
+/** Steps the room until the shield has served its engage window and is up. */
+function raiseShield(room: SpaceshipDefenderRoom): void {
+  const ticks = internals(room).gameConfig.shieldEngageTicks + 1;
+  for (let index = 0; index < ticks; index += 1) room.advanceGameStep();
 }
 
 function controllerAt(controllers: readonly TestClient[], index: number): TestClient {
@@ -134,12 +194,52 @@ function internals(room: SpaceshipDefenderRoom): RoomInternals {
   return room as unknown as RoomInternals;
 }
 
-function forceIntermission(room: SpaceshipDefenderRoom): void {
+/** Drops one hostile bullet a stone's throw from the hull, closing head-on. */
+function aimBulletAtHull(room: SpaceshipDefenderRoom): void {
   const runtime = internals(room);
   const game = runtime.gameState;
   if (game === undefined) throw new Error("Expected an active game.");
+  const x = game.spaceship.x + 300;
+  const y = game.spaceship.y;
   runtime.gameState = {
     ...game,
+    hostileProjectiles: [
+      {
+        id: "bullet-test",
+        spawnSequence: 1,
+        spawnedTick: game.clock.tick,
+        previousX: x,
+        previousY: y,
+        x,
+        y,
+        velocity: { x: -720, y: 0 },
+        radius: 6,
+        damage: 10,
+        shieldHitCost: 10,
+        lifetimeTicks: 100,
+        visual: null
+      }
+    ]
+  };
+}
+
+/**
+ * Clears the field so the next step ends the wave.
+ *
+ * `boughtTiers` decides which tier the crew is offered, because the tree widens
+ * with depth: the first tier is one card and the sixth is the first that can
+ * put all three seats on screen at once.
+ */
+function forceIntermission(room: SpaceshipDefenderRoom, boughtTiers = 0): void {
+  const runtime = internals(room);
+  const game = runtime.gameState;
+  if (game === undefined) throw new Error("Expected an active game.");
+  const purchasedModules = runtime.gameConfig.moduleTiers
+    .slice(0, boughtTiers)
+    .flatMap((tier) => (tier[0] === undefined ? [] : [tier[0].id]));
+  runtime.gameState = {
+    ...game,
+    purchasedModules,
     pendingSpawns: [],
     enemies: [],
     asteroids: [],
@@ -190,7 +290,12 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     const room = new SpaceshipDefenderRoom();
     room.roomId = "ROOM123";
     expect(() => {
-      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, capacity: 3 });
+      room.onCreate({
+        role: "display",
+        protocolVersion: PROTOCOL_VERSION,
+        crewSize: 3,
+        capacity: 3
+      });
     }).toThrow("invalid_message");
     const stateBeforeMismatch = {
       roomId: room.state.roomId,
@@ -230,7 +335,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
 
   it("assigns canonical roles and starts only when all three are ready", () => {
     const room = createRoom();
-    const setInterval = vi.spyOn(room.clock, "setInterval");
+    const setSimulationInterval = vi.spyOn(room, "setSimulationInterval");
     const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
       joinController(room, index)
     );
@@ -249,10 +354,158 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
       arenaRadius: 2200
     });
     expect(room.state.game.spaceship).toMatchObject({ x: 2200, y: 2200, radius: 52 });
-    expect(room.state.game.shield).toMatchObject({ energy: 100, capacity: 100 });
+    const { capacity } = activeBalance();
+    expect(room.state.game.shield).toMatchObject({ energy: capacity, capacity });
     expect(room.state.game.display.obstacles).toHaveLength(9);
     expect(room.maxMessagesPerSecond).toBe(25);
-    expect(setInterval).toHaveBeenCalledTimes(1);
+    // Stopping passes no callback, so only the armed calls count.
+    expect(armedLoops(setSimulationInterval)).toEqual([10]);
+  });
+
+  it("hands the tank helm intent to the core and drops the remembered bearing", () => {
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    const envelope = {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber
+    };
+
+    // A stick command first, so there is a bearing for the spin to drop.
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 1,
+      vector: { x: 0, y: 1 },
+      mgFiring: false
+    });
+    expect(internals(room).gameState?.headingTargetAngle).not.toBeNull();
+
+    room.handlePilotInput(pilot.client, {
+      ...envelope,
+      sequence: 2,
+      vector: { x: 0, y: 0 },
+      mgFiring: false,
+      turn: -1,
+      thrust: 1
+    });
+
+    expect(internals(room).gameState?.inputs.pilot).toMatchObject({ turn: -1, thrust: 1 });
+    expect(internals(room).gameState?.headingTargetAngle).toBeNull();
+  });
+
+  it("spends real time in whole steps instead of one step per wake-up", () => {
+    const { room } = startGame();
+    const before = room.state.game.tick;
+
+    // A host timer quantised above the step - 62.5 ms where 50 was asked for -
+    // must still produce twenty steps per second, not sixteen.
+    for (let index = 0; index < 16; index += 1) room.advanceElapsedTime(62.5);
+
+    expect(room.state.game.tick - before).toBe(20);
+  });
+
+  it("drops a long stall instead of replaying it as a burst", () => {
+    const { room } = startGame();
+    const before = room.state.game.tick;
+
+    room.advanceElapsedTime(2_000);
+
+    expect(room.state.game.tick - before).toBe(4);
+  });
+
+  it("seats a solo crew on the pilot and starts on one ready", () => {
+    const room = createRoom(1);
+    const solo = joinController(room, 0);
+    expect([...room.state.players.values()].map((player) => player.role)).toEqual(["pilot"]);
+
+    expect(() => joinController(room, 1)).toThrow("room_full");
+
+    ready(room, solo);
+    expect(room.state.phase).toBe("active");
+    expect(room.state.hasGame).toBe(true);
+  });
+
+  it("publishes the preset helm to the controller snapshot", () => {
+    const { room } = startGame();
+
+    expect(room.state.game.helm.headingLeadRadians).toBeGreaterThan(0);
+    expect(room.state.game.helm.rotateInPlaceThrottle).toBeGreaterThan(0);
+    expect(room.state.game.helm).toMatchObject(getBalanceStore().getActiveTuning().helm);
+    // The helm predicts where a spin rests, so it needs the run's own braking.
+    expect(room.state.game.helm.hullAngularBrakingPerSecondSquared).toBeCloseTo(
+      getBalanceStore().getActiveSimulationConfig().headingAngularBrakingPerSecondSquared,
+      6
+    );
+  });
+
+  it("raises the message ceiling for the two streams a solo player owns", () => {
+    expect(createRoom(1).maxMessagesPerSecond).toBe(50);
+    expect(createRoom(2).maxMessagesPerSecond).toBe(25);
+    expect(createRoom(3).maxMessagesPerSecond).toBe(25);
+  });
+
+  it("seats a duo on pilot and gunner and waits for both", () => {
+    const room = createRoom(2);
+    const pilot = joinController(room, 0);
+    const gunner = joinController(room, 1);
+    expect([...room.state.players.values()].map((player) => player.role)).toEqual([
+      "pilot",
+      "gunner"
+    ]);
+
+    expect(() => joinController(room, 2)).toThrow("room_full");
+
+    ready(room, pilot);
+    expect(room.state.phase).toBe("lobby");
+    ready(room, gunner);
+    expect(room.state.phase).toBe("active");
+  });
+
+  it("lets the solo pilot drive the turret and keeps the full crew separate", () => {
+    const soloRoom = createRoom(1);
+    const solo = joinController(soloRoom, 0);
+    ready(soloRoom, solo);
+    soloRoom.handleGunnerInput(solo.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: soloRoom.roomId,
+      playerId: solo.client.sessionId,
+      runNumber: soloRoom.state.runNumber,
+      sequence: 1,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+    soloRoom.advanceGameStep();
+    expect(countErrors(solo, "role_mismatch")).toBe(0);
+    expect(soloRoom.state.game.turretAngle).toBeGreaterThan(0);
+
+    const { room, controllers } = startGame();
+    const pilot = controllerAt(controllers, 0);
+    room.handleGunnerInput(pilot.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: pilot.client.sessionId,
+      runNumber: room.state.runNumber,
+      sequence: 1,
+      aim: { x: 0, y: 1 },
+      firing: false
+    });
+    room.advanceGameStep();
+    expect(countErrors(pilot, "role_mismatch")).toBe(1);
+    expect(room.state.game.turretAngle).toBe(0);
+  });
+
+  it("runs the shield itself only when no player holds that seat", () => {
+    const soloRoom = createRoom(1);
+    ready(soloRoom, joinController(soloRoom, 0));
+    aimBulletAtHull(soloRoom);
+    raiseShield(soloRoom);
+    expect(soloRoom.state.game.shield.active).toBe(true);
+
+    const { room } = startGame();
+    aimBulletAtHull(room);
+    room.advanceGameStep();
+    expect(room.state.game.shield.active).toBe(false);
   });
 
   it("publishes the preset's parallax background on the display state at run start", () => {
@@ -538,9 +791,9 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: -1, y: 0 },
       active: true
     });
-    room.advanceGameStep();
+    raiseShield(room);
     expect(room.state.game.shield.active).toBe(true);
-    expect(room.state.game.shield.energy).toBe(99);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
     expect(room.state.game.shield.angle).toBeGreaterThan(0);
     expect(room.state.game.shield.angle).toBeLessThan(Math.PI);
   });
@@ -560,7 +813,10 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
 
     room.advanceGameStep();
     const firstAngle = room.state.game.shield.angle;
-    expect(room.state.game.shield).toMatchObject({ active: false, energy: 100 });
+    expect(room.state.game.shield).toMatchObject({
+      active: false,
+      energy: activeBalance().capacity
+    });
     expect(firstAngle).toBeLessThan(0);
     expect(firstAngle).toBeGreaterThan(-Math.PI / 2);
 
@@ -670,14 +926,15 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     } as const;
     room.handleShieldInput(shield.client, input);
     room.handleShieldInput(shield.client, input);
-    expect(room.state.game.shield.energy).toBe(100);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity);
+    // Coming up spends nothing; the drain starts with the hold.
+    raiseShield(room);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
     room.advanceGameStep();
-    expect(room.state.game.shield.energy).toBe(99);
-    room.advanceGameStep();
-    expect(room.state.game.shield.energy).toBe(98);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 2);
   });
 
-  it("publishes depletion, recharge and a fresh manual re-arm", () => {
+  it("publishes depletion and re-arms itself once the battery is back", () => {
     const { room, controllers } = startGame();
     const shield = controllerAt(controllers, 2);
     const envelope = {
@@ -692,32 +949,27 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 1, y: 0 },
       active: true
     });
-    for (let index = 0; index < 100; index += 1) room.advanceGameStep();
-    expect(room.state.game.shield).toMatchObject({ active: false, energy: 0, capacity: 100 });
+    // Stepped to the event, not to a round number of ticks: how long the
+    // battery lasts is a balance number, and counting ticks here is what made
+    // this test read a half-charged battery as a broken shield.
+    const ticksToDepletion = advanceUntil(room, () => room.state.game.shield.rearmRequired);
+    expect(ticksToDepletion).toBeGreaterThan(0);
+    expect(room.state.game.shield).toMatchObject({
+      active: false,
+      energy: 0,
+      capacity: activeBalance().capacity
+    });
 
-    room.handleShieldInput(shield.client, {
-      ...envelope,
-      sequence: 2,
-      aim: { x: 1, y: 0 },
-      active: true
-    });
-    for (let index = 0; index < 20; index += 1) room.advanceGameStep();
-    expect(room.state.game.shield).toMatchObject({ active: false, energy: 10 });
-
-    room.handleShieldInput(shield.client, {
-      ...envelope,
-      sequence: 3,
-      aim: { x: 1, y: 0 },
-      active: false
-    });
-    room.handleShieldInput(shield.client, {
-      ...envelope,
-      sequence: 4,
-      aim: { x: 1, y: 0 },
-      active: true
-    });
-    room.advanceGameStep();
-    expect(room.state.game.shield).toMatchObject({ active: true, energy: 9 });
+    // The button is never released and never pressed again: the old rule left
+    // an operator holding a shield that refused for ever with nothing on the
+    // panel saying why. The lock now clears on the re-arm mark by itself.
+    const ticksToRearm = advanceUntil(room, () => !room.state.game.shield.rearmRequired);
+    expect(ticksToRearm).toBeGreaterThan(0);
+    expect(room.state.game.shield.energy).toBeGreaterThanOrEqual(25);
+    // The engage window follows the mark, and the hold nobody released raises
+    // the shield without a new command.
+    const ticksToActive = advanceUntil(room, () => room.state.game.shield.active);
+    expect(ticksToActive).toBeGreaterThan(0);
   });
 
   it("clears a queued gunner click on disconnect and reconnect", async () => {
@@ -807,12 +1059,12 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 1, y: 0 },
       active: true
     });
-    room.advanceGameStep();
+    raiseShield(room);
     expect(room.state.game.shield.active).toBe(true);
     vi.spyOn(room, "allowReconnection").mockResolvedValue(shield.client);
     await room.onLeave(shield.client, 1006);
     expect(room.state.game.shield.active).toBe(false);
-    expect(room.state.game.shield.energy).toBe(99);
+    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
   });
 
   it("does not expose a role requested by the controller", () => {
@@ -842,29 +1094,32 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     const { room } = startGame();
 
     expect("runSeed" in room.state.game).toBe(false);
-    expect(room.state.game.spaceship).toMatchObject({ hp: 500, maxHp: 500 });
+    expect(room.state.game.spaceship).toMatchObject({
+      hp: activeBalance().maxHp,
+      maxHp: activeBalance().maxHp
+    });
     expect(room.state.game.shield.arcHalfAngle).toBeCloseTo(Math.PI / 4);
     expect(room.state.game.encounter).toMatchObject({
       phase: "combat",
       waveNumber: 1,
       encounterTick: 0,
       phaseTicksRemaining: 0,
-      waveSecondsRemaining: 1200,
+      waveSecondsRemaining: 300,
       score: 0
     });
   });
 
-  it("resets the 20-minute deadline only when the next combat wave starts", () => {
+  it("resets the five-minute deadline only when the next combat wave starts", () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(10_000);
     try {
       const { room } = startGame();
       const runtime = internals(room);
-      expect(runtime.waveDeadlineAtMs).toBe(1_210_000);
+      expect(runtime.waveDeadlineAtMs).toBe(310_000);
 
       now.mockReturnValue(20_000);
       room.advanceGameStep();
-      expect(runtime.waveDeadlineAtMs).toBe(1_210_000);
-      expect(room.state.game.encounter.waveSecondsRemaining).toBe(1190);
+      expect(runtime.waveDeadlineAtMs).toBe(310_000);
+      expect(room.state.game.encounter.waveSecondsRemaining).toBe(290);
 
       forceIntermission(room);
       expect(runtime.waveDeadlineAtMs).toBeUndefined();
@@ -875,9 +1130,9 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       expect(room.state.game.encounter).toMatchObject({
         phase: "combat",
         waveNumber: 2,
-        waveSecondsRemaining: 1200
+        waveSecondsRemaining: 300
       });
-      expect(runtime.waveDeadlineAtMs).toBe(1_220_000);
+      expect(runtime.waveDeadlineAtMs).toBe(320_000);
     } finally {
       now.mockRestore();
     }
@@ -894,7 +1149,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
 
       const frozenTick = room.state.game.tick;
       room.advanceGameStep();
-      expect(room.state.game.spaceship.hp).toBe(500);
+      expect(room.state.game.spaceship.hp).toBe(activeBalance().maxHp);
       expect(room.state.game.encounter).toMatchObject({
         phase: "result",
         outcome: "defeat",
@@ -992,7 +1247,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
         ready(room, controller);
       });
       expect(room.state.runNumber).toBe(2);
-      expect(runtime.waveDeadlineAtMs).toBe(firstDeadline + 1_000 + 1_200_000);
+      expect(runtime.waveDeadlineAtMs).toBe(firstDeadline + 1_000 + 300_000);
       expect(runtime.lifecycle.expiresAt("room_lifetime_expired")).toBe(hardCap);
     } finally {
       now.mockRestore();
@@ -1005,13 +1260,13 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       const room = createRoom();
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
       startGame(room);
-      const staleCallback = setTimeout.mock.calls.find((call) => call[1] === 1_200_000)?.[0] as
+      const staleCallback = setTimeout.mock.calls.find((call) => call[1] === 300_000)?.[0] as
         (() => void) | undefined;
       if (staleCallback === undefined) throw new Error("Expected a wave deadline callback.");
 
       forceIntermission(room);
       const generation = internals(room).waveDeadlineGeneration;
-      now.mockReturnValue(1_210_000);
+      now.mockReturnValue(310_000);
       staleCallback();
       expect(internals(room).waveDeadlineGeneration).toBe(generation);
       expect(room.state.game.encounter.phase).toBe("intermission");
@@ -1103,13 +1358,15 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     const room = createRoom();
     const display = joinDisplay(room);
     const { controllers } = startGame(room);
-    forceIntermission(room);
+    forceIntermission(room, 5);
 
     const upgrade = room.state.game.teamUpgrade;
     expect(upgrade.hasOffer).toBe(true);
-    expect(upgrade.offer).toMatchObject({ waveNumber: 1 });
-    expect([...upgrade.offer.cards].map(({ role }) => role)).toEqual(CREW_ROLES);
+    expect(upgrade.offer).toMatchObject({ waveNumber: 1, tier: 6 });
+    // A tier of three owes all three seats, but not in any fixed slot order.
+    expect(new Set([...upgrade.offer.cards].map(({ role }) => role))).toEqual(new Set(CREW_ROLES));
     expect(upgrade.offer.cards).toHaveLength(3);
+    for (const card of upgrade.offer.cards) expect(card.effects.length).toBeGreaterThan(0);
     expect(display.client.view?.has(room.state.game)).toBe(true);
     for (const controller of controllers) expect(controller.client.view).toBeDefined();
     expect(room.state.game.display.enemyShips).toHaveLength(0);
@@ -1119,29 +1376,23 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
   it("accepts a vote exactly once and detects an action ID collision", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    forceIntermission(room);
+    forceIntermission(room, 5);
     const actionId = "11111111-1111-4111-8111-111111111111";
+    // The five modules the helper pre-bought to widen the tier; a vote must not
+    // add a sixth before the deadline.
+    const purchased = [...room.state.game.display.purchasedModules];
 
     voteUpgrade(room, pilot, "pilot", actionId);
-    const modifiers = {
-      speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
-      accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
-      maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
-    };
-    expect(modifiers).toEqual({
-      speedMultiplier: 1,
-      accelerationMultiplier: 1,
-      maxHpBonus: 0
-    });
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchased);
     expect(room.state.game.teamUpgrade.votes.get("pilot")).toMatchObject({ revision: 1 });
 
     voteUpgrade(room, pilot, "pilot", actionId);
-    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchased);
     expect(countErrors(pilot, "stale_action")).toBe(0);
 
     voteUpgrade(room, pilot, "pilot", actionId, 1);
     expect(countErrors(pilot, "action_conflict")).toBe(1);
-    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiers);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchased);
   });
 
   it("rejects a legacy upgrade vote before journal or world mutation", () => {
@@ -1153,11 +1404,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       throw new Error("Expected pilot offer.");
     const card = upgrade.offer.cards.at(0);
     const gameBefore = internals(room).gameState;
-    const modifiersBefore = {
-      speedMultiplier: room.state.game.roleModifiers.pilot.speedMultiplier,
-      accelerationMultiplier: room.state.game.roleModifiers.pilot.accelerationMultiplier,
-      maxHpBonus: room.state.game.roleModifiers.pilot.maxHpBonus
-    };
+    const purchasedBefore = [...room.state.game.display.purchasedModules];
 
     room.handleUpgradeVote(pilot.client, {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
@@ -1174,7 +1421,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     expect(countErrors(pilot, "protocol_mismatch")).toBe(1);
     expect(internals(room).upgradeJournals.has(pilot.client.sessionId)).toBe(false);
     expect(internals(room).gameState).toBe(gameBefore);
-    expect(room.state.game.roleModifiers.pilot).toMatchObject(modifiersBefore);
+    expect([...room.state.game.display.purchasedModules]).toEqual(purchasedBefore);
     expect(room.state.game.teamUpgrade.votes.get("pilot")).toBeUndefined();
   });
 
@@ -1222,7 +1469,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
   it("allows a role to vote for another role card without applying it early", () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    forceIntermission(room);
+    forceIntermission(room, 5);
     const upgrade = room.state.game.teamUpgrade;
     if (!upgrade.hasOffer || upgrade.offer.cards.length < 2)
       throw new Error("Expected gunner card.");
@@ -1242,21 +1489,22 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
 
     expect(countErrors(pilot, "role_mismatch")).toBe(0);
     expect(room.state.game.teamUpgrade.votes.get("pilot")?.upgradeId).toBe(card.upgradeId);
-    expect(room.state.game.roleModifiers.gunner.damageMultiplier).toBe(1);
+    // Nothing is bought before the deadline; the five are what widened the tier.
+    expect(room.state.game.display.purchasedModules).toHaveLength(5);
   });
 
-  it("keeps an accepted journal across reconnect and role modifiers across replacement", async () => {
+  it("keeps an accepted journal across reconnect and ship stats across replacement", async () => {
     const { room, controllers } = startGame();
     const pilot = controllerAt(controllers, 0);
-    forceIntermission(room);
+    forceIntermission(room, 5);
     const actionId = "33333333-3333-4333-8333-333333333333";
     voteUpgrade(room, pilot, "pilot", actionId);
-    const speed = room.state.game.roleModifiers.pilot.speedMultiplier;
+    const shipBefore = { ...internals(room).gameState?.ship };
 
     const allowReconnection = vi.spyOn(room, "allowReconnection").mockResolvedValue(pilot.client);
     await room.onLeave(pilot.client, 1006);
     voteUpgrade(room, pilot, "pilot", actionId);
-    expect(room.state.game.roleModifiers.pilot.speedMultiplier).toBe(speed);
+    expect({ ...internals(room).gameState?.ship }).toEqual(shipBefore);
 
     const gunner = controllerAt(controllers, 1);
     voteUpgrade(room, gunner, "gunner", "44444444-4444-4444-8444-444444444444", 1);
@@ -1358,7 +1606,7 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
       actionId: "99999999-9999-4999-8999-999999999999",
       waveNumber: 1,
       offerId: "old-offer",
-      upgradeId: "pilot_speed",
+      upgradeId: "afterburner",
       revision: 1
     });
     room.handleReady(pilot.client, {
@@ -1401,7 +1649,7 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
 
   it("starts one clean run while preserving identities and roles", () => {
     const { room, controllers } = startGame();
-    const setInterval = vi.spyOn(room.clock, "setInterval");
+    const setSimulationInterval = vi.spyOn(room, "setSimulationInterval");
     const pilot = controllerAt(controllers, 0);
     room.handlePilotInput(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1438,7 +1686,10 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
     ).toEqual(roster);
     expect([...room.state.players.values()].every(({ ready }) => !ready)).toBe(true);
     expect(room.state.game).toMatchObject({ tick: 0, elapsedMs: 0 });
-    expect(room.state.game.spaceship).toMatchObject({ hp: 500, maxHp: 500 });
+    expect(room.state.game.spaceship).toMatchObject({
+      hp: activeBalance().maxHp,
+      maxHp: activeBalance().maxHp
+    });
     expect(room.state.game.encounter).toMatchObject({
       phase: "combat",
       hasOutcome: false,
@@ -1452,7 +1703,8 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
     expect(room.state.game.teamUpgrade.votes).toHaveLength(0);
     expect(internals(room).sequenceWatermarks.get(pilot.client.sessionId)?.size).toBe(0);
     expect(internals(room).upgradeJournals.size).toBe(0);
-    expect(setInterval).toHaveBeenCalledTimes(1);
+    // The rematch arms the loop exactly once, whatever it stopped on the way.
+    expect(armedLoops(setSimulationInterval)).toEqual([10]);
   });
 
   it("preserves terminal readiness over reconnect and starts after the crew returns", async () => {
@@ -1552,7 +1804,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
       const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
       const broadcast = vi.spyOn(room, "broadcast");
-      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
       internals(room).lifecycle.set(reason, 30_010);
       const callback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       if (callback === undefined) throw new Error("Expected lifecycle callback.");
@@ -1575,7 +1827,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       const room = new SpaceshipDefenderRoom();
       room.roomId = "ROOM123";
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
-      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
       const staleCallback = setTimeout.mock.calls.at(-1)?.[0] as (() => void) | undefined;
       const runtime = internals(room);
       runtime.lifecycle.set("result_expired", 20_100);
@@ -1613,7 +1865,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
       .spyOn(room, "setMetadata")
       .mockImplementationOnce(() => firstWrite)
       .mockResolvedValue(undefined);
-    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
     joinDisplay(room);
     joinController(room, 0);
     joinController(room, 1);
@@ -1654,7 +1906,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
     vi.spyOn(room, "setMetadata").mockImplementation(() => {
       throw new Error("driver unavailable");
     });
-    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION });
+    room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
     const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
       joinController(room, index)
     );

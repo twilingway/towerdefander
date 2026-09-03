@@ -1,21 +1,36 @@
+import { useState } from "react";
 import { roleLabel } from "@spaceship-defender/client-shared";
 import type {
   CrewRole,
+  CrewSize,
   EncounterPhase,
+  PublicHelmView,
   PublicMachineGunView,
   PublicShieldView,
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
 
+import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "../../controlInput.js";
 import { VirtualStick } from "../../VirtualStick.js";
+import { readLocalStorage } from "../../model/browser.js";
 import type { ControlState } from "../../model/control.js";
+import {
+  DEFAULT_SOLO_LAYOUT,
+  readSoloLayout,
+  saveSoloLayout,
+  type SoloLayout
+} from "../../soloLayout.js";
 import { GunnerPanel } from "./GunnerPanel.js";
 import { PilotPanel } from "./PilotPanel.js";
 import { ShieldPanel } from "./ShieldPanel.js";
+import { SoloPanel } from "./SoloPanel.js";
+import { usePilotKeyboard } from "./usePilotKeyboard.js";
 import { useRoleControls } from "./useRoleControls.js";
 
 interface RoleScreenProps {
   readonly role: CrewRole;
+  readonly crewSize: CrewSize;
+  readonly helm: PublicHelmView | undefined;
   readonly cannon: PublicWeaponHeatView | undefined;
   readonly machineGun: PublicMachineGunView | undefined;
   readonly shield: PublicShieldView | undefined;
@@ -28,6 +43,8 @@ interface RoleScreenProps {
 
 export function RoleScreen({
   role,
+  crewSize,
+  helm,
   shield,
   cannon,
   machineGun,
@@ -37,6 +54,21 @@ export function RoleScreen({
   hidden,
   onSend
 }: RoleScreenProps) {
+  const [soloLayout, setSoloLayout] = useState<SoloLayout>(() => {
+    const storage = readLocalStorage();
+    return storage === undefined ? DEFAULT_SOLO_LAYOUT : readSoloLayout(storage);
+  });
+  const controls = useRoleControls({
+    role,
+    shield,
+    encounterPhase,
+    connectionDisabled,
+    generation,
+    // The helm reads WASD as tank steering, so the role hook must not also read
+    // it as an absolute bearing; gunner and shield keep their own keys.
+    keyboard: role !== "pilot",
+    onSend
+  });
   const {
     controlsEnabled,
     updateAim,
@@ -46,14 +78,47 @@ export function RoleScreen({
     endFire,
     cancelFire,
     toggleShield
-  } = useRoleControls({
-    role,
-    shield,
-    encounterPhase,
-    connectionDisabled,
-    generation,
-    onSend
+  } = controls;
+  /**
+   * A tap is a single shot: the fire path already holds a pulse for a minimum
+   * of sixty milliseconds, so beginning and ending in the same breath is one
+   * round rather than nothing.
+   */
+  function pulseFire(): void {
+    beginFire();
+    endFire();
+  }
+  // The helm belongs to the pilot seat in every crew size; the solo panel runs
+  // its own instance because it also owns the turret.
+  usePilotKeyboard({
+    active: role === "pilot" && crewSize > 1,
+    controlsEnabled,
+    tuning: helm,
+    pilot: controls
   });
+
+  if (crewSize === 1) {
+    return (
+      <div className="role-control role-control--solo" data-role={role} hidden={hidden}>
+        <p className="phase-copy">Ведите корабль и наводите турель; щит держит автопилот</p>
+        <SoloPanel
+          cannon={cannon}
+          machineGun={machineGun}
+          helm={helm}
+          encounterPhase={encounterPhase}
+          connectionDisabled={connectionDisabled}
+          generation={generation}
+          layout={soloLayout}
+          onLayoutChange={(next) => {
+            setSoloLayout(next);
+            const storage = readLocalStorage();
+            if (storage !== undefined) saveSoloLayout(storage, next);
+          }}
+          onSend={onSend}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="role-control" data-role={role} hidden={hidden}>
@@ -65,6 +130,12 @@ export function RoleScreen({
         onCancel={cancelAim}
         enabled={controlsEnabled}
         resetKey={generation}
+        // The barrel carries real angular inertia, so it is turned by a
+        // deliberate push and fired by a tap; the hull and the sector are still
+        // aimed by wherever the thumb sits. The hull's throttle is the length of
+        // that push, and it is all the way open at a third of the ring.
+        {...(role === "gunner" ? { commitShare: AIM_COMMIT_SHARE, onTap: pulseFire } : {})}
+        {...(role === "pilot" ? { fullThrottleShare: FULL_THROTTLE_SHARE } : {})}
       />
       {role === "pilot" && (
         <PilotPanel

@@ -9,15 +9,34 @@ const teamUpgrade: PublicTeamUpgradeView = {
   offer: {
     offerId: "offer-w2",
     waveNumber: 2,
+    tier: 6,
     cards: [
-      { upgradeId: "pilot_speed", role: "pilot", label: "Скорость +10%", value: 0.1, price: 5 },
-      { upgradeId: "gunner_damage", role: "gunner", label: "Урон +15%", value: 0.15, price: 5 },
-      { upgradeId: "shield_capacity", role: "shield", label: "Ёмкость +20", value: 20, price: 5 }
+      {
+        upgradeId: "afterburner",
+        role: "pilot",
+        label: "Форсаж",
+        effects: [{ target: "spaceshipSpeedPerSecond", op: "percent", value: 0.14 }],
+        price: 5
+      },
+      {
+        upgradeId: "turretDrive",
+        role: "gunner",
+        label: "Привод башни",
+        effects: [{ target: "turretMaxAngularSpeedPerSecond", op: "percent", value: 0.25 }],
+        price: 5
+      },
+      {
+        upgradeId: "capacitor2",
+        role: "shield",
+        label: "Батарея",
+        effects: [{ target: "shieldCapacity", op: "add", value: 40 }],
+        price: 5
+      }
     ]
   },
   votes: {
-    pilot: { role: "pilot", upgradeId: "gunner_damage", revision: 2 },
-    gunner: { role: "gunner", upgradeId: "gunner_damage", revision: 1 },
+    pilot: { role: "pilot", upgradeId: "turretDrive", revision: 2 },
+    gunner: { role: "gunner", upgradeId: "turretDrive", revision: 1 },
     shield: null
   },
   selection: null

@@ -6,7 +6,10 @@
 
 import {
   AUTOPILOT_LEVELS,
+  type AutopilotLevelProfiles,
+  ENEMY_SKILL_LEVELS,
   BALANCE_FILE_VERSION,
+  FRIENDLY_WEAPON_KINDS,
   FALLBACK_VISUAL_ASSET_ID,
   LEGACY_BALANCE_FILE_VERSIONS,
   type BalanceTuning
@@ -35,6 +38,9 @@ function migrateEntry(entry: unknown): unknown {
   const migrated: LegacyRecord = {
     ...entry,
     sectors: entry.sectors ?? (typeof sector === "string" ? [sector] : []),
+    // Version 30 played a wave as a queue, so every group started at zero and
+    // waited its turn. Keeping that start preserves the wave as it was written.
+    startDelayTicks: entry.startDelayTicks ?? 0,
     hpMultiplier: entry.hpMultiplier ?? null,
     tempoMultiplier: entry.tempoMultiplier ?? null
   };
@@ -66,6 +72,37 @@ const LEGACY_SHAPE_ASSETS: Readonly<Record<string, string>> = {
 
 /** The gunship's agility: the middle of the built-in range, used as a fallback. */
 const DEFAULT_ENEMY_TURN_RATE = (2 * Math.PI) / 3;
+/**
+ * The level whose knobs reproduce the enemy that predated the profiles, so a
+ * catalogue written before this setting existed plays exactly as it did.
+ */
+const DEFAULT_ENEMY_COMBAT_SKILL = "rookie";
+/** What an operator's own archetype inherits when salvage arrives. */
+const DEFAULT_LOOT_CHANCE = 0.22;
+/** Every salvage knob, so the migration cannot forget one silently. */
+/** Every weapon-kind knob, so the migration cannot forget one silently. */
+const WEAPON_KIND_FIELDS = [
+  "cannonWeaponKind",
+  "mgWeaponKind",
+  "cannonLaserRange",
+  "mgLaserRange",
+  "laserBeamRadius",
+  "friendlyMissileTurnRatePerSecond",
+  "friendlyMissileAcquireConeRadians"
+] as const satisfies readonly (keyof BalanceTuning)[];
+
+const LOOT_FIELDS = [
+  "lootRepairShare",
+  "lootShieldAmount",
+  "lootBossRepairShare",
+  "lootLifetimeTicks",
+  "lootDropRadius",
+  "lootMagnetRadius",
+  "lootMagnetAccelerationPerSecondSquared",
+  "lootDriftDampingPerSecond",
+  "lootWindowTicks",
+  "lootBossWindowTicks"
+] as const satisfies readonly (keyof BalanceTuning)[];
 
 /** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
 const TICK_SECONDS = 0.05;
@@ -86,7 +123,12 @@ function migrateWeapon(weapon: unknown): unknown {
     ...weapon,
     engagementRange:
       weapon.engagementRange ??
-      (Number.isFinite(reach) && reach > 0 ? Math.round(reach * MIGRATED_RANGE_SHARE) : 1200),
+      // A beam states its reach outright and its speed and lifetime sit at the
+      // floor, so the arithmetic here rounds to nothing for it - and a range of
+      // zero is a barrel the schema refuses to load at all.
+      (Number.isFinite(reach) && reach > 0
+        ? Math.max(1, Math.round(reach * MIGRATED_RANGE_SHARE))
+        : 1200),
     // Version 7 had no look for shots; the display default is what they had.
     visual: weapon.visual ?? null
   };
@@ -131,6 +173,7 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
       archetype.turnBrakingPerSecondSquared ??
       known?.turnBrakingPerSecondSquared ??
       DEFAULT_ENEMY_TURN_RATE * 3,
+    combatSkill: archetype.combatSkill ?? known?.combatSkill ?? DEFAULT_ENEMY_COMBAT_SKILL,
     weapons: Array.isArray(weapons) ? weapons.map(migrateWeapon) : weapons,
     visual:
       visual === undefined
@@ -140,7 +183,10 @@ function migrateArchetype(kind: string, archetype: unknown, defaults: BalanceTun
             showHealthBar: false
           })
         : migrateVisual(visual),
-    label: archetype.label ?? known?.label ?? kind
+    label: archetype.label ?? known?.label ?? kind,
+    // Version 24 and earlier had no salvage at all. A built-in archetype gets
+    // its own drop chance back; an operator's own inherits the gunship's.
+    lootChance: archetype.lootChance ?? known?.lootChance ?? DEFAULT_LOOT_CHANCE
   };
   delete migrated.weapon;
   return migrated;
@@ -157,6 +203,7 @@ const PLAYER_SHIP_FIELDS = [
   "spaceshipSpeedPerSecond",
   "spaceshipAccelerationPerSecondSquared",
   "spaceshipBrakingPerSecondSquared",
+  "spaceshipReverseSpeedFactor",
   "headingMaxAngularSpeedPerSecond",
   "headingAngularAccelerationPerSecondSquared",
   "headingAngularBrakingPerSecondSquared",
@@ -186,6 +233,10 @@ const PLAYER_SHIP_FIELDS = [
   "shieldCapacity",
   "shieldDrainPerSecond",
   "shieldRechargePerSecond",
+  "shieldEngageTicks",
+  "shieldMinimumUpTicks",
+  "shieldCooldownTicks",
+  "shieldRearmEnergy",
   "shieldRadius",
   "shieldArcRadians",
   "shieldMaxAngularSpeedPerSecond",
@@ -205,6 +256,17 @@ function migrateTurretVisual(saved: unknown): unknown {
 
 function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
   const migrated: LegacyRecord = { ...tuning, spaceshipVisual: tuning.spaceshipVisual ?? null };
+  // Version 23 stated the re-arm mark as a share of the battery, which made an
+  // upgrade to the battery lengthen the wait. A leftover key would fail the
+  // strict schema and take the operator's waves with it.
+  delete migrated.shieldRearmEnergyFraction;
+  // Version 29 sized the boss repair in hit points; version 30 sizes it as a
+  // share of the hull. Same story as the fraction above: a leftover key fails
+  // the strict schema, and the whole preset — waves included — goes with it.
+  delete migrated.lootBossRepairAmount;
+  // Version 31 sized the ordinary repair in hit points too. Same trap: the
+  // leftover key fails the strict schema and the waves go with it.
+  delete migrated.lootRepairAmount;
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }
@@ -221,23 +283,75 @@ function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): Legac
  */
 function migrateAutopilot(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
   const autopilot = readRecord(tuning, "autopilot");
-  const profiles = readRecord(autopilot, "profiles");
+  const saved = readRecord(autopilot, "profiles");
+  // Version 27 and earlier kept one set of level profiles for every turret;
+  // version 28 keeps a set per kind. A document from before the split has its
+  // one set copied into all three, which is exactly the bot it described.
+  const flat = AUTOPILOT_LEVELS.some((level) => isRecord(saved[level]));
   return {
     level: autopilot.level ?? defaults.autopilot.level,
     profiles: Object.fromEntries(
-      AUTOPILOT_LEVELS.map((level) => {
+      FRIENDLY_WEAPON_KINDS.map((kind) => [
+        kind,
+        migrateAutopilotLevels(
+          flat ? saved : readRecord(saved, kind),
+          defaults.autopilot.profiles[kind]
+        )
+      ])
+    )
+  };
+}
+
+/**
+ * Field by field inside each level, never a saved level carried over whole: a
+ * profile saved before a knob existed must gain it, not fail the strict schema
+ * and take the operator's waves down with it.
+ */
+function migrateAutopilotLevels(saved: LegacyRecord, defaults: AutopilotLevelProfiles): unknown {
+  return Object.fromEntries(
+    AUTOPILOT_LEVELS.map((level) => {
+      const profile = saved[level];
+      return [level, isRecord(profile) ? { ...defaults[level], ...profile } : defaults[level]];
+    })
+  );
+}
+
+/**
+ * Field by field inside each level, never a saved level carried over whole: a
+ * profile written before a knob existed has to gain it, and carrying the level
+ * over whole is exactly what once failed the strict schema and took an
+ * operator's wave table down with it.
+ */
+function migrateEnemySkill(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+  const enemySkill = readRecord(tuning, "enemySkill");
+  const profiles = readRecord(enemySkill, "profiles");
+  return {
+    offset: enemySkill.offset ?? defaults.enemySkill.offset,
+    profiles: Object.fromEntries(
+      ENEMY_SKILL_LEVELS.map((level) => {
         const saved = profiles[level];
-        // Merged field by field, never carried over whole: a profile saved
-        // before a knob existed must gain it, not fail the strict schema.
         return [
           level,
           isRecord(saved)
-            ? { ...defaults.autopilot.profiles[level], ...saved }
-            : defaults.autopilot.profiles[level]
+            ? { ...defaults.enemySkill.profiles[level], ...saved }
+            : defaults.enemySkill.profiles[level]
         ];
       })
     )
   };
+}
+
+/**
+ * Fills the helm section field by field and drops the retired counter angle: a
+ * leftover key would fail the strict schema and take the operator's waves with
+ * it, exactly the way one autopilot knob once did.
+ */
+function migrateHelm(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+  const saved: LegacyRecord = { ...readRecord(tuning, "helm") };
+  // Version 17 named this the counter angle; the release now aims at the
+  // predicted resting point instead, so the old key has no home.
+  delete saved.stopCounterRadians;
+  return { ...defaults.helm, ...saved };
 }
 
 /**
@@ -248,6 +362,57 @@ function migrateBackground(tuning: LegacyRecord, defaults: BalanceTuning): unkno
   return { ...defaults.background, ...readRecord(tuning, "background") };
 }
 
+/**
+ * Salvage arrived in version 25 and its collection window in version 26. Merged
+ * field by field off the defaults rather than carried over whole, which is what
+ * once cost an operator their wave table.
+ */
+function migrateLoot(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  return {
+    ...Object.fromEntries(LOOT_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]])),
+    lootRepairShare: migrateRepairShare(tuning, defaults)
+  };
+}
+
+/**
+ * Version 31 sized the ordinary repair in hit points, so one drop healed the
+ * light hull for nearly twice what it healed the heavy one; version 32 states
+ * it as a share of whatever hull is flying. The saved number is converted
+ * against the hull it was tuned on rather than thrown away.
+ */
+function migrateRepairShare(tuning: LegacyRecord, defaults: BalanceTuning): number {
+  const saved = tuning.lootRepairShare;
+  if (typeof saved === "number") return saved;
+  const amount = tuning.lootRepairAmount;
+  const hull = tuning.spaceshipMaxHp;
+  if (typeof amount !== "number" || typeof hull !== "number" || hull <= 0) {
+    return defaults.lootRepairShare;
+  }
+  return Math.min(1, Math.max(0, amount / hull));
+}
+
+/**
+ * Weapon kinds arrived in version 27. A preset written before them keeps both
+ * barrels kinetic, which is what its numbers already described.
+ */
+function migrateWeaponKinds(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  return Object.fromEntries(
+    WEAPON_KIND_FIELDS.map((field) => [field, tuning[field] ?? defaults[field]])
+  );
+}
+
+/**
+ * Hull archetypes arrived in version 29. A preset written before them gets the
+ * repository's catalogue and its base hull; its flat player-ship block stays
+ * untouched and keeps serving as the base every hull is a diff against.
+ */
+function migrateShipArchetypes(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
+  return {
+    shipArchetypes: tuning.shipArchetypes ?? defaults.shipArchetypes,
+    defaultShipArchetypeId: tuning.defaultShipArchetypeId ?? defaults.defaultShipArchetypeId
+  };
+}
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
@@ -256,17 +421,39 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
     ...preset,
     tuning: {
       ...migratePlayerShip(tuning, defaults),
+      arenaRadius: tuning.arenaRadius ?? defaults.arenaRadius,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),
+      enemySkill: migrateEnemySkill(tuning, defaults),
+      // Field by field, like the background: a preset saved before a helm knob
+      // existed must gain it, not fail the strict schema and take the
+      // operator's waves down with it.
+      helm: migrateHelm(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
+      // Field by field, like the helm: a preset saved before salvage existed
+      // must gain every knob, not fail the strict schema and take the
+      // operator's waves down with it.
+      ...migrateLoot(tuning, defaults),
+      ...migrateWeaponKinds(tuning, defaults),
+      ...migrateShipArchetypes(tuning, defaults),
       enemyArchetypes: Object.fromEntries(
         Object.entries(readRecord(tuning, "enemyArchetypes")).map(([kind, archetype]) => [
           kind,
           migrateArchetype(kind, archetype, defaults)
         ])
       ),
-      waveCampaign: { ...campaign, waves: readArray(campaign, "waves").map(migrateWave) }
+      waveCampaign: {
+        ...campaign,
+        waves: readArray(campaign, "waves").map(migrateWave),
+        // Field by field, like the helm and the salvage: a preset written
+        // before the generator's knobs moved into the file must gain them
+        // rather than fail the strict schema and take the waves with it.
+        authoring: {
+          ...defaults.waveCampaign.authoring,
+          ...readRecord(campaign, "authoring")
+        }
+      }
     }
   };
 }
