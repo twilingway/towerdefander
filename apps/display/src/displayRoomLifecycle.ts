@@ -31,5 +31,7 @@ export function roomClosingMessage(reason: RoomClosingReason): string {
       return "Комната закрыта: игроки слишком долго отсутствовали.";
     case "room_lifetime_expired":
       return "Комната достигла максимального времени работы и закрыта.";
+    case "maintenance_window":
+      return "Забег окончен, а на сервере начинаются технические работы. Комната закрыта.";
   }
 }

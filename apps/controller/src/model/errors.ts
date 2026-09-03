@@ -1,3 +1,5 @@
+import { ROOM_REFUSED_FOR_MAINTENANCE } from "@spaceship-defender/protocol";
+
 export function toServerError(code: string, fallback: string): string {
   if (code === "invalid_phase") return "Действие недоступно до начала полёта.";
   if (code === "role_mismatch") return "Эта команда недоступна вашей роли.";
@@ -12,6 +14,11 @@ export function toServerError(code: string, fallback: string): string {
 
 export function toJoinError(reason: unknown): string {
   if (!(reason instanceof Error)) return "Не удалось подключиться к комнате.";
+  // A room refused for maintenance never came into existence, so this arrives
+  // as matchmaking error text rather than a `server:error` payload.
+  if (reason.message.includes(ROOM_REFUSED_FOR_MAINTENANCE)) {
+    return "На сервере технические работы. Новые комнаты пока не создаются.";
+  }
   if (reason.message.includes("room_full")) return "Все три роли уже заняты.";
   if (reason.message.includes("not found")) return "Комната не найдена. Проверьте код.";
   return reason.message;

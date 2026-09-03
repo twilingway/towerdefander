@@ -27,6 +27,7 @@ import {
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
+  ROOM_REFUSED_FOR_MAINTENANCE,
   clientMessage,
   clientLatencyPongSchema,
   displayCreateOptionsSchema,
@@ -49,6 +50,7 @@ import { CloseCode, ErrorCode, Room, ServerError, matchMaker, type Client } from
 import { randomUUID } from "node:crypto";
 
 import { getBalanceStore } from "../balance/index.js";
+import { getMaintenanceWindow } from "../maintenance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
@@ -162,6 +164,7 @@ export class SpaceshipDefenderRoom extends Room<{
     isDisposing: () => this.disposing
   });
   private waveDeadlineTimer: RoomTimer | undefined;
+  private maintenanceTimer: RoomTimer | undefined;
   private waveDeadlineAtMs: number | undefined;
   private waveDeadlineGeneration = 0;
   private createdAtMs = 0;
@@ -214,6 +217,12 @@ export class SpaceshipDefenderRoom extends Room<{
     // does not yet include the room being created, so the comparison is `>=`.
     // Matchmaking only forwards the message for codes it knows; anything else
     // reaches the client as a bare "Internal Server Error".
+    // A window is announced so the sessions already running can finish. New
+    // ones must not start, or the drain never ends. Refused before the room
+    // exists, like the ceiling below, so nothing already playing is touched.
+    if (getMaintenanceWindow().isActive()) {
+      throw new ServerError(ErrorCode.APPLICATION_ERROR, ROOM_REFUSED_FOR_MAINTENANCE);
+    }
     if (matchMaker.stats.local.roomCount >= maxConcurrentRooms) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, ROOM_REFUSED_AT_CAPACITY);
     }
@@ -248,7 +257,20 @@ export class SpaceshipDefenderRoom extends Room<{
     this.statsId = randomUUID();
     this.lifecycle.set("lobby_expired", now + lobbyTtlSeconds * 1_000);
     this.lifecycle.set("room_lifetime_expired", now + absoluteTtlSeconds * 1_000);
+    // Once a second, not once a tick: the countdown a player reads is in
+    // seconds, and a lobby has no tick at all. Assigning an unchanged value
+    // costs no patch, so a room with no window announced pays nothing.
+    this.syncMaintenance();
+    this.maintenanceTimer = this.clock.setInterval(() => {
+      this.syncMaintenance();
+    }, 1_000);
     this.queueMetadataUpdate();
+  }
+
+  private syncMaintenance(): void {
+    const snapshot = getMaintenanceWindow().snapshot(Date.now());
+    this.state.maintenanceActive = snapshot.active;
+    this.state.maintenanceSecondsRemaining = snapshot.secondsRemaining;
   }
 
   override onJoin(client: Client, unsafeOptions: unknown): void {
@@ -626,6 +648,12 @@ export class SpaceshipDefenderRoom extends Room<{
     if (!canStart || this.state.players.size !== this.state.crewSize || this.disposing) {
       return;
     }
+    // One check covers both entrances: a lobby that has not started yet, and a
+    // rematch after a result. Neither may begin a run the window is about to
+    // interrupt.
+    if (getMaintenanceWindow().isActive()) {
+      return;
+    }
     const players = [...this.state.players.values()];
     if (!players.every((player) => player.connected && player.ready)) {
       return;
@@ -924,6 +952,12 @@ export class SpaceshipDefenderRoom extends Room<{
   private enterTerminalResultLifecycle(): void {
     this.stopSimulation();
     for (const player of this.state.players.values()) player.ready = false;
+    // The crew got to finish; there is nothing left for this room to wait for,
+    // because the rematch it would wait for is refused anyway.
+    if (getMaintenanceWindow().isActive()) {
+      this.disposeOnce("maintenance_window");
+      return;
+    }
     this.lifecycle.set("result_expired", Date.now() + resultTtlSeconds * 1_000);
   }
 
@@ -942,6 +976,8 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private cleanupResources(): void {
     this.lifecycle.stop();
+    this.maintenanceTimer?.clear();
+    this.maintenanceTimer = undefined;
     this.clearWaveDeadline();
     this.stopSimulation();
     this.clearAllLatencyConnections();

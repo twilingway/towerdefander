@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 45 as const;
+export const PROTOCOL_VERSION = 46 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -47,7 +47,9 @@ export const ROOM_CLOSING_REASONS = [
   "lobby_expired",
   "result_expired",
   "controllers_expired",
-  "room_lifetime_expired"
+  "room_lifetime_expired",
+  /** The run finished while a maintenance window was announced. */
+  "maintenance_window"
 ] as const;
 export const PROJECTILE_WORLD_PADDING = 256 as const;
 export const INTERMISSION_DURATION_TICKS = 600 as const;
@@ -137,6 +139,8 @@ export type RunNumber = z.infer<typeof runNumberSchema>;
 export const activeRunNumberSchema = safePositiveInteger;
 
 export const latencyMsSchema = z.number().int().min(0).max(5000).nullable();
+/** Fits the wire's uint16, which is eighteen hours -- far past any window. */
+export const maintenanceSecondsSchema = z.number().int().min(0).max(65_535);
 export type LatencyMs = z.infer<typeof latencyMsSchema>;
 export const vector2Schema = z
   .object({ x: finite.min(-1).max(1), y: finite.min(-1).max(1) })
@@ -764,6 +768,15 @@ const roomShape = {
   crewSize: crewSizeSchema,
   /** The hull this run is played on; a room keeps it across a rematch. */
   shipArchetypeId: shipArchetypeIdSchema,
+  /** Whether the server has announced a maintenance window. */
+  maintenanceActive: z.boolean(),
+  /**
+   * Seconds left until the announced window starts, published by the server
+   * rather than derived from a deadline: a phone with a wrong clock would
+   * otherwise show its owner a time nobody else sees. Zero while no window is
+   * announced, and zero again once the announced moment has passed.
+   */
+  maintenanceSecondsRemaining: maintenanceSecondsSchema,
   players: z.array(publicPlayerViewSchema).max(PLAYER_CAPACITY)
 } satisfies z.ZodRawShape;
 export const controllerRoomViewSchema = z
@@ -894,6 +907,29 @@ export type RoomClosing = z.infer<typeof roomClosingSchema>;
  * `server:error` payload, because the room never comes into existence.
  */
 export const ROOM_REFUSED_AT_CAPACITY = "server_at_capacity" as const;
+
+/**
+ * Message a create is refused with while a maintenance window is announced.
+ * Travels the same way as the capacity refusal above, and for the same reason:
+ * the room never comes into existence, so there is nothing to send a
+ * `server:error` payload to.
+ */
+export const ROOM_REFUSED_FOR_MAINTENANCE = "server_maintenance" as const;
+
+/** The longest window the control route will accept, in seconds. */
+export const MAINTENANCE_MAX_WINDOW_SECONDS = 12 * 60 * 60;
+export const maintenanceCommandSchema = z
+  .object({
+    active: z.boolean(),
+    /** Seconds from now until the window starts; ignored when turning it off. */
+    windowSeconds: z.number().int().min(0).max(MAINTENANCE_MAX_WINDOW_SECONDS).optional()
+  })
+  .strict();
+export type MaintenanceCommand = z.infer<typeof maintenanceCommandSchema>;
+export const maintenanceStateSchema = z
+  .object({ active: z.boolean(), secondsRemaining: maintenanceSecondsSchema })
+  .strict();
+export type MaintenanceState = z.infer<typeof maintenanceStateSchema>;
 
 export const clientMessage = {
   ready: "controller:ready",

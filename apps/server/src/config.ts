@@ -12,6 +12,12 @@ export interface ServerConfig {
   maxConcurrentRooms: number;
   statsPassword: string | undefined;
   balancePassword: string | undefined;
+  /**
+   * Secret for the maintenance-window route. Deliberately not the balance
+   * password: that one goes to whoever tunes numbers, and this one ends other
+   * people's runs.
+   */
+  deployControlToken: string | undefined;
   balancePresetPath: string;
   /** Where finished balance-batch reports are kept. */
   statsBatchDirectory: string;
@@ -117,6 +123,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const configuredGraceSeconds = environment.RECONNECTION_GRACE_SECONDS?.trim();
   const rawStatsPassword = environment.ROOM_STATS_PASSWORD;
   const rawBalancePassword = environment.ADMIN_BALANCE_PASSWORD;
+  const rawDeployControlToken = environment.DEPLOY_CONTROL_TOKEN;
   const configuredBalancePath = environment.BALANCE_PRESET_PATH?.trim();
   const configuredBatchDirectory = environment.STATS_BATCH_DIR?.trim();
   const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
@@ -173,6 +180,10 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     rawBalancePassword === undefined || rawBalancePassword.length === 0
       ? undefined
       : rawBalancePassword;
+  const deployControlToken =
+    rawDeployControlToken === undefined || rawDeployControlToken.length === 0
+      ? undefined
+      : rawDeployControlToken;
   const balancePresetPath =
     configuredBalancePath === undefined || configuredBalancePath.length === 0
       ? DEFAULT_BALANCE_PRESET_PATH
@@ -224,6 +235,15 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     );
   }
 
+  if (
+    deployControlToken !== undefined &&
+    Buffer.byteLength(deployControlToken, "utf8") > MAX_STATS_PASSWORD_BYTES
+  ) {
+    throw new Error(
+      `DEPLOY_CONTROL_TOKEN must be at most ${String(MAX_STATS_PASSWORD_BYTES)} UTF-8 bytes.`
+    );
+  }
+
   return {
     host,
     port,
@@ -236,6 +256,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     maxConcurrentRooms,
     statsPassword,
     balancePassword,
+    deployControlToken,
     balancePresetPath,
     statsBatchDirectory,
     statsBatchKeep,

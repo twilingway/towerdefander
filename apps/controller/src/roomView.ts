@@ -129,6 +129,8 @@ export interface NetworkRoomState {
   runNumber?: number;
   crewSize?: number;
   shipArchetypeId?: string;
+  maintenanceActive?: boolean;
+  maintenanceSecondsRemaining?: number;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;
@@ -173,6 +175,10 @@ export function toControllerRoomView(
     runNumber: state.runNumber,
     crewSize: state.crewSize,
     shipArchetypeId: state.shipArchetypeId,
+    // Defaulted rather than required: an older server, or a state patch that
+    // has not carried these yet, must not fail the whole view.
+    maintenanceActive: state.maintenanceActive ?? false,
+    maintenanceSecondsRemaining: state.maintenanceSecondsRemaining ?? 0,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,

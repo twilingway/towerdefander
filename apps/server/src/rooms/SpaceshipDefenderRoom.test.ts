@@ -2,6 +2,7 @@ import {
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
+  ROOM_REFUSED_FOR_MAINTENANCE,
   type CrewSize,
   roomClosingSchema,
   serverLatencyProbeSchema,
@@ -21,6 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { getBalanceStore } from "../balance/index.js";
+import { getMaintenanceWindow } from "../maintenance/index.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
@@ -183,6 +185,7 @@ interface RoomInternals {
     set(reason: string, expiresAtMs: number): void;
   };
   lifecycleGeneration: number;
+  syncMaintenance(): void;
   waveDeadlineAtMs: number | undefined;
   waveDeadlineGeneration: number;
   metadataWritePromise: Promise<void> | undefined;
@@ -2163,3 +2166,87 @@ function decodeForView(source: SpaceshipDefenderState, view: StateView): Spacesh
   decoder.decode(encoder.encodeAllView(view, iterator.offset, iterator));
   return target;
 }
+
+describe("maintenance window", () => {
+  afterEach(() => {
+    getMaintenanceWindow().cancel();
+  });
+
+  it("refuses a new room while a window is announced", () => {
+    getMaintenanceWindow().announce(3_600, Date.now());
+    const room = new SpaceshipDefenderRoom();
+    room.roomId = "ROOM999";
+    expect(() => {
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
+    }).toThrow(ROOM_REFUSED_FOR_MAINTENANCE);
+  });
+
+  it("takes rooms again once the window is cancelled", () => {
+    getMaintenanceWindow().announce(3_600, Date.now());
+    getMaintenanceWindow().cancel();
+    const room = createRoom();
+    expect(room.state.roomId).toBe("ROOM123");
+  });
+
+  it("keeps a ready lobby from starting a run", () => {
+    const room = createRoom();
+    joinDisplay(room);
+    getMaintenanceWindow().announce(3_600, Date.now());
+    const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+      joinController(room, index)
+    );
+    controllers.forEach((controller) => {
+      ready(room, controller);
+    });
+    // The crew is complete and ready, and still nothing starts: a run begun now
+    // is a run the window would interrupt.
+    expect(room.state.phase).toBe("lobby");
+    expect(internals(room).gameState).toBeUndefined();
+  });
+
+  it("lets a run that already started play on to its result", () => {
+    const { room } = startGame();
+    joinDisplay(room);
+    expect(internals(room).gameState).toBeDefined();
+    getMaintenanceWindow().announce(3_600, Date.now());
+    room.advanceGameStep();
+    // The simulation is untouched: interrupting a wave mid-flight is the very
+    // thing the window exists to avoid.
+    expect(room.state.phase).toBe("active");
+    expect(internals(room).gameState).toBeDefined();
+    expect(room.state.game.encounter.phase).not.toBe("result");
+  });
+
+  it("closes the room at the result instead of offering a rematch", () => {
+    const { room, controllers } = startGame();
+    joinDisplay(room);
+    const broadcast = vi.spyOn(room, "broadcast");
+    vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+    getMaintenanceWindow().announce(3_600, Date.now());
+    forceResult(room);
+    expect(broadcast).toHaveBeenCalledWith(serverMessage.roomClosing, {
+      reason: "maintenance_window"
+    });
+    controllers.forEach((controller) => {
+      ready(room, controller);
+    });
+    expect(room.state.game.encounter.phase).toBe("result");
+  });
+
+  it("publishes the countdown into room state and takes it away again", () => {
+    const room = createRoom();
+    expect(room.state.maintenanceActive).toBe(false);
+    expect(room.state.maintenanceSecondsRemaining).toBe(0);
+
+    getMaintenanceWindow().announce(600, Date.now());
+    internals(room).syncMaintenance();
+    expect(room.state.maintenanceActive).toBe(true);
+    expect(room.state.maintenanceSecondsRemaining).toBeGreaterThan(0);
+    expect(room.state.maintenanceSecondsRemaining).toBeLessThanOrEqual(600);
+
+    getMaintenanceWindow().cancel();
+    internals(room).syncMaintenance();
+    expect(room.state.maintenanceActive).toBe(false);
+    expect(room.state.maintenanceSecondsRemaining).toBe(0);
+  });
+});
