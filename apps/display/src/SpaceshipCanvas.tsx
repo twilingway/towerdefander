@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { readPixelRatioCap } from "./game/devicePixels.js";
+import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "./game/spaceshipViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
 import {
   buildVisibleDemoWorld,
@@ -58,7 +59,7 @@ export function SpaceshipCanvas({
       .then(({ createSpaceshipRuntime }) => {
         if (!disposed) {
           runtimeReference.current = createSpaceshipRuntime(host, latestGame.current, {
-            pixelRatioCap: readPixelRatioCap(globalThis.location.search)
+            pixelRatioCap: pixelRatioCap.current
           });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
@@ -106,16 +107,33 @@ export function SpaceshipCanvas({
 
   const onFpsReference = useRef(onFps);
   onFpsReference.current = onFps;
+  const fpsWindow = useRef<number[]>([]);
+  // Read at render, and the component tests render without a document at all -
+  // the types say `location` is always there, the renderer says otherwise.
+  const pixelRatioCap = useRef(
+    readPixelRatioCap((globalThis as { location?: { search?: string } }).location?.search ?? "")
+  );
   useEffect(() => {
-    if (onFps === undefined) return;
     const sample = () => {
-      onFpsReference.current?.(runtimeReference.current?.readFps() ?? 0);
+      const fps = runtimeReference.current?.readFps() ?? 0;
+      onFpsReference.current?.(fps);
+      // Down only, and only on a run of samples: a wave that briefly puts forty
+      // ships on the field is not a phone that cannot run the game.
+      const window = fpsWindow.current;
+      window.push(fps);
+      if (window.length > PIXEL_RATIO_FALLBACK_SAMPLES) window.shift();
+      const next = nextPixelRatioCap(pixelRatioCap.current, window);
+      if (next !== pixelRatioCap.current) {
+        pixelRatioCap.current = next;
+        window.length = 0;
+        runtimeReference.current?.setPixelRatioCap(next);
+      }
     };
     const timer = globalThis.setInterval(sample, FPS_SAMPLE_INTERVAL_MS);
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [onFps === undefined]);
+  }, []);
 
   useEffect(() => {
     // Demo-only: the Node bot reads this instead of scraping the render path.

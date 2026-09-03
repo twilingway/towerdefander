@@ -202,10 +202,49 @@ export function getResponsiveViewport(
  * arena was rasterised at a third of the linear resolution of the panel and
  * then blown back up, which is why the battlefield read as mush beside a HUD
  * the browser had drawn at full density. The cost is the square of this
- * number, on a scene that is already fill-bound, so it is capped rather than
- * taken: two is four times the pixels, three would be nine.
+ * number, on a scene that is already fill-bound: two is four times the pixels,
+ * three is nine. So this is a ceiling rather than a target - a panel gets what
+ * it has, up to here - and it sits high because two other things bound it
+ * better than a guess does. The edge clamp in `getBackingStoreSize` keeps the
+ * buffer inside what the GPU will allocate, which is what actually bites on a
+ * large dense screen; and `nextPixelRatioCap` walks it down on a machine that
+ * cannot keep up. Measured: a mid-range phone at 2.75 holds 51 frames in a
+ * crowd once the shield stopped running its bloom over the whole canvas.
  */
-export const DEVICE_PIXEL_RATIO_CAP = 2;
+export const DEVICE_PIXEL_RATIO_CAP = 4;
+
+/**
+ * Frames a second below which the scene is not keeping up in a way anyone can
+ * miss, and how long it has to stay there before the resolution is given up.
+ *
+ * Ten seconds, because a wave that briefly puts forty ships on the field is not
+ * a phone that cannot run the game, and a picture that changes sharpness every
+ * time a crowd arrives is worse than one that is simply softer.
+ */
+export const PIXEL_RATIO_FALLBACK_FPS = 30;
+export const PIXEL_RATIO_FALLBACK_SAMPLES = 20;
+
+/** The ladder the ceiling walks down, and never back up inside a run. */
+const PIXEL_RATIO_STEPS = [3, 2, 1] as const;
+// Note the ladder starts below the ceiling on purpose: a panel drawn at four
+// steps to three first, and one already at two steps to one.
+
+/**
+ * The ceiling to draw at next, given the one in force and how the last samples
+ * went.
+ *
+ * Down only: a run that recovers because the wave ended would otherwise climb
+ * back and drop again on the next one, and a picture that keeps changing its
+ * mind is the worst of both.
+ */
+export function nextPixelRatioCap(currentCap: number, recentFps: readonly number[]): number {
+  if (recentFps.length < PIXEL_RATIO_FALLBACK_SAMPLES) return currentCap;
+  const window = recentFps.slice(-PIXEL_RATIO_FALLBACK_SAMPLES);
+  // A zero is a scene that has not started rather than one that is struggling.
+  if (!window.every((fps) => fps > 0 && fps < PIXEL_RATIO_FALLBACK_FPS)) return currentCap;
+  const lower = PIXEL_RATIO_STEPS.filter((step) => step < currentCap);
+  return lower[0] ?? currentCap;
+}
 
 export interface BackingStoreInput {
   readonly cssWidth: number;

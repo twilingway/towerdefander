@@ -30,6 +30,7 @@ describe("SpaceshipCanvas", () => {
       prepareHydration,
       update,
       readFps: () => 60,
+      setPixelRatioCap: vi.fn(),
       destroy: vi.fn()
     };
     const snapshot = { tick: 42 } as DisplayGameSnapshot;

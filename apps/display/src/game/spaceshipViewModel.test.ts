@@ -14,6 +14,8 @@ import {
   getBackgroundCoverRect,
   getBackingStoreSize,
   getLetterboxBars,
+  nextPixelRatioCap,
+  PIXEL_RATIO_FALLBACK_SAMPLES,
   getPhaserCameraScroll,
   getResponsiveViewport,
   getSegmentAlpha,
@@ -57,15 +59,46 @@ describe("getLetterboxBars", () => {
   });
 });
 
+describe("nextPixelRatioCap", () => {
+  const run = (fps: number, samples = PIXEL_RATIO_FALLBACK_SAMPLES) =>
+    Array.from({ length: samples }, () => fps);
+
+  it("gives up a step after a run of bad samples", () => {
+    expect(nextPixelRatioCap(3, run(24))).toBe(2);
+    expect(nextPixelRatioCap(2, run(24))).toBe(1);
+  });
+
+  it("holds while the machine is keeping up", () => {
+    expect(nextPixelRatioCap(3, run(52))).toBe(3);
+    // One bad wave is not a phone that cannot run the game.
+    expect(nextPixelRatioCap(3, [...run(19, 19), 55])).toBe(3);
+    expect(nextPixelRatioCap(3, run(24, 8))).toBe(3);
+  });
+
+  it("does not read a scene that has not started as one that is struggling", () => {
+    expect(nextPixelRatioCap(3, run(0))).toBe(3);
+  });
+
+  it("stops at the bottom of the ladder", () => {
+    expect(nextPixelRatioCap(1, run(12))).toBe(1);
+  });
+});
+
 describe("getBackingStoreSize", () => {
   const glass = { cssWidth: 844, cssHeight: 390 };
 
-  it("draws a phone at its own density, up to the cap", () => {
-    const capped = getBackingStoreSize({ ...glass, devicePixelRatio: 2.75 });
-    expect(capped.ratio).toBe(DEVICE_PIXEL_RATIO_CAP);
-    expect(capped).toMatchObject({ width: 1688, height: 780 });
+  it("draws a panel at its own density, up to the ceiling", () => {
+    // Under the ceiling the device gets exactly what it has - the phone this
+    // was measured on reports 2.75 and is drawn at 2.75.
+    const phone = getBackingStoreSize({ ...glass, devicePixelRatio: 2.75 });
+    expect(phone.ratio).toBe(2.75);
+    expect(phone).toMatchObject({ width: 2321, height: 1073 });
 
-    // Under the cap the device gets exactly what it asks for.
+    // Above it the ceiling holds, which is what keeps a denser panel on a
+    // weaker part from drowning in its own pixels.
+    const dense = getBackingStoreSize({ ...glass, devicePixelRatio: 5 });
+    expect(dense.ratio).toBe(DEVICE_PIXEL_RATIO_CAP);
+
     const modest = getBackingStoreSize({ ...glass, devicePixelRatio: 1.5 });
     expect(modest.ratio).toBe(1.5);
     expect(modest).toMatchObject({ width: 1266, height: 585 });

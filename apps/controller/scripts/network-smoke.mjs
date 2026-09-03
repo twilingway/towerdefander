@@ -57,6 +57,24 @@ const observedAsteroidIds = new Set();
 const observedAsteroidEntrySectors = new Set();
 let arenaViolation;
 
+/**
+ * A hard stop for the whole run.
+ *
+ * Every wait in here carries its own deadline, but the SDK's calls do not: when
+ * the server dies mid-run its clients simply never settle, and this held a gate
+ * for two hours on a promise that was never going to resolve. Nothing the smoke
+ * does legitimately takes ten minutes - a full pass is under two - so past that
+ * the run is not slow, it is stuck.
+ */
+const RUN_DEADLINE_MS = 600_000;
+const watchdog = setTimeout(() => {
+  console.error(`Network smoke gave up after ${String(RUN_DEADLINE_MS)} ms without finishing.`);
+  serverProcess.kill();
+  process.exit(1);
+}, RUN_DEADLINE_MS);
+// Unreferenced so a finished run exits on its own rather than waiting this out.
+watchdog.unref();
+
 try {
   await waitForServer();
   display = await new Client(endpoint).create(ROOM_TYPE, {
@@ -258,6 +276,7 @@ try {
     })
   );
 } finally {
+  clearTimeout(watchdog);
   for (const scheduler of schedulers) clearInterval(scheduler);
   await Promise.allSettled([pilot?.leave(), gunner?.leave(), shield?.leave(), display?.leave()]);
   serverProcess.kill();

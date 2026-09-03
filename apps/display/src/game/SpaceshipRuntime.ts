@@ -998,7 +998,22 @@ function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.G
   shield.setFiltersFocusContext(false);
   const filters = shield.filters;
   if (filters === null) return undefined;
-  const glow = filters.external.addGlow(
+  /**
+   * Internal, not external, and the difference is the whole cost of the shield.
+   *
+   * An external filter is applied to the drawing context - the entire canvas -
+   * so a bloom around an arc that covers a hundredth of the screen was running
+   * a ten-sample shader over every pixel of it, plus two full-screen copies,
+   * on every frame the sector was up. On a phone at three device pixels per
+   * point that is three million pixels of shader for a shield, and it showed:
+   * sixty frames with the sector down, twenty-five with it up.
+   *
+   * An internal filter runs on the object's own target instead, which is the
+   * box `drawShield` sizes to the arc plus the bloom - a few hundred pixels
+   * square. Phaser pads that target by the glow's own distance, so the bloom
+   * still spreads rather than being clipped at the edge.
+   */
+  const glow = filters.internal.addGlow(
     SHIELD_GLOW_COLOR,
     SHIELD_GLOW_OUTER_STRENGTH,
     0,
@@ -1138,6 +1153,12 @@ export interface SpaceshipRuntime {
    * them: what the scene manages to draw is the number worth showing.
    */
   readFps(): number;
+  /**
+   * Lowers the ceiling on how many device pixels the scene may draw, when the
+   * frame counter says this machine cannot afford the one it has. Down only:
+   * see `nextPixelRatioCap`.
+   */
+  setPixelRatioCap(cap: number): void;
   destroy(): void;
 }
 
@@ -1166,6 +1187,7 @@ export function createSpaceshipRuntime(
    * `scale.resize`, and the engine resizes the renderer, the cameras and the
    * filter targets off the back of it.
    */
+  let currentCap = options.pixelRatioCap;
   const target = () => {
     const cssWidth = host.clientWidth > 0 ? host.clientWidth : BASE_VIEWPORT_WIDTH;
     const cssHeight = host.clientHeight > 0 ? host.clientHeight : BASE_VIEWPORT_HEIGHT;
@@ -1173,7 +1195,7 @@ export function createSpaceshipRuntime(
       cssWidth,
       cssHeight,
       devicePixelRatio: globalThis.devicePixelRatio,
-      ...(options.pixelRatioCap === undefined ? {} : { cap: options.pixelRatioCap }),
+      ...(currentCap === undefined ? {} : { cap: currentCap }),
       // The glow allocates a target the size of the frame, and older mobile
       // parts refuse past this; before boot there is nobody to ask.
       maxDimension: 4096
@@ -1239,6 +1261,11 @@ export function createSpaceshipRuntime(
     },
     readFps() {
       return game.loop.actualFps;
+    },
+    setPixelRatioCap(cap) {
+      if (cap === currentCap) return;
+      currentCap = cap;
+      applyTarget();
     },
     destroy() {
       observer.disconnect();
