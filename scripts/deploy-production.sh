@@ -155,6 +155,32 @@ drain_rooms() {
   log "Drain deadline of ${DEPLOY_DRAIN_MINUTES} minute(s) passed; releasing anyway."
 }
 
+# The volume is the home of the balance the console writes; the committed seed
+# is what a host that has never run the game starts from. Seeding only ever
+# happens into an empty volume, so a release can never overwrite tuning an
+# operator saved. Promoting live tuning back into the seed is a separate,
+# deliberate act -- see scripts/export-balance-seed.sh.
+seed_balance_volume() {
+  local seed="${REPO_DIR}/apps/server/presets/production.json"
+  local volume="${COMPOSE_PROJECT}_space-api-data"
+  if [ ! -f "${seed}" ]; then
+    log "No seed preset in the checkout; the server will start on packaged defaults."
+    return 0
+  fi
+  if docker run --rm -v "${volume}:/data" alpine test -f /data/balance.json >/dev/null 2>&1; then
+    return 0
+  fi
+  log "Balance volume is empty; seeding it from the committed preset."
+  # Over stdin rather than a bind mount: the checkout may live outside what the
+  # Docker host can mount, and a mount is not needed to write one file.
+  if docker run --rm -i -v "${volume}:/data" alpine sh -c 'cat > /data/balance.json' <"${seed}"; then
+    compose restart space-api >/dev/null 2>&1 || true
+    log "Seeded the balance volume and restarted the server onto it."
+  else
+    log "Could not seed the balance volume; the server stays on packaged defaults."
+  fi
+}
+
 roll_back() {
   local previous="$1"
   if [ -z "${previous}" ]; then
@@ -228,6 +254,8 @@ if ! IMAGE_TAG="${SHORT_SHA}" compose up -d --remove-orphans; then
   roll_back "${PREVIOUS_TAG}" || true
   die "Release ${SHORT_SHA} failed to start."
 fi
+
+seed_balance_volume
 
 if ! wait_for_health; then
   log "Release ${SHORT_SHA} never answered its health check."
