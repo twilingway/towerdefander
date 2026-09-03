@@ -1667,3 +1667,15 @@ p {
   color: #ffd894;
   font-size: 1.05rem;
 }
+
+/* When the announcement replaces the controls it has to carry the screen, the
+   way the title does: read from across a room, not squinted at up close. */
+.maintenance-notice--prominent {
+  margin: 1.5rem 0 0.5rem;
+  padding: 1.5rem 1.75rem;
+  font-size: clamp(1.4rem, 3.2vw, 2.4rem);
+  line-height: 1.35;
+  font-weight: 600;
+  text-align: center;
+  border-width: 2px;
+}
