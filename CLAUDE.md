@@ -57,6 +57,19 @@ both world builders, and belongs in the shared `apps/controller/scripts/visible-
 whenever it can; see the working agreement in `AGENTS.md`. A fix made on the stand alone measures as
 working and plays as broken.
 
+### Production
+
+`docs/DEPLOYMENT.md` is the operator's document; `openspec/changes/production-deployment/` holds the
+reasoning. The shape in one paragraph: four containers (`docker/api.Dockerfile`,
+`docker/web.Dockerfile`, `docker-compose.prod.yml`) behind an existing reverse proxy, three public
+domains for display, controller and API, and the balance console published to the local network
+only. `.github/workflows/ci.yml` is a quality gate and nothing more — releases are pulled by
+`scripts/watch-main-and-deploy.sh` on the host, because a self-hosted runner on a public repository
+would execute a fork's workflow file. Two consequences reach the code: the admin passwords are
+mandatory in production (behind a proxy the socket address is never loopback, so the localhost
+allowance in `stats/access.ts` never applies), and `/ships` must keep its permissive origin header —
+the display fetches it from a different origin than its own.
+
 ## Architecture
 
 Server-authoritative realtime game: `apps/server` (Colyseus) owns trusted state; display and

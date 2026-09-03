@@ -1529,6 +1529,37 @@ describe("balance routes", () => {
     expect(parsed.data?.defaultShipId).toBe(createDefaultTuning().defaultShipArchetypeId);
   });
 
+  it("lets a display on another origin read the hull catalogue", async () => {
+    const store = storeFor(await temporaryPresetPath());
+    const output = response();
+    await invoke(
+      createShipCatalogueHandler({ password: undefined, store }),
+      request("203.0.113.7"),
+      output.response
+    );
+    // The public deployment puts the display and the game server on separate
+    // hosts, so the browser drops this answer without the header. Losing it is
+    // not a crash -- the create screen falls back to unnamed hulls -- which is
+    // exactly why it needs a test rather than a live report.
+    expect(output.state.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("does not widen the balance routes to another origin itself", async () => {
+    const store = storeFor(await temporaryPresetPath());
+    const output = response();
+    await invoke(
+      createBalanceStateHandler({ password: undefined, store }),
+      request("127.0.0.1"),
+      output.response
+    );
+    expect(output.state.status).toBe(200);
+    // Only what this handler does. Colyseus puts a permissive origin on every
+    // express route it hosts, so the boundary that keeps the console off the
+    // public API host is the reverse proxy refusing /admin there, not this
+    // header -- see docs/DEPLOYMENT.md.
+    expect(output.state.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
   it("keeps the waves when a version 29 preset still sizes the boss repair in hit points", async () => {
     const path = await temporaryPresetPath();
     const defaults = createDefaultTuning();

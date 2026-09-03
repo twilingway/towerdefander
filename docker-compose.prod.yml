@@ -1,0 +1,119 @@
+# Production stack for one host behind a reverse proxy.
+#
+# Every service joins the proxy's existing external network and is reached by
+# container name, which is how the other sites on this machine are wired. Only
+# two ports are published: the console, to the local network, and the API on
+# loopback, which exists so the release script can check health and smoke-test a
+# room without going out to the internet and back.
+#
+# Real domains and passwords live in an env file outside the repository; see
+# .env.production.example.
+
+services:
+  space-api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: spacedef-api:${IMAGE_TAG:-local}
+    container_name: space-api
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Moscow
+      HOST: 0.0.0.0
+      PORT: 2567
+      # The volume, not the image and not the deploy checkout: this is the only
+      # copy of what an operator saved from the console.
+      BALANCE_PRESET_PATH: /data/balance.json
+      STATS_BATCH_DIR: /data/stats-batches
+      # Rooms share one event loop, so the ceiling is set from the cores this
+      # host can actually give the tick, well under the packaged default.
+      ROOM_MAX_CONCURRENT: ${ROOM_MAX_CONCURRENT:-8}
+      # Mandatory here, unlike in development: behind the proxy the socket
+      # address is the proxy's, so the loopback allowance never applies and an
+      # unset password locks the console out instead of opening it.
+      ADMIN_BALANCE_PASSWORD:
+        ${ADMIN_BALANCE_PASSWORD:?set ADMIN_BALANCE_PASSWORD in .env.production}
+      ROOM_STATS_PASSWORD: ${ROOM_STATS_PASSWORD:?set ROOM_STATS_PASSWORD in .env.production}
+    # ALLOW_START_WAVE is deliberately absent: a public server must not accept a
+    # request to drop a crew onto a late wave.
+    volumes:
+      - space-api-data:/data
+    ports:
+      - "127.0.0.1:${API_LOCAL_PORT:-2567}:2567"
+    healthcheck:
+      # alpine has no curl, and Node is right here.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:2567/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    # Colyseus drains connections on SIGTERM when gracefullyShutdown is on.
+    stop_grace_period: 30s
+    networks:
+      - proxy
+
+  space-display:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        APP_NAME: display
+        VITE_GAME_SERVER_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL in .env.production}
+        VITE_CONTROLLER_URL: ${PUBLIC_CONTROLLER_URL:?set PUBLIC_CONTROLLER_URL in .env.production}
+    image: spacedef-display:${IMAGE_TAG:-local}
+    container_name: space-display
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Moscow
+    networks:
+      - proxy
+
+  space-control:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        APP_NAME: controller
+        VITE_GAME_SERVER_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL in .env.production}
+    image: spacedef-control:${IMAGE_TAG:-local}
+    container_name: space-control
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Moscow
+    networks:
+      - proxy
+
+  space-admin:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        APP_NAME: admin
+        NGINX_CONF: docker/nginx-admin.conf
+    image: spacedef-admin:${IMAGE_TAG:-local}
+    container_name: space-admin
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Moscow
+    # Local network only. The router forwards 80/443 to the reverse proxy and
+    # nothing else, so this port does not leave the house.
+    ports:
+      - "${ADMIN_HTTP_PORT:-8081}:80"
+    depends_on:
+      - space-api
+    networks:
+      - proxy
+
+volumes:
+  space-api-data:
+
+networks:
+  proxy:
+    external: true
+    name: ${PROXY_NETWORK:-public_net}

@@ -1,0 +1,42 @@
+# Everything an image never needs, and everything that would make a build
+# depend on the machine it runs on.
+.git
+.gitignore
+node_modules
+**/node_modules
+dist
+**/dist
+.vite
+**/.vite
+.turbo
+.cache
+
+# Secrets and machine-local configuration. Client builds take their public
+# addresses from build arguments, so a stray .env.local must not leak in and
+# quietly win over them.
+.env
+.env.*
+
+# Runtime state: the balance preset and the batch reports live on a volume in
+# production, never inside an image.
+apps/server/data
+data
+
+# Test and reporting output.
+playwright-report
+test-results
+coverage
+**/*.log
+
+# Documentation and process artifacts.
+docs
+openspec
+artifacts
+.daily-worktrees
+.agents
+.claude
+.codex
+.opencode
+.vscode
+.idea
+tools
