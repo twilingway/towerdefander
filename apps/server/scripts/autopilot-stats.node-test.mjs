@@ -3,8 +3,13 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { ensureBalancePreset } from "./ensure-balance-preset.mjs";
+
 const harness = fileURLToPath(new URL("./run-autopilot-stats.mjs", import.meta.url));
-const preset = fileURLToPath(new URL("../data/balance.json", import.meta.url));
+// The harnesses measure the operator's live preset file, which is written at
+// runtime and absent on a fresh checkout. Without this the whole suite dies on
+// ENOENT on any machine that has not run the game yet.
+const preset = ensureBalancePreset();
 
 function run(args) {
   return execFileSync(process.execPath, [harness, ...args], { encoding: "utf8" });
