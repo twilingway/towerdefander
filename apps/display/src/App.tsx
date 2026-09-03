@@ -1,4 +1,5 @@
 import { Client, type Room } from "@colyseus/sdk";
+import type { MaintenanceState } from "@spaceship-defender/protocol";
 import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
@@ -59,6 +60,7 @@ import {
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
+import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
@@ -107,6 +109,7 @@ export function DisplayApp() {
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
+  const [maintenance, setMaintenance] = useState<MaintenanceState | undefined>(undefined);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
   // and the Phaser frame all render through the production path.
   const previewView = useMemo(
@@ -148,6 +151,26 @@ export function DisplayApp() {
       controller.abort();
     };
   }, []);
+
+  // Asked repeatedly, unlike the hull catalogue: a window can be announced
+  // while a crew is still deciding on the create screen, and the countdown has
+  // to move once it has. Only while no room is open -- inside one the room's
+  // own state carries it.
+  useEffect(() => {
+    if (status === "connected") return undefined;
+    const controller = new AbortController();
+    const poll = (): void => {
+      void fetchMaintenance(gameServerUrl, controller.signal).then((state) => {
+        if (!controller.signal.aborted) setMaintenance(state);
+      });
+    };
+    poll();
+    const timer = setInterval(poll, 15_000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [status]);
 
   useEffect(
     () => () => {
@@ -264,6 +287,7 @@ export function DisplayApp() {
   if ((activeStatus !== "connected" && activeStatus !== "reconnecting") || view === undefined) {
     return (
       <CreateRoomScreen
+        maintenance={maintenance}
         status={status}
         error={error}
         visibleDemo={visibleDemo}

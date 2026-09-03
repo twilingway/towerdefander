@@ -22,6 +22,7 @@ import {
   PROTOCOL_VERSION,
   ROOM_TYPE,
   clientMessage,
+  healthResponseSchema,
   publicShipCatalogueSchema,
   serverLatencyProbeSchema,
   serverMessage
@@ -57,9 +58,18 @@ if (failures.length > 0) {
 async function checkHealth() {
   const response = await fetchWithTimeout(`${httpOrigin}/health`);
   if (!response.ok) throw new Error(`/health answered ${String(response.status)}.`);
-  const body = await response.json();
-  if (body?.status !== "ok") throw new Error(`/health answered ${JSON.stringify(body)}.`);
-  console.log("  health: ok");
+  const parsed = healthResponseSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error("/health answered a payload of an unexpected shape.");
+  // Names the real fault instead of letting it surface later as a refused room.
+  // During a switch the public address can still reach the container on its way
+  // out, and a release that moved the protocol would otherwise read that as
+  // broken code.
+  if (parsed.data.protocolVersion !== PROTOCOL_VERSION) {
+    throw new Error(
+      `the public address is serving protocol ${String(parsed.data.protocolVersion)}, not ${String(PROTOCOL_VERSION)} -- the switch is probably still in progress.`
+    );
+  }
+  console.log(`  health: ok, protocol ${String(parsed.data.protocolVersion)}`);
 }
 
 async function checkShipCatalogue() {

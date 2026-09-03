@@ -1,3 +1,7 @@
+import type { MaintenanceState } from "@spaceship-defender/protocol";
+
+import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+
 import { useState } from "react";
 import {
   CREW_SIZES,
@@ -11,6 +15,8 @@ import { VisibleDemoOverlay } from "../../VisibleDemoOverlay.js";
 interface CreateRoomScreenProps {
   readonly status: "idle" | "connecting" | "connected" | "reconnecting" | "error";
   readonly error: string;
+  /** The announced maintenance window, if the server told us about one. */
+  readonly maintenance: MaintenanceState | undefined;
   readonly visibleDemo: boolean;
   /**
    * Whether to offer the wave picker. A development build only: the server
@@ -38,6 +44,7 @@ interface CreateRoomScreenProps {
 export function CreateRoomScreen({
   status,
   error,
+  maintenance,
   visibleDemo,
   allowStartWave,
   initialStartWave,
@@ -110,6 +117,10 @@ export function CreateRoomScreen({
           </label>
         )}
         {error.length > 0 && <p className="error-message">{error}</p>}
+        <MaintenanceNotice
+          active={maintenance?.active ?? false}
+          secondsRemaining={maintenance?.secondsRemaining ?? 0}
+        />
         <button
           type="button"
           onClick={() => {

@@ -210,6 +210,47 @@ seed_balance_volume() {
   fi
 }
 
+# The check that was missing, and that cost two rolled-back releases.
+#
+# Health was measured with `compose exec` -- straight into the new container --
+# while the smoke played through the public address. Those two disagree for a
+# few seconds during a switch: the old container has thirty seconds to drain and
+# the proxy keeps its address for a little while, so the smoke reaches the
+# server that is on its way out. When a release also moves the protocol version,
+# that old server refuses the new client, and the release reads it as broken
+# code rather than as a switch still in progress.
+#
+# So the release now waits for the public address to answer with the version it
+# is releasing, through the same path the game uses, before it believes
+# anything.
+wait_for_public_build() {
+  local expected
+  expected="$(grep -o 'PROTOCOL_VERSION = [0-9]*' "${REPO_DIR}/packages/protocol/src/index.ts" | grep -o '[0-9]*' | head -1)"
+  if [ -z "${expected}" ]; then
+    log "Could not read the protocol version from the checkout; skipping the public wait."
+    return 0
+  fi
+  if [ -z "${PUBLIC_API_URL:-}" ]; then
+    log "No public API address configured; skipping the public wait."
+    return 0
+  fi
+  local origin="${PUBLIC_API_URL/#wss:/https:}"
+  origin="${origin/#ws:/http:}"
+  local deadline=$((SECONDS + 120))
+  local served
+  while [ ${SECONDS} -lt ${deadline} ]; do
+    served="$(curl -fsS -m 10 "${origin}/health" 2>/dev/null |
+      grep -o '"protocolVersion":[0-9]*' | grep -o '[0-9]*' | head -1)"
+    if [ "${served}" = "${expected}" ]; then
+      log "The public address is serving protocol ${expected}."
+      return 0
+    fi
+    sleep 2
+  done
+  log "The public address still serves ${served:-nothing} where ${expected} was expected."
+  return 1
+}
+
 roll_back() {
   local previous="$1"
   if [ -z "${previous}" ]; then
@@ -286,6 +327,12 @@ if ! IMAGE_TAG="${SHORT_SHA}" compose up -d --remove-orphans; then
 fi
 
 seed_balance_volume
+
+if ! wait_for_public_build; then
+  log "The public address never started serving ${SHORT_SHA}."
+  roll_back "${PREVIOUS_TAG}" || true
+  die "Release ${SHORT_SHA} did not reach the public address."
+fi
 
 if ! wait_for_health; then
   log "Release ${SHORT_SHA} never answered its health check."
