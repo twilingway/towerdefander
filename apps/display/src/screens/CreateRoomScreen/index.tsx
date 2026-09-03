@@ -59,6 +59,21 @@ export function CreateRoomScreen({
   // whatever the server calls its default until someone picks otherwise.
   const shipId = pickedShipId ?? defaultShipId;
   const ship = ships.find((candidate) => candidate.id === shipId);
+  // Nothing on this screen works while a window is announced: the server
+  // refuses the room, so a crew size, a hull and a create button would only be
+  // three ways of being told no. The announcement takes their place and says
+  // the one thing that is true.
+  if (maintenance?.active === true) {
+    return (
+      <main className="display-shell display-shell--centered">
+        <section className="hero-card">
+          <p className="eyebrow">Общий экран</p>
+          <h1>SpaceShip Defender</h1>
+          <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
+        </section>
+      </main>
+    );
+  }
   return (
     <main className="display-shell display-shell--centered">
       <section className="hero-card">
@@ -117,10 +132,6 @@ export function CreateRoomScreen({
           </label>
         )}
         {error.length > 0 && <p className="error-message">{error}</p>}
-        <MaintenanceNotice
-          active={maintenance?.active ?? false}
-          secondsRemaining={maintenance?.secondsRemaining ?? 0}
-        />
         <button
           type="button"
           onClick={() => {
