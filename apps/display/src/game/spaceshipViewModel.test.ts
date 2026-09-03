@@ -27,12 +27,15 @@ import {
   fillFocusCandidates,
   interpolateAngle,
   interpolatePoint,
+  PLAYBACK_MIN_LAG_TICKS,
+  PLAYBACK_MAX_LAG_TICKS,
   observePlaybackTick,
   reconcileStableIds,
   samplePointTrack,
   SnapshotResetLatch,
   type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
+import type { PlaybackClock } from "./spaceshipViewModel.js";
 
 describe("getLetterboxBars", () => {
   const frameFor = (glassWidth: number, glassHeight: number) => {
@@ -734,5 +737,97 @@ describe("fillFocusCandidates", () => {
     expect(thinned[0]?.entityId).toBe("c");
     const refilled = fillFocusCandidates(scratch, [enemy("d", 4), enemy("e", 5)], at);
     expect(refilled.map((one) => one.entityId)).toEqual(["d", "e"]);
+  });
+});
+
+describe("playback lag sized from arrival lateness", () => {
+  /** Feeds `count` arrivals of one tick each, `gapMs` apart. */
+  function feed(clock: PlaybackClock, count: number, gapMs: number): PlaybackClock {
+    let next = clock;
+    let tick = clock.latestTick;
+    for (let index = 0; index < count; index += 1) {
+      tick += 1;
+      next = observePlaybackTick(next, tick, gapMs);
+    }
+    return next;
+  }
+
+  it("stays at the floor while arrivals are even", () => {
+    // A viewer beside the server pays one tick and no more.
+    const clock = feed(createPlaybackClock(0), 40, 50);
+    expect(clock.lagTicks).toBeCloseTo(PLAYBACK_MIN_LAG_TICKS, 2);
+  });
+
+  it("does not buy slack for a link that is merely far away", () => {
+    // Constant distance is already absorbed by playback sitting behind; paying
+    // for it again would lengthen the reaction of every viewer for nothing.
+    const near = feed(createPlaybackClock(0), 40, 50);
+    const far = feed(createPlaybackClock(0), 40, 50);
+    expect(far.lagTicks).toBeCloseTo(near.lagTicks, 2);
+  });
+
+  it("buys slack once an arrival runs long", () => {
+    const even = feed(createPlaybackClock(0), 20, 50);
+    // The measured tail on the public deployment: 158.7 ms where 50 was due.
+    const late = observePlaybackTick(even, even.latestTick + 1, 158.7);
+    expect(late.lagTicks).toBeGreaterThan(even.lagTicks);
+    // And enough of it that an arrival of that size no longer empties the
+    // interpolation: the budget is the lag plus the tick the patch carries.
+    expect((late.lagTicks + 1) * late.msPerTick).toBeGreaterThan(158.7);
+  });
+
+  it("gives the slack back when the link settles", () => {
+    const even = feed(createPlaybackClock(0), 20, 50);
+    const late = observePlaybackTick(even, even.latestTick + 1, 250);
+    // Twenty seconds of even arrivals: most of it returned, but not all.
+    const settling = feed(late, 400, 50);
+    expect(settling.lagTicks).toBeLessThan(late.lagTicks);
+    // A minute and a half of them: back to what a quiet link pays.
+    const settled = feed(settling, 1_600, 50);
+    expect(settled.lagTicks).toBeCloseTo(PLAYBACK_MIN_LAG_TICKS, 1);
+  });
+
+  it("gives it back slower than it took it", () => {
+    const even = feed(createPlaybackClock(0), 20, 50);
+    const late = observePlaybackTick(even, even.latestTick + 1, 250);
+    const briefly = feed(late, 20, 50);
+    // Twenty even arrivals after the stall, most of the slack is still there:
+    // the stall has already been paid for, and the next one is what matters.
+    expect(briefly.lagTicks).toBeGreaterThan(PLAYBACK_MIN_LAG_TICKS + 1);
+  });
+
+  it("never turns the game into a recording", () => {
+    let clock = createPlaybackClock(0);
+    for (let index = 0; index < 30; index += 1) {
+      clock = observePlaybackTick(clock, clock.latestTick + 1, 2_000);
+    }
+    expect(clock.lagTicks).toBeLessThanOrEqual(PLAYBACK_MAX_LAG_TICKS);
+  });
+
+  it("keeps playback behind by the lag it decided on while snapshots keep coming", () => {
+    // Frames and arrivals interleaved, the way they actually happen: three
+    // frames of a sixty-hertz screen for every fifty-millisecond snapshot.
+    let clock = observePlaybackTick(feed(createPlaybackClock(0), 20, 50), 21, 250);
+    for (let arrival = 0; arrival < 120; arrival += 1) {
+      for (let frame = 0; frame < 3; frame += 1) clock = advancePlayback(clock, 16.7);
+      clock = observePlaybackTick(clock, clock.latestTick + 1, 50);
+    }
+    expect(clock.tick).toBeLessThanOrEqual(clock.latestTick);
+    // Within half a tick, not exactly: drift is taken back by bending the rate
+    // rather than by moving the position, so playback approaches the lag it
+    // wants instead of snapping to it -- a snap is what would read as a jump.
+    expect(clock.latestTick - clock.tick).toBeCloseTo(clock.lagTicks, 0);
+  });
+
+  it("does not stall the picture on the arrival that used to stall it", () => {
+    // The measured failure, replayed: even arrivals, then one at 158.7 ms. With
+    // slack the picture keeps moving through it; the assertion is that playback
+    // still has somewhere to go when the late one finally lands.
+    let clock = feed(createPlaybackClock(0), 40, 50);
+    clock = observePlaybackTick(clock, clock.latestTick + 1, 158.7);
+    const before = clock.tick;
+    for (let frame = 0; frame < 9; frame += 1) clock = advancePlayback(clock, 16.7);
+    expect(clock.tick).toBeGreaterThan(before);
+    expect(clock.tick).toBeLessThan(clock.latestTick);
   });
 });
