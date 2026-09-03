@@ -32,6 +32,7 @@
     "test:e2e": "pnpm --filter @spaceship-defender/server build && node scripts/run-e2e.mjs",
     "smoke:network": "pnpm --filter @spaceship-defender/server build && pnpm --filter @spaceship-defender/controller smoke:network",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm smoke:network && pnpm test:e2e",
+    "check:ci": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm smoke:network",
     "spec": "cross-env OPENSPEC_TELEMETRY=0 openspec",
     "spec:status": "cross-env OPENSPEC_TELEMETRY=0 openspec status",
     "spec:validate": "cross-env OPENSPEC_TELEMETRY=0 openspec validate --all",

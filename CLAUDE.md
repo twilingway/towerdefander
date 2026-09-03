@@ -25,6 +25,13 @@ smoke, Playwright e2e:
 pnpm check
 ```
 
+`pnpm check:ci` is the same gate without `test:e2e`, and it is what `.github/workflows/ci.yml` runs.
+The browser suite needs a GPU: a hosted runner renders the display in software, the scripted crew
+starves and dies before it clears a wave, and every spec times out.
+`E2E_SOFTWARE_GL=1 pnpm test:e2e` reproduces that machine locally. Browser coverage therefore lands
+on the machine that releases, not on the runner — keep running `pnpm check` before you call work
+done.
+
 Narrower checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm format`.
 
 Single test file or single case (works uniformly across packages; `pnpm --filter <pkg> test <args>`
