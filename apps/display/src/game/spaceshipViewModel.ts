@@ -688,6 +688,14 @@ export interface PlaybackClock {
   /** Smoothed arrival gap and ticks per arrival, kept apart on purpose. */
   readonly gapEmaMs: number;
   readonly tickEma: number;
+  /**
+   * The worst recent lateness, in milliseconds, decaying while arrivals behave.
+   * A mean would hide exactly what matters here: the picture stalls on the rare
+   * arrival that runs long, not on the typical one.
+   */
+  readonly lateMs: number;
+  /** How far behind the newest tick playback aims to stay, in ticks. */
+  readonly lagTicks: number;
 }
 
 /** Stands in until the first pair of snapshots has been timed. */
@@ -695,11 +703,33 @@ export const NOMINAL_MS_PER_TICK = 50;
 const MIN_MS_PER_TICK = 20;
 const MAX_MS_PER_TICK = 250;
 /**
- * How far behind the newest tick playback aims to stay. One tick of slack
- * absorbs an arrival that runs late without ever leaving what the two kept
- * segments cover, so nothing has to be drawn twice while waiting.
+ * The floor on how far behind the newest tick playback aims to stay. One tick
+ * absorbs a single late arrival on a link that does not otherwise misbehave,
+ * and it is what a viewer beside the server pays.
+ *
+ * It used to be the whole story, and on a real link it is not. Measured against
+ * this game's own public deployment over forty-five seconds: arrivals sat at a
+ * median of 50.5 ms either way, but through the internet the tail reached
+ * 158.7 ms, past the 100 ms a one-tick lag affords a single-tick patch. Fifteen
+ * arrivals in eight hundred landed late, and the picture stood still for 0.46 s
+ * of the run -- while the frame counter, drawing the same state over and over,
+ * reported everything was fine.
  */
-export const PLAYBACK_LAG_TICKS = 1;
+export const PLAYBACK_MIN_LAG_TICKS = 1;
+/**
+ * The ceiling. Lag is latency the viewer pays to watch, so a link that misbehaves
+ * for a long stretch must not be allowed to turn the game into a recording. Kept
+ * under `PLAYBACK_RESYNC_TICKS` so a lag at its ceiling is never itself mistaken
+ * for hopeless drift.
+ */
+export const PLAYBACK_MAX_LAG_TICKS = 4;
+/**
+ * Lateness rises to the newest measurement at once and falls by this factor per
+ * arrival. Asymmetric on purpose: the stall has already been paid for by the
+ * time it is measured, so the slack that prevents the next one is given up
+ * slowly. At twenty arrivals a second this halves in about seven seconds.
+ */
+const LATENESS_DECAY = 0.995;
 /** Past this drift, correcting by rate is hopeless and playback jumps instead. */
 export const PLAYBACK_RESYNC_TICKS = 6;
 /** Weight of the newest measurement in the pace estimate. */
@@ -711,7 +741,28 @@ const MAX_PLAYBACK_RATE = 1.15;
 
 export function createPlaybackClock(tick: number, msPerTick = NOMINAL_MS_PER_TICK): PlaybackClock {
   const pace = clamp(msPerTick, MIN_MS_PER_TICK, MAX_MS_PER_TICK);
-  return { tick, latestTick: tick, msPerTick: pace, gapEmaMs: pace, tickEma: 1 };
+  return {
+    tick,
+    latestTick: tick,
+    msPerTick: pace,
+    gapEmaMs: pace,
+    tickEma: 1,
+    lateMs: 0,
+    lagTicks: PLAYBACK_MIN_LAG_TICKS
+  };
+}
+
+/**
+ * The slack a link has earned, in ticks. Only lateness buys it: a link that is
+ * merely far away already has its distance absorbed by playback sitting behind,
+ * and spending slack on it would lengthen every viewer's reaction for nothing.
+ */
+function lagFromLateness(lateMs: number, msPerTick: number): number {
+  return clamp(
+    PLAYBACK_MIN_LAG_TICKS + lateMs / msPerTick,
+    PLAYBACK_MIN_LAG_TICKS,
+    PLAYBACK_MAX_LAG_TICKS
+  );
 }
 
 /**
@@ -736,12 +787,19 @@ export function observePlaybackTick(
   // patches and land on 54 ms per tick where the room really runs 50.
   const gapEmaMs = clock.gapEmaMs + (arrivalGapMs - clock.gapEmaMs) * PACE_SMOOTHING;
   const tickEma = clock.tickEma + (ticks - clock.tickEma) * PACE_SMOOTHING;
+  const msPerTick = clamp(gapEmaMs / tickEma, MIN_MS_PER_TICK, MAX_MS_PER_TICK);
+  // How much longer this arrival took than the ticks it carried are worth. Only
+  // the overshoot counts: an early arrival costs the picture nothing.
+  const overshootMs = Math.max(0, arrivalGapMs - ticks * clock.msPerTick);
+  const lateMs = Math.max(overshootMs, clock.lateMs * LATENESS_DECAY);
   return {
     tick: clock.tick,
     latestTick: tick,
-    msPerTick: clamp(gapEmaMs / tickEma, MIN_MS_PER_TICK, MAX_MS_PER_TICK),
+    msPerTick,
     gapEmaMs,
-    tickEma
+    tickEma,
+    lateMs,
+    lagTicks: lagFromLateness(lateMs, msPerTick)
   };
 }
 
@@ -752,7 +810,7 @@ export function observePlaybackTick(
  */
 export function advancePlayback(clock: PlaybackClock, deltaMs: number): PlaybackClock {
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) return clock;
-  const target = clock.latestTick - PLAYBACK_LAG_TICKS;
+  const target = clock.latestTick - clock.lagTicks;
   const drift = target - clock.tick;
   if (Math.abs(drift) > PLAYBACK_RESYNC_TICKS) return { ...clock, tick: target };
   const rate = clamp(1 + drift * DRIFT_CORRECTION, MIN_PLAYBACK_RATE, MAX_PLAYBACK_RATE);
