@@ -34,6 +34,10 @@ services:
       ADMIN_BALANCE_PASSWORD:
         ${ADMIN_BALANCE_PASSWORD:?set ADMIN_BALANCE_PASSWORD in .env.production}
       ROOM_STATS_PASSWORD: ${ROOM_STATS_PASSWORD:?set ROOM_STATS_PASSWORD in .env.production}
+      # Its own secret, not the console password: this one ends other people's
+      # runs. The release uses it to announce a maintenance window before it
+      # restarts anything.
+      DEPLOY_CONTROL_TOKEN: ${DEPLOY_CONTROL_TOKEN:?set DEPLOY_CONTROL_TOKEN in .env.production}
     # ALLOW_START_WAVE is deliberately absent: a public server must not accept a
     # request to drop a crew onto a late wave.
     volumes:

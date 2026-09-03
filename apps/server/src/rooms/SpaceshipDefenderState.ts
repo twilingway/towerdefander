@@ -321,6 +321,13 @@ export class SpaceshipDefenderState extends Schema {
    * the right shape here: an id the clients look up in their own catalogue.
    */
   @type("string") shipArchetypeId = "";
+  /**
+   * The announced maintenance window. The remaining seconds are published
+   * rather than a deadline: a device with a wrong clock would otherwise show
+   * its owner a countdown nobody else sees. `uint16` holds eighteen hours.
+   */
+  @type("boolean") maintenanceActive = false;
+  @type("uint16") maintenanceSecondsRemaining = 0;
   @type("boolean") displayConnected = false;
   @type("int32") displayLatencyMs = -1;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();

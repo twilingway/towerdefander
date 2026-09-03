@@ -6,6 +6,7 @@ import {
   MAX_START_WAVE,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
+  ROOM_REFUSED_FOR_MAINTENANCE,
   ROOM_TYPE,
   clientMessage,
   roomClosingSchema,
@@ -55,6 +56,7 @@ import {
   PREVIEW_ENDLESS_TIER,
   PREVIEW_MODULE_TIERS
 } from "./previewMode.js";
+import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
@@ -326,6 +328,10 @@ export function DisplayApp() {
         </div>
       </header>
       {error.length > 0 && <p className="error-message">{error}</p>}
+      <MaintenanceNotice
+        active={view.maintenanceActive}
+        secondsRemaining={view.maintenanceSecondsRemaining}
+      />
 
       <LobbyLayout view={view} joinUrl={joinUrl} />
 
@@ -473,6 +479,9 @@ export function PreviewControls({
 
 function createFailureMessage(reason: unknown): string {
   if (!(reason instanceof Error)) return "Не удалось создать комнату.";
+  if (reason.message === ROOM_REFUSED_FOR_MAINTENANCE) {
+    return "На сервере технические работы. Новые комнаты пока не создаются.";
+  }
   if (reason.message === ROOM_REFUSED_AT_CAPACITY) {
     return "Сервер занят: свободных комнат нет. Попробуйте через минуту.";
   }

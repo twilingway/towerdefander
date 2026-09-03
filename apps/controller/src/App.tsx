@@ -42,6 +42,7 @@ import {
   type NetworkRoomState
 } from "./roomView.js";
 import { JoinScreen } from "./screens/JoinScreen/index.js";
+import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { LobbyScreen } from "./screens/LobbyScreen/index.js";
 import { RoleScreen } from "./screens/RoleScreen/index.js";
 import type { ControlState } from "./model/control.js";
@@ -420,6 +421,13 @@ export function ControllerApp() {
           </span>
         </div>
         {error.length > 0 && <p className="error-message">{error}</p>}
+        {activeView !== undefined && (
+          <MaintenanceNotice
+            active={activeView.maintenanceActive}
+            secondsRemaining={activeView.maintenanceSecondsRemaining}
+            inCombat={activeView.game?.encounter.phase === "combat"}
+          />
+        )}
 
         {activeView?.phase === "lobby" ? (
           <LobbyScreen

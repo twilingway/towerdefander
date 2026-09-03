@@ -75,7 +75,9 @@ set -a
 set +a
 
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
-DEPLOY_DRAIN_MINUTES="${DEPLOY_DRAIN_MINUTES:-10}"
+# What players are told: the countdown they see, and the room-free wait after it.
+DEPLOY_ANNOUNCE_MINUTES="${DEPLOY_ANNOUNCE_MINUTES:-60}"
+DEPLOY_DRAIN_MINUTES="${DEPLOY_DRAIN_MINUTES:-30}"
 PROXY_NETWORK="${PROXY_NETWORK:-public_net}"
 COMPOSE_FILE="${REPO_DIR}/docker-compose.prod.yml"
 
@@ -126,6 +128,33 @@ fetch('http://127.0.0.1:2567/health')
   return 1
 }
 
+# Announced before the wait, not after: a warning that arrives when the wait is
+# over has nobody left to warn. From this moment the server refuses new rooms,
+# so the pool drains on its own while the countdown runs.
+announce_maintenance() {
+  if ! compose ps --status running --services 2>/dev/null | grep -q '^space-api$'; then
+    return 0
+  fi
+  local seconds=$((DEPLOY_ANNOUNCE_MINUTES * 60))
+  if api_node "
+const token = process.env.DEPLOY_CONTROL_TOKEN ?? '';
+const authorization = 'Basic ' + Buffer.from('admin:' + token).toString('base64');
+fetch('http://127.0.0.1:2567/admin/maintenance', {
+  method: 'PUT',
+  headers: { authorization, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ active: true, windowSeconds: ${seconds} })
+})
+  .then((response) => process.exit(response.ok ? 0 : 1))
+  .catch(() => process.exit(1));
+" >/dev/null 2>&1; then
+    log "Announced a ${DEPLOY_ANNOUNCE_MINUTES}-minute maintenance window; new rooms are refused."
+    return 0
+  fi
+  # Worth saying out loud: without it the release still happens, but it happens
+  # on top of players who were never told.
+  log "WARNING: could not announce maintenance; releasing without warning anyone."
+}
+
 drain_rooms() {
   if [ "${SKIP_DRAIN}" = "1" ]; then
     log "Drain skipped by request."
@@ -135,7 +164,7 @@ drain_rooms() {
     log "Nothing is running yet; no rooms to drain."
     return 0
   fi
-  local deadline=$((SECONDS + DEPLOY_DRAIN_MINUTES * 60))
+  local deadline=$((SECONDS + (DEPLOY_ANNOUNCE_MINUTES + DEPLOY_DRAIN_MINUTES) * 60))
   local count
   while [ ${SECONDS} -lt ${deadline} ]; do
     count="$(live_room_count || true)"
@@ -152,7 +181,7 @@ drain_rooms() {
   done
   # Deliberate: one room nobody closes must not become a permanent stop on
   # releases. Announcing this to the players is the maintenance-mode change.
-  log "Drain deadline of ${DEPLOY_DRAIN_MINUTES} minute(s) passed; releasing anyway."
+  log "Announced window plus ${DEPLOY_DRAIN_MINUTES} minute(s) passed; releasing anyway."
 }
 
 # The volume is the home of the balance the console writes; the committed seed
@@ -246,6 +275,7 @@ fi
 log "Building images tagged ${SHORT_SHA}."
 IMAGE_TAG="${SHORT_SHA}" compose build || die "Image build failed; the running release is untouched."
 
+announce_maintenance
 drain_rooms
 
 log "Switching the stack onto ${SHORT_SHA}."

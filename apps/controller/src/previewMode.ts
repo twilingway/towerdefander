@@ -96,6 +96,8 @@ export function createPreviewRoomView(
     runNumber: phase === "lobby" ? 0 : 1,
     crewSize,
     shipArchetypeId: "guardian",
+    maintenanceActive: false,
+    maintenanceSecondsRemaining: 0,
     displayConnected: true,
     displayLatencyMs: 18,
     players,
