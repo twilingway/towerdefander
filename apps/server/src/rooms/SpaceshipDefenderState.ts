@@ -66,6 +66,15 @@ export class HelmState extends Schema {
   @type("float32") rotateInPlaceThrottle = 0.02;
   /** Mirrors the run's hull braking so the helm predicts against the real one. */
   @type("float32") hullAngularBrakingPerSecondSquared = 50;
+  /*
+   * Stick geometry. Shares of the ring radius, so `float32` covers them with
+   * room to spare, and the flag is the one boolean here — a share and a switch,
+   * never a string, on a field the panel reads once a run.
+   */
+  @type("float32") driveDeadzoneShare = 0;
+  @type("float32") aimDeadzoneShare = 0;
+  @type("boolean") floatingOrigin = false;
+  @type("float32") aimProjectionShare = 0.58;
 }
 
 export class ShieldState extends Schema {

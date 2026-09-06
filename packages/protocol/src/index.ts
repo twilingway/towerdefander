@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 46 as const;
+export const PROTOCOL_VERSION = 47 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -64,7 +64,13 @@ export const COMBAT_ENTITY_CAPS = {
   dynamicEntities: 208
 } as const;
 
-export const clientRoleSchema = z.enum(["display", "controller"]);
+/**
+ * What a connection is here to do. `solo` is both at once: it draws the world
+ * like a display and holds a crew seat like a controller, so one phone can play
+ * without a second device. It is an addition, not a replacement — a display and
+ * a controller on separate devices still join exactly as before.
+ */
+export const clientRoleSchema = z.enum(["display", "controller", "solo"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
 export const crewSizeSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 /**
@@ -660,7 +666,12 @@ export const publicHelmViewSchema = z
      * helm predicts where a released turn comes to rest, and a guess that does
      * not match the hull overshoots and swings back.
      */
-    hullAngularBrakingPerSecondSquared: finite.positive()
+    hullAngularBrakingPerSecondSquared: finite.positive(),
+    /** Stick geometry, shares of the ring radius rather than pixels. */
+    driveDeadzoneShare: finite.min(0),
+    aimDeadzoneShare: finite.min(0),
+    floatingOrigin: z.boolean(),
+    aimProjectionShare: finite.positive()
   })
   .strict();
 export type PublicHelmView = z.infer<typeof publicHelmViewSchema>;
@@ -830,7 +841,28 @@ export const controllerJoinOptionsSchema = z
   })
   .strict();
 export type ControllerJoinOptions = z.infer<typeof controllerJoinOptionsSchema>;
-export const joinOptionsSchema = z.union([displayJoinOptionsSchema, controllerJoinOptionsSchema]);
+/**
+ * One connection with both duties. It creates its own room, so it names the
+ * hull and the testing aids the way a display does, and it names a player the
+ * way a controller does. The seat count is fixed at one: a second person would
+ * need a second connection, and then the room is the ordinary two-device case.
+ */
+export const soloJoinOptionsSchema = z
+  .object({
+    role: z.literal("solo"),
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    crewSize: z.literal(1).optional(),
+    playerName: z.string().trim().min(1).max(24),
+    shipArchetypeId: shipArchetypeIdSchema.optional(),
+    startWave: startWaveSchema.optional()
+  })
+  .strict();
+export type SoloJoinOptions = z.infer<typeof soloJoinOptionsSchema>;
+export const joinOptionsSchema = z.union([
+  displayJoinOptionsSchema,
+  controllerJoinOptionsSchema,
+  soloJoinOptionsSchema
+]);
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
 
 export const commandEnvelopeSchema = z

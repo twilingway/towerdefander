@@ -213,6 +213,7 @@ const PLAYER_SHIP_FIELDS = [
   "projectileRadius",
   "projectileLifetimeMs",
   "turretMaxAngularSpeedPerSecond",
+  "turretMountedOnHull",
   "turretAngularAccelerationPerSecondSquared",
   "turretAngularBrakingPerSecondSquared",
   "projectileVisual",

@@ -44,7 +44,18 @@ const DEFAULT_HELM: HelmTuning = {
   // release aims at the predicted stopping point.
   headingLeadRadians: 0.45,
   stopDampening: 1,
-  rotateInPlaceThrottle: 0.02
+  rotateInPlaceThrottle: 0.02,
+  /*
+   * The stick as the coop panels have always drawn it: no dead zone, centre in
+   * the middle of the ring. Defaults exist to keep a run that never touched
+   * these playing exactly as it did, so the STEEL VOID geometry lives in a
+   * preset and not here.
+   */
+  driveDeadzoneShare: 0,
+  aimDeadzoneShare: 0,
+  floatingOrigin: false,
+  /** Only the cockpit projects an aim point; the coop panels ignore it. */
+  aimProjectionShare: 0.58
 };
 
 /**
@@ -290,6 +301,7 @@ export function createDefaultTuning(): BalanceTuning {
     turretMaxAngularSpeedPerSecond: config.turretMaxAngularSpeedPerSecond,
     turretAngularAccelerationPerSecondSquared: config.turretAngularAccelerationPerSecondSquared,
     turretAngularBrakingPerSecondSquared: config.turretAngularBrakingPerSecondSquared,
+    turretMountedOnHull: config.turretMountedOnHull,
     mgDamage: config.mgDamage,
     mgFireCooldownTicks: config.mgFireCooldownTicks,
     mgProjectileSpeedPerSecond: config.mgProjectileSpeedPerSecond,

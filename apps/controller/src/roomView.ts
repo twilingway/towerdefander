@@ -105,6 +105,10 @@ interface NetworkGameState {
     stopDampening: number;
     rotateInPlaceThrottle: number;
     hullAngularBrakingPerSecondSquared: number;
+    driveDeadzoneShare: number;
+    aimDeadzoneShare: number;
+    floatingOrigin: boolean;
+    aimProjectionShare: number;
   };
   encounter: {
     phase: EncounterPhase;

@@ -17,7 +17,11 @@ describe("HelmScreen", () => {
           scheme: "tank",
           headingLeadRadians: Math.PI / 6,
           stopDampening: 1,
-          rotateInPlaceThrottle: 0.02
+          rotateInPlaceThrottle: 0.02,
+          driveDeadzoneShare: 0,
+          aimDeadzoneShare: 0,
+          floatingOrigin: false,
+          aimProjectionShare: 0.58
         })}
         onChange={vi.fn()}
       />
@@ -36,7 +40,11 @@ describe("HelmScreen", () => {
       scheme: "tank",
       headingLeadRadians: 0.5,
       stopDampening: 1,
-      rotateInPlaceThrottle: 0.02
+      rotateInPlaceThrottle: 0.02,
+      driveDeadzoneShare: 0,
+      aimDeadzoneShare: 0,
+      floatingOrigin: false,
+      aimProjectionShare: 0.58
     };
     const screen = HelmScreen({ tuning: tuning(helm), onChange });
     const fields = collectOnChange(screen);

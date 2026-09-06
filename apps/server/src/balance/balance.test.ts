@@ -617,6 +617,60 @@ describe("version 1 migration", () => {
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });
 
+  it("gives a version 34 document the turret mount and stick geometry, waves intact", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    // Version 34 had neither: the gun always held a world bearing, and the
+    // stick's dead zone lived in the controller source.
+    delete tuning.turretMountedOnHull;
+    const helm = { ...(tuning.helm as Record<string, unknown>) };
+    delete helm.driveDeadzoneShare;
+    delete helm.aimDeadzoneShare;
+    delete helm.floatingOrigin;
+    delete helm.aimProjectionShare;
+    tuning.helm = helm;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 34,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    // Both arrive at the default, which is the behaviour the document already
+    // had: a world-bearing turret and a stick with no dead zone.
+    expect(saved?.turretMountedOnHull).toBe(false);
+    expect(saved?.helm.driveDeadzoneShare).toBe(0);
+    expect(saved?.helm.floatingOrigin).toBe(false);
+    // And the point of every one of these tests: the campaign survived.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
   it("retires the fractional re-arm mark without touching an operator's waves", async () => {
     const filePath = await temporaryPresetPath();
     const tuning: Record<string, unknown> = { ...createDefaultTuning() };
