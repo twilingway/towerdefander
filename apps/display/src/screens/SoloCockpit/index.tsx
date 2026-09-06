@@ -17,6 +17,8 @@ export interface SoloCockpitProps {
   readonly machineGunOverheated: boolean;
   readonly cannonHeat: number;
   readonly cannonOverheated: boolean;
+  readonly aimAssist: boolean;
+  readonly onAimAssistChange: (enabled: boolean) => void;
 }
 
 /**
@@ -40,7 +42,9 @@ export function SoloCockpit({
   machineGunHeat,
   machineGunOverheated,
   cannonHeat,
-  cannonOverheated
+  cannonOverheated,
+  aimAssist,
+  onAimAssistChange
 }: SoloCockpitProps) {
   return (
     <div className="solo-cockpit" data-testid="solo-cockpit" aria-hidden={!enabled}>
@@ -53,6 +57,17 @@ export function SoloCockpit({
         onRelease={onDriveRelease}
       />
       <div className="solo-cockpit__triggers">
+        <button
+          type="button"
+          className="cockpit-assist"
+          aria-pressed={aimAssist}
+          data-testid="cockpit-assist"
+          onClick={() => {
+            onAimAssistChange(!aimAssist);
+          }}
+        >
+          Помощь {aimAssist ? "вкл" : "выкл"}
+        </button>
         <CockpitTrigger
           testId="cockpit-trigger-mg"
           label="Нос"

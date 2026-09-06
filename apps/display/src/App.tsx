@@ -42,6 +42,7 @@ import { WeaponHeat } from "./WeaponHeat.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { SoloCockpit } from "./screens/SoloCockpit/index.js";
 import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
+import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
@@ -107,6 +108,9 @@ export function DisplayApp() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   /** Set when this page is also the pilot; undefined for an ordinary display. */
   const [cockpitPlayer, setCockpitPlayer] = useState<string | undefined>(undefined);
+  // Read once: it is a device preference, and re-reading storage every render
+  // would answer the same question a hundred times a second.
+  const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0 });
@@ -129,6 +133,16 @@ export function DisplayApp() {
    */
   const cockpitControls = useSoloCockpit({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    aimAssistEnabled: aimAssist,
+    world:
+      view?.game == null
+        ? undefined
+        : {
+            shooter: { x: view.game.spaceship.x, y: view.game.spaceship.y },
+            targets: view.game.enemyShips,
+            obstacles: view.game.obstacles,
+            cannonReach: view.game.cannon.reach
+          },
     roomId: view?.roomId ?? "",
     playerId: roomReference.current?.sessionId ?? "",
     runNumber: view?.runNumber ?? 0,
@@ -439,6 +453,11 @@ export function DisplayApp() {
               machineGunOverheated={view.game.machineGun.overheated}
               cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
               cannonOverheated={view.game.cannon.overheated}
+              aimAssist={aimAssist}
+              onAimAssistChange={(next) => {
+                setAimAssist(next);
+                saveAimAssistToDevice(next);
+              }}
               {...cockpitControls}
             />
           )}

@@ -1805,3 +1805,22 @@ p {
   align-items: center;
   gap: 0.5rem;
 }
+
+/* The assist toggle sits with the triggers because it belongs to the gun, but
+   it is a setting and not a spur: small, quiet, and not where a thumb rests. */
+.cockpit-assist {
+  pointer-events: auto;
+  touch-action: manipulation;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(126, 214, 255, 0.25);
+  background: rgba(8, 24, 36, 0.5);
+  color: rgba(214, 242, 255, 0.7);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.cockpit-assist[aria-pressed="true"] {
+  border-color: rgba(126, 214, 255, 0.6);
+  color: #d6f2ff;
+}

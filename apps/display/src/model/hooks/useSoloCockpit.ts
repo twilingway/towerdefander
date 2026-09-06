@@ -1,6 +1,13 @@
 import { useEffect, useRef } from "react";
 
-import { LatestInputScheduler, type ControlVector } from "@spaceship-defender/client-shared";
+import {
+  LatestInputScheduler,
+  assistedAimDirection,
+  coneForReach,
+  type AimObstacle,
+  type AimTarget,
+  type ControlVector
+} from "@spaceship-defender/client-shared";
 import { PROTOCOL_VERSION, clientMessage } from "@spaceship-defender/protocol";
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
@@ -20,8 +27,20 @@ interface GunnerStream {
 const NEUTRAL_PILOT: PilotStream = { vector: NEUTRAL, mgFiring: false };
 const NEUTRAL_GUNNER: GunnerStream = { aim: NEUTRAL, firing: false };
 
+/** What the assist needs to see. Absent while there is no snapshot yet. */
+export interface SoloCockpitWorld {
+  readonly shooter: { readonly x: number; readonly y: number };
+  readonly targets: readonly AimTarget[];
+  readonly obstacles: readonly AimObstacle[];
+  /** How far the cannon actually reaches; the cone is cut to it. */
+  readonly cannonReach: number;
+}
+
 export interface SoloCockpitOptions {
   readonly enabled: boolean;
+  /** Off sends the raw thumb bearing, whatever is in the cone. */
+  readonly aimAssistEnabled: boolean;
+  readonly world: SoloCockpitWorld | undefined;
   readonly roomId: string;
   readonly playerId: string;
   readonly runNumber: number;
@@ -53,6 +72,8 @@ export interface SoloCockpitControls {
  */
 export function useSoloCockpit({
   enabled,
+  aimAssistEnabled,
+  world,
   roomId,
   playerId,
   runNumber,
@@ -63,6 +84,8 @@ export function useSoloCockpit({
   sendReference.current = send;
   const envelopeReference = useRef({ roomId, playerId, runNumber });
   envelopeReference.current = { roomId, playerId, runNumber };
+  const assistReference = useRef({ enabled: aimAssistEnabled, world });
+  assistReference.current = { enabled: aimAssistEnabled, world };
 
   const pilotReference = useRef<PilotStream>(NEUTRAL_PILOT);
   const gunnerReference = useRef<GunnerStream>(NEUTRAL_GUNNER);
@@ -96,11 +119,30 @@ export function useSoloCockpit({
         playerId: player,
         runNumber: run,
         sequence,
-        aim: value.aim,
+        // Resolved here rather than where the thumb moved, because the world
+        // keeps moving after it stops: a target that drifts out of the cone
+        // between two pushes must stop being the answer, and this is the last
+        // moment before the bearing leaves.
+        aim: resolveAim(value),
         firing: value.firing
       });
     }
   );
+
+  function resolveAim(value: GunnerStream): ControlVector {
+    const { enabled: assistOn, world: snapshot } = assistReference.current;
+    if (!assistOn || snapshot === undefined) return value.aim;
+    return assistedAimDirection(
+      {
+        shooter: snapshot.shooter,
+        direction: value.aim,
+        targets: snapshot.targets,
+        obstacles: snapshot.obstacles,
+        cone: coneForReach(snapshot.cannonReach)
+      },
+      { enabled: true, firing: value.firing }
+    );
+  }
 
   function updatePilot(patch: Partial<PilotStream>): void {
     const next = { ...pilotReference.current, ...patch };

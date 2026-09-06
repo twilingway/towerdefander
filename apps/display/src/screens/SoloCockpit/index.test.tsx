@@ -18,6 +18,8 @@ function props(overrides: Partial<SoloCockpitProps> = {}): SoloCockpitProps {
     machineGunOverheated: false,
     cannonHeat: 0,
     cannonOverheated: false,
+    aimAssist: true,
+    onAimAssistChange: () => undefined,
     ...overrides
   };
 }
@@ -51,6 +53,15 @@ describe("SoloCockpit", () => {
     expect(markup).toContain('data-overheated="true"');
     // ...and the other barrel is not dragged along with it.
     expect(markup.match(/data-overheated="false"/g)).toHaveLength(1);
+  });
+
+  it("says whether the assist is on, and offers the other state", () => {
+    const on = renderToStaticMarkup(<SoloCockpit {...props()} />);
+    const off = renderToStaticMarkup(<SoloCockpit {...props({ aimAssist: false })} />);
+
+    expect(on).toContain("Помощь вкл");
+    expect(off).toContain("Помощь выкл");
+    expect(on).toContain('aria-pressed="true"');
   });
 
   it("draws the heat bar as a share of the barrel's capacity", () => {
