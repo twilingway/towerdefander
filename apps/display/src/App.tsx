@@ -46,6 +46,7 @@ import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js"
 import { SoloCockpit } from "./screens/SoloCockpit/index.js";
 import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
 import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
+import { useCockpitPrediction } from "./model/hooks/useCockpitPrediction.js";
 import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
@@ -159,6 +160,38 @@ export function DisplayApp() {
     generation: `${String(view?.runNumber ?? 0)}:${String(connectionEpoch)}`,
     send: (type, payload) => {
       roomReference.current?.send(type, payload);
+    }
+  });
+
+  /*
+   * Prediction of the two angles the hand feels first, drawn from a ref rather
+   * than from state: it is written every animation frame, and a re-render at
+   * that rate would cost more than the lag it removes. The snapshot arrives at
+   * twenty a second and the render reads whatever the predictor last wrote, so
+   * the runtime interpolates between predicted samples instead of authoritative
+   * ones — the ping and the playback buffer drop out of the angles.
+   */
+  const predictedAngles = useRef<{ heading: number; turretAngle: number } | undefined>(undefined);
+  useCockpitPrediction({
+    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    drive:
+      view?.game == null
+        ? undefined
+        : {
+            hullAngularMaxSpeed: view.game.helm.hullAngularMaxSpeed,
+            hullAngularAcceleration: view.game.helm.hullAngularAcceleration,
+            hullAngularBraking: view.game.helm.hullAngularBrakingPerSecondSquared,
+            turretAngularMaxSpeed: view.game.helm.turretAngularMaxSpeed,
+            turretAngularAcceleration: view.game.helm.turretAngularAcceleration,
+            turretAngularBraking: view.game.helm.turretAngularBraking
+          },
+    authoritative:
+      view?.game == null
+        ? undefined
+        : { heading: view.game.spaceship.heading, turretAngle: view.game.turretAngle },
+    readInputs: () => cockpitControls.readPrediction(),
+    onPredicted: (angles) => {
+      predictedAngles.current = angles;
     }
   });
 
@@ -528,7 +561,7 @@ export function DisplayApp() {
             <RotateNotice />
           ) : (
             <SpaceshipCanvas
-              game={view.game}
+              game={withPredictedAngles(view.game, predictedAngles.current)}
               runNumber={view.runNumber}
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
@@ -678,4 +711,24 @@ function createFailureMessage(reason: unknown): string {
 function createDefaultControllerUrl(): string {
   if (typeof window === "undefined") return "http://localhost:5174";
   return `${window.location.protocol}//${window.location.hostname}:5174`;
+}
+
+/**
+ * The snapshot the canvas draws, with the two predicted angles standing in.
+ *
+ * Only those two, and only when a cockpit is predicting: everything else stays
+ * exactly as the server sent it. Position in particular is untouched — being
+ * wrong about an angle corrects itself, being wrong about a position walks the
+ * ship through a rock and then teleports it back out.
+ */
+function withPredictedAngles<T extends { spaceship: { heading: number }; turretAngle: number }>(
+  game: T,
+  predicted: { heading: number; turretAngle: number } | undefined
+): T {
+  if (predicted === undefined) return game;
+  return {
+    ...game,
+    spaceship: { ...game.spaceship, heading: predicted.heading },
+    turretAngle: predicted.turretAngle
+  };
 }

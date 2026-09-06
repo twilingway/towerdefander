@@ -105,6 +105,11 @@ interface NetworkGameState {
     stopDampening: number;
     rotateInPlaceThrottle: number;
     hullAngularBrakingPerSecondSquared: number;
+    hullAngularMaxSpeed: number;
+    hullAngularAcceleration: number;
+    turretAngularMaxSpeed: number;
+    turretAngularAcceleration: number;
+    turretAngularBraking: number;
     driveDeadzoneShare: number;
     aimDeadzoneShare: number;
     driveZoneShare: number;

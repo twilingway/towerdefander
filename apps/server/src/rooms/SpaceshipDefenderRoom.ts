@@ -745,6 +745,14 @@ export class SpaceshipDefenderRoom extends Room<{
     this.state.game.helm.turretLeadRadians = helm.turretLeadRadians;
     this.state.game.helm.hullAngularBrakingPerSecondSquared =
       this.gameConfig.headingAngularBrakingPerSecondSquared;
+    this.state.game.helm.hullAngularMaxSpeed = this.gameConfig.headingMaxAngularSpeedPerSecond;
+    this.state.game.helm.hullAngularAcceleration =
+      this.gameConfig.headingAngularAccelerationPerSecondSquared;
+    this.state.game.helm.turretAngularMaxSpeed = this.gameConfig.turretMaxAngularSpeedPerSecond;
+    this.state.game.helm.turretAngularAcceleration =
+      this.gameConfig.turretAngularAccelerationPerSecondSquared;
+    this.state.game.helm.turretAngularBraking =
+      this.gameConfig.turretAngularBrakingPerSecondSquared;
     this.gameState = createCleanSpaceshipRun(
       this.gameConfig,
       createRunSeed(previousSeed),

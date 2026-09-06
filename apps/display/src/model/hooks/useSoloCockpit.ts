@@ -90,6 +90,16 @@ export interface SoloCockpitControls {
    */
   readonly onCannonFromStick: (held: boolean) => void;
   readonly onCannonFromTrigger: (held: boolean) => void;
+  /**
+   * What this client is currently asking the ship to do, read fresh rather than
+   * remembered: the predictor runs at frame rate and the streams change between
+   * its frames.
+   */
+  readonly readPrediction: () => {
+    readonly hullTurn: number | null;
+    readonly hullTargetAngle: number | null;
+    readonly turretTurn: number;
+  };
 }
 
 /**
@@ -139,6 +149,12 @@ export function useSoloCockpit({
    */
   const driveHeadingReference = useRef<number | null>(null);
   const aimHeadingReference = useRef<number | null>(null);
+  /*
+   * The last bearing the hull was actually given. The core keeps the previous
+   * target when a pilot vector goes to zero, so a predictor that forgot it
+   * would brake the hull the instant a thumb lifts and the authority would not.
+   */
+  const hullTargetReference = useRef<number | null>(null);
   const lastSampleAtReference = useRef<number | null>(null);
 
   const pilotSchedulerReference = useRef<LatestInputScheduler<PilotStream> | undefined>(undefined);
@@ -321,6 +337,7 @@ export function useSoloCockpit({
         return;
       }
       driveHeadingReference.current = smoothed.heading;
+      hullTargetReference.current = smoothed.heading;
       // Direction from the smoothed bearing, throttle from the strength.
       updatePilot({ vector: { x: smoothed.x * strength, y: smoothed.y * strength } });
     },
@@ -375,6 +392,13 @@ export function useSoloCockpit({
     onCannonFromTrigger: (held) => {
       cannonSpursReference.current.trigger = held;
       updateGunner({ firing: anyCannonSpurDown() });
-    }
+    },
+    readPrediction: () => ({
+      // The cockpit's stick names a bearing rather than a spin, so the hull is
+      // predicted the way the core advances it for exactly that case.
+      hullTurn: null,
+      hullTargetAngle: hullTargetReference.current,
+      turretTurn: resolveTraverse(gunnerReference.current)
+    })
   };
 }

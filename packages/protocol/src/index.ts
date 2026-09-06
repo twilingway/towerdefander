@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 48 as const;
+export const PROTOCOL_VERSION = 49 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -669,6 +669,17 @@ export const publicHelmViewSchema = z
      * not match the hull overshoots and swings back.
      */
     hullAngularBrakingPerSecondSquared: finite.positive(),
+    /*
+     * The drive numbers the run is actually using, mirrored for the client that
+     * has to predict with them. `hullAngularBrakingPerSecondSquared` was here
+     * first and for the same reason — the helm predicts where a released turn
+     * comes to rest — and prediction needs the whole set rather than one of it.
+     */
+    hullAngularMaxSpeed: finite.positive(),
+    hullAngularAcceleration: finite.positive(),
+    turretAngularMaxSpeed: finite.positive(),
+    turretAngularAcceleration: finite.positive(),
+    turretAngularBraking: finite.positive(),
     /** Stick geometry, shares of the ring radius rather than pixels. */
     driveDeadzoneShare: finite.min(0),
     aimDeadzoneShare: finite.min(0),

@@ -66,6 +66,12 @@ export class HelmState extends Schema {
   @type("float32") rotateInPlaceThrottle = 0.02;
   /** Mirrors the run's hull braking so the helm predicts against the real one. */
   @type("float32") hullAngularBrakingPerSecondSquared = 50;
+  /* The rest of the drive, mirrored so a client can predict with it. */
+  @type("float32") hullAngularMaxSpeed = Math.PI;
+  @type("float32") hullAngularAcceleration = 50;
+  @type("float32") turretAngularMaxSpeed = 1.36;
+  @type("float32") turretAngularAcceleration = 2.72;
+  @type("float32") turretAngularBraking = 4.08;
   /*
    * Stick geometry. Shares of the ring radius, so `float32` covers them with
    * room to spare, and the flag is the one boolean here — a share and a switch,

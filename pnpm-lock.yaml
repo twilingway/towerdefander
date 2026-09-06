@@ -115,6 +115,9 @@ importers:
       '@spaceship-defender/client-shared':
         specifier: workspace:*
         version: link:../../packages/client-shared
+      '@spaceship-defender/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
       '@spaceship-defender/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
