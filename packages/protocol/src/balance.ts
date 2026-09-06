@@ -493,7 +493,7 @@ export const helmTuningSchema = z
      * the larger view dimension. It decides how much of the frame a full push
      * reaches, so it belongs with the frame and not with the arena.
      */
-    aimProjectionShare: z.number().min(0.1).max(1.5)
+    aimProjectionShare: z.number().min(0.1).max(1)
   })
   .strict();
 export type HelmTuning = z.infer<typeof helmTuningSchema>;

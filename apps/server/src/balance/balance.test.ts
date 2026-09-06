@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Request, RequestHandler, Response } from "express";
 import {
@@ -615,6 +616,37 @@ describe("version 1 migration", () => {
     // one missing knob does not fail the strict schema and take the table with
     // it. That is exactly how a hand-built campaign was lost once.
     expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
+  /*
+   * The seed a fresh host starts from. It is the one balance document that
+   * ships in the repository, `deploy-production.sh` copies it into an empty
+   * volume, and nothing else here would notice if a schema change left it
+   * behind -- the runtime file is gitignored, so a developer machine that has
+   * already run the game hides the breakage exactly the way it hid the missing
+   * defaults before `ensure-balance-preset` existed.
+   */
+  it("keeps the shipped seed loadable", async () => {
+    const seedPath = fileURLToPath(new URL("../../presets/production.json", import.meta.url));
+    const filePath = await temporaryPresetPath();
+    await writeFile(filePath, await readFile(seedPath, "utf8"), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const presets = store.getState().presets;
+    // Both the host's own tuning and the ported drive survive the round trip.
+    expect(presets.map((preset) => preset.id)).toContain("steelvoid");
+    const steelvoid = presets.find((preset) => preset.id === "steelvoid")?.tuning;
+    expect(steelvoid?.turretMountedOnHull).toBe(true);
+    expect(steelvoid?.spaceshipReverseSpeedFactor).toBeCloseTo(0.55, 5);
+    expect(steelvoid?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
+    // ...and the default it was copied from is left as the host had it.
+    const base = presets.find((preset) => preset.id === "default")?.tuning;
+    expect(base?.turretMountedOnHull).toBe(false);
+    expect(base?.helm.driveDeadzoneShare).toBe(0);
   });
 
   it("gives a version 34 document the turret mount and stick geometry, waves intact", async () => {
