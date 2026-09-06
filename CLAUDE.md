@@ -83,7 +83,7 @@ Server-authoritative realtime game: `apps/server` (Colyseus) owns trusted state;
 controllers send intents and render authoritative snapshots.
 
 ```text
-apps/display    React shell + HUD, Phaser world (Phaser lives only here)
+apps/display    React shell + HUD, Phaser world (Phaser lives only here), solo cockpit
 apps/controller React pilot/gunner/shield panels, touch + mouse + keyboard
 apps/server     Colyseus room, lifecycle timers, /health, /stats/rooms, /admin/balance
 apps/admin      React balance console: waves, enemy catalogue, director, camera frame, batch statistics
@@ -122,16 +122,16 @@ Simulation tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 35) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 47) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
-they carry their own `BALANCE_FILE_VERSION` (currently 24) with migrations in
-`apps/server/src/balance/store.ts`, and a balance-only change bumps that file version instead of the
-protocol. `packages/protocol/src/balanceStats.ts` does the same for the measurement reports the
-statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 1) — but those have **no migrations**:
-a report of another version is dropped and counted, because a measurement of a metric whose meaning
-has changed is worse than no measurement.
+they carry their own `BALANCE_FILE_VERSION` (currently 35) with migrations in
+`apps/server/src/balance/migrations.ts`, and a balance-only change bumps that file version instead
+of the protocol. `packages/protocol/src/balanceStats.ts` does the same for the measurement reports
+the statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 1) — but those have **no
+migrations**: a report of another version is dropped and counted, because a measurement of a metric
+whose meaning has changed is worse than no measurement.
 
 Clients do not read Colyseus schema objects directly in UI code. `apps/display/src/roomView.ts`
 (`toDisplayRoomView`) and `apps/controller/src/roomView.ts` (`toControllerRoomView`) flatten
@@ -141,6 +141,12 @@ protocol schema, server state + sync, both roomView adapters.
 
 `apps/display/src/game/SpaceshipRuntime.ts` is the only Phaser entry point; view models
 (`spaceshipViewModel.ts`, `combatHudViewModel.ts`) stay plain and testable.
+
+A third join role, `solo`, is one connection that is both: it gets the display's `@view(1)` branch
+and holds a crew seat, so one phone draws the arena and flies it. That is why the solo cockpit lives
+in `apps/display` rather than in the controller — the page that already has the world grows a touch
+overlay, instead of the renderer moving across a package boundary. The controller is untouched by
+it; the two-device paths, solo included, still work exactly as before.
 
 ## Spec-driven workflow
 
