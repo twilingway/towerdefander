@@ -251,17 +251,21 @@ export function useSoloCockpit({
     const named =
       assisted.x === 0 && assisted.y === 0 ? value.aimHeading : Math.atan2(assisted.y, assisted.x);
     /*
-     * A mounted gun is aimed relative to the nose, a free one relative to the
-     * world, and the difference is the whole of "the gun is on the hull".
+     * The aim is a world bearing, mounted gun or not.
      *
-     * Named in world terms while the chassis turns, the drive spends its entire
-     * budget undoing what the hull just did: measured on the bot, a turret at
-     * the hull's own rate cancels out exactly and re-aiming becomes impossible.
-     * Read as a bearing off the nose, the carry is free and the drive pays only
-     * for the thumb.
+     * Reading it off the nose was tried and was wrong: a mouse names a point on
+     * the glass and a thumb names a direction on it, so adding the hull's
+     * heading made the gun point at the cursor plus the ship's course — cursor
+     * due north with the hull at 2.04 rad put the barrel at 0.40 rather than
+     * -1.57. Measured, not argued.
+     *
+     * What the mount buys is the carry between orders, which the core already
+     * does: let the aim rest and the gun rides the chassis for free. What it
+     * cannot buy is keeping up while the aim is being commanded and the hull is
+     * turning — for that the drive simply has to outrun the hull, and no frame
+     * of reference substitutes for the rate.
      */
-    const wanted = snapshot.turretMountedOnHull ? named + snapshot.heading : named;
-    const difference = shortestArc(snapshot.turretAngle, wanted);
+    const difference = shortestArc(snapshot.turretAngle, named);
     return Math.max(-1, Math.min(1, difference / Math.max(0.05, snapshot.turretLeadRadians)));
   }
 

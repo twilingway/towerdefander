@@ -12,6 +12,7 @@ import {
   clientMessage,
   type UpgradeId,
   roomClosingSchema,
+  serverErrorSchema,
   serverLatencyProbeSchema,
   serverMessage,
   type CrewSize,
@@ -115,6 +116,8 @@ export function DisplayApp() {
   const [cockpitPlayer, setCockpitPlayer] = useState<string | undefined>(undefined);
   /** Highest revision this screen has sent; the server refuses a repeat. */
   const cockpitVoteRevision = useRef(0);
+  /** Read inside room callbacks, which close over the first render. */
+  const cockpitPlayerReference = useRef<string | undefined>(undefined);
   // Read once: it is a device preference, and re-reading storage every render
   // would answer the same question a hundred times a second.
   const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
@@ -339,6 +342,7 @@ export function DisplayApp() {
     setError("");
     setClosingRoom(false);
     setCockpitPlayer(cockpitPlayerName);
+    cockpitPlayerReference.current = cockpitPlayerName;
     try {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
         // One connection with both duties when this device is also the pilot.
@@ -368,6 +372,21 @@ export function DisplayApp() {
           roomId: room.roomId,
           probeId: result.data.probeId
         });
+      });
+      /*
+       * The refusals the room sends back. The display never listened for these
+       * — it had nothing to send and so nothing to be refused — and the cockpit
+       * inherited that silence: every rejected packet went to a channel with no
+       * handler, and the ship simply did not move, with the reason sitting one
+       * unregistered listener away.
+       */
+      room.onMessage(serverMessage.error, (payload: unknown) => {
+        const parsed = serverErrorSchema.safeParse(payload);
+        const reason = parsed.success ? parsed.data.code : "unknown";
+        console.warn(`Room refused a command: ${reason}`);
+        if (cockpitPlayerReference.current !== undefined) {
+          setError(parsed.success ? parsed.data.message : "Команда отклонена.");
+        }
       });
       room.onMessage(serverMessage.roomClosing, (payload: unknown) => {
         const result = roomClosingSchema.safeParse(payload);
