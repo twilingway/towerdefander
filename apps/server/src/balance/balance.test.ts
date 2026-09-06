@@ -1500,6 +1500,20 @@ describe("version 1 migration", () => {
     expect(config).not.toHaveProperty("autopilot");
   });
 
+  it("sorts the two kinds of control setting to opposite sides of the boundary", () => {
+    const tuning = createDefaultTuning();
+    const config = toSimulationConfig({
+      ...tuning,
+      turretMountedOnHull: true,
+      helm: { ...tuning.helm, driveDeadzoneShare: 0.12 }
+    });
+
+    // The helm shapes what a client sends, so the trusted step must not see it.
+    expect(config).not.toHaveProperty("helm");
+    // The turret mount changes the step itself, so it must arrive.
+    expect(config.turretMountedOnHull).toBe(true);
+  });
+
   it("carries an edited player ship into the next run", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
