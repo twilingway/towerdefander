@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 47 as const;
+export const PROTOCOL_VERSION = 48 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -911,7 +911,21 @@ export const pilotInputCommandSchema = continuousInputEnvelopeSchema
   .strict();
 export type PilotInputCommand = z.infer<typeof pilotInputCommandSchema>;
 export const gunnerInputCommandSchema = continuousInputEnvelopeSchema
-  .extend({ aim: vector2Schema, firing: z.boolean() })
+  .extend({
+    aim: vector2Schema,
+    firing: z.boolean(),
+    /**
+     * Requested traverse in `[-1, 1]`, the turret's answer to the helm's own
+     * `turn`. Absent from a panel that names a bearing instead, which is what
+     * the crew sticks and the keyboard still do.
+     *
+     * It exists for the same reason the hull's does. A client that must name an
+     * angle can only name the authoritative one, already a patch plus a ping
+     * behind, so releasing the stick sent the gun back to where it had been --
+     * the spring the helm suffered from before intents.
+     */
+    turn: finite.min(-1).max(1).optional()
+  })
   .strict();
 export type GunnerInputCommand = z.infer<typeof gunnerInputCommandSchema>;
 export const shieldInputCommandSchema = continuousInputEnvelopeSchema

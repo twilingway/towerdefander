@@ -46,17 +46,27 @@ export function applyGunnerInput(
   const firing = input.firing;
   const isRisingEdge = firing && state.inputs.gunner?.firing !== true;
   const vector = normalizeVector(input.vector);
+  const turn = input.turn ?? null;
   return {
     ...state,
     queuedFire: state.queuedFire || isRisingEdge,
-    turretTargetAngle: isZeroVector(vector)
-      ? state.turretTargetAngle
-      : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
+    /*
+     * A traverse names no bearing, so the remembered one is dropped rather than
+     * left behind for the gun to be pulled back to when the stick comes up.
+     * Same rule the hull follows for the same reason.
+     */
+    turretTargetAngle:
+      turn !== null
+        ? null
+        : isZeroVector(vector)
+          ? state.turretTargetAngle
+          : canonicalizeAngle(Math.atan2(vector.y, vector.x)),
     inputs: {
       ...state.inputs,
       gunner: {
         vector,
         firing,
+        turn,
         receivedTick: input.receivedTick
       }
     }

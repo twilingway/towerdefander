@@ -12,6 +12,17 @@ import {
 import { PROTOCOL_VERSION, clientMessage } from "@spaceship-defender/protocol";
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
+/**
+ * How far off the gun has to be for the traverse to be asked for in full. The
+ * hull's own lead is 0.45 rad and this is the same idea on the same feel.
+ */
+const TRAVERSE_LEAD_RADIANS = 0.45;
+
+/** Shortest signed way round, in (-PI, PI]. */
+function shortestArc(from: number, to: number): number {
+  const TAU = Math.PI * 2;
+  return ((((to - from + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
+}
 /** Same cadence the controller flushes at; the scheduler decides what leaves. */
 const FLUSH_MS = 25;
 
@@ -23,10 +34,12 @@ interface PilotStream {
 interface GunnerStream {
   readonly aim: ControlVector;
   readonly firing: boolean;
+  /** Requested traverse; null while the stick is not asking for one. */
+  readonly turn: number | null;
 }
 
 const NEUTRAL_PILOT: PilotStream = { vector: NEUTRAL, mgFiring: false };
-const NEUTRAL_GUNNER: GunnerStream = { aim: NEUTRAL, firing: false };
+const NEUTRAL_GUNNER: GunnerStream = { aim: NEUTRAL, firing: false, turn: 0 };
 
 /** What the assist needs to see. Absent while there is no snapshot yet. */
 export interface SoloCockpitWorld {
@@ -153,7 +166,9 @@ export function useSoloCockpit({
         // between two pushes must stop being the answer, and this is the last
         // moment before the bearing leaves.
         aim: resolveAim(value),
-        firing: value.firing
+        firing: value.firing,
+        // Zero is a real order — "stop" — so it travels like any other.
+        ...(value.turn === null ? {} : { turn: value.turn })
       });
     })
   );
@@ -275,15 +290,39 @@ export function useSoloCockpit({
       updatePilot({ vector: NEUTRAL });
     },
     onAim: (vector) => {
-      // Length carries nothing here: a bearing is a bearing. A zero vector is
-      // meaningful on its own — the core reads it as "keep the one you have".
       const smoothed = smoothHeadingVector(aimHeadingReference.current, vector, stepSeconds());
       if (smoothed === null) {
-        updateGunner({ aim: NEUTRAL });
+        updateGunner({ aim: NEUTRAL, turn: 0 });
         return;
       }
       aimHeadingReference.current = smoothed.heading;
-      updateGunner({ aim: { x: smoothed.x, y: smoothed.y } });
+      /*
+       * The stick asks for a traverse, not a bearing.
+       *
+       * It still names a direction, so the rate is how far the gun is from it:
+       * hold the stick and the gun closes and settles, let go and the zero
+       * below stops it dead. Naming the bearing instead meant naming the
+       * authoritative angle, already a patch plus a ping old, and the gun
+       * sprang back to it the moment the thumb came up.
+       *
+       * The lead is the hull's own: past it the traverse is simply full.
+       */
+      const world = assistReference.current.world;
+      if (world === undefined) {
+        updateGunner({ aim: { x: smoothed.x, y: smoothed.y }, turn: null });
+        return;
+      }
+      const assisted = resolveAim({
+        aim: { x: smoothed.x, y: smoothed.y },
+        firing: true,
+        turn: null
+      });
+      const wanted = Math.atan2(assisted.y, assisted.x);
+      const difference = shortestArc(world.turretAngle, wanted);
+      updateGunner({
+        aim: { x: smoothed.x, y: smoothed.y },
+        turn: Math.max(-1, Math.min(1, difference / TRAVERSE_LEAD_RADIANS))
+      });
     },
     onAimRelease: () => {
       /*
@@ -297,14 +336,9 @@ export function useSoloCockpit({
        * than a zero, because a zero means "keep the old target".
        */
       aimHeadingReference.current = null;
-      const world = assistReference.current.world;
-      if (world === undefined) {
-        updateGunner({ aim: NEUTRAL });
-        return;
-      }
-      updateGunner({
-        aim: { x: Math.cos(world.turretAngle), y: Math.sin(world.turretAngle) }
-      });
+      // Zero is the order to stop, and it needs no knowledge of where the gun
+      // actually is — which is the whole reason the intent exists.
+      updateGunner({ aim: NEUTRAL, turn: 0 });
     },
     onMachineGunHold: (held) => {
       updatePilot({ mgFiring: held });

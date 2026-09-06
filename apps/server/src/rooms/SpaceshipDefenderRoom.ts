@@ -501,6 +501,9 @@ export class SpaceshipDefenderRoom extends Room<{
     this.gameState = applyGunnerInput(this.gameState, {
       vector: command.aim,
       firing: command.firing,
+      // Carried only when the panel sent one, so a bearing-naming client is
+      // handed exactly the shape it has always been handed.
+      ...(command.turn === undefined ? {} : { turn: command.turn }),
       receivedTick: this.gameState.clock.tick
     });
   }

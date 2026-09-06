@@ -352,6 +352,66 @@ describe("angular helpers", () => {
   });
 });
 
+describe("turret traverse intent", () => {
+  function holdTraverse(
+    state: SpaceshipSimulationState,
+    config: SpaceshipSimulationConfig,
+    turn: number,
+    steps: number
+  ) {
+    let current = state;
+    for (let step = 0; step < steps; step += 1) {
+      current = applyGunnerInput(current, {
+        vector: { x: 0, y: 0 },
+        firing: false,
+        turn,
+        receivedTick: current.clock.tick
+      });
+      current = advanceSpaceshipSimulation(current, config);
+    }
+    return current;
+  }
+
+  it("turns the gun while the intent is held", () => {
+    const config = createSpaceshipSimulationConfig();
+    const turning = holdTraverse(createSpaceshipSimulationState(config, 1), config, 1, 20);
+
+    expect(turning.turretAngle).toBeGreaterThan(0.2);
+    // A rate names no bearing, so none is left behind to be pulled back to.
+    expect(turning.turretTargetAngle).toBeNull();
+  });
+
+  it("stops where it is when the intent goes to zero", () => {
+    const config = createSpaceshipSimulationConfig();
+    const turning = holdTraverse(createSpaceshipSimulationState(config, 1), config, 1, 20);
+    const released = holdTraverse(turning, config, 0, 40);
+
+    // The whole point: no spring back to a bearing the gun has already passed.
+    expect(released.turretAngularVelocity).toBeCloseTo(0, 5);
+    expect(released.turretAngle).toBeGreaterThan(turning.turretAngle - 0.001);
+  });
+
+  it("leaves a bearing-naming gunner exactly as it was", () => {
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 1);
+    // Held, the way a panel holds it: a single packet goes stale in five ticks
+    // and the core drops the bearing, which is existing behaviour and not what
+    // this test is about.
+    for (let step = 0; step < 200; step += 1) {
+      state = applyGunnerInput(state, {
+        vector: { x: 0, y: -1 },
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+    }
+
+    // No intent was sent, so the crew panels keep their latched traverse.
+    expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2, 5);
+    expect(state.turretAngle).toBeCloseTo(-Math.PI / 2, 3);
+  });
+});
+
 describe("turret mounted on the hull", () => {
   /*
    * The carry rides the RETAINED target, and a pushed stick replaces it.

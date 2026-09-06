@@ -180,6 +180,12 @@ export interface TrustedPilotInput {
 }
 
 export interface TrustedGunnerInput {
+  /**
+   * Requested traverse in `[-1, 1]`, preferred over the bearing when it comes.
+   * Absent from a panel that names a bearing, so the crew sticks and the
+   * keyboard are untouched.
+   */
+  readonly turn?: number | null;
   readonly vector: Vector2;
   readonly firing: boolean;
   readonly receivedTick: number;
@@ -503,19 +509,35 @@ export function advanceSpaceshipSimulation(
       ? null
       : canonicalizeAngle(state.turretTargetAngle + hullCarry);
   const turretTargetAngle = gunnerFresh ? carriedTargetAngle : null;
-  const turretTraverse = advanceAngularTraverse(
-    {
-      angle: canonicalizeAngle(state.turretAngle + hullCarry),
-      targetAngle: turretTargetAngle,
-      angularVelocity: state.turretAngularVelocity
-    },
-    {
-      maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
-      angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
-      angularBraking: ship.turretAngularBrakingPerSecondSquared,
-      secondsPerStep
-    }
-  );
+  const gunnerTurn = gunnerFresh ? (state.inputs.gunner?.turn ?? null) : null;
+  const turretConfig = {
+    maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
+    angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
+    angularBraking: ship.turretAngularBrakingPerSecondSquared,
+    secondsPerStep
+  };
+  const carriedTurretAngle = canonicalizeAngle(state.turretAngle + hullCarry);
+  /*
+   * An intent wins over a bearing when one arrives, exactly as it does at the
+   * helm. A gunner who can only name an angle can only name the authoritative
+   * one, already a patch plus a ping old, so a released stick used to send the
+   * gun back to where it had been. A rate has no such memory: zero means stop.
+   */
+  const turretTraverse =
+    gunnerTurn === null
+      ? advanceAngularTraverse(
+          {
+            angle: carriedTurretAngle,
+            targetAngle: turretTargetAngle,
+            angularVelocity: state.turretAngularVelocity
+          },
+          turretConfig
+        )
+      : advanceAngularRate(
+          { angle: carriedTurretAngle, angularVelocity: state.turretAngularVelocity },
+          gunnerTurn,
+          turretConfig
+        );
   const shieldTraverse = advanceAngularTraverse(
     {
       angle: state.shieldAngle,
