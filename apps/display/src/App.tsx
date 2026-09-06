@@ -177,6 +177,16 @@ export function DisplayApp() {
    * the runtime interpolates between predicted samples instead of authoritative
    * ones — the ping and the playback buffer drop out of the angles.
    */
+  /*
+   * A refusal belongs to the moment it happened. Left on screen it outlives the
+   * phase that caused it and reads as a broken control, which is exactly how
+   * one stale line made the upgrade cards look dead.
+   */
+  const encounterPhase = view?.game?.encounter.phase;
+  useEffect(() => {
+    setError("");
+  }, [encounterPhase]);
+
   useCockpitPrediction({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
     drive:
@@ -384,6 +394,15 @@ export function DisplayApp() {
       room.onMessage(serverMessage.error, (payload: unknown) => {
         const parsed = serverErrorSchema.safeParse(payload);
         const reason = parsed.success ? parsed.data.code : "unknown";
+        /*
+         * `invalid_phase` on the continuous streams is expected and means
+         * nothing: a packet in flight when the wave ends lands after the room
+         * has left combat, and the room says so. Painting that on screen — and
+         * never clearing it — turned a transient into a banner that sat over
+         * the intermission reading "Gameplay input requires combat", which is
+         * why the upgrade cards looked broken when they were not.
+         */
+        if (reason === "invalid_phase") return;
         console.warn(`Room refused a command: ${reason}`);
         if (cockpitPlayerReference.current !== undefined) {
           setError(parsed.success ? parsed.data.message : "Команда отклонена.");
