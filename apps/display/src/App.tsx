@@ -402,8 +402,10 @@ export function DisplayApp() {
          * the intermission reading "Gameplay input requires combat", which is
          * why the upgrade cards looked broken when they were not.
          */
-        if (reason === "invalid_phase") return;
+        // Always in the console: a refusal nobody can see is what turned this
+        // into three rounds of guessing. Only the banner is filtered.
         console.warn(`Room refused a command: ${reason}`);
+        if (reason === "invalid_phase") return;
         if (cockpitPlayerReference.current !== undefined) {
           setError(parsed.success ? parsed.data.message : "Команда отклонена.");
         }

@@ -2150,9 +2150,18 @@ p {
   }
 }
 
-/* A card the cockpit can take. It keeps the card's own look — the button is
-   there for the tap target and the pressed state, not for a second style. */
+/*
+ * A card the cockpit can take. It keeps the card's own look — the button is
+ * there for the tap target and the pressed state, not for a second style.
+ *
+ * `pointer-events: auto` is the whole of it. `.encounter-overlay` is
+ * deliberately click-through: on a shared screen it is a notice, and a notice
+ * must not swallow the battlefield behind it. Only the result card ever turned
+ * that off, because only it had a button — until this one, which rendered
+ * perfectly and could not be pressed on any device.
+ */
 .intermission-card__choice {
+  pointer-events: auto;
   display: grid;
   width: 100%;
   gap: 0.2rem;

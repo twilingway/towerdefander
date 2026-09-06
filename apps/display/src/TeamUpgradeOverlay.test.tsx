@@ -150,4 +150,27 @@ describe("TeamUpgradeOverlay", () => {
     expect(markup).toContain("intermission-card__choice");
     expect(markup).toContain("cockpit-vote-");
   });
+
+  it("marks the takeable card so it can receive a click", () => {
+    const markup = renderToStaticMarkup(
+      <TeamUpgradeOverlay
+        teamUpgrade={teamUpgrade}
+        credits={10}
+        score={100}
+        waveNumber={2}
+        phaseTicksRemaining={120}
+        purchasedModules={[]}
+        cockpit={{ role: "pilot", onVote: vi.fn() }}
+      />
+    );
+
+    /*
+     * The class is load-bearing rather than decorative: `.encounter-overlay`
+     * is click-through so a notice does not swallow the battlefield, and this
+     * is the one element inside it that turns pointer events back on. Rendered
+     * without it the card looks right and cannot be pressed, which is exactly
+     * how it shipped.
+     */
+    expect(markup).toContain('class="intermission-card__choice"');
+  });
 });
