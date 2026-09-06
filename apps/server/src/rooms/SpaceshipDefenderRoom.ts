@@ -30,7 +30,7 @@ import {
   ROOM_REFUSED_FOR_MAINTENANCE,
   clientMessage,
   clientLatencyPongSchema,
-  displayCreateOptionsSchema,
+  roomCreateOptionsSchema,
   gunnerInputCommandSchema,
   joinOptionsSchema,
   pilotInputCommandSchema,
@@ -71,7 +71,12 @@ import {
   SpaceshipDefenderState
 } from "./SpaceshipDefenderState.js";
 
-type ConnectionRole = "display" | "controller";
+/**
+ * What a connection is doing here. `solo` is both of the others at once: it
+ * draws the world and holds a seat, so every branch on this type has to name
+ * it explicitly rather than fall into an `else`.
+ */
+type ConnectionRole = "display" | "controller" | "solo";
 type InputMessageType =
   | typeof clientMessage.pilotInput
   | typeof clientMessage.gunnerInput
@@ -206,10 +211,16 @@ export class SpaceshipDefenderRoom extends Room<{
     if (this.hasProtocolMismatch(unsafeOptions)) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "protocol_mismatch");
     }
-    const options = displayCreateOptionsSchema.safeParse(unsafeOptions);
+    /*
+     * A solo cockpit creates its own room, so creation accepts either shape.
+     * The two differ only in what they name: the display names a seat count,
+     * the cockpit names a player and takes the seat count that solo means.
+     */
+    const options = roomCreateOptionsSchema.safeParse(unsafeOptions);
     if (!options.success) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "invalid_message");
     }
+    const crewSize = options.data.role === "solo" ? 1 : options.data.crewSize;
     // Every room in this process shares one event loop, so accepting a room past
     // the ceiling slows the tick of every room already running, not just the
     // newcomer. Refuse instead, and let the operator scale out. The count comes
@@ -227,7 +238,7 @@ export class SpaceshipDefenderRoom extends Room<{
       throw new ServerError(ErrorCode.APPLICATION_ERROR, ROOM_REFUSED_AT_CAPACITY);
     }
     this.state.roomId = this.roomId;
-    this.state.crewSize = options.data.crewSize;
+    this.state.crewSize = crewSize;
     // A hull the preset does not carry is refused rather than swapped for the
     // default: a crew that picked a ship must not be given another one silently.
     const tuning = getBalanceStore().getActiveTuning();
@@ -249,8 +260,7 @@ export class SpaceshipDefenderRoom extends Room<{
         );
       }
     }
-    this.maxMessagesPerSecond =
-      options.data.crewSize === 1 ? SOLO_MESSAGE_CEILING : CREW_MESSAGE_CEILING;
+    this.maxMessagesPerSecond = crewSize === 1 ? SOLO_MESSAGE_CEILING : CREW_MESSAGE_CEILING;
     const now = Date.now();
     this.createdAtMs = now;
     this.statusChangedAtMs = now;
@@ -294,33 +304,76 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
 
+    /*
+     * One connection, both duties, and neither half may be half-applied. Both
+     * refusals are checked before anything is written, because taking the seat
+     * and then finding a display already connected leaves a room holding a
+     * player nobody is behind. The refusals themselves are the ones the
+     * separate paths already throw.
+     */
+    if (result.data.role === "solo") {
+      if (this.displaySessionId !== undefined) {
+        throw new ServerError(ErrorCode.APPLICATION_ERROR, "display_already_connected");
+      }
+      this.takeCrewSeat(client, result.data.playerName, "solo");
+      this.joinDisplay(client, "solo");
+      this.registerLatencyConnection(client);
+      this.lifecycle.clear("display_reconnect_expired");
+      this.updateStatusFromRoom();
+      this.queueMetadataUpdate();
+      return;
+    }
+
+    this.takeCrewSeat(client, result.data.playerName, "controller");
+    this.registerLatencyConnection(client);
+    this.queueMetadataUpdate();
+  }
+
+  /**
+   * The controller half of joining: a seat on the roster, a clean watermark
+   * map, and the clock that disposes a crewless room stopped. Shared with the
+   * solo connection, which is a display that also holds a seat.
+   */
+  private takeCrewSeat(client: Client, playerName: string, role: ConnectionRole): void {
     if (this.state.players.size >= this.state.crewSize) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "room_full");
     }
-    const role = this.findAvailableRole();
-    if (role === undefined) {
+    const crewRole = this.findAvailableRole();
+    if (crewRole === undefined) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "room_full");
     }
 
     client.view = new StateView();
     const player = new PlayerState();
     player.playerId = client.sessionId;
-    player.playerName = result.data.playerName;
-    player.role = role;
+    player.playerName = playerName;
+    player.role = crewRole;
     player.ready = false;
-    this.connectionRoles.set(client.sessionId, "controller");
+    this.connectionRoles.set(client.sessionId, role);
     this.sequenceWatermarks.set(client.sessionId, new Map());
     this.state.players.set(client.sessionId, player);
     this.firstControllerJoined = true;
     this.lifecycle.clear("controllers_expired");
-    this.registerLatencyConnection(client);
-    this.queueMetadataUpdate();
   }
 
   override async onLeave(client: Client, code: number): Promise<void> {
     const connectionRole = this.connectionRoles.get(client.sessionId);
     this.clearLatencyConnection(client.sessionId);
-    if (connectionRole === "display") {
+    if (connectionRole === "display" || connectionRole === "solo") {
+      /*
+       * A solo connection leaves as both, and `allowReconnection` may only be
+       * awaited once per client. The display branch is the one to keep: it is
+       * the stricter of the two, and for the only person in the room a
+       * consented leave really should close it rather than start a grace
+       * period for a crew that does not exist. The seat's own bookkeeping is
+       * done around it.
+       */
+      const solo = connectionRole === "solo";
+      const player = solo ? this.state.players.get(client.sessionId) : undefined;
+      if (solo) {
+        this.neutralizeRole(client.sessionId);
+        if (player !== undefined) player.connected = false;
+      }
       this.state.displayConnected = false;
       this.lifecycle.set(
         "display_reconnect_expired",
@@ -329,19 +382,29 @@ export class SpaceshipDefenderRoom extends Room<{
       this.updateStatus("display_grace");
       this.queueMetadataUpdate();
       if (code === CloseCode.CONSENTED) {
+        // Both true for a solo connection, and this is the reason the
+        // vocabulary already has: the client that drew the world is gone.
         this.disposeOnce("display_left");
         return;
       }
       try {
         const reconnected = await this.allowReconnection(client, reconnectionGraceSeconds);
         if (this.disposing) return;
-        this.connectionRoles.set(reconnected.sessionId, "display");
+        this.connectionRoles.set(reconnected.sessionId, connectionRole);
         this.displaySessionId = reconnected.sessionId;
         this.state.displayConnected = true;
         this.lifecycle.clear("display_reconnect_expired");
+        if (solo) {
+          if (player !== undefined) player.connected = true;
+          // A fresh watermark map, exactly as the controller branch does: the
+          // returning stream starts its sequences over.
+          this.sequenceWatermarks.set(reconnected.sessionId, new Map());
+          this.lifecycle.clear("controllers_expired");
+        }
         this.registerLatencyConnection(reconnected);
         this.updateStatusFromRoom();
         this.queueMetadataUpdate();
+        if (solo) this.tryStartRun();
       } catch {
         this.disposeOnce("display_reconnect_expired");
       }
@@ -614,7 +677,8 @@ export class SpaceshipDefenderRoom extends Room<{
       this.sendError(client, "invalid_message", "Message does not match the strict schema.");
       return undefined;
     }
-    if (this.connectionRoles.get(client.sessionId) !== "controller") {
+    const connectionRole = this.connectionRoles.get(client.sessionId);
+    if (connectionRole !== "controller" && connectionRole !== "solo") {
       this.sendError(client, "not_controller", "Only controllers may send gameplay messages.");
       return undefined;
     }
@@ -782,14 +846,16 @@ export class SpaceshipDefenderRoom extends Room<{
     this.upgradeJournals.set(playerId, journal);
   }
 
-  private joinDisplay(client: Client): void {
+  private joinDisplay(client: Client, role: ConnectionRole = "display"): void {
     if (this.displaySessionId !== undefined) {
       throw new ServerError(ErrorCode.APPLICATION_ERROR, "display_already_connected");
     }
-    client.view = new StateView();
+    // A solo connection already has a view holding its seat; adding the world
+    // branch to it is the whole difference between the two roles.
+    client.view ??= new StateView();
     client.view.add(this.state.game, 1);
     this.displaySessionId = client.sessionId;
-    this.connectionRoles.set(client.sessionId, "display");
+    this.connectionRoles.set(client.sessionId, role);
     this.state.displayConnected = true;
   }
 

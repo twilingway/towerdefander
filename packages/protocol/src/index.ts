@@ -864,6 +864,15 @@ export const joinOptionsSchema = z.union([
   soloJoinOptionsSchema
 ]);
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
+/**
+ * Either shape a room may be created with. A controller never creates one, so
+ * it is absent here: it joins a room a display or a cockpit already opened.
+ */
+export const roomCreateOptionsSchema = z.union([
+  displayCreateOptionsSchema,
+  soloJoinOptionsSchema
+]);
+export type RoomCreateOptions = z.infer<typeof roomCreateOptionsSchema>;
 
 export const commandEnvelopeSchema = z
   .object({

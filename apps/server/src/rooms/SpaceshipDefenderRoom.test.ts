@@ -76,6 +76,24 @@ function joinController(room: SpaceshipDefenderRoom, index: number): TestClient 
   return controller;
 }
 
+function createSoloRoom(): SpaceshipDefenderRoom {
+  const room = new SpaceshipDefenderRoom();
+  room.roomId = "ROOM123";
+  room.onCreate({ role: "solo", protocolVersion: PROTOCOL_VERSION, playerName: "Ada" });
+  openRooms.push(room);
+  return room;
+}
+
+function joinSolo(room: SpaceshipDefenderRoom, sessionId = "solo-1"): TestClient {
+  const cockpit = createClient(sessionId);
+  room.onJoin(cockpit.client, {
+    role: "solo",
+    protocolVersion: PROTOCOL_VERSION,
+    playerName: "Ada"
+  });
+  return cockpit;
+}
+
 function ready(room: SpaceshipDefenderRoom, controller: TestClient): void {
   room.handleReady(controller.client, {
     protocolVersion: PROTOCOL_VERSION,
@@ -669,6 +687,112 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     await room.onLeave(display.client, 1006);
     expect(disconnect).toHaveBeenCalledTimes(1);
     expect(room.state.displayConnected).toBe(false);
+  });
+});
+
+describe("SpaceshipDefenderRoom solo cockpit", () => {
+  it("gives one connection both the world and a seat", () => {
+    const room = createSoloRoom();
+    expect(room.state.crewSize).toBe(1);
+
+    const cockpit = joinSolo(room);
+
+    // The seat, named the way a controller names one.
+    expect(room.state.players.get(cockpit.client.sessionId)).toMatchObject({
+      role: "pilot",
+      playerName: "Ada",
+      ready: false
+    });
+    // And the world, which an ordinary controller never receives.
+    expect(room.state.displayConnected).toBe(true);
+    expect(cockpit.client.view?.has(room.state.game)).toBe(true);
+  });
+
+  it("refuses a controller while the cockpit holds the only seat", () => {
+    const room = createSoloRoom();
+    joinSolo(room);
+
+    expect(() => {
+      joinController(room, 0);
+    }).toThrow();
+    expect(room.state.players.size).toBe(1);
+  });
+
+  it("refuses a cockpit when a display is already drawing", () => {
+    const room = createRoom(1);
+    joinDisplay(room);
+
+    expect(() => {
+      joinSolo(room);
+    }).toThrow();
+    // The seat is not left occupied by a connection that was turned away.
+    expect(room.state.players.size).toBe(0);
+  });
+
+  it("accepts both input streams from the one connection", () => {
+    const room = createSoloRoom();
+    const cockpit = joinSolo(room);
+    ready(room, cockpit);
+    expect(room.state.phase).toBe("active");
+
+    room.handlePilotInput(cockpit.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: cockpit.client.sessionId,
+      runNumber: room.state.runNumber,
+      sequence: 1,
+      vector: { x: 1, y: 0 },
+      mgFiring: false
+    });
+    room.handleGunnerInput(cockpit.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: cockpit.client.sessionId,
+      runNumber: room.state.runNumber,
+      sequence: 1,
+      aim: { x: 0, y: -1 },
+      firing: false
+    });
+
+    // Both landed: the sequences are watermarked per message type, so one
+    // stream does not silence the other.
+    expect(cockpit.send).not.toHaveBeenCalledWith("error", expect.anything());
+  });
+
+  it("closes the room when the only player leaves on purpose", async () => {
+    const room = createSoloRoom();
+    const cockpit = joinSolo(room);
+    const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    await room.onLeave(cockpit.client, CloseCode.CONSENTED);
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(room.state.displayConnected).toBe(false);
+  });
+
+  it("gives both duties back after a dropped connection returns", async () => {
+    const room = createSoloRoom();
+    const cockpit = joinSolo(room);
+    ready(room, cockpit);
+    const reconnect = vi.spyOn(room, "allowReconnection").mockResolvedValueOnce(cockpit.client);
+
+    await room.onLeave(cockpit.client, 1006);
+
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    expect(room.state.displayConnected).toBe(true);
+    expect(room.state.players.get(cockpit.client.sessionId)?.connected).toBe(true);
+    expect(cockpit.client.view?.has(room.state.game)).toBe(true);
+  });
+
+  it("disposes the room when the cockpit never comes back", async () => {
+    const room = createSoloRoom();
+    const cockpit = joinSolo(room);
+    vi.spyOn(room, "allowReconnection").mockRejectedValue(new Error("expired"));
+    const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    await room.onLeave(cockpit.client, 1006);
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
   });
 });
 
