@@ -23,6 +23,13 @@ const FLUSH_MS = 25;
 interface PilotStream {
   readonly vector: ControlVector;
   readonly mgFiring: boolean;
+  /**
+   * Tank helm: a requested spin and a push along the nose. Null while the stick
+   * is driving, which names a bearing instead — the core prefers the intent
+   * whenever one arrives, so the two must not both be sent.
+   */
+  readonly turn: number | null;
+  readonly thrust: number | null;
 }
 
 interface GunnerStream {
@@ -41,18 +48,22 @@ interface GunnerStream {
   readonly aimHeading: number | null;
 }
 
-const NEUTRAL_PILOT: PilotStream = { vector: NEUTRAL, mgFiring: false };
+const NEUTRAL_PILOT: PilotStream = { vector: NEUTRAL, mgFiring: false, turn: null, thrust: null };
 const NEUTRAL_GUNNER: GunnerStream = { aim: NEUTRAL, firing: false, aimHeading: null };
 
 /** What the assist needs to see. Absent while there is no snapshot yet. */
 export interface SoloCockpitWorld {
   readonly shooter: { readonly x: number; readonly y: number };
+  /** The nose, which a mounted gun is aimed against. */
+  readonly heading: number;
   readonly targets: readonly AimTarget[];
   readonly obstacles: readonly AimObstacle[];
   /** How far the cannon actually reaches; the cone is cut to it. */
   readonly cannonReach: number;
   /** Where the gun is pointing right now, straight from the snapshot. */
   readonly turretAngle: number;
+  /** Whether the hull carries the gun; it changes what a stick bearing means. */
+  readonly turretMountedOnHull: boolean;
   /** The tremble guard and the traverse lead, all three from the preset. */
   readonly headingDeadbandRadians: number;
   readonly headingFilterSeconds: number;
@@ -82,6 +93,9 @@ export interface SoloCockpitControls {
   readonly onAim: (vector: ControlVector, strength: number) => void;
   readonly onAimRelease: () => void;
   readonly onMachineGunHold: (held: boolean) => void;
+  /** Tank helm from the keys: spin the hull, push along the nose. */
+  readonly onHelm: (intent: { readonly turn: number; readonly thrust: number }) => void;
+  readonly onHelmRelease: () => void;
   /**
    * The cannon has two spurs and either may hold it: the aim stick itself, the
    * way STEEL VOID does it (`_beginAimFire` sets `fireHeld` on the touch that
@@ -171,7 +185,10 @@ export function useSoloCockpit({
         runNumber: run,
         sequence,
         vector: value.vector,
-        mgFiring: value.mgFiring
+        mgFiring: value.mgFiring,
+        // Only when the helm asked for one; a stick command keeps the shape it
+        // has always had.
+        ...(value.turn === null ? {} : { turn: value.turn, thrust: value.thrust ?? 0 })
       });
     })
   );
@@ -231,8 +248,19 @@ export function useSoloCockpit({
     const snapshot = assistReference.current.world;
     if (snapshot === undefined) return 0;
     const assisted = resolveAim(value);
-    const wanted =
+    const named =
       assisted.x === 0 && assisted.y === 0 ? value.aimHeading : Math.atan2(assisted.y, assisted.x);
+    /*
+     * A mounted gun is aimed relative to the nose, a free one relative to the
+     * world, and the difference is the whole of "the gun is on the hull".
+     *
+     * Named in world terms while the chassis turns, the drive spends its entire
+     * budget undoing what the hull just did: measured on the bot, a turret at
+     * the hull's own rate cancels out exactly and re-aiming becomes impossible.
+     * Read as a bearing off the nose, the carry is free and the drive pays only
+     * for the thumb.
+     */
+    const wanted = snapshot.turretMountedOnHull ? named + snapshot.heading : named;
     const difference = shortestArc(snapshot.turretAngle, wanted);
     return Math.max(-1, Math.min(1, difference / Math.max(0.05, snapshot.turretLeadRadians)));
   }
@@ -338,12 +366,25 @@ export function useSoloCockpit({
       }
       driveHeadingReference.current = smoothed.heading;
       hullTargetReference.current = smoothed.heading;
+      // The stick names a bearing, so any standing helm intent is dropped.
       // Direction from the smoothed bearing, throttle from the strength.
-      updatePilot({ vector: { x: smoothed.x * strength, y: smoothed.y * strength } });
+      updatePilot({
+        vector: { x: smoothed.x * strength, y: smoothed.y * strength },
+        turn: null,
+        thrust: null
+      });
     },
     onDriveRelease: () => {
       driveHeadingReference.current = null;
-      updatePilot({ vector: NEUTRAL });
+      updatePilot({ vector: NEUTRAL, turn: null, thrust: null });
+    },
+    onHelm: (intent) => {
+      // A spin names no bearing, so the remembered one goes with it.
+      hullTargetReference.current = null;
+      updatePilot({ vector: NEUTRAL, turn: intent.turn, thrust: intent.thrust });
+    },
+    onHelmRelease: () => {
+      updatePilot({ vector: NEUTRAL, turn: 0, thrust: 0 });
     },
     onAim: (vector) => {
       /*
@@ -394,9 +435,9 @@ export function useSoloCockpit({
       updateGunner({ firing: anyCannonSpurDown() });
     },
     readPrediction: () => ({
-      // The cockpit's stick names a bearing rather than a spin, so the hull is
-      // predicted the way the core advances it for exactly that case.
-      hullTurn: null,
+      // Predicted the way the core advances it: a spin when the keys asked for
+      // one, a bearing to chase when the stick did.
+      hullTurn: pilotReference.current.turn,
       hullTargetAngle: hullTargetReference.current,
       turretTurn: resolveTraverse(gunnerReference.current)
     })

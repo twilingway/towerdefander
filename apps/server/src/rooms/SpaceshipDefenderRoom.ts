@@ -753,6 +753,7 @@ export class SpaceshipDefenderRoom extends Room<{
       this.gameConfig.turretAngularAccelerationPerSecondSquared;
     this.state.game.helm.turretAngularBraking =
       this.gameConfig.turretAngularBrakingPerSecondSquared;
+    this.state.game.helm.turretMountedOnHull = this.gameConfig.turretMountedOnHull;
     this.gameState = createCleanSpaceshipRun(
       this.gameConfig,
       createRunSeed(previousSeed),

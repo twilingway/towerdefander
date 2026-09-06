@@ -148,6 +148,7 @@ interface NetworkGameState {
     turretAngularMaxSpeed: number;
     turretAngularAcceleration: number;
     turretAngularBraking: number;
+    turretMountedOnHull: boolean;
     driveDeadzoneShare: number;
     aimDeadzoneShare: number;
     driveZoneShare: number;

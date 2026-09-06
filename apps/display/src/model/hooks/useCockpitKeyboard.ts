@@ -4,8 +4,8 @@ import type { ControlVector } from "@spaceship-defender/client-shared";
 
 /** What the keys and the mouse drive, once they have been read. */
 export interface CockpitKeyboardTargets {
-  readonly onDrive: (vector: ControlVector, strength: number) => void;
-  readonly onDriveRelease: () => void;
+  readonly onHelm: (intent: { readonly turn: number; readonly thrust: number }) => void;
+  readonly onHelmRelease: () => void;
   readonly onAim: (vector: ControlVector, strength: number) => void;
   readonly onAimRelease: () => void;
   readonly onMachineGunHold: (held: boolean) => void;
@@ -18,16 +18,24 @@ export interface CockpitKeyboardOptions extends CockpitKeyboardTargets {
   readonly shipScreenPoint: () => { readonly x: number; readonly y: number } | null;
 }
 
-/** WASD drives, the mouse aims, space and the left button fire. As in the lab. */
-const DRIVE_KEYS: Record<string, { readonly x: number; readonly y: number }> = {
-  KeyW: { x: 0, y: -1 },
-  KeyS: { x: 0, y: 1 },
-  KeyA: { x: -1, y: 0 },
-  KeyD: { x: 1, y: 0 },
-  ArrowUp: { x: 0, y: -1 },
-  ArrowDown: { x: 0, y: 1 },
-  ArrowLeft: { x: -1, y: 0 },
-  ArrowRight: { x: 1, y: 0 }
+/**
+ * A tank helm, which is what the lab has and what a keyboard wants.
+ *
+ * W is not north. It is forward along the nose, and A and D spin the hull on
+ * its own axis rather than pointing it at a compass bearing — the difference
+ * between driving a tank and dragging a cursor. The core has carried the
+ * intent for this since `helm-turn-intent`; the cockpit simply never sent it
+ * and shipped the stick's absolute vector instead.
+ */
+const HELM_KEYS: Record<string, { readonly turn: number; readonly thrust: number }> = {
+  KeyW: { turn: 0, thrust: 1 },
+  KeyS: { turn: 0, thrust: -1 },
+  KeyA: { turn: -1, thrust: 0 },
+  KeyD: { turn: 1, thrust: 0 },
+  ArrowUp: { turn: 0, thrust: 1 },
+  ArrowDown: { turn: 0, thrust: -1 },
+  ArrowLeft: { turn: -1, thrust: 0 },
+  ArrowRight: { turn: 1, thrust: 0 }
 };
 const MG_KEY = "Space";
 const CANNON_KEY = "Enter";
@@ -47,24 +55,24 @@ const CANNON_KEY = "Enter";
 export function useCockpitKeyboard({
   enabled,
   shipScreenPoint,
-  onDrive,
-  onDriveRelease,
+  onHelm,
+  onHelmRelease,
   onAim,
   onAimRelease,
   onMachineGunHold,
   onCannonFromTrigger
 }: CockpitKeyboardOptions): void {
   const targets = useRef<CockpitKeyboardTargets>({
-    onDrive,
-    onDriveRelease,
+    onHelm,
+    onHelmRelease,
     onAim,
     onAimRelease,
     onMachineGunHold,
     onCannonFromTrigger
   });
   targets.current = {
-    onDrive,
-    onDriveRelease,
+    onHelm,
+    onHelmRelease,
     onAim,
     onAimRelease,
     onMachineGunHold,
@@ -78,22 +86,25 @@ export function useCockpitKeyboard({
     const held = new Set<string>();
     let aiming = false;
 
-    function applyDrive(): void {
-      let x = 0;
-      let y = 0;
+    function applyHelm(): void {
+      let turn = 0;
+      let thrust = 0;
       for (const code of held) {
-        const key = DRIVE_KEYS[code];
+        const key = HELM_KEYS[code];
         if (key === undefined) continue;
-        x += key.x;
-        y += key.y;
+        turn += key.turn;
+        thrust += key.thrust;
       }
-      const length = Math.hypot(x, y);
-      if (length === 0) {
-        targets.current.onDriveRelease();
+      if (turn === 0 && thrust === 0) {
+        targets.current.onHelmRelease();
         return;
       }
-      // Full throttle: a key is not a stick and has no half-press.
-      targets.current.onDrive({ x: x / length, y: y / length }, 1);
+      // A key has no half-press: clamped rather than normalised, so holding W
+      // and D asks for full of each instead of seven tenths.
+      targets.current.onHelm({
+        turn: Math.max(-1, Math.min(1, turn)),
+        thrust: Math.max(-1, Math.min(1, thrust))
+      });
     }
 
     function onKeyDown(event: KeyboardEvent): void {
@@ -107,11 +118,11 @@ export function useCockpitKeyboard({
         if (!event.repeat) targets.current.onCannonFromTrigger(true);
         return;
       }
-      if (DRIVE_KEYS[event.code] === undefined) return;
+      if (HELM_KEYS[event.code] === undefined) return;
       event.preventDefault();
       if (held.has(event.code)) return;
       held.add(event.code);
-      applyDrive();
+      applyHelm();
     }
 
     function onKeyUp(event: KeyboardEvent): void {
@@ -124,7 +135,7 @@ export function useCockpitKeyboard({
         return;
       }
       if (!held.delete(event.code)) return;
-      applyDrive();
+      applyHelm();
     }
 
     function onPointerMove(event: PointerEvent): void {
@@ -153,7 +164,7 @@ export function useCockpitKeyboard({
 
     function release(): void {
       held.clear();
-      targets.current.onDriveRelease();
+      targets.current.onHelmRelease();
       targets.current.onMachineGunHold(false);
       targets.current.onCannonFromTrigger(false);
       if (aiming) {

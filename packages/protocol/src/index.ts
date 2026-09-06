@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 49 as const;
+export const PROTOCOL_VERSION = 50 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -680,6 +680,12 @@ export const publicHelmViewSchema = z
     turretAngularMaxSpeed: finite.positive(),
     turretAngularAcceleration: finite.positive(),
     turretAngularBraking: finite.positive(),
+    /**
+     * Whether the hull carries the gun. The simulation reads this from the
+     * preset; the panel needs it too, because a mounted turret is aimed
+     * relative to the nose and a free one relative to the world.
+     */
+    turretMountedOnHull: z.boolean(),
     /** Stick geometry, shares of the ring radius rather than pixels. */
     driveDeadzoneShare: finite.min(0),
     aimDeadzoneShare: finite.min(0),

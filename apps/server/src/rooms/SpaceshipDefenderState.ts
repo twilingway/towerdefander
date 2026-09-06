@@ -72,6 +72,7 @@ export class HelmState extends Schema {
   @type("float32") turretAngularMaxSpeed = 1.36;
   @type("float32") turretAngularAcceleration = 2.72;
   @type("float32") turretAngularBraking = 4.08;
+  @type("boolean") turretMountedOnHull = false;
   /*
    * Stick geometry. Shares of the ring radius, so `float32` covers them with
    * room to spare, and the flag is the one boolean here — a share and a switch,

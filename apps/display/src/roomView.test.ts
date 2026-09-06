@@ -52,6 +52,7 @@ describe("display room view", () => {
           turretAngularMaxSpeed: 1.36,
           turretAngularAcceleration: 2.72,
           turretAngularBraking: 4.08,
+          turretMountedOnHull: false,
           driveDeadzoneShare: 0,
           aimDeadzoneShare: 0,
           driveZoneShare: 0.42,

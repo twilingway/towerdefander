@@ -150,6 +150,8 @@ export function DisplayApp() {
             obstacles: view.game.obstacles,
             cannonReach: view.game.cannon.reach,
             turretAngle: view.game.turretAngle,
+            heading: view.game.spaceship.heading,
+            turretMountedOnHull: view.game.helm.turretMountedOnHull,
             headingDeadbandRadians: view.game.helm.headingDeadbandRadians,
             headingFilterSeconds: view.game.helm.headingFilterSeconds,
             turretLeadRadians: view.game.helm.turretLeadRadians
