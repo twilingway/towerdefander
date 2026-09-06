@@ -759,6 +759,35 @@ describe("SpaceshipDefenderRoom solo cockpit", () => {
     expect(cockpit.send).not.toHaveBeenCalledWith("error", expect.anything());
   });
 
+  it("takes an upgrade vote from the cockpit, which is not a controller", () => {
+    const room = createSoloRoom();
+    const cockpit = joinSolo(room);
+    ready(room, cockpit);
+    forceIntermission(room);
+
+    const upgrade = room.state.game.teamUpgrade;
+    if (!upgrade.hasOffer) throw new Error("Expected an upgrade offer.");
+    const card = upgrade.offer.cards.at(0);
+    if (card === undefined) throw new Error("Expected a card.");
+
+    room.handleUpgradeVote(cockpit.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: cockpit.client.sessionId,
+      runNumber: room.state.runNumber,
+      actionId: "11111111-1111-4111-8111-111111111111",
+      waveNumber: upgrade.offer.waveNumber,
+      offerId: upgrade.offer.offerId,
+      upgradeId: card.upgradeId,
+      revision: 1
+    });
+
+    // The seat votes in its own slot, and nothing refuses it for being a
+    // display connection: the gate accepts a cockpit as well as a controller.
+    expect(cockpit.send).not.toHaveBeenCalledWith("error", expect.anything());
+    expect(room.state.game.teamUpgrade.votes.get("pilot")?.upgradeId).toBe(card.upgradeId);
+  });
+
   it("closes the room when the only player leaves on purpose", async () => {
     const room = createSoloRoom();
     const cockpit = joinSolo(room);
