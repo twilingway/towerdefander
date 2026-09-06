@@ -524,8 +524,17 @@ export function DisplayApp() {
               waveNumber={view.game.encounter.waveNumber}
               score={view.game.encounter.score}
               readyCount={view.players.filter(({ ready }) => ready).length}
+              crewSize={view.crewSize}
               closing={closingRoom}
               onClose={() => void handleCloseRoom()}
+              {...(cockpitPlayer === undefined
+                ? {}
+                : {
+                    cockpit: {
+                      ready: cockpitSeat?.ready === true,
+                      onReady: sendCockpitReady
+                    }
+                  })}
             />
           )}
           {/* The run's own hull, straight from the catalogue; the fixture is

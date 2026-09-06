@@ -17,6 +17,12 @@ interface CockpitStickProps {
   readonly deadzoneShare: number;
   /** Extra class on the grab zone, so the two sticks can sit on opposite edges. */
   readonly side: "left" | "right";
+  /**
+   * Told whenever the stick is grabbed and let go. STEEL VOID's aim stick is
+   * also the trigger — the touch that starts aiming holds fire — and a player
+   * who pushes the gun at something and waits for it to shoot is right.
+   */
+  readonly onPressChange?: (pressed: boolean) => void;
 }
 
 /**
@@ -35,7 +41,8 @@ export function CockpitStick({
   onRelease,
   enabled,
   deadzoneShare,
-  side
+  side,
+  onPressChange
 }: CockpitStickProps) {
   const zoneReference = useRef<HTMLDivElement>(null);
   const ringReference = useRef<HTMLDivElement>(null);
@@ -43,8 +50,10 @@ export function CockpitStick({
   const pointerCycle = (pointerCycleReference.current ??= new PointerCycle());
   const onChangeReference = useRef(onChange);
   const onReleaseReference = useRef(onRelease);
+  const onPressChangeReference = useRef(onPressChange);
   onChangeReference.current = onChange;
   onReleaseReference.current = onRelease;
+  onPressChangeReference.current = onPressChange;
   const [reading, setReading] = useState<StickReading>(neutralStickReading);
 
   function applyPointer(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -72,6 +81,7 @@ export function CockpitStick({
           : pointerCycle.complete(pointerId);
     if (!released) return;
     setReading(neutralStickReading());
+    onPressChangeReference.current?.(false);
     onReleaseReference.current();
   }
 
@@ -110,6 +120,7 @@ export function CockpitStick({
       onPointerDown={(event) => {
         if (!enabled || !pointerCycle.claim(event.pointerId, event.button)) return;
         event.currentTarget.setPointerCapture(event.pointerId);
+        onPressChangeReference.current?.(true);
         applyPointer(event);
       }}
       onPointerMove={(event) => {

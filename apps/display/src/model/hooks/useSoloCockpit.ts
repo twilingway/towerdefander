@@ -59,7 +59,14 @@ export interface SoloCockpitControls {
   readonly onAim: (vector: ControlVector, strength: number) => void;
   readonly onAimRelease: () => void;
   readonly onMachineGunHold: (held: boolean) => void;
-  readonly onCannonHold: (held: boolean) => void;
+  /**
+   * The cannon has two spurs and either may hold it: the aim stick itself, the
+   * way STEEL VOID does it (`_beginAimFire` sets `fireHeld` on the touch that
+   * starts aiming), and the separate trigger for firing without moving the
+   * gun. They are reported apart so releasing one does not silence the other.
+   */
+  readonly onCannonFromStick: (held: boolean) => void;
+  readonly onCannonFromTrigger: (held: boolean) => void;
 }
 
 /**
@@ -99,6 +106,8 @@ export function useSoloCockpit({
 
   const pilotReference = useRef<PilotStream>(NEUTRAL_PILOT);
   const gunnerReference = useRef<GunnerStream>(NEUTRAL_GUNNER);
+  /** Which spurs are down; the cannon fires while either is. */
+  const cannonSpursReference = useRef({ stick: false, trigger: false });
 
   const pilotSchedulerReference = useRef<LatestInputScheduler<PilotStream> | undefined>(undefined);
   const gunnerSchedulerReference = useRef<LatestInputScheduler<GunnerStream> | undefined>(
@@ -152,6 +161,11 @@ export function useSoloCockpit({
     );
   }
 
+  function anyCannonSpurDown(): boolean {
+    const spurs = cannonSpursReference.current;
+    return spurs.stick || spurs.trigger;
+  }
+
   function updatePilot(patch: Partial<PilotStream>): void {
     const next = { ...pilotReference.current, ...patch };
     pilotReference.current = next;
@@ -200,6 +214,7 @@ export function useSoloCockpit({
     // A phone that locks or a tab that goes away must not leave the ship under
     // power with both triggers down.
     function neutralize(): void {
+      cannonSpursReference.current = { stick: false, trigger: false };
       updatePilot({ vector: NEUTRAL, mgFiring: false });
       updateGunner({ aim: NEUTRAL, firing: false });
     }
@@ -241,8 +256,13 @@ export function useSoloCockpit({
     onMachineGunHold: (held) => {
       updatePilot({ mgFiring: held });
     },
-    onCannonHold: (held) => {
-      updateGunner({ firing: held });
+    onCannonFromStick: (held) => {
+      cannonSpursReference.current.stick = held;
+      updateGunner({ firing: anyCannonSpurDown() });
+    },
+    onCannonFromTrigger: (held) => {
+      cannonSpursReference.current.trigger = held;
+      updateGunner({ firing: anyCannonSpurDown() });
     }
   };
 }

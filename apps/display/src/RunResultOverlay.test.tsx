@@ -15,6 +15,7 @@ describe("RunResultOverlay", () => {
         waveNumber={7}
         score={12_340}
         readyCount={2}
+        crewSize={3}
         closing={false}
         onClose={vi.fn()}
       />
@@ -35,6 +36,7 @@ describe("RunResultOverlay", () => {
         waveNumber={1}
         score={0}
         readyCount={0}
+        crewSize={3}
         closing
         onClose={vi.fn()}
       />
@@ -52,6 +54,7 @@ describe("RunResultOverlay", () => {
         waveNumber={5}
         score={1500}
         readyCount={0}
+        crewSize={3}
         closing={false}
         onClose={vi.fn()}
       />
@@ -59,5 +62,44 @@ describe("RunResultOverlay", () => {
 
     expect(markup).toContain("Время волны истекло");
     expect(markup).not.toContain("Корабль уничтожен");
+  });
+
+  it("offers a rematch to a screen that is also the pilot", () => {
+    const markup = renderToStaticMarkup(
+      <RunResultOverlay
+        outcome="defeat"
+        defeatReason="spaceship_destroyed"
+        waveNumber={4}
+        score={120}
+        readyCount={0}
+        crewSize={1}
+        closing={false}
+        onClose={vi.fn()}
+        cockpit={{ ready: false, onReady: vi.fn() }}
+      />
+    );
+
+    // Without it the only way out of a finished solo run was to close the room.
+    expect(markup).toContain('data-testid="cockpit-rematch"');
+    expect(markup).toContain("Играть ещё");
+  });
+
+  it("counts the seats there actually are", () => {
+    const solo = renderToStaticMarkup(
+      <RunResultOverlay
+        outcome="victory"
+        defeatReason={null}
+        waveNumber={9}
+        score={900}
+        readyCount={0}
+        crewSize={1}
+        closing={false}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(solo).toContain("0/1");
+    // ...and stops telling one player to wait for two more.
+    expect(solo).not.toContain("все три игрока");
   });
 });

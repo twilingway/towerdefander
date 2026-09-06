@@ -1683,30 +1683,34 @@ p {
 /* ---------------------------------------------------------- Solo cockpit */
 
 /* The overlay sits over the battle canvas and must not eat the whole screen:
-   only the two zones and the triggers take pointer events, so a tap anywhere
+   only the two zones and the buttons take pointer events, so a tap anywhere
    else still reaches whatever is underneath. */
 .solo-cockpit {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  padding: clamp(0.75rem, 3vw, 2rem);
-  padding-bottom: max(clamp(0.75rem, 3vw, 2rem), env(safe-area-inset-bottom, 0));
+  display: grid;
+  /* Thumbs live at the bottom corners and the triggers between them. Anything
+     that drifts to the middle of the screen sits on top of the fight, which is
+     the one place a control must never be. */
+  grid-template-columns: auto 1fr auto;
+  align-items: end;
+  padding: clamp(0.5rem, 2vw, 1.25rem);
+  padding-bottom: max(clamp(0.5rem, 2vw, 1.25rem), env(safe-area-inset-bottom, 0));
 }
 
-/* The grab zone, deliberately far larger than the ring it moves: a thumb that
-   lands an inch off still takes the stick, and the anchor stays at the ring so
-   the first pixel of travel does not jump. */
+/* The grab zone, deliberately larger than the ring it moves: a thumb that lands
+   beside the ring still takes the stick, and the anchor stays at the ring so
+   the first pixel of travel does not jump. Sized off the smaller axis, or a
+   short landscape window makes it taller than the screen. */
 .solo-cockpit .cockpit-stick {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  width: min(38vw, 22rem);
-  height: min(52vh, 22rem);
+  width: min(30vw, 30vh, 15rem);
+  height: min(30vw, 30vh, 15rem);
   display: flex;
   align-items: flex-end;
 }
@@ -1726,8 +1730,8 @@ p {
 
 .cockpit-stick__ring {
   position: relative;
-  width: min(28vw, 13rem);
-  height: min(28vw, 13rem);
+  width: min(22vw, 22vh, 11rem);
+  height: min(22vw, 22vh, 11rem);
   border-radius: 50%;
   border: 2px solid rgba(126, 214, 255, 0.35);
   background: radial-gradient(circle, rgba(10, 30, 44, 0.55), rgba(6, 18, 28, 0.25));
@@ -1745,12 +1749,14 @@ p {
   box-shadow: 0 0 1.2rem rgba(126, 214, 255, 0.45);
 }
 
+/* Side by side along the bottom, not stacked up the middle of the picture. */
 .solo-cockpit__triggers {
   pointer-events: none;
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  align-self: center;
+  flex-direction: row;
+  gap: 0.6rem;
+  justify-content: center;
+  align-items: flex-end;
 }
 
 .cockpit-trigger {
@@ -1758,8 +1764,8 @@ p {
   touch-action: none;
   position: relative;
   overflow: hidden;
-  width: min(22vw, 9rem);
-  height: min(14vh, 5rem);
+  width: min(20vw, 8rem);
+  height: min(12vh, 3.5rem);
   border-radius: 0.9rem;
   border: 1px solid rgba(126, 214, 255, 0.4);
   background: rgba(8, 24, 36, 0.6);
@@ -1794,21 +1800,11 @@ p {
   position: relative;
 }
 
-.cockpit-picker {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
-}
-
-.field--inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* The assist toggle sits with the triggers because it belongs to the gun, but
-   it is a setting and not a spur: small, quiet, and not where a thumb rests. */
+/* A setting, not a spur: out of the corner where a thumb rests. */
 .cockpit-assist {
+  position: absolute;
+  right: clamp(0.5rem, 2vw, 1.25rem);
+  top: clamp(0.5rem, 2vw, 1.25rem);
   pointer-events: auto;
   touch-action: manipulation;
   padding: 0.35rem 0.6rem;
@@ -1823,6 +1819,18 @@ p {
 .cockpit-assist[aria-pressed="true"] {
   border-color: rgba(126, 214, 255, 0.6);
   color: #d6f2ff;
+}
+
+.cockpit-picker {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.field--inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* No code to scan when the screen is the pilot, so the card carries the one

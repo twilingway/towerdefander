@@ -12,7 +12,8 @@ export interface SoloCockpitProps {
   readonly onAim: (vector: ControlVector, strength: number) => void;
   readonly onAimRelease: () => void;
   readonly onMachineGunHold: (held: boolean) => void;
-  readonly onCannonHold: (held: boolean) => void;
+  readonly onCannonFromStick: (held: boolean) => void;
+  readonly onCannonFromTrigger: (held: boolean) => void;
   readonly machineGunHeat: number;
   readonly machineGunOverheated: boolean;
   readonly cannonHeat: number;
@@ -38,7 +39,8 @@ export function SoloCockpit({
   onAim,
   onAimRelease,
   onMachineGunHold,
-  onCannonHold,
+  onCannonFromStick,
+  onCannonFromTrigger,
   machineGunHeat,
   machineGunOverheated,
   cannonHeat,
@@ -56,18 +58,18 @@ export function SoloCockpit({
         onChange={onDrive}
         onRelease={onDriveRelease}
       />
+      <button
+        type="button"
+        className="cockpit-assist"
+        aria-pressed={aimAssist}
+        data-testid="cockpit-assist"
+        onClick={() => {
+          onAimAssistChange(!aimAssist);
+        }}
+      >
+        Помощь {aimAssist ? "вкл" : "выкл"}
+      </button>
       <div className="solo-cockpit__triggers">
-        <button
-          type="button"
-          className="cockpit-assist"
-          aria-pressed={aimAssist}
-          data-testid="cockpit-assist"
-          onClick={() => {
-            onAimAssistChange(!aimAssist);
-          }}
-        >
-          Помощь {aimAssist ? "вкл" : "выкл"}
-        </button>
         <CockpitTrigger
           testId="cockpit-trigger-mg"
           label="Нос"
@@ -82,7 +84,7 @@ export function SoloCockpit({
           enabled={enabled}
           heat={cannonHeat}
           overheated={cannonOverheated}
-          onHoldChange={onCannonHold}
+          onHoldChange={onCannonFromTrigger}
         />
       </div>
       <CockpitStick
@@ -92,6 +94,7 @@ export function SoloCockpit({
         deadzoneShare={aimDeadzoneShare}
         onChange={onAim}
         onRelease={onAimRelease}
+        onPressChange={onCannonFromStick}
       />
     </div>
   );
