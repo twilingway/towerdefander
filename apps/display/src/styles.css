@@ -1894,3 +1894,135 @@ p {
 .cockpit-ready:disabled {
   opacity: 0.6;
 }
+
+/*
+ * A phone standing in for the shared screen, before the fight starts.
+ *
+ * Keyed on height like the battle rules above and for the same reason: held
+ * sideways a phone is 844 points across and 390 tall, so a width rule calls it
+ * roomy while a 7rem title alone eats a third of what there is. The battle
+ * screen already had this treatment; the room-making screen and the lobby did
+ * not, and both of them scrolled — which on a screen that is about to become a
+ * cockpit is worse than ugly, because a thumb that scrolls the page is a thumb
+ * that was aiming at something.
+ */
+@media (height <= 520px) {
+  .display-shell:not(.display-shell--battle) {
+    min-height: 100dvh;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    overflow: hidden;
+  }
+
+  .display-shell--centered {
+    align-content: center;
+  }
+
+  .hero-card {
+    width: min(48rem, 100%);
+    max-height: calc(100dvh - 1.2rem);
+    padding: 0.9rem 1.2rem;
+    border-radius: 1rem;
+    overflow: auto;
+  }
+
+  /* The title is the single biggest thing on the screen and the least useful
+     to somebody who already typed the address to get here. */
+  .hero-card h1 {
+    font-size: clamp(1.6rem, 6vw, 2.4rem);
+  }
+
+  .hero-card p,
+  .join-card p {
+    font-size: 0.9rem;
+  }
+
+  .hero-card .eyebrow {
+    display: none;
+  }
+
+  /*
+   * Every button on this screen is 3.5rem tall by default, and there are three
+   * rows of them: the seat count, the hull, and Create. That alone is more than
+   * half of a 390-point screen before a word of text. A thumb needs about
+   * 2.25rem, and the rest was generosity for a wall-sized display.
+   */
+  .hero-card button {
+    min-height: 2.25rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .hero-card > p {
+    margin-block: 0.25rem;
+    font-size: 0.85rem;
+  }
+
+  /* Flavour, and the only thing here nobody needs to make the choice with. */
+  .ship-pitch {
+    display: none;
+  }
+
+  .hero-card .field {
+    margin-block: 0.35rem;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+  }
+
+  .hero-card .field__input {
+    min-height: 2rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .capacity-picker,
+  .crew-size-picker,
+  .ship-picker,
+  .cockpit-picker {
+    margin-block: 0.5rem;
+    gap: 0.35rem;
+  }
+
+  .cockpit-picker .hint {
+    display: none;
+  }
+
+  /* One column: two side by side leaves neither wide enough to read. */
+  .lobby-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .join-card,
+  .players-card {
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+  }
+
+  .join-card h2,
+  .players-card h2 {
+    font-size: 1.05rem;
+  }
+
+  /* The code goes: a phone cannot scan itself, and in a crew the link under it
+     still works. */
+  .join-card svg {
+    max-width: min(22vw, 120px);
+  }
+
+  .join-card--cockpit .cockpit-ready {
+    margin: 0.5rem 0 0.25rem;
+    padding: 0.5rem 1.1rem;
+  }
+
+  .player-slot {
+    min-height: 0;
+    padding: 0.35rem 0.6rem;
+  }
+
+  /* The ping goes, the name stays: both are drawn as small text, and hiding
+     the lot would take the one thing the roster is for. */
+  .player-slot small:last-of-type {
+    display: none;
+  }
+}
