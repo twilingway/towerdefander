@@ -29,12 +29,16 @@ export const STUTTER_VISIBLE_SHARE = 0.1;
 export const STUTTER_ALARM_SHARE = 0.25;
 
 /**
- * Whole percent, and nothing at all while the picture is even. The badge earns
- * its place only when there is unevenness to report.
+ * Whole percent, always shown.
+ *
+ * The freeze badge beside it appears only when there is a freeze, because a
+ * missing badge there means "nothing stalled" and that is the whole message.
+ * Evenness is different: it was asked for as an instrument, and an instrument
+ * that hides at zero is indistinguishable from one that was never fitted. A
+ * steady 0% is information — it says the picture is even right now.
  */
-export function formatStutterShare(share: number): string | undefined {
-  if (!Number.isFinite(share) || share < STUTTER_VISIBLE_SHARE) return undefined;
-  return String(Math.round(share * 100));
+export function formatStutterShare(share: number): string {
+  return Number.isFinite(share) && share > 0 ? String(Math.round(share * 100)) : "0";
 }
 
 export function stutterClassName(share: number): string {
@@ -81,7 +85,6 @@ export function FpsReadout({
   readonly stutterShare?: number;
 }) {
   const spike = formatFrameSpike(worstFrameMs);
-  const stutter = formatStutterShare(stutterShare);
   return (
     <span className={fpsClassName(fps)} data-testid="fps-readout" aria-label="Кадров в секунду">
       <strong data-testid="fps-value">{formatFps(fps)}</strong> FPS
@@ -95,16 +98,14 @@ export function FpsReadout({
           <strong>{spike}</strong> мс
         </span>
       )}
-      {stutter !== undefined && (
-        <span
-          className={stutterClassName(stutterShare)}
-          data-testid="frame-stutter"
-          aria-label="Доля рваных кадров за секунду"
-        >
-          {" · рывки "}
-          <strong>{stutter}</strong>%
-        </span>
-      )}
+      <span
+        className={stutterClassName(stutterShare)}
+        data-testid="frame-stutter"
+        aria-label="Доля рваных кадров за секунду"
+      >
+        {" · рывки "}
+        <strong>{formatStutterShare(stutterShare)}</strong>%
+      </span>
     </span>
   );
 }

@@ -61,9 +61,11 @@ describe("FpsReadout", () => {
     expect(stalled).toContain("alarming");
   });
 
-  it("says nothing about evenness while the picture is even", () => {
-    expect(formatStutterShare(0)).toBeUndefined();
-    expect(formatStutterShare(0.05)).toBeUndefined();
+  it("reads zero on an even picture rather than disappearing", () => {
+    // An instrument that hides at zero cannot be told from one that was never
+    // fitted — which is exactly how the first version of this landed.
+    expect(formatStutterShare(0)).toBe("0");
+    expect(formatStutterShare(0.05)).toBe("5");
   });
 
   it("names the share of frames that ran long once it is worth naming", () => {
@@ -85,5 +87,12 @@ describe("FpsReadout", () => {
     // third of them arriving late is what the eye actually complains about.
     expect(markup).toContain('data-testid="frame-stutter"');
     expect(markup).toContain("30");
+  });
+
+  it("keeps the badge on screen when nothing is stuttering", () => {
+    const markup = renderToStaticMarkup(<FpsReadout fps={60} worstFrameMs={0} stutterShare={0} />);
+
+    expect(markup).toContain('data-testid="frame-stutter"');
+    expect(markup).toContain(">0</strong>%");
   });
 });
