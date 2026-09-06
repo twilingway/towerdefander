@@ -766,9 +766,10 @@ describe("SpaceshipDefenderRoom solo cockpit", () => {
     forceIntermission(room);
 
     const upgrade = room.state.game.teamUpgrade;
-    if (!upgrade.hasOffer) throw new Error("Expected an upgrade offer.");
-    const [card] = upgrade.offer.cards;
-    if (upgrade.offer.cards.length === 0) throw new Error("Expected a card.");
+    if (!upgrade.hasOffer || upgrade.offer.cards.length === 0) {
+      throw new Error("Expected an upgrade offer.");
+    }
+    const card = upgrade.offer.cards.at(0);
 
     room.handleUpgradeVote(cockpit.client, {
       protocolVersion: PROTOCOL_VERSION,
