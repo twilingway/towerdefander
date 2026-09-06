@@ -10,6 +10,7 @@ import {
   ROOM_REFUSED_FOR_MAINTENANCE,
   ROOM_TYPE,
   clientMessage,
+  type UpgradeId,
   roomClosingSchema,
   serverLatencyProbeSchema,
   serverMessage,
@@ -18,9 +19,11 @@ import {
   type PublicShipCatalogue
 } from "@spaceship-defender/protocol";
 import {
+  createActionId,
   createDefaultGameServerUrl,
   formatLatency,
   isPreviewMode,
+  nextVoteRevision,
   PreviewPhaseButtons,
   PreviewShell,
   readStringEnvironment,
@@ -42,6 +45,7 @@ import { WeaponHeat } from "./WeaponHeat.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { SoloCockpit } from "./screens/SoloCockpit/index.js";
 import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
+import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
 import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
@@ -108,6 +112,8 @@ export function DisplayApp() {
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   /** Set when this page is also the pilot; undefined for an ordinary display. */
   const [cockpitPlayer, setCockpitPlayer] = useState<string | undefined>(undefined);
+  /** Highest revision this screen has sent; the server refuses a repeat. */
+  const cockpitVoteRevision = useRef(0);
   // Read once: it is a device preference, and re-reading storage every render
   // would answer the same question a hundred times a second.
   const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
@@ -155,6 +161,24 @@ export function DisplayApp() {
       roomReference.current?.send(type, payload);
     }
   });
+
+  /*
+   * Keyboard and mouse, wired to the very same handlers the sticks drive, so
+   * nothing downstream learns which one gave the order. The ship's place on
+   * screen is read from the canvas host's box, which is what the mouse bearing
+   * has to be measured from.
+   */
+  useCockpitKeyboard({
+    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    shipScreenPoint: () => {
+      const host = document.querySelector(".battlefield-shell");
+      if (host === null) return null;
+      const box = host.getBoundingClientRect();
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    },
+    ...cockpitControls
+  });
+
   // The readouts move into the letterbox on glass that leaves enough of one;
   // the frame is the camera's, so the arithmetic is the camera's too.
   const bars = useLetterboxBars(
@@ -227,6 +251,34 @@ export function DisplayApp() {
     cockpitPlayer === undefined
       ? undefined
       : view?.players.find((player) => player.playerId === roomReference.current?.sessionId);
+
+  /**
+   * The cockpit's vote. Optimism and revisions are the controller's problem to
+   * repeat: the room deduplicates on `actionId` and keeps the accepted revision
+   * per role, so a retry is safe and a stale number is refused rather than
+   * double-charged.
+   */
+  function sendCockpitVote(upgradeId: UpgradeId): void {
+    const room = roomReference.current;
+    const offer = view?.game?.teamUpgrade.offer;
+    if (room === undefined || view === undefined || cockpitSeat === undefined || offer == null) {
+      return;
+    }
+    const accepted = view.game?.teamUpgrade.votes[cockpitSeat.role]?.revision ?? 0;
+    const revision = nextVoteRevision(accepted, cockpitVoteRevision.current);
+    cockpitVoteRevision.current = revision;
+    room.send(clientMessage.upgradeVote, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: cockpitSeat.playerId,
+      runNumber: view.runNumber,
+      actionId: createActionId(),
+      waveNumber: offer.waveNumber,
+      offerId: offer.offerId,
+      upgradeId,
+      revision
+    });
+  }
 
   function sendCockpitReady(): void {
     const room = roomReference.current;
@@ -519,6 +571,9 @@ export function DisplayApp() {
               waveNumber={view.game.encounter.waveNumber}
               phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
               purchasedModules={view.game.purchasedModules}
+              {...(cockpitSeat === undefined
+                ? {}
+                : { cockpit: { role: cockpitSeat.role, onVote: sendCockpitVote } })}
             />
           )}
           {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (

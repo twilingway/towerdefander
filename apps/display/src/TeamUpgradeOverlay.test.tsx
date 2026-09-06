@@ -1,6 +1,6 @@
 import type { PublicTeamUpgradeView } from "@spaceship-defender/protocol";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 
@@ -115,5 +115,39 @@ describe("TeamUpgradeOverlay", () => {
 
     expect(markup).toContain("Сервер готовит карточки…");
     expect(markup).not.toContain("intermission-card");
+  });
+
+  it("leaves the cards unclickable for an ordinary shared screen", () => {
+    const markup = renderToStaticMarkup(
+      <TeamUpgradeOverlay
+        teamUpgrade={teamUpgrade}
+        credits={10}
+        score={100}
+        waveNumber={2}
+        phaseTicksRemaining={120}
+        purchasedModules={[]}
+      />
+    );
+
+    expect(markup).not.toContain("intermission-card__choice");
+  });
+
+  it("lets a cockpit take a card, because voting is a seat's gesture", () => {
+    const markup = renderToStaticMarkup(
+      <TeamUpgradeOverlay
+        teamUpgrade={teamUpgrade}
+        credits={10}
+        score={100}
+        waveNumber={2}
+        phaseTicksRemaining={120}
+        purchasedModules={[]}
+        cockpit={{ role: "pilot", onVote: vi.fn() }}
+      />
+    );
+
+    // The display's card list has always been a view; a solo player could read
+    // the offer and never take it.
+    expect(markup).toContain("intermission-card__choice");
+    expect(markup).toContain("cockpit-vote-");
   });
 });

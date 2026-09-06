@@ -2149,3 +2149,22 @@ p {
     display: none;
   }
 }
+
+/* A card the cockpit can take. It keeps the card's own look — the button is
+   there for the tap target and the pressed state, not for a second style. */
+.intermission-card__choice {
+  display: grid;
+  width: 100%;
+  gap: 0.2rem;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+}
+
+.intermission-card__choice[aria-pressed="true"] {
+  outline: 2px solid #7ed6ff;
+  outline-offset: 4px;
+}

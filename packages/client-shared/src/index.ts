@@ -41,3 +41,6 @@ export {
   smoothHeadingVector
 } from "./control/headingSmoother.js";
 export type { HeadingSmoothingOptions } from "./control/headingSmoother.js";
+export { keepVoteIntent, nextVoteRevision } from "./upgrades/voteIntent.js";
+export type { VoteIntent, VoteProjection } from "./upgrades/voteIntent.js";
+export { createActionId } from "./upgrades/actionId.js";
