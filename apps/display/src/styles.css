@@ -1824,3 +1824,25 @@ p {
   border-color: rgba(126, 214, 255, 0.6);
   color: #d6f2ff;
 }
+
+/* No code to scan when the screen is the pilot, so the card carries the one
+   control the run is waiting on instead. */
+.join-card--cockpit {
+  display: block;
+}
+
+.cockpit-ready {
+  margin: 0.75rem 0 0.5rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(126, 214, 255, 0.6);
+  background: rgba(22, 62, 88, 0.75);
+  color: #d6f2ff;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.cockpit-ready:disabled {
+  opacity: 0.6;
+}

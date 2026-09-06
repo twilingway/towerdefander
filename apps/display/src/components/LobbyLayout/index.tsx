@@ -7,23 +7,54 @@ import { FullscreenButton } from "../FullscreenButton/index.js";
 interface LobbyLayoutProps {
   readonly view: DisplayRoomView;
   readonly joinUrl: string;
+  /**
+   * Present when this screen is also the pilot. There is then nobody to scan
+   * the code — the seat is already taken by the device showing it — so the
+   * card becomes the one control the run is actually waiting on.
+   */
+  readonly cockpit?: {
+    readonly ready: boolean;
+    readonly onReady: () => void;
+  };
 }
 
 /** The join QR code and the crew roster, side by side above the stage. */
-export function LobbyLayout({ view, joinUrl }: LobbyLayoutProps) {
+export function LobbyLayout({ view, joinUrl, cockpit }: LobbyLayoutProps) {
   const seats = CREW_ROLES.slice(0, view.crewSize);
   const autopilotRoles = CREW_ROLES.slice(view.crewSize);
   return (
     <section className={`lobby-layout ${view.game === null ? "" : "lobby-layout--battle"}`}>
-      <div className="join-card">
-        <QRCodeSVG value={joinUrl} size={180} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
-        <div>
-          <h2>{joinHeading(view.crewSize)}</h2>
-          <p>{joinHint(view.crewSize)}</p>
-          <a href={joinUrl}>{joinUrl}</a>
-          <FullscreenButton />
+      {cockpit === undefined ? (
+        <div className="join-card">
+          <QRCodeSVG value={joinUrl} size={180} bgColor="#f6f4e8" fgColor="#10201f" level="M" />
+          <div>
+            <h2>{joinHeading(view.crewSize)}</h2>
+            <p>{joinHint(view.crewSize)}</p>
+            <a href={joinUrl}>{joinUrl}</a>
+            <FullscreenButton />
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="join-card join-card--cockpit">
+          <div>
+            <h2>Вы за штурвалом</h2>
+            <p>
+              Корабль и турель — с этого экрана. Щитом управляет автопилот. Разверните телефон
+              поперёк и нажмите «Готов».
+            </p>
+            <button
+              type="button"
+              className="cockpit-ready"
+              data-testid="cockpit-ready"
+              onClick={cockpit.onReady}
+              disabled={cockpit.ready}
+            >
+              {cockpit.ready ? "Ждём старта…" : "Готов"}
+            </button>
+            <FullscreenButton />
+          </div>
+        </div>
+      )}
       <div className="players-card">
         <h2>
           Экипаж · {view.players.length}/{view.crewSize}

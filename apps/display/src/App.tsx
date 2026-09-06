@@ -218,6 +218,26 @@ export function DisplayApp() {
     []
   );
 
+  /** The seat this page holds when it is also the pilot. */
+  const cockpitSeat =
+    cockpitPlayer === undefined
+      ? undefined
+      : view?.players.find((player) => player.playerId === roomReference.current?.sessionId);
+
+  function sendCockpitReady(): void {
+    const room = roomReference.current;
+    if (room === undefined || view === undefined || cockpitSeat === undefined) return;
+    room.send(clientMessage.ready, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: cockpitSeat.playerId,
+      runNumber: view.runNumber
+    });
+    // Fullscreen is not asked for here: the card already carries the button,
+    // and this screen's helper toggles rather than requests, so a player who
+    // went fullscreen first would be thrown back out by pressing Готов.
+  }
+
   async function createRoom(
     crewSize: CrewSize,
     shipArchetypeId: string | undefined,
@@ -397,11 +417,26 @@ export function DisplayApp() {
         secondsRemaining={view.maintenanceSecondsRemaining}
       />
 
-      <LobbyLayout view={view} joinUrl={joinUrl} />
+      <LobbyLayout
+        view={view}
+        joinUrl={joinUrl}
+        {...(cockpitPlayer === undefined
+          ? {}
+          : {
+              cockpit: {
+                ready: cockpitSeat?.ready === true,
+                onReady: sendCockpitReady
+              }
+            })}
+      />
 
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
-          <span>Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»</span>
+          <span>
+            {cockpitPlayer === undefined
+              ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
+              : "Полёт начнётся, когда вы нажмёте «Готов»"}
+          </span>
         </section>
       ) : (
         <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
