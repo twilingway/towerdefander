@@ -673,7 +673,10 @@ export const publicHelmViewSchema = z
     driveDeadzoneShare: finite.min(0),
     aimDeadzoneShare: finite.min(0),
     driveZoneShare: finite.positive(),
-    aimProjectionShare: finite.positive()
+    aimProjectionShare: finite.positive(),
+    headingDeadbandRadians: finite.min(0),
+    headingFilterSeconds: finite.min(0),
+    turretLeadRadians: finite.positive()
   })
   .strict();
 export type PublicHelmView = z.infer<typeof publicHelmViewSchema>;

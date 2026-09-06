@@ -12,12 +12,6 @@ import {
 import { PROTOCOL_VERSION, clientMessage } from "@spaceship-defender/protocol";
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
-/**
- * How far off the gun has to be for the traverse to be asked for in full. The
- * hull's own lead is 0.45 rad and this is the same idea on the same feel.
- */
-const TRAVERSE_LEAD_RADIANS = 0.45;
-
 /** Shortest signed way round, in (-PI, PI]. */
 function shortestArc(from: number, to: number): number {
   const TAU = Math.PI * 2;
@@ -50,6 +44,10 @@ export interface SoloCockpitWorld {
   readonly cannonReach: number;
   /** Where the gun is pointing right now, straight from the snapshot. */
   readonly turretAngle: number;
+  /** The tremble guard and the traverse lead, all three from the preset. */
+  readonly headingDeadbandRadians: number;
+  readonly headingFilterSeconds: number;
+  readonly turretLeadRadians: number;
 }
 
 export interface SoloCockpitOptions {
@@ -197,6 +195,16 @@ export function useSoloCockpit({
     return Math.min(0.25, Math.max(0, (now - previous) / 1000));
   }
 
+  /** The guard as the preset states it; built-ins stand in until it arrives. */
+  function smoothingOptions(): { deadbandRadians?: number; tauSeconds?: number } {
+    const world = assistReference.current.world;
+    if (world === undefined) return {};
+    return {
+      deadbandRadians: world.headingDeadbandRadians,
+      tauSeconds: world.headingFilterSeconds
+    };
+  }
+
   function anyCannonSpurDown(): boolean {
     const spurs = cannonSpursReference.current;
     return spurs.stick || spurs.trigger;
@@ -276,7 +284,12 @@ export function useSoloCockpit({
        * IS the throttle — and the strength is the figure that already had the
        * dead zone taken out of it.
        */
-      const smoothed = smoothHeadingVector(driveHeadingReference.current, vector, stepSeconds());
+      const smoothed = smoothHeadingVector(
+        driveHeadingReference.current,
+        vector,
+        stepSeconds(),
+        smoothingOptions()
+      );
       if (smoothed === null) {
         updatePilot({ vector: NEUTRAL });
         return;
@@ -290,7 +303,12 @@ export function useSoloCockpit({
       updatePilot({ vector: NEUTRAL });
     },
     onAim: (vector) => {
-      const smoothed = smoothHeadingVector(aimHeadingReference.current, vector, stepSeconds());
+      const smoothed = smoothHeadingVector(
+        aimHeadingReference.current,
+        vector,
+        stepSeconds(),
+        smoothingOptions()
+      );
       if (smoothed === null) {
         updateGunner({ aim: NEUTRAL, turn: 0 });
         return;
@@ -321,7 +339,7 @@ export function useSoloCockpit({
       const difference = shortestArc(world.turretAngle, wanted);
       updateGunner({
         aim: { x: smoothed.x, y: smoothed.y },
-        turn: Math.max(-1, Math.min(1, difference / TRAVERSE_LEAD_RADIANS))
+        turn: Math.max(-1, Math.min(1, difference / Math.max(0.05, world.turretLeadRadians)))
       });
     },
     onAimRelease: () => {

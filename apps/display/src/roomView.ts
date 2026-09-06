@@ -147,6 +147,9 @@ interface NetworkGameState {
     aimDeadzoneShare: number;
     driveZoneShare: number;
     aimProjectionShare: number;
+    headingDeadbandRadians: number;
+    headingFilterSeconds: number;
+    turretLeadRadians: number;
   };
   rimBandWidth: number;
   spaceship: PublicSpaceshipView;

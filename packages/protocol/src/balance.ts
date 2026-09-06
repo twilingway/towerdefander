@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 35 as const;
+export const BALANCE_FILE_VERSION = 36 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34
+  28, 29, 30, 31, 32, 33, 34, 35
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -493,7 +493,22 @@ export const helmTuningSchema = z
      * the larger view dimension. It decides how much of the frame a full push
      * reaches, so it belongs with the frame and not with the arena.
      */
-    aimProjectionShare: z.number().min(0.1).max(1)
+    aimProjectionShare: z.number().min(0.1).max(1),
+    /**
+     * Below this the stick is not steering, it is shaking. A thumb is never
+     * still: two pixels of slip on the ring is a couple of degrees of commanded
+     * heading, and the hull follows it faithfully — measured in the lab at 4.58
+     * degrees of swing, with the gun riding the hull and trembling with it.
+     */
+    headingDeadbandRadians: z.number().min(0).max(0.35),
+    /** Ease on what survives the dead band. Zero sends the raw bearing. */
+    headingFilterSeconds: z.number().min(0).max(0.5),
+    /**
+     * How far off the gun must be before the cockpit asks for a full traverse.
+     * The turret's answer to `headingLeadRadians`, and the same idea: the stick
+     * names a direction, the rate is the distance to it.
+     */
+    turretLeadRadians: z.number().min(0.05).max(1.5)
   })
   .strict();
 export type HelmTuning = z.infer<typeof helmTuningSchema>;

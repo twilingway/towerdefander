@@ -57,7 +57,11 @@ const DEFAULT_HELM: HelmTuning = {
   /** The coop panels draw their own zones; only the cockpit reads this. */
   driveZoneShare: 0.42,
   /** Only the cockpit projects an aim point; the coop panels ignore it. */
-  aimProjectionShare: 0.58
+  aimProjectionShare: 0.58,
+  // Three degrees and sixty milliseconds, both straight out of the lab.
+  headingDeadbandRadians: (3 * Math.PI) / 180,
+  headingFilterSeconds: 0.06,
+  turretLeadRadians: 0.45
 };
 
 /**

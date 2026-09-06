@@ -109,6 +109,9 @@ interface NetworkGameState {
     aimDeadzoneShare: number;
     driveZoneShare: number;
     aimProjectionShare: number;
+    headingDeadbandRadians: number;
+    headingFilterSeconds: number;
+    turretLeadRadians: number;
   };
   encounter: {
     phase: EncounterPhase;

@@ -1,5 +1,5 @@
 {
-  "version": 35,
+  "version": 36,
   "activePresetId": "default",
   "presets": [
     {
@@ -3329,7 +3329,10 @@
           "driveDeadzoneShare": 0.12,
           "aimDeadzoneShare": 0.1,
           "driveZoneShare": 0.42,
-          "aimProjectionShare": 0.58
+          "aimProjectionShare": 0.58,
+          "headingDeadbandRadians": 0.05235987755982988,
+          "headingFilterSeconds": 0.06,
+          "turretLeadRadians": 0.45
         },
         "shipArchetypes": {
           "guardian": {
@@ -8042,7 +8045,10 @@
           "driveDeadzoneShare": 0.12,
           "aimDeadzoneShare": 0.1,
           "driveZoneShare": 0.42,
-          "aimProjectionShare": 0.58
+          "aimProjectionShare": 0.58,
+          "headingDeadbandRadians": 0.05235987755982988,
+          "headingFilterSeconds": 0.06,
+          "turretLeadRadians": 0.45
         },
         "shipArchetypes": {
           "guardian": {

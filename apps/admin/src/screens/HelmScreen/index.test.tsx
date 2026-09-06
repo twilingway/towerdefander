@@ -17,7 +17,10 @@ const HELM: HelmTuning = {
   driveDeadzoneShare: 0,
   aimDeadzoneShare: 0,
   driveZoneShare: 0.42,
-  aimProjectionShare: 0.58
+  aimProjectionShare: 0.58,
+  headingDeadbandRadians: 0.05236,
+  headingFilterSeconds: 0.06,
+  turretLeadRadians: 0.45
 };
 
 describe("HelmScreen", () => {
@@ -32,7 +35,10 @@ describe("HelmScreen", () => {
           driveDeadzoneShare: 0,
           aimDeadzoneShare: 0,
           driveZoneShare: 0.42,
-          aimProjectionShare: 0.58
+          aimProjectionShare: 0.58,
+          headingDeadbandRadians: 0.05236,
+          headingFilterSeconds: 0.06,
+          turretLeadRadians: 0.45
         })}
         onChange={vi.fn()}
       />

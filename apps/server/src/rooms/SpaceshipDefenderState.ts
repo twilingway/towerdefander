@@ -75,6 +75,9 @@ export class HelmState extends Schema {
   @type("float32") aimDeadzoneShare = 0;
   @type("float32") driveZoneShare = 0.42;
   @type("float32") aimProjectionShare = 0.58;
+  @type("float32") headingDeadbandRadians = 0.05236;
+  @type("float32") headingFilterSeconds = 0.06;
+  @type("float32") turretLeadRadians = 0.45;
 }
 
 export class ShieldState extends Schema {

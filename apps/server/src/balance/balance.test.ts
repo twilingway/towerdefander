@@ -649,17 +649,21 @@ describe("version 1 migration", () => {
     expect(base?.turretMountedOnHull).toBe(false);
   });
 
-  it("gives a version 34 document the turret mount and stick geometry, waves intact", async () => {
+  it("gives a version 35 document the tremble guard, waves intact", async () => {
     const filePath = await temporaryPresetPath();
     const tuning: Record<string, unknown> = { ...createDefaultTuning() };
-    // Version 34 had neither: the gun always held a world bearing, and the
-    // stick's dead zone lived in the controller source.
+    // Version 34 had none of the cockpit's settings at all; version 35 had the
+    // stick geometry but not the guard that keeps a thumb from shaking the
+    // hull. A saved document of either shape must gain what it lacks.
     delete tuning.turretMountedOnHull;
     const helm = { ...(tuning.helm as Record<string, unknown>) };
     delete helm.driveDeadzoneShare;
     delete helm.aimDeadzoneShare;
     delete helm.driveZoneShare;
     delete helm.aimProjectionShare;
+    delete helm.headingDeadbandRadians;
+    delete helm.headingFilterSeconds;
+    delete helm.turretLeadRadians;
     tuning.helm = helm;
     const waves = [
       {
@@ -682,7 +686,7 @@ describe("version 1 migration", () => {
     await writeFile(
       filePath,
       JSON.stringify({
-        version: 34,
+        version: 35,
         activePresetId: "operator",
         presets: [{ id: "operator", name: "Operator", tuning }]
       }),
@@ -700,6 +704,8 @@ describe("version 1 migration", () => {
     expect(saved?.turretMountedOnHull).toBe(false);
     expect(saved?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
     expect(saved?.helm.driveZoneShare).toBe(0.42);
+    expect(saved?.helm.headingFilterSeconds).toBeCloseTo(0.06, 5);
+    expect(saved?.helm.turretLeadRadians).toBeCloseTo(0.45, 5);
     // And the point of every one of these tests: the campaign survived.
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });

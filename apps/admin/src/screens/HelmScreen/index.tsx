@@ -93,6 +93,19 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
             как далеко впереди корабля соло-кокпит ставит точку прицела при полном отклонении стика,
             долей большей стороны кадра
           </dd>
+          <dt>Мёртвая полоса и фильтр курса</dt>
+          <dd>
+            палец никогда не стоит на месте: два пикселя проскальзывания по кольцу — это пара
+            градусов запрошенного курса, и корпус их честно отрабатывает. Полоса выбрасывает то, что
+            меньше её, фильтр сглаживает остальное. Мёртвая зона тут не помогает — она про малое
+            отклонение, а это про шум направления при большом
+          </dd>
+          <dt>Опережение башни</dt>
+          <dd>
+            насколько далеко должна отстоять цель, чтобы кокпит запросил полную скорость привода.
+            Стик называет направление, а скорость — это расстояние до него: держишь — башня
+            доворачивает и встаёт, отпустил — останавливается сразу
+          </dd>
           <dt>Башня на корпусе</dt>
           <dd>
             <b>единственное поле этой вкладки, которое читает симуляция.</b> Включено — корпус везёт
@@ -172,6 +185,33 @@ export function HelmScreen({ tuning, onChange }: HelmScreenProps) {
           fraction={tuning.helm.aimProjectionShare}
           onChange={(aimProjectionShare) => {
             patch({ aimProjectionShare: clamp(aimProjectionShare, 0.1, 1) });
+          }}
+        />
+      </div>
+
+      <h3 className="card__subtitle">Дрожание пальца</h3>
+      <div className="grid">
+        <DegreesField
+          caption="Мёртвая полоса курса, °"
+          radians={tuning.helm.headingDeadbandRadians}
+          onChange={(headingDeadbandRadians) => {
+            patch({ headingDeadbandRadians: clamp(headingDeadbandRadians, 0, 0.35) });
+          }}
+        />
+        <NumberField
+          caption="Фильтр курса, с"
+          value={tuning.helm.headingFilterSeconds}
+          step={0.01}
+          min={0}
+          onChange={(headingFilterSeconds) => {
+            patch({ headingFilterSeconds: clamp(headingFilterSeconds, 0, 0.5) });
+          }}
+        />
+        <DegreesField
+          caption="Опережение башни, °"
+          radians={tuning.helm.turretLeadRadians}
+          onChange={(turretLeadRadians) => {
+            patch({ turretLeadRadians: clamp(turretLeadRadians, 0.05, 1.5) });
           }}
         />
       </div>

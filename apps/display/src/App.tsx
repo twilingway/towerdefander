@@ -142,7 +142,10 @@ export function DisplayApp() {
             targets: view.game.enemyShips,
             obstacles: view.game.obstacles,
             cannonReach: view.game.cannon.reach,
-            turretAngle: view.game.turretAngle
+            turretAngle: view.game.turretAngle,
+            headingDeadbandRadians: view.game.helm.headingDeadbandRadians,
+            headingFilterSeconds: view.game.helm.headingFilterSeconds,
+            turretLeadRadians: view.game.helm.turretLeadRadians
           },
     roomId: view?.roomId ?? "",
     playerId: roomReference.current?.sessionId ?? "",
