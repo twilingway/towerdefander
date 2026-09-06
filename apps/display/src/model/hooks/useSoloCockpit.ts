@@ -28,12 +28,21 @@ interface PilotStream {
 interface GunnerStream {
   readonly aim: ControlVector;
   readonly firing: boolean;
-  /** Requested traverse; null while the stick is not asking for one. */
-  readonly turn: number | null;
+  /**
+   * The bearing the thumb is asking for, or null for "stop".
+   *
+   * Deliberately not a rate. A rate computed where the thumb moved freezes the
+   * moment the thumb stops moving — no pointermove, no recalculation — and the
+   * heartbeat then repeats that stale full-speed order until the turret has
+   * gone all the way round and round. Holding a stick still is the most
+   * ordinary thing a player does, so the rate is worked out at send time
+   * instead, against the gun's angle as it is by then.
+   */
+  readonly aimHeading: number | null;
 }
 
 const NEUTRAL_PILOT: PilotStream = { vector: NEUTRAL, mgFiring: false };
-const NEUTRAL_GUNNER: GunnerStream = { aim: NEUTRAL, firing: false, turn: 0 };
+const NEUTRAL_GUNNER: GunnerStream = { aim: NEUTRAL, firing: false, aimHeading: null };
 
 /** What the assist needs to see. Absent while there is no snapshot yet. */
 export interface SoloCockpitWorld {
@@ -165,8 +174,7 @@ export function useSoloCockpit({
         // moment before the bearing leaves.
         aim: resolveAim(value),
         firing: value.firing,
-        // Zero is a real order — "stop" — so it travels like any other.
-        ...(value.turn === null ? {} : { turn: value.turn })
+        turn: resolveTraverse(value)
       });
     })
   );
@@ -193,6 +201,24 @@ export function useSoloCockpit({
     lastSampleAtReference.current = now;
     if (previous === null) return 0;
     return Math.min(0.25, Math.max(0, (now - previous) / 1000));
+  }
+
+  /**
+   * How fast to swing the gun, worked out against where it is right now.
+   *
+   * Zero when the stick is at rest, which is an order in its own right: stop.
+   * Otherwise it is the angle still to go over the lead, so the rate falls away
+   * as the gun arrives and the turret settles instead of hunting past it.
+   */
+  function resolveTraverse(value: GunnerStream): number {
+    if (value.aimHeading === null) return 0;
+    const snapshot = assistReference.current.world;
+    if (snapshot === undefined) return 0;
+    const assisted = resolveAim(value);
+    const wanted =
+      assisted.x === 0 && assisted.y === 0 ? value.aimHeading : Math.atan2(assisted.y, assisted.x);
+    const difference = shortestArc(snapshot.turretAngle, wanted);
+    return Math.max(-1, Math.min(1, difference / Math.max(0.05, snapshot.turretLeadRadians)));
   }
 
   /** The guard as the preset states it; built-ins stand in until it arrives. */
@@ -303,44 +329,25 @@ export function useSoloCockpit({
       updatePilot({ vector: NEUTRAL });
     },
     onAim: (vector) => {
-      const smoothed = smoothHeadingVector(
-        aimHeadingReference.current,
-        vector,
-        stepSeconds(),
-        smoothingOptions()
-      );
-      if (smoothed === null) {
-        updateGunner({ aim: NEUTRAL, turn: 0 });
-        return;
-      }
-      aimHeadingReference.current = smoothed.heading;
       /*
-       * The stick asks for a traverse, not a bearing.
+       * No smoothing here, unlike the drive stick.
        *
-       * It still names a direction, so the rate is how far the gun is from it:
-       * hold the stick and the gun closes and settles, let go and the zero
-       * below stops it dead. Naming the bearing instead meant naming the
-       * authoritative angle, already a patch plus a ping old, and the gun
-       * sprang back to it the moment the thumb came up.
-       *
-       * The lead is the hull's own: past it the traverse is simply full.
+       * The lab filters one heading and one only — the drive stick's, in
+       * `_updateDrive`. The aim path has no filter at all, and adding one was
+       * my own idea: on a gun that is already rate-limited by its traverse it
+       * buys nothing and costs the thumb its directness. The dead zone still
+       * applies, because that comes from the stick itself.
        */
-      const world = assistReference.current.world;
-      if (world === undefined) {
-        updateGunner({ aim: { x: smoothed.x, y: smoothed.y }, turn: null });
+      if (vector.x === 0 && vector.y === 0) {
+        aimHeadingReference.current = null;
+        updateGunner({ aim: NEUTRAL, aimHeading: null });
         return;
       }
-      const assisted = resolveAim({
-        aim: { x: smoothed.x, y: smoothed.y },
-        firing: true,
-        turn: null
-      });
-      const wanted = Math.atan2(assisted.y, assisted.x);
-      const difference = shortestArc(world.turretAngle, wanted);
-      updateGunner({
-        aim: { x: smoothed.x, y: smoothed.y },
-        turn: Math.max(-1, Math.min(1, difference / Math.max(0.05, world.turretLeadRadians)))
-      });
+      const heading = Math.atan2(vector.y, vector.x);
+      aimHeadingReference.current = heading;
+      // Only the request travels from here. The rate that serves it is worked
+      // out at send time, where the gun's own angle is fresh.
+      updateGunner({ aim: { x: vector.x, y: vector.y }, aimHeading: heading });
     },
     onAimRelease: () => {
       /*
@@ -354,9 +361,9 @@ export function useSoloCockpit({
        * than a zero, because a zero means "keep the old target".
        */
       aimHeadingReference.current = null;
-      // Zero is the order to stop, and it needs no knowledge of where the gun
-      // actually is — which is the whole reason the intent exists.
-      updateGunner({ aim: NEUTRAL, turn: 0 });
+      // Stop, and stopping needs no knowledge of where the gun actually is —
+      // which is the whole reason the intent exists.
+      updateGunner({ aim: NEUTRAL, aimHeading: null });
     },
     onMachineGunHold: (held) => {
       updatePilot({ mgFiring: held });
