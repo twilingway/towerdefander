@@ -141,6 +141,7 @@ export function DisplayApp() {
    * The generation is the controller's own recipe — a new run or a new
    * connection restarts the sequences the room watermarks.
    */
+  const predictedAngles = useRef<{ heading: number; turretAngle: number } | undefined>(undefined);
   const cockpitControls = useSoloCockpit({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
     aimAssistEnabled: aimAssist,
@@ -176,7 +177,6 @@ export function DisplayApp() {
    * the runtime interpolates between predicted samples instead of authoritative
    * ones — the ping and the playback buffer drop out of the angles.
    */
-  const predictedAngles = useRef<{ heading: number; turretAngle: number } | undefined>(undefined);
   useCockpitPrediction({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
     drive:

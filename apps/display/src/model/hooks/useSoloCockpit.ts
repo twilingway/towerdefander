@@ -12,11 +12,6 @@ import {
 import { PROTOCOL_VERSION, clientMessage } from "@spaceship-defender/protocol";
 
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
-/** Shortest signed way round, in (-PI, PI]. */
-function shortestArc(from: number, to: number): number {
-  const TAU = Math.PI * 2;
-  return ((((to - from + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
-}
 /** Same cadence the controller flushes at; the scheduler decides what leaves. */
 const FLUSH_MS = 25;
 
@@ -112,7 +107,8 @@ export interface SoloCockpitControls {
   readonly readPrediction: () => {
     readonly hullTurn: number | null;
     readonly hullTargetAngle: number | null;
-    readonly turretTurn: number;
+    readonly turretTurn: number | null;
+    readonly turretTargetAngle: number | null;
   };
 }
 
@@ -207,7 +203,9 @@ export function useSoloCockpit({
         // moment before the bearing leaves.
         aim: resolveAim(value),
         firing: value.firing,
-        turn: resolveTraverse(value)
+        // Sent only to stop the gun; while it is being aimed the bearing above
+        // is the whole order, and the core's traverse law serves it.
+        ...(resolveTraverse(value) === null ? {} : { turn: 0 })
       });
     })
   );
@@ -237,36 +235,21 @@ export function useSoloCockpit({
   }
 
   /**
-   * How fast to swing the gun, worked out against where it is right now.
+   * Whether the gun is being commanded to stop, or left to the core's own law.
    *
-   * Zero when the stick is at rest, which is an order in its own right: stop.
-   * Otherwise it is the angle still to go over the lead, so the rate falls away
-   * as the gun arrives and the turret settles instead of hunting past it.
+   * A rate was tried here and was the wrong instrument: proportional to the
+   * error, ramped by acceleration, refreshed twenty times a second and a ping
+   * behind, it is a lagging P-controller — it overshoots the bearing and hunts
+   * around it, which is the spinning and the over-turning.
+   *
+   * `advanceAngularTraverse` in the core already does this properly: it carries
+   * the braking bound `sqrt(2 * braking * remaining)` and lands exactly on the
+   * target without passing it. So a pushed stick names a bearing and lets that
+   * law run, and only a released one sends an intent — zero, meaning stop,
+   * which is the one thing a bearing cannot say.
    */
-  function resolveTraverse(value: GunnerStream): number {
-    if (value.aimHeading === null) return 0;
-    const snapshot = assistReference.current.world;
-    if (snapshot === undefined) return 0;
-    const assisted = resolveAim(value);
-    const named =
-      assisted.x === 0 && assisted.y === 0 ? value.aimHeading : Math.atan2(assisted.y, assisted.x);
-    /*
-     * The aim is a world bearing, mounted gun or not.
-     *
-     * Reading it off the nose was tried and was wrong: a mouse names a point on
-     * the glass and a thumb names a direction on it, so adding the hull's
-     * heading made the gun point at the cursor plus the ship's course — cursor
-     * due north with the hull at 2.04 rad put the barrel at 0.40 rather than
-     * -1.57. Measured, not argued.
-     *
-     * What the mount buys is the carry between orders, which the core already
-     * does: let the aim rest and the gun rides the chassis for free. What it
-     * cannot buy is keeping up while the aim is being commanded and the hull is
-     * turning — for that the drive simply has to outrun the hull, and no frame
-     * of reference substitutes for the rate.
-     */
-    const difference = shortestArc(snapshot.turretAngle, named);
-    return Math.max(-1, Math.min(1, difference / Math.max(0.05, snapshot.turretLeadRadians)));
+  function resolveTraverse(value: GunnerStream): number | null {
+    return value.aimHeading === null ? 0 : null;
   }
 
   /** The guard as the preset states it; built-ins stand in until it arrives. */
@@ -443,7 +426,8 @@ export function useSoloCockpit({
       // one, a bearing to chase when the stick did.
       hullTurn: pilotReference.current.turn,
       hullTargetAngle: hullTargetReference.current,
-      turretTurn: resolveTraverse(gunnerReference.current)
+      turretTurn: resolveTraverse(gunnerReference.current),
+      turretTargetAngle: gunnerReference.current.aimHeading
     })
   };
 }

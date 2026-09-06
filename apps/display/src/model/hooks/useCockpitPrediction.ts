@@ -41,8 +41,10 @@ export interface PredictionInputs {
   readonly hullTurn: number | null;
   /** The bearing the pilot's stick names, when it names one. */
   readonly hullTargetAngle: number | null;
-  /** Requested traverse in `[-1, 1]`. Zero is an order: stop. */
-  readonly turretTurn: number;
+  /** Zero means stop; null leaves the gun to chase the bearing below. */
+  readonly turretTurn: number | null;
+  /** The bearing the gun is being aimed at, when one is being named. */
+  readonly turretTargetAngle: number | null;
 }
 
 export interface PredictedAngles {
@@ -163,16 +165,29 @@ export function useCockpitPrediction({
       hull.angle = advancedHull.angle;
       hull.angularVelocity = advancedHull.angularVelocity;
 
-      const advancedTurret = advanceAngularRate(
-        { angle: turret.angle, angularVelocity: turret.angularVelocity },
-        inputs.turretTurn,
-        {
-          maxAngularSpeed: config.turretAngularMaxSpeed,
-          angularAcceleration: config.turretAngularAcceleration,
-          angularBraking: config.turretAngularBraking,
-          secondsPerStep: seconds
-        }
-      );
+      const turretConfig = {
+        maxAngularSpeed: config.turretAngularMaxSpeed,
+        angularAcceleration: config.turretAngularAcceleration,
+        angularBraking: config.turretAngularBraking,
+        secondsPerStep: seconds
+      };
+      // The same fork the core takes: a bearing runs the traverse law, an
+      // intent runs the rate. Predicting with the other one guarantees drift.
+      const advancedTurret =
+        inputs.turretTurn === null
+          ? advanceAngularTraverse(
+              {
+                angle: turret.angle,
+                targetAngle: inputs.turretTargetAngle,
+                angularVelocity: turret.angularVelocity
+              },
+              turretConfig
+            )
+          : advanceAngularRate(
+              { angle: turret.angle, angularVelocity: turret.angularVelocity },
+              inputs.turretTurn,
+              turretConfig
+            );
       turret.angle = advancedTurret.angle;
       turret.angularVelocity = advancedTurret.angularVelocity;
 
