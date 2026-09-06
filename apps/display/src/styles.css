@@ -1686,9 +1686,14 @@ p {
    only the two zones and the buttons take pointer events, so a tap anywhere
    else still reaches whatever is underneath. */
 .solo-cockpit {
+  --cockpit-drive-ring: 7.25rem;
+  --cockpit-aim-ring: 5.75rem;
+  --cockpit-band: calc(var(--cockpit-drive-ring) + 1.25rem);
   position: absolute;
+  /* Above the HUD cards and the radar, which own the same band and carry
+     z-index 25. Underneath them the sticks were simply invisible. */
+  z-index: 26;
   inset: 0;
-  z-index: 3;
   pointer-events: none;
   display: grid;
   /* Thumbs live at the bottom corners and the triggers between them. Anything
@@ -1704,13 +1709,24 @@ p {
    beside the ring still takes the stick, and the anchor stays at the ring so
    the first pixel of travel does not jump. Sized off the smaller axis, or a
    short landscape window makes it taller than the screen. */
+/* The ring is the size STEEL VOID draws it — 116 px for the drive stick, 92 for
+   the aim stick (DRIVE_STICK_BASE_RADIUS 58, AIM_STICK_BASE_RADIUS 46). A thumb
+   is the same size on every phone, so this is one of the few places where a
+   fixed measurement is the right one and a viewport share is not. */
+.display-shell--cockpit {
+  --cockpit-drive-ring: 7.25rem;
+  --cockpit-aim-ring: 5.75rem;
+  --cockpit-band: calc(var(--cockpit-drive-ring) + 1.25rem);
+}
+
 .solo-cockpit .cockpit-stick {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  width: min(30vw, 30vh, 15rem);
-  height: min(30vw, 30vh, 15rem);
+  /* The grab zone: wider than the ring on purpose. */
+  width: calc(var(--cockpit-drive-ring) + 3rem);
+  height: calc(var(--cockpit-drive-ring) + 2rem);
   display: flex;
   align-items: flex-end;
 }
@@ -1723,6 +1739,13 @@ p {
   justify-content: flex-end;
 }
 
+/* The aim stick is the smaller of the two in the lab, and it is the one a
+   thumb rides rather than shoves. */
+.solo-cockpit .cockpit-stick--right .cockpit-stick__ring {
+  width: var(--cockpit-aim-ring);
+  height: var(--cockpit-aim-ring);
+}
+
 .solo-cockpit .cockpit-stick[aria-disabled="true"] {
   opacity: 0.35;
   pointer-events: none;
@@ -1730,8 +1753,8 @@ p {
 
 .cockpit-stick__ring {
   position: relative;
-  width: min(22vw, 22vh, 11rem);
-  height: min(22vw, 22vh, 11rem);
+  width: var(--cockpit-drive-ring);
+  height: var(--cockpit-drive-ring);
   border-radius: 50%;
   border: 2px solid rgba(126, 214, 255, 0.35);
   background: radial-gradient(circle, rgba(10, 30, 44, 0.55), rgba(6, 18, 28, 0.25));
@@ -1747,6 +1770,15 @@ p {
   border-radius: 50%;
   background: rgba(126, 214, 255, 0.55);
   box-shadow: 0 0 1.2rem rgba(126, 214, 255, 0.45);
+}
+
+.solo-cockpit__middle {
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 /* Side by side along the bottom, not stacked up the middle of the picture. */
@@ -1800,11 +1832,9 @@ p {
   position: relative;
 }
 
-/* A setting, not a spur: out of the corner where a thumb rests. */
+/* A setting, not a spur. It rides above the triggers rather than in a corner:
+   the top right belongs to the room header, and the bottom corners to thumbs. */
 .cockpit-assist {
-  position: absolute;
-  right: clamp(0.5rem, 2vw, 1.25rem);
-  top: clamp(0.5rem, 2vw, 1.25rem);
   pointer-events: auto;
   touch-action: manipulation;
   padding: 0.35rem 0.6rem;
@@ -1819,6 +1849,21 @@ p {
 .cockpit-assist[aria-pressed="true"] {
   border-color: rgba(126, 214, 255, 0.6);
   color: #d6f2ff;
+}
+
+/* The bottom band belongs to the thumbs now, so everything that used to live
+   there moves up by exactly the height they take. */
+.display-shell--cockpit .spaceship-hud {
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--cockpit-band));
+}
+
+.display-shell--cockpit .combat-radar {
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--cockpit-band));
+}
+
+/* A cockpit is a phone, and the shared-screen radar is sized for a wall. */
+.display-shell--cockpit {
+  --radar-size: clamp(7rem, 12vw, 10rem);
 }
 
 .cockpit-picker {

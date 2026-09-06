@@ -374,7 +374,7 @@ export function DisplayApp() {
   return (
     <main
       ref={shellReference}
-      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}
+      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
       data-bars={bars.placement}
       style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
     >

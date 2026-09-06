@@ -58,34 +58,36 @@ export function SoloCockpit({
         onChange={onDrive}
         onRelease={onDriveRelease}
       />
-      <button
-        type="button"
-        className="cockpit-assist"
-        aria-pressed={aimAssist}
-        data-testid="cockpit-assist"
-        onClick={() => {
-          onAimAssistChange(!aimAssist);
-        }}
-      >
-        Помощь {aimAssist ? "вкл" : "выкл"}
-      </button>
-      <div className="solo-cockpit__triggers">
-        <CockpitTrigger
-          testId="cockpit-trigger-mg"
-          label="Нос"
-          enabled={enabled}
-          heat={machineGunHeat}
-          overheated={machineGunOverheated}
-          onHoldChange={onMachineGunHold}
-        />
-        <CockpitTrigger
-          testId="cockpit-trigger-cannon"
-          label="Орудие"
-          enabled={enabled}
-          heat={cannonHeat}
-          overheated={cannonOverheated}
-          onHoldChange={onCannonFromTrigger}
-        />
+      <div className="solo-cockpit__middle">
+        <button
+          type="button"
+          className="cockpit-assist"
+          aria-pressed={aimAssist}
+          data-testid="cockpit-assist"
+          onClick={() => {
+            onAimAssistChange(!aimAssist);
+          }}
+        >
+          Помощь {aimAssist ? "вкл" : "выкл"}
+        </button>
+        <div className="solo-cockpit__triggers">
+          <CockpitTrigger
+            testId="cockpit-trigger-mg"
+            label="Нос"
+            enabled={enabled}
+            heat={machineGunHeat}
+            overheated={machineGunOverheated}
+            onHoldChange={onMachineGunHold}
+          />
+          <CockpitTrigger
+            testId="cockpit-trigger-cannon"
+            label="Орудие"
+            enabled={enabled}
+            heat={cannonHeat}
+            overheated={cannonOverheated}
+            onHoldChange={onCannonFromTrigger}
+          />
+        </div>
       </div>
       <CockpitStick
         side="right"
