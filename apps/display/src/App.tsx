@@ -188,7 +188,8 @@ export function DisplayApp() {
             hullAngularBraking: view.game.helm.hullAngularBrakingPerSecondSquared,
             turretAngularMaxSpeed: view.game.helm.turretAngularMaxSpeed,
             turretAngularAcceleration: view.game.helm.turretAngularAcceleration,
-            turretAngularBraking: view.game.helm.turretAngularBraking
+            turretAngularBraking: view.game.helm.turretAngularBraking,
+            turretMountedOnHull: view.game.helm.turretMountedOnHull
           },
     authoritative:
       view?.game == null

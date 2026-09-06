@@ -34,6 +34,14 @@ export interface PredictionDrive {
   readonly turretAngularMaxSpeed: number;
   readonly turretAngularAcceleration: number;
   readonly turretAngularBraking: number;
+  /**
+   * Whether the hull carries the gun. The core adds the step's heading delta to
+   * the turret before its traverse runs, and a predictor that does not do the
+   * same puts the gun where the server never had it: with the aim at rest the
+   * authoritative gun rides the chassis rigidly while the predicted one stands
+   * still, and the reconciliation drags it back and forth once per rock.
+   */
+  readonly turretMountedOnHull: boolean;
 }
 
 export interface PredictionInputs {
@@ -162,8 +170,14 @@ export function useCockpitPrediction({
               inputs.hullTurn,
               hullConfig
             );
+      // The hull's own travel this frame, which is what the chassis drags the
+      // gun by. Taken before the turret is advanced, exactly as the core does.
+      const hullCarry = config.turretMountedOnHull
+        ? shortestArc(hull.angle, advancedHull.angle)
+        : 0;
       hull.angle = advancedHull.angle;
       hull.angularVelocity = advancedHull.angularVelocity;
+      turret.angle += hullCarry;
 
       const turretConfig = {
         maxAngularSpeed: config.turretAngularMaxSpeed,
