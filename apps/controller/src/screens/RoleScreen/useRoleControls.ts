@@ -7,7 +7,7 @@ import {
   getNextShieldDesiredActive,
   LatestInputScheduler,
   type ControlVector
-} from "../../controlInput.js";
+} from "@spaceship-defender/client-shared";
 import { AIM_RELEASE_DELAY_MS, NEUTRAL_CONTROL, type ControlState } from "../../model/control.js";
 
 interface RoleControlsOptions {

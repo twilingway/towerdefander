@@ -10,7 +10,7 @@ import type {
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
 
-import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "../../controlInput.js";
+import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "@spaceship-defender/client-shared";
 import { VirtualStick } from "../../VirtualStick.js";
 import { readLocalStorage } from "../../model/browser.js";
 import type { ControlState } from "../../model/control.js";

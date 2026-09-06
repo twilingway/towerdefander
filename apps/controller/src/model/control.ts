@@ -1,4 +1,4 @@
-import type { ControlVector } from "../controlInput.js";
+import type { ControlVector } from "@spaceship-defender/client-shared";
 
 /** What one controller sends per tick, whatever role is driving it. */
 export interface ControlState {

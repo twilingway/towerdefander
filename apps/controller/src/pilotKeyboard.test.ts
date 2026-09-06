@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getKeyboardVector } from "./controlInput.js";
+import { getKeyboardVector } from "@spaceship-defender/client-shared";
 import {
   BRAKE_KEY,
   THROTTLE_KEY,

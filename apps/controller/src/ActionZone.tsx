@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { PointerCycle } from "./controlInput.js";
+import { PointerCycle } from "@spaceship-defender/client-shared";
 
 interface ActionZoneProps {
   readonly label: string;

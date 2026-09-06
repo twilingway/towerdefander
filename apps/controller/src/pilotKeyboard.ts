@@ -1,4 +1,4 @@
-import { getKeyboardVector, type ControlVector } from "./controlInput.js";
+import { getKeyboardVector, type ControlVector } from "@spaceship-defender/client-shared";
 
 export const THROTTLE_KEY = "KeyW";
 export const BRAKE_KEY = "KeyS";
