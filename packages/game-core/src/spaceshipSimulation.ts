@@ -23,6 +23,7 @@ import {
   advanceAngularRate,
   advanceAngularTraverse,
   assertFiniteVector,
+  canonicalizeAngle,
   clamp,
   isFresh,
   moveProjectiles,
@@ -110,6 +111,17 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly turretMaxAngularSpeedPerSecond: number;
   readonly turretAngularAccelerationPerSecondSquared: number;
   readonly turretAngularBrakingPerSecondSquared: number;
+  /**
+   * Whether the hull carries the turret. Off, the turret holds a world bearing
+   * and the hull slides underneath it. On, a turn of the hull moves the gun and
+   * its target with it, so the traverse only ever pays for the difference the
+   * gunner asked for — which is what a turret bolted to a chassis does.
+   *
+   * A flag rather than a ship stat: it is not a number, nothing upgrades it,
+   * and `SHIP_STAT_FIELDS` is the numeric block. The step therefore reads it
+   * off the config and not off `ship`.
+   */
+  readonly turretMountedOnHull: boolean;
   readonly shieldMaxAngularSpeedPerSecond: number;
   readonly shieldAngularAccelerationPerSecondSquared: number;
   readonly shieldAngularBrakingPerSecondSquared: number;
@@ -446,14 +458,54 @@ export function advanceSpaceshipSimulation(
     ship
   );
 
-  const turretTargetAngle = gunnerFresh ? state.turretTargetAngle : null;
   const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
   // A spin remembers no bearing: keeping one would pull the hull back to it
   // the moment the key comes up, which is the swing this helm exists to lose.
   const headingTargetAngle = pilotTurn === null && pilotFresh ? state.headingTargetAngle : null;
+  // The hull turns before the turret does, because a mounted turret needs how
+  // far the hull went this step. Nothing else here depends on the order.
+  const headingConfig = {
+    maxAngularSpeed: ship.headingMaxAngularSpeedPerSecond,
+    angularAcceleration: ship.headingAngularAccelerationPerSecondSquared,
+    angularBraking: ship.headingAngularBrakingPerSecondSquared,
+    secondsPerStep
+  };
+  const headingTraverse =
+    pilotTurn === null
+      ? advanceAngularTraverse(
+          {
+            angle: state.spaceshipHeading,
+            targetAngle: headingTargetAngle,
+            angularVelocity: state.headingAngularVelocity
+          },
+          headingConfig
+        )
+      : advanceAngularRate(
+          { angle: state.spaceshipHeading, angularVelocity: state.headingAngularVelocity },
+          pilotTurn,
+          headingConfig
+        );
+  /*
+   * How far the hull swung this step, and therefore how far it drags the gun.
+   *
+   * Both the turret and its target move: carrying only the gun would leave it
+   * chasing a bearing the chassis has already left, and carrying only the
+   * target would make the traverse pay for a rotation it never performed. The
+   * stored target is what leaves in the returned state, so the carry has to
+   * happen here rather than at the moment the gunner names a bearing — the
+   * hull keeps turning long after that message.
+   */
+  const hullCarry = config.turretMountedOnHull
+    ? shortestAngleDelta(state.spaceshipHeading, headingTraverse.angle)
+    : 0;
+  const carriedTargetAngle =
+    state.turretTargetAngle === null
+      ? null
+      : canonicalizeAngle(state.turretTargetAngle + hullCarry);
+  const turretTargetAngle = gunnerFresh ? carriedTargetAngle : null;
   const turretTraverse = advanceAngularTraverse(
     {
-      angle: state.turretAngle,
+      angle: canonicalizeAngle(state.turretAngle + hullCarry),
       targetAngle: turretTargetAngle,
       angularVelocity: state.turretAngularVelocity
     },
@@ -477,27 +529,6 @@ export function advanceSpaceshipSimulation(
       secondsPerStep
     }
   );
-  const headingConfig = {
-    maxAngularSpeed: ship.headingMaxAngularSpeedPerSecond,
-    angularAcceleration: ship.headingAngularAccelerationPerSecondSquared,
-    angularBraking: ship.headingAngularBrakingPerSecondSquared,
-    secondsPerStep
-  };
-  const headingTraverse =
-    pilotTurn === null
-      ? advanceAngularTraverse(
-          {
-            angle: state.spaceshipHeading,
-            targetAngle: headingTargetAngle,
-            angularVelocity: state.headingAngularVelocity
-          },
-          headingConfig
-        )
-      : advanceAngularRate(
-          { angle: state.spaceshipHeading, angularVelocity: state.headingAngularVelocity },
-          pilotTurn,
-          headingConfig
-        );
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
   // Sequential rather than switched, so that zero-length phases cascade inside

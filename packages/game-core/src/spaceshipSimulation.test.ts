@@ -352,6 +352,158 @@ describe("angular helpers", () => {
   });
 });
 
+describe("turret mounted on the hull", () => {
+  /*
+   * The carry rides the RETAINED target, and a pushed stick replaces it.
+   *
+   * That is the whole mechanic: a gunner naming a world bearing every 50 ms is
+   * aiming at something out in the world and must win, while a gunner whose
+   * stick is at rest has said nothing since the hull moved, and a gun bolted to
+   * a chassis goes where the chassis goes. `applyGunnerInput` already keeps the
+   * old target on a neutral vector, so the two cases were already separated
+   * before the mount existed.
+   */
+  function restAim(state: SpaceshipSimulationState) {
+    return applyGunnerInput(state, {
+      vector: { x: 0, y: 0 },
+      firing: false,
+      receivedTick: state.clock.tick
+    });
+  }
+
+  function turnWithAim(
+    state: SpaceshipSimulationState,
+    config: SpaceshipSimulationConfig,
+    aim: (current: SpaceshipSimulationState) => SpaceshipSimulationState,
+    steps: number
+  ) {
+    let current = state;
+    for (let step = 0; step < steps; step += 1) {
+      current = aim(current);
+      current = applyPilotInput(current, {
+        vector: { x: 0, y: 0 },
+        mgFiring: false,
+        receivedTick: current.clock.tick,
+        turn: 1,
+        thrust: 0
+      });
+      current = advanceSpaceshipSimulation(current, config);
+    }
+    return current;
+  }
+
+  function settledOnZeroBearing(config: SpaceshipSimulationConfig) {
+    const state = applyGunnerInput(createSpaceshipSimulationState(config, 1), {
+      vector: { x: 1, y: 0 },
+      firing: false,
+      receivedTick: 0
+    });
+    // Long enough for the traverse to arrive and its angular velocity to die,
+    // so anything that moves afterwards was moved by the hull.
+    return advance(state, config, 200);
+  }
+
+  it("carries the gun and its target with the hull while the stick rests", () => {
+    const config = createSpaceshipSimulationConfig({ turretMountedOnHull: true });
+    const settled = settledOnZeroBearing(config);
+    expect(settled.turretAngle).toBeCloseTo(0, 5);
+
+    const turning = turnWithAim(settled, config, restAim, 20);
+
+    const hullSwing = shortestAngleDelta(settled.spaceshipHeading, turning.spaceshipHeading);
+    expect(hullSwing).toBeGreaterThan(0.5);
+    // The gun went exactly as far as the chassis did...
+    expect(shortestAngleDelta(settled.turretAngle, turning.turretAngle)).toBeCloseTo(hullSwing, 5);
+    // ...which is the same statement said the other way.
+    expect(shortestAngleDelta(turning.spaceshipHeading, turning.turretAngle)).toBeCloseTo(
+      shortestAngleDelta(settled.spaceshipHeading, settled.turretAngle),
+      5
+    );
+  });
+
+  it("lets a pushed stick out-argue the carry", () => {
+    const config = createSpaceshipSimulationConfig({ turretMountedOnHull: true });
+    const settled = settledOnZeroBearing(config);
+
+    // The gunner keeps naming the same world bearing while the hull turns away.
+    const turning = turnWithAim(
+      settled,
+      config,
+      (current) =>
+        applyGunnerInput(current, {
+          vector: { x: 1, y: 0 },
+          firing: false,
+          receivedTick: current.clock.tick
+        }),
+      20
+    );
+
+    expect(shortestAngleDelta(settled.spaceshipHeading, turning.spaceshipHeading)).toBeGreaterThan(
+      0.5
+    );
+    // It does not stay bolted to the nose: the named bearing is being chased.
+    const carried = shortestAngleDelta(settled.turretAngle, turning.turretAngle);
+    const hullSwing = shortestAngleDelta(settled.spaceshipHeading, turning.spaceshipHeading);
+    expect(carried).toBeLessThan(hullSwing);
+
+    // The comparison that makes the number mean something: the same pushed
+    // stick against an unmounted turret leaves the gun where it was, so the
+    // difference between the two runs is the carry and nothing else.
+    const loose = createSpaceshipSimulationConfig({ turretMountedOnHull: false });
+    const looseTurning = turnWithAim(
+      settledOnZeroBearing(loose),
+      loose,
+      (current) =>
+        applyGunnerInput(current, {
+          vector: { x: 1, y: 0 },
+          firing: false,
+          receivedTick: current.clock.tick
+        }),
+      20
+    );
+    expect(looseTurning.turretAngle).toBeCloseTo(0, 5);
+    expect(carried).toBeGreaterThan(0.5);
+  });
+
+  it("leaves the gun on its world bearing when the flag is off", () => {
+    const config = createSpaceshipSimulationConfig({ turretMountedOnHull: false });
+    const settled = settledOnZeroBearing(config);
+
+    const turning = turnWithAim(settled, config, restAim, 20);
+
+    expect(shortestAngleDelta(settled.spaceshipHeading, turning.spaceshipHeading)).toBeGreaterThan(
+      0.5
+    );
+    // The hull swung underneath and the gun stayed where it was pointing.
+    expect(turning.turretAngle).toBeCloseTo(settled.turretAngle, 5);
+  });
+
+  it("does not carry the shield sector", () => {
+    const config = createSpaceshipSimulationConfig({ turretMountedOnHull: true });
+    let state = applyShieldInput(createSpaceshipSimulationState(config, 1), {
+      vector: { x: 1, y: 0 },
+      active: false,
+      receivedTick: 0
+    });
+    state = advance(state, config, 200);
+    const settledShield = state.shieldAngle;
+
+    const turning = turnWithAim(
+      state,
+      config,
+      (current) =>
+        applyShieldInput(current, {
+          vector: { x: 0, y: 0 },
+          active: false,
+          receivedTick: current.clock.tick
+        }),
+      20
+    );
+
+    expect(turning.shieldAngle).toBeCloseTo(settledShield, 5);
+  });
+});
+
 describe("gunner simulation", () => {
   it("starts turning toward an upward target without snapping and zero aim preserves it", () => {
     const config = createSpaceshipSimulationConfig();
