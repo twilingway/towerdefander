@@ -34,6 +34,8 @@ export interface SoloCockpitWorld {
   readonly obstacles: readonly AimObstacle[];
   /** How far the cannon actually reaches; the cone is cut to it. */
   readonly cannonReach: number;
+  /** Where the gun is pointing right now, straight from the snapshot. */
+  readonly turretAngle: number;
 }
 
 export interface SoloCockpitOptions {
@@ -251,7 +253,24 @@ export function useSoloCockpit({
       updateGunner({ aim: vector });
     },
     onAimRelease: () => {
-      updateGunner({ aim: NEUTRAL });
+      /*
+       * Stop where the gun is, do not coast on to where the thumb last was.
+       *
+       * A neutral vector keeps the stored target, so the traverse would finish
+       * the turn by itself long after the stick came up — flick and let go, and
+       * the gun sails round on its own. The lab turns the turret only while the
+       * stick is actually pushed. The hull already had this exact problem and
+       * this exact answer: a released turn key sends the current nose rather
+       * than a zero, because a zero means "keep the old target".
+       */
+      const world = assistReference.current.world;
+      if (world === undefined) {
+        updateGunner({ aim: NEUTRAL });
+        return;
+      }
+      updateGunner({
+        aim: { x: Math.cos(world.turretAngle), y: Math.sin(world.turretAngle) }
+      });
     },
     onMachineGunHold: (held) => {
       updatePilot({ mgFiring: held });

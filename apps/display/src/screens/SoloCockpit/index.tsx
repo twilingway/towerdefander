@@ -58,7 +58,7 @@ export function SoloCockpit({
         onChange={onDrive}
         onRelease={onDriveRelease}
       />
-      <div className="solo-cockpit__middle">
+      <div className="solo-cockpit__right">
         <button
           type="button"
           className="cockpit-assist"
@@ -88,16 +88,16 @@ export function SoloCockpit({
             onHoldChange={onCannonFromTrigger}
           />
         </div>
+        <CockpitStick
+          side="right"
+          label="Наводка турели"
+          enabled={enabled}
+          deadzoneShare={aimDeadzoneShare}
+          onChange={onAim}
+          onRelease={onAimRelease}
+          onPressChange={onCannonFromStick}
+        />
       </div>
-      <CockpitStick
-        side="right"
-        label="Наводка турели"
-        enabled={enabled}
-        deadzoneShare={aimDeadzoneShare}
-        onChange={onAim}
-        onRelease={onAimRelease}
-        onPressChange={onCannonFromStick}
-      />
     </div>
   );
 }

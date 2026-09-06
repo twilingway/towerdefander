@@ -1695,12 +1695,12 @@ p {
   z-index: 26;
   inset: 0;
   pointer-events: none;
-  display: grid;
-  /* Thumbs live at the bottom corners and the triggers between them. Anything
-     that drifts to the middle of the screen sits on top of the fight, which is
-     the one place a control must never be. */
-  grid-template-columns: auto 1fr auto;
-  align-items: end;
+  display: flex;
+  /* Two thumbs, two bottom corners, and the buttons stacked over the gun hand
+     rather than adrift in the middle of the picture — the one place a control
+     must never be, because that is where the fight is. */
+  justify-content: space-between;
+  align-items: flex-end;
   padding: clamp(0.5rem, 2vw, 1.25rem);
   padding-bottom: max(clamp(0.5rem, 2vw, 1.25rem), env(safe-area-inset-bottom, 0));
 }
@@ -1772,22 +1772,21 @@ p {
   box-shadow: 0 0 1.2rem rgba(126, 214, 255, 0.45);
 }
 
-.solo-cockpit__middle {
+/* The gun hand: what it presses sits directly above the stick it holds. */
+.solo-cockpit__right {
   pointer-events: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-end;
   gap: 0.5rem;
 }
 
-/* Side by side along the bottom, not stacked up the middle of the picture. */
 .solo-cockpit__triggers {
   pointer-events: none;
   display: flex;
   flex-direction: row;
   gap: 0.6rem;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: flex-end;
 }
 
@@ -1854,10 +1853,6 @@ p {
 /* The bottom band belongs to the thumbs now, so everything that used to live
    there moves up by exactly the height they take. */
 .display-shell--cockpit .spaceship-hud {
-  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--cockpit-band));
-}
-
-.display-shell--cockpit .combat-radar {
   bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--cockpit-band));
 }
 

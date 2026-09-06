@@ -141,7 +141,8 @@ export function DisplayApp() {
             shooter: { x: view.game.spaceship.x, y: view.game.spaceship.y },
             targets: view.game.enemyShips,
             obstacles: view.game.obstacles,
-            cannonReach: view.game.cannon.reach
+            cannonReach: view.game.cannon.reach,
+            turretAngle: view.game.turretAngle
           },
     roomId: view?.roomId ?? "",
     playerId: roomReference.current?.sessionId ?? "",
