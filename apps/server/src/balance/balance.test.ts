@@ -643,10 +643,10 @@ describe("version 1 migration", () => {
     expect(steelvoid?.turretMountedOnHull).toBe(true);
     expect(steelvoid?.spaceshipReverseSpeedFactor).toBeCloseTo(0.55, 5);
     expect(steelvoid?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
-    // ...and the default it was copied from is left as the host had it.
+    // ...and the default it was copied from keeps a world-bearing turret, which
+    // is what every run so far was balanced against.
     const base = presets.find((preset) => preset.id === "default")?.tuning;
     expect(base?.turretMountedOnHull).toBe(false);
-    expect(base?.helm.driveDeadzoneShare).toBe(0);
   });
 
   it("gives a version 34 document the turret mount and stick geometry, waves intact", async () => {
@@ -694,10 +694,11 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     const saved = store.getState().presets[0]?.tuning;
-    // Both arrive at the default, which is the behaviour the document already
-    // had: a world-bearing turret and a stick with no dead zone.
+    // The turret arrives at the behaviour the document already had, and the
+    // stick at STEEL VOID's own geometry — nothing before version 35 had a
+    // cockpit to feel the difference.
     expect(saved?.turretMountedOnHull).toBe(false);
-    expect(saved?.helm.driveDeadzoneShare).toBe(0);
+    expect(saved?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
     expect(saved?.helm.driveZoneShare).toBe(0.42);
     // And the point of every one of these tests: the campaign survived.
     expect(saved?.waveCampaign.waves).toHaveLength(1);

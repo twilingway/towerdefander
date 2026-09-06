@@ -4,6 +4,7 @@ import {
   LatestInputScheduler,
   assistedAimDirection,
   coneForReach,
+  smoothHeadingVector,
   type AimObstacle,
   type AimTarget,
   type ControlVector
@@ -110,6 +111,15 @@ export function useSoloCockpit({
   const gunnerReference = useRef<GunnerStream>(NEUTRAL_GUNNER);
   /** Which spurs are down; the cannon fires while either is. */
   const cannonSpursReference = useRef({ stick: false, trigger: false });
+  /*
+   * The bearing each stick is currently sending, and when it was last touched.
+   * A thumb is never still: two pixels of slip on the ring is a couple of
+   * degrees of commanded heading, and without this the hull and the gun shake
+   * with it. The lab measured 4.58 degrees of swing before the same guard.
+   */
+  const driveHeadingReference = useRef<number | null>(null);
+  const aimHeadingReference = useRef<number | null>(null);
+  const lastSampleAtReference = useRef<number | null>(null);
 
   const pilotSchedulerReference = useRef<LatestInputScheduler<PilotStream> | undefined>(undefined);
   const gunnerSchedulerReference = useRef<LatestInputScheduler<GunnerStream> | undefined>(
@@ -161,6 +171,15 @@ export function useSoloCockpit({
       },
       { enabled: true, firing: value.firing }
     );
+  }
+
+  /** Seconds since the last stick sample, clamped so a stall cannot jump it. */
+  function stepSeconds(): number {
+    const now = performance.now();
+    const previous = lastSampleAtReference.current;
+    lastSampleAtReference.current = now;
+    if (previous === null) return 0;
+    return Math.min(0.25, Math.max(0, (now - previous) / 1000));
   }
 
   function anyCannonSpurDown(): boolean {
@@ -217,6 +236,8 @@ export function useSoloCockpit({
     // power with both triggers down.
     function neutralize(): void {
       cannonSpursReference.current = { stick: false, trigger: false };
+      driveHeadingReference.current = null;
+      aimHeadingReference.current = null;
       updatePilot({ vector: NEUTRAL, mgFiring: false });
       updateGunner({ aim: NEUTRAL, firing: false });
     }
@@ -240,17 +261,29 @@ export function useSoloCockpit({
        * IS the throttle — and the strength is the figure that already had the
        * dead zone taken out of it.
        */
-      const length = Math.hypot(vector.x, vector.y);
-      const scale = length > 0 ? strength / length : 0;
-      updatePilot({ vector: { x: vector.x * scale, y: vector.y * scale } });
+      const smoothed = smoothHeadingVector(driveHeadingReference.current, vector, stepSeconds());
+      if (smoothed === null) {
+        updatePilot({ vector: NEUTRAL });
+        return;
+      }
+      driveHeadingReference.current = smoothed.heading;
+      // Direction from the smoothed bearing, throttle from the strength.
+      updatePilot({ vector: { x: smoothed.x * strength, y: smoothed.y * strength } });
     },
     onDriveRelease: () => {
+      driveHeadingReference.current = null;
       updatePilot({ vector: NEUTRAL });
     },
     onAim: (vector) => {
       // Length carries nothing here: a bearing is a bearing. A zero vector is
       // meaningful on its own — the core reads it as "keep the one you have".
-      updateGunner({ aim: vector });
+      const smoothed = smoothHeadingVector(aimHeadingReference.current, vector, stepSeconds());
+      if (smoothed === null) {
+        updateGunner({ aim: NEUTRAL });
+        return;
+      }
+      aimHeadingReference.current = smoothed.heading;
+      updateGunner({ aim: { x: smoothed.x, y: smoothed.y } });
     },
     onAimRelease: () => {
       /*
@@ -263,6 +296,7 @@ export function useSoloCockpit({
        * this exact answer: a released turn key sends the current nose rather
        * than a zero, because a zero means "keep the old target".
        */
+      aimHeadingReference.current = null;
       const world = assistReference.current.world;
       if (world === undefined) {
         updateGunner({ aim: NEUTRAL });

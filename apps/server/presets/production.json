@@ -3326,8 +3326,8 @@
           "headingLeadRadians": 0.5,
           "stopDampening": 1,
           "rotateInPlaceThrottle": 0.02,
-          "driveDeadzoneShare": 0,
-          "aimDeadzoneShare": 0,
+          "driveDeadzoneShare": 0.12,
+          "aimDeadzoneShare": 0.1,
           "driveZoneShare": 0.42,
           "aimProjectionShare": 0.58
         },

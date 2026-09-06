@@ -34,3 +34,10 @@ export type {
   AimObstacle,
   AimTarget
 } from "./control/aimAssist.js";
+export {
+  HEADING_DEADBAND_RADIANS,
+  HEADING_FILTER_TAU_SECONDS,
+  smoothHeading,
+  smoothHeadingVector
+} from "./control/headingSmoother.js";
+export type { HeadingSmoothingOptions } from "./control/headingSmoother.js";

@@ -46,13 +46,14 @@ const DEFAULT_HELM: HelmTuning = {
   stopDampening: 1,
   rotateInPlaceThrottle: 0.02,
   /*
-   * The stick as the coop panels have always drawn it: no dead zone, centre in
-   * the middle of the ring. Defaults exist to keep a run that never touched
-   * these playing exactly as it did, so the STEEL VOID geometry lives in a
-   * preset and not here.
+   * STEEL VOID's own dead zones, and they belong in the defaults rather than in
+   * a preset: only the solo cockpit reads them, the cockpit is the thing being
+   * ported, and it has no earlier behaviour to preserve. The coop panels draw
+   * their own sticks and never look at these, so a zero here bought nothing and
+   * cost the cockpit the tremble guard it was ported for.
    */
-  driveDeadzoneShare: 0,
-  aimDeadzoneShare: 0,
+  driveDeadzoneShare: 0.12,
+  aimDeadzoneShare: 0.1,
   /** The coop panels draw their own zones; only the cockpit reads this. */
   driveZoneShare: 0.42,
   /** Only the cockpit projects an aim point; the coop panels ignore it. */
