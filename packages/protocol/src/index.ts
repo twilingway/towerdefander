@@ -652,8 +652,10 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
 }
 
 /**
- * Feel of the keyboard helm, straight from the active preset. Only the
- * controller drives with it, so the display never carries these three.
+ * Feel of the helm and the geometry of the sticks, straight from the active
+ * preset. Both snapshots carry it: the controller panels drive with it, and so
+ * does the solo cockpit, which draws the world and works the sticks from the
+ * same page.
  */
 export const publicHelmViewSchema = z
   .object({
@@ -698,6 +700,12 @@ export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntry
 export const displayGameSnapshotSchema = z
   .object({
     ...gameShape,
+    /**
+     * The helm block, which the display used to have no use for. The solo
+     * cockpit gave it one: it draws the world and works the sticks from the
+     * same page, so it needs the geometry those sticks are cut to.
+     */
+    helm: publicHelmViewSchema,
     /** Width of the elastic rim band, measured inward from `arenaRadius`. */
     rimBandWidth: finite.nonnegative(),
     /**

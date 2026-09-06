@@ -16,3 +16,5 @@ export {
   throttleAim
 } from "./control/controlInput.js";
 export type { ControlVector, SequencedValue } from "./control/controlInput.js";
+export { isInDriveZone, neutralStickReading, readStick } from "./control/stickGeometry.js";
+export type { StickPoint, StickReading } from "./control/stickGeometry.js";

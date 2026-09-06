@@ -353,6 +353,17 @@ const PREVIEW_WORLD = {
     nebulaPreset: "blue" as const
   },
   arenaRadius: 2200,
+  helm: {
+    scheme: "tank" as const,
+    headingLeadRadians: 0.45,
+    stopDampening: 1,
+    rotateInPlaceThrottle: 0.02,
+    hullAngularBrakingPerSecondSquared: 50,
+    driveDeadzoneShare: 0,
+    aimDeadzoneShare: 0,
+    driveZoneShare: 0.42,
+    aimProjectionShare: 0.58
+  },
   rimBandWidth: 260,
   shieldPhase: "down",
   purchasedModules: [...PREVIEW_PURCHASES],

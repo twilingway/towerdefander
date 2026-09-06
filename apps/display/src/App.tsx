@@ -40,6 +40,8 @@ import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
+import { SoloCockpit } from "./screens/SoloCockpit/index.js";
+import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
@@ -103,6 +105,8 @@ export function DisplayApp() {
   const [networkView, setNetworkView] = useState<DisplayRoomView>();
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  /** Set when this page is also the pilot; undefined for an ordinary display. */
+  const [cockpitPlayer, setCockpitPlayer] = useState<string | undefined>(undefined);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0 });
@@ -117,6 +121,22 @@ export function DisplayApp() {
     [preview, previewPhase, previewCameraViewWidth]
   );
   const view = previewView ?? networkView;
+  /*
+   * Hooks cannot hide behind a branch, so the cockpit's wire half is always
+   * mounted and simply has nothing to send until this page is also the pilot.
+   * The generation is the controller's own recipe — a new run or a new
+   * connection restarts the sequences the room watermarks.
+   */
+  const cockpitControls = useSoloCockpit({
+    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    roomId: view?.roomId ?? "",
+    playerId: roomReference.current?.sessionId ?? "",
+    runNumber: view?.runNumber ?? 0,
+    generation: `${String(view?.runNumber ?? 0)}:${String(connectionEpoch)}`,
+    send: (type, payload) => {
+      roomReference.current?.send(type, payload);
+    }
+  });
   // The readouts move into the letterbox on glass that leaves enough of one;
   // the frame is the camera's, so the arithmetic is the camera's too.
   const bars = useLetterboxBars(
@@ -187,16 +207,22 @@ export function DisplayApp() {
   async function createRoom(
     crewSize: CrewSize,
     shipArchetypeId: string | undefined,
-    startWave: number
+    startWave: number,
+    cockpitPlayerName?: string
   ): Promise<void> {
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
+    setCockpitPlayer(cockpitPlayerName);
     try {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
-        role: "display",
+        // One connection with both duties when this device is also the pilot.
+        // The two shapes differ in what they name, so the seat count only
+        // travels with the display form.
+        ...(cockpitPlayerName === undefined
+          ? { role: "display" as const, crewSize }
+          : { role: "solo" as const, playerName: cockpitPlayerName }),
         protocolVersion: PROTOCOL_VERSION,
-        crewSize,
         // Absent means the preset's own hull, so a display that could not reach
         // the catalogue still opens a room.
         ...(shipArchetypeId === undefined ? {} : { shipArchetypeId }),
@@ -295,8 +321,8 @@ export function DisplayApp() {
         initialStartWave={initialStartWave}
         ships={shipCatalogue?.ships ?? []}
         defaultShipId={urlShipArchetypeId ?? shipCatalogue?.defaultShipId}
-        onCreate={(crewSize, shipArchetypeId, startWave) =>
-          void createRoom(crewSize, shipArchetypeId, startWave)
+        onCreate={(crewSize, shipArchetypeId, startWave, cockpitPlayerName) =>
+          void createRoom(crewSize, shipArchetypeId, startWave, cockpitPlayerName)
         }
       />
     );
@@ -402,6 +428,18 @@ export function DisplayApp() {
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
               onFrameStats={setFrameStats}
+            />
+          )}
+          {cockpitPlayer !== undefined && !portrait && (
+            <SoloCockpit
+              enabled={view.game.encounter.phase === "combat"}
+              driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
+              aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
+              machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
+              machineGunOverheated={view.game.machineGun.overheated}
+              cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
+              cannonOverheated={view.game.cannon.overheated}
+              {...cockpitControls}
             />
           )}
           {view.game.encounter.phase === "combat" &&

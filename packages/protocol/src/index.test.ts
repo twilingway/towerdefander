@@ -60,13 +60,6 @@ function item<T>(values: readonly T[], index: number): T {
   return value;
 }
 
-/** Everything a controller snapshot carries except the helm the display lacks. */
-function withoutHelm(game: NonNullable<ControllerRoomView["game"]>) {
-  const { helm, ...rest } = game;
-  void helm;
-  return rest;
-}
-
 function controllerRoom(): ControllerRoomView {
   return {
     roomId: ROOM_ID,
@@ -157,8 +150,9 @@ function controllerRoom(): ControllerRoomView {
 function displayRoom(): DisplayRoomView {
   const controller = controllerRoom();
   if (controller.game === null) throw new Error("Expected active game.");
-  // The helm rides on the controller snapshot only; the display never sees it.
-  const controllerGame = withoutHelm(controller.game);
+  // Both snapshots carry the helm now: the solo cockpit draws the world and
+  // works the sticks from the same page, so the display needs it too.
+  const controllerGame = controller.game;
   return {
     roomId: ROOM_ID,
     phase: "active",
