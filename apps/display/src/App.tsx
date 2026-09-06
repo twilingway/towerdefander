@@ -123,7 +123,7 @@ export function DisplayApp() {
   const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
-  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0 });
+  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0, stutterShare: 0 });
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -531,7 +531,11 @@ export function DisplayApp() {
             Экран → сервер {formatLatency(view.displayLatencyMs)}
           </span>
           {view.game !== null && (
-            <FpsReadout fps={frameStats.fps} worstFrameMs={frameStats.worstFrameMs} />
+            <FpsReadout
+              fps={frameStats.fps}
+              worstFrameMs={frameStats.worstFrameMs}
+              stutterShare={frameStats.stutterShare}
+            />
           )}
           <button
             type="button"

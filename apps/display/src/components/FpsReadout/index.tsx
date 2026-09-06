@@ -17,6 +17,30 @@ export const FPS_STRAIN_CEILING = 45;
 export const FREEZE_VISIBLE_MS = 50;
 export const FREEZE_ALARM_MS = 100;
 
+/**
+ * When unevenness is worth naming, and when it is worth alarming about.
+ *
+ * A tenth of the frames running long is the point where a pan stops looking
+ * like motion and starts looking like a slideshow with extra steps; a quarter
+ * is a picture nobody would call smooth. Below the first, a stray long frame
+ * from a garbage collection is not news.
+ */
+export const STUTTER_VISIBLE_SHARE = 0.1;
+export const STUTTER_ALARM_SHARE = 0.25;
+
+/**
+ * Whole percent, and nothing at all while the picture is even. The badge earns
+ * its place only when there is unevenness to report.
+ */
+export function formatStutterShare(share: number): string | undefined {
+  if (!Number.isFinite(share) || share < STUTTER_VISIBLE_SHARE) return undefined;
+  return String(Math.round(share * 100));
+}
+
+export function stutterClassName(share: number): string {
+  return `frame-stutter${share >= STUTTER_ALARM_SHARE ? " frame-stutter--alarming" : ""}`;
+}
+
 export function fpsClassName(fps: number): string {
   return `fps-readout${fps > 0 && fps < FPS_STRAIN_CEILING ? " fps-readout--strained" : ""}`;
 }
@@ -49,12 +73,15 @@ export function frameSpikeClassName(worstFrameMs: number): string {
  */
 export function FpsReadout({
   fps,
-  worstFrameMs
+  worstFrameMs,
+  stutterShare = 0
 }: {
   readonly fps: number;
   readonly worstFrameMs: number;
+  readonly stutterShare?: number;
 }) {
   const spike = formatFrameSpike(worstFrameMs);
+  const stutter = formatStutterShare(stutterShare);
   return (
     <span className={fpsClassName(fps)} data-testid="fps-readout" aria-label="Кадров в секунду">
       <strong data-testid="fps-value">{formatFps(fps)}</strong> FPS
@@ -66,6 +93,16 @@ export function FpsReadout({
         >
           {" · "}
           <strong>{spike}</strong> мс
+        </span>
+      )}
+      {stutter !== undefined && (
+        <span
+          className={stutterClassName(stutterShare)}
+          data-testid="frame-stutter"
+          aria-label="Доля рваных кадров за секунду"
+        >
+          {" · рывки "}
+          <strong>{stutter}</strong>%
         </span>
       )}
     </span>

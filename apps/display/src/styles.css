@@ -2177,3 +2177,14 @@ p {
   outline: 2px solid #7ed6ff;
   outline-offset: 4px;
 }
+
+/* Evenness sits with the frame rate, quieter than the freeze badge beside it:
+   a picture that judders is worth naming, but it is not an emergency until it
+   is most of the frames. */
+.frame-stutter {
+  color: #b9d3ce;
+}
+
+.frame-stutter--alarming {
+  color: #ff9d91;
+}

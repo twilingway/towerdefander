@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatFrameSpike,
   formatFps,
+  formatStutterShare,
+  stutterClassName,
   fpsClassName,
   frameSpikeClassName,
   FpsReadout,
@@ -57,5 +59,31 @@ describe("FpsReadout", () => {
     expect(stalled).toContain('data-testid="frame-spike"');
     expect(stalled).toContain("210");
     expect(stalled).toContain("alarming");
+  });
+
+  it("says nothing about evenness while the picture is even", () => {
+    expect(formatStutterShare(0)).toBeUndefined();
+    expect(formatStutterShare(0.05)).toBeUndefined();
+  });
+
+  it("names the share of frames that ran long once it is worth naming", () => {
+    expect(formatStutterShare(0.1)).toBe("10");
+    expect(formatStutterShare(0.334)).toBe("33");
+  });
+
+  it("alarms only when most of a pan is judder", () => {
+    expect(stutterClassName(0.1)).toBe("frame-stutter");
+    expect(stutterClassName(0.25)).toContain("frame-stutter--alarming");
+  });
+
+  it("draws the badge beside the frame rate", () => {
+    const markup = renderToStaticMarkup(
+      <FpsReadout fps={58} worstFrameMs={0} stutterShare={0.3} />
+    );
+
+    // The two answer different questions: 58 frames a second is healthy, and a
+    // third of them arriving late is what the eye actually complains about.
+    expect(markup).toContain('data-testid="frame-stutter"');
+    expect(markup).toContain("30");
   });
 });
