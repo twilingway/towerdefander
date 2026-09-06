@@ -60,7 +60,9 @@ export function CreateRoomScreen({
 }: CreateRoomScreenProps) {
   const [crewSize, setCrewSize] = useState<CrewSize>(3);
   const [cockpit, setCockpit] = useState(false);
-  const [cockpitName, setCockpitName] = useState("");
+  // Named rather than blank: the field is the only thing between a player and
+  // the button, and a room needs a roster label more than it needs a choice.
+  const [cockpitName, setCockpitName] = useState("Пилот");
   const [startWave, setStartWave] = useState(initialStartWave);
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   // The catalogue arrives after the first render, so the choice falls back to
