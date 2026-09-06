@@ -70,6 +70,16 @@ export interface SoloCockpitControls {
  * a dropped pilot packet look like a replayed gunner packet in the logs. The
  * split is also what lets a thumb on each stick be genuinely simultaneous.
  */
+/**
+ * A scheduler is born enabled and starts heartbeating the moment anything
+ * flushes it. The cockpit's two are created long before there is a cockpit, so
+ * they are silenced at birth and only the gate below turns them on.
+ */
+function silentUntilEnabled<T>(scheduler: LatestInputScheduler<T>): LatestInputScheduler<T> {
+  scheduler.setEnabled(false);
+  return scheduler;
+}
+
 export function useSoloCockpit({
   enabled,
   aimAssistEnabled,
@@ -94,9 +104,8 @@ export function useSoloCockpit({
   const gunnerSchedulerReference = useRef<LatestInputScheduler<GunnerStream> | undefined>(
     undefined
   );
-  pilotSchedulerReference.current ??= new LatestInputScheduler(
-    NEUTRAL_PILOT,
-    ({ sequence, value }) => {
+  pilotSchedulerReference.current ??= silentUntilEnabled(
+    new LatestInputScheduler(NEUTRAL_PILOT, ({ sequence, value }) => {
       const { roomId: room, playerId: player, runNumber: run } = envelopeReference.current;
       sendReference.current(clientMessage.pilotInput, {
         protocolVersion: PROTOCOL_VERSION,
@@ -107,11 +116,10 @@ export function useSoloCockpit({
         vector: value.vector,
         mgFiring: value.mgFiring
       });
-    }
+    })
   );
-  gunnerSchedulerReference.current ??= new LatestInputScheduler(
-    NEUTRAL_GUNNER,
-    ({ sequence, value }) => {
+  gunnerSchedulerReference.current ??= silentUntilEnabled(
+    new LatestInputScheduler(NEUTRAL_GUNNER, ({ sequence, value }) => {
       const { roomId: room, playerId: player, runNumber: run } = envelopeReference.current;
       sendReference.current(clientMessage.gunnerInput, {
         protocolVersion: PROTOCOL_VERSION,
@@ -126,7 +134,7 @@ export function useSoloCockpit({
         aim: resolveAim(value),
         firing: value.firing
       });
-    }
+    })
   );
 
   function resolveAim(value: GunnerStream): ControlVector {
@@ -160,6 +168,17 @@ export function useSoloCockpit({
   useEffect(() => {
     const pilot = pilotSchedulerReference.current;
     const gunner = gunnerSchedulerReference.current;
+    /*
+     * The gate, and it has to be a real one.
+     *
+     * This hook is mounted on every display, cockpit or not, because hooks
+     * cannot hide behind a branch. A scheduler heartbeats from its first flush
+     * whether or not anything changed, so an ordinary shared screen was sending
+     * pilot and gunner packets it has no seat for -- twenty a second, answered
+     * with `not_controller`, against a ceiling of twenty-five.
+     */
+    pilot?.setEnabled(enabled);
+    gunner?.setEnabled(enabled);
     if (generationReference.current !== generation) {
       generationReference.current = generation;
       pilotReference.current = NEUTRAL_PILOT;
@@ -167,6 +186,7 @@ export function useSoloCockpit({
       pilot?.resetGeneration(NEUTRAL_PILOT, performance.now(), enabled);
       gunner?.resetGeneration(NEUTRAL_GUNNER, performance.now(), enabled);
     }
+    if (!enabled) return;
     const timer = window.setInterval(() => {
       pilot?.flush(performance.now());
       gunner?.flush(performance.now());

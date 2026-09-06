@@ -13,6 +13,53 @@ import {
   throttleAim
 } from "./controlInput.js";
 
+describe("LatestInputScheduler idle behaviour", () => {
+  /*
+   * The trap this pins: a scheduler is born enabled, and its first flush finds
+   * `lastSentAt` at negative infinity, so it heartbeats immediately and then
+   * every 100 ms whether or not anything changed. That is what the role panels
+   * want -- a seat that stops talking looks disconnected. It is emphatically
+   * not what a component wants when it was mounted before there is anything to
+   * drive: a display with no seat sent twenty packets a second it had no right
+   * to, and the room answered every one of them.
+   */
+  it("heartbeats from its very first flush, with nothing having changed", () => {
+    const sent: number[] = [];
+    const scheduler = new LatestInputScheduler({ v: 0 }, ({ sequence }) => sent.push(sequence));
+
+    scheduler.flush(0);
+
+    expect(sent).toEqual([1]);
+  });
+
+  it("says nothing at all once disabled", () => {
+    const sent: number[] = [];
+    const scheduler = new LatestInputScheduler({ v: 0 }, ({ sequence }) => sent.push(sequence));
+    scheduler.setEnabled(false);
+
+    scheduler.flush(0);
+    scheduler.update({ v: 1 }, 1_000);
+    scheduler.flush(2_000);
+
+    expect(sent).toEqual([]);
+  });
+
+  it("picks its numbering up where it left off when switched back on", () => {
+    const sent: number[] = [];
+    const scheduler = new LatestInputScheduler({ v: 0 }, ({ sequence }) => sent.push(sequence));
+    scheduler.flush(0);
+    scheduler.setEnabled(false);
+    scheduler.flush(1_000);
+    scheduler.setEnabled(true);
+
+    scheduler.flush(2_000);
+
+    // Not back to 1: the room watermarks sequences, and a stream that restarted
+    // its count mid-run would have its packets dropped as replays.
+    expect(sent).toEqual([1, 2]);
+  });
+});
+
 describe("aim commitment", () => {
   it("names a bearing only past the threshold", () => {
     // Half a stick is a nudge; the barrel keeps what it was given.
