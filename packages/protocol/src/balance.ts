@@ -482,11 +482,12 @@ export const helmTuningSchema = z
     /** The same for the aim stick, which is pushed more gently and more often. */
     aimDeadzoneShare: z.number().min(0).max(0.5),
     /**
-     * Whether the stick puts its centre under the finger that landed. Off, the
-     * centre is the middle of the zone and a touch near the rim already reads
-     * as a full push.
+     * Share of the screen width whose left edge begins a drive. The stick keeps
+     * its anchor at the drawn ring either way — what widens is the area a thumb
+     * may land in to grab it, which is what makes a stick findable without
+     * looking at it.
      */
-    floatingOrigin: z.boolean(),
+    driveZoneShare: z.number().min(0.2).max(0.8),
     /**
      * How far ahead of the ship the aim stick projects its point, as a share of
      * the larger view dimension. It decides how much of the frame a full push

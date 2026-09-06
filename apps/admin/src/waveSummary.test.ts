@@ -282,7 +282,7 @@ function tuning(): BalanceTuning {
       rotateInPlaceThrottle: 0.02,
       driveDeadzoneShare: 0,
       aimDeadzoneShare: 0,
-      floatingOrigin: false,
+      driveZoneShare: 0.42,
       aimProjectionShare: 0.58
     },
     enemySkill: {

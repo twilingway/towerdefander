@@ -107,7 +107,7 @@ interface NetworkGameState {
     hullAngularBrakingPerSecondSquared: number;
     driveDeadzoneShare: number;
     aimDeadzoneShare: number;
-    floatingOrigin: boolean;
+    driveZoneShare: number;
     aimProjectionShare: number;
   };
   encounter: {

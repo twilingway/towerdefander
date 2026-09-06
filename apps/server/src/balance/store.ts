@@ -53,7 +53,8 @@ const DEFAULT_HELM: HelmTuning = {
    */
   driveDeadzoneShare: 0,
   aimDeadzoneShare: 0,
-  floatingOrigin: false,
+  /** The coop panels draw their own zones; only the cockpit reads this. */
+  driveZoneShare: 0.42,
   /** Only the cockpit projects an aim point; the coop panels ignore it. */
   aimProjectionShare: 0.58
 };

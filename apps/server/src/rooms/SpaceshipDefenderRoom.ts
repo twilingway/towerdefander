@@ -735,7 +735,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
     this.state.game.helm.driveDeadzoneShare = helm.driveDeadzoneShare;
     this.state.game.helm.aimDeadzoneShare = helm.aimDeadzoneShare;
-    this.state.game.helm.floatingOrigin = helm.floatingOrigin;
+    this.state.game.helm.driveZoneShare = helm.driveZoneShare;
     this.state.game.helm.aimProjectionShare = helm.aimProjectionShare;
     this.state.game.helm.hullAngularBrakingPerSecondSquared =
       this.gameConfig.headingAngularBrakingPerSecondSquared;

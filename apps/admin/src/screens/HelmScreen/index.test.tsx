@@ -20,7 +20,7 @@ describe("HelmScreen", () => {
           rotateInPlaceThrottle: 0.02,
           driveDeadzoneShare: 0,
           aimDeadzoneShare: 0,
-          floatingOrigin: false,
+          driveZoneShare: 0.42,
           aimProjectionShare: 0.58
         })}
         onChange={vi.fn()}
@@ -43,7 +43,7 @@ describe("HelmScreen", () => {
       rotateInPlaceThrottle: 0.02,
       driveDeadzoneShare: 0,
       aimDeadzoneShare: 0,
-      floatingOrigin: false,
+      driveZoneShare: 0.42,
       aimProjectionShare: 0.58
     };
     const screen = HelmScreen({ tuning: tuning(helm), onChange });

@@ -72,7 +72,7 @@ const PREVIEW_HELM = {
   hullAngularBrakingPerSecondSquared: 50,
   driveDeadzoneShare: 0,
   aimDeadzoneShare: 0,
-  floatingOrigin: false,
+  driveZoneShare: 0.42,
   aimProjectionShare: 0.58
 } as const;
 

@@ -670,7 +670,7 @@ export const publicHelmViewSchema = z
     /** Stick geometry, shares of the ring radius rather than pixels. */
     driveDeadzoneShare: finite.min(0),
     aimDeadzoneShare: finite.min(0),
-    floatingOrigin: z.boolean(),
+    driveZoneShare: finite.positive(),
     aimProjectionShare: finite.positive()
   })
   .strict();

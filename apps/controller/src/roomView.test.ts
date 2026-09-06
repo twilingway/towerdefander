@@ -103,7 +103,7 @@ describe("controller room view", () => {
           hullAngularBrakingPerSecondSquared: 50,
           driveDeadzoneShare: 0,
           aimDeadzoneShare: 0,
-          floatingOrigin: false,
+          driveZoneShare: 0.42,
           aimProjectionShare: 0.58
         },
         credits: 4
@@ -225,7 +225,7 @@ describe("controller room view", () => {
           hullAngularBrakingPerSecondSquared: 50,
           driveDeadzoneShare: 0,
           aimDeadzoneShare: 0,
-          floatingOrigin: false,
+          driveZoneShare: 0.42,
           aimProjectionShare: 0.58
         },
         teamUpgrade: {
@@ -376,7 +376,7 @@ describe("controller room view", () => {
           hullAngularBrakingPerSecondSquared: 50,
           driveDeadzoneShare: 0,
           aimDeadzoneShare: 0,
-          floatingOrigin: false,
+          driveZoneShare: 0.42,
           aimProjectionShare: 0.58
         },
         credits: 12

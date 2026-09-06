@@ -626,7 +626,7 @@ describe("version 1 migration", () => {
     const helm = { ...(tuning.helm as Record<string, unknown>) };
     delete helm.driveDeadzoneShare;
     delete helm.aimDeadzoneShare;
-    delete helm.floatingOrigin;
+    delete helm.driveZoneShare;
     delete helm.aimProjectionShare;
     tuning.helm = helm;
     const waves = [
@@ -666,7 +666,7 @@ describe("version 1 migration", () => {
     // had: a world-bearing turret and a stick with no dead zone.
     expect(saved?.turretMountedOnHull).toBe(false);
     expect(saved?.helm.driveDeadzoneShare).toBe(0);
-    expect(saved?.helm.floatingOrigin).toBe(false);
+    expect(saved?.helm.driveZoneShare).toBe(0.42);
     // And the point of every one of these tests: the campaign survived.
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });

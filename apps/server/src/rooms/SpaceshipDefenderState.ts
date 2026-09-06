@@ -73,7 +73,7 @@ export class HelmState extends Schema {
    */
   @type("float32") driveDeadzoneShare = 0;
   @type("float32") aimDeadzoneShare = 0;
-  @type("boolean") floatingOrigin = false;
+  @type("float32") driveZoneShare = 0.42;
   @type("float32") aimProjectionShare = 0.58;
 }
 

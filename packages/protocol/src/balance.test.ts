@@ -297,7 +297,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       rotateInPlaceThrottle: 0.02,
       driveDeadzoneShare: 0,
       aimDeadzoneShare: 0,
-      floatingOrigin: false,
+      driveZoneShare: 0.42,
       aimProjectionShare: 0.58
     },
     autopilot: autopilotTuning(),
