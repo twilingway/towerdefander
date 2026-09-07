@@ -244,6 +244,15 @@ class SpaceshipScene extends Phaser.Scene {
   private frameWindowFrames = 0;
   private frameWindowStutters = 0;
   private frameWindowShortestMs = Number.POSITIVE_INFINITY;
+  private frameWindowTotalMs = 0;
+  /**
+   * The average frame of the last second.
+   *
+   * Beside the worst on purpose: a rate says how many frames arrived, the worst
+   * says whether one of them was late, and only the mean says whether the whole
+   * second was heavy or one moment in it was.
+   */
+  private averageFrameMs = 0;
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
   /** Reused between frames; see `updateFocusCandidates`. */
@@ -535,21 +544,29 @@ class SpaceshipScene extends Phaser.Scene {
     const raw = this.game.loop.rawDelta;
     if (raw > this.frameWindowWorstMs) this.frameWindowWorstMs = raw;
     this.frameWindowFrames += 1;
+    this.frameWindowTotalMs += raw;
     if (raw > 0 && raw < this.frameWindowShortestMs) this.frameWindowShortestMs = raw;
     if (raw > this.frameWindowShortestMs * STUTTER_RATIO) this.frameWindowStutters += 1;
     if (time < this.frameWindowEndsAt) return;
     this.worstFrameMs = this.frameWindowWorstMs;
     this.stutterShare =
       this.frameWindowFrames > 0 ? this.frameWindowStutters / this.frameWindowFrames : 0;
+    this.averageFrameMs =
+      this.frameWindowFrames > 0 ? this.frameWindowTotalMs / this.frameWindowFrames : 0;
     this.updateMsPerSecond = this.frameWindowUpdateMs;
     this.worstUpdateMs = this.frameWindowWorstUpdateMs;
     this.frameWindowUpdateMs = 0;
     this.frameWindowWorstUpdateMs = 0;
     this.frameWindowWorstMs = 0;
     this.frameWindowFrames = 0;
+    this.frameWindowTotalMs = 0;
     this.frameWindowStutters = 0;
     this.frameWindowShortestMs = Number.POSITIVE_INFINITY;
     this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
+  }
+
+  readAverageFrameMs(): number {
+    return this.averageFrameMs;
   }
 
   readWorstFrameMs(): number {
@@ -1556,6 +1573,8 @@ export interface SpaceshipRuntime {
    * and a low frame rate are different complaints with different causes, and
    * the average above cannot tell them apart.
    */
+  /** The mean frame of the last second, beside the worst one. */
+  readAverageFrameMs(): number;
   readWorstFrameMs(): number;
   readStutterShare(): number;
   /** What the scene's own per-frame work costs, summed over the last second. */
@@ -1688,6 +1707,9 @@ export function createSpaceshipRuntime(
     },
     readFps() {
       return game.loop.actualFps;
+    },
+    readAverageFrameMs() {
+      return scene.readAverageFrameMs();
     },
     readWorstFrameMs() {
       return scene.readWorstFrameMs();

@@ -1,4 +1,5 @@
 import type { WorkMeter } from "../../model/workMeter.js";
+import type { LongTaskMeter } from "../../model/longTasks.js";
 import type { TrafficMeter } from "../../model/trafficMeter.js";
 
 /**
@@ -27,6 +28,10 @@ export function formatPing(value: number | null): string {
 
 export function DiagnosticsPanel({
   fps,
+  averageFrameMs,
+  longTasks,
+  tickHz,
+  patchHz,
   worstFrameMs,
   stutterShare,
   sceneMsPerSecond,
@@ -55,6 +60,18 @@ export function DiagnosticsPanel({
   onToggleVectors
 }: {
   readonly fps: number;
+  /** The mean frame of the last second, beside the worst one. */
+  readonly averageFrameMs: number;
+  /**
+   * Script that held the page for fifty milliseconds or more.
+   *
+   * The last line of the ledger: a long frame with no long task behind it was
+   * spent painting, not running, and nothing in this list can be made cheaper
+   * to fix it.
+   */
+  readonly longTasks: LongTaskMeter | undefined;
+  readonly tickHz: number;
+  readonly patchHz: number;
   readonly worstFrameMs: number;
   readonly stutterShare: number;
   /** What the Phaser scene's own per-frame work costs, over the last second. */
@@ -150,9 +167,24 @@ export function DiagnosticsPanel({
       </div>
       <dl>
         <div>
+          <dt>Темп</dt>
+          <dd data-testid="diagnostics-rates">
+            тик {tickHz} Гц · патч {patchHz} Гц
+          </dd>
+        </div>
+        <div>
+          <dt>Блокировки</dt>
+          <dd data-testid="diagnostics-longtasks">
+            {longTasks?.supported !== true
+              ? "браузер не считает"
+              : `${longTasks.perSecond.toFixed(1)}/с · худшая ${longTasks.worstMs.toFixed(0)} мс`}
+          </dd>
+        </div>
+        <div>
           <dt>Кадр</dt>
           <dd data-testid="diagnostics-frame">
-            {Number.isFinite(fps) && fps > 0 ? Math.round(fps) : "—"} к/с · худший{" "}
+            {Number.isFinite(fps) && fps > 0 ? Math.round(fps) : "—"} к/с · сред{" "}
+            {averageFrameMs.toFixed(1)} мс · худший{" "}
             {Number.isFinite(worstFrameMs) ? Math.round(worstFrameMs) : 0} мс · рывки{" "}
             {Math.round(stutterShare * 100)}%
           </dd>

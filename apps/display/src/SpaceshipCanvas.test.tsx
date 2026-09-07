@@ -30,6 +30,7 @@ describe("SpaceshipCanvas", () => {
       prepareHydration,
       update,
       readFps: () => 60,
+      readAverageFrameMs: () => 0,
       readWorstFrameMs: () => 0,
       readStutterShare: () => 0,
       readUpdateMsPerSecond: () => 0,

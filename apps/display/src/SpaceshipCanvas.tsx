@@ -20,6 +20,8 @@ interface SpaceshipCanvasProps {
    */
   readonly onFrameStats?: (stats: {
     readonly fps: number;
+    /** The mean frame of the last second, beside the worst one. */
+    readonly averageFrameMs: number;
     readonly worstFrameMs: number;
     readonly stutterShare: number;
     /** What the Phaser scene's own per-frame work costs, over the last second. */
@@ -196,6 +198,7 @@ export function SpaceshipCanvas({
       const fps = runtimeReference.current?.readFps() ?? 0;
       onFrameStatsReference.current?.({
         fps,
+        averageFrameMs: runtimeReference.current?.readAverageFrameMs() ?? 0,
         worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0,
         stutterShare: runtimeReference.current?.readStutterShare() ?? 0,
         updateMsPerSecond: runtimeReference.current?.readUpdateMsPerSecond() ?? 0,

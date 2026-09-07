@@ -1,10 +1,12 @@
 import { Client, type Room } from "@colyseus/sdk";
 import type { MaintenanceState } from "@spaceship-defender/protocol";
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
   MAX_START_WAVE,
+  PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
   ROOM_REFUSED_FOR_MAINTENANCE,
@@ -54,7 +56,8 @@ import { countDrawnEntities, getCurrentWaveUpgrade } from "./combatHudViewModel.
 import { WeaponHeat } from "./WeaponHeat.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { SoloCockpit } from "./screens/SoloCockpit/index.js";
-import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
+import { useSoloCockpit, type SoloCockpitControls } from "./model/hooks/useSoloCockpit.js";
+import { useBareControls } from "./model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
 import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
@@ -85,6 +88,7 @@ import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
 import { advanceWork, createWorkMeter, recordWork } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
+import { attachLongTaskMeter, type LongTaskMeter } from "./model/longTasks.js";
 import {
   buildVisibleDemoWorld,
   isVisibleDemoMode,
@@ -161,6 +165,7 @@ export function DisplayApp() {
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   const frameStatsReference = useRef({
     fps: 0,
+    averageFrameMs: 0,
     worstFrameMs: 0,
     stutterShare: 0,
     updateMsPerSecond: 0,
@@ -220,6 +225,7 @@ export function DisplayApp() {
    */
   const [interfaceEnabled, setInterfaceEnabled] = useState(true);
   const trafficReference = useRef<TrafficMeter | undefined>(undefined);
+  const longTasksReference = useRef<LongTaskMeter | undefined>(undefined);
   /*
    * Written on every patch and read twice a second. A ref rather than state:
    * setting state here would add a render to the very work being measured.
@@ -251,7 +257,7 @@ export function DisplayApp() {
    * The generation is the controller's own recipe — a new run or a new
    * connection restarts the sequences the room watermarks.
    */
-  const cockpitControls = useSoloCockpit({
+  const cockpitControls: SoloCockpitControls = useSoloCockpit({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
     /*
      * The switch itself, not the combat-gated one below.
@@ -318,13 +324,16 @@ export function DisplayApp() {
      * would be an instrument paying for itself four times a second, and the
      * panel pulls these on its own beat.
      */
+    const longTasks = attachLongTaskMeter(() => performance.now());
     const timer = window.setInterval(() => {
       const now = performance.now();
       snapshotCost.current = advanceWork(snapshotCost.current, now);
       commitCost.current = advanceWork(commitCost.current, now);
+      longTasksReference.current = longTasks.read(now);
     }, 500);
     return () => {
       window.clearInterval(timer);
+      longTasks.detach();
     };
   }, [diagnostics]);
 
@@ -371,6 +380,16 @@ export function DisplayApp() {
    * never acknowledged and pile up until the replay buffer overflows - which it
    * did, at ninety-five frames, about five seconds of waiting.
    */
+  /*
+   * With the interface off there is nothing left to steer with, and a ship
+   * standing still measures nothing. The canvas becomes the stick.
+   */
+  useBareControls(
+    shellReference,
+    cockpitControls,
+    !interfaceEnabled && cockpitPlayer !== undefined
+  );
+
   const streaming = cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
   useShipPrediction({
     room: roomReference.current,
@@ -547,6 +566,9 @@ export function DisplayApp() {
       pendingInput: pendingInputReference.current,
       drift: driftReference.current,
       traffic: trafficReference.current,
+      longTasks: longTasksReference.current,
+      tickHz: SIMULATION_TICK_RATE,
+      patchHz: Math.round(1000 / PATCH_INTERVAL_MS),
       snapshot: snapshotCost.current,
       commit: commitCost.current
     }),

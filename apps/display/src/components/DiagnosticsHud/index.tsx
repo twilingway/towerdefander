@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { DiagnosticsPanel } from "../DiagnosticsPanel/index.js";
+import type { LongTaskMeter } from "../../model/longTasks.js";
 import type { TrafficMeter } from "../../model/trafficMeter.js";
 import type { WorkMeter } from "../../model/workMeter.js";
 
@@ -14,6 +15,7 @@ import type { WorkMeter } from "../../model/workMeter.js";
  */
 export interface DiagnosticsReadings {
   readonly fps: number;
+  readonly averageFrameMs: number;
   readonly worstFrameMs: number;
   readonly stutterShare: number;
   readonly sceneMsPerSecond: number;
@@ -28,6 +30,11 @@ export interface DiagnosticsReadings {
   readonly pendingInput: number;
   readonly drift: number;
   readonly traffic: TrafficMeter | undefined;
+  /** Script that blocked the page long enough to cost a frame. */
+  readonly longTasks: LongTaskMeter | undefined;
+  /** The two rates the room runs at, so a mismatch is read rather than guessed. */
+  readonly tickHz: number;
+  readonly patchHz: number;
   readonly snapshot: WorkMeter | undefined;
   readonly commit: WorkMeter | undefined;
 }
