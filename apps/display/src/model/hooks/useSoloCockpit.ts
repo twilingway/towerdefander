@@ -157,6 +157,17 @@ export function useSoloCockpit({
   const gunnerReference = useRef<GunnerStream>(NEUTRAL_GUNNER);
   /** Which spurs are down; the cannon fires while either is. */
   const cannonSpursReference = useRef({ stick: false, trigger: false });
+  /**
+   * A trigger pressed and released between two samples.
+   *
+   * The stream reads the cockpit's state once per simulation step rather than
+   * being told when it changes, so a tap shorter than a step - which a mouse
+   * click often is - begins and ends inside one interval and reaches the room
+   * as nothing at all. That is the "fires on the third click" everyone hits.
+   * A press latches here until a frame has carried it; the room fires on the
+   * rising edge, so one frame is a shot.
+   */
+  const pendingTriggerReference = useRef({ cannon: false, machineGun: false });
   /*
    * The bearing each stick is currently sending, and when it was last touched.
    * A thumb is never still: two pixels of slip on the ring is a couple of
@@ -365,6 +376,12 @@ export function useSoloCockpit({
     const gunner = gunnerReference.current;
     const aim = resolveAim(gunner);
     const traverse = resolveTraverse(gunner);
+    // Read once, then spent: a latch that stayed set would hold the trigger
+    // down long after the thumb came off it.
+    const latched = pendingTriggerReference.current;
+    const firing = gunner.firing || latched.cannon;
+    const mgFiring = pilot.mgFiring || latched.machineGun;
+    pendingTriggerReference.current = { cannon: false, machineGun: false };
     return {
       vectorX: pilot.vector.x,
       vectorY: pilot.vector.y,
@@ -375,8 +392,8 @@ export function useSoloCockpit({
       aimY: aim.y,
       hasAimTurn: traverse !== null,
       aimTurn: traverse ?? 0,
-      mgFiring: pilot.mgFiring,
-      firing: gunner.firing
+      mgFiring,
+      firing
     };
   }
 
@@ -459,14 +476,17 @@ export function useSoloCockpit({
       updateGunner({ aim: NEUTRAL, aimHeading: null });
     },
     onMachineGunHold: (held) => {
+      if (held) pendingTriggerReference.current.machineGun = true;
       updatePilot({ mgFiring: held });
     },
     onCannonFromStick: (held) => {
       cannonSpursReference.current.stick = held;
+      if (held) pendingTriggerReference.current.cannon = true;
       updateGunner({ firing: anyCannonSpurDown() });
     },
     onCannonFromTrigger: (held) => {
       cannonSpursReference.current.trigger = held;
+      if (held) pendingTriggerReference.current.cannon = true;
       updateGunner({ firing: anyCannonSpurDown() });
     }
   };
