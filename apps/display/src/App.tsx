@@ -31,7 +31,15 @@ import {
   roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
-import { Profiler, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  Profiler,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode
+} from "react";
 
 import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
@@ -685,12 +693,9 @@ export function DisplayApp() {
           </span>
         </section>
       ) : (
-        <Profiler
-          id="battle"
-          onRender={(_id, _phase, actualDuration) => {
-            // Only while the panel is open: the profiler is not free, and an
-            // instrument that taxes what it measures reports its own weight.
-            if (!diagnostics) return;
+        <MeasuredWhenAsked
+          measuring={diagnostics}
+          onCommit={(actualDuration) => {
             commitCost.current = recordWork(commitCost.current, actualDuration, performance.now());
           }}
         >
@@ -855,7 +860,7 @@ export function DisplayApp() {
           */}
             {!diagnostics && <CrewLatency view={view} game={view.game} />}
           </section>
-        </Profiler>
+        </MeasuredWhenAsked>
       )}
       {visibleDemo ? (
         <VisibleDemoOverlay
@@ -930,3 +935,37 @@ function createDefaultControllerUrl(): string {
  * wrong about an angle corrects itself, being wrong about a position walks the
  * ship through a rock and then teleports it back out.
  */
+
+/**
+ * Wraps the battle in React's profiler only when the instruments were asked
+ * for.
+ *
+ * A profiler is not free: it times every commit whether or not anyone reads the
+ * number, and this tree commits on every patch. Mounted unconditionally it made
+ * the shared screen slower for every player who never opened the panel - and it
+ * showed, in a browser test that clears a wave against a clock.
+ *
+ * `measuring` comes from the address and never changes while the page lives, so
+ * the branch cannot remount the battle underneath a running fight.
+ */
+function MeasuredWhenAsked({
+  measuring,
+  onCommit,
+  children
+}: {
+  readonly measuring: boolean;
+  readonly onCommit: (actualDurationMs: number) => void;
+  readonly children: ReactNode;
+}) {
+  if (!measuring) return children;
+  return (
+    <Profiler
+      id="battle"
+      onRender={(_id, _phase, actualDuration) => {
+        onCommit(actualDuration);
+      }}
+    >
+      {children}
+    </Profiler>
+  );
+}
