@@ -58,7 +58,8 @@ import { getMaintenanceWindow } from "../maintenance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
-import { openSparringStand, refillSparringStand } from "./sparringStand.js";
+import { holdSparringStand, openSparringStand } from "./sparringStand.js";
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import { createRunSeed } from "./runSeed.js";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
@@ -109,14 +110,18 @@ const {
 const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
 
 /**
- * One continuous stream is capped at 20 messages per second on the client, so a
- * crew of one — who drives the ship and the turret from a single connection —
- * legitimately sends twice that. Colyseus force-closes a client that crosses
- * this ceiling, so the limit follows the number of streams a seat can own,
- * plus room for ready, votes and latency pongs.
+ * What a seat may send, and Colyseus force-closes a client that crosses it.
+ *
+ * A crew panel sends one continuous stream capped at twenty a second, plus room
+ * for ready, votes and latency pongs. A cockpit is different in kind: it holds
+ * an acknowledged input stream, one frame per simulation step, so its floor is
+ * the tick rate itself - sixty a second - and the headroom above that is for
+ * everything else the seat does. Set below the tick rate this closes the
+ * connection of a player doing nothing wrong, which shows on screen as the
+ * world freezing while a locally predicted ship flies on.
  */
 const CREW_MESSAGE_CEILING = 25;
-const SOLO_MESSAGE_CEILING = 50;
+const SOLO_MESSAGE_CEILING = SIMULATION_TICK_RATE + 30;
 /**
  * Head room between the end of the salvage window and the wave deadline it
  * pushes: the window closes on a simulation tick, the deadline on a host timer,
@@ -709,7 +714,7 @@ export class SpaceshipDefenderRoom extends Room<{
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     this.lastStepMs = this.nowMs() - stepStartedAt;
     if (sparringEnemies > 0) {
-      this.gameState = refillSparringStand(
+      this.gameState = holdSparringStand(
         this.gameState,
         sparringEnemies,
         this.gameConfig.arenaRadius

@@ -1838,7 +1838,12 @@ p {
    the top right belongs to the room header, and the bottom corners to thumbs. */
 .cockpit-assist {
   pointer-events: auto;
-  touch-action: manipulation;
+  /*
+   * None, like the triggers beside it. `manipulation` still leaves the browser
+   * deciding whether a touch is the start of a gesture, and that decision is
+   * paid for in the first taps of a fight.
+   */
+  touch-action: none;
   padding: 0.35rem 0.6rem;
   border-radius: 0.6rem;
   border: 1px solid rgba(126, 214, 255, 0.25);
@@ -2355,6 +2360,12 @@ p {
 .display-shell[data-panels="opaque"] .boss-health,
 .display-shell[data-panels="opaque"] .combat-radar,
 .display-shell[data-panels="opaque"] .diagnostics-panel,
-.display-shell[data-panels="opaque"] .cockpit-stick__ring {
+.display-shell[data-panels="opaque"] .cockpit-stick__ring,
+.display-shell[data-panels="opaque"] .cockpit-trigger,
+.display-shell[data-panels="opaque"] .cockpit-assist,
+.display-shell[data-panels="opaque"] .module-tree,
+.display-shell[data-panels="opaque"] .module-tree__toggle,
+.display-shell[data-panels="opaque"] .weapon-heat-row,
+.display-shell[data-panels="opaque"] .machine-gun-hud {
   background: #08181f;
 }
