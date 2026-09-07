@@ -161,6 +161,11 @@ export function DisplayApp() {
    * stops being a reason to redraw the interface at all.
    */
   const predictedPoseReference = useRef<PredictedPoseFrame | undefined>(undefined);
+  /** Written every frame, read twice a second by the panel; never a render. */
+  const pendingInputReference = useRef(0);
+  const driftReference = useRef(0);
+  const [pendingInput, setPendingInput] = useState(0);
+  const [drift, setDrift] = useState(0);
   /**
    * The parallax layers, asked about rather than settled: they are four
    * full-screen sprites and three blends, and a phone is where that is paid for.
@@ -264,6 +269,8 @@ export function DisplayApp() {
     if (!diagnostics) return undefined;
     const timer = window.setInterval(() => {
       const now = performance.now();
+      setPendingInput(pendingInputReference.current);
+      setDrift(driftReference.current);
       snapshotCost.current = advanceWork(snapshotCost.current, now);
       commitCost.current = advanceWork(commitCost.current, now);
       setSnapshotReading(snapshotCost.current);
@@ -338,6 +345,10 @@ export function DisplayApp() {
           },
     onPose: (pose) => {
       predictedPoseReference.current = pose;
+    },
+    onPending: (pending, driftEma) => {
+      pendingInputReference.current = pending;
+      driftReference.current = driftEma;
     }
   });
 
@@ -810,6 +821,8 @@ export function DisplayApp() {
                 traffic={traffic}
                 snapshot={snapshotReading}
                 commit={commitReading}
+                pendingInput={pendingInput}
+                drift={drift}
                 predictionEnabled={predictionEnabled}
                 onTogglePrediction={() => {
                   setPredictionEnabled((enabled) => !enabled);

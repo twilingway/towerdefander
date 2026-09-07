@@ -538,18 +538,29 @@ export class SpaceshipDefenderRoom extends Room<{
   }
 
   /**
-   * Spends every solo frame that arrived, oldest first.
+   * Spends exactly one solo frame per step, oldest first.
    *
-   * One frame per step in arrival order rather than "take only the newest",
-   * which is the lab's rule and its reason: taking the newest jumps the
-   * acknowledgement past frames that were never simulated, and the client then
-   * replays from a state the server never produced.
+   * One, not all of them, and the difference is the whole of whether prediction
+   * holds. The client advances one step per frame it sends; if the room spent
+   * two frames inside a single step the client would have stepped twice where
+   * the room stepped once, and the two ships would part company for good -
+   * shots then leave from where the server thinks the hull is, which is not
+   * where the pilot sees it.
+   *
+   * The lab has the same rule and reaches it from the other side: it steps the
+   * tank once per input. We cannot step the world twice, so we take one input.
+   *
+   * Nor "only the newest": that would jump the acknowledgement past frames that
+   * were never simulated, and the client would replay from a state the room
+   * never produced. What is not spent this step waits in the buffer, and the
+   * pilot's own instrument shows how deep it is getting.
    */
   private applySoloInputs(): void {
     if (this.gameState === undefined) return;
     for (const [sessionId, role] of this.connectionRoles) {
       if (role !== "solo") continue;
-      for (const input of this.soloInputs.get(sessionId)) {
+      const input = this.soloInputs.get(sessionId).next();
+      if (input !== undefined) {
         const receivedTick = this.gameState.clock.tick;
         this.gameState = applyPilotInput(this.gameState, {
           vector: { x: input.vectorX, y: input.vectorY },

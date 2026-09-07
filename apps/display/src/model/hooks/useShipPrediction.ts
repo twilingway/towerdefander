@@ -59,7 +59,8 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
   enabled,
   source,
   world,
-  onPose
+  onPose,
+  onPending
 }: {
   readonly room: Room<unknown, TState> | undefined;
   readonly enabled: boolean;
@@ -75,9 +76,19 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
    * a ref; the scene reads the ref.
    */
   readonly onPose: (pose: PredictedPoseFrame | undefined) => void;
+  /**
+   * How deep the replay is: frames we have sent that the room has not
+   * acknowledged.
+   *
+   * The number that tells a healthy prediction from a drowning one. It should
+   * sit at a couple of frames - one round trip. Climbing means the room is not
+   * spending what we send, and every ack then replays a longer and longer
+   * buffer until the device gives up.
+   */
+  readonly onPending?: (pending: number, driftEma: number) => void;
 }): void {
-  const latest = useRef({ source, world, enabled, onPose });
-  latest.current = { source, world, enabled, onPose };
+  const latest = useRef({ source, world, enabled, onPose, onPending });
+  latest.current = { source, world, enabled, onPose, onPending };
 
   useEffect(() => {
     if (room === undefined) return undefined;

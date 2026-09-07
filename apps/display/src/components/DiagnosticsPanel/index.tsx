@@ -37,6 +37,8 @@ export function DiagnosticsPanel({
   traffic,
   snapshot,
   commit,
+  pendingInput,
+  drift,
   predictionEnabled,
   onTogglePrediction,
   backgroundEnabled,
@@ -61,6 +63,10 @@ export function DiagnosticsPanel({
   readonly snapshot: WorkMeter | undefined;
   /** What React spends committing that view, from its own profiler. */
   readonly commit: WorkMeter | undefined;
+  /** Frames sent that the room has not acknowledged; a couple is healthy. */
+  readonly pendingInput: number;
+  /** Persistent disagreement between the predicted ship and the room's. */
+  readonly drift: number;
   readonly predictionEnabled: boolean;
   readonly onTogglePrediction: () => void;
   readonly backgroundEnabled: boolean;
@@ -147,6 +153,12 @@ export function DiagnosticsPanel({
             {commit === undefined
               ? "—"
               : `${commit.msPerSecond.toFixed(0)} мс/с · ${commit.samplesPerSecond.toFixed(0)} коммит/с · худший ${commit.worstMs.toFixed(1)} мс`}
+          </dd>
+        </div>
+        <div>
+          <dt>Ввод в пути</dt>
+          <dd data-testid="diagnostics-pending">
+            {pendingInput} · расхождение {drift.toFixed(2)}
           </dd>
         </div>
         <div>
