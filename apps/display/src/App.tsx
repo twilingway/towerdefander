@@ -43,7 +43,7 @@ import {
 } from "react";
 
 import { BossHealth } from "./BossHealth.js";
-import { CombatRadar } from "./CombatRadar.js";
+import { PolledCombatRadar } from "./CombatRadar.js";
 import { CrewLatency } from "./components/CrewLatency/index.js";
 import { useLetterboxBars } from "./useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
@@ -511,6 +511,16 @@ export function DisplayApp() {
    * reference written by the frame loop, the socket or the patch handler, none
    * of which render the page to do it.
    */
+  /**
+   * The world the dial reads, whichever half of the app is driving it.
+   *
+   * The scene's reader answers only for a room; this one answers for the layout
+   * preview too, which has no room and hands its fixture straight down.
+   */
+  const latestViewReference = useRef(view);
+  latestViewReference.current = view;
+  const readRadarGame = useCallback(() => latestViewReference.current?.game ?? undefined, []);
+
   /** The three numbers the corner readout shows, pulled rather than pushed. */
   const readFrameStats = useCallback(
     () => ({
@@ -1012,7 +1022,7 @@ export function DisplayApp() {
                 }}
               />
             )}
-            {interfaceEnabled && <CombatRadar game={view.game} />}
+            {interfaceEnabled && <PolledCombatRadar read={readRadarGame} />}
             {view.game.encounter.phase === "intermission" && (
               <TeamUpgradeOverlay
                 teamUpgrade={view.game.teamUpgrade}

@@ -1,11 +1,18 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
-import { memo, useId } from "react";
+import { memo, useId, useEffect, useState } from "react";
 
 import {
   createRadarProjection,
   getShieldStatusLabel,
   projectWorldToRadar
 } from "./combatHudViewModel.js";
+
+/**
+ * How often the dial redraws. Three times a second reads as live on a sweep
+ * that spans the whole arena, and every one of them is a commit not spent in
+ * the frame a patch landed on.
+ */
+const RADAR_INTERVAL_MS = 320;
 
 interface CombatRadarProps {
   readonly game: DisplayGameSnapshot;
@@ -351,4 +358,32 @@ const SHIELD_STROKE = "#4fb8ff";
 function hullStroke(fraction: number): string {
   const hue = 138 * Math.min(1, Math.max(0, (fraction - 0.1) / 0.65));
   return `hsl(${String(Math.round(hue))} 72% 52%)`;
+}
+
+/**
+ * The radar on its own clock.
+ *
+ * It was the most expensive thing in the battle tree - a third of what a
+ * publish cost - and it is a dial: it does not need to arrive in the same
+ * commit as everything else. Pulling instead means a patch no longer pays for
+ * it, and the commit that lands in the frame the patch arrives on gets shorter
+ * by exactly that much.
+ */
+export function PolledCombatRadar({
+  read
+}: {
+  readonly read: () => DisplayGameSnapshot | undefined;
+}) {
+  const [game, setGame] = useState<DisplayGameSnapshot | undefined>(read);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setGame(read());
+    }, RADAR_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [read]);
+
+  return game === undefined ? null : <CombatRadar game={game} />;
 }
