@@ -54,6 +54,8 @@ interface DiagnosticsHudProps {
   readonly onToggleVectors: () => void;
   readonly interfaceEnabled: boolean;
   readonly onToggleInterface: () => void;
+  readonly opaquePanels: boolean;
+  readonly onToggleOpaquePanels: () => void;
 }
 
 /**

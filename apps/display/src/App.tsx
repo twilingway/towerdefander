@@ -224,6 +224,14 @@ export function DisplayApp() {
    * them gone the page is the canvas, and whatever is left is the renderer.
    */
   const [interfaceEnabled, setInterfaceEnabled] = useState(true);
+  /**
+   * Panels the compositor can draw over instead of through.
+   *
+   * A switch rather than a decision: translucent panels make the GPU draw the
+   * arena behind them and blend on top every frame, and whether that matters is
+   * a question for the device, not for taste.
+   */
+  const [opaquePanels, setOpaquePanels] = useState(false);
   const trafficReference = useRef<TrafficMeter | undefined>(undefined);
   const longTasksReference = useRef<LongTaskMeter | undefined>(undefined);
   /*
@@ -863,6 +871,7 @@ export function DisplayApp() {
     <main
       ref={shellReference}
       className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
+      data-panels={opaquePanels ? "opaque" : "glass"}
       data-bars={bars.placement}
       style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
     >
@@ -1041,6 +1050,10 @@ export function DisplayApp() {
                 interfaceEnabled={interfaceEnabled}
                 onToggleInterface={() => {
                   setInterfaceEnabled((enabled) => !enabled);
+                }}
+                opaquePanels={opaquePanels}
+                onToggleOpaquePanels={() => {
+                  setOpaquePanels((opaque) => !opaque);
                 }}
               />
             )}

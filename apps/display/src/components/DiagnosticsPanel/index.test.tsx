@@ -24,6 +24,8 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       offscreen={120}
       playbackDelayMs={160}
       patchIntervalMs={62}
+      opaquePanels={false}
+      onToggleOpaquePanels={() => undefined}
       interfaceEnabled={true}
       onToggleInterface={() => undefined}
       traffic={{ ...createTrafficMeter(), inPerSecond: 5_120, outPerSecond: 640, totalIn: 51_200 }}

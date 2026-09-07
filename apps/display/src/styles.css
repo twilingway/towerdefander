@@ -2313,3 +2313,48 @@ p {
     font-size: 0.6rem;
   }
 }
+
+/*
+ * The panels over the arena, kept out of the arena's frame.
+ *
+ * `contain: paint` promises the browser that nothing inside draws outside the
+ * box, so a change in one panel repaints that box instead of walking the layer
+ * it shares with a canvas that repaints sixty times a second. `will-change`
+ * puts each on its own composited layer, so that repaint never becomes the
+ * arena's.
+ *
+ * Costs a layer each, which is why the list is short and battle-only: a phone
+ * pays for layers in memory, and the ones worth having are the ones that sit
+ * over a moving picture.
+ */
+.display-shell--battle .spaceship-hud > div,
+.crew-latency-overlay,
+.wave-countdown,
+.boss-health,
+.combat-radar,
+.solo-cockpit,
+.diagnostics-panel {
+  contain: paint;
+  will-change: transform;
+}
+
+/*
+ * Panels the GPU can draw over instead of through.
+ *
+ * A translucent panel makes the compositor draw the arena behind it and then
+ * blend the panel on top, every frame, over the panel's whole area. An opaque
+ * one lets it skip what is behind entirely. That is the whole difference, and
+ * it is worth a switch rather than an opinion: the shell carries the choice and
+ * the panel beside it flips it, so the cost can be read on the device that pays
+ * it.
+ */
+.display-shell[data-panels="opaque"] .display-shell--battle .spaceship-hud > div,
+.display-shell[data-panels="opaque"] .spaceship-hud > div,
+.display-shell[data-panels="opaque"] .crew-latency-overlay,
+.display-shell[data-panels="opaque"] .wave-countdown,
+.display-shell[data-panels="opaque"] .boss-health,
+.display-shell[data-panels="opaque"] .combat-radar,
+.display-shell[data-panels="opaque"] .diagnostics-panel,
+.display-shell[data-panels="opaque"] .cockpit-stick__ring {
+  background: #08181f;
+}

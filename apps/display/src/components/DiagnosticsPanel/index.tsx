@@ -57,6 +57,8 @@ export function DiagnosticsPanel({
   vectorsEnabled,
   interfaceEnabled,
   onToggleInterface,
+  opaquePanels,
+  onToggleOpaquePanels,
   onToggleVectors
 }: {
   readonly fps: number;
@@ -115,10 +117,22 @@ export function DiagnosticsPanel({
   /** Everything React draws over the world, on or off. */
   readonly interfaceEnabled: boolean;
   readonly onToggleInterface: () => void;
+  /** Panels the compositor draws over rather than through. */
+  readonly opaquePanels: boolean;
+  readonly onToggleOpaquePanels: () => void;
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
       <div className="diagnostics-panel__switches">
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
+          data-testid="diagnostics-panels-toggle"
+          data-panels={opaquePanels ? "opaque" : "glass"}
+          onClick={onToggleOpaquePanels}
+        >
+          Панели: {opaquePanels ? "плотные" : "стекло"}
+        </button>
         <button
           type="button"
           className="diagnostics-panel__toggle"
