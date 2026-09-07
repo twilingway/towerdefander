@@ -15,6 +15,8 @@ import {
   type BalanceTuning
 } from "@spaceship-defender/protocol";
 
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
+
 import { createDefaultTuning } from "./store.js";
 
 type LegacyRecord = Record<string, unknown>;
@@ -104,8 +106,14 @@ const LOOT_FIELDS = [
   "lootBossWindowTicks"
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
-/** Simulation step in seconds; the balance file stores weapon lifetimes in ticks. */
-const TICK_SECONDS = 0.05;
+/**
+ * Simulation step in seconds; the balance file stores weapon lifetimes in ticks.
+ *
+ * The current step, not the one the file was written at: durations are rescaled
+ * to the current rate before any of this runs, so by the time a weapon reaches
+ * here its lifetime is already counted in today's ticks.
+ */
+const TICK_SECONDS = 1 / SIMULATION_TICK_RATE;
 /** A shot at the very edge of its reach expires on arrival, so aim shorter. */
 const MIGRATED_RANGE_SHARE = 0.7;
 
@@ -471,6 +479,35 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
  * those documents forward instead of silently replacing an operator's balance
  * with defaults.
  */
+/**
+ * Every duration counted in ticks, rescaled for a new simulation rate.
+ *
+ * A preset written against twenty steps a second says "reload in three ticks",
+ * and at sixty that is a sixth of a second instead of half of one - the same
+ * file, three times the fire rate, across every weapon, wave delay and shield
+ * timing at once. Reading the name rather than a list of paths is deliberate:
+ * the fields live at half a dozen depths and new ones arrive with every
+ * feature, and a list is what gets forgotten.
+ */
+function scaleTickFields(value: unknown, factor: number): unknown {
+  if (Array.isArray(value)) return value.map((item) => scaleTickFields(item, factor));
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      if (key.endsWith("Ticks") && typeof item === "number" && Number.isFinite(item)) {
+        return [key, Math.round(item * factor)];
+      }
+      return [key, scaleTickFields(item, factor)];
+    })
+  );
+}
+
+/**
+ * Steps a second before the rate moved, and after it. Everything a preset
+ * counts in ticks is multiplied by their ratio, once, on the way forward.
+ */
+const TICK_RATE_BEFORE_60_HZ = 20;
+
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;
   const isLegacy = LEGACY_BALANCE_FILE_VERSIONS.some((candidate) => candidate === version);
@@ -479,7 +516,15 @@ export function migrateBalanceDocument(raw: unknown): unknown {
   return {
     ...raw,
     version: BALANCE_FILE_VERSION,
-    presets: readArray(raw, "presets").map((preset) => migratePreset(preset, defaults))
+    // Rescaled before the defaults are folded in, not after: the defaults are
+    // already written at the new rate, and scaling them a second time would
+    // triple every knob the operator never touched.
+    presets: readArray(raw, "presets").map((preset) =>
+      migratePreset(
+        scaleTickFields(preset, SIMULATION_TICK_RATE / TICK_RATE_BEFORE_60_HZ),
+        defaults
+      )
+    )
   };
 }
 

@@ -30,18 +30,21 @@ export function advanceClock(clock: SimulationClock, stepMs: number): Simulation
     throw new RangeError("clock.tick must be a non-negative safe integer");
   }
 
-  if (!Number.isSafeInteger(clock.elapsedMs) || clock.elapsedMs < 0) {
-    throw new RangeError("clock.elapsedMs must be a non-negative safe integer");
+  // Milliseconds, not counts: sixty steps a second is 16.666..., so neither the
+  // step nor the elapsed total can be whole. The tick beside them still is, and
+  // it is what everything in the balance is counted in.
+  if (!Number.isFinite(clock.elapsedMs) || clock.elapsedMs < 0) {
+    throw new RangeError("clock.elapsedMs must be a non-negative finite number");
   }
 
-  if (!Number.isSafeInteger(stepMs) || stepMs <= 0) {
-    throw new RangeError("stepMs must be a positive safe integer");
+  if (!Number.isFinite(stepMs) || stepMs <= 0) {
+    throw new RangeError("stepMs must be a positive finite number");
   }
 
   const nextTick = clock.tick + 1;
   const nextElapsedMs = clock.elapsedMs + stepMs;
 
-  if (!Number.isSafeInteger(nextTick) || !Number.isSafeInteger(nextElapsedMs)) {
+  if (!Number.isSafeInteger(nextTick) || !Number.isFinite(nextElapsedMs)) {
     throw new RangeError("simulation clock overflow");
   }
 

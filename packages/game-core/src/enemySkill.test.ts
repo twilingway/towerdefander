@@ -147,7 +147,10 @@ describe("a wing that spreads instead of stacking", () => {
     expect(massing.enemySkill.profiles.rookie.flankSpread).toBe(0);
     let spread = stackedWing();
     let massed = stackedWing();
-    for (let step = 0; step < 240; step += 1) {
+    // Twelve seconds of flying, counted from the step rather than from the
+    // number of steps it took at twenty a second.
+    const steps = Math.round(12_000 / config.fixedStepMs);
+    for (let step = 0; step < steps; step += 1) {
       spread = advanceSpaceshipSimulation(spread, config);
       massed = advanceSpaceshipSimulation(massed, massing);
     }

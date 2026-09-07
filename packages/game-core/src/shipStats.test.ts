@@ -108,7 +108,18 @@ describe("computeShipStats", () => {
  * first from passing for the boring reason that the scenario never touches the
  * field at all.
  */
-const TRACE_TICKS = 600;
+/**
+ * Thirty seconds of flying, in whatever ticks that is.
+ *
+ * The phases below - burn, coast, reverse, snap the aim across - are durations,
+ * and a fixed count of ticks was the same durations said in the numbers of a
+ * twenty hertz simulation. Too short and a stat never gets exercised, which
+ * turns this guard into one that cannot fail.
+ */
+const TRACE_TICKS = Math.round(30_000 / createSpaceshipSimulationConfig().fixedStepMs);
+/** The flight's own phases, scaled with it. */
+const TRACE_PHASE = Math.round(TRACE_TICKS / 4);
+const TRACE_AIM_PHASE = Math.round(TRACE_TICKS / 10);
 
 /**
  * One scenario per weapon kind, and the stat that only that kind reads is
@@ -247,11 +258,18 @@ function runTrace(config: SpaceshipSimulationConfig, initial: SpaceshipSimulatio
   let state = initial;
   for (let tick = 0; tick < TRACE_TICKS; tick += 1) {
     const receivedTick = state.clock.tick;
-    const phase = tick % 150;
-    const thrust = phase < 70 ? 1 : phase < 100 ? 0 : phase < 130 ? -1 : 1;
+    const phase = tick % TRACE_PHASE;
+    const thrust =
+      phase < TRACE_PHASE * 0.47
+        ? 1
+        : phase < TRACE_PHASE * 0.67
+          ? 0
+          : phase < TRACE_PHASE * 0.87
+            ? -1
+            : 1;
     // A bearing that snaps to the opposite side: a turret that traverses at any
     // rate reaches a drifting target, and then its rate never shows up.
-    const aim = tick % 60 < 30 ? 0 : Math.PI;
+    const aim = tick % TRACE_AIM_PHASE < TRACE_AIM_PHASE / 2 ? 0 : Math.PI;
     state = applyPilotInput(state, {
       vector: { x: 0, y: 0 },
       mgFiring: tick % 8 < 6,

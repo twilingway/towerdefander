@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 36 as const;
+export const BALANCE_FILE_VERSION = 37 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35
+  28, 29, 30, 31, 32, 33, 34, 35, 36
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -182,7 +182,7 @@ export const enemySkillProfileSchema = z
   .object({
     // --- Perception and aim ---
     /** Ticks between refreshes of the remembered ship position and velocity. */
-    reactionTicks: z.number().int().min(0).max(40),
+    reactionTicks: z.number().int().min(0).max(120),
     /** Seeded spread on the barrel, in radians. */
     aimJitterRadians: z.number().min(0).max(0.6),
     /** 0 fires where the ship is, 1 where it is going to be. */
@@ -198,7 +198,7 @@ export const enemySkillProfileSchema = z
     /** How far the swarm spreads around the ship instead of massing on one side. */
     flankSpread: z.number().min(0).max(1),
     /** Ticks ahead an incoming friendly shot is dodged; 0 never dodges. */
-    evadeHorizonTicks: z.number().int().min(0).max(40),
+    evadeHorizonTicks: z.number().int().min(0).max(120),
 
     // --- Discipline ---
     /** HP fraction below which the enemy backs off; 0 never retreats. */
@@ -292,8 +292,8 @@ export const waveSpawnEntrySchema = z
      * is a schedule: two groups with different starts arrive interleaved, and
      * the order they are written in decides nothing.
      */
-    startDelayTicks: nonNegativeInteger.max(20_000),
-    spawnIntervalTicks: positiveInteger.max(20_000),
+    startDelayTicks: nonNegativeInteger.max(60_000),
+    spawnIntervalTicks: positiveInteger.max(60_000),
     // Empty means the whole circumference; several sectors are picked between per spawn.
     sectors: z.array(spawnSectorSchema).max(SPAWN_SECTORS.length).readonly(),
     /** Overrides the wave and director multipliers for this group only. */
@@ -399,9 +399,9 @@ export const autopilotProfileSchema = z
   .object({
     // --- Accuracy and reaction ---
     /** Ticks a fresh target must persist before the bot commits to it. */
-    reactionTicks: z.number().int().min(0).max(40),
+    reactionTicks: z.number().int().min(0).max(120),
     /** Ticks between target re-rankings; longer means a more sluggish pilot. */
-    retargetIntervalTicks: z.number().int().min(1).max(60),
+    retargetIntervalTicks: z.number().int().min(1).max(180),
     /** Seeded aim noise in radians. */
     aimJitterRadians: z.number().min(0).max(0.6),
     /** 0 aims where the target is, 1 where it will be. */
@@ -423,7 +423,7 @@ export const autopilotProfileSchema = z
     standoffShare: z.number().min(0).max(1.5),
     standoffDistance: z.number().min(200).max(2000),
     /** How far ahead the pilot looks for a hit the shield will not cover. */
-    evadeHorizonTicks: z.number().int().min(0).max(40),
+    evadeHorizonTicks: z.number().int().min(0).max(120),
 
     // --- Resource discipline ---
     /** Half-angle around the ship heading inside which the nose gun fires. */
@@ -435,7 +435,7 @@ export const autopilotProfileSchema = z
     /** Share of the cannon's heat the bot will spend before holding fire. */
     cannonHeatCeiling: z.number().min(0.1).max(1),
     /** Ticks before predicted contact at which the shield goes up. */
-    shieldLeadTicks: z.number().int().min(0).max(40),
+    shieldLeadTicks: z.number().int().min(0).max(120),
     /** Fraction of shield capacity below which the shield stays down. */
     shieldMinEnergy: z.number().min(0).max(0.9)
   })

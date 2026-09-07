@@ -12,6 +12,7 @@ import {
   type ServerErrorCode
 } from "@spaceship-defender/protocol";
 import {
+  createSpaceshipSimulationConfig,
   createTerminalCombatState,
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
@@ -164,6 +165,33 @@ function startGame(room = createRoom()): {
 function activeBalance() {
   const config = getBalanceStore().getActiveSimulationConfig();
   return { capacity: config.shieldCapacity, maxHp: config.spaceshipMaxHp };
+}
+
+/** What a single step of holding the shield up costs, at whatever rate the core runs. */
+function oneStepOfDrain(): number {
+  const config = createSpaceshipSimulationConfig();
+  return (config.shieldDrainPerSecond * config.fixedStepMs) / 1000;
+}
+
+/** What a single step of full thrust is worth, at whatever rate the core runs. */
+function oneStepOfThrust(): number {
+  const config = createSpaceshipSimulationConfig();
+  return (config.spaceshipAccelerationPerSecondSquared * config.fixedStepMs) / 1000;
+}
+
+/**
+ * One step of thrust from a standstill, as a rule rather than as the two numbers
+ * it produced at twenty steps a second.
+ */
+function expectOneStepOfThrust(room: SpaceshipDefenderRoom): void {
+  const config = createSpaceshipSimulationConfig();
+  const speed = oneStepOfThrust();
+  expect(room.state.game.spaceship.velocityX).toBeCloseTo(speed, 6);
+  expect(room.state.game.spaceship.velocityY).toBe(0);
+  expect(room.state.game.spaceship.x).toBeCloseTo(
+    config.worldWidth / 2 + (speed * config.fixedStepMs) / 1000,
+    6
+  );
 }
 
 function armedLoops(spy: {
@@ -402,7 +430,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
       // Twenty steps a second, and the number is the one clients are told: the
       // rate rides the join handshake, so a rate declared once the crew is
       // aboard reaches nobody and their prediction refuses to start.
-      expect(armedLoops(arm)).toEqual([20]);
+      expect(armedLoops(arm)).toEqual([60]);
     } finally {
       arm.mockRestore();
     }
@@ -523,8 +551,11 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     );
   });
 
-  it("raises the message ceiling for the two streams a solo player owns", () => {
-    expect(createRoom(1).maxMessagesPerSecond).toBe(50);
+  it("raises the message ceiling above the rate a cockpit streams at", () => {
+    // A cockpit sends one input frame per simulation step, so a ceiling at or
+    // below the tick rate closes the connection of a player doing nothing
+    // wrong - which shows on screen as the world freezing mid-fight.
+    expect(createRoom(1).maxMessagesPerSecond).toBeGreaterThan(60);
     expect(createRoom(2).maxMessagesPerSecond).toBe(25);
     expect(createRoom(3).maxMessagesPerSecond).toBe(25);
   });
@@ -685,7 +716,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
       mgFiring: false
     });
     room.advanceGameStep();
-    expect(room.state.game.spaceship.velocityX).toBe(-32);
+    expect(room.state.game.spaceship.velocityX).toBeCloseTo(-oneStepOfThrust(), 6);
   });
 
   it("rehydrates v13 geometry through reconnect without widening StateView visibility", async () => {
@@ -922,7 +953,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       mgFiring: false
     });
     room.advanceGameStep();
-    expect(room.state.game.spaceship).toMatchObject({ x: 2201.6, velocityX: 32, velocityY: 0 });
+    expectOneStepOfThrust(room);
   });
 
   it("rejects an unsafe sequence without advancing the connection watermark", () => {
@@ -950,7 +981,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     room.advanceGameStep();
 
     expect(countErrors(pilot, "invalid_message")).toBe(1);
-    expect(room.state.game.spaceship).toMatchObject({ x: 2201.6, velocityX: 32, velocityY: 0 });
+    expectOneStepOfThrust(room);
   });
 
   it("limits held gunner fire by simulation cooldown", () => {
@@ -972,10 +1003,14 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     expect(room.state.game.turretAngle).toBeGreaterThan(-Math.PI / 2);
     const firstProjectile = [...room.state.game.display.friendlyProjectiles.values()][0];
     if (firstProjectile === undefined) throw new Error("Expected a friendly projectile.");
-    expect(Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX)).toBeCloseTo(
-      (-13 * Math.PI) / 6000
-    );
-    for (let index = 0; index < 2; index += 1) room.advanceGameStep();
+    // Along the barrel as it was when the shot left, not where the barrel has
+    // since traversed to: the bearing sits between the two.
+    const muzzleBearing = Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX);
+    expect(muzzleBearing).toBeLessThan(0);
+    expect(muzzleBearing).toBeGreaterThanOrEqual(room.state.game.turretAngle);
+    // The cadence is the cooldown, counted in ticks: waiting a fixed two steps
+    // was the same thing said in the numbers of a twenty hertz simulation.
+    const cooldown = createSpaceshipSimulationConfig().fireCooldownTicks;
     room.handleGunnerInput(gunner.client, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
@@ -985,7 +1020,7 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 0, y: -1 },
       firing: true
     });
-    for (let index = 0; index < 2; index += 1) room.advanceGameStep();
+    for (let index = 0; index < cooldown; index += 1) room.advanceGameStep();
     expect(room.state.game.display.friendlyProjectiles).toHaveLength(2);
   });
 
@@ -1003,7 +1038,10 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     });
     raiseShield(room);
     expect(room.state.game.shield.active).toBe(true);
-    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
+    expect(room.state.game.shield.energy).toBeCloseTo(
+      activeBalance().capacity - oneStepOfDrain(),
+      6
+    );
     expect(room.state.game.shield.angle).toBeGreaterThan(0);
     expect(room.state.game.shield.angle).toBeLessThan(Math.PI);
   });
@@ -1076,13 +1114,19 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       firing: false
     });
 
+    /*
+     * Sampled around the moment the order goes stale rather than at fixed
+     * indices: the timeout is counted in ticks, so at a finer rate the same
+     * moment simply sits further down the list.
+     */
+    const timeout = createSpaceshipSimulationConfig().inputTimeoutTicks;
     const angles: number[] = [];
-    for (let step = 0; step < 5; step += 1) {
+    for (let step = 0; step < timeout + 2; step += 1) {
       room.advanceGameStep();
       angles.push(room.state.game.turretAngle);
     }
-    const thirdIncrement = (angles[3] ?? 0) - (angles[2] ?? 0);
-    const staleIncrement = (angles[4] ?? 0) - (angles[3] ?? 0);
+    const thirdIncrement = (angles[timeout - 2] ?? 0) - (angles[timeout - 3] ?? 0);
+    const staleIncrement = (angles[timeout + 1] ?? 0) - (angles[timeout] ?? 0);
     expect(staleIncrement).toBeGreaterThan(0);
     expect(staleIncrement).toBeLessThan(thirdIncrement);
   });
@@ -1139,9 +1183,15 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     expect(room.state.game.shield.energy).toBe(activeBalance().capacity);
     // Coming up spends nothing; the drain starts with the hold.
     raiseShield(room);
-    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
+    expect(room.state.game.shield.energy).toBeCloseTo(
+      activeBalance().capacity - oneStepOfDrain(),
+      6
+    );
     room.advanceGameStep();
-    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 2);
+    expect(room.state.game.shield.energy).toBeCloseTo(
+      activeBalance().capacity - 2 * oneStepOfDrain(),
+      6
+    );
   });
 
   it("publishes depletion and re-arms itself once the battery is back", () => {
@@ -1274,7 +1324,10 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     vi.spyOn(room, "allowReconnection").mockResolvedValue(shield.client);
     await room.onLeave(shield.client, 1006);
     expect(room.state.game.shield.active).toBe(false);
-    expect(room.state.game.shield.energy).toBe(activeBalance().capacity - 1);
+    expect(room.state.game.shield.energy).toBeCloseTo(
+      activeBalance().capacity - oneStepOfDrain(),
+      6
+    );
   });
 
   it("does not expose a role requested by the controller", () => {

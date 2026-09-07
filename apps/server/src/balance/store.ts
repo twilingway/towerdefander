@@ -79,8 +79,8 @@ const DEFAULT_HELM: HelmTuning = {
  */
 const LASER_PROFILES: AutopilotLevelProfiles = {
   rookie: {
-    reactionTicks: 12,
-    retargetIntervalTicks: 40,
+    reactionTicks: 36,
+    retargetIntervalTicks: 120,
     aimJitterRadians: 0.18,
     leadFactor: 0,
     orbit: false,
@@ -100,8 +100,8 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     shieldMinEnergy: 0
   },
   veteran: {
-    reactionTicks: 20,
-    retargetIntervalTicks: 30,
+    reactionTicks: 60,
+    retargetIntervalTicks: 90,
     aimJitterRadians: 0.06,
     leadFactor: 0.65,
     orbit: true,
@@ -110,17 +110,17 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     threatAwareShield: true,
     standoffShare: 0.85,
     standoffDistance: 400,
-    evadeHorizonTicks: 12,
+    evadeHorizonTicks: 36,
     mgConeRadians: 0.35,
     cannonConeRadians: 0.2,
     mgHeatCeiling: 0.75,
     cannonHeatCeiling: 0.8,
-    shieldLeadTicks: 20,
+    shieldLeadTicks: 60,
     shieldMinEnergy: 0.15
   },
   ace: {
-    reactionTicks: 20,
-    retargetIntervalTicks: 30,
+    reactionTicks: 60,
+    retargetIntervalTicks: 90,
     aimJitterRadians: 0,
     leadFactor: 1,
     orbit: true,
@@ -129,12 +129,12 @@ const LASER_PROFILES: AutopilotLevelProfiles = {
     threatAwareShield: true,
     standoffShare: 0.85,
     standoffDistance: 400,
-    evadeHorizonTicks: 12,
+    evadeHorizonTicks: 36,
     mgConeRadians: 0.5,
     cannonConeRadians: 0.06,
     mgHeatCeiling: 0.95,
     cannonHeatCeiling: 0.95,
-    shieldLeadTicks: 20,
+    shieldLeadTicks: 60,
     shieldMinEnergy: 0.15
   }
 };
@@ -148,7 +148,7 @@ type ProfileDelta = Partial<Record<AutopilotLevel, Partial<AutopilotProfile>>>;
  */
 const KINETIC_DELTA: ProfileDelta = {
   veteran: {
-    reactionTicks: 10,
+    reactionTicks: 30,
     leadFactor: 0.6,
     orbit: false,
     standoffShare: 0.5,
@@ -156,7 +156,7 @@ const KINETIC_DELTA: ProfileDelta = {
     mgHeatCeiling: 0.6
   },
   ace: {
-    reactionTicks: 10,
+    reactionTicks: 30,
     leadFactor: 0.6,
     orbit: false,
     standoffShare: 0.5,
@@ -180,7 +180,7 @@ const MISSILE_DELTA: ProfileDelta = {
     evadeHorizonTicks: 0,
     cannonConeRadians: 0.12,
     cannonHeatCeiling: 0.8,
-    shieldLeadTicks: 10
+    shieldLeadTicks: 30
   },
   ace: {
     leadFactor: 0.6,
@@ -191,7 +191,7 @@ const MISSILE_DELTA: ProfileDelta = {
     evadeHorizonTicks: 0,
     cannonConeRadians: 0.12,
     cannonHeatCeiling: 0.8,
-    shieldLeadTicks: 10
+    shieldLeadTicks: 30
   }
 };
 

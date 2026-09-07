@@ -7,6 +7,18 @@ import {
 } from "./combatTypes.ts";
 import { MAX_PUBLIC_TRANSIENT_PADDING, UINT32_MAX } from "./combatConstants.ts";
 
+/**
+ * Steps a second, and the number every tick-counted duration in the balance is
+ * written against.
+ *
+ * Sixty rather than twenty because the client draws what arrives between
+ * snapshots: at a slower rate each broadcast carries a coarser slice of
+ * movement, and a hull under steering shows the coarseness as judder no
+ * smoothing can undo. It also sets the input rate - one frame per step - so the
+ * helm answers three times as often.
+ */
+export const SIMULATION_TICK_RATE = 60;
+
 export function validateRunSeed(runSeed: number): void {
   if (!Number.isInteger(runSeed) || runSeed <= 0 || runSeed > UINT32_MAX) {
     throw new RangeError("runSeed must be a non-zero uint32");
@@ -14,8 +26,23 @@ export function validateRunSeed(runSeed: number): void {
 }
 
 export function validateCombatConfig(config: CombatConfig): void {
-  if (config.fixedStepMs !== 50) {
-    throw new RangeError("fixedStepMs must be exactly 50 for combat simulation");
+  /*
+   * The rate is pinned, not the millisecond count.
+   *
+   * Every duration in the balance is counted in ticks, so a run at another rate
+   * is a different game played with the same numbers: shots reload three times
+   * as fast, waves arrive three times as early. Sixty a second is 16.666...,
+   * which no whole-millisecond rule can express - so the check is on the rate
+   * it implies, and it holds to a hundredth of a hertz.
+   */
+  if (
+    !Number.isFinite(config.fixedStepMs) ||
+    config.fixedStepMs <= 0 ||
+    Math.abs(1000 / config.fixedStepMs - SIMULATION_TICK_RATE) > 0.01
+  ) {
+    throw new RangeError(
+      `fixedStepMs must run the simulation at ${String(SIMULATION_TICK_RATE)} Hz`
+    );
   }
   const positiveIntegers: readonly (readonly [string, number])[] = [
     ["enemySpawnIntervalTicks", config.enemySpawnIntervalTicks],
@@ -153,8 +180,8 @@ function validateEnemySkill(config: CombatConfig): void {
       ["evadeHorizonTicks", profile.evadeHorizonTicks]
     ];
     for (const [name, value] of wholeTicks) {
-      if (!Number.isSafeInteger(value) || value < 0 || value > 40) {
-        throw new RangeError(`enemySkill.${level}.${name} must be 0 to 40 whole ticks`);
+      if (!Number.isSafeInteger(value) || value < 0 || value > 120) {
+        throw new RangeError(`enemySkill.${level}.${name} must be 0 to 120 whole ticks`);
       }
     }
     const unitFractions: readonly (readonly [string, number])[] = [

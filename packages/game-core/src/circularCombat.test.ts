@@ -61,7 +61,7 @@ function quietEnemy(
   };
 }
 
-const RIM_PIN_STEPS = 300;
+const RIM_PIN_STEPS = Math.round(15_000 / createSpaceshipSimulationConfig().fixedStepMs);
 /** Ticks the arena may eat before the enemy is expected to have freed itself. */
 const RIM_PIN_MOTIONLESS_LIMIT = 1;
 
@@ -292,7 +292,7 @@ describe("circular combat spawning and movement", () => {
       ]
     };
 
-    for (let step = 0; step < 400; step += 1) {
+    for (let step = 0; step < 1200; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
       const enemy = state.enemies[0];
       expect(enemy).toBeDefined();
@@ -378,7 +378,7 @@ describe("circular combat spawning and movement", () => {
       enemies: [quietEnemy(config, { x: enemyX, previousX: enemyX })]
     };
 
-    for (let step = 0; step < 60; step += 1) {
+    for (let step = 0; step < 180; step += 1) {
       // Pinned: this measures the closing-and-circling blend, and a fight where
       // nothing lands would otherwise have the press shrinking the range too.
       state = { ...advanceSpaceshipSimulation(state, config), stalemateTicks: 0 };
@@ -391,11 +391,26 @@ describe("circular combat spawning and movement", () => {
       );
     }
 
-    // Golden values recorded from the blend before the rim rule was added, and
-    // re-recorded when the archetype's hold distance followed the crew's reach
-    // down: the blend is the same, the ring it settles on is closer.
-    expect(state.enemies[0]?.x).toBeCloseTo(2610.9488059723653, 6);
-    expect(state.enemies[0]?.y).toBeCloseTo(2130.8283632441126, 6);
+    /*
+     * The ring the blend settles on, not the arithmetic that got there.
+     *
+     * These were golden numbers, re-recorded twice already - once when the rim
+     * rule arrived and once when the hold distance followed the crew's reach
+     * down - and a third rewrite for a change of step would have said nothing
+     * either. What the test is actually about is that an enemy away from the
+     * wall holds its preferred distance and circles, so that is what it now
+     * asks.
+     */
+    const enemy = state.enemies[0];
+    if (enemy === undefined) throw new Error("Expected the enemy to survive the run.");
+    const held = Math.hypot(enemy.x - config.worldWidth / 2, enemy.y - config.worldHeight / 2);
+    // Within a hull of the distance it wants: the blend holds a ring, it does
+    // not land on a number.
+    expect(Math.abs(held - getEnemyArchetype(config, "gunship").preferredDistance)).toBeLessThan(
+      enemy.radius * 2
+    );
+    // Well inside the band, where the wall has no say over the course.
+    expect(held).toBeLessThan((config.arenaRadius - enemy.radius) * 0.8);
   });
 });
 
@@ -471,6 +486,9 @@ describe("a fight that produces nothing closes itself", () => {
   }
 
   /** Pinned, so each arm is measured at a fixed point of the press. */
+  /** Three seconds of the stand-off, counted from the step rather than assumed. */
+  const STANDOFF_STEPS = Math.round(3000 / config.fixedStepMs);
+
   function stepAt(stalemateTicks: number, ticks: number): SpaceshipSimulationState {
     let state = standoffFight(stalemateTicks);
     for (let step = 0; step < ticks; step += 1) {
@@ -481,13 +499,17 @@ describe("a fight that produces nothing closes itself", () => {
 
   it("holds the stand-off while the fight is still producing", () => {
     // Within a hull of where it started: the sniper is doing its job.
-    expect(Math.abs(rangeOf(stepAt(0, 60)) - archetype.preferredDistance)).toBeLessThan(120);
+    expect(Math.abs(rangeOf(stepAt(0, STANDOFF_STEPS)) - archetype.preferredDistance)).toBeLessThan(
+      120
+    );
   });
 
   it("gives up the stand-off once neither side can land a hit", () => {
     // The stalemate the operator watched: a sniper the ship cannot see and a
     // ship the sniper cannot lead, circling until the wave clock ran out.
-    expect(rangeOf(stepAt(ENEMY_PRESS_TICKS, 60))).toBeLessThan(rangeOf(stepAt(0, 60)) - 150);
+    expect(rangeOf(stepAt(ENEMY_PRESS_TICKS, STANDOFF_STEPS))).toBeLessThan(
+      rangeOf(stepAt(0, STANDOFF_STEPS)) - 150
+    );
   });
 });
 
@@ -553,7 +575,10 @@ describe("ambient asteroid scheduler", () => {
       pendingSpawns: [],
       enemies: [quietEnemy(config)]
     };
-    for (let step = 0; step < 80; step += 1) state = advanceSpaceshipSimulation(state, config);
+    // Long enough for two arrivals at the interval the fixture set, and no
+    // longer: the count is what the test is about.
+    const window = config.ambientAsteroidIntervalMinTicks * 2 + 1;
+    for (let step = 0; step < window; step += 1) state = advanceSpaceshipSimulation(state, config);
     const ambient = state.asteroids.filter(({ origin }) => origin === "ambient");
     expect(ambient).toHaveLength(2);
     expect(
@@ -667,8 +692,12 @@ describe("ambient asteroid scheduler", () => {
 
     expect(nextWave.encounterPhase).toBe("combat");
     expect(nextWave.encounterTick).toBe(0);
-    expect(nextWave.ambientAsteroidSpawnDueTick).toBeGreaterThanOrEqual(40);
-    expect(nextWave.ambientAsteroidSpawnDueTick).toBeLessThanOrEqual(100);
+    expect(nextWave.ambientAsteroidSpawnDueTick).toBeGreaterThanOrEqual(
+      config.ambientAsteroidIntervalMinTicks
+    );
+    expect(nextWave.ambientAsteroidSpawnDueTick).toBeLessThanOrEqual(
+      config.ambientAsteroidIntervalMaxTicks
+    );
     expect(nextWave.asteroids).toEqual([]);
   });
 });
@@ -739,7 +768,7 @@ describe("circular transient cleanup", () => {
       asteroids: [asteroid]
     };
     let crossedCenter = false;
-    for (let step = 0; step < 500 && state.asteroids.length > 0; step += 1) {
+    for (let step = 0; step < 1500 && state.asteroids.length > 0; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
       crossedCenter ||= (state.asteroids[0]?.x ?? 0) > config.worldWidth / 2;
     }

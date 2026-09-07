@@ -4,7 +4,7 @@ import {
 } from "@spaceship-defender/game-core";
 import { describe, expect, it } from "vitest";
 
-import { openSparringStand, refillSparringStand } from "./sparringStand.js";
+import { holdSparringStand, openSparringStand } from "./sparringStand.js";
 
 const config = createSpaceshipSimulationConfig();
 
@@ -47,12 +47,31 @@ describe("sparring stand", () => {
     const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
     const emptied = { ...stand, asteroids: stand.asteroids.slice(0, 1) };
 
-    expect(refillSparringStand(emptied, 2, config.arenaRadius).asteroids).toHaveLength(2);
+    expect(holdSparringStand(emptied, 2, config.arenaRadius).asteroids).toHaveLength(2);
   });
 
   it("adds nothing while the field is full", () => {
     const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
 
-    expect(refillSparringStand(stand, 2, config.arenaRadius)).toBe(stand);
+    expect(holdSparringStand(stand, 2, config.arenaRadius)).toBe(stand);
+  });
+
+  it("refuses to let the wave end, whatever the encounter thinks", () => {
+    // An arena with no enemies reads as a cleared wave, and the display's own
+    // contract forbids moving entities during the intermission that follows -
+    // so every patch failed to parse and the world stopped on screen.
+    const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
+    const cleared = {
+      ...stand,
+      encounterPhase: "intermission" as const,
+      lootWindowTicksRemaining: 300,
+      waveNumber: 4
+    };
+
+    const held = holdSparringStand(cleared, 2, config.arenaRadius);
+
+    expect(held.encounterPhase).toBe("combat");
+    expect(held.lootWindowTicksRemaining).toBe(0);
+    expect(held.waveNumber).toBe(1);
   });
 });

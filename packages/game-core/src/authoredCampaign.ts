@@ -16,7 +16,7 @@ import { type SpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
 export const AUTHORED_SHIP_STATS = {
   friendlyProjectileDamage: 38,
   mgDamage: 10,
-  fireCooldownTicks: 3,
+  fireCooldownTicks: 9,
   projectileRadius: 14,
   projectileSpeedPerSecond: 1000,
   spaceshipMaxHp: 620,
@@ -37,12 +37,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 20,
+        cooldownTicks: 60,
         damage: 4,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 520,
-        projectileLifetimeTicks: 18,
+        projectileLifetimeTicks: 54,
         engagementRange: 368,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -75,12 +75,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 22,
+        cooldownTicks: 66,
         damage: 3,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 560,
-        projectileLifetimeTicks: 16,
+        projectileLifetimeTicks: 48,
         engagementRange: 344,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -113,12 +113,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 30,
+        cooldownTicks: 90,
         damage: 5,
         shieldHitCost: 3,
         projectileRadius: 7,
         projectileSpeedPerSecond: 620,
-        projectileLifetimeTicks: 24,
+        projectileLifetimeTicks: 72,
         engagementRange: 586,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -151,12 +151,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 21,
+        cooldownTicks: 63,
         damage: 3,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 700,
-        projectileLifetimeTicks: 18,
+        projectileLifetimeTicks: 54,
         engagementRange: 496,
         turnRatePerSecond: 2.2,
         burstCount: 3,
@@ -189,12 +189,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "laser",
-        cooldownTicks: 32,
+        cooldownTicks: 96,
         damage: 7,
         shieldHitCost: 4,
         projectileRadius: 8,
         projectileSpeedPerSecond: 1,
-        projectileLifetimeTicks: 1,
+        projectileLifetimeTicks: 3,
         engagementRange: 239,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -227,12 +227,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 10,
+        cooldownTicks: 30,
         damage: 3,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 640,
-        projectileLifetimeTicks: 33,
+        projectileLifetimeTicks: 99,
         engagementRange: 831,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -265,12 +265,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 19,
+        cooldownTicks: 57,
         damage: 4,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 660,
-        projectileLifetimeTicks: 33,
+        projectileLifetimeTicks: 99,
         engagementRange: 857,
         turnRatePerSecond: 2.2,
         burstCount: 2,
@@ -303,12 +303,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "missile",
-        cooldownTicks: 70,
+        cooldownTicks: 210,
         damage: 26,
         shieldHitCost: 16,
         projectileRadius: 7,
         projectileSpeedPerSecond: 300,
-        projectileLifetimeTicks: 130,
+        projectileLifetimeTicks: 390,
         engagementRange: 921,
         turnRatePerSecond: 1.8,
         burstCount: 1,
@@ -341,12 +341,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 33,
+        cooldownTicks: 99,
         damage: 10,
         shieldHitCost: 6,
         projectileRadius: 7,
         projectileSpeedPerSecond: 900,
-        projectileLifetimeTicks: 31,
+        projectileLifetimeTicks: 93,
         engagementRange: 1088,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -379,12 +379,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 17,
+        cooldownTicks: 51,
         damage: 3,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 600,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 850,
         turnRatePerSecond: 2.2,
         burstCount: 3,
@@ -417,12 +417,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 38,
+        cooldownTicks: 114,
         damage: 13,
         shieldHitCost: 8,
         projectileRadius: 7,
         projectileSpeedPerSecond: 1100,
-        projectileLifetimeTicks: 25,
+        projectileLifetimeTicks: 75,
         engagementRange: 1088,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -455,12 +455,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 31,
+        cooldownTicks: 93,
         damage: 5,
         shieldHitCost: 3,
         projectileRadius: 7,
         projectileSpeedPerSecond: 480,
-        projectileLifetimeTicks: 54,
+        projectileLifetimeTicks: 162,
         engagementRange: 1020,
         turnRatePerSecond: 2.2,
         burstCount: 4,
@@ -493,12 +493,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 13,
+        cooldownTicks: 39,
         damage: 4,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 620,
-        projectileLifetimeTicks: 30,
+        projectileLifetimeTicks: 90,
         engagementRange: 732,
         turnRatePerSecond: 2.2,
         burstCount: 2,
@@ -531,12 +531,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "laser",
-        cooldownTicks: 45,
+        cooldownTicks: 135,
         damage: 15,
         shieldHitCost: 9,
         projectileRadius: 10,
         projectileSpeedPerSecond: 1,
-        projectileLifetimeTicks: 1,
+        projectileLifetimeTicks: 3,
         engagementRange: 327,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -569,12 +569,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 14,
+        cooldownTicks: 42,
         damage: 5,
         shieldHitCost: 3,
         projectileRadius: 7,
         projectileSpeedPerSecond: 560,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 793,
         turnRatePerSecond: 2.2,
         burstCount: 2,
@@ -607,12 +607,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "missile",
-        cooldownTicks: 63,
+        cooldownTicks: 189,
         damage: 30,
         shieldHitCost: 18,
         projectileRadius: 7,
         projectileSpeedPerSecond: 280,
-        projectileLifetimeTicks: 150,
+        projectileLifetimeTicks: 450,
         engagementRange: 992,
         turnRatePerSecond: 1.5,
         burstCount: 1,
@@ -621,12 +621,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "bullet",
-        cooldownTicks: 11,
+        cooldownTicks: 33,
         damage: 4,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 600,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 850,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -659,12 +659,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 15,
+        cooldownTicks: 45,
         damage: 6,
         shieldHitCost: 4,
         projectileRadius: 7,
         projectileSpeedPerSecond: 620,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 878,
         turnRatePerSecond: 2.2,
         burstCount: 2,
@@ -673,12 +673,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 145,
+        cooldownTicks: 435,
         damage: 22,
         shieldHitCost: 13,
         projectileRadius: 7,
         projectileSpeedPerSecond: 300,
-        projectileLifetimeTicks: 130,
+        projectileLifetimeTicks: 390,
         engagementRange: 921,
         turnRatePerSecond: 1.6,
         burstCount: 1,
@@ -711,12 +711,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "missile",
-        cooldownTicks: 70,
+        cooldownTicks: 210,
         damage: 16,
         shieldHitCost: 10,
         projectileRadius: 7,
         projectileSpeedPerSecond: 260,
-        projectileLifetimeTicks: 150,
+        projectileLifetimeTicks: 450,
         engagementRange: 921,
         turnRatePerSecond: 1.4,
         burstCount: 3,
@@ -749,12 +749,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 22,
+        cooldownTicks: 66,
         damage: 7,
         shieldHitCost: 4,
         projectileRadius: 7,
         projectileSpeedPerSecond: 640,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 907,
         turnRatePerSecond: 2.2,
         burstCount: 3,
@@ -763,12 +763,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 217,
+        cooldownTicks: 651,
         damage: 26,
         shieldHitCost: 16,
         projectileRadius: 7,
         projectileSpeedPerSecond: 300,
-        projectileLifetimeTicks: 140,
+        projectileLifetimeTicks: 420,
         engagementRange: 992,
         turnRatePerSecond: 1.7,
         burstCount: 1,
@@ -801,12 +801,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "laser",
-        cooldownTicks: 45,
+        cooldownTicks: 135,
         damage: 24,
         shieldHitCost: 14,
         projectileRadius: 12,
         projectileSpeedPerSecond: 1,
-        projectileLifetimeTicks: 1,
+        projectileLifetimeTicks: 3,
         engagementRange: 390,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -839,12 +839,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "missile",
-        cooldownTicks: 60,
+        cooldownTicks: 180,
         damage: 26,
         shieldHitCost: 16,
         projectileRadius: 7,
         projectileSpeedPerSecond: 300,
-        projectileLifetimeTicks: 140,
+        projectileLifetimeTicks: 420,
         engagementRange: 992,
         turnRatePerSecond: 1.6,
         burstCount: 2,
@@ -853,12 +853,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "bullet",
-        cooldownTicks: 12,
+        cooldownTicks: 36,
         damage: 5,
         shieldHitCost: 3,
         projectileRadius: 7,
         projectileSpeedPerSecond: 620,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 878,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -891,12 +891,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 17,
+        cooldownTicks: 51,
         damage: 6,
         shieldHitCost: 4,
         projectileRadius: 7,
         projectileSpeedPerSecond: 640,
-        projectileLifetimeTicks: 33,
+        projectileLifetimeTicks: 99,
         engagementRange: 831,
         turnRatePerSecond: 2.2,
         burstCount: 3,
@@ -905,12 +905,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 162,
+        cooldownTicks: 486,
         damage: 30,
         shieldHitCost: 18,
         projectileRadius: 7,
         projectileSpeedPerSecond: 290,
-        projectileLifetimeTicks: 150,
+        projectileLifetimeTicks: 450,
         engagementRange: 1027,
         turnRatePerSecond: 1.7,
         burstCount: 1,
@@ -943,12 +943,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 10,
+        cooldownTicks: 30,
         damage: 5,
         shieldHitCost: 3,
         projectileRadius: 7,
         projectileSpeedPerSecond: 700,
-        projectileLifetimeTicks: 30,
+        projectileLifetimeTicks: 90,
         engagementRange: 827,
         turnRatePerSecond: 2.2,
         burstCount: 2,
@@ -957,12 +957,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 126,
+        cooldownTicks: 378,
         damage: 26,
         shieldHitCost: 16,
         projectileRadius: 7,
         projectileSpeedPerSecond: 320,
-        projectileLifetimeTicks: 150,
+        projectileLifetimeTicks: 450,
         engagementRange: 1088,
         turnRatePerSecond: 2,
         burstCount: 1,
@@ -995,12 +995,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 25,
+        cooldownTicks: 75,
         damage: 7,
         shieldHitCost: 4,
         projectileRadius: 7,
         projectileSpeedPerSecond: 620,
-        projectileLifetimeTicks: 39,
+        projectileLifetimeTicks: 117,
         engagementRange: 951,
         turnRatePerSecond: 2.2,
         burstCount: 4,
@@ -1009,12 +1009,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 229,
+        cooldownTicks: 687,
         damage: 34,
         shieldHitCost: 20,
         projectileRadius: 7,
         projectileSpeedPerSecond: 280,
-        projectileLifetimeTicks: 160,
+        projectileLifetimeTicks: 480,
         engagementRange: 1058,
         turnRatePerSecond: 1.5,
         burstCount: 1,
@@ -1047,12 +1047,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "laser",
-        cooldownTicks: 64,
+        cooldownTicks: 192,
         damage: 26,
         shieldHitCost: 16,
         projectileRadius: 16,
         projectileSpeedPerSecond: 1,
-        projectileLifetimeTicks: 1,
+        projectileLifetimeTicks: 3,
         engagementRange: 441,
         turnRatePerSecond: 2.2,
         burstCount: 1,
@@ -1061,12 +1061,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "bullet",
-        cooldownTicks: 11,
+        cooldownTicks: 33,
         damage: 4,
         shieldHitCost: 2,
         projectileRadius: 7,
         projectileSpeedPerSecond: 660,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 935,
         turnRatePerSecond: 2.2,
         burstCount: 2,
@@ -1099,12 +1099,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 22,
+        cooldownTicks: 66,
         damage: 7,
         shieldHitCost: 4,
         projectileRadius: 7,
         projectileSpeedPerSecond: 660,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 935,
         turnRatePerSecond: 2.2,
         burstCount: 3,
@@ -1113,12 +1113,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 211,
+        cooldownTicks: 633,
         damage: 32,
         shieldHitCost: 19,
         projectileRadius: 7,
         projectileSpeedPerSecond: 300,
-        projectileLifetimeTicks: 160,
+        projectileLifetimeTicks: 480,
         engagementRange: 1088,
         turnRatePerSecond: 1.7,
         burstCount: 2,
@@ -1151,12 +1151,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 31,
+        cooldownTicks: 93,
         damage: 8,
         shieldHitCost: 5,
         projectileRadius: 7,
         projectileSpeedPerSecond: 660,
-        projectileLifetimeTicks: 39,
+        projectileLifetimeTicks: 117,
         engagementRange: 1013,
         turnRatePerSecond: 2.2,
         burstCount: 4,
@@ -1165,12 +1165,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 278,
+        cooldownTicks: 834,
         damage: 34,
         shieldHitCost: 20,
         projectileRadius: 7,
         projectileSpeedPerSecond: 300,
-        projectileLifetimeTicks: 170,
+        projectileLifetimeTicks: 510,
         engagementRange: 1088,
         turnRatePerSecond: 1.8,
         burstCount: 2,
@@ -1203,12 +1203,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 24,
+        cooldownTicks: 72,
         damage: 9,
         shieldHitCost: 5,
         projectileRadius: 7,
         projectileSpeedPerSecond: 680,
-        projectileLifetimeTicks: 36,
+        projectileLifetimeTicks: 108,
         engagementRange: 963,
         turnRatePerSecond: 2.2,
         burstCount: 3,
@@ -1217,12 +1217,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 219,
+        cooldownTicks: 657,
         damage: 36,
         shieldHitCost: 22,
         projectileRadius: 7,
         projectileSpeedPerSecond: 310,
-        projectileLifetimeTicks: 170,
+        projectileLifetimeTicks: 510,
         engagementRange: 1088,
         turnRatePerSecond: 1.9,
         burstCount: 1,
@@ -1255,12 +1255,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 34,
+        cooldownTicks: 102,
         damage: 9,
         shieldHitCost: 5,
         projectileRadius: 7,
         projectileSpeedPerSecond: 700,
-        projectileLifetimeTicks: 39,
+        projectileLifetimeTicks: 117,
         engagementRange: 1074,
         turnRatePerSecond: 2.2,
         burstCount: 4,
@@ -1269,12 +1269,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 336,
+        cooldownTicks: 1008,
         damage: 38,
         shieldHitCost: 23,
         projectileRadius: 7,
         projectileSpeedPerSecond: 320,
-        projectileLifetimeTicks: 170,
+        projectileLifetimeTicks: 510,
         engagementRange: 1088,
         turnRatePerSecond: 1.9,
         burstCount: 2,
@@ -1307,12 +1307,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
     weapons: [
       {
         kind: "bullet",
-        cooldownTicks: 38,
+        cooldownTicks: 114,
         damage: 10,
         shieldHitCost: 6,
         projectileRadius: 7,
         projectileSpeedPerSecond: 720,
-        projectileLifetimeTicks: 38,
+        projectileLifetimeTicks: 114,
         engagementRange: 1088,
         turnRatePerSecond: 2.2,
         burstCount: 4,
@@ -1321,12 +1321,12 @@ export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetyp
       },
       {
         kind: "missile",
-        cooldownTicks: 357,
+        cooldownTicks: 1071,
         damage: 40,
         shieldHitCost: 24,
         projectileRadius: 7,
         projectileSpeedPerSecond: 330,
-        projectileLifetimeTicks: 165,
+        projectileLifetimeTicks: 495,
         engagementRange: 1088,
         turnRatePerSecond: 2,
         burstCount: 2,
@@ -1356,7 +1356,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "interceptor",
         count: 7,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1364,8 +1364,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "wasp",
         count: 7,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1380,7 +1380,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "interceptor",
         count: 8,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1388,8 +1388,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "wasp",
         count: 8,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1404,7 +1404,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "wasp",
         count: 9,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1412,8 +1412,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 5,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1421,8 +1421,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1437,7 +1437,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "wasp",
         count: 5,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1445,8 +1445,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1454,8 +1454,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "missileCarrier",
         count: 1,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1463,8 +1463,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1479,7 +1479,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "wasp",
         count: 3,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1487,8 +1487,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 1,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1496,8 +1496,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "missileCarrier",
         count: 1,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1505,8 +1505,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 1,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1514,8 +1514,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "boss",
         count: 1,
-        startDelayTicks: 600,
-        spawnIntervalTicks: 200,
+        startDelayTicks: 1800,
+        spawnIntervalTicks: 600,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1530,7 +1530,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "wasp",
         count: 6,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1538,8 +1538,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1547,8 +1547,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1556,8 +1556,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "gunboat",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1565,8 +1565,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1581,7 +1581,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "wasp",
         count: 7,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1589,8 +1589,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "skirmisher",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1598,8 +1598,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1607,8 +1607,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "gunboat",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1623,7 +1623,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1631,8 +1631,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1640,8 +1640,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1649,8 +1649,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "gunboat",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1665,7 +1665,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1673,8 +1673,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1682,8 +1682,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sniper",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1691,8 +1691,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "gunboat",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1700,8 +1700,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1709,8 +1709,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1725,7 +1725,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 1,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1733,8 +1733,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 1,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1742,8 +1742,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "gunboat",
         count: 1,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1751,8 +1751,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "railer",
         count: 1,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1760,8 +1760,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1769,8 +1769,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bossCrab",
         count: 1,
-        startDelayTicks: 600,
-        spawnIntervalTicks: 200,
+        startDelayTicks: 1800,
+        spawnIntervalTicks: 600,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1785,7 +1785,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1793,8 +1793,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1802,8 +1802,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "railer",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1811,8 +1811,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1820,8 +1820,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1836,7 +1836,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1844,8 +1844,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1853,8 +1853,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "mortar",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1862,8 +1862,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1871,8 +1871,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1880,8 +1880,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1896,7 +1896,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1904,8 +1904,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1913,8 +1913,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "mortar",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1922,8 +1922,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1931,8 +1931,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1947,7 +1947,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1955,8 +1955,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1964,8 +1964,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1973,8 +1973,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1982,8 +1982,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -1991,8 +1991,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2007,7 +2007,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 1,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2015,8 +2015,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 2,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2024,8 +2024,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 1,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2033,8 +2033,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 1,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2042,8 +2042,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bulwark",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2051,8 +2051,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2060,8 +2060,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2069,8 +2069,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bossSerpent",
         count: 1,
-        startDelayTicks: 600,
-        spawnIntervalTicks: 200,
+        startDelayTicks: 1800,
+        spawnIntervalTicks: 600,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2085,7 +2085,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2093,8 +2093,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2102,8 +2102,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2111,8 +2111,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2120,8 +2120,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "siege",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2129,8 +2129,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2145,7 +2145,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2153,8 +2153,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2162,8 +2162,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2171,8 +2171,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2180,8 +2180,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "siege",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2189,8 +2189,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2205,7 +2205,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2213,8 +2213,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2222,8 +2222,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2231,8 +2231,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2240,8 +2240,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2249,8 +2249,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2258,8 +2258,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2274,7 +2274,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2282,8 +2282,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2291,8 +2291,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2300,8 +2300,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2309,8 +2309,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2318,8 +2318,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2334,7 +2334,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 1,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2342,8 +2342,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 2,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2351,8 +2351,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 1,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2360,8 +2360,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 1,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2369,8 +2369,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2378,8 +2378,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2387,8 +2387,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bossFortress",
         count: 1,
-        startDelayTicks: 600,
-        spawnIntervalTicks: 200,
+        startDelayTicks: 1800,
+        spawnIntervalTicks: 600,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2403,7 +2403,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2411,8 +2411,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2420,8 +2420,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2429,8 +2429,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2438,8 +2438,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "dreadnought",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2447,8 +2447,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "hive",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2456,8 +2456,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2472,7 +2472,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2480,8 +2480,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2489,8 +2489,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2498,8 +2498,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2507,8 +2507,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2516,8 +2516,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2532,7 +2532,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2540,8 +2540,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2549,8 +2549,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2558,8 +2558,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2567,8 +2567,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2576,8 +2576,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2592,7 +2592,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2600,8 +2600,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2609,8 +2609,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2618,8 +2618,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2627,8 +2627,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2636,8 +2636,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2645,8 +2645,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2661,7 +2661,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 1,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2669,8 +2669,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 2,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2678,8 +2678,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 1,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2687,8 +2687,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2696,8 +2696,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2705,8 +2705,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2714,8 +2714,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bossPrism",
         count: 1,
-        startDelayTicks: 600,
-        spawnIntervalTicks: 200,
+        startDelayTicks: 1800,
+        spawnIntervalTicks: 600,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2730,7 +2730,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["S"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2738,8 +2738,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2747,8 +2747,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2756,8 +2756,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2765,8 +2765,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2774,8 +2774,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2790,7 +2790,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["W"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2798,8 +2798,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2807,8 +2807,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2816,8 +2816,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2825,8 +2825,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2834,8 +2834,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2843,8 +2843,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2859,7 +2859,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["NE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2867,8 +2867,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 3,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2876,8 +2876,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2885,8 +2885,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2894,8 +2894,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2903,8 +2903,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2919,7 +2919,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2927,8 +2927,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 4,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2936,8 +2936,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2945,8 +2945,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 3,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2954,8 +2954,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 2,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2963,8 +2963,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 2,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2979,7 +2979,7 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
         kind: "lancer",
         count: 2,
         startDelayTicks: 0,
-        spawnIntervalTicks: 140,
+        spawnIntervalTicks: 420,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2987,8 +2987,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "sparker",
         count: 2,
-        startDelayTicks: 180,
-        spawnIntervalTicks: 140,
+        startDelayTicks: 540,
+        spawnIntervalTicks: 420,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -2996,8 +2996,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "warden",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 840,
         sectors: ["NW"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -3005,8 +3005,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "lantern",
         count: 2,
-        startDelayTicks: 540,
-        spawnIntervalTicks: 280,
+        startDelayTicks: 1620,
+        spawnIntervalTicks: 840,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -3014,8 +3014,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "leviathan",
         count: 1,
-        startDelayTicks: 720,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2160,
+        spawnIntervalTicks: 1320,
         sectors: ["N"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -3023,8 +3023,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "smelter",
         count: 1,
-        startDelayTicks: 900,
-        spawnIntervalTicks: 440,
+        startDelayTicks: 2700,
+        spawnIntervalTicks: 1320,
         sectors: ["E"],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -3032,8 +3032,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "asteroid",
         count: 2,
-        startDelayTicks: 360,
-        spawnIntervalTicks: 240,
+        startDelayTicks: 1080,
+        spawnIntervalTicks: 720,
         sectors: [],
         hpMultiplier: null,
         tempoMultiplier: null
@@ -3041,8 +3041,8 @@ export const AUTHORED_WAVES: SpaceshipSimulationConfig["waveCampaign"]["waves"] 
       {
         kind: "bossDreadnought",
         count: 1,
-        startDelayTicks: 600,
-        spawnIntervalTicks: 200,
+        startDelayTicks: 1800,
+        spawnIntervalTicks: 600,
         sectors: ["SE"],
         hpMultiplier: null,
         tempoMultiplier: null

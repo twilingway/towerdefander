@@ -123,8 +123,13 @@ describe("SHIP_POSE_STAT_FIELDS", () => {
    */
   function mixedFlight(stats: ShipStats): ShipPose {
     let pose = restingPose();
-    for (let frame = 0; frame < 90; frame += 1) {
-      const phase = Math.floor(frame / 18);
+    // Counted in seconds rather than in frames: the phases below are durations,
+    // and at a finer rate the same flight simply takes more steps.
+    const frames = Math.round(4500 / config.fixedStepMs);
+    const phaseFrames = Math.round(frames / 5);
+    const aimAt = Math.round(2000 / config.fixedStepMs);
+    for (let frame = 0; frame < frames; frame += 1) {
+      const phase = Math.floor(frame / phaseFrames);
       pose = advanceShipPose(
         pose,
         {
@@ -143,7 +148,7 @@ describe("SHIP_POSE_STAT_FIELDS", () => {
            * braking bound binds instead of the ceiling - so neither of those
            * would prove anything.
            */
-          turretTargetAngle: frame >= 40 ? Math.PI : null,
+          turretTargetAngle: frame >= aimAt ? Math.PI : null,
           turretTurn: null
         },
         config,

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { advanceClock, createSpaceshipSimulationConfig, createSeededRandom } from "./index.ts";
+import {
+  advanceClock,
+  createSpaceshipSimulationConfig,
+  createSeededRandom,
+  SIMULATION_TICK_RATE
+} from "./index.ts";
 
 describe("deterministic game core primitives", () => {
   it("generates the same sequence for the same seed", () => {
@@ -35,14 +40,16 @@ describe("deterministic game core primitives", () => {
 
   it("rejects invalid and overflowing clock state", () => {
     expect(() => advanceClock({ tick: -1, elapsedMs: 0 }, 50)).toThrow(RangeError);
-    expect(() => advanceClock({ tick: 1, elapsedMs: Number.MAX_SAFE_INTEGER }, 50)).toThrow(
+    // Elapsed milliseconds are a duration, not a count - sixty steps a second
+    // is 16.666... - so what overflows is the tick, which still is one.
+    expect(() => advanceClock({ tick: Number.MAX_SAFE_INTEGER, elapsedMs: 0 }, 50)).toThrow(
       RangeError
     );
   });
 
   it("exports the spaceship core from the package entrypoint", () => {
     expect(createSpaceshipSimulationConfig()).toMatchObject({
-      fixedStepMs: 50,
+      fixedStepMs: 1000 / SIMULATION_TICK_RATE,
       worldWidth: 4400,
       worldHeight: 4400,
       arenaRadius: 2200

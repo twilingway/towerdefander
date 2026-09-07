@@ -81,7 +81,12 @@ export type {
 export { ASTEROID_SPAWN_KIND, ENEMY_SKILL_LEVELS, SPAWN_SECTORS } from "./combatTypes.ts";
 export { resolveEnemySkill } from "./enemySkill.ts";
 export { TEAM_UPGRADE_PRICE } from "./combatConstants.ts";
-export { getEnemyArchetype, validateCombatConfig, validateRunSeed } from "./combatValidation.ts";
+export {
+  getEnemyArchetype,
+  SIMULATION_TICK_RATE,
+  validateCombatConfig,
+  validateRunSeed
+} from "./combatValidation.ts";
 export { deriveDomainSeed, nextUint32 } from "./rng.ts";
 export { availableTierIndex, createTeamUpgradeOffer, voteForTeamUpgrade } from "./upgrades.ts";
 export { effectsOf, findModule } from "./upgradeCatalogue.ts";

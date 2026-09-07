@@ -8,7 +8,7 @@ import { DEFAULT_ENDLESS_TIER, DEFAULT_MODULE_TIERS } from "./moduleTree.ts";
 import { type SpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
 /** The built-in balance the server starts from before a preset is loaded. */
 export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
-  fixedStepMs: 50,
+  fixedStepMs: 1000 / 60,
   worldWidth: 4400,
   worldHeight: 4400,
   // The frame the campaign is balanced inside, and the same one the console
@@ -22,7 +22,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   spaceshipBrakingPerSecondSquared: 800,
   spaceshipReverseSpeedFactor: 0.4,
   spaceshipRadius: 52,
-  inputTimeoutTicks: 5,
+  inputTimeoutTicks: 15,
   // Reach is speed times lifetime, and the honest ceiling for it is half the
   // frame's height - the short way out of the picture, and therefore the only
   // distance a crew is sure to see what it is shooting at on any glass. At 680
@@ -32,9 +32,9 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   projectileLifetimeMs: 680,
   shieldDrainPerSecond: 20,
   shieldRechargePerSecond: 10,
-  shieldEngageTicks: 10,
-  shieldMinimumUpTicks: 40,
-  shieldCooldownTicks: 20,
+  shieldEngageTicks: 30,
+  shieldMinimumUpTicks: 120,
+  shieldCooldownTicks: 60,
   shieldRearmEnergy: 25,
   turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
   turretAngularAccelerationPerSecondSquared: (13 * Math.PI) / 15,
@@ -50,7 +50,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   headingMaxAngularSpeedPerSecond: Math.PI,
   headingAngularAccelerationPerSecondSquared: 50,
   headingAngularBrakingPerSecondSquared: 50,
-  mgFireCooldownTicks: 2,
+  mgFireCooldownTicks: 6,
   mgProjectileSpeedPerSecond: 900,
   mgProjectileRadius: 5,
   projectileVisual: null,
@@ -79,10 +79,10 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   shieldArcRadians: Math.PI / 2,
   asteroidShieldHitCost: 20,
   asteroidDamage: 40,
-  enemySpawnIntervalTicks: 12,
-  ambientAsteroidIntervalMinTicks: 40,
-  ambientAsteroidIntervalMaxTicks: 100,
-  intermissionTicks: 600,
+  enemySpawnIntervalTicks: 36,
+  ambientAsteroidIntervalMinTicks: 120,
+  ambientAsteroidIntervalMaxTicks: 300,
+  intermissionTicks: 1800,
   // The campaign the console shows, not a second one: an empty table left the
   // director improvising every wave, and a server without a preset played a
   // different game from the one that was tuned.
@@ -96,7 +96,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
     offset: 0,
     profiles: {
       rookie: {
-        reactionTicks: 10,
+        reactionTicks: 30,
         aimJitterRadians: 0.1,
         leadFactor: 0,
         orbitShare: 0.35,
@@ -108,7 +108,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         retreatStandoffFactor: 1
       },
       veteran: {
-        reactionTicks: 4,
+        reactionTicks: 12,
         aimJitterRadians: 0.04,
         leadFactor: 0.6,
         orbitShare: 0.5,
@@ -120,14 +120,14 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
         retreatStandoffFactor: 1.4
       },
       ace: {
-        reactionTicks: 1,
+        reactionTicks: 3,
         aimJitterRadians: 0,
         leadFactor: 1,
         orbitShare: 0.6,
         rangeBandUnits: 280,
         separationWeight: 0.7,
         flankSpread: 1,
-        evadeHorizonTicks: 14,
+        evadeHorizonTicks: 42,
         retreatHpFraction: 0.35,
         retreatStandoffFactor: 1.6
       }
@@ -140,7 +140,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   asteroidHp: 65,
   asteroidRadius: 34,
   asteroidSpeedPerSecond: 190,
-  asteroidLifetimeTicks: 500,
+  asteroidLifetimeTicks: 1500,
   asteroidSpawnCost: 1,
   asteroidScoreReward: 10,
   asteroidCreditReward: 1,
@@ -150,13 +150,13 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   lootRepairShare: 0.06,
   lootShieldAmount: 30,
   lootBossRepairShare: 1,
-  lootLifetimeTicks: 300,
+  lootLifetimeTicks: 900,
   lootDropRadius: 18,
   lootMagnetRadius: 260,
   lootMagnetAccelerationPerSecondSquared: 900,
   lootDriftDampingPerSecond: 1.6,
-  lootWindowTicks: 300,
-  lootBossWindowTicks: 600,
+  lootWindowTicks: 900,
+  lootBossWindowTicks: 1800,
   asteroidVisual: null,
   missileInterceptScoreReward: 5,
   worldPadding: 256,

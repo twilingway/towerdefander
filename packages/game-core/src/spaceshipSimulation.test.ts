@@ -13,6 +13,7 @@ import {
   canonicalizeAngle,
   createSpaceshipSimulationConfig,
   createSpaceshipSimulationState,
+  SIMULATION_TICK_RATE,
   deactivateShield,
   getEnemyArchetype,
   moveVectorTowards,
@@ -80,7 +81,7 @@ describe("spaceship configuration", () => {
     const config = createSpaceshipSimulationConfig();
 
     expect(config).toMatchObject({
-      fixedStepMs: 50,
+      fixedStepMs: 1000 / SIMULATION_TICK_RATE,
       worldWidth: 4400,
       worldHeight: 4400,
       arenaRadius: 2200,
@@ -88,11 +89,11 @@ describe("spaceship configuration", () => {
       spaceshipAccelerationPerSecondSquared: 640,
       spaceshipBrakingPerSecondSquared: 800,
       spaceshipRadius: 52,
-      inputTimeoutTicks: 5,
+      inputTimeoutTicks: 15,
       projectileSpeedPerSecond: 1000,
       projectileLifetimeMs: 680,
       projectileRadius: 14,
-      fireCooldownTicks: 3,
+      fireCooldownTicks: 9,
       shieldCapacity: 120,
       shieldDrainPerSecond: 20,
       shieldRechargePerSecond: 10,
@@ -102,8 +103,8 @@ describe("spaceship configuration", () => {
       shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
       shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
       shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8,
-      ambientAsteroidIntervalMinTicks: 40,
-      ambientAsteroidIntervalMaxTicks: 100
+      ambientAsteroidIntervalMinTicks: 120,
+      ambientAsteroidIntervalMaxTicks: 300
     });
     expect(createSpaceshipSimulationState(config, 1)).toEqual(
       createSpaceshipSimulationState(config, 1)
@@ -201,23 +202,54 @@ function smallArenaConfig(overrides: Partial<SpaceshipSimulationConfig> = {}) {
 }
 
 describe("pilot movement", () => {
-  it("accelerates to max speed in ten equal fixed steps", () => {
+  it("accelerates to max speed in half a second of equal steps", () => {
     const config = createSpaceshipSimulationConfig();
+    const seconds = config.spaceshipSpeedPerSecond / config.spaceshipAccelerationPerSecondSquared;
+    const steps = Math.ceil((seconds * 1000) / config.fixedStepMs);
+    const perStep = (config.spaceshipAccelerationPerSecondSquared * config.fixedStepMs) / 1000;
     let state = createSpaceshipSimulationState(config, 1);
     const velocities: number[] = [];
 
-    for (let step = 0; step < 10; step += 1) {
+    for (let step = 0; step < steps; step += 1) {
       state = holdPilot(state, config, { x: 1, y: 0 }, 1);
       velocities.push(state.spaceship.velocity.x);
     }
 
-    expect(velocities).toEqual([32, 64, 96, 128, 160, 192, 224, 256, 288, 320]);
-    expect(state.spaceship.x).toBe(createSpaceshipSimulationState(config, 1).spaceship.x + 88);
+    // The rule rather than a transcript of it: an even ramp at the configured
+    // acceleration, ending exactly on the configured speed. Written as a table
+    // of numbers this test said nothing except what the rate happened to be.
+    expect(velocities).toHaveLength(steps);
+    velocities.forEach((velocity, index) => {
+      expect(velocity).toBeCloseTo(
+        Math.min(config.spaceshipSpeedPerSecond, perStep * (index + 1)),
+        6
+      );
+    });
+    expect(velocities.at(-1)).toBeCloseTo(config.spaceshipSpeedPerSecond, 6);
+    const travelled = velocities.reduce((sum, v) => sum + (v * config.fixedStepMs) / 1000, 0);
+    expect(state.spaceship.x).toBeCloseTo(
+      createSpaceshipSimulationState(config, 1).spaceship.x + travelled,
+      6
+    );
   });
 
-  it("brakes from max speed to rest in eight fixed steps", () => {
+  it("brakes from max speed to rest at the configured braking rate", () => {
     const config = createSpaceshipSimulationConfig();
-    let state = holdPilot(createSpaceshipSimulationState(config, 1), config, { x: 1, y: 0 }, 10);
+    const spinUp = Math.ceil(
+      ((config.spaceshipSpeedPerSecond / config.spaceshipAccelerationPerSecondSquared) * 1000) /
+        config.fixedStepMs
+    );
+    const steps = Math.ceil(
+      ((config.spaceshipSpeedPerSecond / config.spaceshipBrakingPerSecondSquared) * 1000) /
+        config.fixedStepMs
+    );
+    const perStep = (config.spaceshipBrakingPerSecondSquared * config.fixedStepMs) / 1000;
+    let state = holdPilot(
+      createSpaceshipSimulationState(config, 3),
+      config,
+      { x: 1, y: 0 },
+      spinUp
+    );
     const releaseX = state.spaceship.x;
     const velocities: number[] = [];
 
@@ -226,18 +258,25 @@ describe("pilot movement", () => {
       mgFiring: false,
       receivedTick: state.clock.tick
     });
-    for (let step = 0; step < 8; step += 1) {
+    for (let step = 0; step < steps; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
       velocities.push(state.spaceship.velocity.x);
     }
 
-    expect(velocities).toEqual([280, 240, 200, 160, 120, 80, 40, 0]);
-    expect(state.spaceship.x).toBe(releaseX + 56);
+    velocities.forEach((velocity, index) => {
+      expect(velocity).toBeCloseTo(
+        Math.max(0, config.spaceshipSpeedPerSecond - perStep * (index + 1)),
+        6
+      );
+    });
+    expect(velocities.at(-1)).toBe(0);
+    const travelled = velocities.reduce((sum, v) => sum + (v * config.fixedStepMs) / 1000, 0);
+    expect(state.spaceship.x).toBeCloseTo(releaseX + travelled, 6);
   });
 
   it("caps diagonal target and actual velocity at max speed", () => {
     const config = createSpaceshipSimulationConfig();
-    const state = holdPilot(createSpaceshipSimulationState(config, 1), config, { x: 1, y: 1 }, 10);
+    const state = holdPilot(createSpaceshipSimulationState(config, 3), config, { x: 1, y: 1 }, 30);
 
     expect(Math.hypot(state.spaceship.velocity.x, state.spaceship.velocity.y)).toBeCloseTo(320);
     expect(state.spaceship.velocity.x).toBeCloseTo(320 / Math.sqrt(2));
@@ -290,18 +329,34 @@ describe("pilot movement", () => {
       mgFiring: false,
       receivedTick: 0
     });
-    const afterFourSteps = advance(moving, config, 4);
-    const stale = advanceSpaceshipSimulation(afterFourSteps, config);
+    const held = advance(moving, config, config.inputTimeoutTicks);
+    const stale = advanceSpaceshipSimulation(held, config);
 
-    expect(afterFourSteps.spaceship.velocity.x).toBe(128);
-    expect(stale.spaceship.velocity.x).toBe(88);
-    expect(stale.spaceship.x).toBeGreaterThan(afterFourSteps.spaceship.x);
+    const thrustPerStep =
+      (config.spaceshipAccelerationPerSecondSquared * config.fixedStepMs) / 1000;
+    const brakePerStep = (config.spaceshipBrakingPerSecondSquared * config.fixedStepMs) / 1000;
+    const heldSpeed = Math.min(
+      config.spaceshipSpeedPerSecond,
+      thrustPerStep * config.inputTimeoutTicks
+    );
+    expect(held.spaceship.velocity.x).toBeCloseTo(heldSpeed, 6);
+    expect(stale.spaceship.velocity.x).toBeCloseTo(heldSpeed - brakePerStep, 6);
+    expect(stale.spaceship.x).toBeGreaterThan(held.spaceship.x);
     expect(stale.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
   });
 
   it("brakes instead of teleporting velocity to zero after trusted neutral input", () => {
     const config = createSpaceshipSimulationConfig();
-    let state = holdPilot(createSpaceshipSimulationState(config, 1), config, { x: 1, y: 0 }, 10);
+    const spinUp = Math.ceil(
+      ((config.spaceshipSpeedPerSecond / config.spaceshipAccelerationPerSecondSquared) * 1000) /
+        config.fixedStepMs
+    );
+    let state = holdPilot(
+      createSpaceshipSimulationState(config, 3),
+      config,
+      { x: 1, y: 0 },
+      spinUp
+    );
     state = applyPilotInput(state, {
       vector: { x: 0, y: 0 },
       mgFiring: false,
@@ -309,7 +364,11 @@ describe("pilot movement", () => {
     });
     state = advanceSpaceshipSimulation(state, config);
 
-    expect(state.spaceship.velocity.x).toBe(280);
+    expect(state.spaceship.velocity.x).toBeCloseTo(
+      config.spaceshipSpeedPerSecond -
+        (config.spaceshipBrakingPerSecondSquared * config.fixedStepMs) / 1000,
+      6
+    );
   });
 
   it("rejects non-finite vectors, invalid deltas, and future received ticks", () => {
@@ -374,7 +433,12 @@ describe("turret traverse intent", () => {
 
   it("turns the gun while the intent is held", () => {
     const config = createSpaceshipSimulationConfig();
-    const turning = holdTraverse(createSpaceshipSimulationState(config, 1), config, 1, 20);
+    const turning = holdTraverse(
+      createSpaceshipSimulationState(config, 1),
+      config,
+      1,
+      Math.round(1000 / config.fixedStepMs)
+    );
 
     expect(turning.turretAngle).toBeGreaterThan(0.2);
     // A rate names no bearing, so none is left behind to be pulled back to.
@@ -397,7 +461,7 @@ describe("turret traverse intent", () => {
     // Held, the way a panel holds it: a single packet goes stale in five ticks
     // and the core drops the bearing, which is existing behaviour and not what
     // this test is about.
-    for (let step = 0; step < 200; step += 1) {
+    for (let step = 0; step < 600; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 0, y: -1 },
         firing: false,
@@ -460,7 +524,7 @@ describe("turret mounted on the hull", () => {
     });
     // Long enough for the traverse to arrive and its angular velocity to die,
     // so anything that moves afterwards was moved by the hull.
-    return advance(state, config, 200);
+    return advance(state, config, 600);
   }
 
   it("carries the gun and its target with the hull while the stick rests", () => {
@@ -545,7 +609,7 @@ describe("turret mounted on the hull", () => {
       active: false,
       receivedTick: 0
     });
-    state = advance(state, config, 200);
+    state = advance(state, config, 600);
     const settledShield = state.shieldAngle;
 
     const turning = turnWithAim(
@@ -574,8 +638,15 @@ describe("gunner simulation", () => {
     });
     state = advanceSpaceshipSimulation(state, config);
     expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
-    expect(state.turretAngularVelocity).toBeCloseTo((-13 * Math.PI) / 300);
-    expect(state.turretAngle).toBeCloseTo((-13 * Math.PI) / 6000);
+    expect(state.turretAngularVelocity).toBeCloseTo(
+      -(config.turretAngularAccelerationPerSecondSquared * config.fixedStepMs) / 1000,
+      6
+    );
+    const stepSeconds = config.fixedStepMs / 1000;
+    expect(state.turretAngle).toBeCloseTo(
+      -config.turretAngularAccelerationPerSecondSquared * stepSeconds * stepSeconds,
+      9
+    );
 
     state = applyGunnerInput(state, {
       vector: { x: 0, y: 0 },
@@ -584,15 +655,19 @@ describe("gunner simulation", () => {
     });
     state = advanceSpaceshipSimulation(state, config);
     expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
-    expect(state.turretAngle).toBeLessThan((-13 * Math.PI) / 6000);
+    // Still going: a zero aim keeps the bearing rather than cancelling it, so
+    // the second step leaves the gun further round than the first did.
+    expect(state.turretAngle).toBeLessThan(
+      -config.turretAngularAccelerationPerSecondSquared * stepSeconds * stepSeconds
+    );
   });
 
-  it("accelerates to the configured turret angular speed in ten steps", () => {
+  it("accelerates to the configured turret angular speed in half a second", () => {
     const config = createSpaceshipSimulationConfig();
     let state = createSpaceshipSimulationState(config, 1);
     const velocities: number[] = [];
 
-    for (let step = 0; step < 10; step += 1) {
+    for (let step = 0; step < 30; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: -1, y: 0 },
         firing: false,
@@ -602,10 +677,17 @@ describe("gunner simulation", () => {
       velocities.push(state.turretAngularVelocity);
     }
 
+    // An even ramp at the configured angular acceleration, capped by the
+    // configured speed - the rule, not the ten numbers it made at twenty steps
+    // a second.
+    const perStep = (config.turretAngularAccelerationPerSecondSquared * config.fixedStepMs) / 1000;
     velocities.forEach((velocity, index) => {
-      expect(velocity).toBeCloseTo(((index + 1) * 13 * Math.PI) / 300);
+      expect(velocity).toBeCloseTo(
+        Math.min(config.turretMaxAngularSpeedPerSecond, perStep * (index + 1)),
+        6
+      );
     });
-    expect(velocities[9]).toBeCloseTo((13 * Math.PI) / 30);
+    expect(velocities.at(-1)).toBeCloseTo(config.turretMaxAngularSpeedPerSecond, 6);
   });
 
   it("traverses an exact antipode positively and reaches it without overshoot", () => {
@@ -615,7 +697,7 @@ describe("gunner simulation", () => {
     let previousAngle = state.turretAngle;
     let ticks = 0;
 
-    for (let step = 0; step < 100; step += 1) {
+    for (let step = 0; step < 300; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: -1, y: 0 },
         firing: false,
@@ -637,7 +719,7 @@ describe("gunner simulation", () => {
     expect(state.turretAngle).toBe(-Math.PI);
     expect(state.turretAngularVelocity).toBe(0);
     expect(travelled).toBeCloseTo(Math.PI);
-    expect(ticks).toBe(52);
+    expect(ticks).toBe(52 * 3);
   });
 
   it("takes the short arc through the canonical angle boundary", () => {
@@ -673,7 +755,7 @@ describe("gunner simulation", () => {
     let state = createSpaceshipSimulationState(config, 1);
     const angles: number[] = [];
 
-    for (let step = 0; step < 3; step += 1) {
+    for (let step = 0; step < 9; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: Math.cos(target), y: Math.sin(target) },
         firing: false,
@@ -683,7 +765,7 @@ describe("gunner simulation", () => {
       angles.push(state.turretAngle);
     }
 
-    expect(angles[0]).toBeCloseTo((13 * Math.PI) / 6000);
+    expect(angles[0]).toBeCloseTo((13 * Math.PI) / 6000 / 9);
     expect(angles.every((angle) => angle <= target)).toBe(true);
     expect(state.turretAngle).toBeCloseTo(target);
     expect(state.turretTargetAngle).toBeCloseTo(target);
@@ -693,7 +775,7 @@ describe("gunner simulation", () => {
   it("brakes before reversing toward a target on the opposite side", () => {
     const config = createSpaceshipSimulationConfig();
     let state = createSpaceshipSimulationState(config, 1);
-    for (let step = 0; step < 3; step += 1) {
+    for (let step = 0; step < 9; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 0, y: 1 },
         firing: false,
@@ -711,7 +793,7 @@ describe("gunner simulation", () => {
     state = advanceSpaceshipSimulation(state, config);
 
     expect(velocityBeforeReverse).toBeCloseTo((13 * Math.PI) / 100);
-    expect(state.turretAngularVelocity).toBeCloseTo((13 * Math.PI) / 200);
+    expect(state.turretAngularVelocity).toBeCloseTo((13 * Math.PI) / 600);
     expect(state.turretAngularVelocity).toBeGreaterThan(0);
 
     for (let step = 0; step < 5 && state.turretAngularVelocity >= 0; step += 1) {
@@ -785,7 +867,7 @@ describe("gunner simulation", () => {
     if (projectile === undefined || state.turretTargetAngle === null) {
       throw new Error("expected a projectile and turret target");
     }
-    expect(state.turretAngle).toBeCloseTo((-13 * Math.PI) / 6000);
+    expect(state.turretAngle).toBeCloseTo((-13 * Math.PI) / 6000 / 9);
     expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
     expect(Math.atan2(projectile.velocity.y, projectile.velocity.x)).toBeCloseTo(state.turretAngle);
     expect(Math.atan2(projectile.velocity.y, projectile.velocity.x)).not.toBeCloseTo(
@@ -807,7 +889,7 @@ describe("gunner simulation", () => {
       receivedTick: state.clock.tick
     });
 
-    for (let click = 0; click < 3; click += 1) {
+    for (let click = 0; click < 9; click += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 1, y: 0 },
         firing: true,
@@ -833,7 +915,7 @@ describe("gunner simulation", () => {
     // Pinned: this measures the cadence, not what the campaign is tuned to.
     const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 5 });
     let state = createSpaceshipSimulationState(config, 1);
-    for (let step = 0; step < 11; step += 1) {
+    for (let step = 0; step < 33; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 1, y: 0 },
         firing: true,
@@ -879,7 +961,7 @@ describe("gunner simulation", () => {
       firing: false,
       receivedTick: 0
     });
-    state = advance(state, config, 4);
+    state = advance(state, config, 12);
     const velocityBeforeStale = state.turretAngularVelocity;
     state = advanceSpaceshipSimulation(state, config);
 
@@ -901,7 +983,7 @@ describe("gunner simulation", () => {
       firing: true,
       receivedTick: 0
     });
-    state = advance(state, config, 2);
+    state = advance(state, config, 6);
     const angleAtDisconnect = state.turretAngle;
     const velocityAtDisconnect = state.turretAngularVelocity;
     state = cancelGunnerControl(state);
@@ -949,7 +1031,7 @@ describe("gunner simulation", () => {
       firing: true,
       receivedTick: 0
     });
-    const stale = advance(firing, config, 6);
+    const stale = advance(firing, config, 18);
 
     expect(stale.projectiles).toHaveLength(1);
     expect(stale.turretAngle).toBeCloseTo((117 * Math.PI) / 4000);
@@ -966,7 +1048,7 @@ describe("gunner simulation", () => {
       receivedTick: 0
     });
     state = advanceSpaceshipSimulation(state, lifetimeConfig);
-    state = advance(state, lifetimeConfig, 30);
+    state = advance(state, lifetimeConfig, 90);
     expect(state.projectiles).toEqual([]);
 
     const smallWorld = smallArenaConfig({ projectileSpeedPerSecond: 4000 });
@@ -987,7 +1069,7 @@ describe("shield simulation", () => {
     // Pinned: a hundred points is what the seconds below are counted against.
     const config = createSpaceshipSimulationConfig({ shieldCapacity: 100 });
     const state = advance(
-      applyShieldInput(createSpaceshipSimulationState(config, 1), {
+      applyShieldInput(createSpaceshipSimulationState(config, 3), {
         vector: { x: -1, y: 0 },
         active: true,
         receivedTick: 0
@@ -996,7 +1078,7 @@ describe("shield simulation", () => {
       6
     );
 
-    expect(state.shieldAngle).toBeCloseTo((117 * Math.PI) / 3200);
+    expect(state.shieldAngle).toBeCloseTo((117 * Math.PI) / 3200 / 9);
     expect(state.shieldTargetAngle).toBeNull();
     expect(state.shieldAngularVelocity).toBeCloseTo((13 * Math.PI) / 240);
     // Six ticks in the shield is still coming up, so it neither blocks nor
@@ -1020,7 +1102,7 @@ describe("shield simulation", () => {
     };
     const velocities: number[] = [];
 
-    for (let step = 0; step < 10; step += 1) {
+    for (let step = 0; step < 30; step += 1) {
       state = applyShieldInput(state, {
         vector: { x: 0, y: 1 },
         active: false,
@@ -1031,7 +1113,7 @@ describe("shield simulation", () => {
     }
 
     velocities.forEach((velocity, index) => {
-      expect(velocity).toBeCloseTo(((index + 1) * 13 * Math.PI) / 240);
+      expect(velocity).toBeCloseTo(((index + 1) * 13 * Math.PI) / 720);
     });
     expect(velocities[9]).toBeCloseTo((13 * Math.PI) / 24);
     expect(state.shieldAngle).toBeGreaterThan(0);
@@ -1046,7 +1128,7 @@ describe("shield simulation", () => {
     let previousAngle = state.shieldAngle;
     let ticks = 0;
 
-    for (let step = 0; step < 100; step += 1) {
+    for (let step = 0; step < 300; step += 1) {
       state = applyShieldInput(state, {
         vector: { x: -1, y: 0 },
         active: false,
@@ -1064,7 +1146,7 @@ describe("shield simulation", () => {
       }
     }
 
-    expect(ticks).toBe(43);
+    expect(ticks).toBe(43 * 3);
     expect(state.shieldAngle).toBe(-Math.PI);
     expect(state.shieldAngularVelocity).toBe(0);
     expect(state.shieldActive).toBe(false);
@@ -1080,7 +1162,7 @@ describe("shield simulation", () => {
         receivedTick: 0
       }
     );
-    state = advance(state, config, 2);
+    state = advance(state, config, 6);
     const energyAtDisconnect = state.shieldEnergy;
     const velocityAtDisconnect = state.shieldAngularVelocity;
     state = cancelShieldControl(state);
@@ -1093,7 +1175,7 @@ describe("shield simulation", () => {
 
     state = advanceSpaceshipSimulation(state, config);
     expect(Math.abs(state.shieldAngularVelocity)).toBeLessThan(Math.abs(velocityAtDisconnect));
-    expect(state.shieldEnergy).toBe(energyAtDisconnect + 0.5);
+    expect(state.shieldEnergy).toBeCloseTo(energyAtDisconnect + 0.5 / 3, 6);
   });
 
   it("drains a full shield in five seconds of holding and requires re-arming", () => {
@@ -1117,7 +1199,7 @@ describe("shield simulation", () => {
       active: true,
       receivedTick: state.clock.tick
     });
-    state = advance(state, config, 10);
+    state = advance(state, config, 30);
     expect(state.shieldEnergy).toBe(5);
     expect(state.shieldActive).toBe(false);
     expect(state.shieldRearmRequired).toBe(true);
@@ -1136,12 +1218,12 @@ describe("shield simulation", () => {
       active: false,
       receivedTick: 0
     });
-    state = advance(state, config, 200);
+    state = advance(state, config, 600);
 
     expect(state.shieldEnergy).toBe(100);
     expect(state.shieldActive).toBe(false);
     expect(state.shieldRearmRequired).toBe(false);
-    expect(advance(state, config, 10).shieldEnergy).toBe(100);
+    expect(advance(state, config, 30).shieldEnergy).toBe(100);
   });
 
   it("re-arms itself once the battery wins back the mark", () => {
@@ -1153,8 +1235,8 @@ describe("shield simulation", () => {
       receivedTick: 0
     });
     state = advance(state, config, config.shieldEngageTicks + 100);
-    state = advance(state, config, 4);
-    expect(state.shieldEnergy).toBe(2);
+    state = advance(state, config, 12);
+    expect(state.shieldEnergy).toBeCloseTo(2 / 3, 6);
     expect(state.shieldActive).toBe(false);
     // Draining put the shield into its cooldown and locked it out.
     expect(state.shieldPhase).toBe("cooling");
@@ -1209,13 +1291,13 @@ describe("deterministic spaceship trace", () => {
         active: true,
         receivedTick: 0
       });
-      state = advance(state, config, 3);
+      state = advance(state, config, 9);
       state = applyPilotInput(state, {
         vector: { x: 0, y: 0 },
         mgFiring: false,
         receivedTick: state.clock.tick
       });
-      return advance(state, config, 12);
+      return advance(state, config, 36);
     };
 
     expect(run()).toEqual(run());
@@ -1260,7 +1342,7 @@ describe("pilot nose machine gun", () => {
     const config = createSpaceshipSimulationConfig();
     let state = createSpaceshipSimulationState(config, 1);
     let totalSpawns = 0;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {
       state = applyPilotInput(state, {
         vector: ZERO,
         mgFiring: true,
@@ -1355,7 +1437,7 @@ describe("pilot nose machine gun", () => {
       state = advanceSpaceshipSimulation(state, config);
       ticks++;
     }
-    expect(ticks).toBe(47); // 100 -> <=30 at 1.5/tick
+    expect(ticks).toBe(47 * 3); // the same seconds, three times the ticks
   });
 
   it("auto-resumes firing while held after rearming", () => {
@@ -1364,7 +1446,7 @@ describe("pilot nose machine gun", () => {
     const spawnedTicks: number[] = [];
     let overheatTick: number | null = null;
     let rearmTick: number | null = null;
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 900; i++) {
       const wasOverheated = state.mgOverheated;
       state = applyPilotInput(state, {
         vector: ZERO,
@@ -1527,7 +1609,7 @@ describe("gunner cannon heat", () => {
       cannonOverheated: true
     };
     let shots = 0;
-    for (let index = 0; index < 40; index += 1) {
+    for (let index = 0; index < 120; index += 1) {
       state = holdTrigger(state, config, true);
       shots += cannonSpawnsOnTick(state);
     }
@@ -1555,11 +1637,11 @@ describe("gunner cannon heat", () => {
   it("cools while the trigger is off and climbs while it is held", () => {
     const config = createSpaceshipSimulationConfig();
     let state = createSpaceshipSimulationState(config, 4);
-    for (let index = 0; index < 6; index += 1) state = holdTrigger(state, config, true);
+    for (let index = 0; index < 18; index += 1) state = holdTrigger(state, config, true);
     const hot = state.cannonHeat;
     expect(hot).toBeGreaterThan(0);
 
-    for (let index = 0; index < 6; index += 1) state = holdTrigger(state, config, false);
+    for (let index = 0; index < 18; index += 1) state = holdTrigger(state, config, false);
     expect(state.cannonHeat).toBeLessThan(hot);
   });
 });
@@ -1612,7 +1694,7 @@ describe("shield timing", () => {
     state = advance(state, config, config.shieldMinimumUpTicks - 1);
     expect(state.shieldActive).toBe(true);
 
-    state = advance(state, config, 2);
+    state = advance(state, config, 6);
     expect(state.shieldPhase).toBe("cooling");
     expect(state.shieldActive).toBe(false);
   });
@@ -1678,8 +1760,8 @@ describe("elastic rim", () => {
     let furthest = 0;
 
     // Long enough to cross half the arena at full thrust and meet the rim.
-    for (let step = 0; step < 400; step += 1) {
-      state = holdHelm(state, config, { turn: 0, thrust: 1 }, 1);
+    for (let step = 0; step < 1200; step += 1) {
+      state = holdHelm(state, config, { turn: 0, thrust: 1 }, 3);
       furthest = Math.max(
         furthest,
         Math.hypot(state.spaceship.x - center, state.spaceship.y - center)
@@ -1701,7 +1783,7 @@ describe("elastic rim", () => {
     expect(Math.abs(outward)).toBeLessThan(1);
 
     // Let go and the band gives the hull back: that is the rubber, not a wall.
-    const released = holdHelm(state, config, { turn: 0, thrust: 0 }, 20);
+    const released = holdHelm(state, config, { turn: 0, thrust: 0 }, 60);
     expect(Math.hypot(released.spaceship.x - center, released.spaceship.y - center)).toBeLessThan(
       distanceHeld
     );
@@ -1713,16 +1795,16 @@ describe("tank helm", () => {
     const config = createSpaceshipSimulationConfig();
     const state = createSpaceshipSimulationState(config, 1);
 
-    const spinning = holdHelm(state, config, { turn: 1, thrust: 0 }, 8);
+    const spinning = holdHelm(state, config, { turn: 1, thrust: 0 }, 24);
     expect(spinning.headingAngularVelocity).toBeGreaterThan(0);
     expect(spinning.headingTargetAngle).toBeNull();
 
-    const stopped = holdHelm(spinning, config, { turn: 0, thrust: 0 }, 20);
+    const stopped = holdHelm(spinning, config, { turn: 0, thrust: 0 }, 60);
     expect(stopped.headingAngularVelocity).toBe(0);
 
     // Stopping means staying. A remembered bearing would pull the nose back
     // here, which is exactly the swing this helm exists to lose.
-    const settled = holdHelm(stopped, config, { turn: 0, thrust: 0 }, 20);
+    const settled = holdHelm(stopped, config, { turn: 0, thrust: 0 }, 60);
     expect(settled.spaceshipHeading).toBe(stopped.spaceshipHeading);
   });
 
@@ -1750,11 +1832,11 @@ describe("tank helm", () => {
   it("burns along the nose and backs up along it without turning", () => {
     const config = createSpaceshipSimulationConfig();
     const state = createSpaceshipSimulationState(config, 3);
-    const turned = holdHelm(state, config, { turn: 1, thrust: 0 }, 10);
-    const resting = holdHelm(turned, config, { turn: 0, thrust: 0 }, 20);
+    const turned = holdHelm(state, config, { turn: 1, thrust: 0 }, 30);
+    const resting = holdHelm(turned, config, { turn: 0, thrust: 0 }, 60);
     const heading = resting.spaceshipHeading;
 
-    const forward = holdHelm(resting, config, { turn: 0, thrust: 1 }, 10);
+    const forward = holdHelm(resting, config, { turn: 0, thrust: 1 }, 30);
     expect(Math.hypot(forward.spaceship.velocity.x, forward.spaceship.velocity.y)).toBeGreaterThan(
       0
     );
@@ -1768,7 +1850,7 @@ describe("tank helm", () => {
     ).toBeLessThan(0.01);
     expect(forward.spaceshipHeading).toBe(heading);
 
-    const back = holdHelm(resting, config, { turn: 0, thrust: -1 }, 10);
+    const back = holdHelm(resting, config, { turn: 0, thrust: -1 }, 30);
     expect(
       Math.abs(
         shortestAngleDelta(
@@ -1784,8 +1866,8 @@ describe("tank helm", () => {
     const config = createSpaceshipSimulationConfig();
     const state = createSpaceshipSimulationState(config, 3);
     // Long enough for either direction to have reached its own ceiling.
-    const forward = holdHelm(state, config, { turn: 0, thrust: 1 }, 60);
-    const back = holdHelm(state, config, { turn: 0, thrust: -1 }, 60);
+    const forward = holdHelm(state, config, { turn: 0, thrust: 1 }, 180);
+    const back = holdHelm(state, config, { turn: 0, thrust: -1 }, 180);
     const forwardSpeed = Math.hypot(forward.spaceship.velocity.x, forward.spaceship.velocity.y);
     const backSpeed = Math.hypot(back.spaceship.velocity.x, back.spaceship.velocity.y);
 
@@ -1799,7 +1881,7 @@ describe("tank helm", () => {
     const config = createSpaceshipSimulationConfig();
     const state = createSpaceshipSimulationState(config, 3);
     let stick = state;
-    for (let step = 0; step < 60; step += 1) {
+    for (let step = 0; step < 180; step += 1) {
       stick = applyPilotInput(stick, {
         vector: { x: -1, y: 0 },
         mgFiring: false,
@@ -1817,7 +1899,7 @@ describe("tank helm", () => {
     const config = createSpaceshipSimulationConfig();
     const state = createSpaceshipSimulationState(config, 4);
 
-    const steered = holdPilot(state, config, { x: 0, y: 1 }, 12);
+    const steered = holdPilot(state, config, { x: 0, y: 1 }, 36);
 
     expect(steered.headingTargetAngle).toBeCloseTo(Math.PI / 2, 10);
     expect(steered.spaceshipHeading).toBeGreaterThan(0);

@@ -2,8 +2,19 @@ import { validateCombatConfig } from "./combatValidation.ts";
 import { type SpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
 export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationConfig): void {
   validateCombatConfig(config);
+  /*
+   * The step is a duration, not a count.
+   *
+   * Sixty steps a second is 16.666..., and demanding a whole number of
+   * milliseconds would rule out every rate that is not a divisor of a thousand
+   * - which is most of the ones worth running. What has to be whole is the
+   * number of steps in a broadcast, and the server checks that where both
+   * numbers are known.
+   */
+  if (!Number.isFinite(config.fixedStepMs) || config.fixedStepMs <= 0) {
+    throw new RangeError("fixedStepMs must be a positive finite number of milliseconds");
+  }
   const positiveSafeIntegers: readonly (readonly [string, number])[] = [
-    ["fixedStepMs", config.fixedStepMs],
     ["inputTimeoutTicks", config.inputTimeoutTicks],
     ["projectileLifetimeMs", config.projectileLifetimeMs],
     ["fireCooldownTicks", config.fireCooldownTicks],

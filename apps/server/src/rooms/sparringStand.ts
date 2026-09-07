@@ -76,21 +76,55 @@ export function openSparringStand(
 }
 
 /**
- * Puts a body back once it has left the arena.
+ * Holds the stand still: the campaign never advances and the field never
+ * empties.
  *
- * Without this the stand empties out after a lap and there is nothing left to
- * watch - and an empty arena also counts as a cleared wave, which would bring
- * the whole campaign back on top of the measurement.
+ * Both halves are needed, and the second one is not obvious. An arena with no
+ * enemies counts as a cleared wave, so the encounter walks into the salvage
+ * intermission and on to the next wave - and the display's own contract forbids
+ * publishing moving entities during an intermission, so every patch then failed
+ * to parse and the world stopped on screen while the ship flew on. A stand that
+ * ends its own measurement after twenty-five seconds is worse than no stand.
  */
-export function refillSparringStand(
+export function holdSparringStand(
   state: SpaceshipSimulationState,
   wanted: number,
   arenaRadius: number
 ): SpaceshipSimulationState {
-  if (state.asteroids.length >= wanted) return state;
-  const missing = wanted - state.asteroids.length;
-  const added = Array.from({ length: missing }, (_unused, index) =>
-    drifter(state.encounterTick + index, wanted, state, arenaRadius)
-  );
-  return { ...state, asteroids: [...state.asteroids, ...added], pendingSpawns: [], enemies: [] };
+  const bodies =
+    state.asteroids.length >= wanted
+      ? state.asteroids
+      : [
+          ...state.asteroids,
+          ...Array.from({ length: wanted - state.asteroids.length }, (_unused, index) =>
+            drifter(state.encounterTick + index, wanted, state, arenaRadius)
+          )
+        ];
+  if (
+    bodies === state.asteroids &&
+    state.encounterPhase === "combat" &&
+    state.enemies.length === 0 &&
+    state.pendingSpawns.length === 0 &&
+    state.teamUpgradeOffer === null
+  ) {
+    return state;
+  }
+  return {
+    ...state,
+    asteroids: bodies,
+    enemies: [],
+    pendingSpawns: [],
+    encounterPhase: "combat",
+    outcome: null,
+    defeatReason: null,
+    lootWindowTicksRemaining: 0,
+    stalemateTicks: 0,
+    waveNumber: 1,
+    // The offer belongs to an intermission, and the stand does not have one.
+    // Left standing beside a pinned combat it is a state the display's contract
+    // refuses, and a refused patch stops the world exactly like a lost one.
+    teamUpgradeOffer: null,
+    teamUpgradeVotes: { pilot: null, gunner: null, shield: null },
+    teamUpgradeSelection: null
+  };
 }

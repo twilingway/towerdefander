@@ -340,7 +340,7 @@ export function resolveSpaceshipThreats(
 }
 
 /** How long a fired beam stays on the wire for the display to draw it. */
-export const LASER_BEAM_TICKS = 2;
+export const LASER_BEAM_TICKS = 6;
 
 export function removeExpiredAndOutOfBounds(
   state: CombatStepState,

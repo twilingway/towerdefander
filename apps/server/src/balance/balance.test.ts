@@ -125,6 +125,29 @@ function tunedPresetsFile(hp: number): BalancePresetsFile {
   };
 }
 
+/**
+ * Today's defaults written the way a file from before the rate change holds
+ * them: every duration counted in ticks divided back by three.
+ *
+ * The fixtures below stand in for presets an operator saved at twenty steps a
+ * second, and the migration multiplies those by three on the way forward.
+ * Handed today's numbers instead, it would triple values that were already
+ * scaled and the strict schema would refuse them - which says nothing about the
+ * migration and everything about the fixture.
+ */
+function atLegacyTickRate<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(atLegacyTickRate) as unknown as T;
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      key.endsWith("Ticks") && typeof item === "number"
+        ? Math.round(item / 3)
+        : atLegacyTickRate(item)
+    ])
+  ) as T;
+}
+
 describe("balance store", () => {
   it("publishes built-in defaults that satisfy the shared schema", () => {
     expect(balancePresetsFileSchema.safeParse(createDefaultPresetsFile()).success).toBe(true);
@@ -265,7 +288,7 @@ describe("balance store", () => {
 
 describe("version 1 migration", () => {
   function legacyDocument() {
-    const tuning = createDefaultTuning();
+    const tuning = atLegacyTickRate(createDefaultTuning());
     const archetypes = Object.fromEntries(
       Object.entries(tuning.enemyArchetypes).map(([kind, archetype]) => {
         const legacy: Record<string, unknown> = { ...archetype };
@@ -325,7 +348,7 @@ describe("version 1 migration", () => {
 
   it("turns a version 2 single weapon into a weapon list", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning = createDefaultTuning();
+    const tuning = atLegacyTickRate(createDefaultTuning());
     const archetypes = Object.fromEntries(
       Object.entries(tuning.enemyArchetypes).map(([kind, archetype]) => {
         const legacy: Record<string, unknown> = { ...archetype, weapon: archetype.weapons[0] };
@@ -354,7 +377,7 @@ describe("version 1 migration", () => {
 
   it("gives a version 5 document the default camera frame", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     delete tuning.cameraViewWidth;
     await writeFile(
       filePath,
@@ -377,7 +400,7 @@ describe("version 1 migration", () => {
 
   it("gives a version 18 document the default arena without touching its waves", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     delete tuning.arenaRadius;
     // The operator's own campaign: the point of the test is that adding a field
     // does not take this down with it.
@@ -425,7 +448,7 @@ describe("version 1 migration", () => {
 
   it("gives a version 19 document the shield timings without touching its waves", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     delete tuning.shieldEngageTicks;
     delete tuning.shieldMinimumUpTicks;
     delete tuning.shieldCooldownTicks;
@@ -461,16 +484,23 @@ describe("version 1 migration", () => {
     await store.load();
 
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getState().presets[0]?.tuning.shieldEngageTicks).toBe(10);
-    expect(store.getState().presets[0]?.tuning.shieldMinimumUpTicks).toBe(40);
-    expect(store.getState().presets[0]?.tuning.shieldCooldownTicks).toBe(20);
+    // The defaults it gains, whatever rate they are written at: a file from
+    // before these knobs existed has no opinion about them.
+    const defaults = createDefaultTuning();
+    expect(store.getState().presets[0]?.tuning.shieldEngageTicks).toBe(defaults.shieldEngageTicks);
+    expect(store.getState().presets[0]?.tuning.shieldMinimumUpTicks).toBe(
+      defaults.shieldMinimumUpTicks
+    );
+    expect(store.getState().presets[0]?.tuning.shieldCooldownTicks).toBe(
+      defaults.shieldCooldownTicks
+    );
     // The point of the test: the operator's campaign survived the new fields.
     expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
   });
 
   it("gives a version 20 document enemy skill without touching its waves", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     // A profile saved before a knob existed: the level must gain the missing
     // field, not be carried over whole and fail the strict schema.
     const partialVeteran: Record<string, unknown> = {
@@ -531,7 +561,7 @@ describe("version 1 migration", () => {
 
   it("gives a version 21 document the reverse gear without touching its waves", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     delete tuning.spaceshipReverseSpeedFactor;
     const waves = [
       {
@@ -573,7 +603,7 @@ describe("version 1 migration", () => {
 
   it("gives a version 33 document the escort floor without touching its waves", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     const campaign = tuning.waveCampaign as { authoring: Record<string, unknown> };
     const authoring = { ...campaign.authoring };
     // Version 33 paid for a boss on top of its wave, so it had no such knob.
@@ -651,7 +681,7 @@ describe("version 1 migration", () => {
 
   it("gives a version 35 document the tremble guard, waves intact", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     // Version 34 had none of the cockpit's settings at all; version 35 had the
     // stick geometry but not the guard that keeps a thumb from shaking the
     // hull. A saved document of either shape must gain what it lacks.
@@ -712,7 +742,7 @@ describe("version 1 migration", () => {
 
   it("retires the fractional re-arm mark without touching an operator's waves", async () => {
     const filePath = await temporaryPresetPath();
-    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    const tuning: Record<string, unknown> = { ...atLegacyTickRate(createDefaultTuning()) };
     // Version 23 stated it as a share of the battery, so an upgrade to the
     // battery lengthened the wait. The retired key has to go, or the strict
     // schema rejects the document and the campaign goes with it.
@@ -782,7 +812,7 @@ describe("version 1 migration", () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     const archetypes = Object.fromEntries(
-      Object.entries(defaults.enemyArchetypes).map(([kind, archetype]) => [
+      Object.entries(atLegacyTickRate(defaults.enemyArchetypes)).map(([kind, archetype]) => [
         kind,
         {
           ...archetype,
@@ -803,7 +833,7 @@ describe("version 1 migration", () => {
           {
             id: "operator",
             name: "Operator",
-            tuning: { ...defaults, enemyArchetypes: archetypes }
+            tuning: { ...atLegacyTickRate(defaults), enemyArchetypes: archetypes }
           }
         ]
       }),
@@ -861,7 +891,7 @@ describe("version 1 migration", () => {
       })
     );
     const legacyTuning: Record<string, unknown> = {
-      ...defaults,
+      ...atLegacyTickRate(defaults),
       enemyArchetypes: archetypes
     };
     delete legacyTuning.asteroidVisual;
@@ -955,7 +985,7 @@ describe("version 1 migration", () => {
       "shieldAngularBrakingPerSecondSquared"
     ]);
     const legacyTuning = Object.fromEntries(
-      Object.entries(defaults).filter(([field]) => !playerShipFields.has(field))
+      Object.entries(atLegacyTickRate(defaults)).filter(([field]) => !playerShipFields.has(field))
     );
     const document = {
       version: 8,
@@ -985,7 +1015,7 @@ describe("version 1 migration", () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     // Version 9 had no autopilot section at all: the demo bot was hardcoded.
-    const legacyTuning: Partial<BalanceTuning> = { ...defaults };
+    const legacyTuning: Partial<BalanceTuning> = { ...atLegacyTickRate(defaults) };
     delete legacyTuning.autopilot;
     const document = {
       version: 9,
@@ -1015,10 +1045,10 @@ describe("version 1 migration", () => {
     const defaults = createDefaultTuning();
     // Version 24 had no salvage at all: nothing repaired the hull inside a run.
     const legacyTuning: Partial<BalanceTuning> = {
-      ...defaults,
+      ...atLegacyTickRate(defaults),
       // A hand-built wave table is what a bad migration takes down with it.
       waveCampaign: {
-        ...defaults.waveCampaign,
+        ...atLegacyTickRate(defaults.waveCampaign),
         waves: [
           {
             entries: [
@@ -1094,9 +1124,9 @@ describe("version 1 migration", () => {
     const defaults = createDefaultTuning();
     // Version 28 had one hull and nine hardcoded upgrade cards.
     const legacyTuning: Partial<BalanceTuning> = {
-      ...defaults,
+      ...atLegacyTickRate(defaults),
       waveCampaign: {
-        ...defaults.waveCampaign,
+        ...atLegacyTickRate(defaults.waveCampaign),
         waves: [
           {
             entries: [
@@ -1153,7 +1183,7 @@ describe("version 1 migration", () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     // Version 15 had no background section at all: the display drew a flat color.
-    const legacyTuning: Partial<BalanceTuning> = { ...defaults };
+    const legacyTuning: Partial<BalanceTuning> = { ...atLegacyTickRate(defaults) };
     delete legacyTuning.background;
     const document = {
       version: 15,
@@ -1226,7 +1256,7 @@ describe("version 1 migration", () => {
         {
           id: "operator",
           name: "Operator",
-          tuning: { ...defaults, enemyArchetypes: legacyArchetypes }
+          tuning: { ...atLegacyTickRate(defaults), enemyArchetypes: legacyArchetypes }
         }
       ]
     };
@@ -1264,7 +1294,7 @@ describe("version 1 migration", () => {
           id: "operator",
           name: "Operator",
           tuning: {
-            ...defaults,
+            ...atLegacyTickRate(defaults),
             turretVisual: {
               shape: "weapon-gatling",
               modelScale: 1.4,
@@ -1300,7 +1330,7 @@ describe("version 1 migration", () => {
   it("gives a preset from before the weapon looks the default of none", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
-    const dated: Record<string, unknown> = { ...defaults };
+    const dated: Record<string, unknown> = { ...atLegacyTickRate(defaults) };
     delete dated.turretVisual;
     delete dated.projectileVisual;
     delete dated.mgProjectileVisual;
@@ -1338,7 +1368,10 @@ describe("version 1 migration", () => {
           {
             id: "operator",
             name: "Operator",
-            tuning: { ...defaults, turretVisual: { shape: "weapon-gatling", modelScale: 1.4 } }
+            tuning: {
+              ...atLegacyTickRate(defaults),
+              turretVisual: { shape: "weapon-gatling", modelScale: 1.4 }
+            }
           }
         ]
       }),
@@ -1364,9 +1397,9 @@ describe("version 1 migration", () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     const tuning: Record<string, unknown> = {
-      ...defaults,
+      ...atLegacyTickRate(defaults),
       waveCampaign: {
-        ...defaults.waveCampaign,
+        ...atLegacyTickRate(defaults.waveCampaign),
         waves: [
           {
             entries: [
@@ -1418,7 +1451,9 @@ describe("version 1 migration", () => {
     // profile schema, the whole saved profile was carried over unchanged, it
     // failed the strict schema, and the silent fallback to built-in defaults
     // put an empty campaign in front of the console — which the next save kept.
-    const dated: Record<string, unknown> = { ...defaults.autopilot.profiles.laser.ace };
+    const dated: Record<string, unknown> = {
+      ...atLegacyTickRate(defaults.autopilot.profiles.laser.ace)
+    };
     delete dated.cannonHeatCeiling;
     const waves = [
       {
@@ -1445,11 +1480,11 @@ describe("version 1 migration", () => {
           id: "operator",
           name: "Operator",
           tuning: {
-            ...defaults,
-            waveCampaign: { ...defaults.waveCampaign, waves },
+            ...atLegacyTickRate(defaults),
+            waveCampaign: { ...atLegacyTickRate(defaults.waveCampaign), waves },
             autopilot: {
-              ...defaults.autopilot,
-              profiles: { ...defaults.autopilot.profiles, ace: dated }
+              ...atLegacyTickRate(defaults.autopilot),
+              profiles: { ...atLegacyTickRate(defaults.autopilot.profiles), ace: dated }
             }
           }
         }
@@ -1476,7 +1511,10 @@ describe("version 1 migration", () => {
   it("keeps a hand-tuned autopilot profile and fills only the missing ones", async () => {
     const filePath = await temporaryPresetPath();
     const defaults = createDefaultTuning();
-    const handTuned = { ...defaults.autopilot.profiles.laser.ace, mgConeRadians: 0.05 };
+    const handTuned = {
+      ...atLegacyTickRate(defaults.autopilot.profiles.laser.ace),
+      mgConeRadians: 0.05
+    };
     const document = {
       version: 9,
       activePresetId: "operator",
@@ -1484,7 +1522,10 @@ describe("version 1 migration", () => {
         {
           id: "operator",
           name: "Operator",
-          tuning: { ...defaults, autopilot: { level: "ace", profiles: { ace: handTuned } } }
+          tuning: {
+            ...atLegacyTickRate(defaults),
+            autopilot: { level: "ace", profiles: { ace: handTuned } }
+          }
         }
       ]
     };
@@ -1534,7 +1575,7 @@ describe("version 1 migration", () => {
             id: "operator",
             name: "Operator",
             tuning: {
-              ...defaults,
+              ...atLegacyTickRate(defaults),
               spaceshipSpeedPerSecond: 410,
               shieldCapacity: 180,
               shieldRadius: 150,
@@ -1671,9 +1712,9 @@ describe("balance routes", () => {
     const path = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     const legacyTuning: Record<string, unknown> = {
-      ...defaults,
+      ...atLegacyTickRate(defaults),
       waveCampaign: {
-        ...defaults.waveCampaign,
+        ...atLegacyTickRate(defaults.waveCampaign),
         waves: [
           {
             entries: [
@@ -1721,9 +1762,9 @@ describe("balance routes", () => {
     const path = await temporaryPresetPath();
     const defaults = createDefaultTuning();
     const legacyTuning: Record<string, unknown> = {
-      ...defaults,
+      ...atLegacyTickRate(defaults),
       waveCampaign: {
-        ...defaults.waveCampaign,
+        ...atLegacyTickRate(defaults.waveCampaign),
         waves: [
           {
             entries: [

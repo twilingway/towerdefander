@@ -25,7 +25,7 @@ export const ENEMY_STALL_SPEED_FRACTION = 0.05;
  * until the wave clock runs out. Like the rim unstick, this is correctness
  * rather than difficulty, so it is the same for every skill level.
  */
-export const ENEMY_PRESS_TICKS = 200;
+export const ENEMY_PRESS_TICKS = 600;
 /** Share of the fighting distance given up once the press is at full. */
 export const ENEMY_PRESS_SHARE = 0.75;
 export const SPAWN_DOMAIN = 0x5350_4157;

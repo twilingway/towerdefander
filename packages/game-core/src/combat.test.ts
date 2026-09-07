@@ -502,8 +502,16 @@ describe("deterministic combat foundation", () => {
         ]
       }
     });
+    /*
+     * Just past the last arrival, and no further.
+     *
+     * The claim is about where a group enters, so the window is the group's own
+     * schedule: run it longer and the enemies have simply flown out of the
+     * sector they entered by, which is not what this is asking.
+     */
     let state = createSpaceshipSimulationState(config, 4242);
-    for (let step = 0; step < 24; step += 1) {
+    const arrivals = 12 * 1 + 2;
+    for (let step = 0; step < arrivals; step += 1) {
       state = advanceSpaceshipSimulation(state, config);
     }
     const centerX = config.worldWidth / 2;
@@ -1072,13 +1080,17 @@ describe("combat motion and collision", () => {
       shieldEnergy: 1,
       pendingSpawns: []
     };
+    // Placed one step short of the hull, in whatever a step is worth: a fixed
+    // hundred and forty units was that distance at twenty steps a second.
+    const closingSpeed = 2000;
+    const gap = (closingSpeed * config.fixedStepMs) / 1000 + config.spaceshipRadius * 0.5;
     const bullet: HostileProjectileState = {
       ...bulletFromWeapon(firstWeapon(config, "gunship")),
-      previousX: state.spaceship.x - 140,
+      previousX: state.spaceship.x - gap,
       previousY: state.spaceship.y,
-      x: state.spaceship.x - 140,
+      x: state.spaceship.x - gap,
       y: state.spaceship.y,
-      velocity: { x: 2000, y: 0 }
+      velocity: { x: closingSpeed, y: 0 }
     };
     const stepped = advanceCombat(
       {
@@ -1418,7 +1430,7 @@ describe("team upgrades", () => {
     expect(second.state).toBe(first.state);
   });
 
-  it("resolves majority atomically at the 600-tick deadline", () => {
+  it("resolves majority atomically on the intermission deadline", () => {
     const config = createSpaceshipSimulationConfig();
     const initial = createSpaceshipSimulationState(config, 24);
     const generated = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 4, 1);
@@ -1428,7 +1440,8 @@ describe("team upgrades", () => {
     const beforeDeadline: SpaceshipSimulationState = {
       ...initial,
       encounterPhase: "intermission",
-      encounterTick: 599,
+      // The tick before the intermission is due, whatever that number is now.
+      encounterTick: config.intermissionTicks - 1,
       credits: 7,
       teamUpgradeOffer: generated,
       teamUpgradeVotes: {
@@ -1466,7 +1479,7 @@ describe("team upgrades", () => {
       {
         ...initial,
         encounterPhase: "intermission",
-        encounterTick: 599,
+        encounterTick: config.intermissionTicks - 1,
         credits: 5,
         teamUpgradeOffer: offer,
         teamUpgradeVotes: {
@@ -1493,7 +1506,7 @@ describe("team upgrades", () => {
         {
           ...initial,
           encounterPhase: "intermission",
-          encounterTick: 599,
+          encounterTick: config.intermissionTicks - 1,
           credits,
           teamUpgradeOffer: offer,
           teamUpgradeVotes: votes
@@ -1564,7 +1577,7 @@ describe("enemy turn inertia", () => {
     const cap =
       getEnemyArchetype(config, "gunship").turnRatePerSecond * (config.fixedStepMs / 1000);
 
-    const trail = stepEnemy(config, state, enemy, 24);
+    const trail = stepEnemy(config, state, enemy, Math.round(1200 / config.fixedStepMs));
     let previous = enemy.heading;
     for (const stepped of trail) {
       expect(Math.abs(shortestAngleDelta(previous, stepped.heading))).toBeLessThanOrEqual(

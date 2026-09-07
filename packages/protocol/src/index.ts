@@ -38,11 +38,14 @@ export const ROOM_TYPE = "spaceship_defender" as const;
  * Given the cadence the room actually keeps, the client snaps arrivals back
  * onto that grid and plays them at an even speed.
  *
- * It must be a whole multiple of the simulation step, or a patch carries
- * alternately one and two steps of movement and the evenness this buys is lost
- * again. The server checks that on startup, where both numbers are known.
+ * Thirty a second against a sixty hertz step: two whole steps to a broadcast,
+ * which is the reference prototype's own pairing. It must stay a whole multiple
+ * of the step - the server checks that on startup, where both numbers are
+ * known - and it is deliberately half the simulation rather than equal to it,
+ * because downstream traffic is the one of the three rates that grows with the
+ * number of players.
  */
-export const PATCH_INTERVAL_MS = 50 as const;
+export const PATCH_INTERVAL_MS = 1000 / 30;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
 export const CREW_SIZES = [1, 2, 3] as const;
