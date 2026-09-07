@@ -1,3 +1,4 @@
+import type { ComponentCost } from "../../model/componentCost.js";
 import type { WorkMeter } from "../../model/workMeter.js";
 import type { LongTaskMeter } from "../../model/longTasks.js";
 import type { TrafficMeter } from "../../model/trafficMeter.js";
@@ -46,6 +47,7 @@ export function DiagnosticsPanel({
   traffic,
   snapshot,
   commit,
+  components,
   pendingInput,
   drift,
   predictionEnabled,
@@ -102,6 +104,13 @@ export function DiagnosticsPanel({
   readonly snapshot: WorkMeter | undefined;
   /** What React spends committing that view, from its own profiler. */
   readonly commit: WorkMeter | undefined;
+  /**
+   * The same second, split by panel, dearest first.
+   *
+   * The line above says React cost six milliseconds; this says whether that was
+   * eight panels each costing nothing, or one panel worth rewriting.
+   */
+  readonly components: readonly ComponentCost[];
   /** Frames sent that the room has not acknowledged; a couple is healthy. */
   readonly pendingInput: number;
   /** Persistent disagreement between the predicted ship and the room's. */
@@ -233,6 +242,15 @@ export function DiagnosticsPanel({
               : `${commit.msPerSecond.toFixed(0)} мс/с · ${commit.samplesPerSecond.toFixed(0)} коммит/с · худший ${commit.worstMs.toFixed(1)} мс`}
           </dd>
         </div>
+        {components.map((panel) => (
+          <div key={panel.id} className="diagnostics-component">
+            <dt>{panel.id}</dt>
+            <dd>
+              {panel.msPerSecond.toFixed(1)} мс/с · {panel.commits.toFixed(0)} к/с · худший{" "}
+              {panel.worstMs.toFixed(2)} мс
+            </dd>
+          </div>
+        ))}
         <div>
           <dt>Ввод в пути</dt>
           <dd data-testid="diagnostics-pending">

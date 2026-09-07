@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { DiagnosticsPanel } from "../DiagnosticsPanel/index.js";
+import type { ComponentCost } from "../../model/componentCost.js";
 import type { LongTaskMeter } from "../../model/longTasks.js";
 import type { TrafficMeter } from "../../model/trafficMeter.js";
 import type { WorkMeter } from "../../model/workMeter.js";
@@ -37,6 +38,8 @@ export interface DiagnosticsReadings {
   readonly patchHz: number;
   readonly snapshot: WorkMeter | undefined;
   readonly commit: WorkMeter | undefined;
+  /** The same React second, split by panel - see `componentCost.ts`. */
+  readonly components: readonly ComponentCost[];
 }
 
 /** Twice a second: fast enough to watch, slow enough not to be the thing watched. */

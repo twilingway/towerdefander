@@ -78,6 +78,7 @@ import {
   PREVIEW_MODULE_TIERS
 } from "./previewMode.js";
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
+import { readComponentCosts, recordComponentCommit } from "./model/componentCost.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
@@ -599,7 +600,8 @@ export function DisplayApp() {
       tickHz: SIMULATION_TICK_RATE,
       patchHz: Math.round(1000 / PATCH_INTERVAL_MS),
       snapshot: snapshotCost.current,
-      commit: commitCost.current
+      commit: commitCost.current,
+      components: readComponentCosts(performance.now())
     }),
     []
   );
@@ -970,116 +972,130 @@ export function DisplayApp() {
           }}
         >
           <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
-            {interfaceEnabled && (
-              <header className="battle-header spaceship-hud">
-                <div>
-                  <span>Волна</span>
-                  <strong>{view.game.encounter.waveNumber}</strong>
-                  <small>{encounterLabel(view.game.encounter.phase)}</small>
-                </div>
-                {/* Hull and shield moved onto the radar dial: two rings, their end
+            <MeteredPanel id="шапка" measuring={diagnostics}>
+              {interfaceEnabled && (
+                <header className="battle-header spaceship-hud">
+                  <div>
+                    <span>Волна</span>
+                    <strong>{view.game.encounter.waveNumber}</strong>
+                    <small>{encounterLabel(view.game.encounter.phase)}</small>
+                  </div>
+                  {/* Hull and shield moved onto the radar dial: two rings, their end
                 labels and the shield state word say everything these two cards
                 did, in the place the pilot is already looking. */}
-                <div>
-                  <span>Счёт</span>
-                  <strong>{view.game.encounter.score}</strong>
-                  <small data-testid="hud-field-counts">
-                    Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length} ·
-                    Камни {waveAsteroidCount}
-                  </small>
-                </div>
-                <div>
-                  <span>Кредиты</span>
-                  <strong>{view.game.credits}</strong>
-                  <small>
-                    {waveUpgrade === null
-                      ? "в этой волне улучшений нет"
-                      : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
-                  </small>
-                </div>
-                <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
-              </header>
-            )}
-            {portrait ? (
-              <RotateNotice />
-            ) : (
-              <SpaceshipCanvas
-                game={view.game}
-                prediction={predictionDriverReference.current}
-                // The preview has no room to read from: it renders a fixture
-                // straight through the prop, and a reader that answers nothing
-                // would leave its scene without a world at all.
-                readGame={previewView === undefined ? readLiveGame : undefined}
-                runNumber={view.runNumber}
-                connectionEpoch={connectionEpoch}
-                visibleDemo={visibleDemo}
-                backgroundEnabled={backgroundEnabled}
-                glowEnabled={glowEnabled}
-                vectorsEnabled={vectorsEnabled}
-                onFrameStats={(stats) => {
-                  frameStatsReference.current = stats;
-                }}
-              />
-            )}
-            {cockpitPlayer !== undefined && !portrait && interfaceEnabled && (
-              <SoloCockpit
-                enabled={view.game.encounter.phase === "combat"}
-                driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
-                aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
-                machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
-                machineGunOverheated={view.game.machineGun.overheated}
-                cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
-                cannonOverheated={view.game.cannon.overheated}
-                aimAssist={aimAssist}
-                onAimAssistChange={(next) => {
-                  setAimAssist(next);
-                  saveAimAssistToDevice(next);
-                }}
-                {...cockpitControls}
-              />
-            )}
-            {view.game.encounter.phase === "combat" &&
-              (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
-                <SalvageCountdown
-                  secondsRemaining={view.game.encounter.lootWindowSecondsRemaining}
-                />
+                  <div>
+                    <span>Счёт</span>
+                    <strong>{view.game.encounter.score}</strong>
+                    <small data-testid="hud-field-counts">
+                      Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length}{" "}
+                      · Камни {waveAsteroidCount}
+                    </small>
+                  </div>
+                  <div>
+                    <span>Кредиты</span>
+                    <strong>{view.game.credits}</strong>
+                    <small>
+                      {waveUpgrade === null
+                        ? "в этой волне улучшений нет"
+                        : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
+                    </small>
+                  </div>
+                  <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
+                </header>
+              )}
+            </MeteredPanel>
+            <MeteredPanel id="сцена" measuring={diagnostics}>
+              {portrait ? (
+                <RotateNotice />
               ) : (
-                <WaveCountdown
-                  className="display-wave-countdown"
-                  secondsRemaining={view.game.encounter.waveSecondsRemaining}
+                <SpaceshipCanvas
+                  game={view.game}
+                  prediction={predictionDriverReference.current}
+                  // The preview has no room to read from: it renders a fixture
+                  // straight through the prop, and a reader that answers nothing
+                  // would leave its scene without a world at all.
+                  readGame={previewView === undefined ? readLiveGame : undefined}
+                  runNumber={view.runNumber}
+                  connectionEpoch={connectionEpoch}
+                  visibleDemo={visibleDemo}
+                  backgroundEnabled={backgroundEnabled}
+                  glowEnabled={glowEnabled}
+                  vectorsEnabled={vectorsEnabled}
+                  onFrameStats={(stats) => {
+                    frameStatsReference.current = stats;
+                  }}
                 />
-              ))}
-            {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
-            {diagnostics && (
-              <DiagnosticsHud
-                read={readDiagnostics}
-                predictionEnabled={predictionEnabled}
-                onTogglePrediction={() => {
-                  setPredictionEnabled((enabled) => !enabled);
-                }}
-                backgroundEnabled={backgroundEnabled}
-                onToggleBackground={() => {
-                  setBackgroundEnabled((enabled) => !enabled);
-                }}
-                glowEnabled={glowEnabled}
-                onToggleGlow={() => {
-                  setGlowEnabled((enabled) => !enabled);
-                }}
-                vectorsEnabled={vectorsEnabled}
-                onToggleVectors={() => {
-                  setVectorsEnabled((enabled) => !enabled);
-                }}
-                interfaceEnabled={interfaceEnabled}
-                onToggleInterface={() => {
-                  setInterfaceEnabled((enabled) => !enabled);
-                }}
-                opaquePanels={opaquePanels}
-                onToggleOpaquePanels={() => {
-                  setOpaquePanels((opaque) => !opaque);
-                }}
-              />
-            )}
-            {interfaceEnabled && <PolledCombatRadar read={readRadarGame} />}
+              )}
+            </MeteredPanel>
+            <MeteredPanel id="кокпит" measuring={diagnostics}>
+              {cockpitPlayer !== undefined && !portrait && interfaceEnabled && (
+                <SoloCockpit
+                  enabled={view.game.encounter.phase === "combat"}
+                  driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
+                  aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
+                  machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
+                  machineGunOverheated={view.game.machineGun.overheated}
+                  cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
+                  cannonOverheated={view.game.cannon.overheated}
+                  aimAssist={aimAssist}
+                  onAimAssistChange={(next) => {
+                    setAimAssist(next);
+                    saveAimAssistToDevice(next);
+                  }}
+                  {...cockpitControls}
+                />
+              )}
+            </MeteredPanel>
+            <MeteredPanel id="часы" measuring={diagnostics}>
+              {view.game.encounter.phase === "combat" &&
+                (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
+                  <SalvageCountdown
+                    secondsRemaining={view.game.encounter.lootWindowSecondsRemaining}
+                  />
+                ) : (
+                  <WaveCountdown
+                    className="display-wave-countdown"
+                    secondsRemaining={view.game.encounter.waveSecondsRemaining}
+                  />
+                ))}
+            </MeteredPanel>
+            <MeteredPanel id="босс" measuring={diagnostics}>
+              {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
+            </MeteredPanel>
+            <MeteredPanel id="приборы" measuring={diagnostics}>
+              {diagnostics && (
+                <DiagnosticsHud
+                  read={readDiagnostics}
+                  predictionEnabled={predictionEnabled}
+                  onTogglePrediction={() => {
+                    setPredictionEnabled((enabled) => !enabled);
+                  }}
+                  backgroundEnabled={backgroundEnabled}
+                  onToggleBackground={() => {
+                    setBackgroundEnabled((enabled) => !enabled);
+                  }}
+                  glowEnabled={glowEnabled}
+                  onToggleGlow={() => {
+                    setGlowEnabled((enabled) => !enabled);
+                  }}
+                  vectorsEnabled={vectorsEnabled}
+                  onToggleVectors={() => {
+                    setVectorsEnabled((enabled) => !enabled);
+                  }}
+                  interfaceEnabled={interfaceEnabled}
+                  onToggleInterface={() => {
+                    setInterfaceEnabled((enabled) => !enabled);
+                  }}
+                  opaquePanels={opaquePanels}
+                  onToggleOpaquePanels={() => {
+                    setOpaquePanels((opaque) => !opaque);
+                  }}
+                />
+              )}
+            </MeteredPanel>
+            <MeteredPanel id="радар" measuring={diagnostics}>
+              {interfaceEnabled && <PolledCombatRadar read={readRadarGame} />}
+            </MeteredPanel>
             {view.game.encounter.phase === "intermission" && (
               <TeamUpgradeOverlay
                 teamUpgrade={view.game.teamUpgrade}
@@ -1115,27 +1131,31 @@ export function DisplayApp() {
             )}
             {/* The run's own hull, straight from the catalogue; the fixture is
               the preview's stand-in when no server answered. */}
-            {moduleTree !== undefined && interfaceEnabled && (
-              <ModuleTreeWindow
-                tiers={moduleTree.tiers}
-                endlessTier={moduleTree.endlessTier}
-                purchased={view.game.purchasedModules}
-                initiallyShown={previewView !== undefined}
-                ship={{
-                  maxHp: view.game.spaceship.maxHp,
-                  shieldCapacity: view.game.shield.capacity,
-                  shieldArcRadians: view.game.shield.arcHalfAngle * 2,
-                  shieldRadius: view.game.shieldRadius
-                }}
-              />
-            )}
+            <MeteredPanel id="модули" measuring={diagnostics}>
+              {moduleTree !== undefined && interfaceEnabled && (
+                <ModuleTreeWindow
+                  tiers={moduleTree.tiers}
+                  endlessTier={moduleTree.endlessTier}
+                  purchased={view.game.purchasedModules}
+                  initiallyShown={previewView !== undefined}
+                  ship={{
+                    maxHp: view.game.spaceship.maxHp,
+                    shieldCapacity: view.game.shield.capacity,
+                    shieldArcRadians: view.game.shield.arcHalfAngle * 2,
+                    shieldRadius: view.game.shieldRadius
+                  }}
+                />
+              )}
+            </MeteredPanel>
             {/*
             Stacked directly under the instrument panel and answering the same
             question, so with the panel open it is the third ping on one edge of
             the screen. The panel wins; the crew rows come back the moment the
             flag goes away.
           */}
-            {!diagnostics && <CrewLatency view={view} game={view.game} />}
+            <MeteredPanel id="экипаж" measuring={diagnostics}>
+              {!diagnostics && <CrewLatency view={view} game={view.game} />}
+            </MeteredPanel>
           </section>
         </MeasuredWhenAsked>
       )}
@@ -1225,6 +1245,35 @@ function createDefaultControllerUrl(): string {
  * `measuring` comes from the address and never changes while the page lives, so
  * the branch cannot remount the battle underneath a running fight.
  */
+/**
+ * One panel, timed under its own name.
+ *
+ * Same bargain as the tree above: nothing is mounted unless the instruments
+ * were asked for, because a profiler around eight panels is eight timers on
+ * every commit of a page that commits on every patch.
+ */
+function MeteredPanel({
+  id,
+  measuring,
+  children
+}: {
+  readonly id: string;
+  readonly measuring: boolean;
+  readonly children: ReactNode;
+}) {
+  if (!measuring) return children;
+  return (
+    <Profiler
+      id={id}
+      onRender={(profilerId, _phase, actualDuration) => {
+        recordComponentCommit(profilerId, actualDuration);
+      }}
+    >
+      {children}
+    </Profiler>
+  );
+}
+
 function MeasuredWhenAsked({
   measuring,
   onCommit,
