@@ -42,7 +42,9 @@ export function DiagnosticsPanel({
   backgroundEnabled,
   onToggleBackground,
   glowEnabled,
-  onToggleGlow
+  onToggleGlow,
+  vectorsEnabled,
+  onToggleVectors
 }: {
   readonly fps: number;
   readonly worstFrameMs: number;
@@ -65,6 +67,8 @@ export function DiagnosticsPanel({
   readonly onToggleBackground: () => void;
   readonly glowEnabled: boolean;
   readonly onToggleGlow: () => void;
+  readonly vectorsEnabled: boolean;
+  readonly onToggleVectors: () => void;
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
@@ -95,6 +99,15 @@ export function DiagnosticsPanel({
           onClick={onToggleGlow}
         >
           Свечение: {glowEnabled ? "вкл" : "выкл"}
+        </button>
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
+          data-testid="diagnostics-vectors-toggle"
+          data-vectors={vectorsEnabled ? "on" : "off"}
+          onClick={onToggleVectors}
+        >
+          Векторы: {vectorsEnabled ? "вкл" : "выкл"}
         </button>
       </div>
       <dl>

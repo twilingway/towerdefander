@@ -36,6 +36,7 @@ describe("SpaceshipCanvas", () => {
       readWorstUpdateMs: () => 0,
       setBackgroundEnabled: vi.fn(),
       setGlowEnabled: vi.fn(),
+      setVectorsEnabled: vi.fn(),
       setPixelRatioCap: vi.fn(),
       destroy: vi.fn()
     };

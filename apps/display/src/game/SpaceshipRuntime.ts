@@ -195,6 +195,16 @@ class SpaceshipScene extends Phaser.Scene {
    * way to price the remainder on a phone is to take it away there.
    */
   private glowEnabled = true;
+  /**
+   * Off stops the five vector overlays that are cleared and rebuilt every frame
+   * - the shield sector, the aim envelope, both focus rings and the beams.
+   *
+   * They are the one thing this display does that the lab does not: it draws
+   * its arena once and moves sprites. Rebuilding a path every frame costs
+   * tessellation and an upload, and neither gets cheaper at a lower device
+   * pixel ratio - which is exactly why `dpr=1` changed nothing.
+   */
+  private vectorsEnabled = true;
   private parallaxStrength = 1;
   /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
   private backgroundDriftSeconds = 0;
@@ -318,17 +328,19 @@ class SpaceshipScene extends Phaser.Scene {
     this.turret.setPosition(mount.x, mount.y);
     this.turret.rotation = sampleAngleTrack(this.turretTrack, playbackTick);
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
-    this.drawShield();
-    // From the mount, which is where the simulation fires from too: the barrel
-    // a crew sees is the barrel that shoots, so the envelope and the ring start
-    // on it rather than at the hull's centre.
-    this.drawAimEnvelope(mount, this.turret.rotation);
-    // One list, both rings: they ask the same question of the same ships, and
-    // building it twice was two objects per enemy per frame of pure garbage.
-    const candidates = this.updateFocusCandidates(playbackTick);
-    this.drawFocusRing(mount, this.turret.rotation, candidates);
-    this.drawNoseFocus(spaceshipPosition, spaceshipHeading, candidates);
-    this.drawLaserBeams();
+    if (this.vectorsEnabled) {
+      this.drawShield();
+      // From the mount, which is where the simulation fires from too: the barrel
+      // a crew sees is the barrel that shoots, so the envelope and the ring start
+      // on it rather than at the hull's centre.
+      this.drawAimEnvelope(mount, this.turret.rotation);
+      // One list, both rings: they ask the same question of the same ships, and
+      // building it twice was two objects per enemy per frame of pure garbage.
+      const candidates = this.updateFocusCandidates(playbackTick);
+      this.drawFocusRing(mount, this.turret.rotation, candidates);
+      this.drawNoseFocus(spaceshipPosition, spaceshipHeading, candidates);
+      this.drawLaserBeams();
+    }
     this.focusCamera(spaceshipPosition);
 
     for (const visual of this.combatVisuals.values()) {
@@ -555,6 +567,25 @@ class SpaceshipScene extends Phaser.Scene {
     this.backgroundEnabled = enabled;
     for (const layer of this.backgroundLayers) {
       layer.sprite.setVisible(enabled);
+    }
+  }
+
+  /**
+   * The per-frame vector overlays on or off.
+   *
+   * Hidden as well as skipped: a path left on screen from the frame the switch
+   * was thrown would sit there frozen and read as a bug rather than an answer.
+   */
+  setVectorsEnabled(enabled: boolean): void {
+    this.vectorsEnabled = enabled;
+    for (const drawing of [
+      this.shield,
+      this.aimEnvelope,
+      this.focusRing,
+      this.noseFocus,
+      this.beams
+    ]) {
+      drawing?.setVisible(enabled);
     }
   }
 
@@ -1305,6 +1336,8 @@ export interface SpaceshipRuntime {
   setBackgroundEnabled(enabled: boolean): void;
   /** The shield's bloom on or off, for the same reason. */
   setGlowEnabled(enabled: boolean): void;
+  /** The vector overlays rebuilt every frame, on or off. */
+  setVectorsEnabled(enabled: boolean): void;
   /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
@@ -1431,6 +1464,9 @@ export function createSpaceshipRuntime(
     },
     setGlowEnabled(enabled) {
       scene.setGlowEnabled(enabled);
+    },
+    setVectorsEnabled(enabled) {
+      scene.setVectorsEnabled(enabled);
     },
     readFps() {
       return game.loop.actualFps;

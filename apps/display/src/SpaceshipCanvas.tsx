@@ -39,6 +39,8 @@ interface SpaceshipCanvasProps {
   readonly backgroundEnabled?: boolean;
   /** The shield's bloom, the other thing worth ruling out on a phone. */
   readonly glowEnabled?: boolean;
+  /** The vector overlays rebuilt every frame - the last thing left to price. */
+  readonly vectorsEnabled?: boolean;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -51,6 +53,7 @@ export function SpaceshipCanvas({
   visibleDemo = false,
   backgroundEnabled = true,
   glowEnabled = true,
+  vectorsEnabled = true,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
@@ -60,6 +63,8 @@ export function SpaceshipCanvas({
   latestBackgroundEnabled.current = backgroundEnabled;
   const latestGlowEnabled = useRef(glowEnabled);
   latestGlowEnabled.current = glowEnabled;
+  const latestVectorsEnabled = useRef(vectorsEnabled);
+  latestVectorsEnabled.current = vectorsEnabled;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -88,6 +93,7 @@ export function SpaceshipCanvas({
           // thrown while it was still arriving.
           runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
           runtimeReference.current.setGlowEnabled(latestGlowEnabled.current);
+          runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
@@ -139,6 +145,10 @@ export function SpaceshipCanvas({
   useEffect(() => {
     runtimeReference.current?.setGlowEnabled(glowEnabled);
   }, [glowEnabled]);
+
+  useEffect(() => {
+    runtimeReference.current?.setVectorsEnabled(vectorsEnabled);
+  }, [vectorsEnabled]);
 
   const onFrameStatsReference = useRef(onFrameStats);
   onFrameStatsReference.current = onFrameStats;

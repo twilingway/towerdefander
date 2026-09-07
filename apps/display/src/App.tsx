@@ -151,6 +151,8 @@ export function DisplayApp() {
   const [backgroundEnabled, setBackgroundEnabled] = useState(true);
   /** The shield's bloom, the other visual worth pricing on the device. */
   const [glowEnabled, setGlowEnabled] = useState(true);
+  /** The five overlays the scene rebuilds every frame; the lab has none of these. */
+  const [vectorsEnabled, setVectorsEnabled] = useState(true);
   const [traffic, setTraffic] = useState<TrafficMeter | undefined>(undefined);
   /*
    * Written on every patch and read twice a second. A ref rather than state:
@@ -731,6 +733,7 @@ export function DisplayApp() {
                 visibleDemo={visibleDemo}
                 backgroundEnabled={backgroundEnabled}
                 glowEnabled={glowEnabled}
+                vectorsEnabled={vectorsEnabled}
                 onFrameStats={setFrameStats}
               />
             )}
@@ -787,6 +790,10 @@ export function DisplayApp() {
                 glowEnabled={glowEnabled}
                 onToggleGlow={() => {
                   setGlowEnabled((enabled) => !enabled);
+                }}
+                vectorsEnabled={vectorsEnabled}
+                onToggleVectors={() => {
+                  setVectorsEnabled((enabled) => !enabled);
                 }}
               />
             )}
