@@ -1,14 +1,20 @@
 import type { SpaceshipSimulationState } from "@spaceship-defender/game-core";
 
 /**
- * A run with the wave script switched off and a fixed handful of enemies on the
- * field.
+ * A run with everything that thinks switched off.
  *
  * Not a game mode - a stand. Judder is hard to attribute while forty hulls,
- * their shells, drifting rocks and a wave clock all move at once: any of them
- * could be the one costing the frame. With one hull crossing an empty arena
- * there is nothing else to blame, so a picture that still moves in jerks is the
- * stream or the drawing, and a picture that does not is load.
+ * their shells, drifting rocks, a wave clock and an autopilot all move at once:
+ * any of them could be the frame that was missed. Here the arena holds a
+ * handful of bodies crossing it at a constant speed and nothing else - no
+ * enemies, no steering, no shield autopilot, no ambient drift - so a picture
+ * that still moves in jerks is the stream or the drawing, and one that does not
+ * points at what was taken away.
+ *
+ * The bodies are the game's own drifting rocks rather than a new kind of
+ * entity: adding one to look at would change the renderer being measured, and
+ * what matters is that they move in a straight line at a steady speed, which is
+ * what the reference prototype's hulls do while nobody is steering them.
  *
  * The room turns it on from an environment variable, like the late-wave aid
  * beside it, and it never runs on a server nobody asked.
@@ -16,43 +22,75 @@ import type { SpaceshipSimulationState } from "@spaceship-defender/game-core";
 
 /** Far enough out that no ambient rock arrives during a measurement. */
 const NEVER_TICK = 2_147_483_647;
+/** Big enough to be unmistakable on screen, small enough not to fill it. */
+const DRIFTER_RADIUS = 46;
+/** Units a second. Fast enough that a held frame is visible, slow enough to follow. */
+const DRIFTER_SPEED = 260;
+/** They exist to be watched, not fought: nothing removes one and nothing is hurt by it. */
+const DRIFTER_HP = 1_000_000;
 
-/**
- * Trims a fresh run down to the stand: the first `wanted` arrivals, all due at
- * once, and no ambient drift behind them.
- */
+function drifter(
+  index: number,
+  count: number,
+  state: SpaceshipSimulationState,
+  arenaRadius: number
+): SpaceshipSimulationState["asteroids"][number] {
+  // Spread around the rim and sent across the middle, so every one of them
+  // crosses the camera and none of them shadows another.
+  const angle = (index / count) * Math.PI * 2;
+  const start = arenaRadius * 0.8;
+  const x = state.spaceship.x + Math.cos(angle) * start;
+  const y = state.spaceship.y + Math.sin(angle) * start;
+  return {
+    id: `stand-${String(index)}`,
+    origin: "wave",
+    spawnSequence: state.nextSpawnSequence + index,
+    spawnedTick: state.encounterTick,
+    previousX: x,
+    previousY: y,
+    x,
+    y,
+    velocity: { x: -Math.cos(angle) * DRIFTER_SPEED, y: -Math.sin(angle) * DRIFTER_SPEED },
+    radius: DRIFTER_RADIUS,
+    hp: DRIFTER_HP,
+    maxHp: DRIFTER_HP,
+    damage: 0
+  };
+}
+
+/** Strips a fresh run down to the stand: bodies crossing an empty arena. */
 export function openSparringStand(
   state: SpaceshipSimulationState,
-  wanted: number
+  wanted: number,
+  arenaRadius: number
 ): SpaceshipSimulationState {
   return {
     ...state,
-    pendingSpawns: state.pendingSpawns.slice(0, wanted).map((spawn) => ({ ...spawn, dueTick: 0 })),
+    pendingSpawns: [],
+    enemies: [],
+    asteroids: Array.from({ length: wanted }, (_unused, index) =>
+      drifter(index, wanted, state, arenaRadius)
+    ),
     ambientAsteroidSpawnDueTick: NEVER_TICK
   };
 }
 
 /**
- * Keeps the field at `wanted` after the crew shoots something.
+ * Puts a body back once it has left the arena.
  *
- * Without this the stand empties, the wave counts as cleared, and the next one
- * arrives in full - which is the noise the stand exists to remove. The refill
- * copies an arrival the wave plan already authored rather than inventing one,
- * so the enemies are the same the game spawns.
+ * Without this the stand empties out after a lap and there is nothing left to
+ * watch - and an empty arena also counts as a cleared wave, which would bring
+ * the whole campaign back on top of the measurement.
  */
 export function refillSparringStand(
   state: SpaceshipSimulationState,
   wanted: number,
-  template: SpaceshipSimulationState["pendingSpawns"]
+  arenaRadius: number
 ): SpaceshipSimulationState {
-  const present = state.enemies.length + state.pendingSpawns.length;
-  if (present >= wanted) return state;
-  const source = template[0];
-  if (source === undefined) return state;
-  const added = Array.from({ length: wanted - present }, (_unused, index) => ({
-    ...source,
-    planSequence: state.nextSpawnSequence + index,
-    dueTick: state.encounterTick
-  }));
-  return { ...state, pendingSpawns: [...state.pendingSpawns, ...added] };
+  if (state.asteroids.length >= wanted) return state;
+  const missing = wanted - state.asteroids.length;
+  const added = Array.from({ length: missing }, (_unused, index) =>
+    drifter(state.encounterTick + index, wanted, state, arenaRadius)
+  );
+  return { ...state, asteroids: [...state.asteroids, ...added], pendingSpawns: [], enemies: [] };
 }

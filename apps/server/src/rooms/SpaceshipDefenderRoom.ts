@@ -169,8 +169,6 @@ export class SpaceshipDefenderRoom extends Room<{
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
   /** Whether the armed loop advances the fight or idles through it. */
   private simulationRunning = false;
-  /** One authored arrival, kept so the stand can refill with the real thing. */
-  private sparringTemplate: SpaceshipSimulationState["pendingSpawns"] = [];
   private gameState: SpaceshipSimulationState | undefined;
   /** Real time received from the loop that no whole fixed step has claimed yet. */
   /**
@@ -705,12 +703,17 @@ export class SpaceshipDefenderRoom extends Room<{
     const previousEncounterPhase = this.gameState.encounterPhase;
     const previousLootWindow = this.gameState.lootWindowTicksRemaining;
     const projectionWasResult = this.state.game.encounter.phase === "result";
-    this.gameState = this.applyShieldAutopilot(this.gameState);
+    // The stand takes every helper off the arena, and this is one of them.
+    if (sparringEnemies === 0) this.gameState = this.applyShieldAutopilot(this.gameState);
     const stepStartedAt = this.nowMs();
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     this.lastStepMs = this.nowMs() - stepStartedAt;
     if (sparringEnemies > 0) {
-      this.gameState = refillSparringStand(this.gameState, sparringEnemies, this.sparringTemplate);
+      this.gameState = refillSparringStand(
+        this.gameState,
+        sparringEnemies,
+        this.gameConfig.arenaRadius
+      );
     }
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
       this.clearWaveDeadline();
@@ -854,8 +857,11 @@ export class SpaceshipDefenderRoom extends Room<{
       this.startWave
     );
     if (sparringEnemies > 0) {
-      this.sparringTemplate = this.gameState.pendingSpawns.slice(0, 1);
-      this.gameState = openSparringStand(this.gameState, sparringEnemies);
+      this.gameState = openSparringStand(
+        this.gameState,
+        sparringEnemies,
+        this.gameConfig.arenaRadius
+      );
     }
     this.state.runNumber += 1;
     this.state.phase = "active";

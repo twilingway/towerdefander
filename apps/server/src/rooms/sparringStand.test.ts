@@ -13,36 +13,46 @@ function freshRun() {
 }
 
 describe("sparring stand", () => {
-  it("keeps a handful of arrivals and drops the rest of the wave", () => {
+  it("takes every enemy and every arrival off the arena", () => {
     const run = freshRun();
-    const stand = openSparringStand(run, 2);
+    const stand = openSparringStand(run, 2, config.arenaRadius);
 
-    expect(run.pendingSpawns.length).toBeGreaterThan(2);
-    expect(stand.pendingSpawns).toHaveLength(2);
-    // All at once: a stand that trickles is a wave with fewer ships in it.
-    expect(stand.pendingSpawns.every((spawn) => spawn.dueTick === 0)).toBe(true);
+    expect(run.pendingSpawns.length).toBeGreaterThan(0);
+    expect(stand.pendingSpawns).toHaveLength(0);
+    expect(stand.enemies).toHaveLength(0);
+  });
+
+  it("puts up the bodies asked for, moving at a steady speed", () => {
+    const stand = openSparringStand(freshRun(), 3, config.arenaRadius);
+
+    expect(stand.asteroids).toHaveLength(3);
+    const speeds = stand.asteroids.map((body) => Math.hypot(body.velocity.x, body.velocity.y));
+    for (const speed of speeds) expect(speed).toBeCloseTo(speeds[0] ?? 0, 6);
+    expect(speeds[0]).toBeGreaterThan(0);
+  });
+
+  it("makes them harmless, so a measurement is not also a fight", () => {
+    const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
+
+    expect(stand.asteroids.every((body) => body.damage === 0)).toBe(true);
   });
 
   it("stops the ambient drift, so nothing else is moving to blame", () => {
-    const stand = openSparringStand(freshRun(), 2);
+    const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
 
     expect(stand.ambientAsteroidSpawnDueTick).toBeGreaterThan(1_000_000);
   });
 
-  it("refills the field once it is shot empty", () => {
-    const run = freshRun();
-    const template = run.pendingSpawns.slice(0, 1);
-    const emptied = { ...openSparringStand(run, 2), pendingSpawns: [], enemies: [] };
+  it("puts a body back once one has left the arena", () => {
+    const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
+    const emptied = { ...stand, asteroids: stand.asteroids.slice(0, 1) };
 
-    const refilled = refillSparringStand(emptied, 2, template);
-
-    expect(refilled.pendingSpawns).toHaveLength(2);
-    expect(refilled.pendingSpawns[0]?.kind).toBe(template[0]?.kind);
+    expect(refillSparringStand(emptied, 2, config.arenaRadius).asteroids).toHaveLength(2);
   });
 
   it("adds nothing while the field is full", () => {
-    const stand = openSparringStand(freshRun(), 2);
+    const stand = openSparringStand(freshRun(), 2, config.arenaRadius);
 
-    expect(refillSparringStand(stand, 2, stand.pendingSpawns)).toBe(stand);
+    expect(refillSparringStand(stand, 2, config.arenaRadius)).toBe(stand);
   });
 });
