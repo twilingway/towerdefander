@@ -74,6 +74,12 @@ import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isDiagnosticsRequested } from "./model/diagnostics.js";
 import { withPredictedAngles } from "./model/predictedAngles.js";
+import {
+  advanceSnapshotCost,
+  createSnapshotCost,
+  recordSnapshot,
+  type SnapshotCost
+} from "./model/snapshotCost.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
@@ -143,6 +149,12 @@ export function DisplayApp() {
    */
   const [backgroundEnabled, setBackgroundEnabled] = useState(true);
   const [traffic, setTraffic] = useState<TrafficMeter | undefined>(undefined);
+  /*
+   * Written on every patch and read twice a second. A ref rather than state:
+   * setting state here would add a render to the very work being measured.
+   */
+  const snapshotCost = useRef(createSnapshotCost());
+  const [snapshotReading, setSnapshotReading] = useState<SnapshotCost | undefined>(undefined);
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -205,6 +217,19 @@ export function DisplayApp() {
   useEffect(() => {
     setError("");
   }, [encounterPhase]);
+
+  /* The snapshot cost is published on its own beat, so it is shown even when the
+     byte counter could not attach to a socket. */
+  useEffect(() => {
+    if (!diagnostics) return undefined;
+    const timer = window.setInterval(() => {
+      snapshotCost.current = advanceSnapshotCost(snapshotCost.current, performance.now());
+      setSnapshotReading(snapshotCost.current);
+    }, 500);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [diagnostics]);
 
   /*
    * The byte counter, and only when the panel was asked for. It hooks the live
@@ -501,8 +526,14 @@ export function DisplayApp() {
   }
 
   function applyRoomState(state: NetworkRoomState): void {
+    // The flatten and the schema parse, timed together: they are what stands
+    // between a patch arriving and React being told about it, and on a phone
+    // that is the work landing twenty times a second.
+    const startedAt = performance.now();
     const next = toDisplayRoomView(state);
+    const builtInMs = performance.now() - startedAt;
     if (next !== undefined) {
+      snapshotCost.current = recordSnapshot(snapshotCost.current, builtInMs, startedAt);
       setNetworkView(next);
       setStatus("connected");
     }
@@ -715,6 +746,7 @@ export function DisplayApp() {
               pingMs={view.displayLatencyMs}
               entityCount={countDrawnEntities(view.game)}
               traffic={traffic}
+              snapshot={snapshotReading}
               predictionEnabled={predictionEnabled}
               onTogglePrediction={() => {
                 setPredictionEnabled((enabled) => !enabled);

@@ -1,3 +1,4 @@
+import type { SnapshotCost } from "../../model/snapshotCost.js";
 import type { TrafficMeter } from "../../model/trafficMeter.js";
 
 /**
@@ -32,6 +33,7 @@ export function DiagnosticsPanel({
   pingMs,
   entityCount,
   traffic,
+  snapshot,
   predictionEnabled,
   onTogglePrediction,
   backgroundEnabled,
@@ -45,6 +47,8 @@ export function DiagnosticsPanel({
   readonly entityCount: number;
   /** Undefined means the counter never got hold of the socket. */
   readonly traffic: TrafficMeter | undefined;
+  /** What turning patches into views costs the main thread. */
+  readonly snapshot: SnapshotCost | undefined;
   readonly predictionEnabled: boolean;
   readonly onTogglePrediction: () => void;
   readonly backgroundEnabled: boolean;
@@ -88,6 +92,14 @@ export function DiagnosticsPanel({
         <div>
           <dt>До сервера</dt>
           <dd data-testid="diagnostics-ping">{formatPing(pingMs)}</dd>
+        </div>
+        <div>
+          <dt>Снимок → вид</dt>
+          <dd data-testid="diagnostics-snapshot">
+            {snapshot === undefined
+              ? "—"
+              : `${snapshot.msPerSecond.toFixed(0)} мс/с · ${snapshot.patchesPerSecond.toFixed(0)} патч/с · худший ${snapshot.worstMs.toFixed(1)} мс`}
+          </dd>
         </div>
         <div>
           <dt>Сущностей</dt>
