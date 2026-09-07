@@ -2209,13 +2209,11 @@ p {
   gap: 0.5rem;
   min-width: 13rem;
   /*
-   * Never past the middle of the glass. The sticks live along the bottom edge,
-   * and a panel that reaches them is a panel a thumb has to fight - even though
-   * only its buttons take a touch.
+   * Deliberately uncapped. A height limit here clipped the rows it was meant to
+   * protect - the readings below "До сервера" simply vanished on a phone - and
+   * it was never what kept the panel off the sticks anyway: the card takes no
+   * touch at all, and its two buttons sit at the top, away from them.
    */
-  max-height: calc(50vh - 5rem);
-  /* Without this the cap says nothing: content would simply run past it. */
-  overflow: hidden;
   padding: 0.6rem 0.75rem;
   border: 1px solid rgba(126, 214, 255, 0.35);
   border-radius: 0.6rem;
@@ -2275,20 +2273,36 @@ p {
     top: 3.2rem;
     left: 0.5rem;
     min-width: 0;
-    max-width: 12rem;
-    max-height: calc(46vh - 3.2rem);
+    /* Landscape is the orientation this runs in, so width is the plentiful
+       dimension - spending it keeps the readings on one line each. */
+    max-width: 18rem;
     padding: 0.4rem 0.5rem;
-    gap: 0.3rem;
-    font-size: 0.62rem;
-    line-height: 1.25;
+    gap: 0.25rem;
+    font-size: 0.6rem;
+    line-height: 1.2;
   }
 
   .diagnostics-panel dl {
-    gap: 0.2rem;
+    gap: 0.12rem;
+  }
+
+  /* Label and value on one line: six readings stacked two-high is the shape
+     that ran off the bottom of a landscape phone in the first place. */
+  .diagnostics-panel dl > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem;
   }
 
   .diagnostics-panel dt {
-    font-size: 0.55rem;
+    flex: 0 0 auto;
+    font-size: 0.5rem;
+    letter-spacing: 0.02em;
+  }
+
+  .diagnostics-panel dd {
+    text-align: right;
   }
 
   .diagnostics-panel__toggle {
