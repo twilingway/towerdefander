@@ -33,14 +33,22 @@ const port = 35_677;
  * enough to die quickly, and enough of them that a cleared wave pays for one
  * team upgrade at `TEAM_UPGRADE_PRICE`. Rocks ride along because the arena
  * assertions want entry sectors.
+ *
+ * The delays are seconds written as ticks, and the room now runs sixty of them
+ * a second. Left at their old numbers the whole wave arrived in a third of the
+ * time it was written for, and one scripted gunner could not clear what three
+ * were meant to - so the harness sat waiting for a wave that never ended.
  */
+/** Steps a second the room runs at; these delays were written against it. */
+const SMOKE_TICKS_PER_SECOND = 60;
+const seconds = (value) => Math.round(value * SMOKE_TICKS_PER_SECOND);
 const smokeWave = (shipSector, swarmSector) => ({
   entries: [
     {
       kind: "interceptor",
       count: 4,
       startDelayTicks: 0,
-      spawnIntervalTicks: 30,
+      spawnIntervalTicks: seconds(1.5),
       sectors: [shipSector],
       hpMultiplier: null,
       tempoMultiplier: null
@@ -48,8 +56,8 @@ const smokeWave = (shipSector, swarmSector) => ({
     {
       kind: "wasp",
       count: 3,
-      startDelayTicks: 60,
-      spawnIntervalTicks: 30,
+      startDelayTicks: seconds(3),
+      spawnIntervalTicks: seconds(1.5),
       sectors: [swarmSector],
       hpMultiplier: null,
       tempoMultiplier: null
@@ -57,8 +65,8 @@ const smokeWave = (shipSector, swarmSector) => ({
     {
       kind: "asteroid",
       count: 2,
-      startDelayTicks: 40,
-      spawnIntervalTicks: 60,
+      startDelayTicks: seconds(2),
+      spawnIntervalTicks: seconds(3),
       sectors: [],
       hpMultiplier: null,
       tempoMultiplier: null
