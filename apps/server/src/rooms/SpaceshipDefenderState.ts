@@ -266,6 +266,13 @@ export class EnemyVisualState extends Schema {
   @type("boolean") isBoss = false;
 }
 
+/**
+ * The tag the world branch is gated behind. One number, named once: the schema
+ * declares it, the room grants it per client, and the tests ask about it, and a
+ * bare `1` in three files is the same fact written down three times.
+ */
+export const DISPLAY_VIEW_TAG = 1;
+
 export class SpaceshipDisplayState extends Schema {
   @type("float32") cameraViewWidth = 2200;
   /**
@@ -335,7 +342,7 @@ export class SpaceshipGameState extends Schema {
   @type("uint32") credits = 0;
   @type(TeamUpgradeState) teamUpgrade = new TeamUpgradeState();
   @type(HelmState) helm = new HelmState();
-  @view(1)
+  @view(DISPLAY_VIEW_TAG)
   @type(SpaceshipDisplayState)
   display = new SpaceshipDisplayState();
 }

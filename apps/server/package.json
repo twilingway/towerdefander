@@ -14,10 +14,15 @@
     "test": "vitest run --passWithNoTests && node --test scripts/autopilot-stats.node-test.mjs"
   },
   "dependencies": {
-    "@colyseus/schema": "4.0.30",
+    "@colyseus/auth": "0.18.2",
+    "@colyseus/redis-driver": "0.18.2",
+    "@colyseus/redis-presence": "0.18.3",
+    "@colyseus/schema": "5.0.27",
+    "@colyseus/uwebsockets-transport": "0.18.2",
+    "@colyseus/ws-transport": "0.18.2",
     "@spaceship-defender/game-core": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",
-    "colyseus": "0.17.10"
+    "colyseus": "0.18.5"
   },
   "devDependencies": {
     "@types/express": "5.0.6",

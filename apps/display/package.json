@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@colyseus/sdk": "0.17.43",
+    "@colyseus/sdk": "0.18.2",
     "@spaceship-defender/client-shared": "workspace:*",
     "@spaceship-defender/game-core": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",

@@ -16,7 +16,7 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
 } from "@spaceship-defender/game-core";
-import { Decoder, Encoder, type StateView } from "@colyseus/schema";
+import { Decoder, Encoder, StateView } from "@colyseus/schema";
 import { CloseCode, type Client } from "colyseus";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +24,19 @@ import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { getBalanceStore } from "../balance/index.js";
 import { getMaintenanceWindow } from "../maintenance/index.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
-import { SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
+import { DISPLAY_VIEW_TAG, SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
+
+/**
+ * What the matchmaker does between constructing a room and calling `onCreate`:
+ * `Room.__init()` installs the `state` and `maxClients` accessors, and setting
+ * `state` through that accessor is what builds the encoder every view filter
+ * depends on. A room built by hand here skips the matchmaker, so it has to do
+ * this itself or it is not the room the server runs.
+ */
+function initRoom<T extends object>(room: T): T {
+  (room as unknown as { __init: () => void }).__init();
+  return room;
+}
 
 const LEGACY_PROTOCOL_VERSION = 14;
 
@@ -53,7 +65,7 @@ afterEach(() => {
 });
 
 function createRoom(crewSize: CrewSize = 3): SpaceshipDefenderRoom {
-  const room = new SpaceshipDefenderRoom();
+  const room = initRoom(new SpaceshipDefenderRoom());
   room.roomId = "ROOM123";
   room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize });
   openRooms.push(room);
@@ -99,7 +111,7 @@ function joinController(room: SpaceshipDefenderRoom, index: number): TestClient 
 }
 
 function createSoloRoom(): SpaceshipDefenderRoom {
-  const room = new SpaceshipDefenderRoom();
+  const room = initRoom(new SpaceshipDefenderRoom());
   room.roomId = "ROOM123";
   room.onCreate({ role: "solo", protocolVersion: PROTOCOL_VERSION, playerName: "Ada" });
   openRooms.push(room);
@@ -331,7 +343,7 @@ function voteUpgrade(
 
 describe("SpaceshipDefenderRoom v15 lifecycle", () => {
   it("accepts only strict protocol v15 display create options and rejects v14 before mutation", () => {
-    const room = new SpaceshipDefenderRoom();
+    const room = initRoom(new SpaceshipDefenderRoom());
     room.roomId = "ROOM123";
     expect(() => {
       room.onCreate({
@@ -693,13 +705,8 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     reconnect.mockResolvedValueOnce(pilot.client);
     await room.onLeave(pilot.client, 1006);
 
-    const displayView = display.client.view;
-    const controllerView = pilot.client.view;
-    if (displayView === undefined || controllerView === undefined) {
-      throw new Error("Expected reconnect StateViews.");
-    }
-    const displayProjection = decodeForView(room.state, displayView);
-    const controllerProjection = decodeForView(room.state, controllerView);
+    const displayProjection = decodeForClient(room, display.client);
+    const controllerProjection = decodeForClient(room, pilot.client);
     expect(displayProjection.game).toMatchObject({
       worldWidth: 4400,
       worldHeight: 4400,
@@ -759,7 +766,7 @@ describe("SpaceshipDefenderRoom solo cockpit", () => {
     });
     // And the world, which an ordinary controller never receives.
     expect(room.state.displayConnected).toBe(true);
-    expect(cockpit.client.view?.has(room.state.game)).toBe(true);
+    expect(cockpit.client.view?.hasTag(room.state.game, DISPLAY_VIEW_TAG)).toBe(true);
   });
 
   it("refuses a controller while the cockpit holds the only seat", () => {
@@ -865,7 +872,7 @@ describe("SpaceshipDefenderRoom solo cockpit", () => {
     expect(reconnect).toHaveBeenCalledTimes(1);
     expect(room.state.displayConnected).toBe(true);
     expect(room.state.players.get(cockpit.client.sessionId)?.connected).toBe(true);
-    expect(cockpit.client.view?.has(room.state.game)).toBe(true);
+    expect(cockpit.client.view?.hasTag(room.state.game, DISPLAY_VIEW_TAG)).toBe(true);
   });
 
   it("disposes the room when the cockpit never comes back", async () => {
@@ -1495,13 +1502,8 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       room.state.game.display.enemyShips.size + room.state.game.display.asteroids.size;
     expect(authoritativeEntityCount).toBeGreaterThan(0);
 
-    const displayView = display.client.view;
-    const controllerView = controllerAt(controllers, 0).client.view;
-    if (displayView === undefined || controllerView === undefined) {
-      throw new Error("Expected display and controller StateViews.");
-    }
-    const displayProjection = decodeForView(room.state, displayView);
-    const controllerProjection = decodeForView(room.state, controllerView);
+    const displayProjection = decodeForClient(room, display.client);
+    const controllerProjection = decodeForClient(room, controllerAt(controllers, 0).client);
 
     for (const projection of [displayProjection, controllerProjection]) {
       expect(projection.game).toMatchObject({
@@ -1578,7 +1580,7 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
     expect(new Set([...upgrade.offer.cards].map(({ role }) => role))).toEqual(new Set(CREW_ROLES));
     expect(upgrade.offer.cards).toHaveLength(3);
     for (const card of upgrade.offer.cards) expect(card.effects.length).toBeGreaterThan(0);
-    expect(display.client.view?.has(room.state.game)).toBe(true);
+    expect(display.client.view?.hasTag(room.state.game, DISPLAY_VIEW_TAG)).toBe(true);
     for (const controller of controllers) expect(controller.client.view).toBeDefined();
     expect(room.state.game.display.enemyShips).toHaveLength(0);
     expect(room.state.game.display.asteroids).toHaveLength(0);
@@ -2010,7 +2012,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
   ] as const)("disposes once when the %s deadline expires", async (reason) => {
     const now = vi.spyOn(Date, "now").mockReturnValue(30_000);
     try {
-      const room = new SpaceshipDefenderRoom();
+      const room = initRoom(new SpaceshipDefenderRoom());
       room.roomId = "ROOM123";
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
       const disconnect = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
@@ -2035,7 +2037,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
   it("ignores stale timer generations and uses stable earliest-deadline priority", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(20_000);
     try {
-      const room = new SpaceshipDefenderRoom();
+      const room = initRoom(new SpaceshipDefenderRoom());
       room.roomId = "ROOM123";
       const setTimeout = vi.spyOn(room.clock, "setTimeout");
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
@@ -2070,7 +2072,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve;
     });
-    const room = new SpaceshipDefenderRoom();
+    const room = initRoom(new SpaceshipDefenderRoom());
     room.roomId = "SECRET-ROOM-CODE";
     const setMetadata = vi
       .spyOn(room, "setMetadata")
@@ -2112,7 +2114,7 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
   });
 
   it("isolates metadata write failures from gameplay", async () => {
-    const room = new SpaceshipDefenderRoom();
+    const room = initRoom(new SpaceshipDefenderRoom());
     room.roomId = "ROOM123";
     vi.spyOn(room, "setMetadata").mockImplementation(() => {
       throw new Error("driver unavailable");
@@ -2365,13 +2367,26 @@ describe("SpaceshipDefenderRoom v13 latency telemetry", () => {
   });
 });
 
-function decodeForView(source: SpaceshipDefenderState, view: StateView): SpaceshipDefenderState {
-  const encoder = new Encoder(source);
+/**
+ * What a client actually receives on join, decoded.
+ *
+ * Asked of the room's own serializer rather than a hand-rolled encoder pass:
+ * `getFullState` is the very method Colyseus calls to fill a joining client, so
+ * this asks the question the way the server answers it. Schema 5 keeps view
+ * membership as bits addressed by an id the owning encoder hands out, which is
+ * why a second encoder over the same state sees nothing at all.
+ *
+ * The first byte is the protocol marker the transport strips, so decoding
+ * starts at one.
+ */
+function decodeForClient(room: SpaceshipDefenderRoom, client: Client): SpaceshipDefenderState {
+  const serializer = (
+    room as unknown as {
+      _serializer: { getFullState(client: Client): Uint8Array };
+    }
+  )._serializer;
   const target = new SpaceshipDefenderState();
-  const decoder = new Decoder(target);
-  const iterator = { offset: 0 };
-  encoder.encodeAll(iterator);
-  decoder.decode(encoder.encodeAllView(view, iterator.offset, iterator));
+  new Decoder(target).decode(serializer.getFullState(client), { offset: 1 });
   return target;
 }
 
@@ -2382,7 +2397,7 @@ describe("maintenance window", () => {
 
   it("refuses a new room while a window is announced", () => {
     getMaintenanceWindow().announce(3_600, Date.now());
-    const room = new SpaceshipDefenderRoom();
+    const room = initRoom(new SpaceshipDefenderRoom());
     room.roomId = "ROOM999";
     expect(() => {
       room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });

@@ -23,6 +23,18 @@ interface RoomInternals {
   };
 }
 
+/**
+ * What the matchmaker does between constructing a room and calling `onCreate`:
+ * `Room.__init()` installs the `state` and `maxClients` accessors, and setting
+ * `state` through that accessor is what builds the encoder every view filter
+ * depends on. A room built by hand here skips the matchmaker, so it has to do
+ * this itself or it is not the room the server runs.
+ */
+function initRoom<T extends object>(room: T): T {
+  (room as unknown as { __init: () => void }).__init();
+  return room;
+}
+
 describe("SpaceshipDefenderRoom cap traffic", () => {
   it("encodes latency and one keyed entity change without resending unchanged collections", () => {
     const { room } = startGame();
@@ -140,7 +152,7 @@ function createClient(sessionId: string): TestClient {
 }
 
 function startGame(): { readonly room: SpaceshipDefenderRoom; readonly controllers: TestClient[] } {
-  const room = new SpaceshipDefenderRoom();
+  const room = initRoom(new SpaceshipDefenderRoom());
   room.roomId = "PERF196";
   room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
   const display = createClient("display");

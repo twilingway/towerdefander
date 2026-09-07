@@ -65,6 +65,7 @@ import {
   type UpgradeJournalEntry
 } from "./upgradeJournal.js";
 import {
+  DISPLAY_VIEW_TAG,
   EnemyVisualState,
   ObstacleState,
   PlayerState,
@@ -135,9 +136,7 @@ export class SpaceshipDefenderRoom extends Room<{
   state: SpaceshipDefenderState;
   metadata: RoomStatsMetadata;
 }> {
-  override maxClients = PLAYER_CAPACITY + 2;
   override maxMessagesPerSecond = CREW_MESSAGE_CEILING;
-  override state = new SpaceshipDefenderState();
 
   private readonly connectionRoles = new Map<string, ConnectionRole>();
   private readonly sequenceWatermarks = new Map<string, Map<InputMessageType, number>>();
@@ -212,6 +211,20 @@ export class SpaceshipDefenderRoom extends Room<{
   };
 
   override onCreate(unsafeOptions: unknown): void {
+    /*
+     * Assigned here rather than declared as class fields, and that is not a
+     * style choice.
+     *
+     * `Room` installs `state` and `maxClients` as accessors on the instance in
+     * its constructor: setting `state` is what builds the serializer's encoder,
+     * and setting `maxClients` is what tells matchmaking. A class field is
+     * defined, not assigned - it puts an own data property over the accessor and
+     * neither setter ever runs. The room then has state with no encoder, which
+     * on `@colyseus/schema` 5 means every view filter silently admits nothing:
+     * the display would connect and receive no world at all.
+     */
+    this.state = new SpaceshipDefenderState();
+    this.maxClients = PLAYER_CAPACITY + 2;
     // Matchmaking forwards the message only for codes it recognises; anything
     // else reaches the client as a bare "Internal Server Error", and the join
     // screens match on this text to name the reason for the player.
@@ -880,7 +893,7 @@ export class SpaceshipDefenderRoom extends Room<{
     // A solo connection already has a view holding its seat; adding the world
     // branch to it is the whole difference between the two roles.
     client.view ??= new StateView();
-    client.view.add(this.state.game, 1);
+    client.view.add(this.state.game, DISPLAY_VIEW_TAG);
     this.displaySessionId = client.sessionId;
     this.connectionRoles.set(client.sessionId, role);
     this.state.displayConnected = true;

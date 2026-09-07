@@ -6,6 +6,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BalanceStore, createDefaultTuning } from "../balance/store.js";
 
+/**
+ * What the matchmaker does between constructing a room and calling `onCreate`:
+ * `Room.__init()` installs the `state` and `maxClients` accessors, and setting
+ * `state` through that accessor is what builds the encoder every view filter
+ * depends on. A room built by hand here skips the matchmaker, so it has to do
+ * this itself or it is not the room the server runs.
+ */
+function initRoom<T extends object>(room: T): T {
+  (room as unknown as { __init: () => void }).__init();
+  return room;
+}
+
 const store = new BalanceStore({
   filePath: "unused-in-tests.json",
   logger: { warn: vi.fn() }
@@ -24,7 +36,7 @@ function client(sessionId: string): Client {
 }
 
 function startedRoom(): Room {
-  const room = new SpaceshipDefenderRoom();
+  const room = initRoom(new SpaceshipDefenderRoom());
   room.roomId = "ROOM123";
   room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
   const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) => {
