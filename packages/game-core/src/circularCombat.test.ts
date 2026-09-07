@@ -325,7 +325,13 @@ describe("circular combat spawning and movement", () => {
     expect(run.angleTravelled).toBeGreaterThan(Math.PI / 8);
   });
 
-  it("frees a pinned enemy from every ship placement the arena allows", () => {
+  /*
+   * Fifteen seconds of flight for every placement the arena allows, and at
+   * sixty steps a second that is three times the work it was when the sweep was
+   * written. The default budget was sized for the coarser step; the sweep is
+   * the same sweep.
+   */
+  it("frees a pinned enemy from every ship placement the arena allows", { timeout: 30_000 }, () => {
     const config = quietArenaConfig();
     let covered = 0;
 
