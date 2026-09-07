@@ -1364,14 +1364,31 @@ class SpaceshipScene extends Phaser.Scene {
         );
         container.add(rock);
       } else {
-        const rock = this.add.circle(0, 0, entity.radius, 0x766f77, 1).setStrokeStyle(4, 0xbba9a2);
-        const crater = this.add.circle(
-          -entity.radius * 0.25,
-          -entity.radius * 0.2,
-          entity.radius * 0.22,
-          0x514d59
+        // A plain rock when the preset names no art. Baked like everything
+        // else: `add.circle` is a shape, and a shape goes through the same
+        // graphics pipeline a drawing does - sixteen of them on the field cost
+        // more than the ship, the gun and the arena together.
+        const rock = this.add.image(
+          0,
+          0,
+          this.bakedShape(
+            `rock:plain:${String(Math.round(entity.radius))}`,
+            entity.radius + 6,
+            (graphics) => {
+              graphics.fillStyle(0x766f77, 1);
+              graphics.fillCircle(0, 0, entity.radius);
+              graphics.lineStyle(4, 0xbba9a2, 1);
+              graphics.strokeCircle(0, 0, entity.radius);
+              graphics.fillStyle(0x514d59, 1);
+              graphics.fillCircle(
+                -entity.radius * 0.25,
+                -entity.radius * 0.2,
+                entity.radius * 0.22
+              );
+            }
+          )
         );
-        container.add([rock, crater]);
+        container.add(rock);
       }
     } else if (entity.visualKind === "loot") {
       // Salvage has to read at a glance from across the arena: a bright ring

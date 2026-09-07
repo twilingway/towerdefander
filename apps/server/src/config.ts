@@ -1,3 +1,5 @@
+import { COMBAT_ENTITY_CAPS } from "@spaceship-defender/protocol";
+
 import { fileURLToPath } from "node:url";
 
 export interface ServerConfig {
@@ -139,8 +141,17 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
   const allowStartWave = environment.ALLOW_START_WAVE === "true";
   const rawSparring = Number(environment.SPARRING_ENEMIES ?? "0");
+  /*
+   * The stand started as a handful of bodies to watch, and eight was plenty for
+   * that. It is also where the display's frame budget gets measured, and eight
+   * bodies measure very little - so the ceiling is now the one the wire already
+   * sets. Past it the display refuses every patch and the stand measures a
+   * frozen picture, which is worse than measuring a small one.
+   */
   const sparringEnemies =
-    Number.isSafeInteger(rawSparring) && rawSparring > 0 ? Math.min(rawSparring, 8) : 0;
+    Number.isSafeInteger(rawSparring) && rawSparring > 0
+      ? Math.min(rawSparring, COMBAT_ENTITY_CAPS.asteroids)
+      : 0;
   const host =
     configuredHost === undefined || configuredHost.length === 0 ? "0.0.0.0" : configuredHost;
   const rawPort =

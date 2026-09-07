@@ -52,8 +52,10 @@ describe("readServerConfig", () => {
     expect(readServerConfig({ SPARRING_ENEMIES: "-3" }).sparringEnemies).toBe(0);
     expect(readServerConfig({ SPARRING_ENEMIES: "two" }).sparringEnemies).toBe(0);
     expect(readServerConfig({ SPARRING_ENEMIES: "2.5" }).sparringEnemies).toBe(0);
-    // A stand with forty ships on it measures the same thing the campaign does.
-    expect(readServerConfig({ SPARRING_ENEMIES: "40" }).sparringEnemies).toBe(8);
+    // Up to what the wire carries, and no further: past the display's own cap
+    // every patch is refused and the stand shows a frozen picture.
+    expect(readServerConfig({ SPARRING_ENEMIES: "16" }).sparringEnemies).toBe(16);
+    expect(readServerConfig({ SPARRING_ENEMIES: "180" }).sparringEnemies).toBe(16);
   });
 
   it("accepts explicit host and port", () => {

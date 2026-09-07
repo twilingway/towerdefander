@@ -41,6 +41,16 @@ const useLab = process.argv.includes("--lab");
  */
 const plain = process.argv.includes("--plain");
 /*
+ * Which wave to open the run on, when the server allows it.
+ *
+ * An empty arena measures an empty arena. The reference stand keeps a hundred
+ * and seventy hulls on the field at all times, so a comparison that starts at
+ * wave one is a comparison of two different games.
+ */
+const startWave = Number(
+  process.argv.find((argument) => argument.startsWith("--wave="))?.slice(7) ?? 0
+);
+/*
  * Which of the scene's own switches to hold off for the whole run.
  *
  * Attribution, not tuning: with React off the patch path the judder that is
@@ -140,6 +150,13 @@ const stand = useLab
         // the page opens a room and waits for a phone, and the cockpit - which
         // is the whole subject of the measurement - never mounts.
         await page.getByText("Играть с этого же устройства").click();
+        if (startWave > 1) {
+          const field = page.getByLabel("Начать с волны (для тестов)");
+          if ((await field.count()) === 0) {
+            throw new Error("the server was not started with ALLOW_START_WAVE=true");
+          }
+          await field.fill(String(startWave));
+        }
         await page.getByRole("button", { name: "Создать комнату" }).click();
         const ready = page.getByTestId("cockpit-ready");
         // The world gate: the button stays disabled until the textures are
