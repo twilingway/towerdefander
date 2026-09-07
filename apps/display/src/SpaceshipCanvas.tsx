@@ -5,7 +5,7 @@ import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { readPixelRatioCap } from "./game/devicePixels.js";
 import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "./game/spaceshipViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
-import type { PredictedPoseFrame } from "./model/shipPrediction.js";
+import type { PredictionDriver } from "./model/shipPrediction.js";
 import {
   buildVisibleDemoWorld,
   findNearestVisibleDemoTarget,
@@ -30,6 +30,8 @@ interface SpaceshipCanvasProps {
     /** What the Phaser scene's own per-frame work costs, over the last second. */
     readonly updateMsPerSecond: number;
     readonly worstUpdateMs: number;
+    /** Of the entities drawn, how many were read off the predictor. */
+    readonly liveDrawn: number;
   }) => void;
   /**
    * Parallax layers on or off. A question rather than a setting: four
@@ -49,7 +51,7 @@ interface SpaceshipCanvasProps {
    * down as a prop would mean a React render every frame - which is the tax the
    * prediction exists to remove, not to double.
    */
-  readonly drivePrediction?: () => PredictedPoseFrame | undefined;
+  readonly prediction?: PredictionDriver | undefined;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -63,7 +65,7 @@ export function SpaceshipCanvas({
   backgroundEnabled = true,
   glowEnabled = true,
   vectorsEnabled = true,
-  drivePrediction,
+  prediction,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
@@ -75,8 +77,8 @@ export function SpaceshipCanvas({
   latestGlowEnabled.current = glowEnabled;
   const latestVectorsEnabled = useRef(vectorsEnabled);
   latestVectorsEnabled.current = vectorsEnabled;
-  const latestDrive = useRef(drivePrediction);
-  latestDrive.current = drivePrediction;
+  const latestPrediction = useRef(prediction);
+  latestPrediction.current = prediction;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -106,7 +108,13 @@ export function SpaceshipCanvas({
           runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
           runtimeReference.current.setGlowEnabled(latestGlowEnabled.current);
           runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
-          runtimeReference.current.setPredictionDriver(() => latestDrive.current?.());
+          // A stable adapter over a prop that changes: the scene is handed this
+          // once, and every call finds whatever the cockpit currently has.
+          runtimeReference.current.setPredictionDriver({
+            drive: () => latestPrediction.current?.drive(),
+            bind: (entityId, kind) => latestPrediction.current?.bind(entityId, kind),
+            read: (entity) => latestPrediction.current?.read(entity)
+          });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
@@ -179,7 +187,8 @@ export function SpaceshipCanvas({
         worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0,
         stutterShare: runtimeReference.current?.readStutterShare() ?? 0,
         updateMsPerSecond: runtimeReference.current?.readUpdateMsPerSecond() ?? 0,
-        worstUpdateMs: runtimeReference.current?.readWorstUpdateMs() ?? 0
+        worstUpdateMs: runtimeReference.current?.readWorstUpdateMs() ?? 0,
+        liveDrawn: runtimeReference.current?.readLiveDrawnCount() ?? 0
       });
       // Down only, and only on a run of samples: a wave that briefly puts forty
       // ships on the field is not a phone that cannot run the game.

@@ -50,6 +50,7 @@ import {
   type PointTrack
 } from "./spaceshipViewModel.js";
 import { watchDevicePixelRatio } from "./devicePixels.js";
+import type { LiveEntity, LiveEntityKind, LivePlacement } from "../model/shipPrediction.js";
 import { pickFocusedTarget } from "../combatFocus.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 import {
@@ -131,6 +132,21 @@ interface PredictedShipPose {
   readonly turretAngle: number;
 }
 
+/**
+ * What a streaming cockpit lends the scene: the frame driver for its own ship,
+ * and the world read off that same clock.
+ *
+ * Every call is allowed to answer "not this one" - the two-device display never
+ * has a driver at all, and a sprite whose entity has already left the room has
+ * nothing to bind to.
+ */
+export interface ScenePrediction {
+  /** Steps and sends, then hands back the pose - or nothing when the switch is off. */
+  drive(): PredictedShipPose | undefined;
+  bind(entityId: string, kind: LiveEntityKind): LiveEntity | undefined;
+  read(entity: LiveEntity): LivePlacement | undefined;
+}
+
 interface BackgroundLayerState {
   readonly sprite: Phaser.GameObjects.TileSprite;
   readonly config: BackgroundLayerConfig;
@@ -161,6 +177,16 @@ interface CombatVisual {
    * reads exactly as bullets coming out of nowhere.
    */
   velocity: { readonly x: number; readonly y: number } | undefined;
+  /**
+   * The room's own entity, bound once when the sprite is made.
+   *
+   * Set only while a cockpit is streaming. Where it is set, the entity is read
+   * off the same clock as this page's ship, which is the whole reason it is
+   * here: a hull read from the predictor and a world read from the snapshot are
+   * a hundred milliseconds apart, and a shell that leaves the barrel across
+   * that gap comes out of empty space.
+   */
+  live: LiveEntity | undefined;
 }
 
 class SpaceshipScene extends Phaser.Scene {
@@ -232,7 +258,15 @@ class SpaceshipScene extends Phaser.Scene {
    * and a prop would mean a React render every frame - which is the cost this
    * whole exercise is trying to remove.
    */
-  private drivePrediction: (() => PredictedShipPose | undefined) | undefined;
+  private prediction: ScenePrediction | undefined;
+  /**
+   * How many drawn entities came off the predictor last frame.
+   *
+   * The instrument that tells a working port from a silent fallback: the read
+   * path degrades quietly by design, so without a count on screen a world still
+   * being drawn from twenty-hertz snapshots looks exactly like one that is not.
+   */
+  private liveDrawnCount = 0;
   /**
    * Off keeps the shield's bloom down even while the sector is up.
    *
@@ -363,7 +397,7 @@ class SpaceshipScene extends Phaser.Scene {
      * own step has already put it.
      */
     // First thing in the frame, before anything is read for drawing.
-    const predicted = this.drivePrediction?.();
+    const predicted = this.prediction?.drive();
     const spaceshipPosition =
       predicted === undefined
         ? samplePointTrack(this.spaceshipTrack, playbackTick)
@@ -413,7 +447,24 @@ class SpaceshipScene extends Phaser.Scene {
      */
     const behindSeconds =
       Math.max(0, this.playback.latestTick - playbackTick) * (this.playback.msPerTick / 1000);
+    let liveDrawn = 0;
     for (const visual of this.combatVisuals.values()) {
+      /*
+       * One clock for the whole picture when there is a cockpit driving it.
+       *
+       * The predictor smooths and reckons every entity it was given, so reading
+       * through it puts the world where the ship already is. Without one - the
+       * shared display, the preview - the tracks below still do the job they
+       * always did.
+       */
+      const live = visual.live === undefined ? undefined : this.prediction?.read(visual.live);
+      if (live !== undefined) {
+        liveDrawn += 1;
+        visual.object.setPosition(live.x, live.y);
+        visual.object.rotation = live.rotation;
+        if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
+        continue;
+      }
       const sampled = samplePointTrack(visual.position, playbackTick);
       const carried =
         visual.velocity === undefined || behindSeconds === 0
@@ -427,6 +478,7 @@ class SpaceshipScene extends Phaser.Scene {
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }
+    this.liveDrawnCount = liveDrawn;
   }
 
   /**
@@ -480,6 +532,10 @@ class SpaceshipScene extends Phaser.Scene {
 
   readWorstUpdateMs(): number {
     return this.worstUpdateMs;
+  }
+
+  readLiveDrawnCount(): number {
+    return this.liveDrawnCount;
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
@@ -675,8 +731,8 @@ class SpaceshipScene extends Phaser.Scene {
    * first - leaves the scene reading a pose staged one callback earlier, and
    * one step stale is precisely what a hand reads as stutter.
    */
-  setPredictionDriver(drive: (() => PredictedShipPose | undefined) | undefined): void {
-    this.drivePrediction = drive;
+  setPredictionDriver(prediction: ScenePrediction | undefined): void {
+    this.prediction = prediction;
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
@@ -1016,6 +1072,7 @@ class SpaceshipScene extends Phaser.Scene {
         this.combatVisuals.set(entityId, {
           object: created.object,
           healthBar: created.healthBar,
+          live: this.prediction?.bind(entityId, entity.visualKind),
           // An entity appears already formed at the newest tick; there is no
           // earlier authoritative sample to walk it out of.
           position: createPointTrack(entity, toTick),
@@ -1023,6 +1080,10 @@ class SpaceshipScene extends Phaser.Scene {
           velocity: reckonableVelocity(entity)
         });
       } else {
+        // A binding missed at spawn - the sprite made from a view the room had
+        // already moved past - would otherwise leave that one entity on the
+        // snapshot clock for as long as it lives.
+        visual.live ??= this.prediction?.bind(entityId, entity.visualKind);
         if (snap) {
           visual.object.setPosition(entity.x, entity.y).setRotation(heading);
           visual.position = createPointTrack(entity, toTick);
@@ -1435,7 +1496,7 @@ export interface SpaceshipRuntime {
    * Steps the prediction, sends its input and returns the pose - in that order,
    * once per drawn frame, from inside the frame.
    */
-  setPredictionDriver(drive: (() => PredictedShipPose | undefined) | undefined): void;
+  setPredictionDriver(prediction: ScenePrediction | undefined): void;
   /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
@@ -1451,6 +1512,8 @@ export interface SpaceshipRuntime {
   /** What the scene's own per-frame work costs, summed over the last second. */
   readUpdateMsPerSecond(): number;
   readWorstUpdateMs(): number;
+  /** How many entities the last frame drew off the predictor rather than a track. */
+  readLiveDrawnCount(): number;
   /**
    * Lowers the ceiling on how many device pixels the scene may draw, when the
    * frame counter says this machine cannot afford the one it has. Down only:
@@ -1566,8 +1629,8 @@ export function createSpaceshipRuntime(
     setVectorsEnabled(enabled) {
       scene.setVectorsEnabled(enabled);
     },
-    setPredictionDriver(drive) {
-      scene.setPredictionDriver(drive);
+    setPredictionDriver(prediction) {
+      scene.setPredictionDriver(prediction);
     },
     readFps() {
       return game.loop.actualFps;
@@ -1583,6 +1646,9 @@ export function createSpaceshipRuntime(
     },
     readWorstUpdateMs() {
       return scene.readWorstUpdateMs();
+    },
+    readLiveDrawnCount() {
+      return scene.readLiveDrawnCount();
     },
     setPixelRatioCap(cap) {
       if (cap === currentCap) return;

@@ -81,7 +81,7 @@ import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isDiagnosticsRequested } from "./model/diagnostics.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
-import type { PredictedPoseFrame } from "./model/shipPrediction.js";
+import type { PredictionDriver } from "./model/shipPrediction.js";
 import { advanceWork, createWorkMeter, recordWork, type WorkMeter } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
@@ -144,7 +144,8 @@ export function DisplayApp() {
     worstFrameMs: 0,
     stutterShare: 0,
     updateMsPerSecond: 0,
-    worstUpdateMs: 0
+    worstUpdateMs: 0,
+    liveDrawn: 0
   });
   /**
    * Off means the ship is drawn from the authoritative angles alone. The point
@@ -165,9 +166,7 @@ export function DisplayApp() {
    * prediction, sends what it stepped and returns the pose. Held in a ref
    * because it is handed to Phaser once, not re-rendered.
    */
-  const predictionDriverReference = useRef<(() => PredictedPoseFrame | undefined) | undefined>(
-    undefined
-  );
+  const predictionDriverReference = useRef<PredictionDriver | undefined>(undefined);
   /** Written every frame, read twice a second by the panel; never a render. */
   const pendingInputReference = useRef(0);
   const driftReference = useRef(0);
@@ -226,7 +225,7 @@ export function DisplayApp() {
      * That is the frozen world with a ship still flying: the socket was gone
      * and prediction carried on alone.
      */
-    predicting: predictionEnabled,
+    streaming: cockpitPlayer !== undefined,
     aimAssistEnabled: aimAssist,
     world:
       view?.game == null
@@ -331,14 +330,22 @@ export function DisplayApp() {
    * never acknowledged and pile up until the replay buffer overflows - which it
    * did, at ninety-five frames, about five seconds of waiting.
    */
-  const predicting =
-    predictionEnabled && cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
+  const streaming = cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
   useShipPrediction({
     room: roomReference.current,
-    enabled: predicting,
+    enabled: streaming,
+    /*
+     * The switch turns prediction off, not the input off.
+     *
+     * One cockpit, one input path: the frames go out either way and the room
+     * flies the ship either way. All this decides is whether the scene draws
+     * the pose this page stepped or the one the room sent - which is the only
+     * way the comparison means anything.
+     */
+    predicting: predictionEnabled,
     source: {
       readIntent: () => cockpitControls.readIntent(),
-      enabled: predicting
+      enabled: streaming
     },
     world:
       view?.game == null
@@ -350,8 +357,8 @@ export function DisplayApp() {
             arenaRadius: view.game.arenaRadius,
             turretMountedOnHull: view.game.helm.turretMountedOnHull
           },
-    onDriver: (drive) => {
-      predictionDriverReference.current = drive;
+    onDriver: (driver) => {
+      predictionDriverReference.current = driver;
     },
     onPending: (pending, driftEma) => {
       pendingInputReference.current = pending;
@@ -776,9 +783,7 @@ export function DisplayApp() {
             ) : (
               <SpaceshipCanvas
                 game={view.game}
-                drivePrediction={() =>
-                  predicting ? predictionDriverReference.current?.() : undefined
-                }
+                prediction={predictionDriverReference.current}
                 runNumber={view.runNumber}
                 connectionEpoch={connectionEpoch}
                 visibleDemo={visibleDemo}
@@ -827,6 +832,7 @@ export function DisplayApp() {
                 serverStepMs={view.game.serverStepMs}
                 pingMs={view.displayLatencyMs}
                 entityCount={countDrawnEntities(view.game)}
+                liveDrawn={frameStats.liveDrawn}
                 traffic={traffic}
                 snapshot={snapshotReading}
                 commit={commitReading}

@@ -34,6 +34,7 @@ export function DiagnosticsPanel({
   serverStepMs,
   pingMs,
   entityCount,
+  liveDrawn,
   traffic,
   snapshot,
   commit,
@@ -57,6 +58,14 @@ export function DiagnosticsPanel({
   readonly serverStepMs: number;
   readonly pingMs: number | null;
   readonly entityCount: number;
+  /**
+   * How many of them the scene drew off the predictor.
+   *
+   * Zero next to a full field means the world is still being drawn from
+   * snapshots while the ship is drawn from the local step - the two clocks that
+   * put a shell where the hull used to be.
+   */
+  readonly liveDrawn: number;
   /** Undefined means the counter never got hold of the socket. */
   readonly traffic: TrafficMeter | undefined;
   /** What turning patches into views costs the main thread. */
@@ -163,7 +172,9 @@ export function DiagnosticsPanel({
         </div>
         <div>
           <dt>Сущностей</dt>
-          <dd data-testid="diagnostics-entities">{entityCount}</dd>
+          <dd data-testid="diagnostics-entities">
+            {entityCount} · через предсказание {liveDrawn}
+          </dd>
         </div>
         <div>
           <dt>Трафик</dt>
@@ -175,6 +186,8 @@ export function DiagnosticsPanel({
             ) : (
               <>
                 ↓ {formatBytes(traffic.inPerSecond)}/с · ↑ {formatBytes(traffic.outPerSecond)}/с
+                <br />
+                исходящих {traffic.outMessagesPerSecond.toFixed(0)}/с
                 <br />
                 за сеанс ↓ {formatBytes(traffic.totalIn)} · ↑ {formatBytes(traffic.totalOut)}
               </>

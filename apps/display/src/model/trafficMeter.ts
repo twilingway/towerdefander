@@ -22,6 +22,14 @@ export interface TrafficMeter {
   /** Rates of the last completed window, in bytes a second. */
   readonly inPerSecond: number;
   readonly outPerSecond: number;
+  /**
+   * Messages a second out of this client, over the same window.
+   *
+   * The number the room's own ceiling is measured against: a client that sends
+   * more than it allows is force-closed on the spot, and from the page that
+   * looks like the world freezing while a locally predicted ship flies on.
+   */
+  readonly outMessagesPerSecond: number;
   /** Everything the connection has carried since it opened. */
   readonly totalIn: number;
   readonly totalOut: number;
@@ -33,17 +41,20 @@ export interface TrafficMeter {
   readonly windowStartedAt: number | undefined;
   readonly windowIn: number;
   readonly windowOut: number;
+  readonly windowOutMessages: number;
 }
 
 export function createTrafficMeter(): TrafficMeter {
   return {
     inPerSecond: 0,
     outPerSecond: 0,
+    outMessagesPerSecond: 0,
     totalIn: 0,
     totalOut: 0,
     windowStartedAt: undefined,
     windowIn: 0,
-    windowOut: 0
+    windowOut: 0,
+    windowOutMessages: 0
   };
 }
 
@@ -66,9 +77,11 @@ export function advanceTraffic(meter: TrafficMeter, nowMs: number): TrafficMeter
     ...meter,
     inPerSecond: meter.windowIn * perSecond,
     outPerSecond: meter.windowOut * perSecond,
+    outMessagesPerSecond: meter.windowOutMessages * perSecond,
     windowStartedAt: nowMs,
     windowIn: 0,
-    windowOut: 0
+    windowOut: 0,
+    windowOutMessages: 0
   };
 }
 
@@ -80,10 +93,19 @@ export function recordTraffic(
 ): TrafficMeter {
   const carried = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
   const rolled = advanceTraffic(meter, nowMs);
-  if (carried === 0) return rolled;
-  return direction === "in"
-    ? { ...rolled, windowIn: rolled.windowIn + carried, totalIn: rolled.totalIn + carried }
-    : { ...rolled, windowOut: rolled.windowOut + carried, totalOut: rolled.totalOut + carried };
+  if (direction === "in") {
+    return carried === 0
+      ? rolled
+      : { ...rolled, windowIn: rolled.windowIn + carried, totalIn: rolled.totalIn + carried };
+  }
+  // Counted even when it carried nothing measurable: against a ceiling it is
+  // the message that costs, whatever its size.
+  return {
+    ...rolled,
+    windowOut: rolled.windowOut + carried,
+    totalOut: rolled.totalOut + carried,
+    windowOutMessages: rolled.windowOutMessages + 1
+  };
 }
 
 /** The half of a socket this probe needs, narrowed from the SDK's transport. */

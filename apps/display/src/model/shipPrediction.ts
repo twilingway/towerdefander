@@ -178,3 +178,42 @@ export const PREDICTED_POSE_FIELDS = [
   "hasTurretTarget",
   "turretTargetAngle"
 ] as const;
+
+/**
+ * Which world collection an entity came from, and therefore how it is drawn.
+ *
+ * The bearing is the reason the kind travels: a hull publishes one and it is
+ * interpolated on the shortest arc, while a shell has none and its bearing is
+ * simply where it is going.
+ */
+export type LiveEntityKind = "enemy" | "asteroid" | "loot" | "projectile" | "missile";
+
+/** A live entity, bound once when its sprite is made rather than looked up per frame. */
+export interface LiveEntity {
+  readonly ref: object;
+  readonly kind: LiveEntityKind;
+}
+
+/** Where a bound entity is drawn this frame. */
+export interface LivePlacement {
+  readonly x: number;
+  readonly y: number;
+  readonly rotation: number;
+}
+
+/**
+ * What the scene is handed when prediction is running: one call per drawn
+ * frame for our own ship, and a way to read everything else off the same clock.
+ *
+ * The pairing is the point. Reading the ship from the predictor and the world
+ * from the twenty-hertz snapshot puts them on two clocks - the ship at present,
+ * the world a buffer behind - and shells then leave the barrel from where the
+ * hull used to be.
+ */
+export interface PredictionDriver {
+  /** Steps the prediction, sends exactly what it stepped, returns the pose. */
+  drive(): PredictedPoseFrame | undefined;
+  /** The live entity behind an id, or undefined if the room does not have it. */
+  bind(entityId: string, kind: LiveEntityKind): LiveEntity | undefined;
+  read(entity: LiveEntity): LivePlacement;
+}

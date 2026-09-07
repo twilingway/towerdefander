@@ -7,8 +7,12 @@ import {
   PREDICTED_POSE_FIELDS,
   stepPredictedPose,
   toShipStats,
+  type LiveEntity,
+  type LiveEntityKind,
+  type LivePlacement,
   type PredictedInputFrame,
-  type PredictedPoseFrame
+  type PredictedPoseFrame,
+  type PredictionDriver
 } from "../shipPrediction.js";
 
 /**
@@ -37,6 +41,46 @@ interface DecodedPose extends PredictedPoseFrame {
   readonly $?: unknown;
 }
 
+/** One live entity as the decoder hands it over: identity, place, motion. */
+interface DecodedEntity {
+  readonly entityId: string;
+  x: number;
+  y: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+}
+
+/** An entity that steers, and therefore publishes where it is pointing. */
+interface DecodedHull extends DecodedEntity {
+  readonly heading: number;
+}
+
+interface DecodedCollection {
+  values(): IterableIterator<DecodedEntity>;
+}
+
+interface DecodedDisplay {
+  readonly pose?: DecodedPose;
+  readonly enemyShips: DecodedCollection;
+  readonly asteroids: DecodedCollection;
+  readonly lootDrops: DecodedCollection;
+  readonly friendlyProjectiles: DecodedCollection;
+  readonly hostileProjectiles: DecodedCollection;
+  readonly homingMissiles: DecodedCollection;
+}
+
+/** Which collections an entity of each kind can be found in. */
+const LIVE_COLLECTIONS: Record<LiveEntityKind, readonly (keyof DecodedDisplay)[]> = {
+  enemy: ["enemyShips"],
+  asteroid: ["asteroids"],
+  loot: ["lootDrops"],
+  projectile: ["friendlyProjectiles", "hostileProjectiles"],
+  missile: ["homingMissiles"]
+};
+
+/** The kinds whose bearing is published and therefore interpolated as an angle. */
+const LIVE_KINDS_WITH_HEADING = new Set<LiveEntityKind>(["enemy", "missile"]);
+
 type PredictHandle = ReturnType<typeof Predict.get>;
 
 /**
@@ -54,16 +98,22 @@ export interface PredictionWorld {
   readonly turretMountedOnHull: boolean;
 }
 
-export function useShipPrediction<TState extends { game?: { display?: { pose?: DecodedPose } } }>({
+export function useShipPrediction<
+  TState extends { game?: { display?: DecodedDisplay | undefined } | undefined }
+>({
   room,
   enabled,
   source,
   world,
+  predicting,
   onDriver,
   onPending
 }: {
   readonly room: Room<unknown, TState> | undefined;
+  /** Whether this display holds a cockpit seat in a running fight. */
   readonly enabled: boolean;
+  /** Whether the ship is drawn from the local step or from the room's snapshot. */
+  readonly predicting: boolean;
   readonly source: ShipPredictionSource;
   readonly world: PredictionWorld | undefined;
   /**
@@ -79,7 +129,7 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
    * Handed the function the scene must call once per drawn frame, or undefined
    * when there is nothing to drive.
    */
-  readonly onDriver: (drive: (() => PredictedPoseFrame | undefined) | undefined) => void;
+  readonly onDriver: (driver: PredictionDriver | undefined) => void;
   /**
    * How deep the replay is: frames we have sent that the room has not
    * acknowledged.
@@ -91,8 +141,8 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
    */
   readonly onPending?: (pending: number, driftEma: number) => void;
 }): void {
-  const latest = useRef({ source, world, enabled, onDriver, onPending });
-  latest.current = { source, world, enabled, onDriver, onPending };
+  const latest = useRef({ source, world, enabled, predicting, onDriver, onPending });
+  latest.current = { source, world, enabled, predicting, onDriver, onPending };
 
   useEffect(() => {
     if (room === undefined) return undefined;
@@ -115,8 +165,9 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
 
     function start(): (() => void) | undefined {
       if (room === undefined) return undefined;
-      const pose = room.state.game?.display?.pose;
-      if (pose === undefined) return undefined;
+      const display = room.state.game?.display;
+      const pose = display?.pose;
+      if (display === undefined || pose === undefined) return undefined;
 
       /*
        * The one cast in the file, and it is a boundary rather than a shortcut.
@@ -164,10 +215,95 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
        * a pose staged one callback ago, and a step stale is what a hand reads as
        * stutter. The lab states the same order in the same place.
        */
+      /*
+       * The rest of the world, on the same clock as the ship.
+       *
+       * Position and bearing are two attaches on purpose. One config applies its
+       * `angle` flag to every field it lists, and unwrapping is what folds a hull
+       * crossing PI onto the shorter arc instead of spinning it the long way
+       * round. Put together, the position glides and the rotation steps at the
+       * patch rate - a ship that runs at twenty frames a second while its
+       * position does not.
+       */
+      /*
+       * The second boundary cast, and the same reason as the first: this app
+       * types room state structurally, while `attachAll` is typed against the
+       * schema classes it walks. The keys below are checked against the decoded
+       * shape declared above, so a renamed collection still fails to compile.
+       */
+      const collections = display as unknown as Record<string, never>;
+      const detachers = [
+        predict.attachAll(collections, "enemyShips", { mode: "lerp", fields: ["x", "y"] }),
+        predict.attachAll(collections, "enemyShips", {
+          mode: "lerp",
+          fields: ["heading"],
+          angle: true
+        }),
+        predict.attachAll(collections, "homingMissiles", { mode: "lerp", fields: ["x", "y"] }),
+        predict.attachAll(collections, "homingMissiles", {
+          mode: "lerp",
+          fields: ["heading"],
+          angle: true
+        }),
+        /*
+         * Rocks and salvage drift, and a drift is still someone else's business:
+         * they bounce off the hull and off each other, so they are interpolated
+         * like anything whose next move is not ours to know.
+         */
+        predict.attachAll(collections, "asteroids", { mode: "lerp", fields: ["x", "y"] }),
+        predict.attachAll(collections, "lootDrops", { mode: "lerp", fields: ["x", "y"] }),
+        /*
+         * Shells are dead reckoned, and they are the only thing here that earns
+         * it. An interpolated entity is drawn between the two newest snapshots,
+         * which is to say in the past: at a hundred-millisecond buffer and a
+         * thousand units a second, a shell was drawn a hundred units behind
+         * where the room had it, which is what "the bullets come out of the
+         * wrong place" was. A shell has no driver - constant velocity along a
+         * fixed bearing, both already on the wire - so carrying it to server
+         * present is arithmetic rather than a guess. Smoothing stays off: a
+         * constant-step projectile rebases exactly, and easing it would put back
+         * the very lag this removes.
+         */
+        ...(["friendlyProjectiles", "hostileProjectiles"] as const).map((key) =>
+          predict.attachAll(collections, key, {
+            mode: "reckon",
+            fields: ["x", "y"],
+            step: (shell: DecodedEntity & { x: number; y: number }, dt: number) => {
+              shell.x += shell.velocityX * dt;
+              shell.y += shell.velocityY * dt;
+            },
+            smoothMs: 0
+          })
+        )
+      ];
+
+      const bind = (entityId: string, kind: LiveEntityKind): LiveEntity | undefined => {
+        for (const key of LIVE_COLLECTIONS[kind]) {
+          const collection = display[key] as DecodedCollection;
+          for (const candidate of collection.values()) {
+            if (candidate.entityId === entityId) return { ref: candidate, kind };
+          }
+        }
+        return undefined;
+      };
+
+      const read = (entity: LiveEntity): LivePlacement => {
+        const ref = entity.ref as DecodedEntity;
+        return {
+          x: predict.value(ref, "x"),
+          y: predict.value(ref, "y"),
+          // A shell publishes no bearing because it does not need one: it points
+          // where it is going, and that never changes while it flies.
+          rotation: LIVE_KINDS_WITH_HEADING.has(entity.kind)
+            ? predict.value(ref as DecodedHull, "heading")
+            : Math.atan2(ref.velocityY, ref.velocityX)
+        };
+      };
+
       let seq = 0;
       const drive = (): PredictedPoseFrame | undefined => {
         const steps = predict.tick();
-        const { source: live, enabled: on, world } = latest.current;
+        const { source: live, enabled: on, predicting, world } = latest.current;
         for (let step = 0; step < steps; step += 1) {
           if (!on) break;
           Object.assign(input.data, live.readIntent());
@@ -187,7 +323,16 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
           input.send();
         }
         latest.current.onPending?.(input.pendingCount, reconciler.drift.ema);
-        if (!on) return undefined;
+        /*
+         * The switch stops the prediction, not the stream.
+         *
+         * There is one input path for a cockpit and it is this one: the frames
+         * go out either way, and turning prediction off only stops the scene
+         * from being handed a locally stepped pose, so it draws the room's. A
+         * switch that changed which protocol carries the input would compare two
+         * different games, and the run with it off had no helm at all.
+         */
+        if (!predicting) return undefined;
         /*
          * Position through `value()`, bearings straight from the state.
          *
@@ -200,10 +345,11 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
         const state = reconciler.state as PredictedPoseFrame;
         return { ...state, x: reconciler.value("x"), y: reconciler.value("y") };
       };
-      latest.current.onDriver(drive);
+      latest.current.onDriver({ drive, bind, read });
 
       return () => {
         latest.current.onDriver(undefined);
+        for (const detach of detachers) detach();
       };
     }
   }, [room]);

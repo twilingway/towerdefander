@@ -73,7 +73,14 @@ export interface SoloCockpitOptions {
    * On means the acknowledged input stream is carrying every frame, so the
    * message schedulers here stand down rather than saying the same thing twice.
    */
-  readonly predicting: boolean;
+  /**
+   * Whether the acknowledged input stream carries this seat.
+   *
+   * It always does for a cockpit, and that is the point: the input path never
+   * changes under the player. What the prediction switch decides is which pose
+   * gets drawn, not which protocol carries the helm.
+   */
+  readonly streaming: boolean;
   /** Off sends the raw thumb bearing, whatever is in the cone. */
   readonly aimAssistEnabled: boolean;
   readonly world: SoloCockpitWorld | undefined;
@@ -130,7 +137,7 @@ function silentUntilEnabled<T>(scheduler: LatestInputScheduler<T>): LatestInputS
 
 export function useSoloCockpit({
   enabled,
-  predicting,
+  streaming,
   aimAssistEnabled,
   world,
   roomId,
@@ -292,19 +299,23 @@ export function useSoloCockpit({
      * with `not_controller`, against a ceiling of twenty-five.
      */
     /*
-     * Two ways to say the same thing would say it twice. While the ship is
-     * predicted the acknowledged stream carries every frame, so the message
-     * schedulers stand down entirely - and come straight back when the switch
-     * is thrown, which is what makes the comparison a fair one.
+     * Two ways to say the same thing would say it twice. A cockpit's helm rides
+     * the acknowledged stream, so its message schedulers stand down for good -
+     * both running at once put sixty messages a second against a ceiling of
+     * fifty, and the room answers that by closing the connection.
      */
-    pilot?.setEnabled(enabled && !predicting);
-    gunner?.setEnabled(enabled && !predicting);
+    const scheduled = enabled && !streaming;
+    pilot?.setEnabled(scheduled);
+    gunner?.setEnabled(scheduled);
     if (generationReference.current !== generation) {
       generationReference.current = generation;
       pilotReference.current = NEUTRAL_PILOT;
       gunnerReference.current = NEUTRAL_GUNNER;
-      pilot?.resetGeneration(NEUTRAL_PILOT, performance.now(), enabled);
-      gunner?.resetGeneration(NEUTRAL_GUNNER, performance.now(), enabled);
+      // The same gate, because this call sets the flag rather than reading it:
+      // handed a bare `enabled` it turned the schedulers straight back on at
+      // every new run, and both paths sent at once from there.
+      pilot?.resetGeneration(NEUTRAL_PILOT, performance.now(), scheduled);
+      gunner?.resetGeneration(NEUTRAL_GUNNER, performance.now(), scheduled);
     }
     if (!enabled) return;
     const timer = window.setInterval(() => {
@@ -314,7 +325,11 @@ export function useSoloCockpit({
     return () => {
       window.clearInterval(timer);
     };
-  }, [enabled, generation]);
+    // `streaming` belongs here as much as the other two: the cockpit seat is
+    // confirmed in its own update, and a gate left out of the list is a gate
+    // that never closes - both paths then sent at once, forty messages a second
+    // against a ceiling of fifty, and the first burst took the socket down.
+  }, [enabled, generation, streaming]);
 
   useEffect(() => {
     // A phone that locks or a tab that goes away must not leave the ship under
