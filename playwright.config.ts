@@ -1,4 +1,22 @@
 import { defineConfig } from "@playwright/test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+/**
+ * A preset path that never exists, so the suite runs on the built-in balance.
+ *
+ * Without it the server picks up whatever an operator last saved from the
+ * console, and the arena, the hull and every wave come from that file: the same
+ * spec passes on one machine and fails on the next for reasons that have
+ * nothing to do with the code. The smoke harness has always done this; the
+ * browser suite had not, and it took a preset with a doubled arena to notice.
+ *
+ * It only reaches a server this config starts. `reuseExistingServer` is on, so
+ * a dev server already listening on the port is used as it stands, preset and
+ * all - which is the other half of how a saved arena got into a spec. Run the
+ * suite against a free port to be sure of what it is testing.
+ */
+const HERMETIC_BALANCE_PATH = join(tmpdir(), "spaceship-e2e-balance-never-written.json");
 
 const externalServers = process.env.E2E_EXTERNAL_SERVERS === "1";
 
@@ -26,6 +44,7 @@ export default defineConfig({
         webServer: [
           {
             command: "node apps/server/dist/index.js",
+            env: { BALANCE_PRESET_PATH: HERMETIC_BALANCE_PATH },
             url: "http://127.0.0.1:2567/health",
             reuseExistingServer: true,
             timeout: 30_000

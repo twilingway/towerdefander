@@ -65,7 +65,14 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
     const movedX = (await readNumber(world, "data-spaceship-x")) - startX;
     const movedY = (await readNumber(world, "data-spaceship-y")) - startY;
     expect(Math.hypot(movedX, movedY)).toBeGreaterThan(120);
-    expect(shortestDelta(Math.atan2(movedY, movedX), turnedHeading)).toBeLessThan(0.6);
+    /*
+     * Against the nose it ends on, not the one it started from. The hull is
+     * still settling onto the bearing the turn asked for while the thrust
+     * pushes, so the path is an arc: measured from where the nose was, the
+     * travel is off by the part of the turn that happened during it.
+     */
+    const heldHeading = await readNumber(world, "data-spaceship-heading");
+    expect(shortestDelta(Math.atan2(movedY, movedX), heldHeading)).toBeLessThan(0.6);
 
     // The arrows drive the second stream from the same connection.
     const restingTurret = await readNumber(world, "data-turret-angle");
