@@ -50,6 +50,8 @@ export function DiagnosticsPanel({
   glowEnabled,
   onToggleGlow,
   vectorsEnabled,
+  interfaceEnabled,
+  onToggleInterface,
   onToggleVectors
 }: {
   readonly fps: number;
@@ -93,10 +95,22 @@ export function DiagnosticsPanel({
   readonly onToggleGlow: () => void;
   readonly vectorsEnabled: boolean;
   readonly onToggleVectors: () => void;
+  /** Everything React draws over the world, on or off. */
+  readonly interfaceEnabled: boolean;
+  readonly onToggleInterface: () => void;
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
       <div className="diagnostics-panel__switches">
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
+          data-testid="diagnostics-interface-toggle"
+          data-interface={interfaceEnabled ? "on" : "off"}
+          onClick={onToggleInterface}
+        >
+          Интерфейс: {interfaceEnabled ? "вкл" : "выкл"}
+        </button>
         <button
           type="button"
           className="diagnostics-panel__toggle"

@@ -1,0 +1,75 @@
+import { useEffect, useState } from "react";
+
+import { DiagnosticsPanel } from "../DiagnosticsPanel/index.js";
+import type { TrafficMeter } from "../../model/trafficMeter.js";
+import type { WorkMeter } from "../../model/workMeter.js";
+
+/**
+ * Everything the panel shows, gathered at the moment it is asked for.
+ *
+ * A function rather than props, and that is the whole point of this component:
+ * an instrument that re-renders the page it measures is measuring itself. The
+ * numbers live in references that the frame loop and the socket write without
+ * a render, and this pulls them on its own beat.
+ */
+export interface DiagnosticsReadings {
+  readonly fps: number;
+  readonly worstFrameMs: number;
+  readonly stutterShare: number;
+  readonly sceneMsPerSecond: number;
+  readonly worstSceneMs: number;
+  readonly serverStepMs: number;
+  readonly pingMs: number;
+  readonly entityCount: number;
+  readonly liveDrawn: number;
+  readonly offscreen: number;
+  readonly playbackDelayMs: number;
+  readonly patchIntervalMs: number;
+  readonly pendingInput: number;
+  readonly drift: number;
+  readonly traffic: TrafficMeter | undefined;
+  readonly snapshot: WorkMeter | undefined;
+  readonly commit: WorkMeter | undefined;
+}
+
+/** Twice a second: fast enough to watch, slow enough not to be the thing watched. */
+const SAMPLE_INTERVAL_MS = 500;
+
+interface DiagnosticsHudProps {
+  readonly read: () => DiagnosticsReadings;
+  readonly predictionEnabled: boolean;
+  readonly onTogglePrediction: () => void;
+  readonly backgroundEnabled: boolean;
+  readonly onToggleBackground: () => void;
+  readonly glowEnabled: boolean;
+  readonly onToggleGlow: () => void;
+  readonly vectorsEnabled: boolean;
+  readonly onToggleVectors: () => void;
+  readonly interfaceEnabled: boolean;
+  readonly onToggleInterface: () => void;
+}
+
+/**
+ * The panel on its own clock.
+ *
+ * Before this, every instrument sample was a state change on the page, so the
+ * whole battle tree - radar, cockpit, hull rings, the lot - re-rendered four
+ * times a second to move a number in a corner. The reference prototype's own
+ * panels do three hundred commits a second at a third of a millisecond each,
+ * because each of them re-renders itself and nothing else. This is that: the
+ * only thing a sample can touch is this subtree.
+ */
+export function DiagnosticsHud({ read, ...controls }: DiagnosticsHudProps) {
+  const [readings, setReadings] = useState<DiagnosticsReadings>(read);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setReadings(read());
+    }, SAMPLE_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [read]);
+
+  return <DiagnosticsPanel {...readings} {...controls} />;
+}

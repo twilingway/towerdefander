@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 /**
  * Below this the scene is dropping frames badly enough that the player can see
  * it, so the readout says so rather than making them compare numbers.
@@ -107,5 +109,37 @@ export function FpsReadout({
         <strong>{formatStutterShare(stutterShare)}</strong>%
       </span>
     </span>
+  );
+}
+
+/**
+ * The same readout on its own clock.
+ *
+ * The counter in the corner used to be state on the page, so every sample
+ * re-rendered the whole battle tree to move three digits. Pulling instead means
+ * a sample can only touch this.
+ */
+export function PolledFpsReadout({
+  read
+}: {
+  readonly read: () => { fps: number; worstFrameMs: number; stutterShare: number };
+}) {
+  const [sample, setSample] = useState(read);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setSample(read());
+    }, 500);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [read]);
+
+  return (
+    <FpsReadout
+      fps={sample.fps}
+      worstFrameMs={sample.worstFrameMs}
+      stutterShare={sample.stutterShare}
+    />
   );
 }

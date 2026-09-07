@@ -46,7 +46,7 @@ import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
 import { CrewLatency } from "./components/CrewLatency/index.js";
 import { useLetterboxBars } from "./useLetterboxBars.js";
-import { FpsReadout } from "./components/FpsReadout/index.js";
+import { PolledFpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
@@ -74,7 +74,7 @@ import {
   PREVIEW_ENDLESS_TIER,
   PREVIEW_MODULE_TIERS
 } from "./previewMode.js";
-import { DiagnosticsPanel } from "./components/DiagnosticsPanel/index.js";
+import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
@@ -83,7 +83,7 @@ import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isDiagnosticsRequested } from "./model/diagnostics.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
-import { advanceWork, createWorkMeter, recordWork, type WorkMeter } from "./model/workMeter.js";
+import { advanceWork, createWorkMeter, recordWork } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import {
   buildVisibleDemoWorld,
@@ -144,6 +144,8 @@ export function DisplayApp() {
   const publishedViewReference = useRef<DisplayRoomView | undefined>(undefined);
   const publishedAtReference = useRef(0);
   const publishTimerReference = useRef<number | undefined>(undefined);
+  /** Patches the display's own contract refused, counted rather than fatal. */
+  const refusedPatchesReference = useRef(0);
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   /** Set when this page is also the pilot; undefined for an ordinary display. */
@@ -157,7 +159,7 @@ export function DisplayApp() {
   const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
-  const [frameStats, setFrameStats] = useState({
+  const frameStatsReference = useRef({
     fps: 0,
     worstFrameMs: 0,
     stutterShare: 0,
@@ -179,8 +181,8 @@ export function DisplayApp() {
    * too little and the interpolation runs out of snapshots and holds, which
    * reads as a hull stopping dead and then jumping.
    */
-  const [playbackDelayMs, setPlaybackDelayMs] = useState(0);
-  const [patchIntervalMs, setPatchIntervalMs] = useState(0);
+  const playbackDelayReference = useRef(0);
+  const patchIntervalReference = useRef(0);
   /**
    * The ship this page is flying, as the reconciler currently has it.
    *
@@ -198,8 +200,7 @@ export function DisplayApp() {
   /** Written every frame, read twice a second by the panel; never a render. */
   const pendingInputReference = useRef(0);
   const driftReference = useRef(0);
-  const [pendingInput, setPendingInput] = useState(0);
-  const [drift, setDrift] = useState(0);
+
   /**
    * The parallax layers, asked about rather than settled: they are four
    * full-screen sprites and three blends, and a phone is where that is paid for.
@@ -209,13 +210,22 @@ export function DisplayApp() {
   const [glowEnabled, setGlowEnabled] = useState(true);
   /** The five overlays the scene rebuilds every frame; the lab has none of these. */
   const [vectorsEnabled, setVectorsEnabled] = useState(true);
-  const [traffic, setTraffic] = useState<TrafficMeter | undefined>(undefined);
+  /**
+   * Everything React draws over the world, off.
+   *
+   * The last thing left to rule out: the scene meter says what Phaser spends
+   * and the commit meter says what the tree costs, but neither says what the
+   * browser spends compositing a dozen translucent panels over a canvas. With
+   * them gone the page is the canvas, and whatever is left is the renderer.
+   */
+  const [interfaceEnabled, setInterfaceEnabled] = useState(true);
+  const trafficReference = useRef<TrafficMeter | undefined>(undefined);
   /*
    * Written on every patch and read twice a second. A ref rather than state:
    * setting state here would add a render to the very work being measured.
    */
   const snapshotCost = useRef(createWorkMeter());
-  const [snapshotReading, setSnapshotReading] = useState<WorkMeter | undefined>(undefined);
+
   /*
    * What React itself costs, from React's own stopwatch rather than a guess.
    * Every patch replaces the view object, so the whole battle tree re-renders
@@ -223,7 +233,7 @@ export function DisplayApp() {
    * patches almost exactly - which makes this the last unmeasured suspect.
    */
   const commitCost = useRef(createWorkMeter());
-  const [commitReading, setCommitReading] = useState<WorkMeter | undefined>(undefined);
+
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -301,14 +311,17 @@ export function DisplayApp() {
      byte counter could not attach to a socket. */
   useEffect(() => {
     if (!diagnostics) return undefined;
+    /*
+     * Rolls the windows and nothing else.
+     *
+     * There is no state here on purpose: a sample that re-rendered the page
+     * would be an instrument paying for itself four times a second, and the
+     * panel pulls these on its own beat.
+     */
     const timer = window.setInterval(() => {
       const now = performance.now();
-      setPendingInput(pendingInputReference.current);
-      setDrift(driftReference.current);
       snapshotCost.current = advanceWork(snapshotCost.current, now);
       commitCost.current = advanceWork(commitCost.current, now);
-      setSnapshotReading(snapshotCost.current);
-      setCommitReading(commitCost.current);
     }, 500);
     return () => {
       window.clearInterval(timer);
@@ -337,14 +350,14 @@ export function DisplayApp() {
 
     if (probe === undefined) {
       // Undefined stands for "never attached", which the panel says in words.
-      setTraffic(undefined);
+      trafficReference.current = undefined;
       return undefined;
     }
     // Twice a second: the numbers are read, not watched, and a byte counter
     // driving a React render at frame rate would be an instrument that costs
     // the very thing it measures.
     const timer = window.setInterval(() => {
-      setTraffic(probe.read(performance.now()));
+      trafficReference.current = probe.read(performance.now());
     }, 500);
     return () => {
       window.clearInterval(timer);
@@ -393,8 +406,8 @@ export function DisplayApp() {
       driftReference.current = driftEma;
     },
     onDelay: (delayMs, intervalMs) => {
-      setPlaybackDelayMs(delayMs);
-      setPatchIntervalMs(intervalMs);
+      playbackDelayReference.current = delayMs;
+      patchIntervalReference.current = intervalMs;
     }
   });
 
@@ -490,6 +503,45 @@ export function DisplayApp() {
    * each render.
    */
   const readLiveGame = useCallback(() => liveViewReference.current?.game ?? undefined, []);
+
+  /**
+   * Every instrument, read at the moment the panel asks.
+   *
+   * Stable across renders so the panel keeps one timer: everything inside is a
+   * reference written by the frame loop, the socket or the patch handler, none
+   * of which render the page to do it.
+   */
+  /** The three numbers the corner readout shows, pulled rather than pushed. */
+  const readFrameStats = useCallback(
+    () => ({
+      fps: frameStatsReference.current.fps,
+      worstFrameMs: frameStatsReference.current.worstFrameMs,
+      stutterShare: frameStatsReference.current.stutterShare
+    }),
+    []
+  );
+
+  const readDiagnostics = useCallback(
+    () => ({
+      ...frameStatsReference.current,
+      sceneMsPerSecond: frameStatsReference.current.updateMsPerSecond,
+      worstSceneMs: frameStatsReference.current.worstUpdateMs,
+      serverStepMs: liveViewReference.current?.game?.serverStepMs ?? 0,
+      pingMs: liveViewReference.current?.displayLatencyMs ?? 0,
+      entityCount:
+        liveViewReference.current?.game == null
+          ? 0
+          : countDrawnEntities(liveViewReference.current.game),
+      playbackDelayMs: playbackDelayReference.current,
+      patchIntervalMs: patchIntervalReference.current,
+      pendingInput: pendingInputReference.current,
+      drift: driftReference.current,
+      traffic: trafficReference.current,
+      snapshot: snapshotCost.current,
+      commit: commitCost.current
+    }),
+    []
+  );
 
   /** The seat this page holds when it is also the pilot. */
   const cockpitSeat =
@@ -661,7 +713,26 @@ export function DisplayApp() {
     // between a patch arriving and React being told about it, and on a phone
     // that is the work landing twenty times a second.
     const startedAt = performance.now();
-    const next = toDisplayRoomView(state);
+    /*
+     * A patch the contract refuses must not stop the world.
+     *
+     * The parse throws, and an exception out of a state callback takes the page
+     * with it: the world stands still while a locally predicted ship flies on,
+     * which is what a frozen screen has twice turned out to be. Keeping the last
+     * good view is a worse picture than the newest one and an incomparably
+     * better one than none, and the count says the picture is stale rather than
+     * letting it look merely quiet.
+     */
+    let next: DisplayRoomView | undefined;
+    try {
+      next = toDisplayRoomView(state);
+    } catch (reason) {
+      refusedPatchesReference.current += 1;
+      if (refusedPatchesReference.current === 1) {
+        console.error("A patch did not match the display contract; holding the last one.", reason);
+      }
+      return;
+    }
     const builtInMs = performance.now() - startedAt;
     if (next === undefined) return;
     snapshotCost.current = recordWork(snapshotCost.current, builtInMs, startedAt);
@@ -790,13 +861,7 @@ export function DisplayApp() {
               Экран → сервер {formatLatency(view.displayLatencyMs)}
             </span>
           )}
-          {view.game !== null && !diagnostics && (
-            <FpsReadout
-              fps={frameStats.fps}
-              worstFrameMs={frameStats.worstFrameMs}
-              stutterShare={frameStats.stutterShare}
-            />
-          )}
+          {view.game !== null && !diagnostics && <PolledFpsReadout read={readFrameStats} />}
           <button
             type="button"
             className="room-close-button"
@@ -842,34 +907,36 @@ export function DisplayApp() {
           }}
         >
           <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
-            <header className="battle-header spaceship-hud">
-              <div>
-                <span>Волна</span>
-                <strong>{view.game.encounter.waveNumber}</strong>
-                <small>{encounterLabel(view.game.encounter.phase)}</small>
-              </div>
-              {/* Hull and shield moved onto the radar dial: two rings, their end
+            {interfaceEnabled && (
+              <header className="battle-header spaceship-hud">
+                <div>
+                  <span>Волна</span>
+                  <strong>{view.game.encounter.waveNumber}</strong>
+                  <small>{encounterLabel(view.game.encounter.phase)}</small>
+                </div>
+                {/* Hull and shield moved onto the radar dial: two rings, their end
                 labels and the shield state word say everything these two cards
                 did, in the place the pilot is already looking. */}
-              <div>
-                <span>Счёт</span>
-                <strong>{view.game.encounter.score}</strong>
-                <small data-testid="hud-field-counts">
-                  Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length} ·
-                  Камни {waveAsteroidCount}
-                </small>
-              </div>
-              <div>
-                <span>Кредиты</span>
-                <strong>{view.game.credits}</strong>
-                <small>
-                  {waveUpgrade === null
-                    ? "в этой волне улучшений нет"
-                    : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
-                </small>
-              </div>
-              <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
-            </header>
+                <div>
+                  <span>Счёт</span>
+                  <strong>{view.game.encounter.score}</strong>
+                  <small data-testid="hud-field-counts">
+                    Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length} ·
+                    Камни {waveAsteroidCount}
+                  </small>
+                </div>
+                <div>
+                  <span>Кредиты</span>
+                  <strong>{view.game.credits}</strong>
+                  <small>
+                    {waveUpgrade === null
+                      ? "в этой волне улучшений нет"
+                      : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
+                  </small>
+                </div>
+                <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
+              </header>
+            )}
             {portrait ? (
               <RotateNotice />
             ) : (
@@ -886,10 +953,12 @@ export function DisplayApp() {
                 backgroundEnabled={backgroundEnabled}
                 glowEnabled={glowEnabled}
                 vectorsEnabled={vectorsEnabled}
-                onFrameStats={setFrameStats}
+                onFrameStats={(stats) => {
+                  frameStatsReference.current = stats;
+                }}
               />
             )}
-            {cockpitPlayer !== undefined && !portrait && (
+            {cockpitPlayer !== undefined && !portrait && interfaceEnabled && (
               <SoloCockpit
                 enabled={view.game.encounter.phase === "combat"}
                 driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
@@ -919,24 +988,8 @@ export function DisplayApp() {
               ))}
             {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
             {diagnostics && (
-              <DiagnosticsPanel
-                fps={frameStats.fps}
-                worstFrameMs={frameStats.worstFrameMs}
-                stutterShare={frameStats.stutterShare}
-                sceneMsPerSecond={frameStats.updateMsPerSecond}
-                worstSceneMs={frameStats.worstUpdateMs}
-                serverStepMs={view.game.serverStepMs}
-                pingMs={view.displayLatencyMs}
-                entityCount={countDrawnEntities(view.game)}
-                liveDrawn={frameStats.liveDrawn}
-                playbackDelayMs={playbackDelayMs}
-                patchIntervalMs={patchIntervalMs}
-                offscreen={frameStats.offscreen}
-                traffic={traffic}
-                snapshot={snapshotReading}
-                commit={commitReading}
-                pendingInput={pendingInput}
-                drift={drift}
+              <DiagnosticsHud
+                read={readDiagnostics}
                 predictionEnabled={predictionEnabled}
                 onTogglePrediction={() => {
                   setPredictionEnabled((enabled) => !enabled);
@@ -953,9 +1006,13 @@ export function DisplayApp() {
                 onToggleVectors={() => {
                   setVectorsEnabled((enabled) => !enabled);
                 }}
+                interfaceEnabled={interfaceEnabled}
+                onToggleInterface={() => {
+                  setInterfaceEnabled((enabled) => !enabled);
+                }}
               />
             )}
-            <CombatRadar game={view.game} />
+            {interfaceEnabled && <CombatRadar game={view.game} />}
             {view.game.encounter.phase === "intermission" && (
               <TeamUpgradeOverlay
                 teamUpgrade={view.game.teamUpgrade}
@@ -991,7 +1048,7 @@ export function DisplayApp() {
             )}
             {/* The run's own hull, straight from the catalogue; the fixture is
               the preview's stand-in when no server answered. */}
-            {moduleTree !== undefined && (
+            {moduleTree !== undefined && interfaceEnabled && (
               <ModuleTreeWindow
                 tiers={moduleTree.tiers}
                 endlessTier={moduleTree.endlessTier}
