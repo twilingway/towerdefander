@@ -34,6 +34,8 @@ describe("SpaceshipCanvas", () => {
       readStutterShare: () => 0,
       readUpdateMsPerSecond: () => 0,
       readLiveDrawnCount: () => 0,
+      readOffscreenCount: () => 0,
+      setSnapshotSource: vi.fn(),
       readWorstUpdateMs: () => 0,
       setBackgroundEnabled: vi.fn(),
       setGlowEnabled: vi.fn(),

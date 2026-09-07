@@ -33,6 +33,7 @@ import {
 } from "@spaceship-defender/client-shared";
 import {
   Profiler,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -84,7 +85,14 @@ import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
 import { advanceWork, createWorkMeter, recordWork, type WorkMeter } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
-import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
+import {
+  buildVisibleDemoWorld,
+  isVisibleDemoMode,
+  publishVisibleDemoWorld,
+  readShipArchetypeId,
+  readStartWave
+} from "./visibleDemo.js";
+import { hasImmediateChange, PASSIVE_PUBLISH_MS } from "./model/viewPublishing.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -126,6 +134,16 @@ export function DisplayApp() {
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [networkView, setNetworkView] = useState<DisplayRoomView>();
+  /**
+   * The newest view there is, whether or not React has been told about it.
+   *
+   * The scene pulls the world from here every frame it draws, which is what
+   * lets the page below it commit at its own, far slower pace.
+   */
+  const liveViewReference = useRef<DisplayRoomView | undefined>(undefined);
+  const publishedViewReference = useRef<DisplayRoomView | undefined>(undefined);
+  const publishedAtReference = useRef(0);
+  const publishTimerReference = useRef<number | undefined>(undefined);
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
   /** Set when this page is also the pilot; undefined for an ordinary display. */
@@ -145,7 +163,8 @@ export function DisplayApp() {
     stutterShare: 0,
     updateMsPerSecond: 0,
     worstUpdateMs: 0,
-    liveDrawn: 0
+    liveDrawn: 0,
+    offscreen: 0
   });
   /**
    * Off means the ship is drawn from the authoritative angles alone. The point
@@ -450,6 +469,15 @@ export function DisplayApp() {
     []
   );
 
+  /**
+   * The world as of the newest patch, for the scene to pull.
+   *
+   * Stable across renders on purpose: the scene is handed this once and calls
+   * it every frame, so a new function each render would be a new subscription
+   * each render.
+   */
+  const readLiveGame = useCallback(() => liveViewReference.current?.game ?? undefined, []);
+
   /** The seat this page holds when it is also the pilot. */
   const cockpitSeat =
     cockpitPlayer === undefined
@@ -599,6 +627,22 @@ export function DisplayApp() {
     }
   }
 
+  /**
+   * Hands a view to React, and remembers when.
+   *
+   * Separate from deciding whether to: the trailing timer has to run the same
+   * publish the patch would have run.
+   */
+  function publishView(view: DisplayRoomView, now: number): void {
+    if (publishTimerReference.current !== undefined) {
+      window.clearTimeout(publishTimerReference.current);
+      publishTimerReference.current = undefined;
+    }
+    publishedViewReference.current = view;
+    publishedAtReference.current = now;
+    setNetworkView(view);
+  }
+
   function applyRoomState(state: NetworkRoomState): void {
     // The flatten and the schema parse, timed together: they are what stands
     // between a patch arriving and React being told about it, and on a phone
@@ -606,14 +650,49 @@ export function DisplayApp() {
     const startedAt = performance.now();
     const next = toDisplayRoomView(state);
     const builtInMs = performance.now() - startedAt;
-    if (next !== undefined) {
-      snapshotCost.current = recordWork(snapshotCost.current, builtInMs, startedAt);
-      setNetworkView(next);
-      setStatus("connected");
+    if (next === undefined) return;
+    snapshotCost.current = recordWork(snapshotCost.current, builtInMs, startedAt);
+    // The scene gets it now, whatever the page does: it draws from this
+    // reference every frame, and a shell that waited for a React commit would
+    // appear late for exactly as long as the commit was deferred.
+    liveViewReference.current = next;
+    // Published from here rather than from a render: the Node bot reading it
+    // steers on what it sees, and it must not inherit the page's slow clock.
+    if (visibleDemo && next.game !== null) {
+      publishVisibleDemoWorld(globalThis, buildVisibleDemoWorld(next.game, Date.now()));
     }
+    setStatus("connected");
+
+    /*
+     * The page commits on its own clock.
+     *
+     * Anything a hand is waiting for goes straight through; the rest coalesces,
+     * because a tree rebuilt twenty times a second cost a phone seventy
+     * milliseconds of every one, in commits whose worst was half a frame - and
+     * the numbers in it are not readable at that rate anyway.
+     */
+    const now = performance.now();
+    if (hasImmediateChange(publishedViewReference.current, next)) {
+      publishView(next, now);
+      return;
+    }
+    const due = publishedAtReference.current + PASSIVE_PUBLISH_MS - now;
+    if (due <= 0) {
+      publishView(next, now);
+      return;
+    }
+    // Nothing is dropped: the last state always lands, just later.
+    if (publishTimerReference.current !== undefined) return;
+    publishTimerReference.current = window.setTimeout(() => {
+      publishTimerReference.current = undefined;
+      const latest = liveViewReference.current;
+      if (latest !== undefined) publishView(latest, performance.now());
+    }, due);
   }
 
   function resetToCreate(message: string): void {
+    liveViewReference.current = undefined;
+    publishedViewReference.current = undefined;
     setNetworkView(undefined);
     setStatus("idle");
     setError(message);
@@ -784,6 +863,10 @@ export function DisplayApp() {
               <SpaceshipCanvas
                 game={view.game}
                 prediction={predictionDriverReference.current}
+                // The preview has no room to read from: it renders a fixture
+                // straight through the prop, and a reader that answers nothing
+                // would leave its scene without a world at all.
+                readGame={previewView === undefined ? readLiveGame : undefined}
                 runNumber={view.runNumber}
                 connectionEpoch={connectionEpoch}
                 visibleDemo={visibleDemo}
@@ -833,6 +916,7 @@ export function DisplayApp() {
                 pingMs={view.displayLatencyMs}
                 entityCount={countDrawnEntities(view.game)}
                 liveDrawn={frameStats.liveDrawn}
+                offscreen={frameStats.offscreen}
                 traffic={traffic}
                 snapshot={snapshotReading}
                 commit={commitReading}

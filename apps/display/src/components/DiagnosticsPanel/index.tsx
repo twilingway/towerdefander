@@ -35,6 +35,7 @@ export function DiagnosticsPanel({
   pingMs,
   entityCount,
   liveDrawn,
+  offscreen,
   traffic,
   snapshot,
   commit,
@@ -66,6 +67,8 @@ export function DiagnosticsPanel({
    * put a shell where the hull used to be.
    */
   readonly liveDrawn: number;
+  /** How many of them the camera does not show - what an area filter would drop. */
+  readonly offscreen: number;
   /** Undefined means the counter never got hold of the socket. */
   readonly traffic: TrafficMeter | undefined;
   /** What turning patches into views costs the main thread. */
@@ -173,7 +176,7 @@ export function DiagnosticsPanel({
         <div>
           <dt>Сущностей</dt>
           <dd data-testid="diagnostics-entities">
-            {entityCount} · через предсказание {liveDrawn}
+            {entityCount} · через предсказание {liveDrawn} · за кадром {offscreen}
           </dd>
         </div>
         <div>

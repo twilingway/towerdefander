@@ -260,6 +260,15 @@ class SpaceshipScene extends Phaser.Scene {
    */
   private prediction: ScenePrediction | undefined;
   /**
+   * Where the newest snapshot is, pulled rather than pushed.
+   *
+   * The page around the scene commits far more slowly than the room patches,
+   * because a React tree rebuilt twenty times a second is most of a phone's
+   * frame budget. The world cannot wait for that: a shell has to appear on the
+   * patch that spawned it, so the scene reads the wire itself.
+   */
+  private snapshotSource: (() => DisplayGameSnapshot | undefined) | undefined;
+  /**
    * How many drawn entities came off the predictor last frame.
    *
    * The instrument that tells a working port from a silent fallback: the read
@@ -267,6 +276,14 @@ class SpaceshipScene extends Phaser.Scene {
    * being drawn from twenty-hertz snapshots looks exactly like one that is not.
    */
   private liveDrawnCount = 0;
+  /**
+   * How many drawn entities sat outside the camera last frame.
+   *
+   * The measurement an area filter has to earn its keep against: this cockpit
+   * shows a good part of the arena, so the share the room could stop sending is
+   * a number to read before it is a change to make.
+   */
+  private offscreenCount = 0;
   /**
    * Off keeps the shield's bloom down even while the sector is up.
    *
@@ -373,6 +390,14 @@ class SpaceshipScene extends Phaser.Scene {
 
   override update(time: number, deltaMs: number): void {
     const startedAt = performance.now();
+    const pulled = this.snapshotSource?.();
+    if (
+      pulled !== undefined &&
+      (pulled.tick !== this.snapshot.tick ||
+        pulled.cameraViewWidth !== this.snapshot.cameraViewWidth)
+    ) {
+      this.applySnapshot(pulled);
+    }
     this.updateScene(time, deltaMs);
     // Everything the scene itself does, told apart from the rest of the frame:
     // a frame can run long because of this, or because of React committing a
@@ -448,6 +473,12 @@ class SpaceshipScene extends Phaser.Scene {
     const behindSeconds =
       Math.max(0, this.playback.latestTick - playbackTick) * (this.playback.msPerTick / 1000);
     let liveDrawn = 0;
+    let offscreen = 0;
+    const camera = this.cameras.main;
+    const viewLeft = camera.scrollX;
+    const viewTop = camera.scrollY;
+    const viewRight = viewLeft + this.rendererWidth;
+    const viewBottom = viewTop + this.rendererHeight;
     for (const visual of this.combatVisuals.values()) {
       /*
        * One clock for the whole picture when there is a cockpit driving it.
@@ -478,7 +509,12 @@ class SpaceshipScene extends Phaser.Scene {
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }
+    for (const visual of this.combatVisuals.values()) {
+      const { x, y } = visual.object;
+      if (x < viewLeft || x > viewRight || y < viewTop || y > viewBottom) offscreen += 1;
+    }
     this.liveDrawnCount = liveDrawn;
+    this.offscreenCount = offscreen;
   }
 
   /**
@@ -536,6 +572,10 @@ class SpaceshipScene extends Phaser.Scene {
 
   readLiveDrawnCount(): number {
     return this.liveDrawnCount;
+  }
+
+  readOffscreenCount(): number {
+    return this.offscreenCount;
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
@@ -733,6 +773,10 @@ class SpaceshipScene extends Phaser.Scene {
    */
   setPredictionDriver(prediction: ScenePrediction | undefined): void {
     this.prediction = prediction;
+  }
+
+  setSnapshotSource(read: (() => DisplayGameSnapshot | undefined) | undefined): void {
+    this.snapshotSource = read;
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
@@ -1498,6 +1542,11 @@ export interface SpaceshipRuntime {
    */
   setPredictionDriver(prediction: ScenePrediction | undefined): void;
   /**
+   * Where to read the newest snapshot at the top of each frame. Given one, the
+   * scene stops waiting to be handed snapshots and takes them itself.
+   */
+  setSnapshotSource(read: (() => DisplayGameSnapshot | undefined) | undefined): void;
+  /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
    */
@@ -1514,6 +1563,8 @@ export interface SpaceshipRuntime {
   readWorstUpdateMs(): number;
   /** How many entities the last frame drew off the predictor rather than a track. */
   readLiveDrawnCount(): number;
+  /** How many of them were outside the camera - what an area filter could drop. */
+  readOffscreenCount(): number;
   /**
    * Lowers the ceiling on how many device pixels the scene may draw, when the
    * frame counter says this machine cannot afford the one it has. Down only:
@@ -1632,6 +1683,9 @@ export function createSpaceshipRuntime(
     setPredictionDriver(prediction) {
       scene.setPredictionDriver(prediction);
     },
+    setSnapshotSource(read) {
+      scene.setSnapshotSource(read);
+    },
     readFps() {
       return game.loop.actualFps;
     },
@@ -1649,6 +1703,9 @@ export function createSpaceshipRuntime(
     },
     readLiveDrawnCount() {
       return scene.readLiveDrawnCount();
+    },
+    readOffscreenCount() {
+      return scene.readOffscreenCount();
     },
     setPixelRatioCap(cap) {
       if (cap === currentCap) return;

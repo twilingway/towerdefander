@@ -6,12 +6,7 @@ import { readPixelRatioCap } from "./game/devicePixels.js";
 import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "./game/spaceshipViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
-import {
-  buildVisibleDemoWorld,
-  findNearestVisibleDemoTarget,
-  findNearestVisibleDemoThreat,
-  publishVisibleDemoWorld
-} from "./visibleDemo.js";
+import { findNearestVisibleDemoTarget, findNearestVisibleDemoThreat } from "./visibleDemo.js";
 
 interface SpaceshipCanvasProps {
   readonly game: DisplayGameSnapshot;
@@ -32,6 +27,8 @@ interface SpaceshipCanvasProps {
     readonly worstUpdateMs: number;
     /** Of the entities drawn, how many were read off the predictor. */
     readonly liveDrawn: number;
+    /** And how many of them sat outside the camera. */
+    readonly offscreen: number;
   }) => void;
   /**
    * Parallax layers on or off. A question rather than a setting: four
@@ -52,6 +49,14 @@ interface SpaceshipCanvasProps {
    * prediction exists to remove, not to double.
    */
   readonly prediction?: PredictionDriver | undefined;
+  /**
+   * The newest snapshot there is, read by the scene at the top of each frame.
+   *
+   * Given one, the `game` prop stops being how the world reaches the scene and
+   * becomes only what this component renders around it - which is what lets the
+   * page commit on a slower clock than the room patches on.
+   */
+  readonly readGame?: (() => DisplayGameSnapshot | undefined) | undefined;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -66,6 +71,7 @@ export function SpaceshipCanvas({
   glowEnabled = true,
   vectorsEnabled = true,
   prediction,
+  readGame,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
@@ -79,6 +85,8 @@ export function SpaceshipCanvas({
   latestVectorsEnabled.current = vectorsEnabled;
   const latestPrediction = useRef(prediction);
   latestPrediction.current = prediction;
+  const latestReadGame = useRef(readGame);
+  latestReadGame.current = readGame;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -110,6 +118,7 @@ export function SpaceshipCanvas({
           runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
           // A stable adapter over a prop that changes: the scene is handed this
           // once, and every call finds whatever the cockpit currently has.
+          runtimeReference.current.setSnapshotSource(() => latestReadGame.current?.());
           runtimeReference.current.setPredictionDriver({
             drive: () => latestPrediction.current?.drive(),
             bind: (entityId, kind) => latestPrediction.current?.bind(entityId, kind),
@@ -148,7 +157,10 @@ export function SpaceshipCanvas({
       shouldUpdateRuntime(lastRuntimeTickReference.current, game.tick) ||
       shouldReframeRuntime(lastRuntimeCameraViewWidthReference.current, game.cameraViewWidth)
     ) {
-      runtime.update(game);
+      // Only when nobody is feeding the scene from the wire. With a reader
+      // installed this render is already behind what the scene has drawn, and
+      // pushing it again would walk the world backwards.
+      if (readGame === undefined) runtime.update(game);
     } else {
       return;
     }
@@ -157,7 +169,7 @@ export function SpaceshipCanvas({
     lastRuntimeCameraViewWidthReference.current = game.cameraViewWidth;
     lastRuntimeRunNumberReference.current = runNumber;
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
-  }, [connectionEpoch, game, runNumber]);
+  }, [connectionEpoch, game, readGame, runNumber]);
 
   useEffect(() => {
     runtimeReference.current?.setBackgroundEnabled(backgroundEnabled);
@@ -188,7 +200,8 @@ export function SpaceshipCanvas({
         stutterShare: runtimeReference.current?.readStutterShare() ?? 0,
         updateMsPerSecond: runtimeReference.current?.readUpdateMsPerSecond() ?? 0,
         worstUpdateMs: runtimeReference.current?.readWorstUpdateMs() ?? 0,
-        liveDrawn: runtimeReference.current?.readLiveDrawnCount() ?? 0
+        liveDrawn: runtimeReference.current?.readLiveDrawnCount() ?? 0,
+        offscreen: runtimeReference.current?.readOffscreenCount() ?? 0
       });
       // Down only, and only on a run of samples: a wave that briefly puts forty
       // ships on the field is not a phone that cannot run the game.
@@ -207,12 +220,6 @@ export function SpaceshipCanvas({
       globalThis.clearInterval(timer);
     };
   }, []);
-
-  useEffect(() => {
-    // Demo-only: the Node bot reads this instead of scraping the render path.
-    if (!visibleDemo) return;
-    publishVisibleDemoWorld(globalThis, buildVisibleDemoWorld(game, Date.now()));
-  }, [game, visibleDemo]);
 
   return (
     <div
