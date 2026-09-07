@@ -14,6 +14,28 @@ import type {
 } from "./spaceshipSimulation.ts";
 
 /**
+ * Every ship stat this step reads, named once.
+ *
+ * The list is the contract with the wire: a client replaying an input needs
+ * exactly these numbers and no others. It is checked rather than trusted - a
+ * test perturbs each one and requires the ship to come out different, so a
+ * field that stopped mattering cannot sit here unnoticed, and one that started
+ * mattering cannot stay off the wire.
+ */
+export const SHIP_POSE_STAT_FIELDS = [
+  "spaceshipSpeedPerSecond",
+  "spaceshipAccelerationPerSecondSquared",
+  "spaceshipBrakingPerSecondSquared",
+  "spaceshipReverseSpeedFactor",
+  "headingMaxAngularSpeedPerSecond",
+  "headingAngularAccelerationPerSecondSquared",
+  "headingAngularBrakingPerSecondSquared",
+  "turretMaxAngularSpeedPerSecond",
+  "turretAngularAccelerationPerSecondSquared",
+  "turretAngularBrakingPerSecondSquared"
+] as const;
+
+/**
  * Where the ship is, which way it points, and everything the drive carries
  * between frames.
  *

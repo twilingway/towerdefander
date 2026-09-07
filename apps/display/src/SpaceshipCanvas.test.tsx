@@ -113,6 +113,25 @@ const testGame = {
   worldWidth: 4400,
   cameraViewWidth: 1600,
   serverStepMs: 0.14,
+  drive: {
+    revision: 0,
+    speedPerSecond: 320,
+    accelerationPerSecondSquared: 640,
+    brakingPerSecondSquared: 800,
+    reverseSpeedFactor: 0.4,
+    headingMaxAngularSpeed: Math.PI,
+    headingAngularAcceleration: 50,
+    headingAngularBraking: 50,
+    turretMaxAngularSpeed: 1.36,
+    turretAngularAcceleration: 2.72,
+    turretAngularBraking: 4.08
+  },
+  pose: {
+    headingAngularVelocity: 0,
+    headingTargetAngle: null,
+    turretAngularVelocity: 0,
+    turretTargetAngle: null
+  },
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   worldHeight: 4400,
   arenaRadius: 2200,

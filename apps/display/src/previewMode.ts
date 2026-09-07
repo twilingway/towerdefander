@@ -441,6 +441,25 @@ function createPreviewGame(
       shieldPhase: "down",
       cameraViewWidth,
       serverStepMs: 0,
+      drive: {
+        revision: 0,
+        speedPerSecond: 320,
+        accelerationPerSecondSquared: 640,
+        brakingPerSecondSquared: 800,
+        reverseSpeedFactor: 0.4,
+        headingMaxAngularSpeed: Math.PI,
+        headingAngularAcceleration: 50,
+        headingAngularBraking: 50,
+        turretMaxAngularSpeed: 1.36,
+        turretAngularAcceleration: 2.72,
+        turretAngularBraking: 4.08
+      },
+      pose: {
+        headingAngularVelocity: 0,
+        headingTargetAngle: null,
+        turretAngularVelocity: 0,
+        turretTargetAngle: null
+      },
       shield: {
         angle: Math.PI / 2,
         arcHalfAngle: 0.8,
@@ -609,6 +628,25 @@ function createPreviewGame(
       shieldPhase: "down",
       cameraViewWidth,
       serverStepMs: 0,
+      drive: {
+        revision: 0,
+        speedPerSecond: 320,
+        accelerationPerSecondSquared: 640,
+        brakingPerSecondSquared: 800,
+        reverseSpeedFactor: 0.4,
+        headingMaxAngularSpeed: Math.PI,
+        headingAngularAcceleration: 50,
+        headingAngularBraking: 50,
+        turretMaxAngularSpeed: 1.36,
+        turretAngularAcceleration: 2.72,
+        turretAngularBraking: 4.08
+      },
+      pose: {
+        headingAngularVelocity: 0,
+        headingTargetAngle: null,
+        turretAngularVelocity: 0,
+        turretTargetAngle: null
+      },
       shield: {
         angle: 0,
         arcHalfAngle: 0.8,
@@ -692,6 +730,25 @@ function createPreviewGame(
     purchasedModules: [...PREVIEW_PURCHASES, "turretDrive"],
     cameraViewWidth,
     serverStepMs: 0,
+    drive: {
+      revision: 0,
+      speedPerSecond: 320,
+      accelerationPerSecondSquared: 640,
+      brakingPerSecondSquared: 800,
+      reverseSpeedFactor: 0.4,
+      headingMaxAngularSpeed: Math.PI,
+      headingAngularAcceleration: 50,
+      headingAngularBraking: 50,
+      turretMaxAngularSpeed: 1.36,
+      turretAngularAcceleration: 2.72,
+      turretAngularBraking: 4.08
+    },
+    pose: {
+      headingAngularVelocity: 0,
+      headingTargetAngle: null,
+      turretAngularVelocity: 0,
+      turretTargetAngle: null
+    },
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
     shield: {
       angle: 0,

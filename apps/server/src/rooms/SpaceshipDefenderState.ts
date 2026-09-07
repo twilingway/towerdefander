@@ -273,6 +273,58 @@ export class EnemyVisualState extends Schema {
  */
 export const DISPLAY_VIEW_TAG = 1;
 
+/**
+ * Exactly the numbers `advanceShipPose` reads, as the run currently has them.
+ *
+ * Published from the run's own stats rather than from the preset, because that
+ * is what the step uses: a module that raises the top speed has to raise the
+ * number the client replays with, or the two drift apart the moment it is
+ * bought. Ten floats, and they only travel when a purchase moves one.
+ */
+export class ShipDriveState extends Schema {
+  /**
+   * Bumped whenever any number below moves, and carried back on the input frame.
+   *
+   * Straight from the lab, which keeps its tuning as a compile-time constant and
+   * says why that is only safe there: "the moment it becomes a slider it has to
+   * move into room state instead, or the client will replay old inputs against
+   * new numbers and drift". Ours is a slider - modules move it mid-run and the
+   * balance console moves it between runs - so the numbers travel, and their
+   * identity travels with the input that was given under them.
+   */
+  @type("uint16") revision = 0;
+  @type("float32") speedPerSecond = 0;
+  @type("float32") accelerationPerSecondSquared = 0;
+  @type("float32") brakingPerSecondSquared = 0;
+  @type("float32") reverseSpeedFactor = 0;
+  @type("float32") headingMaxAngularSpeed = 0;
+  @type("float32") headingAngularAcceleration = 0;
+  @type("float32") headingAngularBraking = 0;
+  @type("float32") turretMaxAngularSpeed = 0;
+  @type("float32") turretAngularAcceleration = 0;
+  @type("float32") turretAngularBraking = 0;
+}
+
+/**
+ * What the drive carries between frames, and therefore what a replay has to
+ * start from.
+ *
+ * A client that begins with the position and the bearings but not the angular
+ * velocities is not resuming the ship, it is starting a different one - and the
+ * difference accumulates rather than showing up at once. The bearings being
+ * closed on are nullable, so each gets a flag beside it rather than a sentinel
+ * angle that some real heading could collide with.
+ */
+export class ShipPoseState extends Schema {
+  @type("float32") headingAngularVelocity = 0;
+  @type("boolean") hasHeadingTarget = false;
+  @type("float32") headingTargetAngle = 0;
+  @type("float32") turretAngularVelocity = 0;
+  @type("boolean") hasTurretTarget = false;
+  @type("float32") turretTargetAngle = 0;
+}
+
+
 export class SpaceshipDisplayState extends Schema {
   @type("float32") cameraViewWidth = 2200;
   /**
@@ -285,6 +337,9 @@ export class SpaceshipDisplayState extends Schema {
    * a whole number here would be an indicator of "zero or disaster".
    */
   @type("float32") serverStepMs = 0;
+  /** The run's live drive numbers and the pose the client replays from. */
+  @type(ShipDriveState) drive = new ShipDriveState();
+  @type(ShipPoseState) pose = new ShipPoseState();
   /** Parallax space background for this run; fixed at run start like the silhouettes. */
   @type("float32") backgroundParallaxStrength = 1;
   @type("float32") backgroundDriftSpeed = 1;

@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 51 as const;
+export const PROTOCOL_VERSION = 52 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -717,6 +717,35 @@ export const publicEnemyCatalogueEntrySchema = z
   .strict();
 export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;
 
+export const publicShipDriveViewSchema = z
+  .object({
+    /** Which set of numbers these are; the input frame names it back. */
+    revision: z.number().int().min(0).max(65_535),
+    speedPerSecond: finite.nonnegative(),
+    accelerationPerSecondSquared: finite.nonnegative(),
+    brakingPerSecondSquared: finite.nonnegative(),
+    reverseSpeedFactor: finite.nonnegative(),
+    headingMaxAngularSpeed: finite.nonnegative(),
+    headingAngularAcceleration: finite.nonnegative(),
+    headingAngularBraking: finite.nonnegative(),
+    turretMaxAngularSpeed: finite.nonnegative(),
+    turretAngularAcceleration: finite.nonnegative(),
+    turretAngularBraking: finite.nonnegative()
+  })
+  .strict();
+export type PublicShipDriveView = z.infer<typeof publicShipDriveViewSchema>;
+
+export const publicShipPoseViewSchema = z
+  .object({
+    headingAngularVelocity: finite,
+    /** Null rather than a sentinel: every angle is a legal heading. */
+    headingTargetAngle: finite.nullable(),
+    turretAngularVelocity: finite,
+    turretTargetAngle: finite.nullable()
+  })
+  .strict();
+export type PublicShipPoseView = z.infer<typeof publicShipPoseViewSchema>;
+
 export const displayGameSnapshotSchema = z
   .object({
     ...gameShape,
@@ -742,6 +771,14 @@ export const displayGameSnapshotSchema = z
      * Display-gated, so a crew panel never pays for it.
      */
     serverStepMs: finite.nonnegative(),
+    /**
+     * The run's live drive numbers - exactly what the ship's step reads - and
+     * the state that step carries between frames. Together they are what a
+     * client needs to replay an input the server has not acknowledged yet;
+     * apart, they are two halves of a ship that drifts.
+     */
+    drive: publicShipDriveViewSchema,
+    pose: publicShipPoseViewSchema,
     /** Parallax space background for this run; fixed at run start like the silhouettes. */
     background: backgroundTuningSchema,
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),

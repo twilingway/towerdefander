@@ -48,6 +48,44 @@ export function projectGameState(
   target.arenaRadius = config.arenaRadius;
   target.rimBandWidth = ARENA_CUSHION_BAND;
   target.display.cameraViewWidth = config.cameraViewWidth;
+  /*
+   * The drive as the run currently has it, and the pose it carries between
+   * frames: together, exactly what `advanceShipPose` reads and writes. Taken
+   * from `game.ship` rather than from the config, because the step is - a
+   * number read off the preset is a module that silently does nothing.
+   */
+  const drive = target.display.drive;
+  const nextDrive = {
+    speedPerSecond: game.ship.spaceshipSpeedPerSecond,
+    accelerationPerSecondSquared: game.ship.spaceshipAccelerationPerSecondSquared,
+    brakingPerSecondSquared: game.ship.spaceshipBrakingPerSecondSquared,
+    reverseSpeedFactor: game.ship.spaceshipReverseSpeedFactor,
+    headingMaxAngularSpeed: game.ship.headingMaxAngularSpeedPerSecond,
+    headingAngularAcceleration: game.ship.headingAngularAccelerationPerSecondSquared,
+    headingAngularBraking: game.ship.headingAngularBrakingPerSecondSquared,
+    turretMaxAngularSpeed: game.ship.turretMaxAngularSpeedPerSecond,
+    turretAngularAcceleration: game.ship.turretAngularAccelerationPerSecondSquared,
+    turretAngularBraking: game.ship.turretAngularBrakingPerSecondSquared
+  } as const;
+  // Every one of them, not a representative: a module may move the turret's
+  // traverse and nothing else, and a revision that missed it would hand the
+  // client a replay against numbers the ship no longer has.
+  let driveMoved = false;
+  for (const [field, value] of Object.entries(nextDrive)) {
+    const key = field as keyof typeof nextDrive;
+    if (drive[key] !== value) {
+      drive[key] = value;
+      driveMoved = true;
+    }
+  }
+  if (driveMoved) drive.revision = (drive.revision + 1) % 65_536;
+  const pose = target.display.pose;
+  pose.headingAngularVelocity = game.headingAngularVelocity;
+  pose.hasHeadingTarget = game.headingTargetAngle !== null;
+  pose.headingTargetAngle = game.headingTargetAngle ?? 0;
+  pose.turretAngularVelocity = game.turretAngularVelocity;
+  pose.hasTurretTarget = game.turretTargetAngle !== null;
+  pose.turretTargetAngle = game.turretTargetAngle ?? 0;
   target.display.backgroundParallaxStrength = config.background.parallaxStrength;
   target.display.backgroundDriftSpeed = config.background.driftSpeed;
   target.display.backgroundNebulaAlpha = config.background.nebulaAlpha;

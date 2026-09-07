@@ -204,6 +204,27 @@ interface NetworkGameState {
   display?: {
     cameraViewWidth: number;
     serverStepMs?: number;
+    drive?: {
+      revision: number;
+      speedPerSecond: number;
+      accelerationPerSecondSquared: number;
+      brakingPerSecondSquared: number;
+      reverseSpeedFactor: number;
+      headingMaxAngularSpeed: number;
+      headingAngularAcceleration: number;
+      headingAngularBraking: number;
+      turretMaxAngularSpeed: number;
+      turretAngularAcceleration: number;
+      turretAngularBraking: number;
+    };
+    pose?: {
+      headingAngularVelocity: number;
+      hasHeadingTarget: boolean;
+      headingTargetAngle: number;
+      turretAngularVelocity: number;
+      hasTurretTarget: boolean;
+      turretTargetAngle: number;
+    };
     backgroundParallaxStrength?: number;
     backgroundDriftSpeed?: number;
     backgroundNebulaAlpha?: number;
@@ -255,6 +276,48 @@ export interface NetworkRoomState {
   players?: ValueCollection<NetworkPlayerState>;
   hasGame?: boolean;
   game?: NetworkGameState;
+}
+
+/**
+ * What a display sees before the room has published a drive: nothing to replay
+ * with. Zeroes rather than the preset's numbers, because a plausible-looking
+ * guess would let prediction run on figures the ship does not have.
+ */
+const ZERO_DRIVE = {
+  revision: 0,
+  speedPerSecond: 0,
+  accelerationPerSecondSquared: 0,
+  brakingPerSecondSquared: 0,
+  reverseSpeedFactor: 0,
+  headingMaxAngularSpeed: 0,
+  headingAngularAcceleration: 0,
+  headingAngularBraking: 0,
+  turretMaxAngularSpeed: 0,
+  turretAngularAcceleration: 0,
+  turretAngularBraking: 0
+} as const;
+
+/**
+ * The wire carries a flag beside each bearing because every angle is a legal
+ * heading and no value could stand for "none". The view puts the two back
+ * together as a nullable angle, which is what the step actually takes.
+ */
+interface PoseOnWire {
+  headingAngularVelocity?: number;
+  hasHeadingTarget?: boolean;
+  headingTargetAngle?: number;
+  turretAngularVelocity?: number;
+  hasTurretTarget?: boolean;
+  turretTargetAngle?: number;
+}
+
+function toPoseView(pose: PoseOnWire | undefined) {
+  return {
+    headingAngularVelocity: pose?.headingAngularVelocity ?? 0,
+    headingTargetAngle: pose?.hasHeadingTarget === true ? (pose.headingTargetAngle ?? 0) : null,
+    turretAngularVelocity: pose?.turretAngularVelocity ?? 0,
+    turretTargetAngle: pose?.hasTurretTarget === true ? (pose.turretTargetAngle ?? 0) : null
+  };
 }
 
 export function toDisplayRoomView(
@@ -354,6 +417,8 @@ export function toDisplayRoomView(
             ),
             cameraViewWidth: display.cameraViewWidth,
             serverStepMs: display.serverStepMs ?? 0,
+            drive: { ...ZERO_DRIVE, ...display.drive },
+            pose: toPoseView(display.pose),
             background: {
               parallaxStrength: display.backgroundParallaxStrength ?? 1,
               driftSpeed: display.backgroundDriftSpeed ?? 1,

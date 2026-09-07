@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { createSpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
-import { shipStatsFromConfig } from "./shipStats.ts";
-import { advanceShipPose, type ShipDriveIntent, type ShipPose } from "./shipPose.ts";
+import { shipStatsFromConfig, type ShipStats } from "./shipStats.ts";
+import {
+  SHIP_POSE_STAT_FIELDS,
+  advanceShipPose,
+  type ShipDriveIntent,
+  type ShipPose
+} from "./shipPose.ts";
 
 const config = createSpaceshipSimulationConfig();
 const ship = shipStatsFromConfig(config);
@@ -107,5 +112,58 @@ describe("advanceShipPose", () => {
 
     expect(mounted.heading).toBeCloseTo(free.heading, 12);
     expect(mounted.turretAngle).not.toBeCloseTo(free.turretAngle, 12);
+  });
+});
+
+describe("SHIP_POSE_STAT_FIELDS", () => {
+  /**
+   * A flight that touches every part of the drive: a burn, a coast, a reverse,
+   * a hull spin and a turret closing on a bearing. Without all five, a stat
+   * could go missing from the list and nothing would notice.
+   */
+  function mixedFlight(stats: ShipStats): ShipPose {
+    let pose = restingPose();
+    for (let frame = 0; frame < 90; frame += 1) {
+      const phase = Math.floor(frame / 18);
+      pose = advanceShipPose(
+        pose,
+        {
+          driveVector: { x: 0, y: 0 },
+          turn: phase === 3 ? 0 : 1,
+          thrust: phase === 1 ? 0 : phase === 2 ? -1 : 1,
+          headingTargetAngle: null,
+          /*
+           * Half a turn away, with half the flight left to cover it.
+           *
+           * Timed so the traverse does all three things and is caught in the
+           * last of them: half a second accelerating, most of the way held at
+           * its ceiling, and still braking into the bearing when the flight
+           * ends. A bearing it settles on hides every number that got it there,
+           * and one that runs away keeps the remaining angle so small that the
+           * braking bound binds instead of the ceiling - so neither of those
+           * would prove anything.
+           */
+          turretTargetAngle: frame >= 40 ? Math.PI : null,
+          turretTurn: null
+        },
+        config,
+        stats
+      );
+    }
+    return pose;
+  }
+
+  it("names a stat only while the step still reads it", () => {
+    const baseline = mixedFlight(ship);
+
+    const inert = SHIP_POSE_STAT_FIELDS.filter((field) => {
+      const moved = mixedFlight({ ...ship, [field]: ship[field] * 1.5 + 0.1 });
+      return JSON.stringify(moved) === JSON.stringify(baseline);
+    });
+
+    // Named rather than counted: a field listed here that changes nothing has
+    // either left the step - and has no business on the wire - or the flight
+    // above stopped exercising the part that uses it.
+    expect(inert).toEqual([]);
   });
 });
