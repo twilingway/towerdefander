@@ -115,20 +115,6 @@ const spaceshipSimulationConfig = createSpaceshipSimulationConfig();
 const CREW_MESSAGE_CEILING = 25;
 const SOLO_MESSAGE_CEILING = 50;
 /**
- * How often the room wakes to spend elapsed real time in whole fixed steps.
- * Asking for the step itself does not work: a host timer quantised to 15.625 ms
- * turns a 50 ms interval into 62.5 ms, and the whole game then runs at four
- * fifths speed with nothing in the code to show for it. Waking far more often
- * than the step leaves the pace to the accumulator instead of to the timer.
- */
-const SIMULATION_WAKE_MS = 10;
-/**
- * Steps a single wake-up may run. A long stall - GC, a heavy encode, a laptop
- * coming back from sleep - is dropped rather than replayed: catching up costs
- * exactly the time the room does not have.
- */
-const MAX_CATCHUP_STEPS = 4;
-/**
  * Head room between the end of the salvage window and the wave deadline it
  * pushes: the window closes on a simulation tick, the deadline on a host timer,
  * and the deadline must never be the one that lands first.
@@ -178,9 +164,10 @@ export class SpaceshipDefenderRoom extends Room<{
   private readonly upgradeJournals = new Map<string, UpgradeJournalEntry[]>();
   private displaySessionId: string | undefined;
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
+  /** Whether the armed loop advances the fight or idles through it. */
+  private simulationRunning = false;
   private gameState: SpaceshipSimulationState | undefined;
   /** Real time received from the loop that no whole fixed step has claimed yet. */
-  private stepAccumulatorMs = 0;
   /**
    * Cost of the last simulation step alone, without the projection or the patch
    * that follow it. Measuring the whole tick would blend the three and leave
@@ -255,6 +242,7 @@ export class SpaceshipDefenderRoom extends Room<{
      */
     this.state = new SpaceshipDefenderState();
     this.maxClients = PLAYER_CAPACITY + 2;
+    this.armSimulationLoop();
     // Matchmaking forwards the message only for codes it recognises; anything
     // else reaches the client as a bare "Internal Server Error", and the join
     // screens match on this text to name the reason for the player.
@@ -1046,16 +1034,36 @@ export class SpaceshipDefenderRoom extends Room<{
     return applyShieldInput(game, nextShieldIntent(game, this.gameConfig));
   }
 
+  /**
+   * Arms the loop for the room's whole life, once.
+   *
+   * The library's own fixed step, not ours. Its accumulator is the one we used
+   * to run by hand - spend whole steps out of elapsed real time, with a ceiling
+   * so a stall does not become an avalanche - and it does one thing ours could
+   * not: it advertises the rate to the clients, and a predicting client paces
+   * its input by that number. Which is why this is armed at creation and not
+   * when the fight starts: the rate rides the join handshake, so a rate
+   * declared after the crew connected reaches nobody, and the cockpit comes up
+   * with prediction refusing to start.
+   *
+   * The gate is a flag rather than a cleared timer for the same reason.
+   */
+  private armSimulationLoop(): void {
+    this.setFixedTimestep(
+      () => {
+        if (!this.simulationRunning) return;
+        this.advanceGameStep();
+      },
+      Math.round(1000 / this.gameConfig.fixedStepMs)
+    );
+  }
+
   private startSimulation(): void {
-    this.stopSimulation();
-    this.setTimestep((deltaMs) => {
-      this.advanceElapsedTime(deltaMs);
-    }, SIMULATION_WAKE_MS);
+    this.simulationRunning = true;
   }
 
   private stopSimulation(): void {
-    this.setTimestep(undefined);
-    this.stepAccumulatorMs = 0;
+    this.simulationRunning = false;
     // A stopped simulation costs nothing, and the last number from the fight
     // would otherwise read as a tick that is still running.
     this.lastStepMs = 0;
@@ -1069,22 +1077,6 @@ export class SpaceshipDefenderRoom extends Room<{
    */
   protected nowMs(): number {
     return performance.now();
-  }
-
-  /**
-   * Spends elapsed real time in whole fixed steps, so game time tracks the wall
-   * clock rather than the number of times the host timer happened to fire.
-   */
-  advanceElapsedTime(deltaMs: number): void {
-    const stepMs = this.gameConfig.fixedStepMs;
-    this.stepAccumulatorMs = Math.min(
-      this.stepAccumulatorMs + Math.max(0, deltaMs),
-      stepMs * MAX_CATCHUP_STEPS
-    );
-    while (this.stepAccumulatorMs >= stepMs) {
-      this.stepAccumulatorMs -= stepMs;
-      this.advanceGameStep();
-    }
   }
 
   private armWaveDeadline(now = Date.now()): void {

@@ -160,7 +160,14 @@ export function DisplayApp() {
    * a second. The scene reads it directly instead, which is also how the patch
    * stops being a reason to redraw the interface at all.
    */
-  const predictedPoseReference = useRef<PredictedPoseFrame | undefined>(undefined);
+  /**
+   * The function the scene calls at the top of each drawn frame: it steps the
+   * prediction, sends what it stepped and returns the pose. Held in a ref
+   * because it is handed to Phaser once, not re-rendered.
+   */
+  const predictionDriverReference = useRef<(() => PredictedPoseFrame | undefined) | undefined>(
+    undefined
+  );
   /** Written every frame, read twice a second by the panel; never a render. */
   const pendingInputReference = useRef(0);
   const driftReference = useRef(0);
@@ -343,8 +350,8 @@ export function DisplayApp() {
             arenaRadius: view.game.arenaRadius,
             turretMountedOnHull: view.game.helm.turretMountedOnHull
           },
-    onPose: (pose) => {
-      predictedPoseReference.current = pose;
+    onDriver: (drive) => {
+      predictionDriverReference.current = drive;
     },
     onPending: (pending, driftEma) => {
       pendingInputReference.current = pending;
@@ -769,7 +776,9 @@ export function DisplayApp() {
             ) : (
               <SpaceshipCanvas
                 game={view.game}
-                readPredictedPose={() => (predicting ? predictedPoseReference.current : undefined)}
+                drivePrediction={() =>
+                  predicting ? predictionDriverReference.current?.() : undefined
+                }
                 runNumber={view.runNumber}
                 connectionEpoch={connectionEpoch}
                 visibleDemo={visibleDemo}

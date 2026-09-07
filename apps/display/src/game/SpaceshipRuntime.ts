@@ -232,7 +232,7 @@ class SpaceshipScene extends Phaser.Scene {
    * and a prop would mean a React render every frame - which is the cost this
    * whole exercise is trying to remove.
    */
-  private readPredictedPose: (() => PredictedShipPose | undefined) | undefined;
+  private drivePrediction: (() => PredictedShipPose | undefined) | undefined;
   /**
    * Off keeps the shield's bloom down even while the sector is up.
    *
@@ -362,7 +362,8 @@ class SpaceshipScene extends Phaser.Scene {
      * room said the hull was a patch ago, prediction draws where this page's
      * own step has already put it.
      */
-    const predicted = this.readPredictedPose?.();
+    // First thing in the frame, before anything is read for drawing.
+    const predicted = this.drivePrediction?.();
     const spaceshipPosition =
       predicted === undefined
         ? samplePointTrack(this.spaceshipTrack, playbackTick)
@@ -665,8 +666,17 @@ class SpaceshipScene extends Phaser.Scene {
     }
   }
 
-  setPredictedPoseReader(read: (() => PredictedShipPose | undefined) | undefined): void {
-    this.readPredictedPose = read;
+  /**
+   * The prediction, driven from inside the frame that draws it.
+   *
+   * The order is fixed and it is not ours: ask how many fixed steps are due,
+   * send exactly that many input frames, and only then read the pose. Running
+   * that loop in an animation frame of its own - which is what this was at
+   * first - leaves the scene reading a pose staged one callback earlier, and
+   * one step stale is precisely what a hand reads as stutter.
+   */
+  setPredictionDriver(drive: (() => PredictedShipPose | undefined) | undefined): void {
+    this.drivePrediction = drive;
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
@@ -1421,8 +1431,11 @@ export interface SpaceshipRuntime {
   setGlowEnabled(enabled: boolean): void;
   /** The vector overlays rebuilt every frame, on or off. */
   setVectorsEnabled(enabled: boolean): void;
-  /** Where this page's own step has put the ship, asked for each drawn frame. */
-  setPredictedPoseReader(read: (() => PredictedShipPose | undefined) | undefined): void;
+  /**
+   * Steps the prediction, sends its input and returns the pose - in that order,
+   * once per drawn frame, from inside the frame.
+   */
+  setPredictionDriver(drive: (() => PredictedShipPose | undefined) | undefined): void;
   /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
@@ -1553,8 +1566,8 @@ export function createSpaceshipRuntime(
     setVectorsEnabled(enabled) {
       scene.setVectorsEnabled(enabled);
     },
-    setPredictedPoseReader(read) {
-      scene.setPredictedPoseReader(read);
+    setPredictionDriver(drive) {
+      scene.setPredictionDriver(drive);
     },
     readFps() {
       return game.loop.actualFps;

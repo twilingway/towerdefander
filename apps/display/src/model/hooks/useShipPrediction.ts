@@ -59,7 +59,7 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
   enabled,
   source,
   world,
-  onPose,
+  onDriver,
   onPending
 }: {
   readonly room: Room<unknown, TState> | undefined;
@@ -75,7 +75,11 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
    * the first run and is the very tax prediction is here to remove. Write it to
    * a ref; the scene reads the ref.
    */
-  readonly onPose: (pose: PredictedPoseFrame | undefined) => void;
+  /**
+   * Handed the function the scene must call once per drawn frame, or undefined
+   * when there is nothing to drive.
+   */
+  readonly onDriver: (drive: (() => PredictedPoseFrame | undefined) | undefined) => void;
   /**
    * How deep the replay is: frames we have sent that the room has not
    * acknowledged.
@@ -87,8 +91,8 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
    */
   readonly onPending?: (pending: number, driftEma: number) => void;
 }): void {
-  const latest = useRef({ source, world, enabled, onPose, onPending });
-  latest.current = { source, world, enabled, onPose, onPending };
+  const latest = useRef({ source, world, enabled, onDriver, onPending });
+  latest.current = { source, world, enabled, onDriver, onPending };
 
   useEffect(() => {
     if (room === undefined) return undefined;
@@ -105,7 +109,7 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
        * is not a screen.
        */
       console.error("Ship prediction is off: it could not start.", error);
-      latest.current.onPose(undefined);
+      latest.current.onDriver(undefined);
       return undefined;
     }
 
@@ -128,18 +132,7 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
         { mode: "lerp", delay: 100 }
       );
       const input = room.input({ type: SoloInput });
-      /*
-       * The step is stated rather than discovered.
-       *
-       * The room advances on its own accumulator and wakes far more often than it
-       * steps, so the handle would advertise the wake interval - and the SDK
-       * refuses to guess, because a wrong dt diverges a replay silently rather
-       * than loudly. `fixedStepMs` is a shared constant in the core, so both
-       * sides move together when it moves.
-       */
-      const stepMs = createSpaceshipSimulationConfig().fixedStepMs;
       const reconciler = predict.reconciler(pose, {
-        stepMs,
         input,
         fields: [...PREDICTED_POSE_FIELDS],
         step: (_ctx, state, command) => {
@@ -163,31 +156,54 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
         smoothMs: 65
       });
 
-      let running = true;
-      const frame = () => {
-        if (!running) return;
-        /*
-         * Step, send, then read. The order is the contract: `tick()` says how
-         * many fixed steps are due, each one is transmitted so the server applies
-         * exactly what was predicted, and only afterwards is the pose worth
-         * reading.
-         */
+      /*
+       * One function, called by the scene at the top of the frame it draws.
+       *
+       * Not a loop of its own: the order - step, send exactly what was stepped,
+       * then read - has to happen inside the frame that draws, or the scene reads
+       * a pose staged one callback ago, and a step stale is what a hand reads as
+       * stutter. The lab states the same order in the same place.
+       */
+      let seq = 0;
+      const drive = (): PredictedPoseFrame | undefined => {
         const steps = predict.tick();
-        const { source: live, enabled: on, onPose: publish } = latest.current;
+        const { source: live, enabled: on, world } = latest.current;
         for (let step = 0; step < steps; step += 1) {
           if (!on) break;
-          const intent = live.readIntent();
-          Object.assign(input.data, intent);
+          Object.assign(input.data, live.readIntent());
+          /*
+           * The stamp is ours to write.
+           *
+           * The room dedupes on it and acks by it, and a frame that never
+           * carries one is acknowledged as zero forever: the room applies every
+           * frame, agrees with every frame, and the client still counts them all
+           * as in flight, because nothing it sent was ever confirmed. The drive
+           * revision rides along for the same reason the lab sends its profile
+           * index - a replay has to use the numbers that produced the frame, and
+           * ours move whenever a module is bought.
+           */
+          input.data.seq = ++seq;
+          input.data.driveRevision = world?.drive.revision ?? 0;
           input.send();
         }
-        publish(on ? reconciler.state : undefined);
-        requestAnimationFrame(frame);
+        latest.current.onPending?.(input.pendingCount, reconciler.drift.ema);
+        if (!on) return undefined;
+        /*
+         * Position through `value()`, bearings straight from the state.
+         *
+         * The step runs twenty times a second; read raw it draws twenty positions
+         * a second and nothing between them, which is why prediction looked
+         * jerkier than the interpolation it replaced. Bearings must not go
+         * through it: it interpolates numerically, and a value crossing PI would
+         * take the long way round every time.
+         */
+        const state = reconciler.state as PredictedPoseFrame;
+        return { ...state, x: reconciler.value("x"), y: reconciler.value("y") };
       };
-      requestAnimationFrame(frame);
+      latest.current.onDriver(drive);
 
       return () => {
-        running = false;
-        latest.current.onPose(undefined);
+        latest.current.onDriver(undefined);
       };
     }
   }, [room]);

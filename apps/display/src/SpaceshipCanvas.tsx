@@ -49,7 +49,7 @@ interface SpaceshipCanvasProps {
    * down as a prop would mean a React render every frame - which is the tax the
    * prediction exists to remove, not to double.
    */
-  readonly readPredictedPose?: () => PredictedPoseFrame | undefined;
+  readonly drivePrediction?: () => PredictedPoseFrame | undefined;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -63,7 +63,7 @@ export function SpaceshipCanvas({
   backgroundEnabled = true,
   glowEnabled = true,
   vectorsEnabled = true,
-  readPredictedPose,
+  drivePrediction,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
@@ -75,8 +75,8 @@ export function SpaceshipCanvas({
   latestGlowEnabled.current = glowEnabled;
   const latestVectorsEnabled = useRef(vectorsEnabled);
   latestVectorsEnabled.current = vectorsEnabled;
-  const latestReadPose = useRef(readPredictedPose);
-  latestReadPose.current = readPredictedPose;
+  const latestDrive = useRef(drivePrediction);
+  latestDrive.current = drivePrediction;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -106,7 +106,7 @@ export function SpaceshipCanvas({
           runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
           runtimeReference.current.setGlowEnabled(latestGlowEnabled.current);
           runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
-          runtimeReference.current.setPredictedPoseReader(() => latestReadPose.current?.());
+          runtimeReference.current.setPredictionDriver(() => latestDrive.current?.());
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
