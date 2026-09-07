@@ -263,7 +263,10 @@ try {
       Math.abs(angleDelta(display.state.game.shield.angle, wrapAngle(bearing(source) + Math.PI))) <
       0.18
     );
-  }, 15_000);
+    // Room enough for a busy machine: the whole gate builds four packages
+    // before this runs, and the claim is that the shield can be pointed the
+    // other way at all - not that it manages it inside fifteen seconds.
+  }, 45_000);
   const hpBeforeDirectionalMiss = display.state.game.spaceship.hp;
   shieldEnabled = true;
   await waitFor(
