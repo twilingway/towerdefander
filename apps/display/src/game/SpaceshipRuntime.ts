@@ -277,6 +277,11 @@ class SpaceshipScene extends Phaser.Scene {
    * whole exercise is trying to remove.
    */
   private prediction: ScenePrediction | undefined;
+  /** The geometry and state the shield arc was last built for. */
+  private shieldShape:
+    { readonly radius: number; readonly half: number; readonly active: boolean } | undefined;
+  /** The reach and cone the aiming wedge was last built for. */
+  private aimEnvelopeShape: { readonly reach: number; readonly half: number } | undefined;
   /**
    * Where the newest snapshot is, pulled rather than pushed.
    *
@@ -862,27 +867,47 @@ class SpaceshipScene extends Phaser.Scene {
    * readable: the gunner's question is as often "does it even carry that far"
    * as "am I on it".
    */
+  /**
+   * Where the gun can reach, built once and then carried.
+   *
+   * The wedge is a filled path, and a filled path is triangulated every time it
+   * is drawn: under a phone's budget the tessellator and the graphics batcher
+   * together were most of a frame. Its shape does not change during a run -
+   * only where it points and where it starts - so it is built in the barrel's
+   * own coordinates and moved like any other object, and rebuilt only when the
+   * reach or the cone itself changes.
+   */
   private drawAimEnvelope(origin: { readonly x: number; readonly y: number }, angle: number): void {
     const layer = this.aimEnvelope;
     if (layer === undefined) return;
-    layer.clear();
     const { reach, acquireHalfAngle } = this.snapshot.cannon;
-    if (reach <= 0) return;
-    const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
-    layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
-    layer.slice(origin.x, origin.y, reach, angle - half, angle + half);
-    layer.fillPath();
-    layer.lineStyle(
-      AIM_ENVELOPE_STYLE.width,
-      AIM_ENVELOPE_STYLE.color,
-      AIM_ENVELOPE_STYLE.edgeAlpha
-    );
-    for (const edge of [angle - half, angle + half]) {
-      layer.beginPath();
-      layer.moveTo(origin.x, origin.y);
-      layer.lineTo(origin.x + Math.cos(edge) * reach, origin.y + Math.sin(edge) * reach);
-      layer.strokePath();
+    if (reach <= 0) {
+      layer.clear();
+      this.aimEnvelopeShape = undefined;
+      return;
     }
+    const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
+    const shape = this.aimEnvelopeShape;
+    if (shape === undefined || shape.reach !== reach || shape.half !== half) {
+      this.aimEnvelopeShape = { reach, half };
+      layer.clear();
+      layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
+      layer.slice(0, 0, reach, -half, half);
+      layer.fillPath();
+      layer.lineStyle(
+        AIM_ENVELOPE_STYLE.width,
+        AIM_ENVELOPE_STYLE.color,
+        AIM_ENVELOPE_STYLE.edgeAlpha
+      );
+      for (const edge of [-half, half]) {
+        layer.beginPath();
+        layer.moveTo(0, 0);
+        layer.lineTo(Math.cos(edge) * reach, Math.sin(edge) * reach);
+        layer.strokePath();
+      }
+    }
+    layer.setPosition(origin.x, origin.y);
+    layer.setRotation(angle);
   }
 
   /**
@@ -978,12 +1003,22 @@ class SpaceshipScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * The shield, built in its own coordinates and turned to face.
+   *
+   * The crescent is a filled polygon, and a filled polygon is triangulated
+   * every time it is drawn - with a fresh vector per point on the way in. Doing
+   * that on every frame put the tessellator among the most expensive things in
+   * the profile. What actually changes as the shield sweeps is only where it
+   * points, so the arc is drawn from zero and the object is rotated; it is
+   * rebuilt when the shield goes up or down, or when its geometry moves.
+   */
   private drawShield(): void {
     if (this.shield === undefined || this.spaceshipBody === undefined) return;
-    this.shield.clear();
     this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
+    this.shield.setRotation(this.visualShieldAngle);
     const style = getShieldVisualStyle(this.snapshot.shield.active);
-    const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
+    const arc = getShieldArcRange(0, this.snapshot.shield.arcHalfAngle);
     // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
     const radius = this.snapshot.shieldRadius;
     // A filtered object is composited by a camera of its own, and one that
@@ -992,6 +1027,21 @@ class SpaceshipScene extends Phaser.Scene {
     // glow was laid down from the canvas corner while the hull was drawn from
     // the frame's, and the raised shield drifted off the ship by the width of
     // the bars. Focused on the arc itself, it travels with the hull instead.
+    const built = this.shieldShape;
+    if (
+      built !== undefined &&
+      built.radius === radius &&
+      built.half === this.snapshot.shield.arcHalfAngle &&
+      built.active === this.snapshot.shield.active
+    ) {
+      return;
+    }
+    this.shieldShape = {
+      radius,
+      half: this.snapshot.shield.arcHalfAngle,
+      active: this.snapshot.shield.active
+    };
+    this.shield.clear();
     const filterExtent = (radius + style.lineWidth + SHIELD_GLOW_DISTANCE) * 2;
     this.shield.focusFiltersOverride(
       filterExtent / 2,

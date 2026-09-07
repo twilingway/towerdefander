@@ -232,17 +232,7 @@ export function useShipPrediction<
         step: (_ctx, state, command) => {
           const current = latest.current.world;
           if (current === undefined) return;
-          stepPredictedPose(
-            state,
-            command,
-            createSpaceshipSimulationConfig({
-              worldWidth: current.worldWidth,
-              worldHeight: current.worldHeight,
-              arenaRadius: current.arenaRadius,
-              turretMountedOnHull: current.turretMountedOnHull
-            }),
-            toShipStats(current.drive)
-          );
+          stepPredictedPose(state, command, configFor(current), toShipStats(current.drive));
         },
         // Corrections are eased in rather than snapped. Roughly two thirds of any
         // gap closes per this many milliseconds, which is the price of not seeing
@@ -371,6 +361,39 @@ export function useShipPrediction<
           ? predict.value(ref as DecodedHull, "heading")
           : Math.atan2(ref.velocityY, ref.velocityX);
         return placement;
+      };
+
+      /*
+       * The arena's config, built when the arena changes and not before.
+       *
+       * It was being assembled inside the replay step, which runs sixty times a
+       * second and again for every frame a rollback replays - and assembling it
+       * validates the whole balance, enemy archetypes included. A profile under
+       * a phone's budget put more than a percent of the entire CPU in that one
+       * validation, to produce the same object every time.
+       */
+      let cachedWorld: PredictionWorld | undefined;
+      let cachedConfig: ReturnType<typeof createSpaceshipSimulationConfig> | undefined;
+      const configFor = (
+        current: PredictionWorld
+      ): ReturnType<typeof createSpaceshipSimulationConfig> => {
+        if (
+          cachedConfig === undefined ||
+          cachedWorld === undefined ||
+          cachedWorld.worldWidth !== current.worldWidth ||
+          cachedWorld.worldHeight !== current.worldHeight ||
+          cachedWorld.arenaRadius !== current.arenaRadius ||
+          cachedWorld.turretMountedOnHull !== current.turretMountedOnHull
+        ) {
+          cachedWorld = current;
+          cachedConfig = createSpaceshipSimulationConfig({
+            worldWidth: current.worldWidth,
+            worldHeight: current.worldHeight,
+            arenaRadius: current.arenaRadius,
+            turretMountedOnHull: current.turretMountedOnHull
+          });
+        }
+        return cachedConfig;
       };
 
       let seq = 0;
