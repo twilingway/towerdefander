@@ -187,6 +187,14 @@ class SpaceshipScene extends Phaser.Scene {
   private readonly backgroundLayers: BackgroundLayerState[] = [];
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
   private backgroundEnabled = true;
+  /**
+   * Off keeps the shield's bloom down even while the sector is up.
+   *
+   * The filter is already the cheap kind - internal, on the arc's own target
+   * rather than the whole canvas - but "already cheap" is a claim, and the only
+   * way to price the remainder on a phone is to take it away there.
+   */
+  private glowEnabled = true;
   private parallaxStrength = 1;
   /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
   private backgroundDriftSeconds = 0;
@@ -550,6 +558,14 @@ class SpaceshipScene extends Phaser.Scene {
     }
   }
 
+  /** The shield's bloom on or off, for pricing it on the device that pays. */
+  setGlowEnabled(enabled: boolean): void {
+    this.glowEnabled = enabled;
+    if (this.shieldGlow !== undefined) {
+      this.shieldGlow.active = enabled && this.snapshot.shield.active;
+    }
+  }
+
   private updateBackground(deltaMs: number): void {
     if (!this.backgroundEnabled || this.backgroundLayers.length === 0) return;
     const scrollX = this.cameras.main.scrollX;
@@ -754,7 +770,9 @@ class SpaceshipScene extends Phaser.Scene {
         this.shield.strokePath();
       }
     }
-    if (this.shieldGlow !== undefined) this.shieldGlow.active = this.snapshot.shield.active;
+    if (this.shieldGlow !== undefined) {
+      this.shieldGlow.active = this.glowEnabled && this.snapshot.shield.active;
+    }
   }
 
   private snapToSnapshot(snapshot: DisplayGameSnapshot, tick: number): void {
@@ -1285,6 +1303,8 @@ export interface SpaceshipRuntime {
   prepareHydration(): void;
   /** Parallax layers on or off, for finding out what they cost on a phone. */
   setBackgroundEnabled(enabled: boolean): void;
+  /** The shield's bloom on or off, for the same reason. */
+  setGlowEnabled(enabled: boolean): void;
   /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
@@ -1408,6 +1428,9 @@ export function createSpaceshipRuntime(
     },
     setBackgroundEnabled(enabled) {
       scene.setBackgroundEnabled(enabled);
+    },
+    setGlowEnabled(enabled) {
+      scene.setGlowEnabled(enabled);
     },
     readFps() {
       return game.loop.actualFps;

@@ -37,6 +37,8 @@ interface SpaceshipCanvasProps {
    * the phone that stutters.
    */
   readonly backgroundEnabled?: boolean;
+  /** The shield's bloom, the other thing worth ruling out on a phone. */
+  readonly glowEnabled?: boolean;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -48,6 +50,7 @@ export function SpaceshipCanvas({
   connectionEpoch,
   visibleDemo = false,
   backgroundEnabled = true,
+  glowEnabled = true,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
@@ -55,6 +58,8 @@ export function SpaceshipCanvas({
   const latestGame = useRef(game);
   const latestBackgroundEnabled = useRef(backgroundEnabled);
   latestBackgroundEnabled.current = backgroundEnabled;
+  const latestGlowEnabled = useRef(glowEnabled);
+  latestGlowEnabled.current = glowEnabled;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -82,6 +87,7 @@ export function SpaceshipCanvas({
           // The scene loads asynchronously, so the switch may already have been
           // thrown while it was still arriving.
           runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
+          runtimeReference.current.setGlowEnabled(latestGlowEnabled.current);
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
@@ -129,6 +135,10 @@ export function SpaceshipCanvas({
   useEffect(() => {
     runtimeReference.current?.setBackgroundEnabled(backgroundEnabled);
   }, [backgroundEnabled]);
+
+  useEffect(() => {
+    runtimeReference.current?.setGlowEnabled(glowEnabled);
+  }, [glowEnabled]);
 
   const onFrameStatsReference = useRef(onFrameStats);
   onFrameStatsReference.current = onFrameStats;

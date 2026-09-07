@@ -154,6 +154,8 @@ export function DisplayApp() {
    * full-screen sprites and three blends, and a phone is where that is paid for.
    */
   const [backgroundEnabled, setBackgroundEnabled] = useState(true);
+  /** The shield's bloom, the other visual worth pricing on the device. */
+  const [glowEnabled, setGlowEnabled] = useState(true);
   const [traffic, setTraffic] = useState<TrafficMeter | undefined>(undefined);
   /*
    * Written on every patch and read twice a second. A ref rather than state:
@@ -713,6 +715,7 @@ export function DisplayApp() {
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
               backgroundEnabled={backgroundEnabled}
+              glowEnabled={glowEnabled}
               onFrameStats={setFrameStats}
             />
           )}
@@ -762,6 +765,10 @@ export function DisplayApp() {
               backgroundEnabled={backgroundEnabled}
               onToggleBackground={() => {
                 setBackgroundEnabled((enabled) => !enabled);
+              }}
+              glowEnabled={glowEnabled}
+              onToggleGlow={() => {
+                setGlowEnabled((enabled) => !enabled);
               }}
             />
           )}

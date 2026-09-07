@@ -39,7 +39,9 @@ export function DiagnosticsPanel({
   predictionEnabled,
   onTogglePrediction,
   backgroundEnabled,
-  onToggleBackground
+  onToggleBackground,
+  glowEnabled,
+  onToggleGlow
 }: {
   readonly fps: number;
   readonly worstFrameMs: number;
@@ -58,6 +60,8 @@ export function DiagnosticsPanel({
   readonly onTogglePrediction: () => void;
   readonly backgroundEnabled: boolean;
   readonly onToggleBackground: () => void;
+  readonly glowEnabled: boolean;
+  readonly onToggleGlow: () => void;
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
@@ -79,6 +83,15 @@ export function DiagnosticsPanel({
           onClick={onToggleBackground}
         >
           Фон: {backgroundEnabled ? "вкл" : "выкл"}
+        </button>
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
+          data-testid="diagnostics-glow-toggle"
+          data-glow={glowEnabled ? "on" : "off"}
+          onClick={onToggleGlow}
+        >
+          Свечение: {glowEnabled ? "вкл" : "выкл"}
         </button>
       </div>
       <dl>

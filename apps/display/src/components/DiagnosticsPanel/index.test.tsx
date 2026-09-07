@@ -22,6 +22,8 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       onTogglePrediction={() => undefined}
       backgroundEnabled
       onToggleBackground={() => undefined}
+      glowEnabled
+      onToggleGlow={() => undefined}
       {...overrides}
     />
   );
@@ -70,6 +72,11 @@ describe("DiagnosticsPanel", () => {
   it("names the state of the background toggle", () => {
     expect(render({ backgroundEnabled: true })).toContain('data-background="on"');
     expect(render({ backgroundEnabled: false })).toContain('data-background="off"');
+  });
+
+  it("names the state of the glow toggle", () => {
+    expect(render({ glowEnabled: true })).toContain('data-glow="on"');
+    expect(render({ glowEnabled: false })).toContain('data-glow="off"');
   });
 });
 
