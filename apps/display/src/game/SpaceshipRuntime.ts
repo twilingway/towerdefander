@@ -106,6 +106,23 @@ const ARENA_FILL_ALPHA = 0.5;
 const STUTTER_RATIO = 1.5;
 const FRAME_WINDOW_MS = 1000;
 
+/**
+ * The velocity a shell may be carried forward by, or nothing.
+ *
+ * Shells only. An enemy travels an arc under a steering blend that changes
+ * every tick, so extrapolating it linearly throws it off the curve and snaps it
+ * back; a homing missile steers by definition. Only motion nobody can influence
+ * is safe to carry forward - which is the lab's rule, and the reason it reckons
+ * its bullets and lerps everything else.
+ */
+function reckonableVelocity(
+  entity: CombatEntity
+): { readonly x: number; readonly y: number } | undefined {
+  return entity.visualKind === "projectile"
+    ? { x: entity.velocityX, y: entity.velocityY }
+    : undefined;
+}
+
 /** Only what the scene draws with; the rest of the pose is the replay's business. */
 interface PredictedShipPose {
   readonly x: number;
@@ -131,6 +148,19 @@ interface CombatVisual {
   readonly healthBar: Phaser.GameObjects.Graphics | undefined;
   position: PointTrack;
   angle: AngleTrack;
+  /**
+   * Set only for shells, and only because they are the one thing here that can
+   * be carried forward honestly.
+   *
+   * Interpolation draws an entity between the two newest snapshots - that is,
+   * in the past. For a hull that is unavoidable: nobody knows what the pilot
+   * will do next. A shell has no driver, so its speed and bearing are already
+   * on the wire and advancing it is arithmetic rather than a guess. Without it
+   * the shot appears a tenth of a second behind the ship that fired it, which
+   * at three hundred units a second is further than the hull is wide - and it
+   * reads exactly as bullets coming out of nowhere.
+   */
+  velocity: { readonly x: number; readonly y: number } | undefined;
 }
 
 class SpaceshipScene extends Phaser.Scene {
@@ -375,9 +405,23 @@ class SpaceshipScene extends Phaser.Scene {
     }
     this.focusCamera(spaceshipPosition);
 
+    /*
+     * How far behind the newest snapshot the playback clock is running, in
+     * seconds. Shells are carried forward by exactly this much - to server
+     * present, never past it, so nothing is invented.
+     */
+    const behindSeconds =
+      Math.max(0, this.playback.latestTick - playbackTick) * (this.playback.msPerTick / 1000);
     for (const visual of this.combatVisuals.values()) {
-      const position = samplePointTrack(visual.position, playbackTick);
-      visual.object.setPosition(position.x, position.y);
+      const sampled = samplePointTrack(visual.position, playbackTick);
+      const carried =
+        visual.velocity === undefined || behindSeconds === 0
+          ? sampled
+          : {
+              x: sampled.x + visual.velocity.x * behindSeconds,
+              y: sampled.y + visual.velocity.y * behindSeconds
+            };
+      visual.object.setPosition(carried.x, carried.y);
       visual.object.rotation = sampleAngleTrack(visual.angle, playbackTick);
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
@@ -965,16 +1009,19 @@ class SpaceshipScene extends Phaser.Scene {
           // An entity appears already formed at the newest tick; there is no
           // earlier authoritative sample to walk it out of.
           position: createPointTrack(entity, toTick),
-          angle: createAngleTrack(heading, toTick)
+          angle: createAngleTrack(heading, toTick),
+          velocity: reckonableVelocity(entity)
         });
       } else {
         if (snap) {
           visual.object.setPosition(entity.x, entity.y).setRotation(heading);
           visual.position = createPointTrack(entity, toTick);
           visual.angle = createAngleTrack(heading, toTick);
+          visual.velocity = reckonableVelocity(entity);
         } else {
           visual.position = extendPointTrack(visual.position, entity, toTick);
           visual.angle = extendAngleTrack(visual.angle, heading, toTick);
+          visual.velocity = reckonableVelocity(entity);
         }
         if (visual.healthBar !== undefined && entity.visualKind === "enemy") {
           drawEnemyHealthBar(visual.healthBar, entity);
