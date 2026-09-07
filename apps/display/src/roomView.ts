@@ -509,7 +509,7 @@ export function toDisplayRoomView(
    * instead of the console; that is the trade, and the room's own tests are
    * where that class of bug is caught.
    */
-  const shapeKey = `${state.roomId}|${state.phase}|${String(state.runNumber)}|${String(state.hasGame === true)}|${game?.encounter?.phase ?? ""}`;
+  const shapeKey = `${state.roomId}|${state.phase}|${String(state.runNumber)}|${String(state.hasGame === true)}|${game?.encounter.phase ?? ""}`;
   if (shapeKey !== lastValidatedShape) {
     const validated = displayRoomViewSchema.parse(built);
     lastValidatedShape = shapeKey;
