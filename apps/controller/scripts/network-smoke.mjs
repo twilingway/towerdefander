@@ -14,7 +14,19 @@ import {
   serverMessage
 } from "@spaceship-defender/protocol";
 
+/*
+ * Two different clocks, and mixing them cost a night.
+ *
+ * `STEP_MS` is how often a controller sends - twenty frames a second, which is
+ * what a real panel does and what the room's message ceiling allows. The room
+ * itself steps sixty times a second, and anything measured per simulation tick
+ * has to use that one. The shield check subtracted a tick of passive drain at
+ * the sending rate, three times what a tick actually drains, and read every
+ * real block as no block at all.
+ */
 const STEP_MS = 50;
+/** The room's fixed step; `game-core` validates that the room runs at this rate. */
+const ROOM_STEP_MS = 1000 / 60;
 /** How long the scripted gunner stays on one ship before looking again. */
 const GUNNER_LOCK_HOLD_MS = 4_000;
 const port = 35_677;
@@ -117,6 +129,15 @@ let shieldLockedTargetId;
 let shieldOpposite = false;
 let shieldSurvivalMode = false;
 let pilotSurvivalMode = false;
+/*
+ * Refusals nobody asked for.
+ *
+ * The SDK prints "onMessage() not registered for type 'server:error'" and drops
+ * the payload, so a room that refuses a command mid-run says only that
+ * something was refused - and the stage that then times out gets the blame. The
+ * codes are collected here and read back in the failure message.
+ */
+const unexpectedErrors = [];
 let gunnerStickyMode = false;
 let gunnerLockHeldUntil = 0;
 const schedulers = [];
@@ -136,6 +157,9 @@ let arenaViolation;
 const RUN_DEADLINE_MS = 600_000;
 const watchdog = setTimeout(() => {
   console.error(`Network smoke gave up after ${String(RUN_DEADLINE_MS)} ms without finishing.`);
+  if (unexpectedErrors.length > 0) {
+    console.error(`The room refused: ${unexpectedErrors.join(", ")}.`);
+  }
   serverProcess.kill();
   process.exit(1);
 }, RUN_DEADLINE_MS);
@@ -223,6 +247,17 @@ try {
     mgFiring: false
   });
   if ((await roleError).code !== "role_mismatch") throw new Error("Wrong role was accepted.");
+  // From here on nothing is supposed to be refused; whatever is, gets named.
+  for (const [name, room] of [
+    ["display", display],
+    ["pilot", pilot],
+    ["gunner", gunner],
+    ["shield", shield]
+  ]) {
+    room.onMessage(serverMessage.error, (payload) => {
+      unexpectedErrors.push(`${name}:${String(payload?.code ?? "?")}`);
+    });
+  }
   startRoleSchedulers();
 
   const firstSpawn = await waitForFirstSpawn();
@@ -292,10 +327,17 @@ try {
   shieldSurvivalMode = true;
   pilotSurvivalMode = true;
   gunnerStickyMode = true;
-  // One scripted gunner against a whole wave, on a machine that is also
-  // building and running the browser suite. The room itself is given half an
-  // hour above, so this only has to outlast the fight.
-  await waitFor(() => encounter().phase === "intermission", 600_000);
+  /*
+   * One scripted gunner against a whole wave, on a machine that is also
+   * building and running the browser suite. The room itself is given half an
+   * hour above, so this only has to outlast the fight.
+   *
+   * When it does not, the reason matters and the bare timeout never said it: a
+   * wave that will not end because nothing can kill it looks exactly like a
+   * harness that lost its connection. So the field is reported - what is alive,
+   * how much of it is left, and whether the hull is still there to shoot.
+   */
+  await waitForWaveCleared(300_000);
   gunnerEnabled = false;
   pilotSurvivalMode = false;
   gunnerStickyMode = false;
@@ -474,9 +516,40 @@ function observeArenaState() {
   }
 }
 
+/** The wave, and what the field looked like if it never ended. */
+async function waitForWaveCleared(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now();
+  while (Date.now() < deadline) {
+    observeArenaState();
+    if (arenaViolation !== undefined) throw new Error(arenaViolation);
+    if (encounter().phase === "intermission") return;
+    await delay(100);
+  }
+  const enemies = [...world().enemyShips.values()];
+  const remaining = enemies
+    .map((enemy) => `${enemy.kind ?? "?"} ${enemy.hp.toFixed(0)}/${enemy.maxHp.toFixed(0)}`)
+    .join(", ");
+  throw new Error(
+    `Wave ${String(encounter().waveNumber)} did not end in ${String(Math.round((Date.now() - startedAt) / 1000))} s: ` +
+      `${String(enemies.length)} alive [${remaining}], pending ${String(world().pendingSpawns?.size ?? 0)}, ` +
+      `hull ${display.state.game.spaceship.hp.toFixed(0)}/${display.state.game.spaceship.maxHp.toFixed(0)}, ` +
+      `score ${String(encounter().score)}.`
+  );
+}
+
 async function waitForShieldBlock(timeoutMs) {
   let previous = shieldObservation();
   const deadline = Date.now() + timeoutMs;
+  /*
+   * What the wait saw, kept for the failure message.
+   *
+   * Three conditions have to land on the same tick and the error named none of
+   * them, so a red run said only that ninety seconds had passed - and the three
+   * fail for completely different reasons: no shot ever reached the sector, the
+   * sector was never up when one did, or the hull took the hit anyway.
+   */
+  const best = { cost: Number.NEGATIVE_INFINITY, nearMisses: 0, activeTicks: 0, ticks: 0 };
   while (Date.now() < deadline) {
     await delay(15);
     const current = shieldObservation();
@@ -485,25 +558,47 @@ async function waitForShieldBlock(timeoutMs) {
     const removedNearShield = [...previous.projectiles.values()].some(
       (projectile) => projectile.distance <= 165 && !current.projectiles.has(projectile.entityId)
     );
-    const passiveDrain = tickDelta * 20 * (STEP_MS / 1000);
+    const drainPerTick = 20 * (ROOM_STEP_MS / 1000);
+    const passiveDrain = tickDelta * drainPerTick;
     const collisionCost = previous.energy - current.energy - passiveDrain;
-    // A point beyond the passive drain. It used to want three and a half, which
-    // was the cheapest block in the catalogue back when a barrel fired one big
-    // shot; the campaign splits its heavy barrels into three small ones now and
-    // the block costs the sector two - so the check was reading a real block as
-    // no block at all. What proves it is the pair above: a shot vanished at the
-    // sector and the hull took nothing.
+    best.ticks += tickDelta;
+    if (previous.active) best.activeTicks += tickDelta;
+    if (removedNearShield) best.nearMisses += 1;
+    if (removedNearShield && collisionCost > best.cost) best.cost = collisionCost;
+    /*
+     * More than drift explains, and nothing more specific than that.
+     *
+     * The number here chased the balance twice - three and a half when a barrel
+     * fired one big shot, nine tenths once the heavy barrels were split into
+     * three - and the third time it was not the balance at all: the drain being
+     * subtracted was computed at the controller's sending rate rather than the
+     * room's step, so three times too much was taken off and every real block
+     * read as no block. A constant that has been wrong for two different
+     * reasons should stop being a constant.
+     *
+     * So the floor is drift and a half: enough that a sample misaligned by one
+     * tick cannot produce it, and free of any opinion about what a shot costs.
+     * What proves a block is the pair beside it - a projectile vanished at the
+     * sector and the hull took nothing - and those two are what can still turn
+     * this red.
+     */
     if (
       previous.active &&
       removedNearShield &&
       current.hp === previous.hp &&
-      collisionCost >= 0.9
+      collisionCost >= drainPerTick * 1.5
     ) {
       return { collisionCost, hp: current.hp, tick: current.tick };
     }
     previous = current;
   }
-  throw new Error("No authoritative shield block was observed.");
+  const dearest = Number.isFinite(best.cost) ? best.cost.toFixed(2) : "ни одного";
+  throw new Error(
+    `No authoritative shield block was observed: ${String(best.ticks)} ticks watched, ` +
+      `${String(best.activeTicks)} of them with the sector up, ` +
+      `${String(best.nearMisses)} shots vanished at it, dearest cost ${dearest}` +
+      `${unexpectedErrors.length > 0 ? `; refused: ${unexpectedErrors.join(", ")}` : ""}.`
+  );
 }
 
 function shieldObservation() {
