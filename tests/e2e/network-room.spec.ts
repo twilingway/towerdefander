@@ -231,8 +231,21 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     const drainedShieldEnergy = Number(await world.getAttribute("data-shield-energy"));
     await shield.getByTestId("shield-button").click();
     await expect(world).toHaveAttribute("data-shield-active", "false");
+    /*
+     * Long enough to climb back past a reading taken while it was still
+     * draining.
+     *
+     * The sector empties at twenty a second and refills far slower, and the
+     * reading above is taken the moment it goes up - so on a machine that is
+     * also running the rest of the gate, the seconds between raising and
+     * lowering it can cost more than five seconds of recharge can return. The
+     * assertion is still that it recharges at all: if it does not, no budget
+     * saves this.
+     */
     await expect
-      .poll(async () => Number(await world.getAttribute("data-shield-energy")))
+      .poll(async () => Number(await world.getAttribute("data-shield-energy")), {
+        timeout: 20_000
+      })
       .toBeGreaterThan(drainedShieldEnergy);
     await shield.keyboard.press("Space");
     await expect(world).toHaveAttribute("data-shield-active", "true");
