@@ -35,6 +35,16 @@ export interface ServerConfig {
    * drop a crew onto a boss.
    */
   allowStartWave: boolean;
+  /**
+   * How many enemies a run keeps on the field with the wave script switched
+   * off, or zero for an ordinary run.
+   *
+   * A stand rather than a game mode: with one hull crossing an empty arena
+   * there is nothing else on screen to blame, so a picture that still moves in
+   * jerks is the stream or the drawing and never the load. Off unless the
+   * operator turns it on, like the late-wave aid beside it.
+   */
+  sparringEnemies: number;
 }
 
 const MAX_PHASE_TTL_SECONDS = 86_400;
@@ -128,6 +138,9 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const configuredBatchDirectory = environment.STATS_BATCH_DIR?.trim();
   const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
   const allowStartWave = environment.ALLOW_START_WAVE === "true";
+  const rawSparring = Number(environment.SPARRING_ENEMIES ?? "0");
+  const sparringEnemies =
+    Number.isSafeInteger(rawSparring) && rawSparring > 0 ? Math.min(rawSparring, 8) : 0;
   const host =
     configuredHost === undefined || configuredHost.length === 0 ? "0.0.0.0" : configuredHost;
   const rawPort =
@@ -264,6 +277,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     statsHarnessPath: STATS_HARNESS_PATH,
     statsProcessGuardUrl: STATS_PROCESS_GUARD_URL,
     gracefullyShutdown,
-    allowStartWave
+    allowStartWave,
+    sparringEnemies
   };
 }

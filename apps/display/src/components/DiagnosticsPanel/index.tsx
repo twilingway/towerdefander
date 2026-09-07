@@ -37,6 +37,7 @@ export function DiagnosticsPanel({
   liveDrawn,
   offscreen,
   playbackDelayMs,
+  patchIntervalMs,
   traffic,
   snapshot,
   commit,
@@ -72,6 +73,8 @@ export function DiagnosticsPanel({
   readonly offscreen: number;
   /** How far behind the room the world is drawn - the interpolation buffer. */
   readonly playbackDelayMs: number;
+  /** The measured spacing between snapshots the buffer was sized from. */
+  readonly patchIntervalMs: number;
   /** Undefined means the counter never got hold of the socket. */
   readonly traffic: TrafficMeter | undefined;
   /** What turning patches into views costs the main thread. */
@@ -181,7 +184,7 @@ export function DiagnosticsPanel({
           <dd data-testid="diagnostics-entities">
             {entityCount} · через предсказание {liveDrawn} · за кадром {offscreen}
             <br />
-            буфер мира {playbackDelayMs} мс
+            буфер мира {playbackDelayMs} мс · снимок раз в {patchIntervalMs.toFixed(0)} мс
           </dd>
         </div>
         <div>

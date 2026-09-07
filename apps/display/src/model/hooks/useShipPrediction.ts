@@ -146,8 +146,15 @@ export function useShipPrediction<
    * buffer until the device gives up.
    */
   readonly onPending?: (pending: number, driftEma: number) => void;
-  /** How far behind the newest snapshot the world is being drawn, in ms. */
-  readonly onDelay?: (delayMs: number) => void;
+  /**
+   * How far behind the newest snapshot the world is drawn, and the arrival
+   * spacing that bought it.
+   *
+   * Both, because only the pair says which half is wrong: a buffer that looks
+   * too short is either a stream that is faster than expected or a counter that
+   * is being told about arrivals twice.
+   */
+  readonly onDelay?: (delayMs: number, intervalMs: number) => void;
 }): void {
   const latest = useRef({ source, world, enabled, predicting, onDriver, onPending, onDelay });
   latest.current = { source, world, enabled, predicting, onDriver, onPending, onDelay };
@@ -201,7 +208,10 @@ export function useShipPrediction<
       let publishedDelayMs = playbackDelayMs(delayEstimate);
       const predict: PredictHandle = Predict.get(
         room as unknown as Parameters<typeof Predict.get>[0],
-        { mode: "lerp", delay: publishedDelayMs }
+        {
+          mode: "lerp",
+          delay: publishedDelayMs
+        }
       );
       const noteArrival = (): void => {
         delayEstimate = observePatchArrival(delayEstimate, performance.now());
@@ -212,7 +222,7 @@ export function useShipPrediction<
         if (Math.abs(wanted - publishedDelayMs) < 8) return;
         publishedDelayMs = wanted;
         predict.setDefaults({ delay: wanted });
-        latest.current.onDelay?.(wanted);
+        latest.current.onDelay?.(wanted, delayEstimate.intervalMs);
       };
       room.onStateChange(noteArrival);
       const input = room.input({ type: SoloInput });
@@ -266,13 +276,19 @@ export function useShipPrediction<
        */
       const collections = display as unknown as Record<string, never>;
       const detachers = [
-        predict.attachAll(collections, "enemyShips", { mode: "lerp", fields: ["x", "y"] }),
+        predict.attachAll(collections, "enemyShips", {
+          mode: "lerp",
+          fields: ["x", "y"]
+        }),
         predict.attachAll(collections, "enemyShips", {
           mode: "lerp",
           fields: ["heading"],
           angle: true
         }),
-        predict.attachAll(collections, "homingMissiles", { mode: "lerp", fields: ["x", "y"] }),
+        predict.attachAll(collections, "homingMissiles", {
+          mode: "lerp",
+          fields: ["x", "y"]
+        }),
         predict.attachAll(collections, "homingMissiles", {
           mode: "lerp",
           fields: ["heading"],
@@ -283,8 +299,14 @@ export function useShipPrediction<
          * they bounce off the hull and off each other, so they are interpolated
          * like anything whose next move is not ours to know.
          */
-        predict.attachAll(collections, "asteroids", { mode: "lerp", fields: ["x", "y"] }),
-        predict.attachAll(collections, "lootDrops", { mode: "lerp", fields: ["x", "y"] }),
+        predict.attachAll(collections, "asteroids", {
+          mode: "lerp",
+          fields: ["x", "y"]
+        }),
+        predict.attachAll(collections, "lootDrops", {
+          mode: "lerp",
+          fields: ["x", "y"]
+        }),
         /*
          * Shells are dead reckoned, and they are the only thing here that earns
          * it. An interpolated entity is drawn between the two newest snapshots,

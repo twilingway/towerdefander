@@ -32,7 +32,8 @@ describe("readServerConfig", () => {
       statsBatchKeep: 50,
       statsBatchTimeoutSeconds: 1800,
       gracefullyShutdown: true,
-      allowStartWave: false
+      allowStartWave: false,
+      sparringEnemies: 0
     });
   });
 
@@ -42,6 +43,17 @@ describe("readServerConfig", () => {
     expect(readServerConfig({ ALLOW_START_WAVE: "1" }).allowStartWave).toBe(false);
     expect(readServerConfig({ ALLOW_START_WAVE: "yes" }).allowStartWave).toBe(false);
     expect(readServerConfig({ ALLOW_START_WAVE: "true" }).allowStartWave).toBe(true);
+  });
+
+  it("takes a sparring field only as a whole positive count, and caps it", () => {
+    expect(readServerConfig({}).sparringEnemies).toBe(0);
+    expect(readServerConfig({ SPARRING_ENEMIES: "2" }).sparringEnemies).toBe(2);
+    expect(readServerConfig({ SPARRING_ENEMIES: "0" }).sparringEnemies).toBe(0);
+    expect(readServerConfig({ SPARRING_ENEMIES: "-3" }).sparringEnemies).toBe(0);
+    expect(readServerConfig({ SPARRING_ENEMIES: "two" }).sparringEnemies).toBe(0);
+    expect(readServerConfig({ SPARRING_ENEMIES: "2.5" }).sparringEnemies).toBe(0);
+    // A stand with forty ships on it measures the same thing the campaign does.
+    expect(readServerConfig({ SPARRING_ENEMIES: "40" }).sparringEnemies).toBe(8);
   });
 
   it("accepts explicit host and port", () => {
@@ -71,7 +83,8 @@ describe("readServerConfig", () => {
       statsBatchKeep: 50,
       statsBatchTimeoutSeconds: 1800,
       gracefullyShutdown: true,
-      allowStartWave: false
+      allowStartWave: false,
+      sparringEnemies: 0
     });
   });
 

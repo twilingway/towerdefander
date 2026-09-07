@@ -28,6 +28,21 @@ import {
 
 export const PROTOCOL_VERSION = 52 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
+/**
+ * How often the room broadcasts, in milliseconds.
+ *
+ * Stated rather than left to the library's default, and shared with the clients
+ * on purpose. The interpolation that draws every entity nobody is steering
+ * timestamps samples by when they arrived, so network jitter and a host timer
+ * quantised to 15.625 ms both land in the picture as hulls that move in jerks.
+ * Given the cadence the room actually keeps, the client snaps arrivals back
+ * onto that grid and plays them at an even speed.
+ *
+ * It must be a whole multiple of the simulation step, or a patch carries
+ * alternately one and two steps of movement and the evenness this buys is lost
+ * again. The server checks that on startup, where both numbers are known.
+ */
+export const PATCH_INTERVAL_MS = 50 as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
 export const CREW_SIZES = [1, 2, 3] as const;

@@ -180,6 +180,7 @@ export function DisplayApp() {
    * reads as a hull stopping dead and then jumping.
    */
   const [playbackDelayMs, setPlaybackDelayMs] = useState(0);
+  const [patchIntervalMs, setPatchIntervalMs] = useState(0);
   /**
    * The ship this page is flying, as the reconciler currently has it.
    *
@@ -391,7 +392,10 @@ export function DisplayApp() {
       pendingInputReference.current = pending;
       driftReference.current = driftEma;
     },
-    onDelay: setPlaybackDelayMs
+    onDelay: (delayMs, intervalMs) => {
+      setPlaybackDelayMs(delayMs);
+      setPatchIntervalMs(intervalMs);
+    }
   });
 
   /*
@@ -926,6 +930,7 @@ export function DisplayApp() {
                 entityCount={countDrawnEntities(view.game)}
                 liveDrawn={frameStats.liveDrawn}
                 playbackDelayMs={playbackDelayMs}
+                patchIntervalMs={patchIntervalMs}
                 offscreen={frameStats.offscreen}
                 traffic={traffic}
                 snapshot={snapshotReading}

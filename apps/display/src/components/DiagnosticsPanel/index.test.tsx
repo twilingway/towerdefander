@@ -19,6 +19,7 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       liveDrawn={208}
       offscreen={120}
       playbackDelayMs={160}
+      patchIntervalMs={62}
       traffic={{ ...createTrafficMeter(), inPerSecond: 5_120, outPerSecond: 640, totalIn: 51_200 }}
       snapshot={{ ...createWorkMeter(), msPerSecond: 160, samplesPerSecond: 20, worstMs: 11.4 }}
       commit={{ ...createWorkMeter(), msPerSecond: 320, samplesPerSecond: 16, worstMs: 26.5 }}

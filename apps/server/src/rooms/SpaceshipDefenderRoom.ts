@@ -25,6 +25,7 @@ import {
 import {
   CREW_ROLES,
   PLAYER_CAPACITY,
+  PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
   ROOM_REFUSED_FOR_MAINTENANCE,
@@ -57,6 +58,7 @@ import { getMaintenanceWindow } from "../maintenance/index.js";
 import { readServerConfig } from "../config.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
+import { openSparringStand, refillSparringStand } from "./sparringStand.js";
 import { createRunSeed } from "./runSeed.js";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
@@ -100,6 +102,7 @@ const {
   waveTtlSeconds,
   absoluteTtlSeconds,
   allowStartWave,
+  sparringEnemies,
   maxConcurrentRooms
 } = readServerConfig();
 
@@ -166,6 +169,8 @@ export class SpaceshipDefenderRoom extends Room<{
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
   /** Whether the armed loop advances the fight or idles through it. */
   private simulationRunning = false;
+  /** One authored arrival, kept so the stand can refill with the real thing. */
+  private sparringTemplate: SpaceshipSimulationState["pendingSpawns"] = [];
   private gameState: SpaceshipSimulationState | undefined;
   /** Real time received from the loop that no whole fixed step has claimed yet. */
   /**
@@ -704,6 +709,9 @@ export class SpaceshipDefenderRoom extends Room<{
     const stepStartedAt = this.nowMs();
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     this.lastStepMs = this.nowMs() - stepStartedAt;
+    if (sparringEnemies > 0) {
+      this.gameState = refillSparringStand(this.gameState, sparringEnemies, this.sparringTemplate);
+    }
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
       this.clearWaveDeadline();
       this.neutralizeAllRoles();
@@ -845,6 +853,10 @@ export class SpaceshipDefenderRoom extends Room<{
       createRunSeed(previousSeed),
       this.startWave
     );
+    if (sparringEnemies > 0) {
+      this.sparringTemplate = this.gameState.pendingSpawns.slice(0, 1);
+      this.gameState = openSparringStand(this.gameState, sparringEnemies);
+    }
     this.state.runNumber += 1;
     this.state.phase = "active";
     this.state.hasGame = true;
@@ -1049,6 +1061,20 @@ export class SpaceshipDefenderRoom extends Room<{
    * The gate is a flag rather than a cleared timer for the same reason.
    */
   private armSimulationLoop(): void {
+    /*
+     * The broadcast has to be a whole number of steps, and here is where both
+     * numbers exist. A patch that carries alternately one and two steps of
+     * movement is uneven sampling, and no amount of smoothing on the far end
+     * puts back what the wire took out.
+     */
+    const stepMs = this.gameConfig.fixedStepMs;
+    if (Math.abs(PATCH_INTERVAL_MS / stepMs - Math.round(PATCH_INTERVAL_MS / stepMs)) > 1e-9) {
+      throw new RangeError(
+        `PATCH_INTERVAL_MS (${String(PATCH_INTERVAL_MS)} ms) must be a whole multiple of the ` +
+          `simulation step (${String(stepMs)} ms), or snapshots are unevenly spaced.`
+      );
+    }
+    this.patchRate = PATCH_INTERVAL_MS;
     this.setFixedTimestep(
       () => {
         if (!this.simulationRunning) return;
