@@ -33,7 +33,9 @@ export function DiagnosticsPanel({
   entityCount,
   traffic,
   predictionEnabled,
-  onTogglePrediction
+  onTogglePrediction,
+  backgroundEnabled,
+  onToggleBackground
 }: {
   readonly fps: number;
   readonly worstFrameMs: number;
@@ -45,6 +47,8 @@ export function DiagnosticsPanel({
   readonly traffic: TrafficMeter | undefined;
   readonly predictionEnabled: boolean;
   readonly onTogglePrediction: () => void;
+  readonly backgroundEnabled: boolean;
+  readonly onToggleBackground: () => void;
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
@@ -94,6 +98,15 @@ export function DiagnosticsPanel({
         onClick={onTogglePrediction}
       >
         Предсказание: {predictionEnabled ? "вкл" : "выкл"}
+      </button>
+      <button
+        type="button"
+        className="diagnostics-panel__toggle"
+        data-testid="diagnostics-background-toggle"
+        data-background={backgroundEnabled ? "on" : "off"}
+        onClick={onToggleBackground}
+      >
+        Фон: {backgroundEnabled ? "вкл" : "выкл"}
       </button>
     </aside>
   );

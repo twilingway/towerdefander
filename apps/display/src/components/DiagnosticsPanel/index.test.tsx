@@ -16,6 +16,8 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       traffic={{ ...createTrafficMeter(), inPerSecond: 5_120, outPerSecond: 640, totalIn: 51_200 }}
       predictionEnabled
       onTogglePrediction={() => undefined}
+      backgroundEnabled
+      onToggleBackground={() => undefined}
       {...overrides}
     />
   );
@@ -44,6 +46,11 @@ describe("DiagnosticsPanel", () => {
   it("names the state of the prediction toggle", () => {
     expect(render({ predictionEnabled: true })).toContain('data-prediction="on"');
     expect(render({ predictionEnabled: false })).toContain('data-prediction="off"');
+  });
+
+  it("names the state of the background toggle", () => {
+    expect(render({ backgroundEnabled: true })).toContain('data-background="on"');
+    expect(render({ backgroundEnabled: false })).toContain('data-background="off"');
   });
 });
 

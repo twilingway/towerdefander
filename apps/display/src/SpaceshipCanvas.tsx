@@ -27,6 +27,13 @@ interface SpaceshipCanvasProps {
     readonly worstFrameMs: number;
     readonly stutterShare: number;
   }) => void;
+  /**
+   * Parallax layers on or off. A question rather than a setting: four
+   * full-screen tile sprites, three of them blended, are a plausible way to
+   * spend a phone's fill rate, and the only way to know is to take them away on
+   * the phone that stutters.
+   */
+  readonly backgroundEnabled?: boolean;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -37,11 +44,14 @@ export function SpaceshipCanvas({
   runNumber,
   connectionEpoch,
   visibleDemo = false,
+  backgroundEnabled = true,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<SpaceshipRuntime | undefined>(undefined);
   const latestGame = useRef(game);
+  const latestBackgroundEnabled = useRef(backgroundEnabled);
+  latestBackgroundEnabled.current = backgroundEnabled;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -66,6 +76,9 @@ export function SpaceshipCanvas({
           runtimeReference.current = createSpaceshipRuntime(host, latestGame.current, {
             pixelRatioCap: pixelRatioCap.current
           });
+          // The scene loads asynchronously, so the switch may already have been
+          // thrown while it was still arriving.
+          runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
@@ -109,6 +122,10 @@ export function SpaceshipCanvas({
     lastRuntimeRunNumberReference.current = runNumber;
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, runNumber]);
+
+  useEffect(() => {
+    runtimeReference.current?.setBackgroundEnabled(backgroundEnabled);
+  }, [backgroundEnabled]);
 
   const onFrameStatsReference = useRef(onFrameStats);
   onFrameStatsReference.current = onFrameStats;

@@ -180,6 +180,8 @@ class SpaceshipScene extends Phaser.Scene {
   /** Reused between frames; see `updateFocusCandidates`. */
   private readonly focusScratch: MutableFocusCandidate[] = [];
   private readonly backgroundLayers: BackgroundLayerState[] = [];
+  /** Off makes the layers invisible and stops their per-frame arithmetic. */
+  private backgroundEnabled = true;
   private parallaxStrength = 1;
   /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
   private backgroundDriftSeconds = 0;
@@ -486,6 +488,9 @@ class SpaceshipScene extends Phaser.Scene {
         .setTileScale(config.tileScale);
       sprite.setBlendMode(backgroundBlendMode(config.blendMode));
       sprite.alpha = backgroundLayerAlpha(config.kind, background.nebulaAlpha);
+      // The scene boots asynchronously, so the switch may already have been
+      // thrown before these existed.
+      sprite.setVisible(this.backgroundEnabled);
       this.backgroundLayers.push({ sprite, config });
     }
   }
@@ -499,8 +504,24 @@ class SpaceshipScene extends Phaser.Scene {
     this.parallaxStrength = background.parallaxStrength;
   }
 
+  /**
+   * Turns the parallax layers off, sprites and per-frame work together.
+   *
+   * Four full-screen tile sprites, three of them blended, are a plausible way to
+   * spend a phone's fill rate, and the only way to find out is to take them away
+   * on the phone that stutters. Hidden rather than destroyed: this is a question
+   * being asked, not a decision being made, and the answer has to be one button
+   * away in both directions.
+   */
+  setBackgroundEnabled(enabled: boolean): void {
+    this.backgroundEnabled = enabled;
+    for (const layer of this.backgroundLayers) {
+      layer.sprite.setVisible(enabled);
+    }
+  }
+
   private updateBackground(deltaMs: number): void {
-    if (this.backgroundLayers.length === 0) return;
+    if (!this.backgroundEnabled || this.backgroundLayers.length === 0) return;
     const scrollX = this.cameras.main.scrollX;
     const scrollY = this.cameras.main.scrollY;
     // Drift speed comes from the snapshot so a preset change retunes it live.
@@ -1232,6 +1253,8 @@ function getEntityHeading(entity: CombatEntity): number {
 export interface SpaceshipRuntime {
   update(snapshot: DisplayGameSnapshot): void;
   prepareHydration(): void;
+  /** Parallax layers on or off, for finding out what they cost on a phone. */
+  setBackgroundEnabled(enabled: boolean): void;
   /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
@@ -1349,6 +1372,9 @@ export function createSpaceshipRuntime(
     },
     prepareHydration() {
       scene.prepareHydration();
+    },
+    setBackgroundEnabled(enabled) {
+      scene.setBackgroundEnabled(enabled);
     },
     readFps() {
       return game.loop.actualFps;

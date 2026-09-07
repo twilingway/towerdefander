@@ -137,6 +137,11 @@ export function DisplayApp() {
    * comparing two sessions would compare two networks instead.
    */
   const [predictionEnabled, setPredictionEnabled] = useState(true);
+  /**
+   * The parallax layers, asked about rather than settled: they are four
+   * full-screen sprites and three blends, and a phone is where that is paid for.
+   */
+  const [backgroundEnabled, setBackgroundEnabled] = useState(true);
   const [traffic, setTraffic] = useState<TrafficMeter | undefined>(undefined);
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
@@ -670,6 +675,7 @@ export function DisplayApp() {
               runNumber={view.runNumber}
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
+              backgroundEnabled={backgroundEnabled}
               onFrameStats={setFrameStats}
             />
           )}
@@ -712,6 +718,10 @@ export function DisplayApp() {
               predictionEnabled={predictionEnabled}
               onTogglePrediction={() => {
                 setPredictionEnabled((enabled) => !enabled);
+              }}
+              backgroundEnabled={backgroundEnabled}
+              onToggleBackground={() => {
+                setBackgroundEnabled((enabled) => !enabled);
               }}
             />
           )}
