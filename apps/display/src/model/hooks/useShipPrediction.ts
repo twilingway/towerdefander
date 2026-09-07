@@ -54,14 +54,14 @@ export interface PredictionWorld {
   readonly turretMountedOnHull: boolean;
 }
 
-export function useShipPrediction({
+export function useShipPrediction<TState extends { game?: { display?: { pose?: DecodedPose } } }>({
   room,
   enabled,
   source,
   world,
   onPose
 }: {
-  readonly room: Room<unknown, { game?: { display?: { pose?: DecodedPose } } }> | undefined;
+  readonly room: Room<unknown, TState> | undefined;
   readonly enabled: boolean;
   readonly source: ShipPredictionSource;
   readonly world: PredictionWorld | undefined;

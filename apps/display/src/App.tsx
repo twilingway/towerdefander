@@ -55,7 +55,6 @@ import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js"
 import { SoloCockpit } from "./screens/SoloCockpit/index.js";
 import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
 import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
-import { useCockpitPrediction } from "./model/hooks/useCockpitPrediction.js";
 import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
@@ -81,7 +80,9 @@ import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } fro
 import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isDiagnosticsRequested } from "./model/diagnostics.js";
-import { withPredictedAngles } from "./model/predictedAngles.js";
+import { withPredictedPose } from "./model/predictedAngles.js";
+import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
+import type { PredictedPoseFrame } from "./model/shipPrediction.js";
 import { advanceWork, createWorkMeter, recordWork, type WorkMeter } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
@@ -153,6 +154,14 @@ export function DisplayApp() {
    */
   const [predictionEnabled, setPredictionEnabled] = useState(true);
   /**
+   * The ship this page is flying, as the reconciler currently has it.
+   *
+   * State rather than a ref because the canvas is a React child and has to be
+   * handed it; the runtime publishes once per frame, which is the rate the
+   * canvas already redraws at.
+   */
+  const [predictedPose, setPredictedPose] = useState<PredictedPoseFrame | undefined>(undefined);
+  /**
    * The parallax layers, asked about rather than settled: they are four
    * full-screen sprites and three blends, and a phone is where that is paid for.
    */
@@ -193,9 +202,9 @@ export function DisplayApp() {
    * The generation is the controller's own recipe — a new run or a new
    * connection restarts the sequences the room watermarks.
    */
-  const predictedAngles = useRef<{ heading: number; turretAngle: number } | undefined>(undefined);
   const cockpitControls = useSoloCockpit({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    predicting: predictionEnabled,
     aimAssistEnabled: aimAssist,
     world:
       view?.game == null
@@ -292,28 +301,24 @@ export function DisplayApp() {
     };
   }, [diagnostics, connectionEpoch, status]);
 
-  useCockpitPrediction({
-    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
-    drive:
+  useShipPrediction({
+    room: roomReference.current,
+    enabled: predictionEnabled && cockpitPlayer !== undefined,
+    source: {
+      readIntent: () => cockpitControls.readIntent(),
+      enabled: predictionEnabled && cockpitPlayer !== undefined
+    },
+    world:
       view?.game == null
         ? undefined
         : {
-            hullAngularMaxSpeed: view.game.helm.hullAngularMaxSpeed,
-            hullAngularAcceleration: view.game.helm.hullAngularAcceleration,
-            hullAngularBraking: view.game.helm.hullAngularBrakingPerSecondSquared,
-            turretAngularMaxSpeed: view.game.helm.turretAngularMaxSpeed,
-            turretAngularAcceleration: view.game.helm.turretAngularAcceleration,
-            turretAngularBraking: view.game.helm.turretAngularBraking,
+            drive: view.game.drive,
+            worldWidth: view.game.worldWidth,
+            worldHeight: view.game.worldHeight,
+            arenaRadius: view.game.arenaRadius,
             turretMountedOnHull: view.game.helm.turretMountedOnHull
           },
-    authoritative:
-      view?.game == null
-        ? undefined
-        : { heading: view.game.spaceship.heading, turretAngle: view.game.turretAngle },
-    readInputs: () => cockpitControls.readPrediction(),
-    onPredicted: (angles) => {
-      predictedAngles.current = angles;
-    }
+    onPose: setPredictedPose
   });
 
   /*
@@ -732,7 +737,7 @@ export function DisplayApp() {
               <RotateNotice />
             ) : (
               <SpaceshipCanvas
-                game={withPredictedAngles(view.game, predictedAngles.current, predictionEnabled)}
+                game={withPredictedPose(view.game, predictedPose, predictionEnabled)}
                 runNumber={view.runNumber}
                 connectionEpoch={connectionEpoch}
                 visibleDemo={visibleDemo}

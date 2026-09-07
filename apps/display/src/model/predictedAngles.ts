@@ -1,19 +1,31 @@
+import type { PredictedPoseFrame } from "./shipPrediction.js";
+
 /**
- * Which angles the canvas is handed: the predicted ones, or the authoritative
- * ones exactly as they arrived.
+ * Which ship the canvas is handed: the one this page is flying, or the one the
+ * room last said.
  *
  * The switch exists so the two can be compared on one connection and one tick.
  * Turned off, nothing about what the page sends changes - only what it draws -
  * because a switch that also changed the traffic would be comparing two
  * different games.
  */
-export function withPredictedAngles<
-  T extends { spaceship: { heading: number }; turretAngle: number }
->(game: T, predicted: { heading: number; turretAngle: number } | undefined, enabled: boolean): T {
-  if (!enabled || predicted === undefined) return game;
+export function withPredictedPose<
+  T extends {
+    spaceship: { x: number; y: number; velocityX: number; velocityY: number; heading: number };
+    turretAngle: number;
+  }
+>(game: T, pose: PredictedPoseFrame | undefined, enabled: boolean): T {
+  if (!enabled || pose === undefined) return game;
   return {
     ...game,
-    spaceship: { ...game.spaceship, heading: predicted.heading },
-    turretAngle: predicted.turretAngle
+    spaceship: {
+      ...game.spaceship,
+      x: pose.x,
+      y: pose.y,
+      velocityX: pose.velocityX,
+      velocityY: pose.velocityY,
+      heading: pose.heading
+    },
+    turretAngle: pose.turretAngle
   };
 }

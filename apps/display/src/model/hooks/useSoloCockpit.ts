@@ -11,6 +11,8 @@ import {
 } from "@spaceship-defender/client-shared";
 import { PROTOCOL_VERSION, clientMessage } from "@spaceship-defender/protocol";
 
+import type { PredictedInputFrame } from "../shipPrediction.js";
+
 const NEUTRAL: ControlVector = { x: 0, y: 0 };
 /** Same cadence the controller flushes at; the scheduler decides what leaves. */
 const FLUSH_MS = 25;
@@ -67,6 +69,11 @@ export interface SoloCockpitWorld {
 
 export interface SoloCockpitOptions {
   readonly enabled: boolean;
+  /**
+   * On means the acknowledged input stream is carrying every frame, so the
+   * message schedulers here stand down rather than saying the same thing twice.
+   */
+  readonly predicting: boolean;
   /** Off sends the raw thumb bearing, whatever is in the cone. */
   readonly aimAssistEnabled: boolean;
   readonly world: SoloCockpitWorld | undefined;
@@ -83,6 +90,8 @@ export interface SoloCockpitOptions {
 }
 
 export interface SoloCockpitControls {
+  /** The current order in the shape the wire takes; the stream reads it per step. */
+  readonly readIntent: () => PredictedInputFrame;
   readonly onDrive: (vector: ControlVector, strength: number) => void;
   readonly onDriveRelease: () => void;
   readonly onAim: (vector: ControlVector, strength: number) => void;
@@ -99,17 +108,6 @@ export interface SoloCockpitControls {
    */
   readonly onCannonFromStick: (held: boolean) => void;
   readonly onCannonFromTrigger: (held: boolean) => void;
-  /**
-   * What this client is currently asking the ship to do, read fresh rather than
-   * remembered: the predictor runs at frame rate and the streams change between
-   * its frames.
-   */
-  readonly readPrediction: () => {
-    readonly hullTurn: number | null;
-    readonly hullTargetAngle: number | null;
-    readonly turretTurn: number | null;
-    readonly turretTargetAngle: number | null;
-  };
 }
 
 /**
@@ -132,6 +130,7 @@ function silentUntilEnabled<T>(scheduler: LatestInputScheduler<T>): LatestInputS
 
 export function useSoloCockpit({
   enabled,
+  predicting,
   aimAssistEnabled,
   world,
   roomId,
@@ -292,8 +291,14 @@ export function useSoloCockpit({
      * pilot and gunner packets it has no seat for -- twenty a second, answered
      * with `not_controller`, against a ceiling of twenty-five.
      */
-    pilot?.setEnabled(enabled);
-    gunner?.setEnabled(enabled);
+    /*
+     * Two ways to say the same thing would say it twice. While the ship is
+     * predicted the acknowledged stream carries every frame, so the message
+     * schedulers stand down entirely - and come straight back when the switch
+     * is thrown, which is what makes the comparison a fair one.
+     */
+    pilot?.setEnabled(enabled && !predicting);
+    gunner?.setEnabled(enabled && !predicting);
     if (generationReference.current !== generation) {
       generationReference.current = generation;
       pilotReference.current = NEUTRAL_PILOT;
@@ -333,7 +338,35 @@ export function useSoloCockpit({
     };
   }, [enabled]);
 
+  /**
+   * The cockpit's current order, in the shape the wire takes.
+   *
+   * Read rather than pushed: the stream asks for it exactly as often as the
+   * simulation steps, so a thumb held still produces the same frame again
+   * rather than nothing at all - which is what a replay needs to reproduce.
+   */
+  function readIntent() {
+    const pilot = pilotReference.current;
+    const gunner = gunnerReference.current;
+    const aim = resolveAim(gunner);
+    const traverse = resolveTraverse(gunner);
+    return {
+      vectorX: pilot.vector.x,
+      vectorY: pilot.vector.y,
+      hasHelm: pilot.turn !== null,
+      turn: pilot.turn ?? 0,
+      thrust: pilot.thrust ?? 0,
+      aimX: aim.x,
+      aimY: aim.y,
+      hasAimTurn: traverse !== null,
+      aimTurn: traverse ?? 0,
+      mgFiring: pilot.mgFiring,
+      firing: gunner.firing
+    };
+  }
+
   return {
+    readIntent,
     onDrive: (vector, strength) => {
       /*
        * Direction from the stick, throttle from the strength. The core clamps
@@ -420,14 +453,6 @@ export function useSoloCockpit({
     onCannonFromTrigger: (held) => {
       cannonSpursReference.current.trigger = held;
       updateGunner({ firing: anyCannonSpurDown() });
-    },
-    readPrediction: () => ({
-      // Predicted the way the core advances it: a spin when the keys asked for
-      // one, a bearing to chase when the stick did.
-      hullTurn: pilotReference.current.turn,
-      hullTargetAngle: hullTargetReference.current,
-      turretTurn: resolveTraverse(gunnerReference.current),
-      turretTargetAngle: gunnerReference.current.aimHeading
-    })
+    }
   };
 }
