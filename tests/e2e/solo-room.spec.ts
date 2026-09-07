@@ -81,19 +81,25 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
       shortestDelta(await readNumber(world, "data-turret-angle"), restingTurret)
     ).toBeGreaterThan(0.3);
 
-    // The hull's throttle is the length of the push, and it is all the way open
-    // at a third of the ring: pushed to the rim and pushed a third of the way,
-    // the ship has to cover the same ground. Measured as ground covered because
-    // that is what the pilot feels.
+    /*
+     * The hull's throttle is the length of the push, and it is all the way open
+     * at a third of the ring: pushed to the rim and pushed a third of the way,
+     * the ship has to end up going the same speed.
+     *
+     * Speed rather than ground covered, which is what this used to measure. The
+     * second run starts wherever the first one left the hull, and a hull that
+     * ended near the rim spends its run against the cushion - so the distance
+     * says as much about where the ship was as about how far the stick went.
+     */
     const courseStick = solo.locator(".solo-stick--pilot [data-testid='virtual-stick']");
     const courseBounds = await courseStick.boundingBox();
     if (courseBounds === null) throw new Error("Solo course stick has no bounds.");
-    const rimRun = await coveredWhileHeld(solo, world, courseBounds, 0.95);
-    const thirdRun = await coveredWhileHeld(solo, world, courseBounds, 0.35);
-    expect(rimRun).toBeGreaterThan(40);
+    const rimSpeed = await speedWhileHeld(solo, world, courseBounds, 0.95);
+    const thirdSpeed = await speedWhileHeld(solo, world, courseBounds, 0.35);
+    expect(rimSpeed).toBeGreaterThan(100);
     // Equal is the point: a third of the ring is the whole throttle, so the two
-    // runs land on the same distance and a strict "greater" fails on a tie.
-    expect(thirdRun).toBeGreaterThanOrEqual(rimRun * 0.9);
+    // runs land on the same speed and a strict "greater" fails on a tie.
+    expect(thirdSpeed).toBeGreaterThanOrEqual(rimSpeed * 0.9);
 
     // The turret stick is the one control that reads a push and a tap
     // differently: past six tenths it names a bearing, short of it the barrel
@@ -133,7 +139,8 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
  * Ground covered in half a second with the stick held at a share of its travel,
  * pushed along +x from the middle.
  */
-async function coveredWhileHeld(
+/** How fast the hull ends up going while the stick is held at `share` of the ring. */
+async function speedWhileHeld(
   page: Page,
   world: Locator,
   stick: { x: number; y: number; width: number; height: number },
@@ -144,14 +151,14 @@ async function coveredWhileHeld(
   await page.mouse.move(centreX, centreY);
   await page.mouse.down();
   await page.mouse.move(centreX + (stick.width / 2) * share, centreY);
-  // Long enough to be up to speed before the run is measured.
-  await page.waitForTimeout(600);
-  const from = await readNumber(world, "data-spaceship-x");
-  await page.waitForTimeout(500);
-  const to = await readNumber(world, "data-spaceship-x");
+  // Long enough to be up to speed before the reading is taken.
+  await page.waitForTimeout(900);
+  // Along the axis the stick pushes on: the world only publishes the one
+  // component, and the push in this test is horizontal.
+  const speed = Math.abs(await readNumber(world, "data-spaceship-velocity-x"));
   await page.mouse.up();
-  await page.waitForTimeout(200);
-  return to - from;
+  await page.waitForTimeout(400);
+  return speed;
 }
 
 async function joinSolo(

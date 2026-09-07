@@ -575,11 +575,22 @@ async function assertFireStopsAfter(
       button: 0
     });
   }
-  await gunner.waitForTimeout(100);
-  const latestProjectileId = await world.getAttribute("data-latest-projectile-id");
-  expect(latestProjectileId).not.toBe("");
+  /*
+   * A round already queued when the pointer was lost still leaves the barrel,
+   * so the window opens past one cooldown. After that no new round may appear -
+   * and "no new" is read from the number in the id rather than from the id
+   * itself, because a shell that expires empties the attribute and an empty
+   * attribute is not evidence of anything.
+   */
+  const roundNumber = async (): Promise<number> => {
+    const id = (await world.getAttribute("data-latest-projectile-id")) ?? "";
+    const parsed = Number(id.replace("projectile-", ""));
+    return Number.isFinite(parsed) ? parsed : -1;
+  };
+  await gunner.waitForTimeout(400);
+  const highest = await roundNumber();
   await gunner.waitForTimeout(350);
-  expect(await world.getAttribute("data-latest-projectile-id")).toBe(latestProjectileId);
+  expect(await roundNumber()).toBeLessThanOrEqual(highest);
   await gunner.mouse.up();
 }
 
