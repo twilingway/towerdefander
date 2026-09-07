@@ -26,6 +26,9 @@ interface SpaceshipCanvasProps {
     readonly fps: number;
     readonly worstFrameMs: number;
     readonly stutterShare: number;
+    /** What the Phaser scene's own per-frame work costs, over the last second. */
+    readonly updateMsPerSecond: number;
+    readonly worstUpdateMs: number;
   }) => void;
   /**
    * Parallax layers on or off. A question rather than a setting: four
@@ -141,7 +144,9 @@ export function SpaceshipCanvas({
       onFrameStatsReference.current?.({
         fps,
         worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0,
-        stutterShare: runtimeReference.current?.readStutterShare() ?? 0
+        stutterShare: runtimeReference.current?.readStutterShare() ?? 0,
+        updateMsPerSecond: runtimeReference.current?.readUpdateMsPerSecond() ?? 0,
+        worstUpdateMs: runtimeReference.current?.readWorstUpdateMs() ?? 0
       });
       // Down only, and only on a run of samples: a wave that briefly puts forty
       // ships on the field is not a phone that cannot run the game.

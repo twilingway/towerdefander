@@ -11,6 +11,8 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       fps={60}
       worstFrameMs={18}
       stutterShare={0.04}
+      sceneMsPerSecond={240}
+      worstSceneMs={9.3}
       serverStepMs={0.137}
       pingMs={24}
       entityCount={208}
@@ -26,6 +28,13 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
 }
 
 describe("DiagnosticsPanel", () => {
+  it("tells the scene's own frame work apart from the rest of the frame", () => {
+    const markup = render();
+
+    expect(markup).toContain("240 мс/с");
+    expect(markup).toContain("9.3 мс");
+  });
+
   it("shows the step cost in tenths, where the whole signal is", () => {
     expect(render()).toContain("0.14 мс");
   });

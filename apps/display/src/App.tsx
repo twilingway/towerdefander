@@ -136,7 +136,13 @@ export function DisplayApp() {
   const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
-  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0, stutterShare: 0 });
+  const [frameStats, setFrameStats] = useState({
+    fps: 0,
+    worstFrameMs: 0,
+    stutterShare: 0,
+    updateMsPerSecond: 0,
+    worstUpdateMs: 0
+  });
   /**
    * Off means the ship is drawn from the authoritative angles alone. The point
    * of the switch is that it compares the two on one connection and one tick;
@@ -742,6 +748,8 @@ export function DisplayApp() {
               fps={frameStats.fps}
               worstFrameMs={frameStats.worstFrameMs}
               stutterShare={frameStats.stutterShare}
+              sceneMsPerSecond={frameStats.updateMsPerSecond}
+              worstSceneMs={frameStats.worstUpdateMs}
               serverStepMs={view.game.serverStepMs}
               pingMs={view.displayLatencyMs}
               entityCount={countDrawnEntities(view.game)}

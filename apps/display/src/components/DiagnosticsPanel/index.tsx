@@ -29,6 +29,8 @@ export function DiagnosticsPanel({
   fps,
   worstFrameMs,
   stutterShare,
+  sceneMsPerSecond,
+  worstSceneMs,
   serverStepMs,
   pingMs,
   entityCount,
@@ -42,6 +44,9 @@ export function DiagnosticsPanel({
   readonly fps: number;
   readonly worstFrameMs: number;
   readonly stutterShare: number;
+  /** What the Phaser scene's own per-frame work costs, over the last second. */
+  readonly sceneMsPerSecond: number;
+  readonly worstSceneMs: number;
   readonly serverStepMs: number;
   readonly pingMs: number | null;
   readonly entityCount: number;
@@ -83,6 +88,12 @@ export function DiagnosticsPanel({
             {Number.isFinite(fps) && fps > 0 ? Math.round(fps) : "—"} к/с · худший{" "}
             {Number.isFinite(worstFrameMs) ? Math.round(worstFrameMs) : 0} мс · рывки{" "}
             {Math.round(stutterShare * 100)}%
+          </dd>
+        </div>
+        <div>
+          <dt>Сцена</dt>
+          <dd data-testid="diagnostics-scene">
+            {`${sceneMsPerSecond.toFixed(0)} мс/с · худший ${worstSceneMs.toFixed(1)} мс`}
           </dd>
         </div>
         <div>

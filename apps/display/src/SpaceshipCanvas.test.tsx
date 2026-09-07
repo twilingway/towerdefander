@@ -32,6 +32,8 @@ describe("SpaceshipCanvas", () => {
       readFps: () => 60,
       readWorstFrameMs: () => 0,
       readStutterShare: () => 0,
+      readUpdateMsPerSecond: () => 0,
+      readWorstUpdateMs: () => 0,
       setBackgroundEnabled: vi.fn(),
       setPixelRatioCap: vi.fn(),
       destroy: vi.fn()

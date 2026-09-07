@@ -172,6 +172,11 @@ class SpaceshipScene extends Phaser.Scene {
    * 120 Hz or a throttled tab without being told which.
    */
   private stutterShare = 0;
+  /** Milliseconds a second the scene spends in its own update, and the worst one. */
+  private updateMsPerSecond = 0;
+  private worstUpdateMs = 0;
+  private frameWindowUpdateMs = 0;
+  private frameWindowWorstUpdateMs = 0;
   private frameWindowFrames = 0;
   private frameWindowStutters = 0;
   private frameWindowShortestMs = Number.POSITIVE_INFINITY;
@@ -269,6 +274,18 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   override update(time: number, deltaMs: number): void {
+    const startedAt = performance.now();
+    this.updateScene(time, deltaMs);
+    // Everything the scene itself does, told apart from the rest of the frame:
+    // a frame can run long because of this, or because of React committing a
+    // snapshot beside it, or because the browser rasterised. Only a number says
+    // which.
+    const spent = performance.now() - startedAt;
+    this.frameWindowUpdateMs += spent;
+    if (spent > this.frameWindowWorstUpdateMs) this.frameWindowWorstUpdateMs = spent;
+  }
+
+  private updateScene(time: number, deltaMs: number): void {
     this.recordFrameTime(time);
     this.updateBackground(deltaMs);
     this.playback = advancePlayback(this.playback, deltaMs);
@@ -339,6 +356,10 @@ class SpaceshipScene extends Phaser.Scene {
     this.worstFrameMs = this.frameWindowWorstMs;
     this.stutterShare =
       this.frameWindowFrames > 0 ? this.frameWindowStutters / this.frameWindowFrames : 0;
+    this.updateMsPerSecond = this.frameWindowUpdateMs;
+    this.worstUpdateMs = this.frameWindowWorstUpdateMs;
+    this.frameWindowUpdateMs = 0;
+    this.frameWindowWorstUpdateMs = 0;
     this.frameWindowWorstMs = 0;
     this.frameWindowFrames = 0;
     this.frameWindowStutters = 0;
@@ -353,6 +374,15 @@ class SpaceshipScene extends Phaser.Scene {
   /** Share of the last second's frames that ran long, on `[0, 1]`. */
   readStutterShare(): number {
     return this.stutterShare;
+  }
+
+  /** Milliseconds of the last second the scene spent inside its own update. */
+  readUpdateMsPerSecond(): number {
+    return this.updateMsPerSecond;
+  }
+
+  readWorstUpdateMs(): number {
+    return this.worstUpdateMs;
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
@@ -1267,6 +1297,9 @@ export interface SpaceshipRuntime {
    */
   readWorstFrameMs(): number;
   readStutterShare(): number;
+  /** What the scene's own per-frame work costs, summed over the last second. */
+  readUpdateMsPerSecond(): number;
+  readWorstUpdateMs(): number;
   /**
    * Lowers the ceiling on how many device pixels the scene may draw, when the
    * frame counter says this machine cannot afford the one it has. Down only:
@@ -1384,6 +1417,12 @@ export function createSpaceshipRuntime(
     },
     readStutterShare() {
       return scene.readStutterShare();
+    },
+    readUpdateMsPerSecond() {
+      return scene.readUpdateMsPerSecond();
+    },
+    readWorstUpdateMs() {
+      return scene.readWorstUpdateMs();
     },
     setPixelRatioCap(cap) {
       if (cap === currentCap) return;
