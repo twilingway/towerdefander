@@ -6,3 +6,6 @@ apps/display/android/
 pnpm-lock.yaml
 .agents/skills/react-best-practices/
 .opencode/
+
+# Snapshots a browser session drops beside the repo; never part of it.
+.playwright-mcp/

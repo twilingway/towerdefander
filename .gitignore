@@ -30,3 +30,6 @@ data/
 # Local, reproducible source material for daily development Shorts.
 artifacts/daily-videos/
 .daily-worktrees/
+
+# Snapshots a browser session drops beside the repo; never part of it.
+.playwright-mcp/
