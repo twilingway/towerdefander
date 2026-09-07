@@ -280,6 +280,8 @@ class SpaceshipScene extends Phaser.Scene {
   /** The geometry and state the shield arc was last built for. */
   private shieldShape:
     { readonly radius: number; readonly half: number; readonly active: boolean } | undefined;
+  /** Reused points for the shield's crescent; refilled, never rebuilt. */
+  private readonly shieldPoints: Phaser.Math.Vector2[] = [];
   /** The reach and cone the aiming wedge was last built for. */
   private aimEnvelopeShape: { readonly reach: number; readonly half: number } | undefined;
   /**
@@ -1004,21 +1006,20 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   /**
-   * The shield, built in its own coordinates and turned to face.
+   * The shield, drawn where it actually points.
    *
-   * The crescent is a filled polygon, and a filled polygon is triangulated
-   * every time it is drawn - with a fresh vector per point on the way in. Doing
-   * that on every frame put the tessellator among the most expensive things in
-   * the profile. What actually changes as the shield sweeps is only where it
-   * points, so the arc is drawn from zero and the object is rotated; it is
-   * rebuilt when the shield goes up or down, or when its geometry moves.
+   * Built at its bearing rather than built once and rotated: the arc carries a
+   * glow, and a filtered object is composited through a focus region that does
+   * not travel with a rotation - turning the object tore the bloom off the
+   * crescent. The tessellation this costs is real and is paid for elsewhere,
+   * by baking what can be baked; correctness is not the place to save it.
    */
   private drawShield(): void {
     if (this.shield === undefined || this.spaceshipBody === undefined) return;
+    this.shield.clear();
     this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
-    this.shield.setRotation(this.visualShieldAngle);
     const style = getShieldVisualStyle(this.snapshot.shield.active);
-    const arc = getShieldArcRange(0, this.snapshot.shield.arcHalfAngle);
+    const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
     // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
     const radius = this.snapshot.shieldRadius;
     // A filtered object is composited by a camera of its own, and one that
@@ -1027,20 +1028,6 @@ class SpaceshipScene extends Phaser.Scene {
     // glow was laid down from the canvas corner while the hull was drawn from
     // the frame's, and the raised shield drifted off the ship by the width of
     // the bars. Focused on the arc itself, it travels with the hull instead.
-    const built = this.shieldShape;
-    if (
-      built?.radius === radius &&
-      built.half === this.snapshot.shield.arcHalfAngle &&
-      built.active === this.snapshot.shield.active
-    ) {
-      return;
-    }
-    this.shieldShape = {
-      radius,
-      half: this.snapshot.shield.arcHalfAngle,
-      active: this.snapshot.shield.active
-    };
-    this.shield.clear();
     const filterExtent = (radius + style.lineWidth + SHIELD_GLOW_DISTANCE) * 2;
     this.shield.focusFiltersOverride(
       filterExtent / 2,
@@ -1052,12 +1039,18 @@ class SpaceshipScene extends Phaser.Scene {
     if (style.crescentThickness !== null) {
       const crescent = getShieldCrescentPoints(arc.start, arc.end, radius, style.crescentThickness);
       if (crescent.length > 0) {
+        // The vectors are reused: a crescent is a hundred points, and a hundred
+        // fresh objects sixty times a second is six thousand a second thrown
+        // away to say the same thing.
+        while (this.shieldPoints.length < crescent.length) {
+          this.shieldPoints.push(new Phaser.Math.Vector2(0, 0));
+        }
+        this.shieldPoints.length = crescent.length;
+        crescent.forEach((point, index) => {
+          this.shieldPoints[index]?.set(point.x, point.y);
+        });
         this.shield.fillStyle(style.color, style.alpha);
-        this.shield.fillPoints(
-          crescent.map((point) => new Phaser.Math.Vector2(point.x, point.y)),
-          true,
-          true
-        );
+        this.shield.fillPoints(this.shieldPoints, true, true);
       }
     } else if (style.dash === null) {
       this.shield.beginPath();
