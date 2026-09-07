@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 
 import type { ControlVector } from "@spaceship-defender/client-shared";
 
+import { isArenaTarget } from "../arenaPointer.js";
+
 /** What the keys and the mouse drive, once they have been read. */
 export interface CockpitKeyboardTargets {
   readonly onHelm: (intent: { readonly turn: number; readonly thrust: number }) => void;
@@ -138,10 +140,18 @@ export function useCockpitKeyboard({
       applyHelm();
     }
 
+    function isArenaPointer(event: PointerEvent): boolean {
+      return isArenaTarget(event.target as { closest?: (selector: string) => unknown } | null);
+    }
+
     function onPointerMove(event: PointerEvent): void {
       // Only a mouse: a finger on the glass belongs to the sticks, and reading
       // it here as well would make every touch aim at itself.
       if (event.pointerType !== "mouse") return;
+      // Off the arena the bearing freezes where it was, which is what a gun
+      // does when nobody is commanding it - it does not chase the cursor onto
+      // a button.
+      if (!isArenaPointer(event)) return;
       const ship = shipPoint.current();
       if (ship === null) return;
       const dx = event.clientX - ship.x;
@@ -154,11 +164,15 @@ export function useCockpitKeyboard({
 
     function onPointerDown(event: PointerEvent): void {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
+      if (!isArenaPointer(event)) return;
       targets.current.onCannonFromTrigger(true);
     }
 
     function onPointerUp(event: PointerEvent): void {
       if (event.pointerType !== "mouse" || event.button !== 0) return;
+      // Deliberately not asked where this happened. A shot that started on the
+      // arena has to stop wherever the button is let go, or releasing over the
+      // HUD leaves the cannon held down.
       targets.current.onCannonFromTrigger(false);
     }
 
