@@ -31,7 +31,7 @@ import {
   roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Profiler, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import { BossHealth } from "./BossHealth.js";
 import { CombatRadar } from "./CombatRadar.js";
@@ -74,12 +74,7 @@ import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isDiagnosticsRequested } from "./model/diagnostics.js";
 import { withPredictedAngles } from "./model/predictedAngles.js";
-import {
-  advanceSnapshotCost,
-  createSnapshotCost,
-  recordSnapshot,
-  type SnapshotCost
-} from "./model/snapshotCost.js";
+import { advanceWork, createWorkMeter, recordWork, type WorkMeter } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
@@ -161,8 +156,16 @@ export function DisplayApp() {
    * Written on every patch and read twice a second. A ref rather than state:
    * setting state here would add a render to the very work being measured.
    */
-  const snapshotCost = useRef(createSnapshotCost());
-  const [snapshotReading, setSnapshotReading] = useState<SnapshotCost | undefined>(undefined);
+  const snapshotCost = useRef(createWorkMeter());
+  const [snapshotReading, setSnapshotReading] = useState<WorkMeter | undefined>(undefined);
+  /*
+   * What React itself costs, from React's own stopwatch rather than a guess.
+   * Every patch replaces the view object, so the whole battle tree re-renders
+   * with it, and the number of long frames on a phone matches the number of
+   * patches almost exactly - which makes this the last unmeasured suspect.
+   */
+  const commitCost = useRef(createWorkMeter());
+  const [commitReading, setCommitReading] = useState<WorkMeter | undefined>(undefined);
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -231,8 +234,11 @@ export function DisplayApp() {
   useEffect(() => {
     if (!diagnostics) return undefined;
     const timer = window.setInterval(() => {
-      snapshotCost.current = advanceSnapshotCost(snapshotCost.current, performance.now());
+      const now = performance.now();
+      snapshotCost.current = advanceWork(snapshotCost.current, now);
+      commitCost.current = advanceWork(commitCost.current, now);
       setSnapshotReading(snapshotCost.current);
+      setCommitReading(commitCost.current);
     }, 500);
     return () => {
       window.clearInterval(timer);
@@ -541,7 +547,7 @@ export function DisplayApp() {
     const next = toDisplayRoomView(state);
     const builtInMs = performance.now() - startedAt;
     if (next !== undefined) {
-      snapshotCost.current = recordSnapshot(snapshotCost.current, builtInMs, startedAt);
+      snapshotCost.current = recordWork(snapshotCost.current, builtInMs, startedAt);
       setNetworkView(next);
       setStatus("connected");
     }
@@ -677,159 +683,172 @@ export function DisplayApp() {
           </span>
         </section>
       ) : (
-        <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
-          <header className="battle-header spaceship-hud">
-            <div>
-              <span>Волна</span>
-              <strong>{view.game.encounter.waveNumber}</strong>
-              <small>{encounterLabel(view.game.encounter.phase)}</small>
-            </div>
-            {/* Hull and shield moved onto the radar dial: two rings, their end
+        <Profiler
+          id="battle"
+          onRender={(_id, _phase, actualDuration) => {
+            // Only while the panel is open: the profiler is not free, and an
+            // instrument that taxes what it measures reports its own weight.
+            if (!diagnostics) return;
+            commitCost.current = recordWork(commitCost.current, actualDuration, performance.now());
+          }}
+        >
+          <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
+            <header className="battle-header spaceship-hud">
+              <div>
+                <span>Волна</span>
+                <strong>{view.game.encounter.waveNumber}</strong>
+                <small>{encounterLabel(view.game.encounter.phase)}</small>
+              </div>
+              {/* Hull and shield moved onto the radar dial: two rings, their end
                 labels and the shield state word say everything these two cards
                 did, in the place the pilot is already looking. */}
-            <div>
-              <span>Счёт</span>
-              <strong>{view.game.encounter.score}</strong>
-              <small data-testid="hud-field-counts">
-                Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length} ·
-                Камни {waveAsteroidCount}
-              </small>
-            </div>
-            <div>
-              <span>Кредиты</span>
-              <strong>{view.game.credits}</strong>
-              <small>
-                {waveUpgrade === null
-                  ? "в этой волне улучшений нет"
-                  : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
-              </small>
-            </div>
-            <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
-          </header>
-          {portrait ? (
-            <RotateNotice />
-          ) : (
-            <SpaceshipCanvas
-              game={withPredictedAngles(view.game, predictedAngles.current, predictionEnabled)}
-              runNumber={view.runNumber}
-              connectionEpoch={connectionEpoch}
-              visibleDemo={visibleDemo}
-              backgroundEnabled={backgroundEnabled}
-              glowEnabled={glowEnabled}
-              onFrameStats={setFrameStats}
-            />
-          )}
-          {cockpitPlayer !== undefined && !portrait && (
-            <SoloCockpit
-              enabled={view.game.encounter.phase === "combat"}
-              driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
-              aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
-              machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
-              machineGunOverheated={view.game.machineGun.overheated}
-              cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
-              cannonOverheated={view.game.cannon.overheated}
-              aimAssist={aimAssist}
-              onAimAssistChange={(next) => {
-                setAimAssist(next);
-                saveAimAssistToDevice(next);
-              }}
-              {...cockpitControls}
-            />
-          )}
-          {view.game.encounter.phase === "combat" &&
-            (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
-              <SalvageCountdown secondsRemaining={view.game.encounter.lootWindowSecondsRemaining} />
+              <div>
+                <span>Счёт</span>
+                <strong>{view.game.encounter.score}</strong>
+                <small data-testid="hud-field-counts">
+                  Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length} ·
+                  Камни {waveAsteroidCount}
+                </small>
+              </div>
+              <div>
+                <span>Кредиты</span>
+                <strong>{view.game.credits}</strong>
+                <small>
+                  {waveUpgrade === null
+                    ? "в этой волне улучшений нет"
+                    : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
+                </small>
+              </div>
+              <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
+            </header>
+            {portrait ? (
+              <RotateNotice />
             ) : (
-              <WaveCountdown
-                className="display-wave-countdown"
-                secondsRemaining={view.game.encounter.waveSecondsRemaining}
+              <SpaceshipCanvas
+                game={withPredictedAngles(view.game, predictedAngles.current, predictionEnabled)}
+                runNumber={view.runNumber}
+                connectionEpoch={connectionEpoch}
+                visibleDemo={visibleDemo}
+                backgroundEnabled={backgroundEnabled}
+                glowEnabled={glowEnabled}
+                onFrameStats={setFrameStats}
               />
-            ))}
-          {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
-          {diagnostics && (
-            <DiagnosticsPanel
-              fps={frameStats.fps}
-              worstFrameMs={frameStats.worstFrameMs}
-              stutterShare={frameStats.stutterShare}
-              sceneMsPerSecond={frameStats.updateMsPerSecond}
-              worstSceneMs={frameStats.worstUpdateMs}
-              serverStepMs={view.game.serverStepMs}
-              pingMs={view.displayLatencyMs}
-              entityCount={countDrawnEntities(view.game)}
-              traffic={traffic}
-              snapshot={snapshotReading}
-              predictionEnabled={predictionEnabled}
-              onTogglePrediction={() => {
-                setPredictionEnabled((enabled) => !enabled);
-              }}
-              backgroundEnabled={backgroundEnabled}
-              onToggleBackground={() => {
-                setBackgroundEnabled((enabled) => !enabled);
-              }}
-              glowEnabled={glowEnabled}
-              onToggleGlow={() => {
-                setGlowEnabled((enabled) => !enabled);
-              }}
-            />
-          )}
-          <CombatRadar game={view.game} />
-          {view.game.encounter.phase === "intermission" && (
-            <TeamUpgradeOverlay
-              teamUpgrade={view.game.teamUpgrade}
-              credits={view.game.credits}
-              score={view.game.encounter.score}
-              waveNumber={view.game.encounter.waveNumber}
-              phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
-              purchasedModules={view.game.purchasedModules}
-              {...(cockpitSeat === undefined
-                ? {}
-                : { cockpit: { role: cockpitSeat.role, onVote: sendCockpitVote } })}
-            />
-          )}
-          {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
-            <RunResultOverlay
-              outcome={view.game.encounter.outcome}
-              defeatReason={view.game.encounter.defeatReason}
-              waveNumber={view.game.encounter.waveNumber}
-              score={view.game.encounter.score}
-              readyCount={view.players.filter(({ ready }) => ready).length}
-              crewSize={view.crewSize}
-              closing={closingRoom}
-              onClose={() => void handleCloseRoom()}
-              {...(cockpitPlayer === undefined
-                ? {}
-                : {
-                    cockpit: {
-                      ready: cockpitSeat?.ready === true,
-                      onReady: sendCockpitReady
-                    }
-                  })}
-            />
-          )}
-          {/* The run's own hull, straight from the catalogue; the fixture is
+            )}
+            {cockpitPlayer !== undefined && !portrait && (
+              <SoloCockpit
+                enabled={view.game.encounter.phase === "combat"}
+                driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
+                aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
+                machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
+                machineGunOverheated={view.game.machineGun.overheated}
+                cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
+                cannonOverheated={view.game.cannon.overheated}
+                aimAssist={aimAssist}
+                onAimAssistChange={(next) => {
+                  setAimAssist(next);
+                  saveAimAssistToDevice(next);
+                }}
+                {...cockpitControls}
+              />
+            )}
+            {view.game.encounter.phase === "combat" &&
+              (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
+                <SalvageCountdown
+                  secondsRemaining={view.game.encounter.lootWindowSecondsRemaining}
+                />
+              ) : (
+                <WaveCountdown
+                  className="display-wave-countdown"
+                  secondsRemaining={view.game.encounter.waveSecondsRemaining}
+                />
+              ))}
+            {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
+            {diagnostics && (
+              <DiagnosticsPanel
+                fps={frameStats.fps}
+                worstFrameMs={frameStats.worstFrameMs}
+                stutterShare={frameStats.stutterShare}
+                sceneMsPerSecond={frameStats.updateMsPerSecond}
+                worstSceneMs={frameStats.worstUpdateMs}
+                serverStepMs={view.game.serverStepMs}
+                pingMs={view.displayLatencyMs}
+                entityCount={countDrawnEntities(view.game)}
+                traffic={traffic}
+                snapshot={snapshotReading}
+                commit={commitReading}
+                predictionEnabled={predictionEnabled}
+                onTogglePrediction={() => {
+                  setPredictionEnabled((enabled) => !enabled);
+                }}
+                backgroundEnabled={backgroundEnabled}
+                onToggleBackground={() => {
+                  setBackgroundEnabled((enabled) => !enabled);
+                }}
+                glowEnabled={glowEnabled}
+                onToggleGlow={() => {
+                  setGlowEnabled((enabled) => !enabled);
+                }}
+              />
+            )}
+            <CombatRadar game={view.game} />
+            {view.game.encounter.phase === "intermission" && (
+              <TeamUpgradeOverlay
+                teamUpgrade={view.game.teamUpgrade}
+                credits={view.game.credits}
+                score={view.game.encounter.score}
+                waveNumber={view.game.encounter.waveNumber}
+                phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
+                purchasedModules={view.game.purchasedModules}
+                {...(cockpitSeat === undefined
+                  ? {}
+                  : { cockpit: { role: cockpitSeat.role, onVote: sendCockpitVote } })}
+              />
+            )}
+            {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
+              <RunResultOverlay
+                outcome={view.game.encounter.outcome}
+                defeatReason={view.game.encounter.defeatReason}
+                waveNumber={view.game.encounter.waveNumber}
+                score={view.game.encounter.score}
+                readyCount={view.players.filter(({ ready }) => ready).length}
+                crewSize={view.crewSize}
+                closing={closingRoom}
+                onClose={() => void handleCloseRoom()}
+                {...(cockpitPlayer === undefined
+                  ? {}
+                  : {
+                      cockpit: {
+                        ready: cockpitSeat?.ready === true,
+                        onReady: sendCockpitReady
+                      }
+                    })}
+              />
+            )}
+            {/* The run's own hull, straight from the catalogue; the fixture is
               the preview's stand-in when no server answered. */}
-          {moduleTree !== undefined && (
-            <ModuleTreeWindow
-              tiers={moduleTree.tiers}
-              endlessTier={moduleTree.endlessTier}
-              purchased={view.game.purchasedModules}
-              initiallyShown={previewView !== undefined}
-              ship={{
-                maxHp: view.game.spaceship.maxHp,
-                shieldCapacity: view.game.shield.capacity,
-                shieldArcRadians: view.game.shield.arcHalfAngle * 2,
-                shieldRadius: view.game.shieldRadius
-              }}
-            />
-          )}
-          {/*
+            {moduleTree !== undefined && (
+              <ModuleTreeWindow
+                tiers={moduleTree.tiers}
+                endlessTier={moduleTree.endlessTier}
+                purchased={view.game.purchasedModules}
+                initiallyShown={previewView !== undefined}
+                ship={{
+                  maxHp: view.game.spaceship.maxHp,
+                  shieldCapacity: view.game.shield.capacity,
+                  shieldArcRadians: view.game.shield.arcHalfAngle * 2,
+                  shieldRadius: view.game.shieldRadius
+                }}
+              />
+            )}
+            {/*
             Stacked directly under the instrument panel and answering the same
             question, so with the panel open it is the third ping on one edge of
             the screen. The panel wins; the crew rows come back the moment the
             flag goes away.
           */}
-          {!diagnostics && <CrewLatency view={view} game={view.game} />}
-        </section>
+            {!diagnostics && <CrewLatency view={view} game={view.game} />}
+          </section>
+        </Profiler>
       )}
       {visibleDemo ? (
         <VisibleDemoOverlay
