@@ -14,7 +14,12 @@ import { BalanceStore, createDefaultTuning } from "../balance/store.js";
  * this itself or it is not the room the server runs.
  */
 function initRoom<T extends object>(room: T): T {
-  (room as unknown as { __init: () => void }).__init();
+  const internals = room as unknown as { __init: () => void; _listing: Record<string, unknown> };
+  internals.__init();
+  // The matchmaker fills this in between `__init` and `onCreate`, and setting
+  // `maxClients` writes through to it. Without one the write rejects, which
+  // surfaces as an unhandled rejection rather than a failed test.
+  internals._listing = {};
   return room;
 }
 

@@ -1,4 +1,4 @@
-import { Decoder, Encoder, StateView } from "@colyseus/schema";
+import { Decoder, StateView, type Encoder } from "@colyseus/schema";
 import { dynamicEntityCount, type SpaceshipSimulationState } from "@spaceship-defender/game-core";
 import { PLAYER_CAPACITY, PROTOCOL_VERSION } from "@spaceship-defender/protocol";
 import type { Client } from "colyseus";
@@ -31,7 +31,12 @@ interface RoomInternals {
  * this itself or it is not the room the server runs.
  */
 function initRoom<T extends object>(room: T): T {
-  (room as unknown as { __init: () => void }).__init();
+  const internals = room as unknown as { __init: () => void; _listing: Record<string, unknown> };
+  internals.__init();
+  // The matchmaker fills this in between `__init` and `onCreate`, and setting
+  // `maxClients` writes through to it. Without one the write rejects, which
+  // surfaces as an unhandled rejection rather than a failed test.
+  internals._listing = {};
   return room;
 }
 
@@ -43,7 +48,12 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
     room.advanceGameStep();
 
     expect(schemaEntityCount(room.state)).toBe(208);
-    const encoder = new Encoder(room.state);
+    // The room owns this state and its encoder; a second encoder over the same
+    // state is a second root, and schema 5 addresses view membership by the root
+    // that issued the view - so patches raised on one are invisible to the other.
+    const encoder = (
+      room as unknown as { _serializer: { encoder: Encoder<SpaceshipDefenderState> } }
+    )._serializer.encoder;
     const displayView = new StateView();
     displayView.add(room.state.game, 1);
     const decoderState = new SpaceshipDefenderState();

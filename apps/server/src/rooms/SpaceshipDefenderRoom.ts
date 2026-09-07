@@ -971,13 +971,13 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private startSimulation(): void {
     this.stopSimulation();
-    this.setSimulationInterval((deltaMs) => {
+    this.setTimestep((deltaMs) => {
       this.advanceElapsedTime(deltaMs);
     }, SIMULATION_WAKE_MS);
   }
 
   private stopSimulation(): void {
-    this.setSimulationInterval(undefined);
+    this.setTimestep(undefined);
     this.stepAccumulatorMs = 0;
     // A stopped simulation costs nothing, and the last number from the fight
     // would otherwise read as a tick that is still running.

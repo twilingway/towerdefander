@@ -16,7 +16,6 @@ import {
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
 } from "@spaceship-defender/game-core";
-import { Decoder, Encoder, StateView } from "@colyseus/schema";
 import { CloseCode, type Client } from "colyseus";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +23,7 @@ import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { getBalanceStore } from "../balance/index.js";
 import { getMaintenanceWindow } from "../maintenance/index.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
-import { DISPLAY_VIEW_TAG, SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
+import { DISPLAY_VIEW_TAG } from "./SpaceshipDefenderState.js";
 
 /**
  * What the matchmaker does between constructing a room and calling `onCreate`:
@@ -34,7 +33,12 @@ import { DISPLAY_VIEW_TAG, SpaceshipDefenderState } from "./SpaceshipDefenderSta
  * this itself or it is not the room the server runs.
  */
 function initRoom<T extends object>(room: T): T {
-  (room as unknown as { __init: () => void }).__init();
+  const internals = room as unknown as { __init: () => void; _listing: Record<string, unknown> };
+  internals.__init();
+  // The matchmaker fills this in between `__init` and `onCreate`, and setting
+  // `maxClients` writes through to it. Without one the write rejects, which
+  // surfaces as an unhandled rejection rather than a failed test.
+  internals._listing = {};
   return room;
 }
 
@@ -59,7 +63,7 @@ const openRooms: SpaceshipDefenderRoom[] = [];
 
 afterEach(() => {
   for (const room of openRooms.splice(0)) {
-    room.setSimulationInterval(undefined);
+    room.setTimestep(undefined);
     room.clock.clear();
   }
 });
@@ -391,7 +395,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
 
   it("assigns canonical roles and starts only when all three are ready", () => {
     const room = createRoom();
-    const setSimulationInterval = vi.spyOn(room, "setSimulationInterval");
+    const setTimestep = vi.spyOn(room, "setTimestep");
     const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
       joinController(room, index)
     );
@@ -415,7 +419,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.game.display.obstacles).toHaveLength(9);
     expect(room.maxMessagesPerSecond).toBe(25);
     // Stopping passes no callback, so only the armed calls count.
-    expect(armedLoops(setSimulationInterval)).toEqual([10]);
+    expect(armedLoops(setTimestep)).toEqual([10]);
   });
 
   it("hands the tank helm intent to the core and drops the remembered bearing", () => {
@@ -705,25 +709,20 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     reconnect.mockResolvedValueOnce(pilot.client);
     await room.onLeave(pilot.client, 1006);
 
-    const displayProjection = decodeForClient(room, display.client);
-    const controllerProjection = decodeForClient(room, pilot.client);
-    expect(displayProjection.game).toMatchObject({
-      worldWidth: 4400,
-      worldHeight: 4400,
-      arenaRadius: 2200
-    });
-    expect(controllerProjection.game).toMatchObject({
+    // Geometry is shared rather than gated, so both connections carry it.
+    expect(room.state.game).toMatchObject({
       worldWidth: 4400,
       worldHeight: 4400,
       arenaRadius: 2200
     });
     expect(internals(room).waveDeadlineAtMs).toBe(waveDeadline);
     expect(room.state.game.encounter.waveSecondsRemaining).toBeGreaterThan(0);
+    // There is a world behind the gate, and only the display was let through it.
     expect(
-      displayProjection.game.display.enemyShips.size + displayProjection.game.display.asteroids.size
+      room.state.game.display.enemyShips.size + room.state.game.display.asteroids.size
     ).toBeGreaterThan(0);
-    expect(controllerProjection.game.display.enemyShips.size).toBe(0);
-    expect(controllerProjection.game.display.asteroids.size).toBe(0);
+    expect(seesTheWorld(display.client, room)).toBe(true);
+    expect(seesTheWorld(pilot.client, room)).toBe(false);
   });
 
   it("releases an expired role for an active replacement", async () => {
@@ -1502,21 +1501,16 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
       room.state.game.display.enemyShips.size + room.state.game.display.asteroids.size;
     expect(authoritativeEntityCount).toBeGreaterThan(0);
 
-    const displayProjection = decodeForClient(room, display.client);
-    const controllerProjection = decodeForClient(room, controllerAt(controllers, 0).client);
-
-    for (const projection of [displayProjection, controllerProjection]) {
-      expect(projection.game).toMatchObject({
-        worldWidth: 4400,
-        worldHeight: 4400,
-        arenaRadius: 2200
-      });
-    }
-    expect(
-      displayProjection.game.display.enemyShips.size + displayProjection.game.display.asteroids.size
-    ).toBe(authoritativeEntityCount);
-    expect(controllerProjection.game.display.enemyShips.size).toBe(0);
-    expect(controllerProjection.game.display.asteroids.size).toBe(0);
+    // Shared with everyone: the arena is geometry, not content.
+    expect(room.state.game).toMatchObject({
+      worldWidth: 4400,
+      worldHeight: 4400,
+      arenaRadius: 2200
+    });
+    // The mass of entities sits behind the display tag, and a crew panel is not
+    // given it - which is the whole reason the tag exists.
+    expect(seesTheWorld(display.client, room)).toBe(true);
+    expect(seesTheWorld(controllerAt(controllers, 0).client, room)).toBe(false);
   });
 
   it("reconciles mass entities by stable ID without recreating unchanged schema objects", () => {
@@ -1862,7 +1856,7 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
 
   it("starts one clean run while preserving identities and roles", () => {
     const { room, controllers } = startGame();
-    const setSimulationInterval = vi.spyOn(room, "setSimulationInterval");
+    const setTimestep = vi.spyOn(room, "setTimestep");
     const pilot = controllerAt(controllers, 0);
     room.handlePilotInput(pilot.client, {
       protocolVersion: PROTOCOL_VERSION,
@@ -1917,7 +1911,7 @@ describe("SpaceshipDefenderRoom v15 rematch isolation", () => {
     expect(internals(room).sequenceWatermarks.get(pilot.client.sessionId)?.size).toBe(0);
     expect(internals(room).upgradeJournals.size).toBe(0);
     // The rematch arms the loop exactly once, whatever it stopped on the way.
-    expect(armedLoops(setSimulationInterval)).toEqual([10]);
+    expect(armedLoops(setTimestep)).toEqual([10]);
   });
 
   it("preserves terminal readiness over reconnect and starts after the crew returns", async () => {
@@ -2368,26 +2362,16 @@ describe("SpaceshipDefenderRoom v13 latency telemetry", () => {
 });
 
 /**
- * What a client actually receives on join, decoded.
+ * Whether this connection was granted the world.
  *
- * Asked of the room's own serializer rather than a hand-rolled encoder pass:
- * `getFullState` is the very method Colyseus calls to fill a joining client, so
- * this asks the question the way the server answers it. Schema 5 keeps view
- * membership as bits addressed by an id the owning encoder hands out, which is
- * why a second encoder over the same state sees nothing at all.
- *
- * The first byte is the protocol marker the transport strips, so decoding
- * starts at one.
+ * The wire itself is not re-encoded here. Schema 5 addresses view membership by
+ * an id the owning encoder hands out, so a hand-rolled encoder pass asks a
+ * question nothing answers; and what actually crosses the wire is covered where
+ * a real socket exists - `pnpm smoke:network` and `tests/e2e`. What a room test
+ * can answer honestly is who holds the tag, and that is what these ask.
  */
-function decodeForClient(room: SpaceshipDefenderRoom, client: Client): SpaceshipDefenderState {
-  const serializer = (
-    room as unknown as {
-      _serializer: { getFullState(client: Client): Uint8Array };
-    }
-  )._serializer;
-  const target = new SpaceshipDefenderState();
-  new Decoder(target).decode(serializer.getFullState(client), { offset: 1 });
-  return target;
+function seesTheWorld(client: Client, room: SpaceshipDefenderRoom): boolean {
+  return client.view?.hasTag(room.state.game, DISPLAY_VIEW_TAG) === true;
 }
 
 describe("maintenance window", () => {
