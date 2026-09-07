@@ -63,6 +63,8 @@ interface SpaceshipCanvasProps {
 
 /** Twice a second: faster than this and the digits blur into noise. */
 const FPS_SAMPLE_INTERVAL_MS = 500;
+/** The world as text, for tests and the demo bot; nothing on screen reads it. */
+const READABLE_SAMPLE_INTERVAL_MS = 100;
 
 export function SpaceshipCanvas({
   game,
@@ -224,42 +226,68 @@ export function SpaceshipCanvas({
     };
   }, []);
 
+  /*
+   * The readable state of the world, on its own slow clock.
+   *
+   * These attributes are how a browser test and the demo bot see the arena, and
+   * they used to come from the `game` prop - which was fine while every patch
+   * re-rendered the page. It no longer does: in combat the page holds still and
+   * the scene draws from the live reader, so an attribute rendered from the
+   * prop would sit frozen at whatever the last structural change left behind.
+   *
+   * Ten times a second is far below the patch rate and far above anything a
+   * test waits for, and the subtree it re-renders is this div and one hidden
+   * sentence.
+   */
+  const [readable, setReadable] = useState(game);
+  useEffect(() => {
+    if (readGame === undefined) return undefined;
+    const timer = globalThis.setInterval(() => {
+      const latest = readGame();
+      if (latest !== undefined) setReadable(latest);
+    }, READABLE_SAMPLE_INTERVAL_MS);
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, [readGame]);
+  const shown = readGame === undefined ? game : readable;
+
   return (
     <div
       className="battlefield-shell"
       data-testid="spaceship-world"
       data-run-number={runNumber}
-      data-arena-radius={game.arenaRadius}
-      data-world-width={game.worldWidth}
-      data-world-height={game.worldHeight}
-      data-spaceship-x={game.spaceship.x}
-      data-spaceship-y={game.spaceship.y}
-      data-spaceship-radius={game.spaceship.radius}
-      data-spaceship-velocity-x={game.spaceship.velocityX}
-      data-spaceship-heading={game.spaceship.heading}
-      data-spaceship-hp={game.spaceship.hp}
-      data-spaceship-max-hp={game.spaceship.maxHp}
-      data-score={game.encounter.score}
-      data-credits={game.credits}
-      data-wave-number={game.encounter.waveNumber}
-      data-encounter-phase={game.encounter.phase}
+      data-arena-radius={shown.arenaRadius}
+      data-world-width={shown.worldWidth}
+      data-world-height={shown.worldHeight}
+      data-spaceship-x={shown.spaceship.x}
+      data-spaceship-y={shown.spaceship.y}
+      data-spaceship-radius={shown.spaceship.radius}
+      data-spaceship-velocity-x={shown.spaceship.velocityX}
+      data-spaceship-heading={shown.spaceship.heading}
+      data-spaceship-hp={shown.spaceship.hp}
+      data-spaceship-max-hp={shown.spaceship.maxHp}
+      data-score={shown.encounter.score}
+      data-credits={shown.credits}
+      data-wave-number={shown.encounter.waveNumber}
+      data-encounter-phase={shown.encounter.phase}
       data-team-upgrade-id={
-        getCurrentWaveUpgrade(game.teamUpgrade.selection, game.encounter.waveNumber)?.upgradeId ??
+        getCurrentWaveUpgrade(shown.teamUpgrade.selection, shown.encounter.waveNumber)?.upgradeId ??
         ""
       }
-      data-turret-angle={game.turretAngle}
-      data-enemy-count={game.enemyShips.length}
-      data-asteroid-count={game.asteroids.length}
-      data-friendly-projectile-count={game.friendlyProjectiles.length}
+      data-turret-angle={shown.turretAngle}
+      data-enemy-count={shown.enemyShips.length}
+      data-asteroid-count={shown.asteroids.length}
+      data-friendly-projectile-count={shown.friendlyProjectiles.length}
       data-mg-projectile-count={
-        game.friendlyProjectiles.filter((projectile) => projectile.source === "machineGun").length
+        shown.friendlyProjectiles.filter((projectile) => projectile.source === "machineGun").length
       }
-      data-hostile-projectile-count={game.hostileProjectiles.length}
-      data-missile-count={game.homingMissiles.length}
-      data-latest-projectile-id={game.friendlyProjectiles.at(-1)?.entityId ?? ""}
-      data-shield-active={game.shield.active}
-      data-shield-angle={game.shield.angle}
-      data-shield-energy={game.shield.energy}
+      data-hostile-projectile-count={shown.hostileProjectiles.length}
+      data-missile-count={shown.homingMissiles.length}
+      data-latest-projectile-id={shown.friendlyProjectiles.at(-1)?.entityId ?? ""}
+      data-shield-active={shown.shield.active}
+      data-shield-angle={shown.shield.angle}
+      data-shield-energy={shown.shield.energy}
       {...(visibleDemo
         ? {
             "data-demo-target-id": demoTarget?.entityId ?? "",
@@ -278,9 +306,9 @@ export function SpaceshipCanvas({
       <div ref={hostReference} className="battlefield-canvas" aria-hidden="true" />
       {failed && <p className="battlefield-fallback">Не удалось запустить Phaser-сцену.</p>}
       <span className="sr-only">
-        Корабль находится в точке {Math.round(game.spaceship.x)}, {Math.round(game.spaceship.y)}.
-        Снарядов: {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
-        {game.enemyShips.length}.
+        Корабль находится в точке {Math.round(shown.spaceship.x)}, {Math.round(shown.spaceship.y)}.
+        Снарядов: {shown.friendlyProjectiles.length + shown.hostileProjectiles.length}. Врагов:{" "}
+        {shown.enemyShips.length}.
       </span>
     </div>
   );
