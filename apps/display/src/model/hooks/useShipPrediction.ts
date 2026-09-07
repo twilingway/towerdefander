@@ -65,6 +65,15 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
   readonly enabled: boolean;
   readonly source: ShipPredictionSource;
   readonly world: PredictionWorld | undefined;
+  /**
+   * Called every animation frame with the pose to draw.
+   *
+   * It must NOT set React state. This runs at frame rate, and pushing a new
+   * value into a component from here re-renders the whole battle tree sixty to
+   * a hundred and sixty times a second - which froze a phone within seconds of
+   * the first run and is the very tax prediction is here to remove. Write it to
+   * a ref; the scene reads the ref.
+   */
   readonly onPose: (pose: PredictedPoseFrame | undefined) => void;
 }): void {
   const latest = useRef({ source, world, enabled, onPose });

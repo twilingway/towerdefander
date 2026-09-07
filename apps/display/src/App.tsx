@@ -80,7 +80,6 @@ import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } fro
 import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { isDiagnosticsRequested } from "./model/diagnostics.js";
-import { withPredictedPose } from "./model/predictedAngles.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictedPoseFrame } from "./model/shipPrediction.js";
 import { advanceWork, createWorkMeter, recordWork, type WorkMeter } from "./model/workMeter.js";
@@ -156,11 +155,12 @@ export function DisplayApp() {
   /**
    * The ship this page is flying, as the reconciler currently has it.
    *
-   * State rather than a ref because the canvas is a React child and has to be
-   * handed it; the runtime publishes once per frame, which is the rate the
-   * canvas already redraws at.
+   * A ref, and that is the whole point: it is written every animation frame,
+   * and a state update at that rate re-renders the battle tree a hundred times
+   * a second. The scene reads it directly instead, which is also how the patch
+   * stops being a reason to redraw the interface at all.
    */
-  const [predictedPose, setPredictedPose] = useState<PredictedPoseFrame | undefined>(undefined);
+  const predictedPoseReference = useRef<PredictedPoseFrame | undefined>(undefined);
   /**
    * The parallax layers, asked about rather than settled: they are four
    * full-screen sprites and three blends, and a phone is where that is paid for.
@@ -326,7 +326,9 @@ export function DisplayApp() {
             arenaRadius: view.game.arenaRadius,
             turretMountedOnHull: view.game.helm.turretMountedOnHull
           },
-    onPose: setPredictedPose
+    onPose: (pose) => {
+      predictedPoseReference.current = pose;
+    }
   });
 
   /*
@@ -745,7 +747,8 @@ export function DisplayApp() {
               <RotateNotice />
             ) : (
               <SpaceshipCanvas
-                game={withPredictedPose(view.game, predictedPose, predictionEnabled)}
+                game={view.game}
+                readPredictedPose={() => (predicting ? predictedPoseReference.current : undefined)}
                 runNumber={view.runNumber}
                 connectionEpoch={connectionEpoch}
                 visibleDemo={visibleDemo}

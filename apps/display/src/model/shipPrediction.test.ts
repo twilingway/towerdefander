@@ -75,6 +75,35 @@ describe("toDriveIntent", () => {
     expect(intent.thrust).toBeNull();
   });
 
+  it("derives the hull's bearing from the drive vector, as the room does", () => {
+    /*
+     * The bug this exists for: the room computes a fresh target from the stick
+     * every frame, and a replay that merely carried the last published one
+     * steered nowhere at all - the ship simply would not turn under prediction.
+     */
+    const intent = toDriveIntent(
+      { ...inputAt(0), hasHelm: false, vectorX: 0, vectorY: 1 },
+      restingFrame()
+    );
+
+    expect(intent.headingTargetAngle).toBeCloseTo(Math.atan2(1, 0), 12);
+  });
+
+  it("keeps the hull's bearing when the drive stick is released", () => {
+    const held = { ...restingFrame(), hasHeadingTarget: true, headingTargetAngle: 0.75 };
+    const intent = toDriveIntent({ ...inputAt(0), hasHelm: false, vectorX: 0, vectorY: 0 }, held);
+
+    expect(intent.headingTargetAngle).toBe(0.75);
+  });
+
+  it("drops the bearing when a spin is asked for instead", () => {
+    const held = { ...restingFrame(), hasHeadingTarget: true, headingTargetAngle: 0.75 };
+    const intent = toDriveIntent({ ...inputAt(0), hasHelm: true, turn: 1 }, held);
+
+    // A spin names no bearing; keeping one would pull the hull back to it.
+    expect(intent.headingTargetAngle).toBeNull();
+  });
+
   it("names the same bearing from an aim vector that the room stores", () => {
     const intent = toDriveIntent({ ...inputAt(0), aimX: 0, aimY: 1 }, restingFrame());
 
@@ -90,6 +119,25 @@ describe("toDriveIntent", () => {
 });
 
 describe("stepPredictedPose", () => {
+  it("turns the ship when the stick is held to one side", () => {
+    // The end the player actually judges: a held stick has to move the hull.
+    const pose = restingFrame();
+    const held: PredictedInputFrame = {
+      ...inputAt(0),
+      hasHelm: false,
+      vectorX: 0,
+      vectorY: 1,
+      aimX: 0,
+      aimY: 0
+    };
+
+    for (let frame = 0; frame < 20; frame += 1) {
+      stepPredictedPose(pose, held, config, stats);
+    }
+
+    expect(pose.heading).toBeGreaterThan(0.2);
+  });
+
   it("loses nothing the core step carries, over a long replay", () => {
     /*
      * The point of the check: the wire pose is flat with flags where the step

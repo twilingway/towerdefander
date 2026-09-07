@@ -106,6 +106,14 @@ const ARENA_FILL_ALPHA = 0.5;
 const STUTTER_RATIO = 1.5;
 const FRAME_WINDOW_MS = 1000;
 
+/** Only what the scene draws with; the rest of the pose is the replay's business. */
+interface PredictedShipPose {
+  readonly x: number;
+  readonly y: number;
+  readonly heading: number;
+  readonly turretAngle: number;
+}
+
 interface BackgroundLayerState {
   readonly sprite: Phaser.GameObjects.TileSprite;
   readonly config: BackgroundLayerConfig;
@@ -187,6 +195,14 @@ class SpaceshipScene extends Phaser.Scene {
   private readonly backgroundLayers: BackgroundLayerState[] = [];
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
   private backgroundEnabled = true;
+  /**
+   * The ship this page is flying, asked for once per drawn frame.
+   *
+   * Read here rather than handed down as a prop: the pose changes every frame,
+   * and a prop would mean a React render every frame - which is the cost this
+   * whole exercise is trying to remove.
+   */
+  private readPredictedPose: (() => PredictedShipPose | undefined) | undefined;
   /**
    * Off keeps the shield's bloom down even while the sector is up.
    *
@@ -310,8 +326,21 @@ class SpaceshipScene extends Phaser.Scene {
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
     const playbackTick = this.playback.tick;
-    const spaceshipPosition = samplePointTrack(this.spaceshipTrack, playbackTick);
-    const spaceshipHeading = sampleAngleTrack(this.headingTrack, playbackTick);
+    /*
+     * The predicted ship wins over the interpolated one when there is a
+     * prediction, and that is the whole point: interpolation draws where the
+     * room said the hull was a patch ago, prediction draws where this page's
+     * own step has already put it.
+     */
+    const predicted = this.readPredictedPose?.();
+    const spaceshipPosition =
+      predicted === undefined
+        ? samplePointTrack(this.spaceshipTrack, playbackTick)
+        : { x: predicted.x, y: predicted.y };
+    const spaceshipHeading =
+      predicted === undefined
+        ? sampleAngleTrack(this.headingTrack, playbackTick)
+        : predicted.heading;
     this.spaceshipBody
       .setPosition(spaceshipPosition.x, spaceshipPosition.y)
       .setRotation(spaceshipHeading);
@@ -326,7 +355,10 @@ class SpaceshipScene extends Phaser.Scene {
       this.snapshot.turretVisual
     );
     this.turret.setPosition(mount.x, mount.y);
-    this.turret.rotation = sampleAngleTrack(this.turretTrack, playbackTick);
+    this.turret.rotation =
+      predicted === undefined
+        ? sampleAngleTrack(this.turretTrack, playbackTick)
+        : predicted.turretAngle;
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     if (this.vectorsEnabled) {
       this.drawShield();
@@ -587,6 +619,10 @@ class SpaceshipScene extends Phaser.Scene {
     ]) {
       drawing?.setVisible(enabled);
     }
+  }
+
+  setPredictedPoseReader(read: (() => PredictedShipPose | undefined) | undefined): void {
+    this.readPredictedPose = read;
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
@@ -1338,6 +1374,8 @@ export interface SpaceshipRuntime {
   setGlowEnabled(enabled: boolean): void;
   /** The vector overlays rebuilt every frame, on or off. */
   setVectorsEnabled(enabled: boolean): void;
+  /** Where this page's own step has put the ship, asked for each drawn frame. */
+  setPredictedPoseReader(read: (() => PredictedShipPose | undefined) | undefined): void;
   /**
    * Frames a second as the game loop measures them, not as the browser paints
    * them: what the scene manages to draw is the number worth showing.
@@ -1467,6 +1505,9 @@ export function createSpaceshipRuntime(
     },
     setVectorsEnabled(enabled) {
       scene.setVectorsEnabled(enabled);
+    },
+    setPredictedPoseReader(read) {
+      scene.setPredictedPoseReader(read);
     },
     readFps() {
       return game.loop.actualFps;

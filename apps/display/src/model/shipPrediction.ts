@@ -1,5 +1,7 @@
 import {
   advanceShipPose,
+  canonicalizeAngle,
+  normalizeVector,
   type ShipDriveIntent,
   type ShipPose,
   type ShipPoseStats,
@@ -46,31 +48,50 @@ export interface PredictedPoseFrame {
 }
 
 /**
- * A bearing named by a stick, as the room names it.
+ * The bearing a stick names, derived exactly as the room derives it.
  *
- * The room turns the gunner's vector into an angle with `atan2` and stores that;
- * a replay has to do the same or the gun ends up somewhere else. A vector too
- * short to have a direction leaves the bearing alone, which is what a released
- * stick means.
+ * This is the whole of why the ship would not turn under prediction: the room
+ * computes a fresh target from the vector on every frame, and a replay that
+ * merely carries the last published one steers nowhere. Three rules, and all
+ * three matter - a rate cancels the bearing, a released stick keeps the last
+ * one, and anything else is the vector's own angle.
  */
-function aimBearing(frame: PredictedInputFrame, current: number | null): number | null {
-  const length = Math.hypot(frame.aimX, frame.aimY);
-  if (length < 1e-6) return current;
-  return Math.atan2(frame.aimY, frame.aimX);
+function derivedTarget(
+  vector: { x: number; y: number },
+  turn: number | null,
+  previous: number | null
+): number | null {
+  if (turn !== null) return null;
+  const normalized = normalizeVector(vector);
+  if (normalized.x === 0 && normalized.y === 0) return previous;
+  return canonicalizeAngle(Math.atan2(normalized.y, normalized.x));
 }
 
 export function toDriveIntent(
   frame: PredictedInputFrame,
   pose: PredictedPoseFrame
 ): ShipDriveIntent {
+  const drive = { x: frame.vectorX, y: frame.vectorY };
+  const helmTurn = frame.hasHelm ? frame.turn : null;
+  const aimTurn = frame.hasAimTurn ? frame.aimTurn : null;
   return {
-    driveVector: { x: frame.vectorX, y: frame.vectorY },
+    // Normalised the way the room stores it, so the step reads the same vector
+    // on both sides rather than one that is a fraction longer.
+    driveVector: normalizeVector(drive),
     // Absent rather than zero: zero is "stop turning", which is a command.
-    turn: frame.hasHelm ? frame.turn : null,
+    turn: helmTurn,
     thrust: frame.hasHelm ? frame.thrust : null,
-    headingTargetAngle: pose.hasHeadingTarget ? pose.headingTargetAngle : null,
-    turretTargetAngle: aimBearing(frame, pose.hasTurretTarget ? pose.turretTargetAngle : null),
-    turretTurn: frame.hasAimTurn ? frame.aimTurn : null
+    headingTargetAngle: derivedTarget(
+      drive,
+      helmTurn,
+      pose.hasHeadingTarget ? pose.headingTargetAngle : null
+    ),
+    turretTargetAngle: derivedTarget(
+      { x: frame.aimX, y: frame.aimY },
+      aimTurn,
+      pose.hasTurretTarget ? pose.turretTargetAngle : null
+    ),
+    turretTurn: aimTurn
   };
 }
 

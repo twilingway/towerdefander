@@ -5,6 +5,7 @@ import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { readPixelRatioCap } from "./game/devicePixels.js";
 import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "./game/spaceshipViewModel.js";
 import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
+import type { PredictedPoseFrame } from "./model/shipPrediction.js";
 import {
   buildVisibleDemoWorld,
   findNearestVisibleDemoTarget,
@@ -41,6 +42,14 @@ interface SpaceshipCanvasProps {
   readonly glowEnabled?: boolean;
   /** The vector overlays rebuilt every frame - the last thing left to price. */
   readonly vectorsEnabled?: boolean;
+  /**
+   * The ship this page is flying, read once per drawn frame.
+   *
+   * A reader rather than a value: the pose changes every frame, and handing it
+   * down as a prop would mean a React render every frame - which is the tax the
+   * prediction exists to remove, not to double.
+   */
+  readonly readPredictedPose?: () => PredictedPoseFrame | undefined;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -54,6 +63,7 @@ export function SpaceshipCanvas({
   backgroundEnabled = true,
   glowEnabled = true,
   vectorsEnabled = true,
+  readPredictedPose,
   onFrameStats
 }: SpaceshipCanvasProps) {
   const hostReference = useRef<HTMLDivElement>(null);
@@ -65,6 +75,8 @@ export function SpaceshipCanvas({
   latestGlowEnabled.current = glowEnabled;
   const latestVectorsEnabled = useRef(vectorsEnabled);
   latestVectorsEnabled.current = vectorsEnabled;
+  const latestReadPose = useRef(readPredictedPose);
+  latestReadPose.current = readPredictedPose;
   const latestRunNumber = useRef(runNumber);
   const latestConnectionEpoch = useRef(connectionEpoch);
   const lastRuntimeTickReference = useRef(game.tick);
@@ -94,6 +106,7 @@ export function SpaceshipCanvas({
           runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
           runtimeReference.current.setGlowEnabled(latestGlowEnabled.current);
           runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
+          runtimeReference.current.setPredictedPoseReader(() => latestReadPose.current?.());
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
           lastRuntimeRunNumberReference.current = latestRunNumber.current;
