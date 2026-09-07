@@ -120,3 +120,31 @@ export function selectBoss(game: DisplayGameSnapshot): BossView | undefined {
     maxHp: found.maxHp
   };
 }
+
+/**
+ * How many moving things the scene is currently being handed.
+ *
+ * The instrument panel needs it to read the byte counter beside it: bytes alone
+ * cannot say whether a busy second was a busy fight or a wasteful projection.
+ * Counted from the snapshot rather than from Phaser, because what arrived is the
+ * question, not what got drawn.
+ */
+export function countDrawnEntities(game: {
+  readonly enemyShips: readonly unknown[];
+  readonly asteroids: readonly unknown[];
+  readonly lootDrops: readonly unknown[];
+  readonly friendlyProjectiles: readonly unknown[];
+  readonly hostileProjectiles: readonly unknown[];
+  readonly homingMissiles: readonly unknown[];
+  readonly laserBeams: readonly unknown[];
+}): number {
+  return (
+    game.enemyShips.length +
+    game.asteroids.length +
+    game.lootDrops.length +
+    game.friendlyProjectiles.length +
+    game.hostileProjectiles.length +
+    game.homingMissiles.length +
+    game.laserBeams.length
+  );
+}

@@ -41,7 +41,7 @@ import { FpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
-import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
+import { countDrawnEntities, getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { SoloCockpit } from "./screens/SoloCockpit/index.js";
@@ -66,11 +66,15 @@ import {
   PREVIEW_ENDLESS_TIER,
   PREVIEW_MODULE_TIERS
 } from "./previewMode.js";
+import { DiagnosticsPanel } from "./components/DiagnosticsPanel/index.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
+import { isDiagnosticsRequested } from "./model/diagnostics.js";
+import { withPredictedAngles } from "./model/predictedAngles.js";
+import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -107,6 +111,9 @@ export function DisplayApp() {
     typeof window === "undefined" ? "" : window.location.search,
     import.meta.env.DEV
   );
+  const diagnostics = isDiagnosticsRequested(
+    typeof window === "undefined" ? "" : window.location.search
+  );
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [networkView, setNetworkView] = useState<DisplayRoomView>();
@@ -124,6 +131,13 @@ export function DisplayApp() {
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0, stutterShare: 0 });
+  /**
+   * Off means the ship is drawn from the authoritative angles alone. The point
+   * of the switch is that it compares the two on one connection and one tick;
+   * comparing two sessions would compare two networks instead.
+   */
+  const [predictionEnabled, setPredictionEnabled] = useState(true);
+  const [traffic, setTraffic] = useState<TrafficMeter | undefined>(undefined);
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -186,6 +200,43 @@ export function DisplayApp() {
   useEffect(() => {
     setError("");
   }, [encounterPhase]);
+
+  /*
+   * The byte counter, and only when the panel was asked for. It hooks the live
+   * socket rather than the SDK, so it has to be re-read as connections come and
+   * go - the probe follows the socket across a reconnect on its own, and the
+   * connection epoch is what brings a whole new room here.
+   */
+  useEffect(() => {
+    if (!diagnostics) return undefined;
+    const probe = attachTrafficMeter(
+      () => {
+        // The socket itself, not the SDK transport around it: the transport has
+        // no listeners to add, and everything the room sends passes through the
+        // socket's own `send`.
+        const connection = roomReference.current?.connection as
+          { transport?: { ws?: unknown } } | undefined;
+        return connection?.transport?.ws;
+      },
+      () => performance.now()
+    );
+
+    if (probe === undefined) {
+      // Undefined stands for "never attached", which the panel says in words.
+      setTraffic(undefined);
+      return undefined;
+    }
+    // Twice a second: the numbers are read, not watched, and a byte counter
+    // driving a React render at frame rate would be an instrument that costs
+    // the very thing it measures.
+    const timer = window.setInterval(() => {
+      setTraffic(probe.read(performance.now()));
+    }, 500);
+    return () => {
+      window.clearInterval(timer);
+      probe.detach();
+    };
+  }, [diagnostics, connectionEpoch, status]);
 
   useCockpitPrediction({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
@@ -608,7 +659,7 @@ export function DisplayApp() {
             <RotateNotice />
           ) : (
             <SpaceshipCanvas
-              game={withPredictedAngles(view.game, predictedAngles.current)}
+              game={withPredictedAngles(view.game, predictedAngles.current, predictionEnabled)}
               runNumber={view.runNumber}
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
@@ -642,6 +693,21 @@ export function DisplayApp() {
               />
             ))}
           {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
+          {diagnostics && (
+            <DiagnosticsPanel
+              fps={frameStats.fps}
+              worstFrameMs={frameStats.worstFrameMs}
+              stutterShare={frameStats.stutterShare}
+              serverStepMs={view.game.serverStepMs}
+              pingMs={view.displayLatencyMs}
+              entityCount={countDrawnEntities(view.game)}
+              traffic={traffic}
+              predictionEnabled={predictionEnabled}
+              onTogglePrediction={() => {
+                setPredictionEnabled((enabled) => !enabled);
+              }}
+            />
+          )}
           <CombatRadar game={view.game} />
           {view.game.encounter.phase === "intermission" && (
             <TeamUpgradeOverlay
@@ -768,14 +834,3 @@ function createDefaultControllerUrl(): string {
  * wrong about an angle corrects itself, being wrong about a position walks the
  * ship through a rock and then teleports it back out.
  */
-function withPredictedAngles<T extends { spaceship: { heading: number }; turretAngle: number }>(
-  game: T,
-  predicted: { heading: number; turretAngle: number } | undefined
-): T {
-  if (predicted === undefined) return game;
-  return {
-    ...game,
-    spaceship: { ...game.spaceship, heading: predicted.heading },
-    turretAngle: predicted.turretAngle
-  };
-}
