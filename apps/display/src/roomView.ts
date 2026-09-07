@@ -203,6 +203,7 @@ interface NetworkGameState {
   teamUpgrade?: NetworkTeamUpgradeState;
   display?: {
     cameraViewWidth: number;
+    serverStepMs?: number;
     backgroundParallaxStrength?: number;
     backgroundDriftSpeed?: number;
     backgroundNebulaAlpha?: number;
@@ -352,6 +353,7 @@ export function toDisplayRoomView(
                   }
             ),
             cameraViewWidth: display.cameraViewWidth,
+            serverStepMs: display.serverStepMs ?? 0,
             background: {
               parallaxStrength: display.backgroundParallaxStrength ?? 1,
               driftSpeed: display.backgroundDriftSpeed ?? 1,

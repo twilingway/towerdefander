@@ -160,6 +160,13 @@ export class SpaceshipDefenderRoom extends Room<{
   private gameState: SpaceshipSimulationState | undefined;
   /** Real time received from the loop that no whole fixed step has claimed yet. */
   private stepAccumulatorMs = 0;
+  /**
+   * Cost of the last simulation step alone, without the projection or the patch
+   * that follow it. Measuring the whole tick would blend the three and leave
+   * nothing to tell them apart afterwards; and when one wake runs several steps,
+   * the price of one is the interesting number, not their sum.
+   */
+  private lastStepMs = 0;
   private readonly lifecycle = new LifecycleSchedule({
     schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
     now: () => Date.now(),
@@ -617,7 +624,9 @@ export class SpaceshipDefenderRoom extends Room<{
     const previousLootWindow = this.gameState.lootWindowTicksRemaining;
     const projectionWasResult = this.state.game.encounter.phase === "result";
     this.gameState = this.applyShieldAutopilot(this.gameState);
+    const stepStartedAt = this.nowMs();
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
+    this.lastStepMs = this.nowMs() - stepStartedAt;
     if (previousEncounterPhase === "combat" && this.gameState.encounterPhase !== "combat") {
       this.clearWaveDeadline();
       this.neutralizeAllRoles();
@@ -828,6 +837,9 @@ export class SpaceshipDefenderRoom extends Room<{
       return;
     }
     projectGameState(this.state.game, game, this.gameConfig, this.waveDeadlineAtMs);
+    // Not part of the projection: it measures the host, not the simulation
+    // frame, and `projectGameState` is state plus config and nothing else.
+    this.state.game.display.serverStepMs = this.lastStepMs;
   }
 
   private neutralizeRole(playerId: string): void {
@@ -954,6 +966,19 @@ export class SpaceshipDefenderRoom extends Room<{
   private stopSimulation(): void {
     this.setSimulationInterval(undefined);
     this.stepAccumulatorMs = 0;
+    // A stopped simulation costs nothing, and the last number from the fight
+    // would otherwise read as a tick that is still running.
+    this.lastStepMs = 0;
+    this.state.game.display.serverStepMs = 0;
+  }
+
+  /**
+   * Monotonic clock the step measurement reads. A seam rather than a bare call
+   * to `performance.now()` so a test can hold time still and prove the published
+   * number is the price of one step and not the sum of the steps a wake ran.
+   */
+  protected nowMs(): number {
+    return performance.now();
   }
 
   /**

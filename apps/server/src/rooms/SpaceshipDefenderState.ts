@@ -268,6 +268,16 @@ export class EnemyVisualState extends Schema {
 
 export class SpaceshipDisplayState extends Schema {
   @type("float32") cameraViewWidth = 2200;
+  /**
+   * How long the last simulation step took the host, in milliseconds.
+   *
+   * Four bytes a patch to answer the only question a load test actually asks -
+   * whether the tick still fits its budget - and to answer it on the device in
+   * the player's hands rather than in the host's console. Float because the
+   * whole signal is in the fractions: a step costs tenths of a millisecond, and
+   * a whole number here would be an indicator of "zero or disaster".
+   */
+  @type("float32") serverStepMs = 0;
   /** Parallax space background for this run; fixed at run start like the silhouettes. */
   @type("float32") backgroundParallaxStrength = 1;
   @type("float32") backgroundDriftSpeed = 1;

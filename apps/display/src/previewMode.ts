@@ -440,6 +440,7 @@ function createPreviewGame(
       ...PREVIEW_WORLD,
       shieldPhase: "down",
       cameraViewWidth,
+      serverStepMs: 0,
       shield: {
         angle: Math.PI / 2,
         arcHalfAngle: 0.8,
@@ -607,6 +608,7 @@ function createPreviewGame(
       ...EMPTY_WORLD_ENTITIES,
       shieldPhase: "down",
       cameraViewWidth,
+      serverStepMs: 0,
       shield: {
         angle: 0,
         arcHalfAngle: 0.8,
@@ -689,6 +691,7 @@ function createPreviewGame(
     // The ballot below closed on the turret drive, so the result frame owns it.
     purchasedModules: [...PREVIEW_PURCHASES, "turretDrive"],
     cameraViewWidth,
+    serverStepMs: 0,
     spaceship: { ...PREVIEW_WORLD.spaceship, hp: 0, velocityX: 0, velocityY: 0 },
     shield: {
       angle: 0,

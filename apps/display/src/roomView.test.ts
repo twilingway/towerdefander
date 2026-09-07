@@ -114,6 +114,7 @@ describe("display room view", () => {
         credits: 6,
         display: {
           cameraViewWidth: 1600,
+          serverStepMs: 0.42,
           purchasedModules: [],
           laserBeams: [],
           backgroundParallaxStrength: 0.8,
@@ -218,6 +219,7 @@ describe("display room view", () => {
     expect(view?.game?.hostileProjectiles).toHaveLength(1);
     expect(view?.game?.hostileProjectiles[0]).not.toHaveProperty("source");
     expect(view?.game?.spaceship.heading).toBe(Math.PI / 3);
+    expect(view?.game?.serverStepMs).toBe(0.42);
     expect(view?.game?.machineGun).toEqual({
       heat: 30,
       capacity: 100,

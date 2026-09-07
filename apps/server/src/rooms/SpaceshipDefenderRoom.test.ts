@@ -60,6 +60,28 @@ function createRoom(crewSize: CrewSize = 3): SpaceshipDefenderRoom {
   return room;
 }
 
+/**
+ * Holds the clock still: every reading is one millisecond after the previous, so
+ * a step always costs exactly one no matter how many a wake runs. That is what
+ * makes "one step, not their sum" a claim a test can refute.
+ */
+class SteppedClockRoom extends SpaceshipDefenderRoom {
+  private readings = 0;
+
+  protected override nowMs(): number {
+    this.readings += 1;
+    return this.readings;
+  }
+}
+
+function createSteppedClockRoom(): SpaceshipDefenderRoom {
+  const room = new SteppedClockRoom();
+  room.roomId = "ROOM123";
+  room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
+  openRooms.push(room);
+  return room;
+}
+
 function joinDisplay(room: SpaceshipDefenderRoom): TestClient {
   const display = createClient("display");
   room.onJoin(display.client, { role: "display", protocolVersion: PROTOCOL_VERSION });
@@ -202,6 +224,7 @@ interface RoomInternals {
     expiresAt(reason: string): number | undefined;
     set(reason: string, expiresAtMs: number): void;
   };
+  stopSimulation(): void;
   lifecycleGeneration: number;
   syncMaintenance(): void;
   waveDeadlineAtMs: number | undefined;
@@ -433,6 +456,37 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     room.advanceElapsedTime(2_000);
 
     expect(room.state.game.tick - before).toBe(4);
+  });
+
+  it("publishes what a simulation step cost the host", () => {
+    const { room } = startGame();
+
+    room.advanceElapsedTime(50);
+
+    // A step over two hundred entities takes tenths of a millisecond, which is
+    // orders of magnitude above the clock's resolution: a zero here means the
+    // measurement never reached the wire, not that the step was free.
+    expect(room.state.game.display.serverStepMs).toBeGreaterThan(0);
+  });
+
+  it("publishes the price of one step, not the sum of a catch-up burst", () => {
+    const { room } = startGame(createSteppedClockRoom());
+
+    // One wake carrying four whole steps - the catch-up ceiling. Summed, this
+    // would read as four; the interesting number is the price of one.
+    room.advanceElapsedTime(50 * 4);
+
+    expect(room.state.game.display.serverStepMs).toBe(1);
+  });
+
+  it("reports no cost once the simulation is stopped", () => {
+    const { room } = startGame(createSteppedClockRoom());
+    room.advanceElapsedTime(50);
+    expect(room.state.game.display.serverStepMs).toBe(1);
+
+    internals(room).stopSimulation();
+
+    expect(room.state.game.display.serverStepMs).toBe(0);
   });
 
   it("seats a solo crew on the pilot and starts on one ready", () => {

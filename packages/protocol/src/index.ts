@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 50 as const;
+export const PROTOCOL_VERSION = 51 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -735,6 +735,13 @@ export const displayGameSnapshotSchema = z
     shieldPhase: shieldPhaseSchema,
     /** Narrowest slice of the world the display frames; height follows as 9/16. */
     cameraViewWidth: cameraViewWidthSchema,
+    /**
+     * Cost of the last simulation step on the host, in milliseconds. An
+     * instrument, not gameplay: it reaches the display so the question "does the
+     * tick still fit its budget" can be asked on a live room from a phone.
+     * Display-gated, so a crew panel never pays for it.
+     */
+    serverStepMs: finite.nonnegative(),
     /** Parallax space background for this run; fixed at run start like the silhouettes. */
     background: backgroundTuningSchema,
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
