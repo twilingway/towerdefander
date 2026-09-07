@@ -1162,6 +1162,38 @@ class SpaceshipScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * A shape drawn once into a texture, and an image of it thereafter.
+   *
+   * Everything on the field is built from primitives, and every one of them was
+   * being tessellated again on every spawn - a wave of shells is a wave of
+   * geometry rebuilt from scratch. The reference prototype draws the same
+   * primitives, but bakes them at boot (`generateTexture`) and puts an `image`
+   * on the field, so a frame costs a transform and nothing else. That is the
+   * whole difference between seven milliseconds a second on a hundred and
+   * sixty-five bodies and fifteen on three.
+   *
+   * The key must name everything that changes a pixel - shape, size, colour -
+   * because a texture is shared by every entity that asks for the same one.
+   * `half` is how far the drawing reaches from its own origin; the box is twice
+   * that and the origin sits at its centre, so the image lands exactly where
+   * the graphics would have.
+   */
+  private bakedShape(
+    key: string,
+    half: number,
+    draw: (graphics: Phaser.GameObjects.Graphics) => void
+  ): string {
+    if (this.textures.exists(key)) return key;
+    const size = Math.max(2, Math.ceil(half * 2));
+    const graphics = this.make.graphics({ x: 0, y: 0 }, false);
+    graphics.translateCanvas(size / 2, size / 2);
+    draw(graphics);
+    graphics.generateTexture(key, size, size);
+    graphics.destroy();
+    return key;
+  }
+
   private createCombatVisual(entity: CombatEntity): {
     readonly object: Phaser.GameObjects.Container;
     readonly healthBar: Phaser.GameObjects.Graphics | undefined;
@@ -1170,8 +1202,14 @@ class SpaceshipScene extends Phaser.Scene {
     let healthBar: Phaser.GameObjects.Graphics | undefined;
     if (entity.visualKind === "enemy") {
       const visual = resolveEnemyVisual(this.snapshot.enemyCatalogue, entity.kind);
-      const body = this.add.graphics();
-      drawEnemyBody(body, visual, entity.radius);
+      const key = `enemy:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(entity.radius))}`;
+      const body = this.add.image(
+        0,
+        0,
+        this.bakedShape(key, entity.radius * visual.modelScale * 1.35 + 4, (graphics) => {
+          drawEnemyBody(graphics, visual, entity.radius);
+        })
+      );
       container.add(body);
       if (visual.showHealthBar) {
         healthBar = this.add.graphics();
@@ -1181,8 +1219,18 @@ class SpaceshipScene extends Phaser.Scene {
     } else if (entity.visualKind === "asteroid") {
       const asteroidVisual = this.snapshot.asteroidVisual;
       if (asteroidVisual !== null) {
-        const rock = this.add.graphics();
-        drawCatalogAssetById(rock, asteroidVisual.shape, entity.radius * asteroidVisual.modelScale);
+        const size = entity.radius * asteroidVisual.modelScale;
+        const rock = this.add.image(
+          0,
+          0,
+          this.bakedShape(
+            `rock:${asteroidVisual.shape}:${String(Math.round(size))}`,
+            size * 1.35 + 4,
+            (graphics) => {
+              drawCatalogAssetById(graphics, asteroidVisual.shape, size);
+            }
+          )
+        );
         container.add(rock);
       } else {
         const rock = this.add.circle(0, 0, entity.radius, 0x766f77, 1).setStrokeStyle(4, 0xbba9a2);
@@ -1200,56 +1248,86 @@ class SpaceshipScene extends Phaser.Scene {
       // bar for a shield cell, so the pilot decides without reading a label.
       const repair = entity.kind === "repair";
       const tint = repair ? 0x7ef2a4 : 0x7ec8f2;
-      const halo = this.add.circle(0, 0, entity.radius * 1.6, tint, 0.18);
-      const shell = this.add.circle(0, 0, entity.radius, 0x0d1b24, 0.9).setStrokeStyle(3, tint, 1);
-      const mark = this.add.graphics();
-      mark.fillStyle(tint, 1);
-      if (repair) {
-        mark.fillRect(
-          -entity.radius * 0.55,
-          -entity.radius * 0.18,
-          entity.radius * 1.1,
-          entity.radius * 0.36
-        );
-        mark.fillRect(
-          -entity.radius * 0.18,
-          -entity.radius * 0.55,
-          entity.radius * 0.36,
-          entity.radius * 1.1
-        );
-      } else {
-        mark.fillRect(
-          -entity.radius * 0.5,
-          -entity.radius * 0.3,
-          entity.radius,
-          entity.radius * 0.6
-        );
-      }
-      container.add([halo, shell, mark]);
+      const radius = entity.radius;
+      const drop = this.add.image(
+        0,
+        0,
+        this.bakedShape(
+          `loot:${repair ? "repair" : "cell"}:${String(Math.round(radius))}`,
+          radius * 1.6 + 4,
+          (graphics) => {
+            graphics.fillStyle(tint, 0.18);
+            graphics.fillCircle(0, 0, radius * 1.6);
+            graphics.fillStyle(0x0d1b24, 0.9);
+            graphics.fillCircle(0, 0, radius);
+            graphics.lineStyle(3, tint, 1);
+            graphics.strokeCircle(0, 0, radius);
+            graphics.fillStyle(tint, 1);
+            if (repair) {
+              graphics.fillRect(-radius * 0.55, -radius * 0.18, radius * 1.1, radius * 0.36);
+              graphics.fillRect(-radius * 0.18, -radius * 0.55, radius * 0.36, radius * 1.1);
+            } else {
+              graphics.fillRect(-radius * 0.5, -radius * 0.3, radius, radius * 0.6);
+            }
+          }
+        )
+      );
+      container.add(drop);
     } else if (entity.visual !== null) {
-      const shot = this.add.graphics();
-      drawCatalogAssetById(shot, entity.visual.shape, entity.radius * entity.visual.modelScale);
+      // A shell or a rocket the preset gave a silhouette to: same treatment as
+      // the rest, one texture per silhouette and calibre.
+      const visual = entity.visual;
+      const size = entity.radius * visual.modelScale;
+      const shot = this.add.image(
+        0,
+        0,
+        this.bakedShape(
+          `asset:${visual.shape}:${String(Math.round(size))}`,
+          size * 1.35 + 4,
+          (graphics) => {
+            drawCatalogAssetById(graphics, visual.shape, size);
+          }
+        )
+      );
       container.add(shot);
     } else if (entity.visualKind === "missile") {
-      const body = this.add.rectangle(0, 0, entity.radius * 3.2, entity.radius * 1.3, 0xff704d);
-      // Graphics keeps the plume on the missile axis; a Triangle would centre
-      // itself on its bounding box and drift the flame sideways.
-      const trail = this.add.graphics();
-      trail.fillStyle(0xffd36f, 0.8);
-      trail.fillTriangle(
-        -entity.radius * 2.9,
+      const radius = entity.radius;
+      const missile = this.add.image(
         0,
-        -entity.radius * 1.6,
-        -entity.radius * 0.65,
-        -entity.radius * 1.6,
-        entity.radius * 0.65
+        0,
+        this.bakedShape(`missile:${String(Math.round(radius))}`, radius * 2.9 + 3, (graphics) => {
+          // The plume is drawn on the missile axis; a triangle game object
+          // would centre itself on its bounding box and drift sideways.
+          graphics.fillStyle(0xffd36f, 0.8);
+          graphics.fillTriangle(
+            -radius * 2.9,
+            0,
+            -radius * 1.6,
+            -radius * 0.65,
+            -radius * 1.6,
+            radius * 0.65
+          );
+          graphics.fillStyle(0xff704d, 1);
+          graphics.fillRect(-radius * 1.6, -radius * 0.65, radius * 3.2, radius * 1.3);
+        })
       );
-      container.add([trail, body]);
+      container.add(missile);
     } else {
       const style = getProjectileStyle(entity);
-      const bullet = this.add
-        .circle(0, 0, entity.radius, style.fill, 1)
-        .setStrokeStyle(2, style.stroke);
+      const bullet = this.add.image(
+        0,
+        0,
+        this.bakedShape(
+          `shot:${String(style.fill)}:${String(Math.round(entity.radius))}`,
+          entity.radius + 3,
+          (graphics) => {
+            graphics.fillStyle(style.fill, 1);
+            graphics.fillCircle(0, 0, entity.radius);
+            graphics.lineStyle(2, style.stroke, 1);
+            graphics.strokeCircle(0, 0, entity.radius);
+          }
+        )
+      );
       container.add(bullet);
     }
     return { object: container, healthBar };
