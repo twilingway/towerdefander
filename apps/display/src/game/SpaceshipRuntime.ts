@@ -888,7 +888,7 @@ class SpaceshipScene extends Phaser.Scene {
     }
     const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
     const shape = this.aimEnvelopeShape;
-    if (shape === undefined || shape.reach !== reach || shape.half !== half) {
+    if (shape?.reach !== reach || shape.half !== half) {
       this.aimEnvelopeShape = { reach, half };
       layer.clear();
       layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
@@ -1029,8 +1029,7 @@ class SpaceshipScene extends Phaser.Scene {
     // the bars. Focused on the arc itself, it travels with the hull instead.
     const built = this.shieldShape;
     if (
-      built !== undefined &&
-      built.radius === radius &&
+      built?.radius === radius &&
       built.half === this.snapshot.shield.arcHalfAngle &&
       built.active === this.snapshot.shield.active
     ) {

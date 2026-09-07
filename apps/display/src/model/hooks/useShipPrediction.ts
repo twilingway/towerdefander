@@ -379,8 +379,7 @@ export function useShipPrediction<
       ): ReturnType<typeof createSpaceshipSimulationConfig> => {
         if (
           cachedConfig === undefined ||
-          cachedWorld === undefined ||
-          cachedWorld.worldWidth !== current.worldWidth ||
+          cachedWorld?.worldWidth !== current.worldWidth ||
           cachedWorld.worldHeight !== current.worldHeight ||
           cachedWorld.arenaRadius !== current.arenaRadius ||
           cachedWorld.turretMountedOnHull !== current.turretMountedOnHull
