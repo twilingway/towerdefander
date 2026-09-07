@@ -731,13 +731,20 @@ export const publicShipDriveViewSchema = z
     headingAngularBraking: finite.nonnegative(),
     turretMaxAngularSpeed: finite.nonnegative(),
     turretAngularAcceleration: finite.nonnegative(),
-    turretAngularBraking: finite.nonnegative()
+    turretAngularBraking: finite.nonnegative(),
+    hullRadius: finite.positive()
   })
   .strict();
 export type PublicShipDriveView = z.infer<typeof publicShipDriveViewSchema>;
 
 export const publicShipPoseViewSchema = z
   .object({
+    x: finite,
+    y: finite,
+    velocityX: finite,
+    velocityY: finite,
+    heading: finite,
+    turretAngle: finite,
     headingAngularVelocity: finite,
     /** Null rather than a sentinel: every angle is a legal heading. */
     headingTargetAngle: finite.nullable(),

@@ -217,8 +217,15 @@ interface NetworkGameState {
       turretMaxAngularSpeed: number;
       turretAngularAcceleration: number;
       turretAngularBraking: number;
+      hullRadius: number;
     };
     pose?: {
+      x: number;
+      y: number;
+      velocityX: number;
+      velocityY: number;
+      heading: number;
+      turretAngle: number;
       headingAngularVelocity: number;
       hasHeadingTarget: boolean;
       headingTargetAngle: number;
@@ -295,7 +302,8 @@ const ZERO_DRIVE = {
   headingAngularBraking: 0,
   turretMaxAngularSpeed: 0,
   turretAngularAcceleration: 0,
-  turretAngularBraking: 0
+  turretAngularBraking: 0,
+  hullRadius: 1
 } as const;
 
 /**
@@ -304,6 +312,12 @@ const ZERO_DRIVE = {
  * together as a nullable angle, which is what the step actually takes.
  */
 interface PoseOnWire {
+  x?: number;
+  y?: number;
+  velocityX?: number;
+  velocityY?: number;
+  heading?: number;
+  turretAngle?: number;
   headingAngularVelocity?: number;
   hasHeadingTarget?: boolean;
   headingTargetAngle?: number;
@@ -314,6 +328,12 @@ interface PoseOnWire {
 
 function toPoseView(pose: PoseOnWire | undefined) {
   return {
+    x: pose?.x ?? 0,
+    y: pose?.y ?? 0,
+    velocityX: pose?.velocityX ?? 0,
+    velocityY: pose?.velocityY ?? 0,
+    heading: pose?.heading ?? 0,
+    turretAngle: pose?.turretAngle ?? 0,
     headingAngularVelocity: pose?.headingAngularVelocity ?? 0,
     headingTargetAngle: pose?.hasHeadingTarget === true ? (pose.headingTargetAngle ?? 0) : null,
     turretAngularVelocity: pose?.turretAngularVelocity ?? 0,

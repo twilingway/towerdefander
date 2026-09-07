@@ -172,7 +172,9 @@ export function moveSpaceshipWithinWorld(
   velocity: Vector2,
   secondsPerStep: number,
   config: SpaceshipSimulationConfig,
-  ship: ShipStats
+  // The hull's radius and nothing else, so the pose step can call this with the
+  // ten-odd numbers a client actually receives rather than the whole record.
+  ship: Pick<ShipStats, "spaceshipRadius">
 ): SpaceshipKinematics {
   const arena = {
     centerX: config.worldWidth / 2,

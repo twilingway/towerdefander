@@ -156,7 +156,9 @@ describe("SHIP_POSE_STAT_FIELDS", () => {
   it("names a stat only while the step still reads it", () => {
     const baseline = mixedFlight(ship);
 
+    const RIM_ONLY = "spaceshipRadius";
     const inert = SHIP_POSE_STAT_FIELDS.filter((field) => {
+      if (field === RIM_ONLY) return false;
       const moved = mixedFlight({ ...ship, [field]: ship[field] * 1.5 + 0.1 });
       return JSON.stringify(moved) === JSON.stringify(baseline);
     });
@@ -165,5 +167,40 @@ describe("SHIP_POSE_STAT_FIELDS", () => {
     // either left the step - and has no business on the wire - or the flight
     // above stopped exercising the part that uses it.
     expect(inert).toEqual([]);
+  });
+
+  it("reads the hull's own size where the arena holds it", () => {
+    // The one stat the flight above cannot show: the radius only matters at the
+    // rim, and a ship circling the middle never touches it.
+    function pressIntoRim(stats: typeof ship): ShipPose {
+      let pose: ShipPose = {
+        ...restingPose(),
+        spaceship: {
+          x: config.worldWidth / 2 + config.arenaRadius - 40,
+          y: config.worldHeight / 2,
+          velocity: { x: 0, y: 0 }
+        }
+      };
+      for (let frame = 0; frame < 40; frame += 1) {
+        pose = advanceShipPose(
+          pose,
+          {
+            driveVector: { x: 1, y: 0 },
+            turn: null,
+            thrust: null,
+            headingTargetAngle: null,
+            turretTargetAngle: null,
+            turretTurn: null
+          },
+          config,
+          stats
+        );
+      }
+      return pose;
+    }
+
+    expect(pressIntoRim({ ...ship, spaceshipRadius: ship.spaceshipRadius * 2 })).not.toEqual(
+      pressIntoRim(ship)
+    );
   });
 });

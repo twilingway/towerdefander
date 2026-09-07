@@ -32,8 +32,19 @@ export const SHIP_POSE_STAT_FIELDS = [
   "headingAngularBrakingPerSecondSquared",
   "turretMaxAngularSpeedPerSecond",
   "turretAngularAccelerationPerSecondSquared",
-  "turretAngularBrakingPerSecondSquared"
+  "turretAngularBrakingPerSecondSquared",
+  /** The hull's own size: the arena clamp is where it is read. */
+  "spaceshipRadius"
 ] as const;
+
+/**
+ * The stats this step is allowed to read, and no others.
+ *
+ * Narrower than `ShipStats` on purpose: the client only ever receives these ten
+ * numbers, so typing the parameter as the whole record would have forced a cast
+ * there - and a cast is exactly how a step quietly starts reading an eleventh.
+ */
+export type ShipPoseStats = Pick<ShipStats, (typeof SHIP_POSE_STAT_FIELDS)[number]>;
 
 /**
  * Where the ship is, which way it points, and everything the drive carries
@@ -89,7 +100,7 @@ export function advanceShipPose(
   pose: ShipPose,
   intent: ShipDriveIntent,
   config: SpaceshipSimulationConfig,
-  ship: ShipStats
+  ship: ShipPoseStats
 ): ShipPose {
   const secondsPerStep = config.fixedStepMs / 1000;
   const pilotSpeed = ship.spaceshipSpeedPerSecond;

@@ -303,6 +303,8 @@ export class ShipDriveState extends Schema {
   @type("float32") turretMaxAngularSpeed = 0;
   @type("float32") turretAngularAcceleration = 0;
   @type("float32") turretAngularBraking = 0;
+  /** The hull's own size; the arena clamp is where the step reads it. */
+  @type("float32") hullRadius = 0;
 }
 
 /**
@@ -316,6 +318,21 @@ export class ShipDriveState extends Schema {
  * angle that some real heading could collide with.
  */
 export class ShipPoseState extends Schema {
+  /*
+   * The position, velocity and bearings are already on the shared branch, and
+   * they are here again on purpose.
+   *
+   * A reconciler mirrors one schema instance, and the pose a replay starts from
+   * has to be that one instance - split across three objects it cannot be
+   * bound at all. Twenty bytes a tick to the one client that predicts, against
+   * a snapshot that runs to nineteen kilobytes, buys the whole mechanism.
+   */
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") heading = 0;
+  @type("float32") turretAngle = 0;
   @type("float32") headingAngularVelocity = 0;
   @type("boolean") hasHeadingTarget = false;
   @type("float32") headingTargetAngle = 0;
@@ -323,7 +340,6 @@ export class ShipPoseState extends Schema {
   @type("boolean") hasTurretTarget = false;
   @type("float32") turretTargetAngle = 0;
 }
-
 
 export class SpaceshipDisplayState extends Schema {
   @type("float32") cameraViewWidth = 2200;

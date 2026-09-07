@@ -125,9 +125,16 @@ const testGame = {
     headingAngularBraking: 50,
     turretMaxAngularSpeed: 1.36,
     turretAngularAcceleration: 2.72,
-    turretAngularBraking: 4.08
+    turretAngularBraking: 4.08,
+    hullRadius: 52
   },
   pose: {
+    x: 2200,
+    y: 2200,
+    velocityX: 0,
+    velocityY: 0,
+    heading: 0,
+    turretAngle: 0,
     headingAngularVelocity: 0,
     headingTargetAngle: null,
     turretAngularVelocity: 0,

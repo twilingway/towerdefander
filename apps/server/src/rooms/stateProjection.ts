@@ -65,7 +65,8 @@ export function projectGameState(
     headingAngularBraking: game.ship.headingAngularBrakingPerSecondSquared,
     turretMaxAngularSpeed: game.ship.turretMaxAngularSpeedPerSecond,
     turretAngularAcceleration: game.ship.turretAngularAccelerationPerSecondSquared,
-    turretAngularBraking: game.ship.turretAngularBrakingPerSecondSquared
+    turretAngularBraking: game.ship.turretAngularBrakingPerSecondSquared,
+    hullRadius: game.ship.spaceshipRadius
   } as const;
   // Every one of them, not a representative: a module may move the turret's
   // traverse and nothing else, and a revision that missed it would hand the
@@ -80,6 +81,12 @@ export function projectGameState(
   }
   if (driveMoved) drive.revision = (drive.revision + 1) % 65_536;
   const pose = target.display.pose;
+  pose.x = game.spaceship.x;
+  pose.y = game.spaceship.y;
+  pose.velocityX = game.spaceship.velocity.x;
+  pose.velocityY = game.spaceship.velocity.y;
+  pose.heading = game.spaceshipHeading;
+  pose.turretAngle = game.turretAngle;
   pose.headingAngularVelocity = game.headingAngularVelocity;
   pose.hasHeadingTarget = game.headingTargetAngle !== null;
   pose.headingTargetAngle = game.headingTargetAngle ?? 0;
