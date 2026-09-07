@@ -113,6 +113,7 @@ const testGame = {
   worldWidth: 4400,
   cameraViewWidth: 1600,
   serverStepMs: 0.14,
+  appliedInputSeq: 0,
   drive: {
     revision: 0,
     speedPerSecond: 320,

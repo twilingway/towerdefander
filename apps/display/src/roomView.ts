@@ -204,6 +204,7 @@ interface NetworkGameState {
   display?: {
     cameraViewWidth: number;
     serverStepMs?: number;
+    appliedInputSeq?: number;
     drive?: {
       revision: number;
       speedPerSecond: number;
@@ -417,6 +418,7 @@ export function toDisplayRoomView(
             ),
             cameraViewWidth: display.cameraViewWidth,
             serverStepMs: display.serverStepMs ?? 0,
+            appliedInputSeq: display.appliedInputSeq ?? 0,
             drive: { ...ZERO_DRIVE, ...display.drive },
             pose: toPoseView(display.pose),
             background: {

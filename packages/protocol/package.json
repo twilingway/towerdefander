@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@colyseus/schema": "5.0.27",
     "zod": "latest"
   },
   "devDependencies": {

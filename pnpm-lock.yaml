@@ -237,6 +237,9 @@ importers:
 
   packages/protocol:
     dependencies:
+      '@colyseus/schema':
+        specifier: 5.0.27
+        version: 5.0.27(typescript@6.0.2)
       zod:
         specifier: latest
         version: 4.4.3

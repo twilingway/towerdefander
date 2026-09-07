@@ -337,6 +337,8 @@ export class SpaceshipDisplayState extends Schema {
    * a whole number here would be an indicator of "zero or disaster".
    */
   @type("float32") serverStepMs = 0;
+  /** The last solo input frame the room applied; the cockpit replays past it. */
+  @type("uint32") appliedInputSeq = 0;
   /** The run's live drive numbers and the pose the client replays from. */
   @type(ShipDriveState) drive = new ShipDriveState();
   @type(ShipPoseState) pose = new ShipPoseState();

@@ -441,6 +441,7 @@ function createPreviewGame(
       shieldPhase: "down",
       cameraViewWidth,
       serverStepMs: 0,
+      appliedInputSeq: 0,
       drive: {
         revision: 0,
         speedPerSecond: 320,
@@ -628,6 +629,7 @@ function createPreviewGame(
       shieldPhase: "down",
       cameraViewWidth,
       serverStepMs: 0,
+      appliedInputSeq: 0,
       drive: {
         revision: 0,
         speedPerSecond: 320,
@@ -730,6 +732,7 @@ function createPreviewGame(
     purchasedModules: [...PREVIEW_PURCHASES, "turretDrive"],
     cameraViewWidth,
     serverStepMs: 0,
+    appliedInputSeq: 0,
     drive: {
       revision: 0,
       speedPerSecond: 320,

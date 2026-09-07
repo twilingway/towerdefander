@@ -28,6 +28,9 @@ import {
   PROTOCOL_VERSION,
   ROOM_REFUSED_AT_CAPACITY,
   ROOM_REFUSED_FOR_MAINTENANCE,
+  SOLO_INPUT_BUFFER_SIZE,
+  SOLO_INPUT_RANGES,
+  SoloInput,
   clientMessage,
   clientLatencyPongSchema,
   roomCreateOptionsSchema,
@@ -138,6 +141,25 @@ export class SpaceshipDefenderRoom extends Room<{
 }> {
   override maxMessagesPerSecond = CREW_MESSAGE_CEILING;
 
+  /**
+   * The solo cockpit's own input stream.
+   *
+   * A stream rather than a message because prediction needs a sequence the
+   * library acknowledges: the client replays every frame past the one the room
+   * has applied, and it has to be told which that is. Crew panels keep their
+   * three messages - they have no ship of their own to replay.
+   *
+   * `sanitize` clamps in place before anything reads a frame. Not anti-cheat -
+   * the room still owns every outcome - but NaN containment: one NaN reaching
+   * the step poisons the ship's position permanently and it vanishes with no
+   * error anywhere.
+   */
+  private readonly soloInputs = this.defineInput(SoloInput, {
+    bufferMaxSize: SOLO_INPUT_BUFFER_SIZE,
+    seqField: "seq",
+    sanitize: SOLO_INPUT_RANGES
+  });
+
   private readonly connectionRoles = new Map<string, ConnectionRole>();
   private readonly sequenceWatermarks = new Map<string, Map<InputMessageType, number>>();
   private readonly connectionClients = new Map<string, Client>();
@@ -166,6 +188,14 @@ export class SpaceshipDefenderRoom extends Room<{
    * the price of one is the interesting number, not their sum.
    */
   private lastStepMs = 0;
+  /**
+   * The last solo frame this room actually applied.
+   *
+   * Published so the cockpit knows where its replay starts. Without it the
+   * client has a local ship and no way to tell which of its own inputs the
+   * server has already seen, which is the whole of reconciliation.
+   */
+  private appliedSoloSeq = 0;
   private readonly lifecycle = new LifecycleSchedule({
     schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
     now: () => Date.now(),
@@ -507,6 +537,40 @@ export class SpaceshipDefenderRoom extends Room<{
     });
   }
 
+  /**
+   * Spends every solo frame that arrived, oldest first.
+   *
+   * One frame per step in arrival order rather than "take only the newest",
+   * which is the lab's rule and its reason: taking the newest jumps the
+   * acknowledgement past frames that were never simulated, and the client then
+   * replays from a state the server never produced.
+   */
+  private applySoloInputs(): void {
+    if (this.gameState === undefined) return;
+    for (const [sessionId, role] of this.connectionRoles) {
+      if (role !== "solo") continue;
+      for (const input of this.soloInputs.get(sessionId)) {
+        const receivedTick = this.gameState.clock.tick;
+        this.gameState = applyPilotInput(this.gameState, {
+          vector: { x: input.vectorX, y: input.vectorY },
+          mgFiring: input.mgFiring,
+          receivedTick,
+          // Absent rather than zero when the stick is driving: zero is a real
+          // command at this helm and cannot stand for "no command".
+          turn: input.hasHelm ? input.turn : null,
+          thrust: input.hasHelm ? input.thrust : null
+        });
+        this.gameState = applyGunnerInput(this.gameState, {
+          vector: { x: input.aimX, y: input.aimY },
+          firing: input.firing,
+          ...(input.hasAimTurn ? { turn: input.aimTurn } : {}),
+          receivedTick
+        });
+        this.appliedSoloSeq = input.seq;
+      }
+    }
+  }
+
   handleGunnerInput(client: Client, unsafePayload: unknown): void {
     const command = this.parseRoleInput(
       client,
@@ -633,6 +697,7 @@ export class SpaceshipDefenderRoom extends Room<{
     if (this.expireWaveDeadlineIfDue(Date.now())) {
       return;
     }
+    this.applySoloInputs();
     const previousEncounterPhase = this.gameState.encounterPhase;
     const previousLootWindow = this.gameState.lootWindowTicksRemaining;
     const projectionWasResult = this.state.game.encounter.phase === "result";
@@ -853,6 +918,7 @@ export class SpaceshipDefenderRoom extends Room<{
     // Not part of the projection: it measures the host, not the simulation
     // frame, and `projectGameState` is state plus config and nothing else.
     this.state.game.display.serverStepMs = this.lastStepMs;
+    this.state.game.display.appliedInputSeq = this.appliedSoloSeq;
   }
 
   private neutralizeRole(playerId: string): void {

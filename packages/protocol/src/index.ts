@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export * from "./crewRoles.ts";
+export * from "./soloInput.ts";
 export * from "./enemyKinds.ts";
 export * from "./visualCatalog.ts";
 import { CREW_ROLES, crewRoleSchema, type CrewRole } from "./crewRoles.ts";
@@ -777,6 +778,8 @@ export const displayGameSnapshotSchema = z
      * client needs to replay an input the server has not acknowledged yet;
      * apart, they are two halves of a ship that drifts.
      */
+    /** The last solo frame the room applied; a replay starts past it. */
+    appliedInputSeq: safeNonnegativeInteger,
     drive: publicShipDriveViewSchema,
     pose: publicShipPoseViewSchema,
     /** Parallax space background for this run; fixed at run start like the silhouettes. */
