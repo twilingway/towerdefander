@@ -158,16 +158,22 @@ export function useSoloCockpit({
   /** Which spurs are down; the cannon fires while either is. */
   const cannonSpursReference = useRef({ stick: false, trigger: false });
   /**
-   * A trigger pressed and released between two samples.
+   * How many more frames must carry a trigger that has already been let go.
    *
    * The stream reads the cockpit's state once per simulation step rather than
    * being told when it changes, so a tap shorter than a step - which a mouse
    * click often is - begins and ends inside one interval and reaches the room
    * as nothing at all. That is the "fires on the third click" everyone hits.
-   * A press latches here until a frame has carried it; the room fires on the
-   * rising edge, so one frame is a shot.
+   *
+   * A count rather than a flag, because one frame is not proof of arrival: a
+   * burst after a hitch can overrun the room's input buffer, and the frame that
+   * carried the press is as droppable as any other. The room fires on the
+   * rising edge, so repeating the press costs nothing - a held trigger is one
+   * shot however many frames say so - and fifty milliseconds of insistence is
+   * far below the fastest a thumb can tap twice.
    */
-  const pendingTriggerReference = useRef({ cannon: false, machineGun: false });
+  const TRIGGER_FRAMES = 3;
+  const pendingTriggerReference = useRef({ cannon: 0, machineGun: 0 });
   /*
    * The bearing each stick is currently sending, and when it was last touched.
    * A thumb is never still: two pixels of slip on the ring is a couple of
@@ -379,9 +385,10 @@ export function useSoloCockpit({
     // Read once, then spent: a latch that stayed set would hold the trigger
     // down long after the thumb came off it.
     const latched = pendingTriggerReference.current;
-    const firing = gunner.firing || latched.cannon;
-    const mgFiring = pilot.mgFiring || latched.machineGun;
-    pendingTriggerReference.current = { cannon: false, machineGun: false };
+    const firing = gunner.firing || latched.cannon > 0;
+    const mgFiring = pilot.mgFiring || latched.machineGun > 0;
+    if (latched.cannon > 0) latched.cannon -= 1;
+    if (latched.machineGun > 0) latched.machineGun -= 1;
     return {
       vectorX: pilot.vector.x,
       vectorY: pilot.vector.y,
@@ -476,17 +483,17 @@ export function useSoloCockpit({
       updateGunner({ aim: NEUTRAL, aimHeading: null });
     },
     onMachineGunHold: (held) => {
-      if (held) pendingTriggerReference.current.machineGun = true;
+      if (held) pendingTriggerReference.current.machineGun = TRIGGER_FRAMES;
       updatePilot({ mgFiring: held });
     },
     onCannonFromStick: (held) => {
       cannonSpursReference.current.stick = held;
-      if (held) pendingTriggerReference.current.cannon = true;
+      if (held) pendingTriggerReference.current.cannon = TRIGGER_FRAMES;
       updateGunner({ firing: anyCannonSpurDown() });
     },
     onCannonFromTrigger: (held) => {
       cannonSpursReference.current.trigger = held;
-      if (held) pendingTriggerReference.current.cannon = true;
+      if (held) pendingTriggerReference.current.cannon = TRIGGER_FRAMES;
       updateGunner({ firing: anyCannonSpurDown() });
     }
   };

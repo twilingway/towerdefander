@@ -1905,3 +1905,56 @@ describe("tank helm", () => {
     expect(steered.spaceshipHeading).toBeGreaterThan(0);
   });
 });
+
+describe("a tap on the trigger", () => {
+  it("fires once when a press is carried by a few frames and then let go", () => {
+    /*
+     * What the cockpit's stream actually sends. The room fires on the rising
+     * edge, so a tap repeated across a handful of frames is one shot - and it
+     * has to be one shot even if one of those frames never arrives, which is
+     * why the cockpit repeats it at all.
+     */
+    const config = createSpaceshipSimulationConfig();
+    let state = createSpaceshipSimulationState(config, 7);
+    const aim = { x: 1, y: 0 };
+    const idle = (): void => {
+      state = applyPilotInput(state, {
+        vector: { x: 0, y: 0 },
+        mgFiring: false,
+        receivedTick: state.clock.tick,
+        turn: null,
+        thrust: null
+      });
+    };
+    for (let step = 0; step < 5; step += 1) {
+      idle();
+      state = applyGunnerInput(state, {
+        vector: aim,
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    const before = state.projectiles.length;
+    for (let step = 0; step < 3; step += 1) {
+      idle();
+      state = applyGunnerInput(state, {
+        vector: aim,
+        firing: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    for (let step = 0; step < 3; step += 1) {
+      idle();
+      state = applyGunnerInput(state, {
+        vector: aim,
+        firing: false,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+    }
+
+    expect(state.projectiles.length).toBe(before + 1);
+  });
+});
