@@ -41,6 +41,25 @@ const useLab = process.argv.includes("--lab");
  */
 const plain = process.argv.includes("--plain");
 /*
+ * Which of the scene's own switches to hold off for the whole run.
+ *
+ * Attribution, not tuning: with React off the patch path the judder that is
+ * left has to be either the drawing or the garbage, and turning one layer off
+ * at a time is the only way to say which without guessing. `--off=фон,свечение`
+ * names them the way the panel does.
+ */
+const switchesOff = (process.argv.find((argument) => argument.startsWith("--off="))?.slice(6) ?? "")
+  .split(",")
+  .map((name) => name.trim())
+  .filter((name) => name.length > 0);
+
+const SWITCHES = {
+  фон: { testId: "diagnostics-background-toggle", attribute: "data-background" },
+  свечение: { testId: "diagnostics-glow-toggle", attribute: "data-glow" },
+  векторы: { testId: "diagnostics-vectors-toggle", attribute: "data-vectors" },
+  предсказание: { testId: "diagnostics-prediction-toggle", attribute: "data-prediction" }
+};
+/*
  * A desktop at 165 fps has three times the headroom a phone does, and both
  * stands measure as flawless on one. Throttling the main thread is how the
  * comparison is made on the machine that has the problem: the same divisor on
@@ -166,6 +185,17 @@ const stand = useLab
 await page.goto(stand.url, { waitUntil: "load" });
 await stand.enter();
 
+for (const name of switchesOff) {
+  const control = SWITCHES[name];
+  if (control === undefined) throw new Error(`unknown switch: ${name}`);
+  const button = page.getByTestId(control.testId);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if ((await button.getAttribute(control.attribute)) === "off") break;
+    await button.click();
+    await sleep(150);
+  }
+}
+
 if (cpuThrottle > 1) {
   // Applied after joining: a throttled page takes minutes to reach a fight, and
   // the loading is not what is being measured.
@@ -192,7 +222,8 @@ console.log("");
 console.log(`стенд: ${stand.name} — ${stand.url}`);
 console.log(
   `${SAMPLES} проб по секунде после ${WARMUP_MS / 1000} с прогрева, медианы` +
-    (cpuThrottle > 1 ? ` · процессор замедлен в ${cpuThrottle} раз` : "")
+    (cpuThrottle > 1 ? ` · процессор замедлен в ${cpuThrottle} раз` : "") +
+    (switchesOff.length > 0 ? ` · выключено: ${switchesOff.join(", ")}` : "")
 );
 
 for (const run of runs) {

@@ -200,8 +200,8 @@ interface CombatVisual {
 
 class SpaceshipScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
-  private spaceshipBody: Phaser.GameObjects.Graphics | undefined;
-  private noseMarker: Phaser.GameObjects.Graphics | undefined;
+  private spaceshipBody: Phaser.GameObjects.Image | undefined;
+  private noseMarker: Phaser.GameObjects.Image | undefined;
   private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Graphics | undefined;
   private beams: Phaser.GameObjects.Graphics | undefined;
@@ -381,18 +381,39 @@ class SpaceshipScene extends Phaser.Scene {
     this.createBackground(this.snapshot.background);
     this.drawDecorations();
 
-    this.spaceshipBody = this.add.graphics().setDepth(10);
-    drawSpaceshipHull(this.spaceshipBody, this.snapshot);
-    this.spaceshipBody
-      .setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y)
+    /*
+     * The hull and its nose marker are baked for the same reason the enemies
+     * are: they are fixed drawings that only ever move and turn, and a
+     * `Graphics` object is walked command by command on every frame it is
+     * visible, however long ago it was drawn.
+     */
+    const shipRadius = this.snapshot.spaceship.radius;
+    const hullVisual = this.snapshot.spaceshipVisual;
+    this.spaceshipBody = this.add
+      .image(
+        this.snapshot.spaceship.x,
+        this.snapshot.spaceship.y,
+        this.bakedShape(
+          `hull:${hullVisual?.shape ?? "default"}:${String(hullVisual?.modelScale ?? 1)}:${String(Math.round(shipRadius))}`,
+          shipRadius * (hullVisual?.modelScale ?? 1) * 1.35 + 6,
+          (graphics) => {
+            drawSpaceshipHull(graphics, this.snapshot);
+          }
+        )
+      )
+      .setDepth(10)
       .setRotation(this.snapshot.spaceship.heading);
 
-    const shipRadius = this.snapshot.spaceship.radius;
-    this.noseMarker = this.add.graphics().setDepth(11);
-    this.noseMarker.fillStyle(0xffd36f, 1);
-    this.noseMarker.fillTriangle(shipRadius - 4, -9, shipRadius + 12, 0, shipRadius - 4, 9);
-    this.noseMarker
-      .setPosition(this.snapshot.spaceship.x, this.snapshot.spaceship.y)
+    this.noseMarker = this.add
+      .image(
+        this.snapshot.spaceship.x,
+        this.snapshot.spaceship.y,
+        this.bakedShape(`nose:${String(Math.round(shipRadius))}`, shipRadius + 16, (graphics) => {
+          graphics.fillStyle(0xffd36f, 1);
+          graphics.fillTriangle(shipRadius - 4, -9, shipRadius + 12, 0, shipRadius - 4, 9);
+        })
+      )
+      .setDepth(11)
       .setRotation(this.snapshot.spaceship.heading);
 
     this.turret = createTurret(this, this.snapshot);
@@ -663,36 +684,74 @@ class SpaceshipScene extends Phaser.Scene {
     this.snapshotReset.request();
   }
 
+  /**
+   * The floor, baked once instead of re-tessellated sixty times a second.
+   *
+   * A profile of a throttled fight put Phaser's graphics renderer, its batcher
+   * and the polygon tessellator at two thirds of the main thread, and the arena
+   * is the largest single drawing on the field: a filled circle four thousand
+   * units across, a rim band, five rings and twelve spokes, every command of it
+   * walked again on every frame because that is what a `Graphics` object is.
+   *
+   * As a texture it is four vertices. The bake happens in texture space and the
+   * image is stretched back to world size, which is why every width below is
+   * multiplied: a two-unit ring drawn at texture scale comes back two units
+   * wide on the floor. Curves and flat fills carry that stretch without
+   * showing it; that is the whole reason this shape can be baked and the shield
+   * cannot.
+   */
   private drawArena(): void {
     const centerX = this.snapshot.worldWidth / 2;
     const centerY = this.snapshot.worldHeight / 2;
     this.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
 
-    const graphics = this.add.graphics().setDepth(0);
-    graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
-    graphics.fillCircle(centerX, centerY, this.snapshot.arenaRadius);
-    // The band the rim slows a hull in, under the rings so those stay readable.
-    const band = getRimBandStroke(this.snapshot.arenaRadius, this.snapshot.rimBandWidth);
-    if (band !== null) {
-      graphics.lineStyle(band.thickness, RIM_BAND_COLOR, RIM_BAND_ALPHA);
-      graphics.strokeCircle(centerX, centerY, band.radius);
-    }
+    const radius = this.snapshot.arenaRadius;
+    const diameter = radius * 2;
+    const scale = SpaceshipScene.ARENA_TEXTURE_SIDE / diameter;
+    const band = getRimBandStroke(radius, this.snapshot.rimBandWidth);
 
-    // Rings and spokes rather than a square grid: on a round arena what a pilot
-    // reads off the floor is the distance to the rim and the bearing, and a
-    // square mesh states neither.
-    graphics.lineStyle(2, 0x163746, 0.75);
-    for (const radius of getArenaRingRadii(this.snapshot.arenaRadius)) {
-      graphics.strokeCircle(centerX, centerY, radius);
-    }
-    graphics.lineStyle(2, 0x14303d, 0.5);
-    for (const spoke of getArenaSpokes(centerX, centerY, this.snapshot.arenaRadius)) {
-      graphics.lineBetween(spoke.from.x, spoke.from.y, spoke.to.x, spoke.to.y);
-    }
+    const floorKey = this.bakedShape(
+      `arena:floor:${String(Math.round(radius))}:${String(Math.round(this.snapshot.rimBandWidth))}`,
+      SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
+      (graphics) => {
+        graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
+        graphics.fillCircle(0, 0, radius * scale);
+        // The band the rim slows a hull in, under the rings so those stay readable.
+        if (band !== null) {
+          graphics.lineStyle(band.thickness * scale, RIM_BAND_COLOR, RIM_BAND_ALPHA);
+          graphics.strokeCircle(0, 0, band.radius * scale);
+        }
+        // Rings and spokes rather than a square grid: on a round arena what a
+        // pilot reads off the floor is the distance to the rim and the bearing,
+        // and a square mesh states neither.
+        graphics.lineStyle(2 * scale, 0x163746, 0.75);
+        for (const ringRadius of getArenaRingRadii(radius)) {
+          graphics.strokeCircle(0, 0, ringRadius * scale);
+        }
+        graphics.lineStyle(2 * scale, 0x14303d, 0.5);
+        for (const spoke of getArenaSpokes(0, 0, radius)) {
+          graphics.lineBetween(
+            spoke.from.x * scale,
+            spoke.from.y * scale,
+            spoke.to.x * scale,
+            spoke.to.y * scale
+          );
+        }
+      }
+    );
+    this.add.image(centerX, centerY, floorKey).setDisplaySize(diameter, diameter).setDepth(0);
 
-    const border = this.add.graphics().setDepth(3);
-    border.lineStyle(8, 0x3d6874, 1);
-    border.strokeCircle(centerX, centerY, this.snapshot.arenaRadius);
+    // Its own image rather than part of the floor: the rim has to stay above
+    // the obstacles, and they sit between the two.
+    const borderKey = this.bakedShape(
+      `arena:border:${String(Math.round(radius))}`,
+      SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
+      (graphics) => {
+        graphics.lineStyle(8 * scale, 0x3d6874, 1);
+        graphics.strokeCircle(0, 0, radius * scale);
+      }
+    );
+    this.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
   }
 
   private drawDecorations(): void {
@@ -1248,19 +1307,22 @@ class SpaceshipScene extends Phaser.Scene {
    * that and the origin sits at its centre, so the image lands exactly where
    * the graphics would have.
    */
+  /**
+   * Side of the baked arena floor, in texture pixels.
+   *
+   * Sixteen megabytes of video memory for a drawing that would otherwise be
+   * rebuilt every frame. Halving it would blur the two-unit rings past reading
+   * once the image is stretched to four thousand units; doubling it buys
+   * nothing the camera can show.
+   */
+  private static readonly ARENA_TEXTURE_SIDE = 2048;
+
   private bakedShape(
     key: string,
     half: number,
     draw: (graphics: Phaser.GameObjects.Graphics) => void
   ): string {
-    if (this.textures.exists(key)) return key;
-    const size = Math.max(2, Math.ceil(half * 2));
-    const graphics = this.make.graphics({ x: 0, y: 0 }, false);
-    graphics.translateCanvas(size / 2, size / 2);
-    draw(graphics);
-    graphics.generateTexture(key, size, size);
-    graphics.destroy();
-    return key;
+    return bakeShape(this, key, half, draw);
   }
 
   private createCombatVisual(entity: CombatEntity): {
@@ -1619,8 +1681,18 @@ function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): Turre
   // The drawing is offset inside a container so the container itself still
   // turns about the ship's centre: nudging the asset must move the gun, never
   // the point it spins around.
-  const gun = scene.add.graphics();
-  drawCatalogAssetById(gun, visual.shape, snapshot.spaceship.radius * visual.modelScale);
+  const gun = scene.add.image(
+    0,
+    0,
+    bakeShape(
+      scene,
+      `turret:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(snapshot.spaceship.radius))}`,
+      snapshot.spaceship.radius * visual.modelScale * 1.6 + 6,
+      (graphics) => {
+        drawCatalogAssetById(graphics, visual.shape, snapshot.spaceship.radius * visual.modelScale);
+      }
+    )
+  );
   gun.setPosition(
     visual.pivotX * snapshot.spaceship.radius,
     visual.pivotY * snapshot.spaceship.radius
@@ -1630,6 +1702,35 @@ function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): Turre
     .container(mount.x, mount.y, [gun])
     .setDepth(12)
     .setRotation(snapshot.turretAngle);
+}
+
+/**
+ * A drawing turned into a texture, once per key.
+ *
+ * A `Graphics` object is re-walked, re-tessellated and re-batched on every
+ * frame it is visible, however long ago it was drawn - a profile of a throttled
+ * fight put that walk and its batcher at two thirds of the main thread. An
+ * `Image` of the same drawing is four vertices. So anything with a fixed shape
+ * is baked here and then only moved, turned and scaled.
+ *
+ * The canvas is translated to the middle first, so the drawing's own origin
+ * ends up at the texture's centre and the image's default origin lines up with
+ * what the graphics version would have shown.
+ */
+export function bakeShape(
+  scene: Phaser.Scene,
+  key: string,
+  half: number,
+  draw: (graphics: Phaser.GameObjects.Graphics) => void
+): string {
+  if (scene.textures.exists(key)) return key;
+  const size = Math.max(2, Math.ceil(half * 2));
+  const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+  graphics.translateCanvas(size / 2, size / 2);
+  draw(graphics);
+  graphics.generateTexture(key, size, size);
+  graphics.destroy();
+  return key;
 }
 
 export function drawSpaceshipHull(

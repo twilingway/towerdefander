@@ -66,6 +66,69 @@ const FPS_SAMPLE_INTERVAL_MS = 500;
 /** The world as text, for tests and the demo bot; nothing on screen reads it. */
 const READABLE_SAMPLE_INTERVAL_MS = 100;
 
+/**
+ * The world as text: what a browser test and the demo bot read off the arena.
+ *
+ * Gathered in one place because two paths need exactly the same set - React
+ * spreads it on the first render, and a timer writes it straight to the node
+ * afterwards. Written imperatively rather than through state on purpose: the
+ * page holds still during combat, and re-rendering this div ten times a second
+ * to move a number no one looks at was measurable - eleven commits a second
+ * where the rest of the page manages three.
+ */
+function worldAttributes(
+  game: DisplayGameSnapshot,
+  runNumber: number,
+  visibleDemo: boolean
+): Record<string, string> {
+  const attributes: Record<string, string> = {
+    "data-run-number": String(runNumber),
+    "data-arena-radius": String(game.arenaRadius),
+    "data-world-width": String(game.worldWidth),
+    "data-world-height": String(game.worldHeight),
+    "data-spaceship-x": String(game.spaceship.x),
+    "data-spaceship-y": String(game.spaceship.y),
+    "data-spaceship-radius": String(game.spaceship.radius),
+    "data-spaceship-velocity-x": String(game.spaceship.velocityX),
+    "data-spaceship-heading": String(game.spaceship.heading),
+    "data-spaceship-hp": String(game.spaceship.hp),
+    "data-spaceship-max-hp": String(game.spaceship.maxHp),
+    "data-score": String(game.encounter.score),
+    "data-credits": String(game.credits),
+    "data-wave-number": String(game.encounter.waveNumber),
+    "data-encounter-phase": game.encounter.phase,
+    "data-team-upgrade-id":
+      getCurrentWaveUpgrade(game.teamUpgrade.selection, game.encounter.waveNumber)?.upgradeId ?? "",
+    "data-turret-angle": String(game.turretAngle),
+    "data-enemy-count": String(game.enemyShips.length),
+    "data-asteroid-count": String(game.asteroids.length),
+    "data-friendly-projectile-count": String(game.friendlyProjectiles.length),
+    "data-mg-projectile-count": String(
+      game.friendlyProjectiles.filter((projectile) => projectile.source === "machineGun").length
+    ),
+    "data-hostile-projectile-count": String(game.hostileProjectiles.length),
+    "data-missile-count": String(game.homingMissiles.length),
+    "data-latest-projectile-id": game.friendlyProjectiles.at(-1)?.entityId ?? "",
+    "data-shield-active": String(game.shield.active),
+    "data-shield-angle": String(game.shield.angle),
+    "data-shield-energy": String(game.shield.energy)
+  };
+  if (!visibleDemo) return attributes;
+  const target = findNearestVisibleDemoTarget(game);
+  const threat = findNearestVisibleDemoThreat(game);
+  attributes["data-demo-target-id"] = target?.entityId ?? "";
+  attributes["data-demo-target-x"] = String(target?.x ?? "");
+  attributes["data-demo-target-y"] = String(target?.y ?? "");
+  attributes["data-demo-target-velocity-x"] = String(target?.velocityX ?? "");
+  attributes["data-demo-target-velocity-y"] = String(target?.velocityY ?? "");
+  attributes["data-demo-threat-id"] = threat?.entityId ?? "";
+  attributes["data-demo-threat-x"] = String(threat?.x ?? "");
+  attributes["data-demo-threat-y"] = String(threat?.y ?? "");
+  attributes["data-demo-threat-velocity-x"] = String(threat?.velocityX ?? "");
+  attributes["data-demo-threat-velocity-y"] = String(threat?.velocityY ?? "");
+  return attributes;
+}
+
 export function SpaceshipCanvas({
   game,
   runNumber,
@@ -101,8 +164,6 @@ export function SpaceshipCanvas({
   latestGame.current = game;
   latestRunNumber.current = runNumber;
   latestConnectionEpoch.current = connectionEpoch;
-  const demoTarget = visibleDemo ? findNearestVisibleDemoTarget(game) : undefined;
-  const demoThreat = visibleDemo ? findNearestVisibleDemoThreat(game) : undefined;
 
   useEffect(() => {
     let disposed = false;
@@ -239,76 +300,35 @@ export function SpaceshipCanvas({
    * test waits for, and the subtree it re-renders is this div and one hidden
    * sentence.
    */
-  const [readable, setReadable] = useState(game);
+  const shellReference = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (readGame === undefined) return undefined;
     const timer = globalThis.setInterval(() => {
       const latest = readGame();
-      if (latest !== undefined) setReadable(latest);
+      const element = shellReference.current;
+      if (latest === undefined || element === null) return;
+      for (const [name, value] of Object.entries(worldAttributes(latest, runNumber, visibleDemo))) {
+        if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+      }
     }, READABLE_SAMPLE_INTERVAL_MS);
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [readGame]);
-  const shown = readGame === undefined ? game : readable;
+  }, [readGame, runNumber, visibleDemo]);
 
   return (
     <div
+      ref={shellReference}
       className="battlefield-shell"
       data-testid="spaceship-world"
-      data-run-number={runNumber}
-      data-arena-radius={shown.arenaRadius}
-      data-world-width={shown.worldWidth}
-      data-world-height={shown.worldHeight}
-      data-spaceship-x={shown.spaceship.x}
-      data-spaceship-y={shown.spaceship.y}
-      data-spaceship-radius={shown.spaceship.radius}
-      data-spaceship-velocity-x={shown.spaceship.velocityX}
-      data-spaceship-heading={shown.spaceship.heading}
-      data-spaceship-hp={shown.spaceship.hp}
-      data-spaceship-max-hp={shown.spaceship.maxHp}
-      data-score={shown.encounter.score}
-      data-credits={shown.credits}
-      data-wave-number={shown.encounter.waveNumber}
-      data-encounter-phase={shown.encounter.phase}
-      data-team-upgrade-id={
-        getCurrentWaveUpgrade(shown.teamUpgrade.selection, shown.encounter.waveNumber)?.upgradeId ??
-        ""
-      }
-      data-turret-angle={shown.turretAngle}
-      data-enemy-count={shown.enemyShips.length}
-      data-asteroid-count={shown.asteroids.length}
-      data-friendly-projectile-count={shown.friendlyProjectiles.length}
-      data-mg-projectile-count={
-        shown.friendlyProjectiles.filter((projectile) => projectile.source === "machineGun").length
-      }
-      data-hostile-projectile-count={shown.hostileProjectiles.length}
-      data-missile-count={shown.homingMissiles.length}
-      data-latest-projectile-id={shown.friendlyProjectiles.at(-1)?.entityId ?? ""}
-      data-shield-active={shown.shield.active}
-      data-shield-angle={shown.shield.angle}
-      data-shield-energy={shown.shield.energy}
-      {...(visibleDemo
-        ? {
-            "data-demo-target-id": demoTarget?.entityId ?? "",
-            "data-demo-target-x": demoTarget?.x ?? "",
-            "data-demo-target-y": demoTarget?.y ?? "",
-            "data-demo-target-velocity-x": demoTarget?.velocityX ?? "",
-            "data-demo-target-velocity-y": demoTarget?.velocityY ?? "",
-            "data-demo-threat-id": demoThreat?.entityId ?? "",
-            "data-demo-threat-x": demoThreat?.x ?? "",
-            "data-demo-threat-y": demoThreat?.y ?? "",
-            "data-demo-threat-velocity-x": demoThreat?.velocityX ?? "",
-            "data-demo-threat-velocity-y": demoThreat?.velocityY ?? ""
-          }
-        : {})}
+      {...worldAttributes(game, runNumber, visibleDemo)}
     >
       <div ref={hostReference} className="battlefield-canvas" aria-hidden="true" />
       {failed && <p className="battlefield-fallback">Не удалось запустить Phaser-сцену.</p>}
       <span className="sr-only">
-        Корабль находится в точке {Math.round(shown.spaceship.x)}, {Math.round(shown.spaceship.y)}.
-        Снарядов: {shown.friendlyProjectiles.length + shown.hostileProjectiles.length}. Врагов:{" "}
-        {shown.enemyShips.length}.
+        Корабль находится в точке {Math.round(game.spaceship.x)}, {Math.round(game.spaceship.y)}.
+        Снарядов: {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
+        {game.enemyShips.length}.
       </span>
     </div>
   );
