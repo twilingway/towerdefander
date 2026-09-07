@@ -4,6 +4,11 @@ import { SoloInput } from "@spaceship-defender/protocol";
 import { useEffect, useRef } from "react";
 
 import {
+  createPlaybackDelayEstimate,
+  observePatchArrival,
+  playbackDelayMs
+} from "../playbackDelay.js";
+import {
   PREDICTED_POSE_FIELDS,
   stepPredictedPose,
   toShipStats,
@@ -107,7 +112,8 @@ export function useShipPrediction<
   world,
   predicting,
   onDriver,
-  onPending
+  onPending,
+  onDelay
 }: {
   readonly room: Room<unknown, TState> | undefined;
   /** Whether this display holds a cockpit seat in a running fight. */
@@ -140,9 +146,11 @@ export function useShipPrediction<
    * buffer until the device gives up.
    */
   readonly onPending?: (pending: number, driftEma: number) => void;
+  /** How far behind the newest snapshot the world is being drawn, in ms. */
+  readonly onDelay?: (delayMs: number) => void;
 }): void {
-  const latest = useRef({ source, world, enabled, predicting, onDriver, onPending });
-  latest.current = { source, world, enabled, predicting, onDriver, onPending };
+  const latest = useRef({ source, world, enabled, predicting, onDriver, onPending, onDelay });
+  latest.current = { source, world, enabled, predicting, onDriver, onPending, onDelay };
 
   useEffect(() => {
     if (room === undefined) return undefined;
@@ -178,10 +186,35 @@ export function useShipPrediction<
        * decoded tree itself. So the two meet here, once, and everything past this
        * line is typed again.
        */
+      /*
+       * The buffer starts at one interval's guess and is then measured.
+       *
+       * Interpolation draws at `now - delay` and needs two snapshots around
+       * that moment; on underrun the SDK holds the newest one, which is what an
+       * enemy stopping dead and then jumping actually is. Three intervals of
+       * slack is what the reference prototype keeps, and it broadcasts every
+       * thirty-three milliseconds. Ours arrive further apart and less evenly,
+       * so the same slack is a bigger number here - and one nobody should have
+       * to guess, because the stream says what it is.
+       */
+      let delayEstimate = createPlaybackDelayEstimate();
+      let publishedDelayMs = playbackDelayMs(delayEstimate);
       const predict: PredictHandle = Predict.get(
         room as unknown as Parameters<typeof Predict.get>[0],
-        { mode: "lerp", delay: 100 }
+        { mode: "lerp", delay: publishedDelayMs }
       );
+      const noteArrival = (): void => {
+        delayEstimate = observePatchArrival(delayEstimate, performance.now());
+        const wanted = playbackDelayMs(delayEstimate);
+        // Moved only when it moved enough to matter: rewriting the profile on
+        // every patch would be churn, and the buffer is not a precision
+        // instrument.
+        if (Math.abs(wanted - publishedDelayMs) < 8) return;
+        publishedDelayMs = wanted;
+        predict.setDefaults({ delay: wanted });
+        latest.current.onDelay?.(wanted);
+      };
+      room.onStateChange(noteArrival);
       const input = room.input({ type: SoloInput });
       const reconciler = predict.reconciler(pose, {
         input,
@@ -349,6 +382,7 @@ export function useShipPrediction<
 
       return () => {
         latest.current.onDriver(undefined);
+        room.onStateChange.remove(noteArrival);
         for (const detach of detachers) detach();
       };
     }

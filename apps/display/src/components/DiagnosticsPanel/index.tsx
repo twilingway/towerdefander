@@ -36,6 +36,7 @@ export function DiagnosticsPanel({
   entityCount,
   liveDrawn,
   offscreen,
+  playbackDelayMs,
   traffic,
   snapshot,
   commit,
@@ -69,6 +70,8 @@ export function DiagnosticsPanel({
   readonly liveDrawn: number;
   /** How many of them the camera does not show - what an area filter would drop. */
   readonly offscreen: number;
+  /** How far behind the room the world is drawn - the interpolation buffer. */
+  readonly playbackDelayMs: number;
   /** Undefined means the counter never got hold of the socket. */
   readonly traffic: TrafficMeter | undefined;
   /** What turning patches into views costs the main thread. */
@@ -177,6 +180,8 @@ export function DiagnosticsPanel({
           <dt>Сущностей</dt>
           <dd data-testid="diagnostics-entities">
             {entityCount} · через предсказание {liveDrawn} · за кадром {offscreen}
+            <br />
+            буфер мира {playbackDelayMs} мс
           </dd>
         </div>
         <div>

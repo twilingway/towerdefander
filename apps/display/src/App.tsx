@@ -173,6 +173,14 @@ export function DisplayApp() {
    */
   const [predictionEnabled, setPredictionEnabled] = useState(true);
   /**
+   * How far behind the room the world is drawn, measured rather than chosen.
+   *
+   * On the panel because it is the number an enemy's smoothness is bought with:
+   * too little and the interpolation runs out of snapshots and holds, which
+   * reads as a hull stopping dead and then jumping.
+   */
+  const [playbackDelayMs, setPlaybackDelayMs] = useState(0);
+  /**
    * The ship this page is flying, as the reconciler currently has it.
    *
    * A ref, and that is the whole point: it is written every animation frame,
@@ -382,7 +390,8 @@ export function DisplayApp() {
     onPending: (pending, driftEma) => {
       pendingInputReference.current = pending;
       driftReference.current = driftEma;
-    }
+    },
+    onDelay: setPlaybackDelayMs
   });
 
   /*
@@ -916,6 +925,7 @@ export function DisplayApp() {
                 pingMs={view.displayLatencyMs}
                 entityCount={countDrawnEntities(view.game)}
                 liveDrawn={frameStats.liveDrawn}
+                playbackDelayMs={playbackDelayMs}
                 offscreen={frameStats.offscreen}
                 traffic={traffic}
                 snapshot={snapshotReading}
