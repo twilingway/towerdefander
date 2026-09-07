@@ -1,3 +1,14 @@
+/*
+ * No backdrop blur over the arena, anywhere.
+ *
+ * Every one of these sat over a canvas that repaints sixty times a second, and
+ * a backdrop filter makes the browser read that canvas back and blur it again
+ * on every one of those frames. It costs nothing a script meter can see: on a
+ * phone the panels held the frame at thirty-three milliseconds with zero long
+ * tasks, and taking the whole interface off the screen took the stutter to
+ * zero and the frame to sixty. Frosted glass is not worth a third of the frame
+ * rate; the panels carry their own background instead.
+ */
 :root {
   color: #f6f4e8;
   background: #081313;
@@ -224,7 +235,6 @@ p {
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
-  backdrop-filter: blur(6px);
 }
 
 .crew-latency-overlay strong {
@@ -435,7 +445,6 @@ p {
 .display-shell--battle .spaceship-hud > div {
   background: rgb(8 28 34 / 82%);
   box-shadow: 0 0.35rem 1.2rem rgb(0 0 0 / 20%);
-  backdrop-filter: blur(6px);
 }
 
 .spaceship-hud > div {
@@ -530,7 +539,6 @@ p {
   aspect-ratio: 1;
   place-content: center;
   font-variant-numeric: tabular-nums;
-  backdrop-filter: blur(6px);
 }
 
 /* The caption no longer fits and no longer has to: the timer carries its own
@@ -561,7 +569,6 @@ p {
   text-align: center;
   pointer-events: none;
   transform: translateX(-50%);
-  backdrop-filter: blur(6px);
 }
 
 .boss-health span {
@@ -651,7 +658,6 @@ p {
   pointer-events: none;
   aspect-ratio: 1;
   transform: translateX(-50%);
-  backdrop-filter: blur(3px);
 }
 
 .combat-radar svg {
@@ -819,7 +825,6 @@ p {
   box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 55%);
   transform: translate(-50%, -50%);
   pointer-events: none;
-  backdrop-filter: blur(10px);
 }
 
 .encounter-overlay h2,
@@ -976,7 +981,6 @@ p {
   box-shadow: 0 0.75rem 2.5rem rgb(0 0 0 / 45%);
   font-size: 0.82rem;
   text-align: left;
-  backdrop-filter: blur(10px);
 }
 
 .visible-demo-overlay__heading,
@@ -1758,7 +1762,6 @@ p {
   border-radius: 50%;
   border: 2px solid rgba(126, 214, 255, 0.35);
   background: radial-gradient(circle, rgba(10, 30, 44, 0.55), rgba(6, 18, 28, 0.25));
-  backdrop-filter: blur(2px);
 }
 
 .cockpit-stick__knob {
