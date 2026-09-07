@@ -16,19 +16,16 @@ import {
 import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
 import type { ShipStats } from "./shipStats.ts";
 import { shortestAngleDelta } from "./simulationMath.ts";
+import { advanceShipPose } from "./shipPose.ts";
 import { addRunStats } from "./runStats.ts";
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 import {
   ZERO,
-  advanceAngularRate,
   advanceAngularTraverse,
   assertFiniteVector,
-  canonicalizeAngle,
   clamp,
   isFresh,
-  moveProjectiles,
-  moveSpaceshipWithinWorld,
-  moveVectorTowards
+  moveProjectiles
 } from "./simulationMath.ts";
 import { validateSpaceshipSimulationConfig } from "./simulationValidation.ts";
 
@@ -435,109 +432,43 @@ export function advanceSpaceshipSimulation(
   // The ship's own numbers come from the run, never from the config: a stat
   // read off the config is a module that silently does nothing.
   const ship = state.ship;
-  const pilotSpeed = ship.spaceshipSpeedPerSecond;
-  // With a turn intent the push runs along the nose, so reverse is the same
-  // burn with a negative sign and it never turns the hull.
-  // Reverse is deliberately the slower gear; see the config field.
-  const thrustSpeed =
-    pilotThrust !== null && pilotThrust < 0
-      ? pilotSpeed * ship.spaceshipReverseSpeedFactor
-      : pilotSpeed;
-  const targetVelocity =
-    pilotThrust === null
-      ? { x: pilotVector.x * pilotSpeed, y: pilotVector.y * pilotSpeed }
-      : {
-          x: Math.cos(state.spaceshipHeading) * thrustSpeed * pilotThrust,
-          y: Math.sin(state.spaceshipHeading) * thrustSpeed * pilotThrust
-        };
-  const coasting =
-    pilotThrust === null ? pilotVector.x === 0 && pilotVector.y === 0 : pilotThrust === 0;
-  const velocityDelta = coasting
-    ? ship.spaceshipBrakingPerSecondSquared * secondsPerStep
-    : ship.spaceshipAccelerationPerSecondSquared * secondsPerStep;
-  const nextVelocity = moveVectorTowards(state.spaceship.velocity, targetVelocity, velocityDelta);
-  const spaceship = moveSpaceshipWithinWorld(
-    state.spaceship,
-    nextVelocity,
-    secondsPerStep,
-    config,
-    ship
-  );
-
   const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
   // A spin remembers no bearing: keeping one would pull the hull back to it
   // the moment the key comes up, which is the swing this helm exists to lose.
   const headingTargetAngle = pilotTurn === null && pilotFresh ? state.headingTargetAngle : null;
-  // The hull turns before the turret does, because a mounted turret needs how
-  // far the hull went this step. Nothing else here depends on the order.
-  const headingConfig = {
-    maxAngularSpeed: ship.headingMaxAngularSpeedPerSecond,
-    angularAcceleration: ship.headingAngularAccelerationPerSecondSquared,
-    angularBraking: ship.headingAngularBrakingPerSecondSquared,
-    secondsPerStep
-  };
-  const headingTraverse =
-    pilotTurn === null
-      ? advanceAngularTraverse(
-          {
-            angle: state.spaceshipHeading,
-            targetAngle: headingTargetAngle,
-            angularVelocity: state.headingAngularVelocity
-          },
-          headingConfig
-        )
-      : advanceAngularRate(
-          { angle: state.spaceshipHeading, angularVelocity: state.headingAngularVelocity },
-          pilotTurn,
-          headingConfig
-        );
-  /*
-   * How far the hull swung this step, and therefore how far it drags the gun.
-   *
-   * Both the turret and its target move: carrying only the gun would leave it
-   * chasing a bearing the chassis has already left, and carrying only the
-   * target would make the traverse pay for a rotation it never performed. The
-   * stored target is what leaves in the returned state, so the carry has to
-   * happen here rather than at the moment the gunner names a bearing — the
-   * hull keeps turning long after that message.
-   */
-  const hullCarry = config.turretMountedOnHull
-    ? shortestAngleDelta(state.spaceshipHeading, headingTraverse.angle)
-    : 0;
-  const carriedTargetAngle =
-    state.turretTargetAngle === null
-      ? null
-      : canonicalizeAngle(state.turretTargetAngle + hullCarry);
-  const turretTargetAngle = gunnerFresh ? carriedTargetAngle : null;
   const gunnerTurn = gunnerFresh ? (state.inputs.gunner?.turn ?? null) : null;
-  const turretConfig = {
-    maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
-    angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
-    angularBraking: ship.turretAngularBrakingPerSecondSquared,
-    secondsPerStep
-  };
-  const carriedTurretAngle = canonicalizeAngle(state.turretAngle + hullCarry);
   /*
-   * An intent wins over a bearing when one arrives, exactly as it does at the
-   * helm. A gunner who can only name an angle can only name the authoritative
-   * one, already a patch plus a ping old, so a released stick used to send the
-   * gun back to where it had been. A rate has no such memory: zero means stop.
+   * The whole drive, in one call that the client makes too.
+   *
+   * Everything above this line is the room deciding whose input counts; below
+   * it is arithmetic that has to come out the same on both sides, so it lives
+   * in one place rather than in two that agree today.
    */
-  const turretTraverse =
-    gunnerTurn === null
-      ? advanceAngularTraverse(
-          {
-            angle: carriedTurretAngle,
-            targetAngle: turretTargetAngle,
-            angularVelocity: state.turretAngularVelocity
-          },
-          turretConfig
-        )
-      : advanceAngularRate(
-          { angle: carriedTurretAngle, angularVelocity: state.turretAngularVelocity },
-          gunnerTurn,
-          turretConfig
-        );
+  const pose = advanceShipPose(
+    {
+      spaceship: state.spaceship,
+      heading: state.spaceshipHeading,
+      headingTargetAngle: state.headingTargetAngle,
+      headingAngularVelocity: state.headingAngularVelocity,
+      turretAngle: state.turretAngle,
+      turretTargetAngle: state.turretTargetAngle,
+      turretAngularVelocity: state.turretAngularVelocity
+    },
+    {
+      driveVector: pilotVector,
+      turn: pilotTurn,
+      thrust: pilotThrust,
+      headingTargetAngle,
+      turretTargetAngle: gunnerFresh ? state.turretTargetAngle : null,
+      turretTurn: gunnerTurn
+    },
+    config,
+    ship
+  );
+  const spaceship = pose.spaceship;
+  const headingTraverse = { angle: pose.heading, angularVelocity: pose.headingAngularVelocity };
+  const turretTraverse = { angle: pose.turretAngle, angularVelocity: pose.turretAngularVelocity };
+  const turretTargetAngle = pose.turretTargetAngle;
   const shieldTraverse = advanceAngularTraverse(
     {
       angle: state.shieldAngle,
