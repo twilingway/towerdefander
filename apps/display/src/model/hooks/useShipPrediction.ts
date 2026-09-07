@@ -342,17 +342,35 @@ export function useShipPrediction<
         return undefined;
       };
 
+      /*
+       * One object, handed out again and again.
+       *
+       * This is called for every entity on every drawn frame, and a fresh
+       * object each time is a few hundred a second on a full field - small
+       * enough to look free and exactly the shape of a collection pause, which
+       * arrives as the odd long frame in an otherwise even second. The caller
+       * reads it before asking for the next one, which is the only contract a
+       * shared scratch needs.
+       */
+      const placement = { x: 0, y: 0, rotation: 0 };
+      const drawnPose = {
+        x: 0,
+        y: 0,
+        velocityX: 0,
+        velocityY: 0,
+        heading: 0,
+        turretAngle: 0
+      } as PredictedPoseFrame;
       const read = (entity: LiveEntity): LivePlacement => {
         const ref = entity.ref as DecodedEntity;
-        return {
-          x: predict.value(ref, "x"),
-          y: predict.value(ref, "y"),
-          // A shell publishes no bearing because it does not need one: it points
-          // where it is going, and that never changes while it flies.
-          rotation: LIVE_KINDS_WITH_HEADING.has(entity.kind)
-            ? predict.value(ref as DecodedHull, "heading")
-            : Math.atan2(ref.velocityY, ref.velocityX)
-        };
+        placement.x = predict.value(ref, "x");
+        placement.y = predict.value(ref, "y");
+        // A shell publishes no bearing because it does not need one: it points
+        // where it is going, and that never changes while it flies.
+        placement.rotation = LIVE_KINDS_WITH_HEADING.has(entity.kind)
+          ? predict.value(ref as DecodedHull, "heading")
+          : Math.atan2(ref.velocityY, ref.velocityX);
+        return placement;
       };
 
       let seq = 0;
@@ -399,8 +417,17 @@ export function useShipPrediction<
          * through it: it interpolates numerically, and a value crossing PI would
          * take the long way round every time.
          */
+        // The same scratch as the placements above, and for the same reason: a
+        // pose spread into a new object every frame is a pose allocated sixty
+        // times a second to be read once.
         const state = reconciler.state as PredictedPoseFrame;
-        return { ...state, x: reconciler.value("x"), y: reconciler.value("y") };
+        drawnPose.x = reconciler.value("x");
+        drawnPose.y = reconciler.value("y");
+        drawnPose.heading = state.heading;
+        drawnPose.turretAngle = state.turretAngle;
+        drawnPose.velocityX = state.velocityX;
+        drawnPose.velocityY = state.velocityY;
+        return drawnPose;
       };
       latest.current.onDriver({ drive, bind, read });
 
