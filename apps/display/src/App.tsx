@@ -10,7 +10,9 @@ import {
   ROOM_REFUSED_FOR_MAINTENANCE,
   ROOM_TYPE,
   clientMessage,
+  type UpgradeId,
   roomClosingSchema,
+  serverErrorSchema,
   serverLatencyProbeSchema,
   serverMessage,
   type CrewSize,
@@ -18,9 +20,11 @@ import {
   type PublicShipCatalogue
 } from "@spaceship-defender/protocol";
 import {
+  createActionId,
   createDefaultGameServerUrl,
   formatLatency,
   isPreviewMode,
+  nextVoteRevision,
   PreviewPhaseButtons,
   PreviewShell,
   readStringEnvironment,
@@ -40,6 +44,11 @@ import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
+import { SoloCockpit } from "./screens/SoloCockpit/index.js";
+import { useSoloCockpit } from "./model/hooks/useSoloCockpit.js";
+import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
+import { useCockpitPrediction } from "./model/hooks/useCockpitPrediction.js";
+import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
@@ -103,9 +112,18 @@ export function DisplayApp() {
   const [networkView, setNetworkView] = useState<DisplayRoomView>();
   const [error, setError] = useState("");
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  /** Set when this page is also the pilot; undefined for an ordinary display. */
+  const [cockpitPlayer, setCockpitPlayer] = useState<string | undefined>(undefined);
+  /** Highest revision this screen has sent; the server refuses a repeat. */
+  const cockpitVoteRevision = useRef(0);
+  /** Read inside room callbacks, which close over the first render. */
+  const cockpitPlayerReference = useRef<string | undefined>(undefined);
+  // Read once: it is a device preference, and re-reading storage every render
+  // would answer the same question a hundred times a second.
+  const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
-  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0 });
+  const [frameStats, setFrameStats] = useState({ fps: 0, worstFrameMs: 0, stutterShare: 0 });
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -117,6 +135,99 @@ export function DisplayApp() {
     [preview, previewPhase, previewCameraViewWidth]
   );
   const view = previewView ?? networkView;
+  /*
+   * Hooks cannot hide behind a branch, so the cockpit's wire half is always
+   * mounted and simply has nothing to send until this page is also the pilot.
+   * The generation is the controller's own recipe — a new run or a new
+   * connection restarts the sequences the room watermarks.
+   */
+  const predictedAngles = useRef<{ heading: number; turretAngle: number } | undefined>(undefined);
+  const cockpitControls = useSoloCockpit({
+    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    aimAssistEnabled: aimAssist,
+    world:
+      view?.game == null
+        ? undefined
+        : {
+            shooter: { x: view.game.spaceship.x, y: view.game.spaceship.y },
+            targets: view.game.enemyShips,
+            obstacles: view.game.obstacles,
+            cannonReach: view.game.cannon.reach,
+            turretAngle: view.game.turretAngle,
+            heading: view.game.spaceship.heading,
+            turretMountedOnHull: view.game.helm.turretMountedOnHull,
+            headingDeadbandRadians: view.game.helm.headingDeadbandRadians,
+            headingFilterSeconds: view.game.helm.headingFilterSeconds,
+            turretLeadRadians: view.game.helm.turretLeadRadians
+          },
+    roomId: view?.roomId ?? "",
+    playerId: roomReference.current?.sessionId ?? "",
+    runNumber: view?.runNumber ?? 0,
+    generation: `${String(view?.runNumber ?? 0)}:${String(connectionEpoch)}`,
+    send: (type, payload) => {
+      roomReference.current?.send(type, payload);
+    }
+  });
+
+  /*
+   * Prediction of the two angles the hand feels first, drawn from a ref rather
+   * than from state: it is written every animation frame, and a re-render at
+   * that rate would cost more than the lag it removes. The snapshot arrives at
+   * twenty a second and the render reads whatever the predictor last wrote, so
+   * the runtime interpolates between predicted samples instead of authoritative
+   * ones — the ping and the playback buffer drop out of the angles.
+   */
+  /*
+   * A refusal belongs to the moment it happened. Left on screen it outlives the
+   * phase that caused it and reads as a broken control, which is exactly how
+   * one stale line made the upgrade cards look dead.
+   */
+  const encounterPhase = view?.game?.encounter.phase;
+  useEffect(() => {
+    setError("");
+  }, [encounterPhase]);
+
+  useCockpitPrediction({
+    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    drive:
+      view?.game == null
+        ? undefined
+        : {
+            hullAngularMaxSpeed: view.game.helm.hullAngularMaxSpeed,
+            hullAngularAcceleration: view.game.helm.hullAngularAcceleration,
+            hullAngularBraking: view.game.helm.hullAngularBrakingPerSecondSquared,
+            turretAngularMaxSpeed: view.game.helm.turretAngularMaxSpeed,
+            turretAngularAcceleration: view.game.helm.turretAngularAcceleration,
+            turretAngularBraking: view.game.helm.turretAngularBraking,
+            turretMountedOnHull: view.game.helm.turretMountedOnHull
+          },
+    authoritative:
+      view?.game == null
+        ? undefined
+        : { heading: view.game.spaceship.heading, turretAngle: view.game.turretAngle },
+    readInputs: () => cockpitControls.readPrediction(),
+    onPredicted: (angles) => {
+      predictedAngles.current = angles;
+    }
+  });
+
+  /*
+   * Keyboard and mouse, wired to the very same handlers the sticks drive, so
+   * nothing downstream learns which one gave the order. The ship's place on
+   * screen is read from the canvas host's box, which is what the mouse bearing
+   * has to be measured from.
+   */
+  useCockpitKeyboard({
+    enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    shipScreenPoint: () => {
+      const host = document.querySelector(".battlefield-shell");
+      if (host === null) return null;
+      const box = host.getBoundingClientRect();
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    },
+    ...cockpitControls
+  });
+
   // The readouts move into the letterbox on glass that leaves enough of one;
   // the frame is the camera's, so the arithmetic is the camera's too.
   const bars = useLetterboxBars(
@@ -184,19 +295,74 @@ export function DisplayApp() {
     []
   );
 
+  /** The seat this page holds when it is also the pilot. */
+  const cockpitSeat =
+    cockpitPlayer === undefined
+      ? undefined
+      : view?.players.find((player) => player.playerId === roomReference.current?.sessionId);
+
+  /**
+   * The cockpit's vote. Optimism and revisions are the controller's problem to
+   * repeat: the room deduplicates on `actionId` and keeps the accepted revision
+   * per role, so a retry is safe and a stale number is refused rather than
+   * double-charged.
+   */
+  function sendCockpitVote(upgradeId: UpgradeId): void {
+    const room = roomReference.current;
+    const offer = view?.game?.teamUpgrade.offer;
+    if (room === undefined || view === undefined || cockpitSeat === undefined || offer == null) {
+      return;
+    }
+    const accepted = view.game?.teamUpgrade.votes[cockpitSeat.role]?.revision ?? 0;
+    const revision = nextVoteRevision(accepted, cockpitVoteRevision.current);
+    cockpitVoteRevision.current = revision;
+    room.send(clientMessage.upgradeVote, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: cockpitSeat.playerId,
+      runNumber: view.runNumber,
+      actionId: createActionId(),
+      waveNumber: offer.waveNumber,
+      offerId: offer.offerId,
+      upgradeId,
+      revision
+    });
+  }
+
+  function sendCockpitReady(): void {
+    const room = roomReference.current;
+    if (room === undefined || view === undefined || cockpitSeat === undefined) return;
+    room.send(clientMessage.ready, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: view.roomId,
+      playerId: cockpitSeat.playerId,
+      runNumber: view.runNumber
+    });
+    // Fullscreen is not asked for here: the card already carries the button,
+    // and this screen's helper toggles rather than requests, so a player who
+    // went fullscreen first would be thrown back out by pressing Готов.
+  }
+
   async function createRoom(
     crewSize: CrewSize,
     shipArchetypeId: string | undefined,
-    startWave: number
+    startWave: number,
+    cockpitPlayerName?: string
   ): Promise<void> {
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
+    setCockpitPlayer(cockpitPlayerName);
+    cockpitPlayerReference.current = cockpitPlayerName;
     try {
       const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
-        role: "display",
+        // One connection with both duties when this device is also the pilot.
+        // The two shapes differ in what they name, so the seat count only
+        // travels with the display form.
+        ...(cockpitPlayerName === undefined
+          ? { role: "display" as const, crewSize }
+          : { role: "solo" as const, playerName: cockpitPlayerName }),
         protocolVersion: PROTOCOL_VERSION,
-        crewSize,
         // Absent means the preset's own hull, so a display that could not reach
         // the catalogue still opens a room.
         ...(shipArchetypeId === undefined ? {} : { shipArchetypeId }),
@@ -217,6 +383,32 @@ export function DisplayApp() {
           roomId: room.roomId,
           probeId: result.data.probeId
         });
+      });
+      /*
+       * The refusals the room sends back. The display never listened for these
+       * — it had nothing to send and so nothing to be refused — and the cockpit
+       * inherited that silence: every rejected packet went to a channel with no
+       * handler, and the ship simply did not move, with the reason sitting one
+       * unregistered listener away.
+       */
+      room.onMessage(serverMessage.error, (payload: unknown) => {
+        const parsed = serverErrorSchema.safeParse(payload);
+        const reason = parsed.success ? parsed.data.code : "unknown";
+        /*
+         * `invalid_phase` on the continuous streams is expected and means
+         * nothing: a packet in flight when the wave ends lands after the room
+         * has left combat, and the room says so. Painting that on screen — and
+         * never clearing it — turned a transient into a banner that sat over
+         * the intermission reading "Gameplay input requires combat", which is
+         * why the upgrade cards looked broken when they were not.
+         */
+        // Always in the console: a refusal nobody can see is what turned this
+        // into three rounds of guessing. Only the banner is filtered.
+        console.warn(`Room refused a command: ${reason}`);
+        if (reason === "invalid_phase") return;
+        if (cockpitPlayerReference.current !== undefined) {
+          setError(parsed.success ? parsed.data.message : "Команда отклонена.");
+        }
       });
       room.onMessage(serverMessage.roomClosing, (payload: unknown) => {
         const result = roomClosingSchema.safeParse(payload);
@@ -295,8 +487,8 @@ export function DisplayApp() {
         initialStartWave={initialStartWave}
         ships={shipCatalogue?.ships ?? []}
         defaultShipId={urlShipArchetypeId ?? shipCatalogue?.defaultShipId}
-        onCreate={(crewSize, shipArchetypeId, startWave) =>
-          void createRoom(crewSize, shipArchetypeId, startWave)
+        onCreate={(crewSize, shipArchetypeId, startWave, cockpitPlayerName) =>
+          void createRoom(crewSize, shipArchetypeId, startWave, cockpitPlayerName)
         }
       />
     );
@@ -314,7 +506,7 @@ export function DisplayApp() {
   return (
     <main
       ref={shellReference}
-      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}`}
+      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
       data-bars={bars.placement}
       style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
     >
@@ -339,7 +531,11 @@ export function DisplayApp() {
             Экран → сервер {formatLatency(view.displayLatencyMs)}
           </span>
           {view.game !== null && (
-            <FpsReadout fps={frameStats.fps} worstFrameMs={frameStats.worstFrameMs} />
+            <FpsReadout
+              fps={frameStats.fps}
+              worstFrameMs={frameStats.worstFrameMs}
+              stutterShare={frameStats.stutterShare}
+            />
           )}
           <button
             type="button"
@@ -357,11 +553,26 @@ export function DisplayApp() {
         secondsRemaining={view.maintenanceSecondsRemaining}
       />
 
-      <LobbyLayout view={view} joinUrl={joinUrl} />
+      <LobbyLayout
+        view={view}
+        joinUrl={joinUrl}
+        {...(cockpitPlayer === undefined
+          ? {}
+          : {
+              cockpit: {
+                ready: cockpitSeat?.ready === true,
+                onReady: sendCockpitReady
+              }
+            })}
+      />
 
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
-          <span>Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»</span>
+          <span>
+            {cockpitPlayer === undefined
+              ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
+              : "Полёт начнётся, когда вы нажмёте «Готов»"}
+          </span>
         </section>
       ) : (
         <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
@@ -397,11 +608,28 @@ export function DisplayApp() {
             <RotateNotice />
           ) : (
             <SpaceshipCanvas
-              game={view.game}
+              game={withPredictedAngles(view.game, predictedAngles.current)}
               runNumber={view.runNumber}
               connectionEpoch={connectionEpoch}
               visibleDemo={visibleDemo}
               onFrameStats={setFrameStats}
+            />
+          )}
+          {cockpitPlayer !== undefined && !portrait && (
+            <SoloCockpit
+              enabled={view.game.encounter.phase === "combat"}
+              driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
+              aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
+              machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
+              machineGunOverheated={view.game.machineGun.overheated}
+              cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
+              cannonOverheated={view.game.cannon.overheated}
+              aimAssist={aimAssist}
+              onAimAssistChange={(next) => {
+                setAimAssist(next);
+                saveAimAssistToDevice(next);
+              }}
+              {...cockpitControls}
             />
           )}
           {view.game.encounter.phase === "combat" &&
@@ -423,6 +651,9 @@ export function DisplayApp() {
               waveNumber={view.game.encounter.waveNumber}
               phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
               purchasedModules={view.game.purchasedModules}
+              {...(cockpitSeat === undefined
+                ? {}
+                : { cockpit: { role: cockpitSeat.role, onVote: sendCockpitVote } })}
             />
           )}
           {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
@@ -432,8 +663,17 @@ export function DisplayApp() {
               waveNumber={view.game.encounter.waveNumber}
               score={view.game.encounter.score}
               readyCount={view.players.filter(({ ready }) => ready).length}
+              crewSize={view.crewSize}
               closing={closingRoom}
               onClose={() => void handleCloseRoom()}
+              {...(cockpitPlayer === undefined
+                ? {}
+                : {
+                    cockpit: {
+                      ready: cockpitSeat?.ready === true,
+                      onReady: sendCockpitReady
+                    }
+                  })}
             />
           )}
           {/* The run's own hull, straight from the catalogue; the fixture is
@@ -518,4 +758,24 @@ function createFailureMessage(reason: unknown): string {
 function createDefaultControllerUrl(): string {
   if (typeof window === "undefined") return "http://localhost:5174";
   return `${window.location.protocol}//${window.location.hostname}:5174`;
+}
+
+/**
+ * The snapshot the canvas draws, with the two predicted angles standing in.
+ *
+ * Only those two, and only when a cockpit is predicting: everything else stays
+ * exactly as the server sent it. Position in particular is untouched — being
+ * wrong about an angle corrects itself, being wrong about a position walks the
+ * ship through a rock and then teleports it back out.
+ */
+function withPredictedAngles<T extends { spaceship: { heading: number }; turretAngle: number }>(
+  game: T,
+  predicted: { heading: number; turretAngle: number } | undefined
+): T {
+  if (predicted === undefined) return game;
+  return {
+    ...game,
+    spaceship: { ...game.spaceship, heading: predicted.heading },
+    turretAngle: predicted.turretAngle
+  };
 }

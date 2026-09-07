@@ -4,7 +4,9 @@ import {
   MODULE_TIER_COUNT,
   TEAM_UPGRADE_PRICE,
   summariseModuleEffects,
-  type PublicTeamUpgradeView
+  type CrewRole,
+  type PublicTeamUpgradeView,
+  type UpgradeId
 } from "@spaceship-defender/protocol";
 
 interface TeamUpgradeOverlayProps {
@@ -15,6 +17,16 @@ interface TeamUpgradeOverlayProps {
   readonly phaseTicksRemaining: number;
   /** Modules bought so far; the ribbon reads the crew's depth from its length. */
   readonly purchasedModules: readonly string[];
+  /**
+   * Present when this screen is also a seat. The display's card list has always
+   * been a view — voting is a controller gesture — and a cockpit is not a
+   * controller, so without this a solo player could read the offer and never
+   * take it. Same hole the lobby and the rematch had.
+   */
+  readonly cockpit?: {
+    readonly role: CrewRole;
+    readonly onVote: (upgradeId: UpgradeId) => void;
+  };
 }
 
 export function TeamUpgradeOverlay({
@@ -23,7 +35,8 @@ export function TeamUpgradeOverlay({
   score,
   waveNumber,
   phaseTicksRemaining,
-  purchasedModules
+  purchasedModules,
+  cockpit
 }: TeamUpgradeOverlayProps) {
   const offer = teamUpgrade.offer;
   const price = TEAM_UPGRADE_PRICE;
@@ -44,11 +57,9 @@ export function TeamUpgradeOverlay({
             const voters = CREW_ROLES.filter(
               (role) => teamUpgrade.votes[role]?.upgradeId === card.upgradeId
             );
-            return (
-              <li
-                className={`intermission-card${voters.length > 0 ? " intermission-card--voted" : ""}`}
-                key={card.upgradeId}
-              >
+            const chosen = teamUpgrade.votes[cockpit?.role ?? "pilot"]?.upgradeId;
+            const body = (
+              <>
                 <strong>{card.label}</strong>
                 <small>{summariseModuleEffects(card.effects)}</small>
                 <small>{roleLabel(card.role)}</small>
@@ -57,6 +68,28 @@ export function TeamUpgradeOverlay({
                     ? "Голосов нет"
                     : `Голоса: ${voters.map((role) => roleLabel(role)).join(", ")}`}
                 </small>
+              </>
+            );
+            return (
+              <li
+                className={`intermission-card${voters.length > 0 ? " intermission-card--voted" : ""}`}
+                key={card.upgradeId}
+              >
+                {cockpit === undefined ? (
+                  body
+                ) : (
+                  <button
+                    type="button"
+                    className="intermission-card__choice"
+                    aria-pressed={chosen === card.upgradeId}
+                    data-testid={`cockpit-vote-${card.upgradeId}`}
+                    onClick={() => {
+                      cockpit.onVote(card.upgradeId);
+                    }}
+                  >
+                    {body}
+                  </button>
+                )}
               </li>
             );
           })}

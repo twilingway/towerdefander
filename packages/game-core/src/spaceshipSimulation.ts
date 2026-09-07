@@ -23,6 +23,7 @@ import {
   advanceAngularRate,
   advanceAngularTraverse,
   assertFiniteVector,
+  canonicalizeAngle,
   clamp,
   isFresh,
   moveProjectiles,
@@ -110,6 +111,17 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly turretMaxAngularSpeedPerSecond: number;
   readonly turretAngularAccelerationPerSecondSquared: number;
   readonly turretAngularBrakingPerSecondSquared: number;
+  /**
+   * Whether the hull carries the turret. Off, the turret holds a world bearing
+   * and the hull slides underneath it. On, a turn of the hull moves the gun and
+   * its target with it, so the traverse only ever pays for the difference the
+   * gunner asked for — which is what a turret bolted to a chassis does.
+   *
+   * A flag rather than a ship stat: it is not a number, nothing upgrades it,
+   * and `SHIP_STAT_FIELDS` is the numeric block. The step therefore reads it
+   * off the config and not off `ship`.
+   */
+  readonly turretMountedOnHull: boolean;
   readonly shieldMaxAngularSpeedPerSecond: number;
   readonly shieldAngularAccelerationPerSecondSquared: number;
   readonly shieldAngularBrakingPerSecondSquared: number;
@@ -168,6 +180,12 @@ export interface TrustedPilotInput {
 }
 
 export interface TrustedGunnerInput {
+  /**
+   * Requested traverse in `[-1, 1]`, preferred over the bearing when it comes.
+   * Absent from a panel that names a bearing, so the crew sticks and the
+   * keyboard are untouched.
+   */
+  readonly turn?: number | null;
   readonly vector: Vector2;
   readonly firing: boolean;
   readonly receivedTick: number;
@@ -446,37 +464,12 @@ export function advanceSpaceshipSimulation(
     ship
   );
 
-  const turretTargetAngle = gunnerFresh ? state.turretTargetAngle : null;
   const shieldTargetAngle = shieldFresh ? state.shieldTargetAngle : null;
   // A spin remembers no bearing: keeping one would pull the hull back to it
   // the moment the key comes up, which is the swing this helm exists to lose.
   const headingTargetAngle = pilotTurn === null && pilotFresh ? state.headingTargetAngle : null;
-  const turretTraverse = advanceAngularTraverse(
-    {
-      angle: state.turretAngle,
-      targetAngle: turretTargetAngle,
-      angularVelocity: state.turretAngularVelocity
-    },
-    {
-      maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
-      angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
-      angularBraking: ship.turretAngularBrakingPerSecondSquared,
-      secondsPerStep
-    }
-  );
-  const shieldTraverse = advanceAngularTraverse(
-    {
-      angle: state.shieldAngle,
-      targetAngle: shieldTargetAngle,
-      angularVelocity: state.shieldAngularVelocity
-    },
-    {
-      maxAngularSpeed: ship.shieldMaxAngularSpeedPerSecond,
-      angularAcceleration: ship.shieldAngularAccelerationPerSecondSquared,
-      angularBraking: ship.shieldAngularBrakingPerSecondSquared,
-      secondsPerStep
-    }
-  );
+  // The hull turns before the turret does, because a mounted turret needs how
+  // far the hull went this step. Nothing else here depends on the order.
   const headingConfig = {
     maxAngularSpeed: ship.headingMaxAngularSpeedPerSecond,
     angularAcceleration: ship.headingAngularAccelerationPerSecondSquared,
@@ -498,6 +491,66 @@ export function advanceSpaceshipSimulation(
           pilotTurn,
           headingConfig
         );
+  /*
+   * How far the hull swung this step, and therefore how far it drags the gun.
+   *
+   * Both the turret and its target move: carrying only the gun would leave it
+   * chasing a bearing the chassis has already left, and carrying only the
+   * target would make the traverse pay for a rotation it never performed. The
+   * stored target is what leaves in the returned state, so the carry has to
+   * happen here rather than at the moment the gunner names a bearing — the
+   * hull keeps turning long after that message.
+   */
+  const hullCarry = config.turretMountedOnHull
+    ? shortestAngleDelta(state.spaceshipHeading, headingTraverse.angle)
+    : 0;
+  const carriedTargetAngle =
+    state.turretTargetAngle === null
+      ? null
+      : canonicalizeAngle(state.turretTargetAngle + hullCarry);
+  const turretTargetAngle = gunnerFresh ? carriedTargetAngle : null;
+  const gunnerTurn = gunnerFresh ? (state.inputs.gunner?.turn ?? null) : null;
+  const turretConfig = {
+    maxAngularSpeed: ship.turretMaxAngularSpeedPerSecond,
+    angularAcceleration: ship.turretAngularAccelerationPerSecondSquared,
+    angularBraking: ship.turretAngularBrakingPerSecondSquared,
+    secondsPerStep
+  };
+  const carriedTurretAngle = canonicalizeAngle(state.turretAngle + hullCarry);
+  /*
+   * An intent wins over a bearing when one arrives, exactly as it does at the
+   * helm. A gunner who can only name an angle can only name the authoritative
+   * one, already a patch plus a ping old, so a released stick used to send the
+   * gun back to where it had been. A rate has no such memory: zero means stop.
+   */
+  const turretTraverse =
+    gunnerTurn === null
+      ? advanceAngularTraverse(
+          {
+            angle: carriedTurretAngle,
+            targetAngle: turretTargetAngle,
+            angularVelocity: state.turretAngularVelocity
+          },
+          turretConfig
+        )
+      : advanceAngularRate(
+          { angle: carriedTurretAngle, angularVelocity: state.turretAngularVelocity },
+          gunnerTurn,
+          turretConfig
+        );
+  const shieldTraverse = advanceAngularTraverse(
+    {
+      angle: state.shieldAngle,
+      targetAngle: shieldTargetAngle,
+      angularVelocity: state.shieldAngularVelocity
+    },
+    {
+      maxAngularSpeed: ship.shieldMaxAngularSpeedPerSecond,
+      angularAcceleration: ship.shieldAngularAccelerationPerSecondSquared,
+      angularBraking: ship.shieldAngularBrakingPerSecondSquared,
+      secondsPerStep
+    }
+  );
   const shieldDesiredActive = state.inputs.shield?.active === true;
   const shieldCanActivate = !state.shieldRearmRequired && state.shieldEnergy > 0;
   // Sequential rather than switched, so that zero-length phases cascade inside

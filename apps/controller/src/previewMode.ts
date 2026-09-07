@@ -69,7 +69,20 @@ const PREVIEW_HELM = {
   headingLeadRadians: 0.5,
   stopDampening: 1,
   rotateInPlaceThrottle: 0.02,
-  hullAngularBrakingPerSecondSquared: 50
+  hullAngularBrakingPerSecondSquared: 50,
+  hullAngularMaxSpeed: 3.14159,
+  hullAngularAcceleration: 50,
+  turretAngularMaxSpeed: 1.36,
+  turretAngularAcceleration: 2.72,
+  turretAngularBraking: 4.08,
+  turretMountedOnHull: false,
+  driveDeadzoneShare: 0,
+  aimDeadzoneShare: 0,
+  driveZoneShare: 0.42,
+  aimProjectionShare: 0.58,
+  headingDeadbandRadians: 0.05236,
+  headingFilterSeconds: 0.06,
+  turretLeadRadians: 0.45
 } as const;
 
 const EMPTY_TEAM_UPGRADE = {

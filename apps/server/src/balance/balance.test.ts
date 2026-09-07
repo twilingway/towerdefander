@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { Request, RequestHandler, Response } from "express";
 import {
@@ -614,6 +615,98 @@ describe("version 1 migration", () => {
     // The point of the test: the authoring block is merged field by field, so
     // one missing knob does not fail the strict schema and take the table with
     // it. That is exactly how a hand-built campaign was lost once.
+    expect(saved?.waveCampaign.waves).toHaveLength(1);
+  });
+
+  /*
+   * The seed a fresh host starts from. It is the one balance document that
+   * ships in the repository, `deploy-production.sh` copies it into an empty
+   * volume, and nothing else here would notice if a schema change left it
+   * behind -- the runtime file is gitignored, so a developer machine that has
+   * already run the game hides the breakage exactly the way it hid the missing
+   * defaults before `ensure-balance-preset` existed.
+   */
+  it("keeps the shipped seed loadable", async () => {
+    const seedPath = fileURLToPath(new URL("../../presets/production.json", import.meta.url));
+    const filePath = await temporaryPresetPath();
+    await writeFile(filePath, await readFile(seedPath, "utf8"), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const presets = store.getState().presets;
+    // Both the host's own tuning and the ported drive survive the round trip.
+    expect(presets.map((preset) => preset.id)).toContain("steelvoid");
+    const steelvoid = presets.find((preset) => preset.id === "steelvoid")?.tuning;
+    expect(steelvoid?.turretMountedOnHull).toBe(true);
+    expect(steelvoid?.spaceshipReverseSpeedFactor).toBeCloseTo(0.55, 5);
+    expect(steelvoid?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
+    // ...and the default it was copied from keeps a world-bearing turret, which
+    // is what every run so far was balanced against.
+    const base = presets.find((preset) => preset.id === "default")?.tuning;
+    expect(base?.turretMountedOnHull).toBe(false);
+  });
+
+  it("gives a version 35 document the tremble guard, waves intact", async () => {
+    const filePath = await temporaryPresetPath();
+    const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+    // Version 34 had none of the cockpit's settings at all; version 35 had the
+    // stick geometry but not the guard that keeps a thumb from shaking the
+    // hull. A saved document of either shape must gain what it lacks.
+    delete tuning.turretMountedOnHull;
+    const helm = { ...(tuning.helm as Record<string, unknown>) };
+    delete helm.driveDeadzoneShare;
+    delete helm.aimDeadzoneShare;
+    delete helm.driveZoneShare;
+    delete helm.aimProjectionShare;
+    delete helm.headingDeadbandRadians;
+    delete helm.headingFilterSeconds;
+    delete helm.turretLeadRadians;
+    tuning.helm = helm;
+    const waves = [
+      {
+        entries: [
+          {
+            kind: "gunship",
+            count: 2,
+            startDelayTicks: 0,
+            spawnIntervalTicks: 30,
+            sectors: ["E"],
+            hpMultiplier: null,
+            tempoMultiplier: null
+          }
+        ],
+        hpMultiplier: null,
+        tempoMultiplier: null
+      }
+    ];
+    tuning.waveCampaign = { ...(tuning.waveCampaign as object), waves };
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 35,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const saved = store.getState().presets[0]?.tuning;
+    // The turret arrives at the behaviour the document already had, and the
+    // stick at STEEL VOID's own geometry — nothing before version 35 had a
+    // cockpit to feel the difference.
+    expect(saved?.turretMountedOnHull).toBe(false);
+    expect(saved?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
+    expect(saved?.helm.driveZoneShare).toBe(0.42);
+    expect(saved?.helm.headingFilterSeconds).toBeCloseTo(0.06, 5);
+    expect(saved?.helm.turretLeadRadians).toBeCloseTo(0.45, 5);
+    // And the point of every one of these tests: the campaign survived.
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });
 
@@ -1412,6 +1505,20 @@ describe("version 1 migration", () => {
   it("keeps the autopilot section out of the simulation config", () => {
     const config = toSimulationConfig(createDefaultTuning());
     expect(config).not.toHaveProperty("autopilot");
+  });
+
+  it("sorts the two kinds of control setting to opposite sides of the boundary", () => {
+    const tuning = createDefaultTuning();
+    const config = toSimulationConfig({
+      ...tuning,
+      turretMountedOnHull: true,
+      helm: { ...tuning.helm, driveDeadzoneShare: 0.12 }
+    });
+
+    // The helm shapes what a client sends, so the trusted step must not see it.
+    expect(config).not.toHaveProperty("helm");
+    // The turret mount changes the step itself, so it must arrive.
+    expect(config.turretMountedOnHull).toBe(true);
   });
 
   it("carries an edited player ship into the next run", async () => {

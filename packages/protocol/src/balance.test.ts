@@ -250,6 +250,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     turretMaxAngularSpeedPerSecond: 1.36,
     turretAngularAccelerationPerSecondSquared: 2.72,
     turretAngularBrakingPerSecondSquared: 4.08,
+    turretMountedOnHull: false,
     mgDamage: 8,
     mgFireCooldownTicks: 2,
     mgProjectileSpeedPerSecond: 900,
@@ -293,7 +294,14 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       scheme: "tank",
       headingLeadRadians: 0.5,
       stopDampening: 1,
-      rotateInPlaceThrottle: 0.02
+      rotateInPlaceThrottle: 0.02,
+      driveDeadzoneShare: 0,
+      aimDeadzoneShare: 0,
+      driveZoneShare: 0.42,
+      aimProjectionShare: 0.58,
+      headingDeadbandRadians: 0.05236,
+      headingFilterSeconds: 0.06,
+      turretLeadRadians: 0.45
     },
     autopilot: autopilotTuning(),
     enemySkill: {

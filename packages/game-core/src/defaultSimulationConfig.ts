@@ -39,6 +39,9 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
   turretAngularAccelerationPerSecondSquared: (13 * Math.PI) / 15,
   turretAngularBrakingPerSecondSquared: (13 * Math.PI) / 10,
+  // Off keeps the turret on a world bearing, which is what every run so
+  // far has been balanced against. An operator turns it on per preset.
+  turretMountedOnHull: false,
   shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
   shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
   shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8,

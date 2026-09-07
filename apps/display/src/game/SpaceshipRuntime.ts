@@ -97,6 +97,13 @@ const ARENA_FILL_ALPHA = 0.5;
  * because a shorter window makes the reading flicker faster than it can be
  * read.
  */
+/**
+ * How much longer than the shortest frame of the window a frame has to run
+ * before it counts as a stutter. Half again: a frame that misses its slot and
+ * waits for the next one is a full double, so this catches a dropped frame with
+ * room to spare and ignores the ordinary jitter of a busy compositor.
+ */
+const STUTTER_RATIO = 1.5;
 const FRAME_WINDOW_MS = 1000;
 
 interface BackgroundLayerState {
@@ -152,6 +159,22 @@ class SpaceshipScene extends Phaser.Scene {
   private worstFrameMs = 0;
   private frameWindowWorstMs = 0;
   private frameWindowEndsAt = 0;
+  /*
+   * Smoothness, which the two numbers above cannot show between them. An
+   * average says whether the scene keeps up and the worst frame says whether it
+   * stopped; neither says whether it is *even*. Thirty frames of 16 ms and
+   * thirty of 33 average to a healthy 45 and hide a picture that judders the
+   * whole way.
+   *
+   * A stutter here is a frame that took half again as long as the shortest one
+   * this window. The shortest is the display's own cadence — it is the one
+   * figure a stall cannot inflate — so the measure calibrates itself to 60 Hz,
+   * 120 Hz or a throttled tab without being told which.
+   */
+  private stutterShare = 0;
+  private frameWindowFrames = 0;
+  private frameWindowStutters = 0;
+  private frameWindowShortestMs = Number.POSITIVE_INFINITY;
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
   /** Reused between frames; see `updateFocusCandidates`. */
@@ -307,14 +330,27 @@ class SpaceshipScene extends Phaser.Scene {
     }
     const raw = this.game.loop.rawDelta;
     if (raw > this.frameWindowWorstMs) this.frameWindowWorstMs = raw;
+    this.frameWindowFrames += 1;
+    if (raw > 0 && raw < this.frameWindowShortestMs) this.frameWindowShortestMs = raw;
+    if (raw > this.frameWindowShortestMs * STUTTER_RATIO) this.frameWindowStutters += 1;
     if (time < this.frameWindowEndsAt) return;
     this.worstFrameMs = this.frameWindowWorstMs;
+    this.stutterShare =
+      this.frameWindowFrames > 0 ? this.frameWindowStutters / this.frameWindowFrames : 0;
     this.frameWindowWorstMs = 0;
+    this.frameWindowFrames = 0;
+    this.frameWindowStutters = 0;
+    this.frameWindowShortestMs = Number.POSITIVE_INFINITY;
     this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
   }
 
   readWorstFrameMs(): number {
     return this.worstFrameMs;
+  }
+
+  /** Share of the last second's frames that ran long, on `[0, 1]`. */
+  readStutterShare(): number {
+    return this.stutterShare;
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
@@ -1207,6 +1243,7 @@ export interface SpaceshipRuntime {
    * the average above cannot tell them apart.
    */
   readWorstFrameMs(): number;
+  readStutterShare(): number;
   /**
    * Lowers the ceiling on how many device pixels the scene may draw, when the
    * frame counter says this machine cannot afford the one it has. Down only:
@@ -1318,6 +1355,9 @@ export function createSpaceshipRuntime(
     },
     readWorstFrameMs() {
       return scene.readWorstFrameMs();
+    },
+    readStutterShare() {
+      return scene.readStutterShare();
     },
     setPixelRatioCap(cap) {
       if (cap === currentCap) return;

@@ -61,7 +61,10 @@ try {
     waitForUrl(`http://127.0.0.1:${String(controllerPort)}`)
   ]);
 
-  const result = await runProcess(packageRunner, ["exec", "playwright", "test"], {
+  // Anything after `--` is handed to Playwright, so a single spec or a repeat
+  // count can be asked for without standing up the servers by hand.
+  const passthrough = process.argv.slice(2);
+  const result = await runProcess(packageRunner, ["exec", "playwright", "test", ...passthrough], {
     E2E_EXTERNAL_SERVERS: "1",
     E2E_DISPLAY_URL: `http://127.0.0.1:${String(displayPort)}`,
     E2E_CONTROLLER_URL: `http://127.0.0.1:${String(controllerPort)}`

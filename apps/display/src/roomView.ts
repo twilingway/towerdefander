@@ -9,6 +9,7 @@ import {
   type DisplayRoomView,
   type EnemyKind,
   type EncounterPhase,
+  type HelmScheme,
   type NebulaPreset,
   type ProjectileKind,
   type PublicSpaceshipView,
@@ -136,6 +137,26 @@ interface NetworkGameState {
   worldWidth: number;
   worldHeight: number;
   arenaRadius: number;
+  helm: {
+    scheme: HelmScheme;
+    headingLeadRadians: number;
+    stopDampening: number;
+    rotateInPlaceThrottle: number;
+    hullAngularBrakingPerSecondSquared: number;
+    hullAngularMaxSpeed: number;
+    hullAngularAcceleration: number;
+    turretAngularMaxSpeed: number;
+    turretAngularAcceleration: number;
+    turretAngularBraking: number;
+    turretMountedOnHull: boolean;
+    driveDeadzoneShare: number;
+    aimDeadzoneShare: number;
+    driveZoneShare: number;
+    aimProjectionShare: number;
+    headingDeadbandRadians: number;
+    headingFilterSeconds: number;
+    turretLeadRadians: number;
+  };
   rimBandWidth: number;
   spaceship: PublicSpaceshipView;
   turretAngle: number;
@@ -285,6 +306,7 @@ export function toDisplayRoomView(
             worldWidth: game.worldWidth,
             worldHeight: game.worldHeight,
             arenaRadius: game.arenaRadius,
+            helm: game.helm,
             rimBandWidth: game.rimBandWidth,
             shieldPhase: display.shieldPhase ?? "down",
             spaceship: { ...game.spaceship },

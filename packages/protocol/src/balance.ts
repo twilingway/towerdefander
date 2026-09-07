@@ -8,11 +8,11 @@ import {
 } from "./enemyKinds.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 34 as const;
+export const BALANCE_FILE_VERSION = 36 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33
+  28, 29, 30, 31, 32, 33, 34, 35
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -471,7 +471,44 @@ export const helmTuningSchema = z
      */
     stopDampening: z.number().min(0.5).max(1.5),
     /** Share of full thrust a turn without the engine rides on. */
-    rotateInPlaceThrottle: z.number().min(0.005).max(0.2)
+    rotateInPlaceThrottle: z.number().min(0.005).max(0.2),
+    /*
+     * Stick geometry, for the panels that have one. Shares of the stick radius
+     * rather than pixels: the ring is sized by the viewport, so a pixel figure
+     * would mean a different thing on every phone.
+     */
+    /** How far the drive stick travels before it asks for any movement at all. */
+    driveDeadzoneShare: z.number().min(0).max(0.5),
+    /** The same for the aim stick, which is pushed more gently and more often. */
+    aimDeadzoneShare: z.number().min(0).max(0.5),
+    /**
+     * Share of the screen width whose left edge begins a drive. The stick keeps
+     * its anchor at the drawn ring either way — what widens is the area a thumb
+     * may land in to grab it, which is what makes a stick findable without
+     * looking at it.
+     */
+    driveZoneShare: z.number().min(0.2).max(0.8),
+    /**
+     * How far ahead of the ship the aim stick projects its point, as a share of
+     * the larger view dimension. It decides how much of the frame a full push
+     * reaches, so it belongs with the frame and not with the arena.
+     */
+    aimProjectionShare: z.number().min(0.1).max(1),
+    /**
+     * Below this the stick is not steering, it is shaking. A thumb is never
+     * still: two pixels of slip on the ring is a couple of degrees of commanded
+     * heading, and the hull follows it faithfully — measured in the lab at 4.58
+     * degrees of swing, with the gun riding the hull and trembling with it.
+     */
+    headingDeadbandRadians: z.number().min(0).max(0.35),
+    /** Ease on what survives the dead band. Zero sends the raw bearing. */
+    headingFilterSeconds: z.number().min(0).max(0.5),
+    /**
+     * How far off the gun must be before the cockpit asks for a full traverse.
+     * The turret's answer to `headingLeadRadians`, and the same idea: the stick
+     * names a direction, the rate is the distance to it.
+     */
+    turretLeadRadians: z.number().min(0.05).max(1.5)
   })
   .strict();
 export type HelmTuning = z.infer<typeof helmTuningSchema>;
@@ -934,6 +971,11 @@ export const balanceTuningSchema = z
     turretMaxAngularSpeedPerSecond: positiveFinite,
     turretAngularAccelerationPerSecondSquared: positiveFinite,
     turretAngularBrakingPerSecondSquared: positiveFinite,
+    /**
+     * Whether the hull carries the gun. Unlike `helm` beside it, the simulation
+     * does read this one: it changes the trusted step, not what a client sends.
+     */
+    turretMountedOnHull: z.boolean(),
 
     /** Look of the cannon shot; null keeps the display's own primitive. */
     projectileVisual: entityVisualSchema,

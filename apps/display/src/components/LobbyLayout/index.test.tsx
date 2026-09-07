@@ -1,56 +1,86 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import type { CrewSize } from "@spaceship-defender/protocol";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { createPreviewRoomView } from "../../previewMode.js";
+import type { DisplayRoomView } from "@spaceship-defender/protocol";
+
 import { LobbyLayout } from "./index.js";
 
-function seatCount(html: string): number {
-  return html.match(/class="player-slot/g)?.length ?? 0;
-}
-
-function markup(crewSize: CrewSize): string {
-  const preview = createPreviewRoomView("lobby");
-  return renderToStaticMarkup(
-    <LobbyLayout
-      view={{ ...preview, crewSize, players: preview.players.slice(0, crewSize) }}
-      joinUrl="https://example.test/join"
-    />
-  );
+function view(overrides: Partial<DisplayRoomView> = {}): DisplayRoomView {
+  return {
+    roomId: "ROOM123",
+    phase: "lobby",
+    runNumber: 0,
+    crewSize: 1,
+    shipArchetypeId: "guardian",
+    maintenanceActive: false,
+    maintenanceSecondsRemaining: 0,
+    displayConnected: true,
+    displayLatencyMs: 12,
+    players: [
+      {
+        playerId: "solo-1",
+        playerName: "Ada",
+        role: "pilot",
+        ready: false,
+        connected: true,
+        latencyMs: 20
+      }
+    ],
+    game: null,
+    ...overrides
+  } as unknown as DisplayRoomView;
 }
 
 describe("LobbyLayout", () => {
-  it("offers the fullscreen switch where the room is set up", () => {
-    // Rendered without a document, so the host reads as unsupported and the
-    // button is absent rather than dead: what this pins is that the lobby asks
-    // for it at all, and that it degrades to nothing.
-    expect(markup(3)).not.toContain('data-testid="fullscreen-button"');
+  it("offers the code to scan when somebody else is joining", () => {
+    const markup = renderToStaticMarkup(
+      <LobbyLayout view={view({ crewSize: 3 })} joinUrl="http://example/join" />
+    );
+
+    expect(markup).toContain("http://example/join");
+    expect(markup).toContain("<svg");
+    expect(markup).not.toContain("cockpit-ready");
   });
 
-  it("counts the seats a solo room actually has and names the autopilot", () => {
-    const html = markup(1);
+  it("drops the code when the screen is the pilot, because nobody can scan it", () => {
+    const markup = renderToStaticMarkup(
+      <LobbyLayout
+        view={view()}
+        joinUrl="http://example/join"
+        cockpit={{ ready: false, onReady: vi.fn() }}
+      />
+    );
 
-    expect(seatCount(html)).toBe(1);
-    expect(html).toContain("1/1");
-    expect(html).toContain("Подключите контроллер");
-    expect(html).toContain("Под автопилотом");
+    // The whole point: there is no second device, so no code and no link.
+    expect(markup).not.toContain("<svg");
+    expect(markup).not.toContain("http://example/join");
+    expect(markup).toContain('data-testid="cockpit-ready"');
+    expect(markup).toContain("Готов");
   });
 
-  it("shows two seats for a duo and still hands the shield to the autopilot", () => {
-    const html = markup(2);
+  it("stops offering the button once the seat is ready", () => {
+    const markup = renderToStaticMarkup(
+      <LobbyLayout
+        view={view()}
+        joinUrl="http://example/join"
+        cockpit={{ ready: true, onReady: vi.fn() }}
+      />
+    );
 
-    expect(seatCount(html)).toBe(2);
-    expect(html).toContain("2/2");
-    expect(html).toContain("Подключите два контроллера");
-    expect(html).toContain("Под автопилотом");
+    expect(markup).toContain("Ждём старта…");
+    expect(markup).toContain("disabled");
   });
 
-  it("keeps the full crew unchanged", () => {
-    const html = markup(3);
+  it("still shows the roster, so the seat can be seen to be taken", () => {
+    const markup = renderToStaticMarkup(
+      <LobbyLayout
+        view={view()}
+        joinUrl="http://example/join"
+        cockpit={{ ready: false, onReady: vi.fn() }}
+      />
+    );
 
-    expect(seatCount(html)).toBe(3);
-    expect(html).toContain("3/3");
-    expect(html).toContain("Подключите три контроллера");
-    expect(html).not.toContain("Под автопилотом");
+    expect(markup).toContain("Ada");
+    expect(markup).toContain("Экипаж");
   });
 });

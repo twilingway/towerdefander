@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { getKeyboardVector } from "../../controlInput.js";
+import { getKeyboardVector } from "@spaceship-defender/client-shared";
 import {
   MG_FIRE_KEY,
   PILOT_KEYS,

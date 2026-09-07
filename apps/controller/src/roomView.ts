@@ -105,6 +105,19 @@ interface NetworkGameState {
     stopDampening: number;
     rotateInPlaceThrottle: number;
     hullAngularBrakingPerSecondSquared: number;
+    hullAngularMaxSpeed: number;
+    hullAngularAcceleration: number;
+    turretAngularMaxSpeed: number;
+    turretAngularAcceleration: number;
+    turretAngularBraking: number;
+    turretMountedOnHull: boolean;
+    driveDeadzoneShare: number;
+    aimDeadzoneShare: number;
+    driveZoneShare: number;
+    aimProjectionShare: number;
+    headingDeadbandRadians: number;
+    headingFilterSeconds: number;
+    turretLeadRadians: number;
   };
   encounter: {
     phase: EncounterPhase;

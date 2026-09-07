@@ -22,7 +22,11 @@ interface SpaceshipCanvasProps {
    * and read out in the header because that is where a player looks for it.
    * The average and the worst frame answer different questions, so both travel.
    */
-  readonly onFrameStats?: (stats: { readonly fps: number; readonly worstFrameMs: number }) => void;
+  readonly onFrameStats?: (stats: {
+    readonly fps: number;
+    readonly worstFrameMs: number;
+    readonly stutterShare: number;
+  }) => void;
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
@@ -119,7 +123,8 @@ export function SpaceshipCanvas({
       const fps = runtimeReference.current?.readFps() ?? 0;
       onFrameStatsReference.current?.({
         fps,
-        worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0
+        worstFrameMs: runtimeReference.current?.readWorstFrameMs() ?? 0,
+        stutterShare: runtimeReference.current?.readStutterShare() ?? 0
       });
       // Down only, and only on a run of samples: a wave that briefly puts forty
       // ships on the field is not a phone that cannot run the game.

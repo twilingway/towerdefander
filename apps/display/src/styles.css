@@ -1679,3 +1679,512 @@ p {
   text-align: center;
   border-width: 2px;
 }
+
+/* ---------------------------------------------------------- Solo cockpit */
+
+/* The overlay sits over the battle canvas and must not eat the whole screen:
+   only the two zones and the buttons take pointer events, so a tap anywhere
+   else still reaches whatever is underneath. */
+.solo-cockpit {
+  --cockpit-drive-ring: 7.25rem;
+  --cockpit-aim-ring: 5.75rem;
+  --cockpit-band: calc(var(--cockpit-drive-ring) + 1.25rem);
+  position: absolute;
+  /* Above the HUD cards and the radar, which own the same band and carry
+     z-index 25. Underneath them the sticks were simply invisible. */
+  z-index: 26;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  /* Two thumbs, two bottom corners, and the buttons stacked over the gun hand
+     rather than adrift in the middle of the picture — the one place a control
+     must never be, because that is where the fight is. */
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: clamp(0.5rem, 2vw, 1.25rem);
+  padding-bottom: max(clamp(0.5rem, 2vw, 1.25rem), env(safe-area-inset-bottom, 0));
+}
+
+/* The grab zone, deliberately larger than the ring it moves: a thumb that lands
+   beside the ring still takes the stick, and the anchor stays at the ring so
+   the first pixel of travel does not jump. Sized off the smaller axis, or a
+   short landscape window makes it taller than the screen. */
+/* The ring is the size STEEL VOID draws it — 116 px for the drive stick, 92 for
+   the aim stick (DRIVE_STICK_BASE_RADIUS 58, AIM_STICK_BASE_RADIUS 46). A thumb
+   is the same size on every phone, so this is one of the few places where a
+   fixed measurement is the right one and a viewport share is not. */
+.display-shell--cockpit {
+  --cockpit-drive-ring: 7.25rem;
+  --cockpit-aim-ring: 5.75rem;
+  --cockpit-band: calc(var(--cockpit-drive-ring) + 1.25rem);
+}
+
+.solo-cockpit .cockpit-stick {
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  /* The grab zone: wider than the ring on purpose. */
+  width: calc(var(--cockpit-drive-ring) + 3rem);
+  height: calc(var(--cockpit-drive-ring) + 2rem);
+  display: flex;
+  align-items: flex-end;
+}
+
+.solo-cockpit .cockpit-stick--left {
+  justify-content: flex-start;
+}
+
+.solo-cockpit .cockpit-stick--right {
+  justify-content: flex-end;
+}
+
+/* The aim stick is the smaller of the two in the lab, and it is the one a
+   thumb rides rather than shoves. */
+.solo-cockpit .cockpit-stick--right .cockpit-stick__ring {
+  width: var(--cockpit-aim-ring);
+  height: var(--cockpit-aim-ring);
+}
+
+.solo-cockpit .cockpit-stick[aria-disabled="true"] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.cockpit-stick__ring {
+  position: relative;
+  width: var(--cockpit-drive-ring);
+  height: var(--cockpit-drive-ring);
+  border-radius: 50%;
+  border: 2px solid rgba(126, 214, 255, 0.35);
+  background: radial-gradient(circle, rgba(10, 30, 44, 0.55), rgba(6, 18, 28, 0.25));
+  backdrop-filter: blur(2px);
+}
+
+.cockpit-stick__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: rgba(126, 214, 255, 0.55);
+  box-shadow: 0 0 1.2rem rgba(126, 214, 255, 0.45);
+}
+
+/* The gun hand: what it presses sits directly above the stick it holds. */
+.solo-cockpit__right {
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.solo-cockpit__triggers {
+  pointer-events: none;
+  display: flex;
+  flex-direction: row;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  align-items: flex-end;
+}
+
+.cockpit-trigger {
+  pointer-events: auto;
+  touch-action: none;
+  position: relative;
+  overflow: hidden;
+  width: min(20vw, 8rem);
+  height: min(12vh, 3.5rem);
+  border-radius: 0.9rem;
+  border: 1px solid rgba(126, 214, 255, 0.4);
+  background: rgba(8, 24, 36, 0.6);
+  color: #d6f2ff;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cockpit-trigger[aria-pressed="true"] {
+  border-color: rgba(126, 214, 255, 0.9);
+  background: rgba(22, 62, 88, 0.75);
+}
+
+/* Overheat is the one state worth shouting: the trigger is inert until it
+   clears, and a player who cannot see why has no way to learn the rhythm. */
+.cockpit-trigger[data-overheated="true"] {
+  border-color: rgba(255, 138, 96, 0.9);
+  color: #ffd0be;
+}
+
+.cockpit-trigger__heat {
+  position: absolute;
+  inset: 0;
+  transform-origin: bottom;
+  background: rgba(255, 138, 96, 0.28);
+  pointer-events: none;
+}
+
+.cockpit-trigger__label {
+  position: relative;
+}
+
+/* A setting, not a spur. It rides above the triggers rather than in a corner:
+   the top right belongs to the room header, and the bottom corners to thumbs. */
+.cockpit-assist {
+  pointer-events: auto;
+  touch-action: manipulation;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(126, 214, 255, 0.25);
+  background: rgba(8, 24, 36, 0.5);
+  color: rgba(214, 242, 255, 0.7);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.cockpit-assist[aria-pressed="true"] {
+  border-color: rgba(126, 214, 255, 0.6);
+  color: #d6f2ff;
+}
+
+/* The bottom band belongs to the thumbs now, so everything that used to live
+   there moves up by exactly the height they take. */
+.display-shell--cockpit .spaceship-hud {
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--cockpit-band));
+}
+
+/* A cockpit is a phone, and the shared-screen radar is sized for a wall. */
+.display-shell--cockpit {
+  --radar-size: clamp(7rem, 12vw, 10rem);
+}
+
+.cockpit-picker {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.field--inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/*
+ * The room-making controls. None of these class names had a rule of their own
+ * here — they were written in the markup and styled by the browser, which is
+ * why the seat buttons touched each other and the inputs were plain white
+ * boxes in the middle of a dark card.
+ */
+.crew-size-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-block: 1rem;
+}
+
+.crew-size-picker button[aria-pressed="true"],
+.ship-picker button[aria-pressed="true"] {
+  outline: 2px solid #7ed6ff;
+  outline-offset: 2px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-block: 0.75rem;
+}
+
+.field__caption {
+  color: #b9d3ce;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.field__input {
+  min-height: 2.75rem;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid #54746d;
+  border-radius: 0.7rem;
+  color: #f6f4e8;
+  font: inherit;
+  background: #132d2a;
+}
+
+.field__input:focus-visible {
+  border-color: #7ed6ff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(126 214 255 / 35%);
+}
+
+.field__input::placeholder {
+  color: #6f8e88;
+}
+
+.hint {
+  margin-block: 0.4rem 0;
+  color: #9dbab5;
+  font-size: 0.9rem;
+}
+
+/* No code to scan when the screen is the pilot, so the card carries the one
+   control the run is waiting on instead. */
+.join-card--cockpit {
+  display: block;
+}
+
+.cockpit-ready {
+  margin: 0.75rem 0 0.5rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(126, 214, 255, 0.6);
+  background: rgba(22, 62, 88, 0.75);
+  color: #d6f2ff;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.cockpit-ready:disabled {
+  opacity: 0.6;
+}
+
+/*
+ * A phone standing in for the shared screen, before the fight starts.
+ *
+ * Keyed on height like the battle rules above and for the same reason: held
+ * sideways a phone is 844 points across and 390 tall, so a width rule calls it
+ * roomy while a 7rem title alone eats a third of what there is. The battle
+ * screen already had this treatment; the room-making screen and the lobby did
+ * not, and both of them scrolled — which on a screen that is about to become a
+ * cockpit is worse than ugly, because a thumb that scrolls the page is a thumb
+ * that was aiming at something.
+ */
+@media (height <= 520px) {
+  /*
+   * `100vh` is the trap here. On a phone it counts the browser chrome the page
+   * does not actually get, so the document stands taller than the window and
+   * the whole page scrolls — which looks like the card overflowing and is not.
+   * `100dvh` is the height that exists.
+   */
+  body {
+    min-height: 100dvh;
+  }
+
+  .display-shell:not(.display-shell--battle) {
+    height: 100dvh;
+    min-height: 0;
+    gap: 0.4rem;
+    padding: 0.5rem;
+    overflow: hidden;
+  }
+
+  .display-shell--centered {
+    align-content: center;
+  }
+
+  .hero-card {
+    width: min(48rem, 100%);
+    max-height: 100%;
+    padding: 0.7rem 1rem;
+    border-radius: 1rem;
+    /* A last resort, not the plan: everything below is sized so it never
+       triggers, and a scrollbar appearing here means something grew. */
+    overflow: auto;
+  }
+
+  /* The title is the single biggest thing on the screen and the least useful
+     to somebody who already typed the address to get here. */
+  .hero-card h1 {
+    margin: 0;
+    font-size: clamp(1.25rem, 4.5vw, 1.75rem);
+  }
+
+  .hero-card p,
+  .join-card p {
+    font-size: 0.9rem;
+  }
+
+  .hero-card .eyebrow {
+    display: none;
+  }
+
+  /*
+   * Every button on this screen is 3.5rem tall by default, and there are three
+   * rows of them: the seat count, the hull, and Create. That alone is more than
+   * half of a 390-point screen before a word of text. A thumb needs about
+   * 2.25rem, and the rest was generosity for a wall-sized display.
+   */
+  .hero-card button,
+  .join-card button {
+    min-height: 2.25rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .hero-card > p {
+    margin-block: 0.25rem;
+    font-size: 0.85rem;
+  }
+
+  /* Flavour, and the only thing here nobody needs to make the choice with. */
+  .ship-pitch {
+    display: none;
+  }
+
+  .hero-card .field {
+    margin-block: 0.25rem;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+
+  /* The room's own error line is one row nobody planned for, and it lands
+     right above the button it is about. */
+  .display-shell--centered .error-message {
+    margin-block: 0.2rem;
+    font-size: 0.8rem;
+  }
+
+  .hero-card .field__input {
+    min-height: 2rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .capacity-picker,
+  .crew-size-picker,
+  .ship-picker,
+  .cockpit-picker {
+    margin-block: 0.5rem;
+    gap: 0.35rem;
+  }
+
+  .cockpit-picker .hint {
+    display: none;
+  }
+
+  /*
+   * The lobby's three bands add up to 806 points of content in a 390 point
+   * window, and the biggest of them is the emptiest: a dashed box holding one
+   * sentence. Measured, not guessed — header 134, lobby 355, waiting box 288.
+   */
+  .display-shell:not(.display-shell--battle) .room-code {
+    font-size: 1.5rem;
+  }
+
+  .display-shell:not(.display-shell--battle) .room-header .eyebrow,
+  .display-shell:not(.display-shell--battle) .room-network {
+    display: none;
+  }
+
+  .display-shell:not(.display-shell--battle) .phase-badge {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .display-shell:not(.display-shell--battle) .room-close-button {
+    min-height: 2.25rem;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  .game-stage--waiting {
+    min-height: 0;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  /* One column: two side by side leaves neither wide enough to read. */
+  .lobby-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .join-card,
+  .players-card {
+    padding: 0.6rem 0.8rem;
+    border-radius: 1rem;
+  }
+
+  .players-card {
+    gap: 0.4rem;
+    align-content: start;
+  }
+
+  .autopilot-note {
+    margin: 0;
+    font-size: 0.8rem;
+  }
+
+  .join-card h2,
+  .players-card h2 {
+    font-size: 1.05rem;
+  }
+
+  /* The code goes: a phone cannot scan itself, and in a crew the link under it
+     still works. */
+  .join-card svg {
+    max-width: min(22vw, 120px);
+  }
+
+  .join-card--cockpit .cockpit-ready {
+    margin: 0.5rem 0 0.25rem;
+    padding: 0.5rem 1.1rem;
+  }
+
+  .player-slot {
+    min-height: 0;
+    padding: 0.35rem 0.6rem;
+  }
+
+  /* The ping goes, the name stays: both are drawn as small text, and hiding
+     the lot would take the one thing the roster is for. */
+  .player-slot small:last-of-type {
+    display: none;
+  }
+}
+
+/*
+ * A card the cockpit can take. It keeps the card's own look — the button is
+ * there for the tap target and the pressed state, not for a second style.
+ *
+ * `pointer-events: auto` is the whole of it. `.encounter-overlay` is
+ * deliberately click-through: on a shared screen it is a notice, and a notice
+ * must not swallow the battlefield behind it. Only the result card ever turned
+ * that off, because only it had a button — until this one, which rendered
+ * perfectly and could not be pressed on any device.
+ */
+.intermission-card__choice {
+  pointer-events: auto;
+  display: grid;
+  width: 100%;
+  gap: 0.2rem;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+}
+
+.intermission-card__choice[aria-pressed="true"] {
+  outline: 2px solid #7ed6ff;
+  outline-offset: 4px;
+}
+
+/* Evenness sits with the frame rate, quieter than the freeze badge beside it:
+   a picture that judders is worth naming, but it is not an emergency until it
+   is most of the frames. */
+.frame-stutter {
+  color: #b9d3ce;
+}
+
+.frame-stutter--alarming {
+  color: #ff9d91;
+}

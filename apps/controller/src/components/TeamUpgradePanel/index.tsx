@@ -9,8 +9,12 @@ import {
 import { roleLabel } from "@spaceship-defender/client-shared";
 import { useEffect, useRef, useState } from "react";
 
-import { createActionId } from "../../model/actionId.js";
-import { keepVoteIntent, nextVoteRevision, type VoteIntent } from "../../voteIntent.js";
+import { createActionId } from "@spaceship-defender/client-shared";
+import {
+  keepVoteIntent,
+  nextVoteRevision,
+  type VoteIntent
+} from "@spaceship-defender/client-shared";
 
 export function TeamUpgradePanel({
   role,

@@ -6,7 +6,7 @@ import {
   PointerCycle,
   throttleAim,
   type ControlVector
-} from "./controlInput.js";
+} from "@spaceship-defender/client-shared";
 
 interface VirtualStickProps {
   readonly label: string;

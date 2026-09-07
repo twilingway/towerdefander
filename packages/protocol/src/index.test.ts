@@ -16,6 +16,7 @@ import {
   controllerJoinOptionsSchema,
   controllerRoomViewSchema,
   displayCreateOptionsSchema,
+  soloJoinOptionsSchema,
   displayRoomViewSchema,
   gunnerInputCommandSchema,
   joinOptionsSchema,
@@ -57,13 +58,6 @@ function item<T>(values: readonly T[], index: number): T {
   const value = values[index];
   if (value === undefined) throw new Error(`Expected item ${String(index)}.`);
   return value;
-}
-
-/** Everything a controller snapshot carries except the helm the display lacks. */
-function withoutHelm(game: NonNullable<ControllerRoomView["game"]>) {
-  const { helm, ...rest } = game;
-  void helm;
-  return rest;
 }
 
 function controllerRoom(): ControllerRoomView {
@@ -138,7 +132,20 @@ function controllerRoom(): ControllerRoomView {
         headingLeadRadians: 0.5,
         stopDampening: 1,
         rotateInPlaceThrottle: 0.02,
-        hullAngularBrakingPerSecondSquared: 50
+        hullAngularBrakingPerSecondSquared: 50,
+        hullAngularMaxSpeed: 3.14159,
+        hullAngularAcceleration: 50,
+        turretAngularMaxSpeed: 1.36,
+        turretAngularAcceleration: 2.72,
+        turretAngularBraking: 4.08,
+        turretMountedOnHull: false,
+        driveDeadzoneShare: 0,
+        aimDeadzoneShare: 0,
+        driveZoneShare: 0.42,
+        aimProjectionShare: 0.58,
+        headingDeadbandRadians: 0.05236,
+        headingFilterSeconds: 0.06,
+        turretLeadRadians: 0.45
       },
       teamUpgrade: {
         offer: null,
@@ -152,8 +159,9 @@ function controllerRoom(): ControllerRoomView {
 function displayRoom(): DisplayRoomView {
   const controller = controllerRoom();
   if (controller.game === null) throw new Error("Expected active game.");
-  // The helm rides on the controller snapshot only; the display never sees it.
-  const controllerGame = withoutHelm(controller.game);
+  // Both snapshots carry the helm now: the solo cockpit draws the world and
+  // works the sticks from the same page, so the display needs it too.
+  const controllerGame = controller.game;
   return {
     roomId: ROOM_ID,
     phase: "active",
@@ -314,43 +322,82 @@ function intermissionController(): ControllerRoomView {
 }
 
 describe("protocol v33 handshake and messages", () => {
-  it("publishes the fixed crew and v46", () => {
-    expect(PROTOCOL_VERSION).toBe(46);
+  it("publishes the fixed crew and v50", () => {
+    expect(PROTOCOL_VERSION).toBe(50);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v46 create/join and rejects v45 and unknown fields", () => {
+  it("accepts v50 create/join and rejects v49 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 46, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 50, crewSize: 3 })
         .success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 45, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 49, crewSize: 3 })
         .success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 46,
+        protocolVersion: 50,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 45,
+        protocolVersion: 49,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 46,
+        protocolVersion: 50,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
+    ).toBe(false);
+  });
+
+  it("takes a solo connection that is display and crew seat at once", () => {
+    const parsed = soloJoinOptionsSchema.parse({
+      role: "solo",
+      protocolVersion: 50,
+      playerName: "  Ada  "
+    });
+    // It names a player like a controller does, trimming included.
+    expect(parsed.playerName).toBe("Ada");
+    // And it reaches the union, so the room can branch on it at the boundary.
+    expect(
+      joinOptionsSchema.safeParse({ role: "solo", protocolVersion: 50, playerName: "Ada" }).success
+    ).toBe(true);
+    // A seat count may be stated, but only the one that solo means.
+    expect(
+      soloJoinOptionsSchema.safeParse({
+        role: "solo",
+        protocolVersion: 50,
+        playerName: "Ada",
+        crewSize: 1
+      }).success
+    ).toBe(true);
+    expect(
+      soloJoinOptionsSchema.safeParse({
+        role: "solo",
+        protocolVersion: 50,
+        playerName: "Ada",
+        crewSize: 2
+      }).success
+    ).toBe(false);
+    // A player is not optional: the roster has a seat to label.
+    expect(soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 50 }).success).toBe(
+      false
+    );
+    expect(
+      soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 49, playerName: "Ada" })
+        .success
     ).toBe(false);
   });
 
@@ -379,9 +426,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v46 and the active run", () => {
+  it("keeps continuous role messages strict on v50 and the active run", () => {
     const envelope = {
-      protocolVersion: 46,
+      protocolVersion: 50,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -457,7 +504,7 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 45,
+        protocolVersion: 49,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -467,9 +514,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v46 pilot input", () => {
+  it("requires the machine gun trigger on v50 pilot input", () => {
     const envelope = {
-      protocolVersion: 46,
+      protocolVersion: 50,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -486,7 +533,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("carries an optional turn intent on pilot input", () => {
     const envelope = {
-      protocolVersion: 46,
+      protocolVersion: 50,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -508,11 +555,11 @@ describe("protocol v33 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 46, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 50, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 45, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 49, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -555,7 +602,7 @@ describe("protocol v33 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 46,
+    protocolVersion: 50,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -1069,18 +1116,18 @@ describe("strict v33 room projections", () => {
 describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 46, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 50, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 46,
+        protocolVersion: 50,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 46,
+        protocolVersion: 50,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -1088,13 +1135,13 @@ describe("v33 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 45,
+        protocolVersion: 49,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 45, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 49, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

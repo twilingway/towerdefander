@@ -17,6 +17,34 @@ export const FPS_STRAIN_CEILING = 45;
 export const FREEZE_VISIBLE_MS = 50;
 export const FREEZE_ALARM_MS = 100;
 
+/**
+ * When unevenness is worth naming, and when it is worth alarming about.
+ *
+ * A tenth of the frames running long is the point where a pan stops looking
+ * like motion and starts looking like a slideshow with extra steps; a quarter
+ * is a picture nobody would call smooth. Below the first, a stray long frame
+ * from a garbage collection is not news.
+ */
+export const STUTTER_VISIBLE_SHARE = 0.1;
+export const STUTTER_ALARM_SHARE = 0.25;
+
+/**
+ * Whole percent, always shown.
+ *
+ * The freeze badge beside it appears only when there is a freeze, because a
+ * missing badge there means "nothing stalled" and that is the whole message.
+ * Evenness is different: it was asked for as an instrument, and an instrument
+ * that hides at zero is indistinguishable from one that was never fitted. A
+ * steady 0% is information — it says the picture is even right now.
+ */
+export function formatStutterShare(share: number): string {
+  return Number.isFinite(share) && share > 0 ? String(Math.round(share * 100)) : "0";
+}
+
+export function stutterClassName(share: number): string {
+  return `frame-stutter${share >= STUTTER_ALARM_SHARE ? " frame-stutter--alarming" : ""}`;
+}
+
 export function fpsClassName(fps: number): string {
   return `fps-readout${fps > 0 && fps < FPS_STRAIN_CEILING ? " fps-readout--strained" : ""}`;
 }
@@ -49,10 +77,12 @@ export function frameSpikeClassName(worstFrameMs: number): string {
  */
 export function FpsReadout({
   fps,
-  worstFrameMs
+  worstFrameMs,
+  stutterShare = 0
 }: {
   readonly fps: number;
   readonly worstFrameMs: number;
+  readonly stutterShare?: number;
 }) {
   const spike = formatFrameSpike(worstFrameMs);
   return (
@@ -68,6 +98,14 @@ export function FpsReadout({
           <strong>{spike}</strong> мс
         </span>
       )}
+      <span
+        className={stutterClassName(stutterShare)}
+        data-testid="frame-stutter"
+        aria-label="Доля рваных кадров за секунду"
+      >
+        {" · рывки "}
+        <strong>{formatStutterShare(stutterShare)}</strong>%
+      </span>
     </span>
   );
 }

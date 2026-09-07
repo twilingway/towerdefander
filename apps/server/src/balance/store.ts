@@ -44,7 +44,24 @@ const DEFAULT_HELM: HelmTuning = {
   // release aims at the predicted stopping point.
   headingLeadRadians: 0.45,
   stopDampening: 1,
-  rotateInPlaceThrottle: 0.02
+  rotateInPlaceThrottle: 0.02,
+  /*
+   * STEEL VOID's own dead zones, and they belong in the defaults rather than in
+   * a preset: only the solo cockpit reads them, the cockpit is the thing being
+   * ported, and it has no earlier behaviour to preserve. The coop panels draw
+   * their own sticks and never look at these, so a zero here bought nothing and
+   * cost the cockpit the tremble guard it was ported for.
+   */
+  driveDeadzoneShare: 0.12,
+  aimDeadzoneShare: 0.1,
+  /** The coop panels draw their own zones; only the cockpit reads this. */
+  driveZoneShare: 0.42,
+  /** Only the cockpit projects an aim point; the coop panels ignore it. */
+  aimProjectionShare: 0.58,
+  // Three degrees and sixty milliseconds, both straight out of the lab.
+  headingDeadbandRadians: (3 * Math.PI) / 180,
+  headingFilterSeconds: 0.06,
+  turretLeadRadians: 0.45
 };
 
 /**
@@ -290,6 +307,7 @@ export function createDefaultTuning(): BalanceTuning {
     turretMaxAngularSpeedPerSecond: config.turretMaxAngularSpeedPerSecond,
     turretAngularAccelerationPerSecondSquared: config.turretAngularAccelerationPerSecondSquared,
     turretAngularBrakingPerSecondSquared: config.turretAngularBrakingPerSecondSquared,
+    turretMountedOnHull: config.turretMountedOnHull,
     mgDamage: config.mgDamage,
     mgFireCooldownTicks: config.mgFireCooldownTicks,
     mgProjectileSpeedPerSecond: config.mgProjectileSpeedPerSecond,

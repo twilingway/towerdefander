@@ -25,7 +25,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 46 as const;
+export const PROTOCOL_VERSION = 50 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
@@ -64,7 +64,13 @@ export const COMBAT_ENTITY_CAPS = {
   dynamicEntities: 208
 } as const;
 
-export const clientRoleSchema = z.enum(["display", "controller"]);
+/**
+ * What a connection is here to do. `solo` is both at once: it draws the world
+ * like a display and holds a crew seat like a controller, so one phone can play
+ * without a second device. It is an addition, not a replacement — a display and
+ * a controller on separate devices still join exactly as before.
+ */
+export const clientRoleSchema = z.enum(["display", "controller", "solo"]);
 export type ClientRole = z.infer<typeof clientRoleSchema>;
 export const crewSizeSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 /**
@@ -646,8 +652,10 @@ function refineWorld(world: WorldProjection, context: z.RefinementCtx): void {
 }
 
 /**
- * Feel of the keyboard helm, straight from the active preset. Only the
- * controller drives with it, so the display never carries these three.
+ * Feel of the helm and the geometry of the sticks, straight from the active
+ * preset. Both snapshots carry it: the controller panels drive with it, and so
+ * does the solo cockpit, which draws the world and works the sticks from the
+ * same page.
  */
 export const publicHelmViewSchema = z
   .object({
@@ -660,7 +668,32 @@ export const publicHelmViewSchema = z
      * helm predicts where a released turn comes to rest, and a guess that does
      * not match the hull overshoots and swings back.
      */
-    hullAngularBrakingPerSecondSquared: finite.positive()
+    hullAngularBrakingPerSecondSquared: finite.positive(),
+    /*
+     * The drive numbers the run is actually using, mirrored for the client that
+     * has to predict with them. `hullAngularBrakingPerSecondSquared` was here
+     * first and for the same reason — the helm predicts where a released turn
+     * comes to rest — and prediction needs the whole set rather than one of it.
+     */
+    hullAngularMaxSpeed: finite.positive(),
+    hullAngularAcceleration: finite.positive(),
+    turretAngularMaxSpeed: finite.positive(),
+    turretAngularAcceleration: finite.positive(),
+    turretAngularBraking: finite.positive(),
+    /**
+     * Whether the hull carries the gun. The simulation reads this from the
+     * preset; the panel needs it too, because a mounted turret is aimed
+     * relative to the nose and a free one relative to the world.
+     */
+    turretMountedOnHull: z.boolean(),
+    /** Stick geometry, shares of the ring radius rather than pixels. */
+    driveDeadzoneShare: finite.min(0),
+    aimDeadzoneShare: finite.min(0),
+    driveZoneShare: finite.positive(),
+    aimProjectionShare: finite.positive(),
+    headingDeadbandRadians: finite.min(0),
+    headingFilterSeconds: finite.min(0),
+    turretLeadRadians: finite.positive()
   })
   .strict();
 export type PublicHelmView = z.infer<typeof publicHelmViewSchema>;
@@ -687,6 +720,12 @@ export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntry
 export const displayGameSnapshotSchema = z
   .object({
     ...gameShape,
+    /**
+     * The helm block, which the display used to have no use for. The solo
+     * cockpit gave it one: it draws the world and works the sticks from the
+     * same page, so it needs the geometry those sticks are cut to.
+     */
+    helm: publicHelmViewSchema,
     /** Width of the elastic rim band, measured inward from `arenaRadius`. */
     rimBandWidth: finite.nonnegative(),
     /**
@@ -830,8 +869,35 @@ export const controllerJoinOptionsSchema = z
   })
   .strict();
 export type ControllerJoinOptions = z.infer<typeof controllerJoinOptionsSchema>;
-export const joinOptionsSchema = z.union([displayJoinOptionsSchema, controllerJoinOptionsSchema]);
+/**
+ * One connection with both duties. It creates its own room, so it names the
+ * hull and the testing aids the way a display does, and it names a player the
+ * way a controller does. The seat count is fixed at one: a second person would
+ * need a second connection, and then the room is the ordinary two-device case.
+ */
+export const soloJoinOptionsSchema = z
+  .object({
+    role: z.literal("solo"),
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    crewSize: z.literal(1).optional(),
+    playerName: z.string().trim().min(1).max(24),
+    shipArchetypeId: shipArchetypeIdSchema.optional(),
+    startWave: startWaveSchema.optional()
+  })
+  .strict();
+export type SoloJoinOptions = z.infer<typeof soloJoinOptionsSchema>;
+export const joinOptionsSchema = z.union([
+  displayJoinOptionsSchema,
+  controllerJoinOptionsSchema,
+  soloJoinOptionsSchema
+]);
 export type JoinOptions = z.infer<typeof joinOptionsSchema>;
+/**
+ * Either shape a room may be created with. A controller never creates one, so
+ * it is absent here: it joins a room a display or a cockpit already opened.
+ */
+export const roomCreateOptionsSchema = z.union([displayCreateOptionsSchema, soloJoinOptionsSchema]);
+export type RoomCreateOptions = z.infer<typeof roomCreateOptionsSchema>;
 
 export const commandEnvelopeSchema = z
   .object({
@@ -865,7 +931,21 @@ export const pilotInputCommandSchema = continuousInputEnvelopeSchema
   .strict();
 export type PilotInputCommand = z.infer<typeof pilotInputCommandSchema>;
 export const gunnerInputCommandSchema = continuousInputEnvelopeSchema
-  .extend({ aim: vector2Schema, firing: z.boolean() })
+  .extend({
+    aim: vector2Schema,
+    firing: z.boolean(),
+    /**
+     * Requested traverse in `[-1, 1]`, the turret's answer to the helm's own
+     * `turn`. Absent from a panel that names a bearing instead, which is what
+     * the crew sticks and the keyboard still do.
+     *
+     * It exists for the same reason the hull's does. A client that must name an
+     * angle can only name the authoritative one, already a patch plus a ping
+     * behind, so releasing the stick sent the gun back to where it had been --
+     * the spring the helm suffered from before intents.
+     */
+    turn: finite.min(-1).max(1).optional()
+  })
   .strict();
 export type GunnerInputCommand = z.infer<typeof gunnerInputCommandSchema>;
 export const shieldInputCommandSchema = continuousInputEnvelopeSchema

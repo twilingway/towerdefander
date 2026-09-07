@@ -66,6 +66,25 @@ export class HelmState extends Schema {
   @type("float32") rotateInPlaceThrottle = 0.02;
   /** Mirrors the run's hull braking so the helm predicts against the real one. */
   @type("float32") hullAngularBrakingPerSecondSquared = 50;
+  /* The rest of the drive, mirrored so a client can predict with it. */
+  @type("float32") hullAngularMaxSpeed = Math.PI;
+  @type("float32") hullAngularAcceleration = 50;
+  @type("float32") turretAngularMaxSpeed = 1.36;
+  @type("float32") turretAngularAcceleration = 2.72;
+  @type("float32") turretAngularBraking = 4.08;
+  @type("boolean") turretMountedOnHull = false;
+  /*
+   * Stick geometry. Shares of the ring radius, so `float32` covers them with
+   * room to spare, and the flag is the one boolean here — a share and a switch,
+   * never a string, on a field the panel reads once a run.
+   */
+  @type("float32") driveDeadzoneShare = 0;
+  @type("float32") aimDeadzoneShare = 0;
+  @type("float32") driveZoneShare = 0.42;
+  @type("float32") aimProjectionShare = 0.58;
+  @type("float32") headingDeadbandRadians = 0.05236;
+  @type("float32") headingFilterSeconds = 0.06;
+  @type("float32") turretLeadRadians = 0.45;
 }
 
 export class ShieldState extends Schema {
