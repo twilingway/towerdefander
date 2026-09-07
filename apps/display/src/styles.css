@@ -2207,8 +2207,16 @@ p {
   z-index: 70;
   display: grid;
   gap: 0.5rem;
-  min-width: 15rem;
-  padding: 0.75rem 0.9rem;
+  min-width: 13rem;
+  /*
+   * Never past the middle of the glass. The sticks live along the bottom edge,
+   * and a panel that reaches them is a panel a thumb has to fight - even though
+   * only its buttons take a touch.
+   */
+  max-height: calc(50vh - 5rem);
+  /* Without this the cap says nothing: content would simply run past it. */
+  overflow: hidden;
+  padding: 0.6rem 0.75rem;
   border: 1px solid rgba(126, 214, 255, 0.35);
   border-radius: 0.6rem;
   background: rgba(4, 10, 20, 0.82);
@@ -2236,6 +2244,14 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+/* The only things here a finger may hit, kept at the top of the card and so as
+   far from the sticks as the card allows. */
+.diagnostics-panel__switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .diagnostics-panel__toggle {
   justify-self: start;
   padding: 0.35rem 0.7rem;
@@ -2252,4 +2268,31 @@ p {
 .diagnostics-panel__toggle[data-prediction="off"] {
   border-color: rgba(255, 176, 96, 0.7);
   color: #ffd2a1;
+}
+
+@media (height <= 520px) {
+  .diagnostics-panel {
+    top: 3.2rem;
+    left: 0.5rem;
+    min-width: 0;
+    max-width: 12rem;
+    max-height: calc(46vh - 3.2rem);
+    padding: 0.4rem 0.5rem;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    line-height: 1.25;
+  }
+
+  .diagnostics-panel dl {
+    gap: 0.2rem;
+  }
+
+  .diagnostics-panel dt {
+    font-size: 0.55rem;
+  }
+
+  .diagnostics-panel__toggle {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.6rem;
+  }
 }

@@ -52,6 +52,26 @@ export function DiagnosticsPanel({
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
+      <div className="diagnostics-panel__switches">
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
+          data-testid="diagnostics-prediction-toggle"
+          data-prediction={predictionEnabled ? "on" : "off"}
+          onClick={onTogglePrediction}
+        >
+          Предсказание: {predictionEnabled ? "вкл" : "выкл"}
+        </button>
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
+          data-testid="diagnostics-background-toggle"
+          data-background={backgroundEnabled ? "on" : "off"}
+          onClick={onToggleBackground}
+        >
+          Фон: {backgroundEnabled ? "вкл" : "выкл"}
+        </button>
+      </div>
       <dl>
         <div>
           <dt>Кадр</dt>
@@ -90,24 +110,6 @@ export function DiagnosticsPanel({
           </dd>
         </div>
       </dl>
-      <button
-        type="button"
-        className="diagnostics-panel__toggle"
-        data-testid="diagnostics-prediction-toggle"
-        data-prediction={predictionEnabled ? "on" : "off"}
-        onClick={onTogglePrediction}
-      >
-        Предсказание: {predictionEnabled ? "вкл" : "выкл"}
-      </button>
-      <button
-        type="button"
-        className="diagnostics-panel__toggle"
-        data-testid="diagnostics-background-toggle"
-        data-background={backgroundEnabled ? "on" : "off"}
-        onClick={onToggleBackground}
-      >
-        Фон: {backgroundEnabled ? "вкл" : "выкл"}
-      </button>
     </aside>
   );
 }
