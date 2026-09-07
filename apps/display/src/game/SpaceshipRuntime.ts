@@ -162,6 +162,15 @@ type CombatEntity =
 interface CombatVisual {
   readonly object: Phaser.GameObjects.Container;
   readonly healthBar: Phaser.GameObjects.Graphics | undefined;
+  /**
+   * The health the bar was last drawn at.
+   *
+   * A bar is geometry, and it was being rebuilt for every enemy on every patch
+   * whether or not anything had hit it - twenty enemies at twenty-six patches a
+   * second is five hundred rebuilds a second to draw the same rectangle. It
+   * changes only when the enemy is hit, so that is when it is redrawn.
+   */
+  drawnHealth: number;
   position: PointTrack;
   angle: AngleTrack;
   /**
@@ -961,7 +970,11 @@ class SpaceshipScene extends Phaser.Scene {
   private updateFocusCandidates(playbackTick: number): readonly MutableFocusCandidate[] {
     return fillFocusCandidates(this.focusScratch, this.snapshot.enemyShips, (enemy) => {
       const visual = this.combatVisuals.get(enemy.entityId);
-      return visual === undefined ? enemy : samplePointTrack(visual.position, playbackTick);
+      if (visual === undefined) return enemy;
+      // Where it is drawn, from wherever the drawing came: the predictor when
+      // there is one, the track when there is not.
+      if (visual.live !== undefined) return visual.object;
+      return samplePointTrack(visual.position, playbackTick);
     });
   }
 
@@ -1134,6 +1147,7 @@ class SpaceshipScene extends Phaser.Scene {
           object: created.object,
           healthBar: created.healthBar,
           live: this.prediction?.bind(entityId, entity.visualKind),
+          drawnHealth: entity.visualKind === "enemy" ? entity.hp : 0,
           // An entity appears already formed at the newest tick; there is no
           // earlier authoritative sample to walk it out of.
           position: createPointTrack(entity, toTick),
@@ -1145,7 +1159,15 @@ class SpaceshipScene extends Phaser.Scene {
         // already moved past - would otherwise leave that one entity on the
         // snapshot clock for as long as it lives.
         visual.live ??= this.prediction?.bind(entityId, entity.visualKind);
-        if (snap) {
+        /*
+         * The tracks are the fallback's memory, and a bound entity does not use
+         * them: it is read from the predictor every frame. Extending them anyway
+         * was two allocations and an angle unwrap per entity per patch - work
+         * that scales with the wave and is thrown away.
+         */
+        if (visual.live !== undefined) {
+          visual.velocity = reckonableVelocity(entity);
+        } else if (snap) {
           visual.object.setPosition(entity.x, entity.y).setRotation(heading);
           visual.position = createPointTrack(entity, toTick);
           visual.angle = createAngleTrack(heading, toTick);
@@ -1155,7 +1177,12 @@ class SpaceshipScene extends Phaser.Scene {
           visual.angle = extendAngleTrack(visual.angle, heading, toTick);
           visual.velocity = reckonableVelocity(entity);
         }
-        if (visual.healthBar !== undefined && entity.visualKind === "enemy") {
+        if (
+          visual.healthBar !== undefined &&
+          entity.visualKind === "enemy" &&
+          visual.drawnHealth !== entity.hp
+        ) {
+          visual.drawnHealth = entity.hp;
           drawEnemyHealthBar(visual.healthBar, entity);
         }
       }
