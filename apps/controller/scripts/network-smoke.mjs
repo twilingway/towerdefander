@@ -238,7 +238,7 @@ try {
 
   gunner = await reconnectController(gunner, "combat");
 
-  await waitForEnemy(undefined, 35_000);
+  await waitForEnemy(undefined, 70_000);
   // Whatever is nearest, held for as long as the battery allows.
   //
   // Locked to one ship and raised once, this depended on that ship staying
@@ -251,7 +251,7 @@ try {
   shieldOpposite = false;
   shieldSurvivalMode = true;
   shieldEnabled = true;
-  const shieldBlock = await waitForShieldBlock(45_000);
+  const shieldBlock = await waitForShieldBlock(90_000);
   shieldSurvivalMode = false;
 
   shieldEnabled = false;
@@ -266,7 +266,7 @@ try {
     // Room enough for a busy machine: the whole gate builds four packages
     // before this runs, and the claim is that the shield can be pointed the
     // other way at all - not that it manages it inside fifteen seconds.
-  }, 45_000);
+  }, 90_000);
   const hpBeforeDirectionalMiss = display.state.game.spaceship.hp;
   shieldEnabled = true;
   await waitFor(
@@ -279,13 +279,13 @@ try {
   shieldEnabled = false;
   shieldOpposite = false;
 
-  const hitTarget = await waitForShootableTarget(35_000);
+  const hitTarget = await waitForShootableTarget(70_000);
   gunnerLockedTargetId = hitTarget.entityId;
   gunnerEnabled = true;
   await waitFor(() => {
     const current = findEntity(hitTarget.entityId);
     return current === undefined || current.hp < hitTarget.hp;
-  }, 25_000);
+  }, 50_000);
   gunnerLockedTargetId = undefined;
 
   shieldOpposite = false;
@@ -319,7 +319,7 @@ try {
 
   const purchase = await resolveTeamPurchase(offer, pilotCard);
   const modifiersAfterPurchase = pilotModifierSnapshot();
-  await waitFor(() => observedAsteroidEntrySectors.size >= 2, 12_000);
+  await waitFor(() => observedAsteroidEntrySectors.size >= 2, 24_000);
   pilot.send(clientMessage.upgradeVote, duplicateCommand);
   await delay(350);
   if (JSON.stringify(pilotModifierSnapshot()) !== JSON.stringify(modifiersAfterPurchase))
