@@ -301,12 +301,20 @@ export function DisplayApp() {
     };
   }, [diagnostics, connectionEpoch, status]);
 
+  /*
+   * The same gate the cockpit's own sending uses, and it has to be: the room
+   * only spends input while a run is stepping, so frames sent in the lobby are
+   * never acknowledged and pile up until the replay buffer overflows - which it
+   * did, at ninety-five frames, about five seconds of waiting.
+   */
+  const predicting =
+    predictionEnabled && cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
   useShipPrediction({
     room: roomReference.current,
-    enabled: predictionEnabled && cockpitPlayer !== undefined,
+    enabled: predicting,
     source: {
       readIntent: () => cockpitControls.readIntent(),
-      enabled: predictionEnabled && cockpitPlayer !== undefined
+      enabled: predicting
     },
     world:
       view?.game == null

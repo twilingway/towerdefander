@@ -1,0 +1,13 @@
+- main [ref=f2e3]:
+  - generic [ref=f2e4]:
+    - paragraph [ref=f2e5]: Общий экран
+    - heading "SpaceShip Defender" [level=1] [ref=f2e6]
+    - paragraph [ref=f2e7]: "Три игрока управляют одним космическим кораблём: движение, орудия и щит."
+    - group "Размер экипажа" [ref=f2e8]:
+      - button "1 игрок" [ref=f2e9] [cursor=pointer]
+      - button "2 игрока" [ref=f2e10] [cursor=pointer]
+      - button "3 игрока" [pressed] [ref=f2e11] [cursor=pointer]
+    - generic [ref=f2e12]:
+      - generic [ref=f2e13]: Начать с волны (для тестов)
+      - spinbutton "Начать с волны (для тестов)" [ref=f2e14]: "1"
+    - button "Создать комнату" [ref=f2e15] [cursor=pointer]

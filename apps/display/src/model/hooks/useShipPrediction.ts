@@ -72,72 +72,103 @@ export function useShipPrediction<TState extends { game?: { display?: { pose?: D
 
   useEffect(() => {
     if (room === undefined) return undefined;
-    const pose = room.state.game?.display?.pose;
-    if (pose === undefined) return undefined;
-
-    /*
-     * The one cast in the file, and it is a boundary rather than a shortcut.
-     *
-     * This app types room state structurally on purpose - `roomView` never
-     * imports the server's schema classes, which is what keeps the display from
-     * depending on the room's internals. The predictor, however, works on the
-     * decoded tree itself. So the two meet here, once, and everything past this
-     * line is typed again.
-     */
-    const predict: PredictHandle = Predict.get(
-      room as unknown as Parameters<typeof Predict.get>[0],
-      { mode: "lerp", delay: 100 }
-    );
-    const input = room.input({ type: SoloInput });
-    const reconciler = predict.reconciler(pose, {
-      input,
-      fields: [...PREDICTED_POSE_FIELDS],
-      step: (_ctx, state, command) => {
-        const current = latest.current.world;
-        if (current === undefined) return;
-        stepPredictedPose(
-          state,
-          command,
-          createSpaceshipSimulationConfig({
-            worldWidth: current.worldWidth,
-            worldHeight: current.worldHeight,
-            arenaRadius: current.arenaRadius,
-            turretMountedOnHull: current.turretMountedOnHull
-          }),
-          toShipStats(current.drive)
-        );
-      },
-      // Corrections are eased in rather than snapped. Roughly two thirds of any
-      // gap closes per this many milliseconds, which is the price of not seeing
-      // the ship jump when the room disagrees.
-      smoothMs: 65
-    });
-
-    let running = true;
-    const frame = () => {
-      if (!running) return;
+    try {
+      return start();
+    } catch (error) {
       /*
-       * Step, send, then read. The order is the contract: `tick()` says how
-       * many fixed steps are due, each one is transmitted so the server applies
-       * exactly what was predicted, and only afterwards is the pose worth
-       * reading.
+       * Prediction is an improvement, never a dependency.
+       *
+       * It threw once already - the room advertises a wake interval rather than
+       * a step - and it took the whole display down with it, because a hook
+       * that throws in an effect has no boundary above it. A screen that draws
+       * the authoritative ship is a worse screen; a screen that draws nothing
+       * is not a screen.
        */
-      const steps = predict.tick();
-      const { source: live, enabled: on, onPose: publish } = latest.current;
-      for (let step = 0; step < steps; step += 1) {
-        if (!on) break;
-        const intent = live.readIntent();
-        Object.assign(input.data, intent);
-        input.send();
-      }
-      publish(on ? reconciler.state : undefined);
-      requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-
-    return () => {
-      running = false;
+      console.error("Ship prediction is off: it could not start.", error);
       latest.current.onPose(undefined);
-    };
+      return undefined;
+    }
+
+    function start(): (() => void) | undefined {
+      if (room === undefined) return undefined;
+      const pose = room.state.game?.display?.pose;
+      if (pose === undefined) return undefined;
+
+      /*
+       * The one cast in the file, and it is a boundary rather than a shortcut.
+       *
+       * This app types room state structurally on purpose - `roomView` never
+       * imports the server's schema classes, which is what keeps the display from
+       * depending on the room's internals. The predictor, however, works on the
+       * decoded tree itself. So the two meet here, once, and everything past this
+       * line is typed again.
+       */
+      const predict: PredictHandle = Predict.get(
+        room as unknown as Parameters<typeof Predict.get>[0],
+        { mode: "lerp", delay: 100 }
+      );
+      const input = room.input({ type: SoloInput });
+      /*
+       * The step is stated rather than discovered.
+       *
+       * The room advances on its own accumulator and wakes far more often than it
+       * steps, so the handle would advertise the wake interval - and the SDK
+       * refuses to guess, because a wrong dt diverges a replay silently rather
+       * than loudly. `fixedStepMs` is a shared constant in the core, so both
+       * sides move together when it moves.
+       */
+      const stepMs = createSpaceshipSimulationConfig().fixedStepMs;
+      const reconciler = predict.reconciler(pose, {
+        stepMs,
+        input,
+        fields: [...PREDICTED_POSE_FIELDS],
+        step: (_ctx, state, command) => {
+          const current = latest.current.world;
+          if (current === undefined) return;
+          stepPredictedPose(
+            state,
+            command,
+            createSpaceshipSimulationConfig({
+              worldWidth: current.worldWidth,
+              worldHeight: current.worldHeight,
+              arenaRadius: current.arenaRadius,
+              turretMountedOnHull: current.turretMountedOnHull
+            }),
+            toShipStats(current.drive)
+          );
+        },
+        // Corrections are eased in rather than snapped. Roughly two thirds of any
+        // gap closes per this many milliseconds, which is the price of not seeing
+        // the ship jump when the room disagrees.
+        smoothMs: 65
+      });
+
+      let running = true;
+      const frame = () => {
+        if (!running) return;
+        /*
+         * Step, send, then read. The order is the contract: `tick()` says how
+         * many fixed steps are due, each one is transmitted so the server applies
+         * exactly what was predicted, and only afterwards is the pose worth
+         * reading.
+         */
+        const steps = predict.tick();
+        const { source: live, enabled: on, onPose: publish } = latest.current;
+        for (let step = 0; step < steps; step += 1) {
+          if (!on) break;
+          const intent = live.readIntent();
+          Object.assign(input.data, intent);
+          input.send();
+        }
+        publish(on ? reconciler.state : undefined);
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+
+      return () => {
+        running = false;
+        latest.current.onPose(undefined);
+      };
+    }
   }, [room]);
 }
