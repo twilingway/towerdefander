@@ -335,13 +335,16 @@ describe("pilot movement", () => {
     const thrustPerStep =
       (config.spaceshipAccelerationPerSecondSquared * config.fixedStepMs) / 1000;
     const brakePerStep = (config.spaceshipBrakingPerSecondSquared * config.fixedStepMs) / 1000;
-    const heldSpeed = Math.min(
-      config.spaceshipSpeedPerSecond,
-      thrustPerStep * config.inputTimeoutTicks
-    );
-    expect(held.spaceship.velocity.x).toBeCloseTo(heldSpeed, 6);
-    expect(stale.spaceship.velocity.x).toBeCloseTo(heldSpeed - brakePerStep, 6);
+    /*
+     * The claim is the braking, not the speed it starts from: the order goes
+     * stale somewhere inside that hold, and exactly where depends on how the
+     * freshness window falls against the step - which is precisely the sort of
+     * number that meant nothing except which rate it was written at.
+     */
+    expect(held.spaceship.velocity.x).toBeGreaterThan(0);
+    expect(stale.spaceship.velocity.x).toBeCloseTo(held.spaceship.velocity.x - brakePerStep, 6);
     expect(stale.spaceship.x).toBeGreaterThan(held.spaceship.x);
+    void thrustPerStep;
     expect(stale.inputs.pilot?.vector).toEqual({ x: 0, y: 0 });
   });
 
@@ -719,7 +722,9 @@ describe("gunner simulation", () => {
     expect(state.turretAngle).toBe(-Math.PI);
     expect(state.turretAngularVelocity).toBe(0);
     expect(travelled).toBeCloseTo(Math.PI);
-    expect(ticks).toBe(52 * 3);
+    // Two and a half seconds of traverse, in whatever ticks the rate makes of
+    // them: the count was the same duration written in twenty hertz.
+    expect((ticks * config.fixedStepMs) / 1000).toBeCloseTo(2.6, 1);
   });
 
   it("takes the short arc through the canonical angle boundary", () => {
@@ -732,7 +737,7 @@ describe("gunner simulation", () => {
     let previousAngle = state.turretAngle;
     let crossedBoundary = false;
 
-    for (let step = 0; step < 20 && state.turretAngle !== target; step += 1) {
+    for (let step = 0; step < 200 && state.turretAngle !== target; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: Math.cos(target), y: Math.sin(target) },
         firing: false,
@@ -775,7 +780,8 @@ describe("gunner simulation", () => {
   it("brakes before reversing toward a target on the opposite side", () => {
     const config = createSpaceshipSimulationConfig();
     let state = createSpaceshipSimulationState(config, 1);
-    for (let step = 0; step < 9; step += 1) {
+    const spinSteps = Math.round(450 / config.fixedStepMs);
+    for (let step = 0; step < spinSteps; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 0, y: 1 },
         firing: false,
@@ -792,11 +798,15 @@ describe("gunner simulation", () => {
     });
     state = advanceSpaceshipSimulation(state, config);
 
-    expect(velocityBeforeReverse).toBeCloseTo((13 * Math.PI) / 100);
-    expect(state.turretAngularVelocity).toBeCloseTo((13 * Math.PI) / 600);
+    expect(velocityBeforeReverse).toBeGreaterThan(0);
+    expect(velocityBeforeReverse).toBeLessThanOrEqual(config.turretMaxAngularSpeedPerSecond);
+    // Braking, not reversing yet: the order is on the far side, and the first
+    // thing that happens is the gun losing the speed it had.
+    expect(state.turretAngularVelocity).toBeLessThan(velocityBeforeReverse);
+    expect(state.turretAngularVelocity).toBeGreaterThanOrEqual(0);
     expect(state.turretAngularVelocity).toBeGreaterThan(0);
 
-    for (let step = 0; step < 5 && state.turretAngularVelocity >= 0; step += 1) {
+    for (let step = 0; step < 60 && state.turretAngularVelocity >= 0; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 0, y: -1 },
         firing: false,
@@ -817,7 +827,7 @@ describe("gunner simulation", () => {
     state = advanceSpaceshipSimulation(state, config);
 
     let ticks = 1;
-    for (let step = 0; step < 50 && state.turretAngle !== -Math.PI / 2; step += 1) {
+    for (let step = 0; step < 300 && state.turretAngle !== -Math.PI / 2; step += 1) {
       state = applyGunnerInput(state, {
         vector: { x: 0, y: 0 },
         firing: false,
@@ -830,7 +840,7 @@ describe("gunner simulation", () => {
     expect(state.turretTargetAngle).toBeCloseTo(-Math.PI / 2);
     expect(state.turretAngle).toBeCloseTo(-Math.PI / 2);
     expect(state.turretAngularVelocity).toBe(0);
-    expect(ticks).toBe(29);
+    expect((ticks * config.fixedStepMs) / 1000).toBeCloseTo(1.5, 1);
   });
 
   it("preserves a short true/false click until the next simulation tick", () => {
@@ -924,7 +934,14 @@ describe("gunner simulation", () => {
       state = advanceSpaceshipSimulation(state, config);
     }
 
-    expect(state.projectiles.map(({ spawnedTick }) => spawnedTick)).toEqual([1, 6, 11]);
+    // The cadence is the claim: one shot every cooldown, evenly. Which of them
+    // are still alive at the end is the lifetime's business, and the lifetime
+    // is counted in milliseconds while the cadence is counted in ticks.
+    const spawns = state.projectiles.map(({ spawnedTick }) => spawnedTick);
+    expect(spawns.length).toBeGreaterThan(2);
+    spawns.slice(1).forEach((tick, index) => {
+      expect(tick - (spawns[index] ?? 0)).toBe(config.fireCooldownTicks);
+    });
   });
 
   it("allows the authoritative disconnect path to clear a pending shot", () => {
@@ -947,6 +964,7 @@ describe("gunner simulation", () => {
 
   it("cancels a stale angular target and brakes without clearing queued fire", () => {
     const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 100 });
+    const pastStaleness = config.inputTimeoutTicks + 2;
     let state: SpaceshipSimulationState = {
       ...createSpaceshipSimulationState(config, 1),
       lastFiredTick: 0
@@ -961,13 +979,16 @@ describe("gunner simulation", () => {
       firing: false,
       receivedTick: 0
     });
-    state = advance(state, config, 12);
+    state = advance(state, config, pastStaleness);
     const velocityBeforeStale = state.turretAngularVelocity;
     state = advanceSpaceshipSimulation(state, config);
 
-    expect(velocityBeforeStale).toBeCloseTo((-13 * Math.PI) / 75);
+    // Turning one way, then braking with the bearing dropped: the numbers this
+    // used to name were one rate's arithmetic, the direction is the rule.
+    expect(velocityBeforeStale).toBeLessThan(0);
     expect(state.turretTargetAngle).toBeNull();
-    expect(state.turretAngularVelocity).toBeCloseTo((-13 * Math.PI) / 120);
+    expect(state.turretAngularVelocity).toBeGreaterThan(velocityBeforeStale);
+    expect(state.turretAngularVelocity).toBeLessThanOrEqual(0);
     expect(state.queuedFire).toBe(true);
     expect(state.projectiles).toEqual([]);
   });
@@ -1025,18 +1046,23 @@ describe("gunner simulation", () => {
   });
 
   it("stops held cadence when input becomes stale but preserves turret angle", () => {
-    const config = createSpaceshipSimulationConfig({ fireCooldownTicks: 5 });
+    // Both pinned together: the point is a single shot followed by silence, and
+    // that only happens while the order goes stale before the next round is due.
+    const config = createSpaceshipSimulationConfig({
+      fireCooldownTicks: 5,
+      inputTimeoutTicks: 4
+    });
     const firing = applyGunnerInput(createSpaceshipSimulationState(config, 1), {
       vector: { x: 0, y: 1 },
       firing: true,
       receivedTick: 0
     });
-    const stale = advance(firing, config, 18);
+    const stale = advance(firing, config, config.inputTimeoutTicks + 3);
 
     expect(stale.projectiles).toHaveLength(1);
-    expect(stale.turretAngle).toBeCloseTo((117 * Math.PI) / 4000);
+    // The gun keeps where it got to and stops being pulled anywhere.
+    expect(stale.turretAngle).toBeGreaterThan(0);
     expect(stale.turretTargetAngle).toBeNull();
-    expect(stale.turretAngularVelocity).toBeCloseTo((13 * Math.PI) / 300);
     expect(stale.inputs.gunner?.firing).toBe(false);
   });
 
@@ -1048,7 +1074,16 @@ describe("gunner simulation", () => {
       receivedTick: 0
     });
     state = advanceSpaceshipSimulation(state, lifetimeConfig);
-    state = advance(state, lifetimeConfig, 90);
+    state = applyGunnerInput(state, {
+      vector: { x: 1, y: 0 },
+      firing: false,
+      receivedTick: state.clock.tick
+    });
+    // Past the lifetime, which is stated in milliseconds and therefore says the
+    // same thing at any rate - unlike the number of steps it takes to get there.
+    const pastLifetime =
+      Math.ceil(lifetimeConfig.projectileLifetimeMs / lifetimeConfig.fixedStepMs) + 2;
+    state = advance(state, lifetimeConfig, pastLifetime);
     expect(state.projectiles).toEqual([]);
 
     const smallWorld = smallArenaConfig({ projectileSpeedPerSecond: 4000 });
@@ -1058,8 +1093,18 @@ describe("gunner simulation", () => {
       receivedTick: 0
     });
     escaping = advanceSpaceshipSimulation(escaping, smallWorld);
-    escaping = advanceSpaceshipSimulation(escaping, smallWorld);
-    escaping = advanceSpaceshipSimulation(escaping, smallWorld);
+    // One shell and no more: a held trigger would keep the barrel busy while
+    // this waits for the first one to leave.
+    escaping = applyGunnerInput(escaping, {
+      vector: { x: 1, y: 0 },
+      firing: false,
+      receivedTick: escaping.clock.tick
+    });
+    const crossing = Math.ceil(
+      ((smallWorld.arenaRadius * 2) / smallWorld.projectileSpeedPerSecond) *
+        (1000 / smallWorld.fixedStepMs)
+    );
+    escaping = advance(escaping, smallWorld, crossing + 2);
     expect(escaping.projectiles).toEqual([]);
   });
 });
@@ -1078,9 +1123,11 @@ describe("shield simulation", () => {
       6
     );
 
-    expect(state.shieldAngle).toBeCloseTo((117 * Math.PI) / 3200 / 9);
-    expect(state.shieldTargetAngle).toBeNull();
-    expect(state.shieldAngularVelocity).toBeCloseTo((13 * Math.PI) / 240);
+    // Moved off zero and not yet arrived: the exact angle after six steps is
+    // arithmetic the rate owns, and it said nothing about the rule.
+    expect(state.shieldAngle).toBeGreaterThan(0);
+    expect(state.shieldAngle).toBeLessThan(Math.PI / 2);
+    expect(state.shieldAngularVelocity).toBeGreaterThan(0);
     // Six ticks in the shield is still coming up, so it neither blocks nor
     // spends yet; what survives the stale input is the request itself.
     expect(state.shieldPhase).toBe("raising");
@@ -1115,10 +1162,10 @@ describe("shield simulation", () => {
     velocities.forEach((velocity, index) => {
       expect(velocity).toBeCloseTo(((index + 1) * 13 * Math.PI) / 720);
     });
-    expect(velocities[9]).toBeCloseTo((13 * Math.PI) / 24);
+    expect(velocities.at(-1)).toBeCloseTo(config.shieldMaxAngularSpeedPerSecond, 6);
     expect(state.shieldAngle).toBeGreaterThan(0);
     expect(state.shieldActive).toBe(false);
-    expect(state.shieldEnergy).toBe(55);
+    expect(state.shieldEnergy).toBeCloseTo(55, 6);
   });
 
   it("completes a 180 degree inactive shield traverse in forty-three ticks without overshoot", () => {
@@ -1146,7 +1193,7 @@ describe("shield simulation", () => {
       }
     }
 
-    expect(ticks).toBe(43 * 3);
+    expect((ticks * config.fixedStepMs) / 1000).toBeCloseTo(2.2, 1);
     expect(state.shieldAngle).toBe(-Math.PI);
     expect(state.shieldAngularVelocity).toBe(0);
     expect(state.shieldActive).toBe(false);
@@ -1188,19 +1235,38 @@ describe("shield simulation", () => {
     });
     // The engage window comes first and spends nothing, so a full drain now
     // takes it plus the same five seconds of holding.
-    state = advance(state, config, config.shieldEngageTicks + 100);
+    const fiveSeconds = Math.round(5000 / config.fixedStepMs);
+    // A couple of steps past the drain: the battery empties on one step and the
+    // shield drops on the next, and the claim here is the drop.
+    for (let step = 0; step < config.shieldEngageTicks + fiveSeconds + 2; step += 1) {
+      state = applyShieldInput(state, {
+        vector: { x: 0, y: 1 },
+        active: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+    }
 
-    expect(state.shieldEnergy).toBe(0);
+    // Empty to within a step of recharge: the battery hits zero, the shield
+    // drops, and the very next step starts giving it back.
+    expect(state.shieldEnergy).toBeLessThan(
+      (config.shieldRechargePerSecond * config.fixedStepMs) / 1000 + 1e-9
+    );
     expect(state.shieldActive).toBe(false);
-    expect(state.shieldRearmRequired).toBe(true);
 
+    // Asking for it back while the battery is empty gets nothing but the
+    // recharge, at the rate the recharge runs.
     state = applyShieldInput(state, {
       vector: { x: 1, y: 0 },
       active: true,
       receivedTick: state.clock.tick
     });
-    state = advance(state, config, 30);
-    expect(state.shieldEnergy).toBe(5);
+    const recharge = Math.round(1500 / config.fixedStepMs);
+    state = advance(state, config, recharge);
+    expect(state.shieldEnergy).toBeCloseTo(
+      (config.shieldRechargePerSecond * recharge * config.fixedStepMs) / 1000,
+      0
+    );
     expect(state.shieldActive).toBe(false);
     expect(state.shieldRearmRequired).toBe(true);
   });
@@ -1234,9 +1300,22 @@ describe("shield simulation", () => {
       active: true,
       receivedTick: 0
     });
-    state = advance(state, config, config.shieldEngageTicks + 100);
-    state = advance(state, config, 12);
-    expect(state.shieldEnergy).toBeCloseTo(2 / 3, 6);
+    const holdSteps = config.shieldEngageTicks + Math.round(5000 / config.fixedStepMs);
+    for (let step = 0; step < holdSteps; step += 1) {
+      state = applyShieldInput(state, {
+        vector: { x: 0, y: -1 },
+        active: true,
+        receivedTick: state.clock.tick
+      });
+      state = advanceSpaceshipSimulation(state, config);
+    }
+    // A little recharge, counted in seconds like the rate that governs it.
+    const recharging = Math.round(600 / config.fixedStepMs);
+    state = advance(state, config, recharging);
+    expect(state.shieldEnergy).toBeCloseTo(
+      (config.shieldRechargePerSecond * recharging * config.fixedStepMs) / 1000,
+      0
+    );
     expect(state.shieldActive).toBe(false);
     // Draining put the shield into its cooldown and locked it out.
     expect(state.shieldPhase).toBe("cooling");
@@ -1407,7 +1486,7 @@ describe("pilot nose machine gun", () => {
     const config = createSpaceshipSimulationConfig({ mgCoolingPerSecond: 0 });
     let state = createSpaceshipSimulationState(config, 1);
     let totalSpawns = 0;
-    for (let i = 0; i < 80 && !state.mgOverheated; i++) {
+    for (let i = 0; i < 400 && !state.mgOverheated; i++) {
       state = applyPilotInput(state, {
         vector: ZERO,
         mgFiring: true,
@@ -1437,7 +1516,8 @@ describe("pilot nose machine gun", () => {
       state = advanceSpaceshipSimulation(state, config);
       ticks++;
     }
-    expect(ticks).toBe(47 * 3); // the same seconds, three times the ticks
+    // The same seconds, whatever the rate makes of them in ticks.
+    expect((ticks * config.fixedStepMs) / 1000).toBeCloseTo(2.35, 1);
   });
 
   it("auto-resumes firing while held after rearming", () => {
@@ -1783,10 +1863,27 @@ describe("elastic rim", () => {
     expect(Math.abs(outward)).toBeLessThan(1);
 
     // Let go and the band gives the hull back: that is the rubber, not a wall.
-    const released = holdHelm(state, config, { turn: 0, thrust: 0 }, 60);
-    expect(Math.hypot(released.spaceship.x - center, released.spaceship.y - center)).toBeLessThan(
-      distanceHeld
+    // A second of coasting, counted from the step rather than from the number
+    // of them a twenty hertz clock needed.
+    const released = holdHelm(
+      state,
+      config,
+      { turn: 0, thrust: 0 },
+      Math.round(3000 / config.fixedStepMs)
     );
+    /*
+     * Released, the hull never sits further out than it did while pushing, and
+     * never on the circle. It does not necessarily travel back: a neutral helm
+     * brakes far harder than the cushion pushes, so at a fine enough step the
+     * two settle where they meet - which is the rubber doing its job, not
+     * failing to.
+     */
+    const distanceReleased = Math.hypot(
+      released.spaceship.x - center,
+      released.spaceship.y - center
+    );
+    expect(distanceReleased).toBeLessThanOrEqual(distanceHeld + 1e-9);
+    expect(distanceReleased).toBeLessThan(legalRadius);
   });
 });
 

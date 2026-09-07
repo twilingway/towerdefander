@@ -53,9 +53,13 @@ test("different seeds play different runs", () => {
       preset
     ])
   );
+  // Not the score, for the same reason the difficulty test avoids it: both
+  // seeds clear every wave the cap allows and the same kills pay the same
+  // points. What a seed moves is the shape of the fight - where the enemies
+  // come from and how long the clearing takes.
   assert.notDeepEqual(
-    left.results.map(({ score }) => score),
-    right.results.map(({ score }) => score)
+    left.results.map(({ ticks }) => ticks),
+    right.results.map(({ ticks }) => ticks)
   );
 });
 
