@@ -88,3 +88,28 @@ export function hasImmediateChange(
     sameVote(before.teamUpgrade.votes.shield, after.teamUpgrade.votes.shield)
   );
 }
+
+/**
+ * Whether the page itself has to re-render, as opposed to a panel.
+ *
+ * Every battle panel now holds its own subscription and wakes on its own slice,
+ * so a patch that moved enemies, warmed a barrel or added a credit no longer
+ * concerns the tree above them. What is left for the root is the shape of the
+ * page: which screen is up, who is in the room, and the two overlays that own
+ * the screen when the fight is not running.
+ *
+ * Outside combat the root follows every patch. The intermission and the result
+ * screen are the page - their countdowns, votes and totals are rendered here
+ * and nowhere else - and neither is a place where a frame budget is at stake.
+ * Inside combat it sleeps, which is the whole point.
+ */
+export function needsRootRender(
+  previous: DisplayRoomView | undefined,
+  next: DisplayRoomView
+): boolean {
+  if (previous === undefined) return true;
+  if (hasImmediateChange(previous, next)) return true;
+  // The header prints this one while the instrument panel is closed.
+  if (previous.displayLatencyMs !== next.displayLatencyMs) return true;
+  return next.game?.encounter.phase !== "combat";
+}

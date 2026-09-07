@@ -341,6 +341,11 @@ function toPoseView(pose: PoseOnWire | undefined) {
   };
 }
 
+/**
+ * The last moment whose shape was checked in full; see the note at the parse.
+ */
+let lastValidatedShape: string | undefined;
+
 export function toDisplayRoomView(
   state: NetworkRoomState | undefined
 ): DisplayRoomView | undefined {
@@ -370,7 +375,7 @@ export function toDisplayRoomView(
 
   const game = state.game;
   const display = game?.display;
-  return displayRoomViewSchema.parse({
+  const built = {
     roomId: state.roomId,
     phase: state.phase,
     runNumber: state.runNumber,
@@ -485,7 +490,32 @@ export function toDisplayRoomView(
             homingMissiles: toSpawnOrder(display.homingMissiles).map(toPublicHomingMissile)
           }
         : null
-  });
+  };
+
+  /*
+   * Validated when the shape can have changed, not on every patch.
+   *
+   * The full parse is a contract check worth keeping - it has caught a real bug,
+   * where an intermission published moving entities and the display's own rule
+   * refused the patch. But that rule, and every other one in `refineRoom`, is
+   * about the shape of a moment: which phase, which run, whether there is a
+   * world at all. Between two combat patches nothing it tests can change, and
+   * running it anyway cost thirty milliseconds a second on a throttled phone -
+   * the largest single item left after React was taken off the patch path,
+   * because zod rebuilds the whole object it validates.
+   *
+   * So it runs on the first patch of every such moment and is skipped for the
+   * repeats. A malformed field that appears mid-combat now reaches the scene
+   * instead of the console; that is the trade, and the room's own tests are
+   * where that class of bug is caught.
+   */
+  const shapeKey = `${state.roomId}|${state.phase}|${String(state.runNumber)}|${String(state.hasGame === true)}|${game?.encounter?.phase ?? ""}`;
+  if (shapeKey !== lastValidatedShape) {
+    const validated = displayRoomViewSchema.parse(built);
+    lastValidatedShape = shapeKey;
+    return validated;
+  }
+  return built as DisplayRoomView;
 }
 
 function toTeamUpgradeView(teamUpgrade: NetworkTeamUpgradeState | undefined) {

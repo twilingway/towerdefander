@@ -30,7 +30,6 @@ import {
   PreviewPhaseButtons,
   PreviewShell,
   readStringEnvironment,
-  roleLabel,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
 import {
@@ -44,18 +43,13 @@ import {
   type ReactNode
 } from "react";
 
-import { BossHealth } from "./BossHealth.js";
 import { PolledCombatRadar } from "./CombatRadar.js";
-import { CrewLatency } from "./components/CrewLatency/index.js";
 import { useLetterboxBars } from "./useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
-import { encounterLabel } from "./model/labels.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
-import { countDrawnEntities, getCurrentWaveUpgrade } from "./combatHudViewModel.js";
-import { WeaponHeat } from "./WeaponHeat.js";
+import { countDrawnEntities } from "./combatHudViewModel.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
-import { SoloCockpit } from "./screens/SoloCockpit/index.js";
 import { useSoloCockpit, type SoloCockpitControls } from "./model/hooks/useSoloCockpit.js";
 import { useBareControls } from "./model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
@@ -63,8 +57,6 @@ import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssis
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
-import { SalvageCountdown } from "./SalvageCountdown.js";
-import { WaveCountdown } from "./WaveCountdown.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import {
   closeDisplayRoom,
@@ -79,8 +71,16 @@ import {
 } from "./previewMode.js";
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
 import { readComponentCosts, recordComponentCommit } from "./model/componentCost.js";
+import { publishWorld } from "./model/worldStore.js";
+import {
+  BattleHudPanel,
+  BossPanel,
+  CockpitPanel,
+  CountdownPanel,
+  CrewLatencyPanel,
+  ModuleWindowPanel
+} from "./screens/BattleScreen/panels.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
-import { ModuleTreeWindow } from "./components/ModuleTreeWindow/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
@@ -97,7 +97,7 @@ import {
   readShipArchetypeId,
   readStartWave
 } from "./visibleDemo.js";
-import { hasImmediateChange, PASSIVE_PUBLISH_MS } from "./model/viewPublishing.js";
+import { hasImmediateChange, needsRootRender, PASSIVE_PUBLISH_MS } from "./model/viewPublishing.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -266,10 +266,19 @@ export function DisplayApp() {
   const [maintenance, setMaintenance] = useState<MaintenanceState | undefined>(undefined);
   // Layout preview feeds the same view the network fills, so the HUD, overlays
   // and the Phaser frame all render through the production path.
-  const previewView = useMemo(
-    () => (preview ? createPreviewRoomView(previewPhase, previewCameraViewWidth) : undefined),
-    [preview, previewPhase, previewCameraViewWidth]
-  );
+  const previewView = useMemo(() => {
+    if (!preview) return undefined;
+    const built = createPreviewRoomView(previewPhase, previewCameraViewWidth);
+    /*
+     * Published from the memo rather than an effect, because the preview is
+     * also how the battle screen is rendered to static markup in tests, and
+     * effects do not run there - the panels would find an empty store and draw
+     * nothing. The memo runs during this render and before any child's, so they
+     * see the fixture on the first pass.
+     */
+    publishWorld(built);
+    return built;
+  }, [preview, previewPhase, previewCameraViewWidth]);
   const view = previewView ?? networkView;
   /*
    * Hooks cannot hide behind a branch, so the cockpit's wire half is always
@@ -766,9 +775,12 @@ export function DisplayApp() {
       window.clearTimeout(publishTimerReference.current);
       publishTimerReference.current = undefined;
     }
+    const rootFollows = needsRootRender(publishedViewReference.current, view);
     publishedViewReference.current = view;
     publishedAtReference.current = now;
-    setNetworkView(view);
+    // The panels already have it; the tree above them re-renders only when the
+    // shape of the page changed.
+    if (rootFollows) setNetworkView(view);
   }
 
   function applyRoomState(state: NetworkRoomState): void {
@@ -803,6 +815,13 @@ export function DisplayApp() {
     // reference every frame, and a shell that waited for a React commit would
     // appear late for exactly as long as the commit was deferred.
     liveViewReference.current = next;
+    /*
+     * Straight into the store, on the patch rather than on the page's slower
+     * publish clock. A panel subscribed to a slice pays only when that slice
+     * moves, so there is nothing to coalesce for it - and the throttle below
+     * exists for the tree that still re-renders whole, not for them.
+     */
+    publishWorld(next);
     // Published from here rather than from a render: the Node bot reading it
     // steers on what it sees, and it must not inherit the page's slow clock.
     if (visibleDemo && next.game !== null) {
@@ -840,6 +859,7 @@ export function DisplayApp() {
   function resetToCreate(message: string): void {
     liveViewReference.current = undefined;
     publishedViewReference.current = undefined;
+    publishWorld(undefined);
     setNetworkView(undefined);
     setStatus("idle");
     setError(message);
@@ -880,15 +900,6 @@ export function DisplayApp() {
       />
     );
   }
-
-  const waveUpgrade =
-    view.game === null
-      ? null
-      : getCurrentWaveUpgrade(view.game.teamUpgrade.selection, view.game.encounter.waveNumber);
-  // Only the rocks that came with the wave pay credits, so those are the ones
-  // worth counting next to the score.
-  const waveAsteroidCount =
-    view.game?.asteroids.filter(({ origin }) => origin === "wave").length ?? 0;
 
   return (
     <main
@@ -973,36 +984,7 @@ export function DisplayApp() {
         >
           <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
             <MeteredPanel id="шапка" measuring={diagnostics}>
-              {interfaceEnabled && (
-                <header className="battle-header spaceship-hud">
-                  <div>
-                    <span>Волна</span>
-                    <strong>{view.game.encounter.waveNumber}</strong>
-                    <small>{encounterLabel(view.game.encounter.phase)}</small>
-                  </div>
-                  {/* Hull and shield moved onto the radar dial: two rings, their end
-                labels and the shield state word say everything these two cards
-                did, in the place the pilot is already looking. */}
-                  <div>
-                    <span>Счёт</span>
-                    <strong>{view.game.encounter.score}</strong>
-                    <small data-testid="hud-field-counts">
-                      Враги {view.game.enemyShips.length} · Ракеты {view.game.homingMissiles.length}{" "}
-                      · Камни {waveAsteroidCount}
-                    </small>
-                  </div>
-                  <div>
-                    <span>Кредиты</span>
-                    <strong>{view.game.credits}</strong>
-                    <small>
-                      {waveUpgrade === null
-                        ? "в этой волне улучшений нет"
-                        : `улучшение волны: ${roleLabel(waveUpgrade.role)}`}
-                    </small>
-                  </div>
-                  <WeaponHeat cannon={view.game.cannon} machineGun={view.game.machineGun} />
-                </header>
-              )}
+              {interfaceEnabled && <BattleHudPanel />}
             </MeteredPanel>
             <MeteredPanel id="сцена" measuring={diagnostics}>
               {portrait ? (
@@ -1029,38 +1011,21 @@ export function DisplayApp() {
             </MeteredPanel>
             <MeteredPanel id="кокпит" measuring={diagnostics}>
               {cockpitPlayer !== undefined && !portrait && interfaceEnabled && (
-                <SoloCockpit
-                  enabled={view.game.encounter.phase === "combat"}
-                  driveDeadzoneShare={view.game.helm.driveDeadzoneShare}
-                  aimDeadzoneShare={view.game.helm.aimDeadzoneShare}
-                  machineGunHeat={view.game.machineGun.heat / view.game.machineGun.capacity}
-                  machineGunOverheated={view.game.machineGun.overheated}
-                  cannonHeat={view.game.cannon.heat / view.game.cannon.capacity}
-                  cannonOverheated={view.game.cannon.overheated}
+                <CockpitPanel
+                  controls={cockpitControls}
                   aimAssist={aimAssist}
                   onAimAssistChange={(next) => {
                     setAimAssist(next);
                     saveAimAssistToDevice(next);
                   }}
-                  {...cockpitControls}
                 />
               )}
             </MeteredPanel>
             <MeteredPanel id="часы" measuring={diagnostics}>
-              {view.game.encounter.phase === "combat" &&
-                (view.game.encounter.lootWindowSecondsRemaining > 0 ? (
-                  <SalvageCountdown
-                    secondsRemaining={view.game.encounter.lootWindowSecondsRemaining}
-                  />
-                ) : (
-                  <WaveCountdown
-                    className="display-wave-countdown"
-                    secondsRemaining={view.game.encounter.waveSecondsRemaining}
-                  />
-                ))}
+              <CountdownPanel />
             </MeteredPanel>
             <MeteredPanel id="босс" measuring={diagnostics}>
-              {view.game.encounter.phase === "combat" && <BossHealth game={view.game} />}
+              <BossPanel />
             </MeteredPanel>
             <MeteredPanel id="приборы" measuring={diagnostics}>
               {diagnostics && (
@@ -1133,17 +1098,10 @@ export function DisplayApp() {
               the preview's stand-in when no server answered. */}
             <MeteredPanel id="модули" measuring={diagnostics}>
               {moduleTree !== undefined && interfaceEnabled && (
-                <ModuleTreeWindow
+                <ModuleWindowPanel
                   tiers={moduleTree.tiers}
                   endlessTier={moduleTree.endlessTier}
-                  purchased={view.game.purchasedModules}
                   initiallyShown={previewView !== undefined}
-                  ship={{
-                    maxHp: view.game.spaceship.maxHp,
-                    shieldCapacity: view.game.shield.capacity,
-                    shieldArcRadians: view.game.shield.arcHalfAngle * 2,
-                    shieldRadius: view.game.shieldRadius
-                  }}
                 />
               )}
             </MeteredPanel>
@@ -1154,7 +1112,7 @@ export function DisplayApp() {
             flag goes away.
           */}
             <MeteredPanel id="экипаж" measuring={diagnostics}>
-              {!diagnostics && <CrewLatency view={view} game={view.game} />}
+              {!diagnostics && <CrewLatencyPanel />}
             </MeteredPanel>
           </section>
         </MeasuredWhenAsked>
