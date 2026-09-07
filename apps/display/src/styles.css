@@ -2198,7 +2198,13 @@ p {
   position: absolute;
   top: 4.5rem;
   left: 1rem;
-  z-index: 30;
+  /*
+   * Above the module tree, which is a near-full-screen window at 60. The panel
+   * is read while the tree is open - what a wave cost is exactly the question
+   * asked at the moment modules are bought - so it stays on top rather than
+   * disappearing under it.
+   */
+  z-index: 70;
   display: grid;
   gap: 0.5rem;
   min-width: 15rem;

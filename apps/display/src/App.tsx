@@ -578,10 +578,17 @@ export function DisplayApp() {
           <div className={`phase-badge phase-badge--${view.phase}`}>
             {view.phase === "active" ? "Корабль в бою" : "Собираем экипаж"}
           </div>
-          <span className="latency-indicator" aria-live="polite">
-            Экран → сервер {formatLatency(view.displayLatencyMs)}
-          </span>
-          {view.game !== null && (
+          {/*
+            The instrument panel says both of these, and says them better. While
+            it is open the header gives the room back rather than printing the
+            same numbers twice; without the flag nothing here changes.
+          */}
+          {!diagnostics && (
+            <span className="latency-indicator" aria-live="polite">
+              Экран → сервер {formatLatency(view.displayLatencyMs)}
+            </span>
+          )}
+          {view.game !== null && !diagnostics && (
             <FpsReadout
               fps={frameStats.fps}
               worstFrameMs={frameStats.worstFrameMs}
@@ -758,7 +765,13 @@ export function DisplayApp() {
               }}
             />
           )}
-          <CrewLatency view={view} game={view.game} />
+          {/*
+            Stacked directly under the instrument panel and answering the same
+            question, so with the panel open it is the third ping on one edge of
+            the screen. The panel wins; the crew rows come back the moment the
+            flag goes away.
+          */}
+          {!diagnostics && <CrewLatency view={view} game={view.game} />}
         </section>
       )}
       {visibleDemo ? (
