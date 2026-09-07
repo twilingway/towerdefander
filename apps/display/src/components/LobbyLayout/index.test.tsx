@@ -47,7 +47,7 @@ describe("LobbyLayout", () => {
       <LobbyLayout
         view={view()}
         joinUrl="http://example/join"
-        cockpit={{ ready: false, onReady: vi.fn() }}
+        cockpit={{ ready: false, worldReady: true, onReady: vi.fn() }}
       />
     );
 
@@ -63,7 +63,7 @@ describe("LobbyLayout", () => {
       <LobbyLayout
         view={view()}
         joinUrl="http://example/join"
-        cockpit={{ ready: true, onReady: vi.fn() }}
+        cockpit={{ ready: true, worldReady: true, onReady: vi.fn() }}
       />
     );
 
@@ -76,11 +76,27 @@ describe("LobbyLayout", () => {
       <LobbyLayout
         view={view()}
         joinUrl="http://example/join"
-        cockpit={{ ready: false, onReady: vi.fn() }}
+        cockpit={{ ready: false, worldReady: true, onReady: vi.fn() }}
       />
     );
 
     expect(markup).toContain("Ada");
     expect(markup).toContain("Экипаж");
+  });
+
+  it("holds the seat until the world it will fly has loaded", () => {
+    const markup = renderToStaticMarkup(
+      <LobbyLayout
+        view={view()}
+        joinUrl="http://example/join"
+        cockpit={{ ready: false, worldReady: false, onReady: vi.fn() }}
+      />
+    );
+
+    // The renderer is a chunk of its own, and a run that starts before it
+    // lands is a run with no world drawn and nothing driving the helm.
+    expect(markup).toContain("Загрузка мира…");
+    expect(markup).toContain('data-world-ready="false"');
+    expect(markup).toContain("disabled");
   });
 });

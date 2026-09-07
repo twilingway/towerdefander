@@ -356,7 +356,9 @@ export function useShipPrediction<
       };
 
       let seq = 0;
+      let lastDrivenAt = 0;
       const drive = (): PredictedPoseFrame | undefined => {
+        lastDrivenAt = performance.now();
         const steps = predict.tick();
         const { source: live, enabled: on, predicting, world } = latest.current;
         for (let step = 0; step < steps; step += 1) {
@@ -402,7 +404,32 @@ export function useShipPrediction<
       };
       latest.current.onDriver({ drive, bind, read });
 
+      /*
+       * A driver of last resort, for the seconds before there is a scene.
+       *
+       * The frame order belongs in the scene - step, send exactly what was
+       * stepped, then read - but the scene is Phaser, and Phaser arrives in its
+       * own chunk. On a phone that is about a second after the fight starts,
+       * and for that second nothing called the driver at all: no input frames
+       * left the cockpit, so the first shots vanished, the heat never rose and
+       * the ship would not answer the stick. Whatever the cause of a gap - a
+       * chunk still loading, a tab in the background, a scene being rebuilt -
+       * the helm is not allowed to stop.
+       *
+       * It stands down the moment the scene takes over: one frame of overlap
+       * would be one input frame too many.
+       */
+      const STALE_DRIVE_MS = 40;
+      let fallbackFrame = 0;
+      const runFallback = (): void => {
+        fallbackFrame = requestAnimationFrame(runFallback);
+        if (performance.now() - lastDrivenAt < STALE_DRIVE_MS) return;
+        drive();
+      };
+      fallbackFrame = requestAnimationFrame(runFallback);
+
       return () => {
+        cancelAnimationFrame(fallbackFrame);
         latest.current.onDriver(undefined);
         room.onStateChange.remove(noteArrival);
         for (const detach of detachers) detach();

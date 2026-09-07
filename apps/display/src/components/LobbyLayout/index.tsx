@@ -15,6 +15,15 @@ interface LobbyLayoutProps {
   readonly cockpit?: {
     readonly ready: boolean;
     readonly onReady: () => void;
+    /**
+     * Whether the world this seat is about to fly has finished loading.
+     *
+     * The renderer arrives in a chunk of its own, and until it is up nothing
+     * drives the cockpit's input: on a phone that was about a second of a
+     * started fight with no ship, no shots and no answer from the helm. A run
+     * does not begin before the thing that draws it exists.
+     */
+    readonly worldReady: boolean;
   };
 }
 
@@ -47,9 +56,10 @@ export function LobbyLayout({ view, joinUrl, cockpit }: LobbyLayoutProps) {
               className="cockpit-ready"
               data-testid="cockpit-ready"
               onClick={cockpit.onReady}
-              disabled={cockpit.ready}
+              disabled={cockpit.ready || !cockpit.worldReady}
+              data-world-ready={cockpit.worldReady}
             >
-              {cockpit.ready ? "Ждём старта…" : "Готов"}
+              {!cockpit.worldReady ? "Загрузка мира…" : cockpit.ready ? "Ждём старта…" : "Готов"}
             </button>
             <FullscreenButton />
           </div>

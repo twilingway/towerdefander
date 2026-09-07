@@ -232,6 +232,17 @@ export function DisplayApp() {
    * a question for the device, not for taste.
    */
   const [opaquePanels, setOpaquePanels] = useState(false);
+  /**
+   * Whether the renderer's chunk has arrived.
+   *
+   * Fetched from the lobby rather than when the battle screen mounts: it is a
+   * separate chunk carrying the whole of Phaser, and on a phone it lands about
+   * a second into a fight that has already started - a second with no world
+   * drawn and, worse, nothing driving the cockpit's input, so the first shots
+   * went nowhere and the helm did not answer. The seat cannot be ready before
+   * the thing that draws its world is.
+   */
+  const [worldReady, setWorldReady] = useState(false);
   const trafficReference = useRef<TrafficMeter | undefined>(undefined);
   const longTasksReference = useRef<LongTaskMeter | undefined>(undefined);
   /*
@@ -397,6 +408,16 @@ export function DisplayApp() {
     cockpitControls,
     !interfaceEnabled && cockpitPlayer !== undefined
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    void import("./game/SpaceshipRuntime.js").then(() => {
+      if (!cancelled) setWorldReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const streaming = cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
   useShipPrediction({
@@ -927,7 +948,8 @@ export function DisplayApp() {
           : {
               cockpit: {
                 ready: cockpitSeat?.ready === true,
-                onReady: sendCockpitReady
+                onReady: sendCockpitReady,
+                worldReady
               }
             })}
       />
