@@ -204,6 +204,16 @@ export function DisplayApp() {
    */
   const cockpitControls = useSoloCockpit({
     enabled: cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat",
+    /*
+     * The switch itself, not the combat-gated one below.
+     *
+     * Gating this on the phase too let both paths run at once between waves:
+     * the stream stopped, the schedulers woke up, and the room answered their
+     * commands with `invalid_phase` - two paths sending sixty messages a second
+     * against a ceiling of fifty, which 0.18 answers by closing the connection.
+     * That is the frozen world with a ship still flying: the socket was gone
+     * and prediction carried on alone.
+     */
     predicting: predictionEnabled,
     aimAssistEnabled: aimAssist,
     world:
