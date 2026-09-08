@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import type { BalancePresetsFile, BalanceTuning } from "@spaceship-defender/protocol";
 
 import {
@@ -9,12 +10,11 @@ import {
   validateBalance
 } from "./balanceClient.js";
 import { activePresetOf, withTuning } from "./model/tuning.js";
-import { SCREENS, TABS, TAB_LABELS, type Tab } from "./screens/registry.js";
+import { SCREENS, TABS, TAB_LABELS, TAB_PATHS } from "./screens/registry.js";
 
 export function AdminApp() {
   const [balanceDocument, setBalanceDocument] = useState<BalancePresetsFile | null>(null);
   const [password, setPassword] = useState("");
-  const [tab, setTab] = useState<Tab>("waves");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,6 +39,13 @@ export function AdminApp() {
   }, [load]);
 
   const active = balanceDocument === null ? undefined : activePresetOf(balanceDocument);
+
+  // The address owns the choice of section; the tab strip only reads it back,
+  // so a reload, a shared link and the back button all land on the same screen.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab =
+    TABS.find((candidate) => location.pathname === `/${TAB_PATHS[candidate]}`) ?? TABS[0];
 
   const updateTuning = (tuning: BalanceTuning): void => {
     if (balanceDocument === null) return;
@@ -166,14 +173,14 @@ export function AdminApp() {
       <nav className="tabs" aria-label="Разделы баланса" role="tablist">
         {TABS.map((candidate) => (
           <button
-            className={`tabs__tab${candidate === tab ? " tabs__tab--active" : ""}`}
+            className={`tabs__tab${candidate === activeTab ? " tabs__tab--active" : ""}`}
             data-testid={`admin-tab-${candidate}`}
             key={candidate}
             role="tab"
-            aria-selected={candidate === tab}
+            aria-selected={candidate === activeTab}
             type="button"
             onClick={() => {
-              setTab(candidate);
+              void navigate(`/${TAB_PATHS[candidate]}`);
             }}
           >
             {TAB_LABELS[candidate]}
@@ -181,18 +188,27 @@ export function AdminApp() {
         ))}
       </nav>
 
-      <section data-testid={`admin-panel-${tab}`} role="tabpanel">
+      <section data-testid={`admin-panel-${activeTab}`} role="tabpanel">
         {balanceDocument === null || active === undefined ? (
           <p className="empty">Баланс ещё не загружен.</p>
         ) : (
-          SCREENS[tab]({
-            document: balanceDocument,
-            password,
-            tuning: active.tuning,
-            onTuningChange: updateTuning,
-            onDocumentChange: updateDocument,
-            onImportError: setError
-          })
+          <Routes>
+            {TABS.map((candidate) => (
+              <Route
+                key={candidate}
+                path={TAB_PATHS[candidate]}
+                element={SCREENS[candidate]({
+                  document: balanceDocument,
+                  password,
+                  tuning: active.tuning,
+                  onTuningChange: updateTuning,
+                  onDocumentChange: updateDocument,
+                  onImportError: setError
+                })}
+              />
+            ))}
+            <Route path="*" element={<Navigate replace to={`/${TAB_PATHS[TABS[0]]}`} />} />
+          </Routes>
         )}
       </section>
     </main>

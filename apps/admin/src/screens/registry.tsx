@@ -39,6 +39,24 @@ export const TAB_LABELS: Record<Tab, string> = {
   presets: "Пресеты"
 };
 
+/**
+ * The path segment each tab answers on. Mostly the id, with one exception:
+ * `/stats/` on this origin is proxied to the API (docker/nginx-admin.conf), so
+ * the statistics tab answers on `/statistics` instead.
+ */
+export const TAB_PATHS: Record<Tab, string> = {
+  waves: "waves",
+  enemies: "enemies",
+  enemySkill: "enemySkill",
+  player: "player",
+  ships: "ships",
+  helm: "helm",
+  autopilot: "autopilot",
+  director: "director",
+  stats: "statistics",
+  presets: "presets"
+};
+
 /** Everything a tab may need; each entry below takes only its own slice. */
 export interface ScreenContext {
   readonly document: BalancePresetsFile;
