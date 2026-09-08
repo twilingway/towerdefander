@@ -138,6 +138,8 @@ export function DisplayApp() {
   );
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
+  /** What was last handed to `setStatus`; see the guard in `applyRoomState`. */
+  const statusReference = useRef<ConnectionStatus>("idle");
   const [networkView, setNetworkView] = useState<DisplayRoomView>();
   /**
    * The newest view there is, whether or not React has been told about it.
@@ -669,6 +671,7 @@ export function DisplayApp() {
     startWave: number,
     cockpitPlayerName?: string
   ): Promise<void> {
+    statusReference.current = "connecting";
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
@@ -739,17 +742,20 @@ export function DisplayApp() {
       });
       room.onDrop(() => {
         if (roomReference.current !== room) return;
+        statusReference.current = "reconnecting";
         setStatus("reconnecting");
         setError("Связь прервана. Восстанавливаем общий экран…");
         setConnectionEpoch((value) => value + 1);
       });
       room.onReconnect(() => {
         if (roomReference.current !== room) return;
+        statusReference.current = "connected";
         setStatus("connected");
         setError("");
       });
       room.onError((_code, message) => {
         if (roomReference.current !== room) return;
+        statusReference.current = "error";
         setStatus("error");
         setError(message ?? "Сервер сообщил об ошибке.");
       });
@@ -759,6 +765,7 @@ export function DisplayApp() {
         resetToCreate("Комната закрыта. Создайте новую сессию.");
       });
     } catch (reason) {
+      statusReference.current = "error";
       setStatus("error");
       setError(createFailureMessage(reason));
     }
@@ -827,7 +834,19 @@ export function DisplayApp() {
     if (visibleDemo && next.game !== null) {
       publishVisibleDemoWorld(globalThis, buildVisibleDemoWorld(next.game, Date.now()));
     }
-    setStatus("connected");
+    /*
+     * Only on the way in, not on every patch.
+     *
+     * Setting a state to the value it already holds is not free: React renders
+     * the component once more before it bails out, and this one is the root -
+     * so a call meant for the moment a connection comes up was re-rendering the
+     * whole page twenty-six times a second, and every battle panel with it. It
+     * measured as the two dearest panels on the screen and it was neither.
+     */
+    if (statusReference.current !== "connected") {
+      statusReference.current = "connected";
+      setStatus("connected");
+    }
 
     /*
      * The page commits on its own clock.
@@ -861,6 +880,7 @@ export function DisplayApp() {
     publishedViewReference.current = undefined;
     publishWorld(undefined);
     setNetworkView(undefined);
+    statusReference.current = "idle";
     setStatus("idle");
     setError(message);
     setConnectionEpoch(0);

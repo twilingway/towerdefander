@@ -196,6 +196,17 @@ project differs:
 - Prettier: 100 columns, double quotes, no trailing commas, `proseWrap: always` (Markdown reflows).
 - Keep the display 2D — pseudo-3D art, layered space, particles, shaders; no true 3D renderer, and
   no `react-phaser-fiber`.
+- **`Graphics` is a drawing tool, not an object on the field.** Phaser re-walks, re-tessellates and
+  re-batches every `Graphics` (and every shape built on one, `add.circle` included) on every frame
+  it is visible, however long ago it was drawn — a profile of a real wave put that at two thirds of
+  the main thread. Anything with a fixed shape is baked once into a texture and put on the field as
+  an `Image`; only geometry that genuinely differs every frame stays a drawing. The same rule
+  decides the HUD: a panel is compared on what it draws rather than on what arrived, and anything
+  that redraws a crowd with the world belongs in a canvas, not in SVG. `docs/CODE_STYLE.md` carries
+  the rule with its numbers, `.agents/skills/phaser-display/SKILL.md` the practice, and
+  `scripts/profile-display.mjs` plus `scripts/bench-panels.mjs` are how it is checked — throttled
+  and flying, because this desktop shows 165 fps and no stutters for any version of the code.
+
 - **Pick wire field widths from observable precision, not from habit.** Every `@type()` in
   `SpaceshipDefenderState.ts` is paid per client per tick, and state sync already costs about twice
   the simulation step (`pnpm benchmark:combat`: `schemaSync` p50 0.16 ms against `pureFixedStep`

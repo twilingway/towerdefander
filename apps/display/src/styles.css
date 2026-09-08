@@ -1695,6 +1695,9 @@ p {
   inset: 0;
   transform-origin: bottom;
   background: rgba(255, 138, 96, 0.28);
+  /* Heat is compared in steps of four percent so the panel is not re-rendered
+     on every patch; the slide is what makes those steps invisible. */
+  transition: transform 100ms linear;
   pointer-events: none;
 }
 
