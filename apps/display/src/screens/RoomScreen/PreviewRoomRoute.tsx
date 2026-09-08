@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/previewMode.js";
+import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/preview/world.js";
 import type { PublicShip } from "@spaceship-defender/protocol";
 import type { PreviewPhase } from "@spaceship-defender/client-shared";
 

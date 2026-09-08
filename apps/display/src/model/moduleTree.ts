@@ -1,6 +1,6 @@
 import type { PublicShip } from "@spaceship-defender/protocol";
 
-import { PREVIEW_ENDLESS_TIER, PREVIEW_MODULE_TIERS } from "./previewMode.js";
+import { PREVIEW_ENDLESS_TIER, PREVIEW_MODULE_TIERS } from "./preview/moduleTree.js";
 
 export interface ModuleTree {
   readonly tiers: PublicShip["tiers"];

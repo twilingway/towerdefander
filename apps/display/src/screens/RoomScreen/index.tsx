@@ -20,7 +20,7 @@ import { useSoloCockpit, type SoloCockpitControls } from "../../model/hooks/useS
 import type { RoomSession } from "../../model/hooks/useRoomSession.js";
 import { readFrameStats, writePlaybackDelay, writePredictionLag } from "../../model/instruments.js";
 import { selectModuleTree } from "../../model/moduleTree.js";
-import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/previewMode.js";
+import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/preview/world.js";
 import { createControllerJoinUrl } from "../../model/roomView.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
 import { BattleStage } from "./BattleStage.js";
