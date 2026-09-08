@@ -38,7 +38,7 @@ import {
 } from "react";
 
 import { PolledCombatRadar } from "./CombatRadar.js";
-import { useLetterboxBars } from "./useLetterboxBars.js";
+import { useLetterboxBars } from "./model/hooks/useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
@@ -57,12 +57,7 @@ import {
   confirmDisplayRoomClose,
   roomClosingMessage
 } from "./displayRoomLifecycle.js";
-import {
-  createPreviewRoomView,
-  PREVIEW_CAMERA_VIEW_WIDTH,
-  PREVIEW_ENDLESS_TIER,
-  PREVIEW_MODULE_TIERS
-} from "./previewMode.js";
+import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
 import { readComponentCosts, recordComponentCommit } from "./model/componentCost.js";
 import { publishWorld } from "./model/worldStore.js";
@@ -88,6 +83,8 @@ import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "./visibleDemo.js
 import { hasImmediateChange, needsRootRender, PASSIVE_PUBLISH_MS } from "./model/viewPublishing.js";
 import { CONTROLLER_URL, GAME_SERVER_URL } from "./model/environment.js";
 import { createFailureMessage } from "./model/roomFailure.js";
+import { toAimWorld, toPredictionWorld } from "./model/cockpitWorld.js";
+import { selectModuleTree } from "./model/moduleTree.js";
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
@@ -273,21 +270,7 @@ export function DisplayApp() {
      */
     streaming: cockpitPlayer !== undefined,
     aimAssistEnabled: aimAssist,
-    world:
-      view?.game == null
-        ? undefined
-        : {
-            shooter: { x: view.game.spaceship.x, y: view.game.spaceship.y },
-            targets: view.game.enemyShips,
-            obstacles: view.game.obstacles,
-            cannonReach: view.game.cannon.reach,
-            turretAngle: view.game.turretAngle,
-            heading: view.game.spaceship.heading,
-            turretMountedOnHull: view.game.helm.turretMountedOnHull,
-            headingDeadbandRadians: view.game.helm.headingDeadbandRadians,
-            headingFilterSeconds: view.game.helm.headingFilterSeconds,
-            turretLeadRadians: view.game.helm.turretLeadRadians
-          },
+    world: toAimWorld(view?.game),
     roomId: view?.roomId ?? "",
     playerId: roomReference.current?.sessionId ?? "",
     runNumber: view?.runNumber ?? 0,
@@ -419,16 +402,7 @@ export function DisplayApp() {
       readIntent: () => cockpitControls.readIntent(),
       enabled: streaming
     },
-    world:
-      view?.game == null
-        ? undefined
-        : {
-            drive: view.game.drive,
-            worldWidth: view.game.worldWidth,
-            worldHeight: view.game.worldHeight,
-            arenaRadius: view.game.arenaRadius,
-            turretMountedOnHull: view.game.helm.turretMountedOnHull
-          },
+    world: toPredictionWorld(view?.game),
     onDriver: (driver) => {
       predictionDriverReference.current = driver;
     },
@@ -471,15 +445,11 @@ export function DisplayApp() {
     () => (view === undefined ? "" : createControllerJoinUrl(CONTROLLER_URL, view.roomId)),
     [view]
   );
-  // Which tree the crew is walking: this run's hull out of the catalogue, or
-  // the fixture when the preview has no server to ask.
-  const runHull = shipCatalogue?.ships.find((ship) => ship.id === view?.shipArchetypeId);
-  const moduleTree =
-    runHull !== undefined
-      ? { tiers: runHull.tiers, endlessTier: runHull.endlessTier }
-      : previewView === undefined
-        ? undefined
-        : { tiers: PREVIEW_MODULE_TIERS, endlessTier: PREVIEW_ENDLESS_TIER };
+  const moduleTree = selectModuleTree(
+    shipCatalogue?.ships,
+    view?.shipArchetypeId,
+    previewView !== undefined
+  );
 
   // The hulls a room can be opened on. Fetched once, and only informative: a
   // display that cannot reach the route still creates rooms, on the preset's
