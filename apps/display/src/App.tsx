@@ -1,5 +1,4 @@
 import { Client, type Room } from "@colyseus/sdk";
-import type { MaintenanceState } from "@spaceship-defender/protocol";
 import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
@@ -13,8 +12,7 @@ import {
   serverLatencyProbeSchema,
   serverMessage,
   type CrewSize,
-  type DisplayRoomView,
-  type PublicShipCatalogue
+  type DisplayRoomView
 } from "@spaceship-defender/protocol";
 import {
   createActionId,
@@ -58,7 +56,6 @@ import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
 import { recordComponentCommit } from "./model/componentCost.js";
 import { publishWorld } from "./model/worldStore.js";
-import { writeLiveHeat } from "./model/liveHeat.js";
 import {
   BattleHudPanel,
   BossPanel,
@@ -69,8 +66,6 @@ import {
 } from "./screens/BattleScreen/panels.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
-import { fetchMaintenance } from "./serverStatus.js";
-import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
 import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "./visibleDemo.js";
@@ -91,12 +86,13 @@ import {
   writePredictionLag
 } from "./model/instruments.js";
 import { useDiagnosticsMeters } from "./model/hooks/useDiagnosticsMeters.js";
+import { useDisplaySwitches } from "./model/hooks/useDisplaySwitches.js";
+import { useLiveHeat } from "./model/hooks/useLiveHeat.js";
+import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
+import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
-
-/** Twenty a second: below what a barrel changes at, above what an eye reads. */
-const LIVE_HEAT_INTERVAL_MS = 50;
 
 export function DisplayApp() {
   const portrait = useIsPortrait();
@@ -141,12 +137,6 @@ export function DisplayApp() {
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
   /**
-   * Off means the ship is drawn from the authoritative angles alone. The point
-   * of the switch is that it compares the two on one connection and one tick;
-   * comparing two sessions would compare two networks instead.
-   */
-  const [predictionEnabled, setPredictionEnabled] = useState(true);
-  /**
    * The ship this page is flying, as the reconciler currently has it.
    *
    * A ref, and that is the whole point: it is written every animation frame,
@@ -161,45 +151,21 @@ export function DisplayApp() {
    */
   const predictionDriverReference = useRef<PredictionDriver | undefined>(undefined);
 
-  /**
-   * The parallax layers, asked about rather than settled: they are four
-   * full-screen sprites and three blends, and a phone is where that is paid for.
-   */
-  /** The shield's bloom, the other visual worth pricing on the device. */
-  /** The five overlays the scene rebuilds every frame; the lab has none of these. */
-  const [vectorsEnabled, setVectorsEnabled] = useState(true);
-  /**
-   * Everything React draws over the world, off.
-   *
-   * The last thing left to rule out: the scene meter says what Phaser spends
-   * and the commit meter says what the tree costs, but neither says what the
-   * browser spends compositing a dozen translucent panels over a canvas. With
-   * them gone the page is the canvas, and whatever is left is the renderer.
-   */
-  const [interfaceEnabled, setInterfaceEnabled] = useState(true);
-  /**
-   * Panels the compositor can draw over instead of through.
-   *
-   * A switch rather than a decision: translucent panels make the GPU draw the
-   * arena behind them and blend on top every frame, and whether that matters is
-   * a question for the device, not for taste.
-   */
-  const [opaquePanels, setOpaquePanels] = useState(false);
-  /**
-   * Whether the renderer's chunk has arrived.
-   *
-   * Fetched from the lobby rather than when the battle screen mounts: it is a
-   * separate chunk carrying the whole of Phaser, and on a phone it lands about
-   * a second into a fight that has already started - a second with no world
-   * drawn and, worse, nothing driving the cockpit's input, so the first shots
-   * went nowhere and the helm did not answer. The seat cannot be ready before
-   * the thing that draws its world is.
-   */
-  const [worldReady, setWorldReady] = useState(false);
+  const {
+    predictionEnabled,
+    vectorsEnabled,
+    interfaceEnabled,
+    opaquePanels,
+    togglePrediction,
+    toggleVectors,
+    toggleInterface,
+    toggleOpaquePanels
+  } = useDisplaySwitches();
+  const worldReady = useRuntimePreload();
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
-  const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
-  const [maintenance, setMaintenance] = useState<MaintenanceState | undefined>(undefined);
+  const shipCatalogue = useShipCatalogue(GAME_SERVER_URL);
+  const maintenance = useMaintenance(GAME_SERVER_URL, status === "connected");
   // Layout preview feeds the same view the network fills, so the HUD, overlays
   // and the Phaser frame all render through the production path.
   const previewView = useMemo(() => {
@@ -294,16 +260,6 @@ export function DisplayApp() {
     !interfaceEnabled && cockpitPlayer !== undefined
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    void import("./game/SpaceshipRuntime.js").then(() => {
-      if (!cancelled) setWorldReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const streaming = cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
   useShipPrediction({
     room: roomReference.current,
@@ -368,39 +324,6 @@ export function DisplayApp() {
     previewView !== undefined
   );
 
-  // The hulls a room can be opened on. Fetched once, and only informative: a
-  // display that cannot reach the route still creates rooms, on the preset's
-  // own default hull.
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetchShipCatalogue(GAME_SERVER_URL, controller.signal).then((catalogue) => {
-      if (!controller.signal.aborted) setShipCatalogue(catalogue);
-    });
-    return () => {
-      controller.abort();
-    };
-  }, []);
-
-  // Asked repeatedly, unlike the hull catalogue: a window can be announced
-  // while a crew is still deciding on the create screen, and the countdown has
-  // to move once it has. Only while no room is open -- inside one the room's
-  // own state carries it.
-  useEffect(() => {
-    if (status === "connected") return undefined;
-    const controller = new AbortController();
-    const poll = (): void => {
-      void fetchMaintenance(GAME_SERVER_URL, controller.signal).then((state) => {
-        if (!controller.signal.aborted) setMaintenance(state);
-      });
-    };
-    poll();
-    const timer = setInterval(poll, 15_000);
-    return () => {
-      controller.abort();
-      clearInterval(timer);
-    };
-  }, [status]);
-
   useEffect(
     () => () => {
       const room = roomReference.current;
@@ -438,24 +361,7 @@ export function DisplayApp() {
   latestViewReference.current = view;
   const readRadarGame = useCallback(() => latestViewReference.current?.game ?? undefined, []);
 
-  /*
-   * The heat gauges, moved without a render.
-   *
-   * Twenty times a second, straight onto the nodes React drew once. Heat is the
-   * fastest thing on the screen and every commit it used to cause was a DOM
-   * write inside a frame the arena was drawing - which a trace of the long
-   * frames shows as layout and paint the short frames never carry.
-   */
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const game = readLiveGame();
-      const shell = shellReference.current;
-      if (game != null && shell !== null) writeLiveHeat(shell, game);
-    }, LIVE_HEAT_INTERVAL_MS);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, []);
+  useLiveHeat(shellReference);
 
   /** The seat this page holds when it is also the pilot. */
   const cockpitSeat =
@@ -897,21 +803,13 @@ export function DisplayApp() {
                 <DiagnosticsHud
                   read={readDiagnostics}
                   predictionEnabled={predictionEnabled}
-                  onTogglePrediction={() => {
-                    setPredictionEnabled((enabled) => !enabled);
-                  }}
+                  onTogglePrediction={togglePrediction}
                   vectorsEnabled={vectorsEnabled}
-                  onToggleVectors={() => {
-                    setVectorsEnabled((enabled) => !enabled);
-                  }}
+                  onToggleVectors={toggleVectors}
                   interfaceEnabled={interfaceEnabled}
-                  onToggleInterface={() => {
-                    setInterfaceEnabled((enabled) => !enabled);
-                  }}
+                  onToggleInterface={toggleInterface}
                   opaquePanels={opaquePanels}
-                  onToggleOpaquePanels={() => {
-                    setOpaquePanels((opaque) => !opaque);
-                  }}
+                  onToggleOpaquePanels={toggleOpaquePanels}
                 />
               )}
             </MeteredPanel>
