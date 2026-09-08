@@ -52,10 +52,6 @@ export function DiagnosticsPanel({
   drift,
   predictionEnabled,
   onTogglePrediction,
-  backgroundEnabled,
-  onToggleBackground,
-  glowEnabled,
-  onToggleGlow,
   vectorsEnabled,
   interfaceEnabled,
   onToggleInterface,
@@ -118,10 +114,6 @@ export function DiagnosticsPanel({
   readonly drift: number;
   readonly predictionEnabled: boolean;
   readonly onTogglePrediction: () => void;
-  readonly backgroundEnabled: boolean;
-  readonly onToggleBackground: () => void;
-  readonly glowEnabled: boolean;
-  readonly onToggleGlow: () => void;
   readonly vectorsEnabled: boolean;
   readonly onToggleVectors: () => void;
   /** Everything React draws over the world, on or off. */
@@ -171,24 +163,6 @@ export function DiagnosticsPanel({
           onClick={onTogglePrediction}
         >
           Предсказание: {predictionEnabled ? "вкл" : "выкл"}
-        </button>
-        <button
-          type="button"
-          className="diagnostics-panel__toggle"
-          data-testid="diagnostics-background-toggle"
-          data-background={backgroundEnabled ? "on" : "off"}
-          onClick={onToggleBackground}
-        >
-          Фон: {backgroundEnabled ? "вкл" : "выкл"}
-        </button>
-        <button
-          type="button"
-          className="diagnostics-panel__toggle"
-          data-testid="diagnostics-glow-toggle"
-          data-glow={glowEnabled ? "on" : "off"}
-          onClick={onToggleGlow}
-        >
-          Свечение: {glowEnabled ? "вкл" : "выкл"}
         </button>
         <button
           type="button"

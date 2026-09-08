@@ -38,9 +38,7 @@ interface SpaceshipCanvasProps {
    * spend a phone's fill rate, and the only way to know is to take them away on
    * the phone that stutters.
    */
-  readonly backgroundEnabled?: boolean;
   /** The shield's bloom, the other thing worth ruling out on a phone. */
-  readonly glowEnabled?: boolean;
   /** The vector overlays rebuilt every frame - the last thing left to price. */
   readonly vectorsEnabled?: boolean;
   /**
@@ -134,8 +132,6 @@ export function SpaceshipCanvas({
   runNumber,
   connectionEpoch,
   visibleDemo = false,
-  backgroundEnabled = true,
-  glowEnabled = true,
   vectorsEnabled = true,
   prediction,
   readGame,
@@ -144,10 +140,6 @@ export function SpaceshipCanvas({
   const hostReference = useRef<HTMLDivElement>(null);
   const runtimeReference = useRef<SpaceshipRuntime | undefined>(undefined);
   const latestGame = useRef(game);
-  const latestBackgroundEnabled = useRef(backgroundEnabled);
-  latestBackgroundEnabled.current = backgroundEnabled;
-  const latestGlowEnabled = useRef(glowEnabled);
-  latestGlowEnabled.current = glowEnabled;
   const latestVectorsEnabled = useRef(vectorsEnabled);
   latestVectorsEnabled.current = vectorsEnabled;
   const latestPrediction = useRef(prediction);
@@ -178,8 +170,6 @@ export function SpaceshipCanvas({
           });
           // The scene loads asynchronously, so the switch may already have been
           // thrown while it was still arriving.
-          runtimeReference.current.setBackgroundEnabled(latestBackgroundEnabled.current);
-          runtimeReference.current.setGlowEnabled(latestGlowEnabled.current);
           runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
           // A stable adapter over a prop that changes: the scene is handed this
           // once, and every call finds whatever the cockpit currently has.
@@ -235,14 +225,6 @@ export function SpaceshipCanvas({
     lastRuntimeRunNumberReference.current = runNumber;
     lastRuntimeConnectionEpochReference.current = connectionEpoch;
   }, [connectionEpoch, game, readGame, runNumber]);
-
-  useEffect(() => {
-    runtimeReference.current?.setBackgroundEnabled(backgroundEnabled);
-  }, [backgroundEnabled]);
-
-  useEffect(() => {
-    runtimeReference.current?.setGlowEnabled(glowEnabled);
-  }, [glowEnabled]);
 
   useEffect(() => {
     runtimeReference.current?.setVectorsEnabled(vectorsEnabled);
@@ -316,21 +298,37 @@ export function SpaceshipCanvas({
     };
   }, [readGame, runNumber, visibleDemo]);
 
+  /*
+   * Three branches, and the canvas is the first of them with nothing above it
+   * that changes.
+   *
+   * The reference prototype's page is `#game`, `#touch-layer`, `#hud` as
+   * siblings, and that shape is not cosmetic: an attribute written on an
+   * ancestor of a canvas invalidates style for the subtree it is in, and the
+   * arena's readable state is written ten times a second. It used to be written
+   * on the canvas's own parent.
+   */
   return (
-    <div
-      ref={shellReference}
-      className="battlefield-shell"
-      data-testid="spaceship-world"
-      {...worldAttributes(game, runNumber, visibleDemo)}
-    >
+    <>
       <div ref={hostReference} className="battlefield-canvas" aria-hidden="true" />
       {failed && <p className="battlefield-fallback">Не удалось запустить Phaser-сцену.</p>}
-      <span className="sr-only">
-        Корабль находится в точке {Math.round(game.spaceship.x)}, {Math.round(game.spaceship.y)}.
-        Снарядов: {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
-        {game.enemyShips.length}.
-      </span>
-    </div>
+      {/*
+        The world as text, on an element of its own: a browser test and the demo
+        bot read it, nothing draws it, and it has no children to invalidate.
+      */}
+      <div
+        ref={shellReference}
+        className="battlefield-shell"
+        data-testid="spaceship-world"
+        {...worldAttributes(game, runNumber, visibleDemo)}
+      >
+        <span className="sr-only">
+          Корабль находится в точке {Math.round(game.spaceship.x)}, {Math.round(game.spaceship.y)}.
+          Снарядов: {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
+          {game.enemyShips.length}.
+        </span>
+      </div>
+    </>
   );
 }
 

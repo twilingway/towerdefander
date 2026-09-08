@@ -217,9 +217,7 @@ export function DisplayApp() {
    * The parallax layers, asked about rather than settled: they are four
    * full-screen sprites and three blends, and a phone is where that is paid for.
    */
-  const [backgroundEnabled, setBackgroundEnabled] = useState(true);
   /** The shield's bloom, the other visual worth pricing on the device. */
-  const [glowEnabled, setGlowEnabled] = useState(true);
   /** The five overlays the scene rebuilds every frame; the lab has none of these. */
   const [vectorsEnabled, setVectorsEnabled] = useState(true);
   /**
@@ -1026,9 +1024,12 @@ export function DisplayApp() {
           }}
         >
           <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
-            <MeteredPanel id="шапка" measuring={diagnostics}>
-              {interfaceEnabled && <BattleHudPanel />}
-            </MeteredPanel>
+            {/*
+              The order is the reference prototype's: the world first, the layer
+              a thumb touches next, and the readable interface after both. What
+              it buys is that nothing above the canvas is re-rendered or
+              re-attributed while the arena is drawing.
+            */}
             <MeteredPanel id="сцена" measuring={diagnostics}>
               {portrait ? (
                 <RotateNotice />
@@ -1043,8 +1044,6 @@ export function DisplayApp() {
                   runNumber={view.runNumber}
                   connectionEpoch={connectionEpoch}
                   visibleDemo={visibleDemo}
-                  backgroundEnabled={backgroundEnabled}
-                  glowEnabled={glowEnabled}
                   vectorsEnabled={vectorsEnabled}
                   onFrameStats={(stats) => {
                     frameStatsReference.current = stats;
@@ -1064,6 +1063,10 @@ export function DisplayApp() {
                 />
               )}
             </MeteredPanel>
+            <MeteredPanel id="шапка" measuring={diagnostics}>
+              {interfaceEnabled && <BattleHudPanel />}
+            </MeteredPanel>
+
             <MeteredPanel id="часы" measuring={diagnostics}>
               <CountdownPanel />
             </MeteredPanel>
@@ -1077,14 +1080,6 @@ export function DisplayApp() {
                   predictionEnabled={predictionEnabled}
                   onTogglePrediction={() => {
                     setPredictionEnabled((enabled) => !enabled);
-                  }}
-                  backgroundEnabled={backgroundEnabled}
-                  onToggleBackground={() => {
-                    setBackgroundEnabled((enabled) => !enabled);
-                  }}
-                  glowEnabled={glowEnabled}
-                  onToggleGlow={() => {
-                    setGlowEnabled((enabled) => !enabled);
                   }}
                   vectorsEnabled={vectorsEnabled}
                   onToggleVectors={() => {

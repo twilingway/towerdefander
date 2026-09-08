@@ -2011,9 +2011,7 @@ export interface SpaceshipRuntime {
   update(snapshot: DisplayGameSnapshot): void;
   prepareHydration(): void;
   /** Parallax layers on or off, for finding out what they cost on a phone. */
-  setBackgroundEnabled(enabled: boolean): void;
   /** The shield's bloom on or off, for the same reason. */
-  setGlowEnabled(enabled: boolean): void;
   /** The vector overlays rebuilt every frame, on or off. */
   setVectorsEnabled(enabled: boolean): void;
   /**
@@ -2152,12 +2150,6 @@ export function createSpaceshipRuntime(
     },
     prepareHydration() {
       scene.prepareHydration();
-    },
-    setBackgroundEnabled(enabled) {
-      scene.setBackgroundEnabled(enabled);
-    },
-    setGlowEnabled(enabled) {
-      scene.setGlowEnabled(enabled);
     },
     setVectorsEnabled(enabled) {
       scene.setVectorsEnabled(enabled);

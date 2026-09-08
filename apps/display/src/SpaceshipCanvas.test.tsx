@@ -38,8 +38,6 @@ describe("SpaceshipCanvas", () => {
       readOffscreenCount: () => 0,
       setSnapshotSource: vi.fn(),
       readWorstUpdateMs: () => 0,
-      setBackgroundEnabled: vi.fn(),
-      setGlowEnabled: vi.fn(),
       setVectorsEnabled: vi.fn(),
       setPredictionDriver: vi.fn(),
       setPixelRatioCap: vi.fn(),

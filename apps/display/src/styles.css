@@ -98,7 +98,7 @@ button:disabled {
   border-radius: 0;
 }
 
-.display-shell--battle .battlefield-shell {
+.display-shell--battle .battlefield-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -407,13 +407,34 @@ p {
   background: #ff9d91;
 }
 
-.battlefield-shell {
+/*
+ * The canvas owns the box now, and the element that carries the arena's
+ * readable state has no box at all.
+ *
+ * Those attributes are written ten times a second, and an attribute on an
+ * ancestor of a canvas invalidates style for everything under it - which is why
+ * the reference prototype keeps its canvas, its touch layer and its HUD as
+ * siblings with nothing above them that changes.
+ */
+.battlefield-canvas {
   position: relative;
   width: 100%;
   overflow: hidden;
   border-radius: 1rem;
   background: #07171f;
   aspect-ratio: 16 / 9;
+}
+
+/*
+ * A box, but nothing in it: no background, no border, no pointer. It needs a
+ * box because a browser test asks whether it is visible before reading it, and
+ * a zero-sized element answers no; it paints nothing, so the box costs the
+ * compositor nothing either.
+ */
+.battlefield-shell {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .spaceship-hud {
@@ -1106,7 +1127,6 @@ p {
   }
 }
 
-.battlefield-canvas,
 .battlefield-canvas canvas {
   display: block;
   width: 100% !important;

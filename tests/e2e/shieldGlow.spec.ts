@@ -36,9 +36,16 @@ interface ShieldMeasurement {
  * whatever covers it. Hidden rather than removed, so the layout the canvas was
  * sized against stays exactly as it was.
  */
+/*
+ * Everything but the arena, hidden.
+ *
+ * The canvas is its own branch now rather than a child of the element that
+ * carries the arena's readable state, so both have to be named: the shot is
+ * taken of the canvas, and it was being hidden along with the HUD.
+ */
 const HIDE_HUD_CSS = `
   body * { visibility: hidden; }
-  [data-testid="spaceship-world"], [data-testid="spaceship-world"] * { visibility: visible; }
+  .battlefield-canvas, .battlefield-canvas * { visibility: visible; }
 `;
 
 /**
@@ -110,7 +117,11 @@ test("the raised shield is drawn on the hull on every aspect ratio", async ({ br
  */
 async function measureShield(page: Page): Promise<ShieldMeasurement | null> {
   await page.addStyleTag({ content: HIDE_HUD_CSS });
-  const canvas = page.locator('[data-testid="spaceship-world"] canvas');
+  // The canvas is its own branch now, beside the element that carries the
+  // arena's readable state rather than under it: an attribute written on an
+  // ancestor of a canvas invalidates style for everything below it, and those
+  // attributes move ten times a second.
+  const canvas = page.locator(".battlefield-canvas canvas");
   await expect(canvas).toBeVisible();
   const shot = (await canvas.screenshot({ animations: "disabled" })).toString("base64");
   const camera = await page.evaluate(

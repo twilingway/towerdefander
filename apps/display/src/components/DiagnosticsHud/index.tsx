@@ -49,10 +49,6 @@ interface DiagnosticsHudProps {
   readonly read: () => DiagnosticsReadings;
   readonly predictionEnabled: boolean;
   readonly onTogglePrediction: () => void;
-  readonly backgroundEnabled: boolean;
-  readonly onToggleBackground: () => void;
-  readonly glowEnabled: boolean;
-  readonly onToggleGlow: () => void;
   readonly vectorsEnabled: boolean;
   readonly onToggleVectors: () => void;
   readonly interfaceEnabled: boolean;

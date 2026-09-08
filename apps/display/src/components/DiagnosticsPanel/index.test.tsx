@@ -37,10 +37,6 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       drift={0.04}
       predictionEnabled
       onTogglePrediction={() => undefined}
-      backgroundEnabled
-      onToggleBackground={() => undefined}
-      glowEnabled
-      onToggleGlow={() => undefined}
       vectorsEnabled
       onToggleVectors={() => undefined}
       {...overrides}
@@ -96,19 +92,9 @@ describe("DiagnosticsPanel", () => {
     expect(render({ predictionEnabled: false })).toContain('data-prediction="off"');
   });
 
-  it("names the state of the background toggle", () => {
-    expect(render({ backgroundEnabled: true })).toContain('data-background="on"');
-    expect(render({ backgroundEnabled: false })).toContain('data-background="off"');
-  });
-
   it("names the state of the vectors toggle", () => {
     expect(render({ vectorsEnabled: true })).toContain('data-vectors="on"');
     expect(render({ vectorsEnabled: false })).toContain('data-vectors="off"');
-  });
-
-  it("names the state of the glow toggle", () => {
-    expect(render({ glowEnabled: true })).toContain('data-glow="on"');
-    expect(render({ glowEnabled: false })).toContain('data-glow="off"');
   });
 });
 
