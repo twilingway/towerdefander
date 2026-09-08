@@ -1,7 +1,13 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
-import { drawCombatRadar, hullStroke, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
+import {
+  drawCombatRadar,
+  easeRing,
+  hullStroke,
+  RADAR_UNITS,
+  ringFraction
+} from "./combatRadarPainter.js";
 import type { RadarContext } from "./combatRadarPainter.js";
 
 const baseGame: DisplayGameSnapshot = {
@@ -344,6 +350,22 @@ describe("the status rings", () => {
   it("draws an empty ring rather than a full one when there is no capacity", () => {
     expect(ringFraction(0, 0)).toBe(0);
     expect(ringFraction(40, 0)).toBe(0);
+  });
+
+  it("slides toward a new reading instead of stepping to it", () => {
+    const first = easeRing(1, 0.6);
+    expect(first).toBeLessThan(1);
+    expect(first).toBeGreaterThan(0.6);
+    // And it gets there: twenty steps a second, well under a second.
+    let shown = 1;
+    for (let step = 0; step < 40; step += 1) shown = easeRing(shown, 0.6);
+    expect(shown).toBeCloseTo(0.6, 3);
+  });
+
+  it("takes a jump whole rather than sliding across the whole ring", () => {
+    // A new run or a repair bay, not a drain: easing that would read as a bug.
+    expect(easeRing(0.1, 1)).toBe(1);
+    expect(easeRing(1, 0)).toBe(0);
   });
 
   it("paints a full hull green and a dying one red", () => {

@@ -1,7 +1,7 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef } from "react";
 
-import { drawCombatRadar, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
+import { drawCombatRadar, easeRing, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
 
 /**
  * The radar, on the canvas and on the frame clock.
@@ -77,6 +77,8 @@ export function PolledCombatRadar({
     let frame = 0;
     let backingSide = 0;
     let paintedAt = 0;
+    // Where the two arcs currently stand; the numbers beside them are exact.
+    let shownRings: { hull: number; shield: number } | undefined;
     let context: CanvasRenderingContext2D | null = null;
 
     const paint = (): void => {
@@ -97,7 +99,8 @@ export function PolledCombatRadar({
        * soft.
        */
       const ratio = Math.min(MAX_PIXEL_RATIO, Math.max(1, globalThis.devicePixelRatio || 1));
-      const side = Math.round(element.clientWidth * ratio);
+      const box = element.clientWidth || element.getBoundingClientRect().width;
+      const side = Math.round(box * ratio);
       if (side <= 0) return;
       if (side !== backingSide) {
         element.width = side;
@@ -107,9 +110,21 @@ export function PolledCombatRadar({
       }
       if (context === null) return;
 
+      const target = {
+        hull: ringFraction(game.spaceship.hp, game.spaceship.maxHp),
+        shield: ringFraction(game.shield.energy, game.shield.capacity)
+      };
+      shownRings =
+        shownRings === undefined
+          ? target
+          : {
+              hull: easeRing(shownRings.hull, target.hull),
+              shield: easeRing(shownRings.shield, target.shield)
+            };
+
       const scale = side / RADAR_UNITS;
       context.setTransform(scale, 0, 0, scale, 0, 0);
-      drawCombatRadar(context, game);
+      drawCombatRadar(context, game, shownRings);
 
       const attributes = radarAttributes(game);
       for (const name of Object.keys(attributes) as (keyof RadarAttributes)[]) {

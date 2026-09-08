@@ -996,8 +996,17 @@ class SpaceshipScene extends Phaser.Scene {
           graphics.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
           graphics.slice(0, 0, drawn, -half, half);
           graphics.fillPath();
+          /*
+           * Drawn at the texture's scale, not the world's.
+           *
+           * The image is stretched from this square to twice the reach, and a
+           * stroke stretches with it: left at its world width the two edges
+           * came out three and a half times too thick and the cone read as a
+           * beam across the screen. The arena floor does the same arithmetic
+           * for the same reason.
+           */
           graphics.lineStyle(
-            AIM_ENVELOPE_STYLE.width,
+            (AIM_ENVELOPE_STYLE.width * drawn) / reach,
             AIM_ENVELOPE_STYLE.color,
             AIM_ENVELOPE_STYLE.edgeAlpha
           );

@@ -56,8 +56,12 @@ Follow `apps/display/src/game/SpaceshipRuntime.ts` + `apps/display/src/Spaceship
 - Depth layers are a fixed contract: arena background 0–3, obstacles 2, asteroids 5, enemies 7,
   projectiles/missiles 11, spaceship body 10, turret 12, shield 14. New visuals must pick a depth
   that preserves this ordering.
-- Prefer `Graphics` for vector shapes and redraw with `clear()` per frame instead of creating new
-  objects; use one `Container` per combat entity so position/rotation apply to the whole unit.
+- **`Graphics` is a drawing tool, not a display object.** Phaser walks, tessellates and batches a
+  `Graphics` object on **every frame it is visible**, however long ago it was drawn — and a shape
+  (`add.circle`, `add.rectangle`, `add.triangle`, …) is a `Graphics` wearing a different name. So a
+  fixed shape is baked once with `bakeShape`/`bakeRect` (`generateTexture`) and put on the field as
+  an `Image`, which costs four vertices and a transform. See "What may stay a drawing" below.
+- One `Container` per combat entity so position and rotation apply to the whole unit.
 - Camera: follow the spaceship via `getPhaserCameraScroll` with overscan, set zoom from
   `getResponsiveViewport`, keep bounds in sync on resize (`Phaser.Scale.Events.RESIZE`).
 - Scale mode is `NONE` + `NO_CENTER`, and the buffer is sized by us. `RESIZE` sizes it in CSS
@@ -72,13 +76,44 @@ Follow `apps/display/src/game/SpaceshipRuntime.ts` + `apps/display/src/Spaceship
   shield arcs) belongs in pure functions in `spaceshipViewModel.ts`, not inline in the scene. That
   keeps it unit-testable without Phaser (`spaceshipViewModel.test.ts`).
 
+## What may stay a drawing
+
+Measured, not assumed. A profile of a real wave on a throttled machine
+(`node scripts/profile-display.mjs --cpu=4 --wave=8`) put Phaser's graphics renderer, its batcher
+and the polygon tessellator at **two thirds of the main thread**, with none of our own code in the
+top twenty-eight rows. Baking what could be baked took the same wave from 119 fps and 26.5% torn
+frames to 154 fps and 0.5%.
+
+- **Bake it** when the shape is fixed and only its place, angle, size, tint or alpha change: hulls,
+  guns, shells, rocks, obstacles, loot, health bars, focus rings, the aiming wedge, the arena floor,
+  the shield. A drawing far larger than a sensible texture (the arena is 4400 units across) is baked
+  at a fixed resolution and stretched — curves and flat fills carry that without showing it.
+- **Keep it a drawing** only when the geometry genuinely differs every frame and cannot be expressed
+  as a transform of a baked one. Laser beams are the current example: endpoints come from the room
+  and change every tick.
+- **A filter follows an image, not a `Graphics`.** A `Graphics` object carries no width or height,
+  so Phaser calls it poorly bounded and composites its filters through a focus region that does not
+  follow a rotation — which is why the shield's glow used to tear off when it turned, and why the
+  shield was left as a per-frame drawing for months. An `Image` has a size; the bloom travels with
+  it.
+- **A texture key is the whole recipe.** Bake per shape _and_ per size/style, and leave out anything
+  that is a transform: `shield:up:104:0.803` is right, `shield:up:104:0.803:1.57` (bearing) is a
+  texture per frame.
+
 ## Determinism and performance
 
 - No gameplay decisions in `update()`: no collision resolution, damage, spawning, or timers that
   affect state. Visual-only effects (particles, shader uniforms) are allowed but must not feed back
   into snapshot interpretation.
 - Avoid per-frame allocations: reuse buffers/objects, cache property access in loops, destroy game
-  objects when reconciliation removes them.
+  objects when reconciliation removes them. Worth knowing where this sits: in the same profile the
+  garbage collector was 2%, the drawing 65% — allocation is worth tidying, never worth a rewrite
+  until a profile says so.
+- **Profile before optimising, and measure while flying.** `scripts/profile-display.mjs` for where
+  the frame goes, `scripts/bench-panels.mjs` for what changed. Both need `--cpu=4`, because this
+  desktop runs everything at 165 fps with no stutters at all, and both fly the ship
+  (`scripts/fly-the-ship.mjs`) — a parked ship measures a still picture. Twice on this branch the
+  obvious suspect (React, then allocation) was wrong and the profile settled it in twelve seconds.
 - Renderer settings stay `antialias: true`, `roundPixels: false`,
   `mipmapFilter: "LINEAR_MIPMAP_LINEAR"` (the background tiles are power-of-two and drawn far
   smaller than they are stored) and `powerPreference: "high-performance"`, unless an accepted change

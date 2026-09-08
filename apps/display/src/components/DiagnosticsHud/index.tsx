@@ -73,38 +73,39 @@ interface DiagnosticsHudProps {
  */
 export function DiagnosticsHud({ read, ...controls }: DiagnosticsHudProps) {
   const [readings, setReadings] = useState<DiagnosticsReadings>(read);
-  const [shown, setShown] = useState(true);
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    if (!shown) return undefined;
+    if (!open) return undefined;
     const timer = window.setInterval(() => {
       setReadings(read());
     }, SAMPLE_INTERVAL_MS);
     return () => {
       window.clearInterval(timer);
     };
-  }, [read, shown]);
+  }, [read, open]);
 
   /*
-   * Unmounted rather than hidden, and the clock stops with it.
+   * Folded down to its own title, and the clock stops with it.
    *
-   * The panel turned out to be the dearest thing on the screen it measures -
-   * more than half of the React it was reporting - so hiding it with a class
-   * would leave the measurement exactly where it was and only take the numbers
-   * away. What is left behind is one button, because a screen with no way back
-   * to the instruments would need the address bar.
+   * The rows are unmounted rather than hidden with a class: the panel turned
+   * out to be the dearest thing on the screen it measures - more than half of
+   * the React it was reporting - and a folded card that keeps sampling would
+   * take the numbers away and leave the cost. The title stays in place, so the
+   * way back is where the way out was.
    */
-  if (!shown) {
+  if (!open) {
     return (
       <button
         type="button"
-        className="diagnostics-reveal"
-        data-testid="diagnostics-reveal"
+        className="diagnostics-panel diagnostics-panel--folded"
+        data-testid="diagnostics-expand"
+        aria-expanded="false"
         onClick={() => {
-          setShown(true);
+          setOpen(true);
         }}
       >
-        Приборы
+        Приборы ▸
       </button>
     );
   }
@@ -113,8 +114,8 @@ export function DiagnosticsHud({ read, ...controls }: DiagnosticsHudProps) {
     <DiagnosticsPanel
       {...readings}
       {...controls}
-      onHide={() => {
-        setShown(false);
+      onCollapse={() => {
+        setOpen(false);
       }}
     />
   );

@@ -79,6 +79,32 @@ export interface RadarContext {
   textBaseline: CanvasTextBaseline;
 }
 
+/**
+ * Where the two gauges are drawn, which is not always where they are.
+ *
+ * The numbers beside them are the authoritative ones; the arcs are eased toward
+ * them, because a shield that empties at twenty a second arrives in steps of a
+ * third of the ring and reads as a fault rather than as a drain.
+ */
+export interface RingFractions {
+  readonly hull: number;
+  readonly shield: number;
+}
+
+/**
+ * One step of the easing, per redraw.
+ *
+ * A fifth of the remaining distance twenty times a second lands within a
+ * percent of the target in about a third of a second - fast enough that a hit
+ * is felt, slow enough that the arc slides. A jump of more than half the ring
+ * is taken whole: that is a new run or a repair bay, not a drain.
+ */
+export function easeRing(shown: number, target: number): number {
+  const distance = target - shown;
+  if (Math.abs(distance) > 0.5 || Math.abs(distance) < 0.002) return target;
+  return shown + distance * 0.2;
+}
+
 /** A missing or zero capacity reads as an empty ring, never as a full one. */
 export function ringFraction(value: number, capacity: number): number {
   if (!Number.isFinite(value) || !Number.isFinite(capacity) || capacity <= 0) return 0;
@@ -161,10 +187,16 @@ function scaleLabel(context: RadarContext, radius: number, angle: number, text: 
  * rendered, and once the page stopped re-rendering during combat that snapshot
  * stopped moving - the radar showed the first wave and then held it.
  */
-export function drawCombatRadar(context: RadarContext, game: DisplayGameSnapshot): void {
+export function drawCombatRadar(
+  context: RadarContext,
+  game: DisplayGameSnapshot,
+  rings: RingFractions = {
+    hull: ringFraction(game.spaceship.hp, game.spaceship.maxHp),
+    shield: ringFraction(game.shield.energy, game.shield.capacity)
+  }
+): void {
   const projection = createRadarProjection(game.arenaRadius, RADAR_UNITS, CENTRE - MAP_RADIUS);
-  const hull = ringFraction(game.spaceship.hp, game.spaceship.maxHp);
-  const shield = ringFraction(game.shield.energy, game.shield.capacity);
+  const { hull, shield } = rings;
 
   context.clearRect(0, 0, RADAR_UNITS, RADAR_UNITS);
 
