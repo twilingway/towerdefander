@@ -19,6 +19,15 @@ import {
   type PredictedPoseFrame,
   type PredictionDriver
 } from "../shipPrediction.js";
+import {
+  LIVE_COLLECTIONS,
+  LIVE_KINDS_WITH_HEADING,
+  type DecodedCollection,
+  type DecodedDisplay,
+  type DecodedEntity,
+  type DecodedHull,
+  type PredictHandle
+} from "../predictionWire.js";
 
 /**
  * Runs the ship locally and reconciles it with the room.
@@ -41,52 +50,6 @@ export interface ShipPredictionHandle {
   /** How many of our own frames the room has not acknowledged yet. */
   readPending(): number;
 }
-
-interface DecodedPose extends PredictedPoseFrame {
-  readonly $?: unknown;
-}
-
-/** One live entity as the decoder hands it over: identity, place, motion. */
-interface DecodedEntity {
-  readonly entityId: string;
-  x: number;
-  y: number;
-  readonly velocityX: number;
-  readonly velocityY: number;
-}
-
-/** An entity that steers, and therefore publishes where it is pointing. */
-interface DecodedHull extends DecodedEntity {
-  readonly heading: number;
-}
-
-interface DecodedCollection {
-  values(): IterableIterator<DecodedEntity>;
-}
-
-interface DecodedDisplay {
-  readonly pose?: DecodedPose;
-  readonly enemyShips: DecodedCollection;
-  readonly asteroids: DecodedCollection;
-  readonly lootDrops: DecodedCollection;
-  readonly friendlyProjectiles: DecodedCollection;
-  readonly hostileProjectiles: DecodedCollection;
-  readonly homingMissiles: DecodedCollection;
-}
-
-/** Which collections an entity of each kind can be found in. */
-const LIVE_COLLECTIONS: Record<LiveEntityKind, readonly (keyof DecodedDisplay)[]> = {
-  enemy: ["enemyShips"],
-  asteroid: ["asteroids"],
-  loot: ["lootDrops"],
-  projectile: ["friendlyProjectiles", "hostileProjectiles"],
-  missile: ["homingMissiles"]
-};
-
-/** The kinds whose bearing is published and therefore interpolated as an angle. */
-const LIVE_KINDS_WITH_HEADING = new Set<LiveEntityKind>(["enemy", "missile"]);
-
-type PredictHandle = ReturnType<typeof Predict.get>;
 
 /**
  * The drive numbers and the arena the replay steps with.
