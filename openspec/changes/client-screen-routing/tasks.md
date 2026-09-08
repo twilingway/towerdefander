@@ -175,13 +175,16 @@
 
 - [ ] 9.1 `openspec/changes/production-cicd-maintenance` не проходит `pnpm spec:validate`: это
       заглушка от 2026-09-03 — только `.openspec.yaml` и однострочный README, ни proposal, ни дельт.
-      Падало до начала этой работы. Каталог **не под git**; в этой сессии он пропал с диска на одном
-      из `git stash -u` и восстановлен из объектов git байт в байт (`.openspec.yaml` 40 байт,
-      `README.md` 110 байт), после чего `spec:validate` вернулся к прежним 65 элементам с тем же
-      единственным провалом.
+      Падало до начала этой работы. Каталог был **не под git** — в этой сессии он пропал с диска на
+      одном из `git stash -u`, восстановлен из объектов git байт в байт и теперь отслеживается, так
+      что унести его `stash -u` или `clean` больше не может. Само изменение по-прежнему нужно
+      дописать до настоящего: proposal и хотя бы одна дельта.
 - [ ] 9.2 Три теста сервера падают на чистом дереве: `src/balance/balance.test.ts` — «keeps the
       shipped seed loadable» и «gives a version 35 document the tremble guard, waves intact»;
       `src/rooms/SpaceshipDefenderRoom.test.ts` — «cancels stale aim and softly brakes the turret».
       Проверено через `git stash`: те же три и без правок.
 - [ ] 9.3 `apps/display/src/game/spaceshipViewModel.ts` — 856 строк, над потолком и без обоснования
       в шапке. План этого файла не называл, поэтому он не тронут.
+- [x] 9.4 Шесть PNG в `apps/display/public/textures/` (1.8 МБ) удалены: их грузила только
+      предзагрузка неба, которая ушла вместе с ним, и на них не осталось ни одной ссылки. Каталог
+      `public/` был пуст и исчез целиком; сборка и обе пиксельные спеки это переживают.
