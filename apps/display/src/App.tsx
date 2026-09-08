@@ -1,40 +1,21 @@
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
-import {
-  Profiler,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode
-} from "react";
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import { PolledCombatRadar } from "./screens/RoomScreen/CombatRadar.js";
 import { useLetterboxBars } from "./model/hooks/useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
 import { PreviewControls } from "./screens/RoomScreen/PreviewControls.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
-import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
+import { useIsPortrait } from "./components/RotateNotice/index.js";
 import { useSoloCockpit, type SoloCockpitControls } from "./model/hooks/useSoloCockpit.js";
 import { useBareControls } from "./model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
-import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
-import { SpaceshipCanvas } from "./screens/RoomScreen/SpaceshipCanvas.js";
-import { TeamUpgradeOverlay } from "./screens/RoomScreen/TeamUpgradeOverlay.js";
+import { readAimAssistFromDevice } from "./model/aimAssistPreference.js";
+
 import { VisibleDemoOverlay } from "./components/VisibleDemoOverlay/index.js";
-import { RunResultOverlay } from "./screens/RoomScreen/RunResultOverlay.js";
+
 import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./model/previewMode.js";
-import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
-import { recordComponentCommit } from "./model/componentCost.js";
-import {
-  BattleHudPanel,
-  BossPanel,
-  CockpitPanel,
-  CountdownPanel,
-  CrewLatencyPanel,
-  ModuleWindowPanel
-} from "./screens/RoomScreen/panels.js";
+
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { createControllerJoinUrl } from "./model/roomView.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
@@ -43,19 +24,13 @@ import { CONTROLLER_URL, GAME_SERVER_URL } from "./model/environment.js";
 import { toAimWorld, toPredictionWorld } from "./model/cockpitWorld.js";
 import { selectModuleTree } from "./model/moduleTree.js";
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
-import { readLiveGame } from "./model/liveView.js";
+
 import { publishWorld } from "./model/worldStore.js";
-import {
-  readDiagnostics,
-  readFrameStats,
-  recordCommitWork,
-  writeFrameStats,
-  writePlaybackDelay,
-  writePredictionLag
-} from "./model/instruments.js";
+import { readFrameStats, writePlaybackDelay, writePredictionLag } from "./model/instruments.js";
 import { useDiagnosticsMeters } from "./model/hooks/useDiagnosticsMeters.js";
 import { useRoomSession, type ConnectionStatus } from "./model/hooks/useRoomSession.js";
 import { useDisplaySwitches } from "./model/hooks/useDisplaySwitches.js";
+import { BattleStage } from "./screens/RoomScreen/BattleStage.js";
 import { useLiveHeat } from "./model/hooks/useLiveHeat.js";
 import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
 import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
@@ -88,16 +63,7 @@ export function DisplayApp() {
    */
   const predictionDriverReference = useRef<PredictionDriver | undefined>(undefined);
 
-  const {
-    predictionEnabled,
-    vectorsEnabled,
-    interfaceEnabled,
-    opaquePanels,
-    togglePrediction,
-    toggleVectors,
-    toggleInterface,
-    toggleOpaquePanels
-  } = useDisplaySwitches();
+  const switches = useDisplaySwitches();
   const worldReady = useRuntimePreload();
   const {
     view: networkView,
@@ -192,7 +158,7 @@ export function DisplayApp() {
   useBareControls(
     shellReference,
     cockpitControls,
-    !interfaceEnabled && cockpitPlayer !== undefined
+    !switches.interfaceEnabled && cockpitPlayer !== undefined
   );
 
   const streaming = cockpitPlayer !== undefined && view?.game?.encounter.phase === "combat";
@@ -207,7 +173,7 @@ export function DisplayApp() {
      * the pose this page stepped or the one the room sent - which is the only
      * way the comparison means anything.
      */
-    predicting: predictionEnabled,
+    predicting: switches.predictionEnabled,
     source: {
       readIntent: () => cockpitControls.readIntent(),
       enabled: streaming
@@ -308,7 +274,7 @@ export function DisplayApp() {
     <main
       ref={shellReference}
       className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
-      data-panels={opaquePanels ? "opaque" : "glass"}
+      data-panels={switches.opaquePanels ? "opaque" : "glass"}
       data-bars={bars.placement}
       style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
     >
@@ -379,135 +345,29 @@ export function DisplayApp() {
           </span>
         </section>
       ) : (
-        <MeasuredWhenAsked
-          measuring={diagnostics}
-          onCommit={(actualDuration) => {
-            recordCommitWork(actualDuration, performance.now());
+        <BattleStage
+          view={{ ...view, game: view.game }}
+          diagnostics={diagnostics}
+          visibleDemo={visibleDemo}
+          preview={previewView !== undefined}
+          portrait={portrait}
+          connectionEpoch={connectionEpoch}
+          switches={switches}
+          moduleTree={moduleTree}
+          readRadarGame={readRadarGame}
+          cockpit={{
+            seated: cockpitPlayer !== undefined,
+            seat: cockpitSeat,
+            controls: cockpitControls,
+            driver: predictionDriverReference.current,
+            onVote: sendCockpitVote,
+            onReady: sendCockpitReady
           }}
-        >
-          <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
-            {/*
-              The order is the reference prototype's: the world first, the layer
-              a thumb touches next, and the readable interface after both. What
-              it buys is that nothing above the canvas is re-rendered or
-              re-attributed while the arena is drawing.
-            */}
-            <MeteredPanel id="сцена" measuring={diagnostics}>
-              {portrait ? (
-                <RotateNotice />
-              ) : (
-                <SpaceshipCanvas
-                  game={view.game}
-                  prediction={predictionDriverReference.current}
-                  // The preview has no room to read from: it renders a fixture
-                  // straight through the prop, and a reader that answers nothing
-                  // would leave its scene without a world at all.
-                  readGame={previewView === undefined ? readLiveGame : undefined}
-                  runNumber={view.runNumber}
-                  connectionEpoch={connectionEpoch}
-                  visibleDemo={visibleDemo}
-                  vectorsEnabled={vectorsEnabled}
-                  onFrameStats={(stats) => {
-                    writeFrameStats(stats);
-                  }}
-                />
-              )}
-            </MeteredPanel>
-            <MeteredPanel id="кокпит" measuring={diagnostics}>
-              {cockpitPlayer !== undefined && !portrait && interfaceEnabled && (
-                <CockpitPanel
-                  controls={cockpitControls}
-                  aimAssist={aimAssist}
-                  onAimAssistChange={(next) => {
-                    setAimAssist(next);
-                    saveAimAssistToDevice(next);
-                  }}
-                />
-              )}
-            </MeteredPanel>
-            <MeteredPanel id="шапка" measuring={diagnostics}>
-              {interfaceEnabled && <BattleHudPanel />}
-            </MeteredPanel>
-
-            <MeteredPanel id="часы" measuring={diagnostics}>
-              <CountdownPanel />
-            </MeteredPanel>
-            <MeteredPanel id="босс" measuring={diagnostics}>
-              <BossPanel />
-            </MeteredPanel>
-            <MeteredPanel id="приборы" measuring={diagnostics}>
-              {diagnostics && (
-                <DiagnosticsHud
-                  read={readDiagnostics}
-                  predictionEnabled={predictionEnabled}
-                  onTogglePrediction={togglePrediction}
-                  vectorsEnabled={vectorsEnabled}
-                  onToggleVectors={toggleVectors}
-                  interfaceEnabled={interfaceEnabled}
-                  onToggleInterface={toggleInterface}
-                  opaquePanels={opaquePanels}
-                  onToggleOpaquePanels={toggleOpaquePanels}
-                />
-              )}
-            </MeteredPanel>
-            <MeteredPanel id="радар" measuring={diagnostics}>
-              {interfaceEnabled && <PolledCombatRadar read={readRadarGame} />}
-            </MeteredPanel>
-            {view.game.encounter.phase === "intermission" && (
-              <TeamUpgradeOverlay
-                teamUpgrade={view.game.teamUpgrade}
-                credits={view.game.credits}
-                score={view.game.encounter.score}
-                waveNumber={view.game.encounter.waveNumber}
-                phaseTicksRemaining={view.game.encounter.phaseTicksRemaining}
-                purchasedModules={view.game.purchasedModules}
-                {...(cockpitSeat === undefined
-                  ? {}
-                  : { cockpit: { role: cockpitSeat.role, onVote: sendCockpitVote } })}
-              />
-            )}
-            {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
-              <RunResultOverlay
-                outcome={view.game.encounter.outcome}
-                defeatReason={view.game.encounter.defeatReason}
-                waveNumber={view.game.encounter.waveNumber}
-                score={view.game.encounter.score}
-                readyCount={view.players.filter(({ ready }) => ready).length}
-                crewSize={view.crewSize}
-                closing={closingRoom}
-                onClose={() => void handleCloseRoom()}
-                {...(cockpitPlayer === undefined
-                  ? {}
-                  : {
-                      cockpit: {
-                        ready: cockpitSeat?.ready === true,
-                        onReady: sendCockpitReady
-                      }
-                    })}
-              />
-            )}
-            {/* The run's own hull, straight from the catalogue; the fixture is
-              the preview's stand-in when no server answered. */}
-            <MeteredPanel id="модули" measuring={diagnostics}>
-              {moduleTree !== undefined && interfaceEnabled && (
-                <ModuleWindowPanel
-                  tiers={moduleTree.tiers}
-                  endlessTier={moduleTree.endlessTier}
-                  initiallyShown={previewView !== undefined}
-                />
-              )}
-            </MeteredPanel>
-            {/*
-            Stacked directly under the instrument panel and answering the same
-            question, so with the panel open it is the third ping on one edge of
-            the screen. The panel wins; the crew rows come back the moment the
-            flag goes away.
-          */}
-            <MeteredPanel id="экипаж" measuring={diagnostics}>
-              {!diagnostics && <CrewLatencyPanel />}
-            </MeteredPanel>
-          </section>
-        </MeasuredWhenAsked>
+          closingRoom={closingRoom}
+          onCloseRoom={() => void handleCloseRoom()}
+          aimAssist={aimAssist}
+          onAimAssistChange={setAimAssist}
+        />
       )}
       {visibleDemo ? (
         <VisibleDemoOverlay
@@ -542,53 +402,3 @@ export function DisplayApp() {
  * `measuring` comes from the address and never changes while the page lives, so
  * the branch cannot remount the battle underneath a running fight.
  */
-/**
- * One panel, timed under its own name.
- *
- * Same bargain as the tree above: nothing is mounted unless the instruments
- * were asked for, because a profiler around eight panels is eight timers on
- * every commit of a page that commits on every patch.
- */
-function MeteredPanel({
-  id,
-  measuring,
-  children
-}: {
-  readonly id: string;
-  readonly measuring: boolean;
-  readonly children: ReactNode;
-}) {
-  if (!measuring) return children;
-  return (
-    <Profiler
-      id={id}
-      onRender={(profilerId, _phase, actualDuration) => {
-        recordComponentCommit(profilerId, actualDuration);
-      }}
-    >
-      {children}
-    </Profiler>
-  );
-}
-
-function MeasuredWhenAsked({
-  measuring,
-  onCommit,
-  children
-}: {
-  readonly measuring: boolean;
-  readonly onCommit: (actualDurationMs: number) => void;
-  readonly children: ReactNode;
-}) {
-  if (!measuring) return children;
-  return (
-    <Profiler
-      id="battle"
-      onRender={(_id, _phase, actualDuration) => {
-        onCommit(actualDuration);
-      }}
-    >
-      {children}
-    </Profiler>
-  );
-}
