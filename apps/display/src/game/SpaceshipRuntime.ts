@@ -222,7 +222,6 @@ class SpaceshipScene extends Phaser.Scene {
   private focusedEntityId: string | undefined;
   private noseFocus: Phaser.GameObjects.Image | undefined;
   private noseFocusedEntityId: string | undefined;
-  private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
   private headingTrack: AngleTrack;
@@ -279,7 +278,13 @@ class SpaceshipScene extends Phaser.Scene {
   private readonly focusScratch: MutableFocusCandidate[] = [];
   private readonly backgroundLayers: BackgroundLayerState[] = [];
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
-  private backgroundEnabled = true;
+  /**
+   * Off, and not merely hidden: four full-screen tile sprites, three of them
+   * blended, measured forty-three points of torn frames on a tablet - the
+   * largest single thing on the field by a distance. Nothing creates them until
+   * the switch in the instrument panel asks for them.
+   */
+  private backgroundEnabled = false;
   /**
    * The prototype's picture instead of ours; see `readTankLook`. Read once at
    * construction because it decides what is baked, and a texture is baked once.
@@ -396,9 +401,7 @@ class SpaceshipScene extends Phaser.Scene {
     });
     this.focusCamera(this.snapshot.spaceship);
     this.drawArena();
-    // The prototype has no sky: under the flag the parallax is never built, so
-    // what is being compared is the arena and the hulls and nothing else.
-    if (!this.tankLook) this.createBackground(this.snapshot.background);
+    if (this.backgroundEnabled) this.createBackground(this.snapshot.background);
     this.drawDecorations();
 
     /*
@@ -453,7 +456,6 @@ class SpaceshipScene extends Phaser.Scene {
 
     this.turret = createTurret(this, this.snapshot);
     this.shield = this.add.image(0, 0, blank).setDepth(14);
-    this.shieldGlow = attachShieldGlow(this.shield);
     // Above the arena, below the shield: a pulse is over before it can hide
     // anything that matters.
     this.beams = this.add.graphics().setDepth(13);
@@ -916,8 +918,20 @@ class SpaceshipScene extends Phaser.Scene {
    * being asked, not a decision being made, and the answer has to be one button
    * away in both directions.
    */
+  /**
+   * Builds the sky the first time anyone asks for it, and hides it after that.
+   *
+   * A run starts without it - see the field above - so there is nothing to
+   * reveal until this has been on once. Kept switchable rather than deleted
+   * because the measurement that took it away is the one thing that could ever
+   * bring it back, and that measurement needs both sides.
+   */
   setBackgroundEnabled(enabled: boolean): void {
     this.backgroundEnabled = enabled;
+    if (enabled && this.backgroundLayers.length === 0) {
+      this.createBackground(this.snapshot.background);
+      return;
+    }
     for (const layer of this.backgroundLayers) {
       layer.sprite.setVisible(enabled);
     }
@@ -960,11 +974,17 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
+  /**
+   * Kept as a switch with nothing behind it for exactly as long as it takes to
+   * notice: the shield's bloom is gone.
+   *
+   * It was one filter on one small object, and on a tablet it measured
+   * twenty-two points of torn frames - a mobile GPU pays for a render target
+   * and a shader pass per frame whatever the object's size. Nothing else on the
+   * field glows.
+   */
   setGlowEnabled(enabled: boolean): void {
     this.glowEnabled = enabled;
-    if (this.shieldGlow !== undefined) {
-      this.shieldGlow.active = enabled && this.snapshot.shield.active;
-    }
   }
 
   private updateBackground(deltaMs: number): void {
@@ -1256,9 +1276,6 @@ class SpaceshipScene extends Phaser.Scene {
     this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
     this.shield.setRotation(this.visualShieldAngle);
     this.shield.setVisible(this.vectorsEnabled);
-    if (this.shieldGlow !== undefined) {
-      this.shieldGlow.active = this.glowEnabled && this.snapshot.shield.active;
-    }
   }
 
   private snapToSnapshot(snapshot: DisplayGameSnapshot, tick: number): void {
@@ -1688,24 +1705,6 @@ export function resolveEnemyVisual(
   return catalogue.find((entry) => entry.kind === kind) ?? FALLBACK_ENEMY_VISUAL;
 }
 
-const SHIELD_GLOW_COLOR = 0x65baff;
-/** Gentle bloom: the crescent already carries the shape, the glow only softens it. */
-const SHIELD_GLOW_OUTER_STRENGTH = 2.4;
-/**
- * Sample count of the glow shader, fixed at creation by Phaser. Ten is Phaser's
- * own default and this stood at sixteen; the shield is the only filtered object
- * in the scene, which makes it the one pass whose cost grows with the square of
- * the render resolution, and a sixty per cent surcharge on it is not something
- * the bloom shows off.
- */
-const SHIELD_GLOW_QUALITY = 10;
-const SHIELD_GLOW_DISTANCE = 24;
-
-/**
- * `Phaser.AUTO` can settle on a renderer with no filter support, and then the
- * game object never gets a filter list. The arc still has to be drawn, so the
- * glow is treated as an enhancement that may simply be unavailable.
- */
 /**
  * The aiming envelope. Faint enough to read the arena through it, with edges
  * solid enough to be a line rather than a glow.
@@ -1758,45 +1757,6 @@ const LASER_ENEMY_STYLE = { width: 4, color: 0xff5a4a, alpha: 0.9 } as const;
 function beamStyle(source: string) {
   if (source === ENEMY_BEAM_SOURCE) return LASER_ENEMY_STYLE;
   return source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
-}
-
-function attachShieldGlow(shield: Phaser.GameObjects.Image): Phaser.Filters.Glow | undefined {
-  shield.enableFilters();
-  /*
-   * No focus override any more, and no context focusing either. Those existed
-   * because a `Graphics` object has no width or height for Phaser to bound a
-   * filter with; an image of the same arc has both, so the bloom is composited
-   * against the object itself and travels with it - including through the
-   * rotation that used to tear it off.
-   */
-  const filters = shield.filters;
-  if (filters === null) return undefined;
-  /**
-   * Internal, not external, and the difference is the whole cost of the shield.
-   *
-   * An external filter is applied to the drawing context - the entire canvas -
-   * so a bloom around an arc that covers a hundredth of the screen was running
-   * a ten-sample shader over every pixel of it, plus two full-screen copies,
-   * on every frame the sector was up. On a phone at three device pixels per
-   * point that is three million pixels of shader for a shield, and it showed:
-   * sixty frames with the sector down, twenty-five with it up.
-   *
-   * An internal filter runs on the object's own target instead, which is the
-   * box `drawShield` sizes to the arc plus the bloom - a few hundred pixels
-   * square. Phaser pads that target by the glow's own distance, so the bloom
-   * still spreads rather than being clipped at the edge.
-   */
-  const glow = filters.internal.addGlow(
-    SHIELD_GLOW_COLOR,
-    SHIELD_GLOW_OUTER_STRENGTH,
-    0,
-    1,
-    false,
-    SHIELD_GLOW_QUALITY,
-    SHIELD_GLOW_DISTANCE
-  );
-  glow.active = false;
-  return glow;
 }
 
 /**
