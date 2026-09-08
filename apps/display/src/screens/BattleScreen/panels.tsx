@@ -45,33 +45,6 @@ function waveAsteroidCount(game: Game): number {
 const gameOf = (view: DisplayRoomView | undefined): Game | null => view?.game ?? null;
 
 /**
- * Heat as the screen shows it: a whole percent of the barrel's capacity.
- *
- * Both the header bar and the cockpit ring are drawn from that percent, and the
- * room sends a fresh number sixty times a second while a trigger is down - so
- * comparing the raw value woke both panels on every patch and made them the two
- * dearest things on the screen the moment anyone fired. A panel is compared on
- * what it draws, never on what arrived.
- */
-function heatPercent(weapon: { readonly heat: number; readonly capacity: number }): number {
-  if (!Number.isFinite(weapon.capacity) || weapon.capacity <= 0) return 0;
-  return Math.round(weapon.heat / weapon.capacity / HEAT_STEP) * HEAT_STEP * 100;
-}
-
-/**
- * How coarsely a barrel's heat is compared: one step in twenty-five.
- *
- * A whole percent is not coarse enough - a held trigger moves the heat by more
- * than that between patches, so both panels woke on every one of the
- * twenty-six, and together they were two thirds of the React on the screen. The
- * bars themselves stay smooth because they are animated: the header's meter
- * carries a hundred-millisecond width transition and the cockpit's ring the
- * same on its scale, so a four-percent step arrives as a slide rather than a
- * jump.
- */
-const HEAT_STEP = 0.04;
-
-/**
  * Both live, or nothing to compare.
  *
  * A pair rather than a type guard because a guard narrows only the argument it
@@ -100,34 +73,31 @@ function sameHeader(left: Game | null, right: Game | null): boolean {
   );
 }
 
-/** Only what the two bars are drawn from; see `WeaponHeatPanel`. */
-function sameHeat(left: Game | null, right: Game | null): boolean {
+/**
+ * The two bars, drawn once and moved by hand afterwards.
+ *
+ * Nothing subscribes here: `useLiveHeat` writes the fill, the label and the
+ * attributes straight to these nodes twenty times a second, so a held trigger
+ * never re-renders anything. The snapshot below is only what the gauges are
+ * built from - the capacity decides the shape of the meter, and it is bought,
+ * not fired.
+ */
+function WeaponHeatPanel() {
+  const game = useWorldSlice(gameOf, sameCapacities);
+  if (game === null) return null;
+  return <WeaponHeat cannon={game.cannon} machineGun={game.machineGun} />;
+}
+
+/** What a gauge is built from, as opposed to what it shows. */
+function sameCapacities(left: Game | null, right: Game | null): boolean {
   if (left === right) return true;
   const both = pair(left, right);
   if (both === undefined) return false;
   const [held, next] = both;
   return (
-    heatPercent(held.cannon) === heatPercent(next.cannon) &&
     held.cannon.capacity === next.cannon.capacity &&
-    held.cannon.overheated === next.cannon.overheated &&
-    heatPercent(held.machineGun) === heatPercent(next.machineGun) &&
-    held.machineGun.capacity === next.machineGun.capacity &&
-    held.machineGun.overheated === next.machineGun.overheated
+    held.machineGun.capacity === next.machineGun.capacity
   );
-}
-
-/**
- * The two bars on their own subscription.
- *
- * Heat is the fastest thing on the screen - a held trigger moves it through the
- * whole gauge in a couple of seconds - and while it lived in the header's own
- * comparison it dragged the wave, the score, the credits and the counts along
- * with it on every step. Split out, a heat step re-renders two bars.
- */
-function WeaponHeatPanel() {
-  const game = useWorldSlice(gameOf, sameHeat);
-  if (game === null) return null;
-  return <WeaponHeat cannon={game.cannon} machineGun={game.machineGun} />;
 }
 
 export function BattleHudPanel() {
@@ -301,12 +271,8 @@ function sameCockpit(left: Game | null, right: Game | null): boolean {
     held.encounter.phase === next.encounter.phase &&
     held.helm.driveDeadzoneShare === next.helm.driveDeadzoneShare &&
     held.helm.aimDeadzoneShare === next.helm.aimDeadzoneShare &&
-    heatPercent(held.machineGun) === heatPercent(next.machineGun) &&
     held.machineGun.capacity === next.machineGun.capacity &&
-    held.machineGun.overheated === next.machineGun.overheated &&
-    heatPercent(held.cannon) === heatPercent(next.cannon) &&
-    held.cannon.capacity === next.cannon.capacity &&
-    held.cannon.overheated === next.cannon.overheated
+    held.cannon.capacity === next.cannon.capacity
   );
 }
 

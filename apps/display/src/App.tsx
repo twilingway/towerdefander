@@ -72,6 +72,7 @@ import {
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
 import { readComponentCosts, recordComponentCommit } from "./model/componentCost.js";
 import { publishWorld } from "./model/worldStore.js";
+import { writeLiveHeat } from "./model/liveHeat.js";
 import {
   BattleHudPanel,
   BossPanel,
@@ -101,6 +102,9 @@ import { hasImmediateChange, needsRootRender, PASSIVE_PUBLISH_MS } from "./model
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
+
+/** Twenty a second: below what a barrel changes at, above what an eye reads. */
+const LIVE_HEAT_INTERVAL_MS = 50;
 
 const gameServerUrl = readStringEnvironment(
   import.meta.env.VITE_GAME_SERVER_URL,
@@ -590,6 +594,25 @@ export function DisplayApp() {
     }),
     []
   );
+
+  /*
+   * The heat gauges, moved without a render.
+   *
+   * Twenty times a second, straight onto the nodes React drew once. Heat is the
+   * fastest thing on the screen and every commit it used to cause was a DOM
+   * write inside a frame the arena was drawing - which a trace of the long
+   * frames shows as layout and paint the short frames never carry.
+   */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const game = liveViewReference.current?.game;
+      const shell = shellReference.current;
+      if (game != null && shell !== null) writeLiveHeat(shell, game);
+    }, LIVE_HEAT_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const readDiagnostics = useCallback(
     () => ({

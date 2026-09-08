@@ -213,13 +213,38 @@ export function useShipPrediction<
           delay: publishedDelayMs
         }
       );
+      /*
+       * Grown at once, given back slowly, and never for a small amount.
+       *
+       * Moving the buffer moves the clock every interpolated entity is drawn
+       * on, so a change of ten milliseconds slides the whole world by ten
+       * milliseconds of travel in a single frame - which is a jerk with a
+       * perfect frame counter beside it, and exactly what "the picture stutters
+       * but the fps is fine" is. The reference prototype never has it because
+       * it pins its buffer at a hundred and never touches it again.
+       *
+       * Ours still measures, because a fixed buffer is what used to freeze the
+       * picture on a phone whose stream arrived further apart than the number
+       * assumed. So it grows the moment the stream asks for more, and it gives
+       * that back only after the stream has been calmer than the buffer for a
+       * couple of seconds - and in one visible step rather than a dozen small
+       * ones nobody can see individually.
+       */
+      let calmSince: number | undefined;
       const noteArrival = (): void => {
-        delayEstimate = observePatchArrival(delayEstimate, performance.now());
+        const now = performance.now();
+        delayEstimate = observePatchArrival(delayEstimate, now);
         const wanted = playbackDelayMs(delayEstimate);
-        // Moved only when it moved enough to matter: rewriting the profile on
-        // every patch would be churn, and the buffer is not a precision
-        // instrument.
-        if (Math.abs(wanted - publishedDelayMs) < 8) return;
+        if (wanted > publishedDelayMs + DELAY_GROW_MS) {
+          calmSince = undefined;
+        } else if (wanted < publishedDelayMs - DELAY_SHRINK_MS) {
+          calmSince ??= now;
+          if (now - calmSince < DELAY_SHRINK_PATIENCE_MS) return;
+          calmSince = undefined;
+        } else {
+          calmSince = undefined;
+          return;
+        }
         publishedDelayMs = wanted;
         predict.setDefaults({ delay: wanted });
         latest.current.onDelay?.(wanted, delayEstimate.intervalMs);
@@ -469,6 +494,12 @@ export function useShipPrediction<
        * would be one input frame too many.
        */
       const STALE_DRIVE_MS = 40;
+      /** Growth is an emergency: the stream already arrived later than the buffer. */
+      const DELAY_GROW_MS = 6;
+      /** Giving it back is not, so it takes a step nobody can mistake for jitter. */
+      const DELAY_SHRINK_MS = 30;
+      /** ...and only after the stream has been that calm for this long. */
+      const DELAY_SHRINK_PATIENCE_MS = 2_500;
       let fallbackFrame = 0;
       const runFallback = (): void => {
         fallbackFrame = requestAnimationFrame(runFallback);
