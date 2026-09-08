@@ -1,14 +1,4 @@
-import {
-  CAMERA_VIEW_ASPECT,
-  CAMERA_VIEW_WIDTH_MAX,
-  CAMERA_VIEW_WIDTH_MIN
-} from "@spaceship-defender/protocol";
-import {
-  formatLatency,
-  PreviewPhaseButtons,
-  PreviewShell,
-  type PreviewPhase
-} from "@spaceship-defender/client-shared";
+import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
 import {
   Profiler,
   useCallback,
@@ -22,6 +12,7 @@ import {
 import { PolledCombatRadar } from "./screens/RoomScreen/CombatRadar.js";
 import { useLetterboxBars } from "./model/hooks/useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
+import { PreviewControls } from "./screens/RoomScreen/PreviewControls.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
@@ -527,40 +518,6 @@ export function DisplayApp() {
         />
       ) : null}
     </main>
-  );
-}
-
-export function PreviewControls({
-  phase,
-  onPhaseChange,
-  cameraViewWidth,
-  onCameraViewWidthChange
-}: {
-  readonly phase: PreviewPhase;
-  readonly onPhaseChange: (phase: PreviewPhase) => void;
-  readonly cameraViewWidth: number;
-  readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
-}) {
-  return (
-    <PreviewShell>
-      <PreviewPhaseButtons phase={phase} onPhaseChange={onPhaseChange} />
-      <label className="preview-controls__camera">
-        <span>
-          Кадр камеры {cameraViewWidth} × {Math.round(cameraViewWidth * CAMERA_VIEW_ASPECT)}
-        </span>
-        <input
-          type="range"
-          min={CAMERA_VIEW_WIDTH_MIN}
-          max={CAMERA_VIEW_WIDTH_MAX}
-          step={50}
-          value={cameraViewWidth}
-          data-testid="preview-camera-view-width"
-          onChange={(event) => {
-            onCameraViewWidthChange(Number(event.target.value));
-          }}
-        />
-      </label>
-    </PreviewShell>
   );
 }
 
