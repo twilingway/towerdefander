@@ -6,7 +6,7 @@ import { getCurrentWaveUpgrade, selectBoss } from "../../model/combatHudViewMode
 import { roleLabel } from "@spaceship-defender/client-shared";
 import { encounterLabel } from "../../model/labels.js";
 import { ModuleTreeWindow, type ModuleTreeEntry } from "../../components/ModuleTreeWindow/index.js";
-import { SoloCockpit, type SoloCockpitProps } from "../SoloCockpit/index.js";
+import { SoloCockpit, type SoloCockpitProps } from "./SoloCockpit/index.js";
 import { SalvageCountdown } from "./SalvageCountdown.js";
 import { useWorldSlice } from "../../model/worldStore.js";
 import { WaveCountdown } from "./WaveCountdown.js";
