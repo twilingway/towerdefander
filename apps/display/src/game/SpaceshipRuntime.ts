@@ -9,9 +9,10 @@ import type {
 } from "@spaceship-defender/protocol";
 import Phaser from "phaser";
 
-import { bakeRect, bakeShape } from "./bake.js";
+import { bakeShape } from "./bake.js";
 import { FrameMeter } from "./scene/frameMeter.js";
 import { AimingLayer } from "./scene/aiming.js";
+import { drawArena, drawDecorations } from "./scene/arena.js";
 import { drawShield } from "./scene/shield.js";
 import {
   createEnemyHealthBar,
@@ -30,9 +31,6 @@ import {
   createSnappedVisualTransitions,
   extendAngleTrack,
   extendPointTrack,
-  getArenaRingRadii,
-  getArenaSpokes,
-  getRimBandStroke,
   getBackingStoreSize,
   getPhaserCameraScroll,
   getResponsiveViewport,
@@ -51,14 +49,11 @@ import type { LiveEntity, LiveEntityKind, LivePlacement } from "../model/shipPre
 import { drawCatalogAssetById } from "./catalogRenderer.js";
 import {
   drawEnemyTank,
-  drawTankArena,
-  drawTankArenaRim,
   drawTankHull,
   drawTankTurret,
   ENEMY_ART_HALF,
   readTankLook,
-  TANK_ART_HALF,
-  TANK_VOID_COLOR
+  TANK_ART_HALF
 } from "./tankArt.js";
 
 /**
@@ -79,13 +74,6 @@ interface DisplayCameraSlice {
 
 const BASE_VIEWPORT_WIDTH = 1600;
 const BASE_VIEWPORT_HEIGHT = 900;
-const OUTSIDE_SPACE_COLOR = 0x02070d;
-const ARENA_SPACE_COLOR = 0x07171f;
-/** The elastic rim band: visible enough to read as ground, not as an object. */
-const RIM_BAND_COLOR = 0xf2c14e;
-const RIM_BAND_ALPHA = 0.12;
-/** The parallax background shows through the arena disc. */
-const ARENA_FILL_ALPHA = 0.5;
 
 /**
  * How long the worst frame is gathered over before it is published. A second,
@@ -268,8 +256,10 @@ class SpaceshipScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     });
     this.focusCamera(this.snapshot.spaceship);
-    this.drawArena();
-    this.drawDecorations();
+    drawArena(this, this.snapshot, this.tankLook, (key, half, draw) =>
+      this.bakedShape(key, half, draw)
+    );
+    drawDecorations(this, this.snapshot, (key, half, draw) => this.bakedShape(key, half, draw));
 
     /*
      * The hull and its nose marker are baked for the same reason the enemies
@@ -582,132 +572,6 @@ class SpaceshipScene extends Phaser.Scene {
    * pixels and shown at four thousand units returns a line twice as thick as it
    * was written.
    */
-  private drawArena(): void {
-    const centerX = this.snapshot.worldWidth / 2;
-    const centerY = this.snapshot.worldHeight / 2;
-    const radius = this.snapshot.arenaRadius;
-    const diameter = radius * 2;
-    const scale = SpaceshipScene.ARENA_TEXTURE_SIDE / diameter;
-
-    if (this.tankLook) {
-      this.cameras.main.setBackgroundColor(TANK_VOID_COLOR);
-      const floor = this.bakedShape(
-        `tankArena:floor:${String(Math.round(radius))}`,
-        SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
-        (graphics) => {
-          drawTankArena(graphics, radius * scale, scale);
-        }
-      );
-      this.add.image(centerX, centerY, floor).setDisplaySize(diameter, diameter).setDepth(0);
-      const rim = this.bakedShape(
-        `tankArena:rim:${String(Math.round(radius))}`,
-        SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
-        (graphics) => {
-          drawTankArenaRim(graphics, radius * scale, scale);
-        }
-      );
-      this.add.image(centerX, centerY, rim).setDisplaySize(diameter, diameter).setDepth(3);
-      return;
-    }
-
-    this.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
-
-    const band = getRimBandStroke(radius, this.snapshot.rimBandWidth);
-
-    const floorKey = this.bakedShape(
-      `arena:floor:${String(Math.round(radius))}:${String(Math.round(this.snapshot.rimBandWidth))}`,
-      SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
-      (graphics) => {
-        graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
-        graphics.fillCircle(0, 0, radius * scale);
-        // The band the rim slows a hull in, under the rings so those stay readable.
-        if (band !== null) {
-          graphics.lineStyle(band.thickness * scale, RIM_BAND_COLOR, RIM_BAND_ALPHA);
-          graphics.strokeCircle(0, 0, band.radius * scale);
-        }
-        // Rings and spokes rather than a square grid: on a round arena what a
-        // pilot reads off the floor is the distance to the rim and the bearing,
-        // and a square mesh states neither.
-        graphics.lineStyle(2 * scale, 0x163746, 0.75);
-        for (const ringRadius of getArenaRingRadii(radius)) {
-          graphics.strokeCircle(0, 0, ringRadius * scale);
-        }
-        graphics.lineStyle(2 * scale, 0x14303d, 0.5);
-        for (const spoke of getArenaSpokes(0, 0, radius)) {
-          graphics.lineBetween(
-            spoke.from.x * scale,
-            spoke.from.y * scale,
-            spoke.to.x * scale,
-            spoke.to.y * scale
-          );
-        }
-      }
-    );
-    this.add.image(centerX, centerY, floorKey).setDisplaySize(diameter, diameter).setDepth(0);
-
-    // Its own image rather than part of the floor: the rim has to stay above
-    // the obstacles, and they sit between the two.
-    const borderKey = this.bakedShape(
-      `arena:border:${String(Math.round(radius))}`,
-      SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
-      (graphics) => {
-        graphics.lineStyle(8 * scale, 0x3d6874, 1);
-        graphics.strokeCircle(0, 0, radius * scale);
-      }
-    );
-    this.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
-  }
-
-  /**
-   * The obstacles, one image each.
-   *
-   * They never move and never change, and drawn into a `Graphics` they were
-   * still tessellated on every frame - the rounded rectangles in particular,
-   * which is a fan of triangles per corner. Baked per shape and size, a field
-   * of them costs a transform apiece.
-   */
-  private drawDecorations(): void {
-    for (const obstacle of this.snapshot.obstacles) {
-      const fill = obstacle.kind === "circle" ? 0x305d63 : 0x435262;
-      if (obstacle.kind === "circle") {
-        const radius = Math.round(obstacle.radius);
-        this.add
-          .image(
-            obstacle.x,
-            obstacle.y,
-            this.bakedShape(`rock:field:${String(radius)}`, radius + 6, (graphics) => {
-              graphics.fillStyle(fill, 0.78);
-              graphics.fillCircle(0, 0, radius);
-              graphics.lineStyle(5, 0x78a4a4, 0.7);
-              graphics.strokeCircle(0, 0, radius);
-            })
-          )
-          .setDepth(2);
-        continue;
-      }
-      const width = Math.round(obstacle.width);
-      const height = Math.round(obstacle.height);
-      this.add
-        .image(
-          obstacle.x,
-          obstacle.y,
-          bakeRect(
-            this,
-            `slab:${String(width)}x${String(height)}`,
-            width + 8,
-            height + 8,
-            (graphics) => {
-              graphics.fillStyle(fill, 0.78);
-              graphics.fillRoundedRect(4, 4, width, height, 24);
-              graphics.lineStyle(5, 0x78a4a4, 0.7);
-              graphics.strokeRoundedRect(4, 4, width, height, 24);
-            }
-          )
-        )
-        .setDepth(2);
-    }
-  }
-
   setVectorsEnabled(enabled: boolean): void {
     this.vectorsEnabled = enabled;
     this.shield?.setVisible(enabled);
@@ -925,7 +789,6 @@ class SpaceshipScene extends Phaser.Scene {
    * once the image is stretched to four thousand units; doubling it buys
    * nothing the camera can show.
    */
-  private static readonly ARENA_TEXTURE_SIDE = 2048;
 
   /**
    * Side of the baked aiming wedge, in texture pixels.
