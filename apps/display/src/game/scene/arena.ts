@@ -6,10 +6,13 @@ import { getArenaRingRadii, getArenaSpokes, getRimBandStroke } from "../spaceshi
 import { drawTankArena, drawTankArenaRim, TANK_VOID_COLOR } from "../tankArt.js";
 
 /**
- * The floor is baked at this side and stretched to the arena's diameter. A disc
- * four thousand units across would otherwise be a four-thousand-pixel texture -
- * and line widths drawn inside it have to be divided by the same stretch, or
- * they arrive that many times too thick.
+ * Side of the baked arena floor, in texture pixels.
+ *
+ * Sixteen megabytes of video memory for a drawing that would otherwise be
+ * rebuilt every frame. Halving it would blur the two-unit rings past reading
+ * once the image is stretched to four thousand units; doubling it buys nothing
+ * the camera can show. Line widths drawn inside it are divided by that stretch,
+ * or they arrive as many times too thick.
  */
 const ARENA_TEXTURE_SIDE = 2048;
 
@@ -28,6 +31,30 @@ type BakeShape = (
   draw: (graphics: Phaser.GameObjects.Graphics) => void
 ) => string;
 
+/**
+ * The floor, baked once instead of re-tessellated sixty times a second.
+ *
+ * A profile of a throttled fight put Phaser's graphics renderer, its batcher
+ * and the polygon tessellator at two thirds of the main thread, and the arena
+ * is the largest single drawing on the field: a filled circle four thousand
+ * units across, a rim band, five rings and twelve spokes, every command of it
+ * walked again on every frame because that is what a `Graphics` object is.
+ *
+ * As a texture it is four vertices. The bake happens in texture space and the
+ * image is stretched back to world size, which is why every width below is
+ * multiplied: a two-unit ring drawn at texture scale comes back two units
+ * wide on the floor. Curves and flat fills carry that stretch without
+ * showing it; that is the whole reason this shape can be baked and the shield
+ * cannot.
+ */
+/**
+ * The floor. Ours by default, the prototype's under `?tanks=1`.
+ *
+ * Both are baked at a fixed resolution and stretched to the arena, and both
+ * divide their line widths by that stretch: an image drawn at two thousand
+ * pixels and shown at four thousand units returns a line twice as thick as it
+ * was written.
+ */
 export function drawArena(
   scene: Phaser.Scene,
   snapshot: DisplayGameSnapshot,

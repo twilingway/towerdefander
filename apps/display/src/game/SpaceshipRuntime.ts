@@ -4,9 +4,10 @@ import Phaser from "phaser";
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH } from "./scene/camera.js";
 import { getBackingStoreSize } from "./spaceshipViewModel.js";
-import { SpaceshipScene, type ScenePrediction } from "./scene/SpaceshipScene.js";
+import { SpaceshipScene } from "./scene/SpaceshipScene.js";
+import type { ScenePrediction } from "./scene/entities.js";
 
-export type { ScenePrediction } from "./scene/SpaceshipScene.js";
+export type { ScenePrediction } from "./scene/entities.js";
 
 export interface SpaceshipRuntime {
   update(snapshot: DisplayGameSnapshot): void;
@@ -163,25 +164,25 @@ export function createSpaceshipRuntime(
       return game.loop.actualFps;
     },
     readAverageFrameMs() {
-      return scene.readAverageFrameMs();
+      return scene.readFrames().readAverageFrameMs();
     },
     readWorstFrameMs() {
-      return scene.readWorstFrameMs();
+      return scene.readFrames().readWorstFrameMs();
     },
     readStutterShare() {
-      return scene.readStutterShare();
+      return scene.readFrames().readStutterShare();
     },
     readUpdateMsPerSecond() {
-      return scene.readUpdateMsPerSecond();
+      return scene.readFrames().readUpdateMsPerSecond();
     },
     readWorstUpdateMs() {
-      return scene.readWorstUpdateMs();
+      return scene.readFrames().readWorstUpdateMs();
     },
     readLiveDrawnCount() {
-      return scene.readLiveDrawnCount();
+      return scene.readFrames().readLiveDrawnCount();
     },
     readOffscreenCount() {
-      return scene.readOffscreenCount();
+      return scene.readFrames().readOffscreenCount();
     },
     setPixelRatioCap(cap) {
       if (cap === currentCap) return;

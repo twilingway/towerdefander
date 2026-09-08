@@ -8,8 +8,23 @@ import type {
   PublicProjectileView
 } from "@spaceship-defender/protocol";
 
+import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
+import {
+  createAngleTrack,
+  createPointTrack,
+  extendAngleTrack,
+  extendPointTrack,
+  reconcileStableIds,
+  type AngleTrack,
+  type PointTrack
+} from "../spaceshipViewModel.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
-import { createEnemyHealthBar, drawEnemyBody, resolveEnemyVisual } from "../entityArt.js";
+import {
+  createEnemyHealthBar,
+  drawEnemyBody,
+  resolveEnemyVisual,
+  setEnemyHealthBar
+} from "../entityArt.js";
 import { drawEnemyTank, ENEMY_ART_HALF } from "../tankArt.js";
 
 /** Everything the field draws that is neither the ship nor the scenery. */
@@ -198,4 +213,215 @@ export function createCombatVisual(
     container.add(bullet);
   }
   return { object: container, healthBar };
+}
+
+export interface CombatVisual {
+  readonly object: Phaser.GameObjects.Container;
+  readonly healthBar: Phaser.GameObjects.Container | undefined;
+  /**
+   * The health the bar was last drawn at.
+   *
+   * A bar is geometry, and it was being rebuilt for every enemy on every patch
+   * whether or not anything had hit it - twenty enemies at twenty-six patches a
+   * second is five hundred rebuilds a second to draw the same rectangle. It
+   * changes only when the enemy is hit, so that is when it is redrawn.
+   */
+  drawnHealth: number;
+  position: PointTrack;
+  angle: AngleTrack;
+  /**
+   * Set only for shells, and only because they are the one thing here that can
+   * be carried forward honestly.
+   *
+   * Interpolation draws an entity between the two newest snapshots - that is,
+   * in the past. For a hull that is unavoidable: nobody knows what the pilot
+   * will do next. A shell has no driver, so its speed and bearing are already
+   * on the wire and advancing it is arithmetic rather than a guess. Without it
+   * the shot appears a tenth of a second behind the ship that fired it, which
+   * at three hundred units a second is further than the hull is wide - and it
+   * reads exactly as bullets coming out of nowhere.
+   */
+  velocity: { readonly x: number; readonly y: number } | undefined;
+  /**
+   * The room's own entity, bound once when the sprite is made.
+   *
+   * Set only while a cockpit is streaming. Where it is set, the entity is read
+   * off the same clock as this page's ship, which is the whole reason it is
+   * here: a hull read from the predictor and a world read from the snapshot are
+   * a hundred milliseconds apart, and a shell that leaves the barrel across
+   * that gap comes out of empty space.
+   */
+  live: LiveEntity | undefined;
+}
+
+function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
+  return [
+    ...snapshot.enemyShips.map((entity) => ({ ...entity, visualKind: "enemy" as const })),
+    ...snapshot.asteroids.map((entity) => ({ ...entity, visualKind: "asteroid" as const })),
+    ...snapshot.lootDrops.map((entity) => ({ ...entity, visualKind: "loot" as const })),
+    ...snapshot.friendlyProjectiles.map((entity) => ({
+      ...entity,
+      visualKind: "projectile" as const
+    })),
+    ...snapshot.hostileProjectiles.map((entity) => ({
+      ...entity,
+      visualKind: "projectile" as const
+    })),
+    ...snapshot.homingMissiles.map((entity) => ({ ...entity, visualKind: "missile" as const }))
+  ];
+}
+
+/**
+ * The hull look travels with the preset, so an unknown id falls back the same
+ * way an enemy silhouette does rather than leaving the ship invisible.
+ */
+/** What the scene needs from the turret, whichever shape it ends up being. */
+
+/** Everything reconciling a wave of visuals needs, and nothing it does not. */
+interface ReconcileRequest {
+  readonly scene: Phaser.Scene;
+  readonly visuals: Map<string, CombatVisual>;
+  readonly snapshot: DisplayGameSnapshot;
+  readonly prediction: ScenePrediction | undefined;
+  readonly tankLook: boolean;
+  readonly bake: BakeShape;
+  readonly toTick: number;
+  readonly snap: boolean;
+}
+
+export function reconcileCombatVisuals({
+  scene,
+  visuals,
+  snapshot,
+  prediction,
+  tankLook,
+  bake,
+  toTick,
+  snap
+}: ReconcileRequest): void {
+  const incoming = collectCombatEntities(snapshot);
+  const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
+  const plan = reconcileStableIds(visuals.keys(), incomingById.keys());
+  for (const entityId of plan.remove) {
+    visuals.get(entityId)?.object.destroy();
+    visuals.delete(entityId);
+  }
+  for (const entityId of [...plan.create, ...plan.update]) {
+    const entity = incomingById.get(entityId);
+    if (entity === undefined) continue;
+    const heading = getEntityHeading(entity);
+    const visual = visuals.get(entityId);
+    if (visual === undefined) {
+      const created = createCombatVisual(scene, entity, snapshot, tankLook, bake);
+      created.object.setPosition(entity.x, entity.y);
+      created.object.rotation = heading;
+      visuals.set(entityId, {
+        object: created.object,
+        healthBar: created.healthBar,
+        live: prediction?.bind(entityId, entity.visualKind),
+        drawnHealth: entity.visualKind === "enemy" ? entity.hp : 0,
+        // An entity appears already formed at the newest tick; there is no
+        // earlier authoritative sample to walk it out of.
+        position: createPointTrack(entity, toTick),
+        angle: createAngleTrack(heading, toTick),
+        velocity: reckonableVelocity(entity)
+      });
+    } else {
+      // A binding missed at spawn - the sprite made from a view the room had
+      // already moved past - would otherwise leave that one entity on the
+      // snapshot clock for as long as it lives.
+      visual.live ??= prediction?.bind(entityId, entity.visualKind);
+      /*
+       * The tracks are the fallback's memory, and a bound entity does not use
+       * them: it is read from the predictor every frame. Extending them anyway
+       * was two allocations and an angle unwrap per entity per patch - work
+       * that scales with the wave and is thrown away.
+       */
+      if (visual.live !== undefined) {
+        visual.velocity = reckonableVelocity(entity);
+      } else if (snap) {
+        visual.object.setPosition(entity.x, entity.y).setRotation(heading);
+        visual.position = createPointTrack(entity, toTick);
+        visual.angle = createAngleTrack(heading, toTick);
+        visual.velocity = reckonableVelocity(entity);
+      } else {
+        visual.position = extendPointTrack(visual.position, entity, toTick);
+        visual.angle = extendAngleTrack(visual.angle, heading, toTick);
+        visual.velocity = reckonableVelocity(entity);
+      }
+      if (
+        visual.healthBar !== undefined &&
+        entity.visualKind === "enemy" &&
+        visual.drawnHealth !== entity.hp
+      ) {
+        visual.drawnHealth = entity.hp;
+        setEnemyHealthBar(visual.healthBar, entity);
+      }
+    }
+  }
+}
+
+/**
+ * A shape drawn once into a texture, and an image of it thereafter.
+ *
+ * Everything on the field is built from primitives, and every one of them was
+ * being tessellated again on every spawn - a wave of shells is a wave of
+ * geometry rebuilt from scratch. The reference prototype draws the same
+ * primitives, but bakes them at boot (`generateTexture`) and puts an `image`
+ * on the field, so a frame costs a transform and nothing else. That is the
+ * whole difference between seven milliseconds a second on a hundred and
+ * sixty-five bodies and fifteen on three.
+ *
+ * The key must name everything that changes a pixel - shape, size, colour -
+ * because a texture is shared by every entity that asks for the same one.
+ * `half` is how far the drawing reaches from its own origin; the box is twice
+ * that and the origin sits at its centre, so the image lands exactly where
+ * the graphics would have.
+ */
+
+/**
+ * What a streaming cockpit lends the scene: the frame driver for its own ship,
+ * and the world read off that same clock.
+ *
+ * Every call is allowed to answer "not this one" - the two-device display never
+ * has a driver at all, and a sprite whose entity has already left the room has
+ * nothing to bind to.
+ */
+/** Only what the scene draws with; the rest of the pose is the replay's business. */
+interface PredictedShipPose {
+  readonly x: number;
+  readonly y: number;
+  readonly heading: number;
+  readonly turretAngle: number;
+}
+
+export interface ScenePrediction {
+  /** Steps and sends, then hands back the pose - or nothing when the switch is off. */
+  drive(): PredictedShipPose | undefined;
+  bind(entityId: string, kind: LiveEntityKind): LiveEntity | undefined;
+  read(entity: LiveEntity): LivePlacement | undefined;
+}
+
+/**
+ * How long the worst frame is gathered over before it is published. A second,
+ * because that is the unit the frame counter beside it already speaks in, and
+ * because a shorter window makes the reading flicker faster than it can be
+ * read.
+ */
+
+/**
+ * The velocity a shell may be carried forward by, or nothing.
+ *
+ * Shells only. An enemy travels an arc under a steering blend that changes
+ * every tick, so extrapolating it linearly throws it off the curve and snaps it
+ * back; a homing missile steers by definition. Only motion nobody can influence
+ * is safe to carry forward - which is the lab's rule, and the reason it reckons
+ * its bullets and lerps everything else.
+ */
+function reckonableVelocity(
+  entity: CombatEntity
+): { readonly x: number; readonly y: number } | undefined {
+  return entity.visualKind === "projectile"
+    ? { x: entity.velocityX, y: entity.velocityY }
+    : undefined;
 }
