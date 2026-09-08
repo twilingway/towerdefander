@@ -173,6 +173,18 @@ export class LatestInputScheduler<T> {
     if (enabled) this.flush(now);
   }
 
+  /**
+   * The number the next send will carry, which is also how many have gone out.
+   *
+   * A caller that must not lose a momentary press - a trigger tap - reads this
+   * when it presses and waits for it to move before it lets go. The scheduler
+   * keeps only the latest value, so a press set and unset inside one send
+   * window is otherwise coalesced into nothing at all.
+   */
+  readSequence(): number {
+    return this.nextSequence;
+  }
+
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     if (!enabled) this.pending = false;

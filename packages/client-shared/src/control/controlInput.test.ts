@@ -229,3 +229,37 @@ describe("controller input", () => {
     expect(send).toHaveBeenCalledWith({ sequence: 1, value: { x: 0 } });
   });
 });
+
+describe("LatestInputScheduler unsent changes", () => {
+  /*
+   * The trap this pins: the scheduler keeps only the latest value, so a trigger
+   * pressed and let go inside one send window arrives as no press at all. The
+   * controller's fire path asks before it lets go, and this is the question it
+   * asks.
+   */
+  it("counts what has gone out, so a press can wait to be carried", () => {
+    const sent: { v: boolean }[] = [];
+    const scheduler = new LatestInputScheduler<{ v: boolean }>({ v: false }, ({ value }) =>
+      sent.push(value)
+    );
+
+    scheduler.flush(0);
+    expect(sent).toEqual([{ v: false }]);
+    const pressedAt = scheduler.readSequence();
+
+    // Inside the fifty the scheduler holds to, so the press is kept back and
+    // the count does not move.
+    scheduler.update({ v: true }, 10);
+    expect(sent).toHaveLength(1);
+    expect(scheduler.readSequence()).toBe(pressedAt);
+
+    // Letting go here is what used to lose the round: the press had not left
+    // and the release overwrote it.
+    scheduler.update({ v: false }, 20);
+    expect(sent).toHaveLength(1);
+
+    scheduler.flush(60);
+    expect(sent).toHaveLength(2);
+    expect(scheduler.readSequence()).toBe(pressedAt + 1);
+  });
+});

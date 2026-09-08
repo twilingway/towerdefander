@@ -117,6 +117,10 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
       .toBeCloseTo(-Math.PI / 2, 1);
 
     const heldBearing = await readNumber(world, "data-turret-angle");
+    // A tap is only a round while the wave is running: outside combat the room
+    // refuses gunner input, and waiting for a projectile id that can never
+    // change reads as a mystery instead of as the wrong phase.
+    expect(await world.getAttribute("data-encounter-phase")).toBe("combat");
     const shotBeforeTap = await world.getAttribute("data-latest-projectile-id");
     await solo.mouse.click(centreX, centreY + stickBounds.height * 0.06);
     await expect

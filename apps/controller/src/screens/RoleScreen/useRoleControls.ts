@@ -10,6 +10,19 @@ import {
 } from "@spaceship-defender/client-shared";
 import { AIM_RELEASE_DELAY_MS, NEUTRAL_CONTROL, type ControlState } from "../../model/control.js";
 
+/** How often to ask again whether the press has gone out. */
+const FIRE_SEND_POLL_MS = 10;
+
+/**
+ * How many sends must carry a trigger that has already been let go.
+ *
+ * One is not proof of arrival - the same reason the display's cockpit repeats a
+ * press. The room fires on the rising edge, so a held trigger is one round
+ * however many frames say so, and three sends of insistence is far below the
+ * fastest a thumb can tap twice.
+ */
+const TRIGGER_SENDS = 3;
+
 interface RoleControlsOptions {
   readonly role: CrewRole;
   readonly shield: PublicShieldView | undefined;
@@ -53,6 +66,8 @@ export function useRoleControls({
 }: RoleControlsOptions): RoleControls {
   const controlReference = useRef<ControlState>(NEUTRAL_CONTROL);
   const firePressedAtReference = useRef<number | undefined>(undefined);
+  /** The send number the press was handed over at; see TRIGGER_SENDS. */
+  const firePressedSequenceReference = useRef<number | undefined>(undefined);
   const fireReleaseTimerReference = useRef<number | undefined>(undefined);
   const aimReleaseTimerReference = useRef<number | undefined>(undefined);
   const shieldSnapshotReference = useRef(shield);
@@ -130,7 +145,32 @@ export function useRoleControls({
   function beginFire(): void {
     clearFireReleaseTimer();
     firePressedAtReference.current = performance.now();
+    firePressedSequenceReference.current = schedulerReference.current?.readSequence();
     setFireDesired(true);
+  }
+
+  /**
+   * Lets the trigger go, but never before the press has left the page.
+   *
+   * The minimum pulse alone is a race the scheduler can win: it keeps only the
+   * latest value and sends at most every fifty milliseconds, so a press and a
+   * release inside one window coalesce into nothing at all. Normally the
+   * twenty-five millisecond flush carries the press out well inside the pulse -
+   * and when the tab is busy enough to miss that flush, the tap is swallowed
+   * and the round never happens. The display's own cockpit already repeats a
+   * press for this reason; this is the same insistence, asked as a question
+   * rather than counted in frames.
+   */
+  function releaseFireWhenSent(): void {
+    const pressedAtSequence = firePressedSequenceReference.current;
+    const sent = (schedulerReference.current?.readSequence() ?? 0) - (pressedAtSequence ?? 0);
+    if (pressedAtSequence !== undefined && sent < TRIGGER_SENDS) {
+      fireReleaseTimerReference.current = window.setTimeout(releaseFireWhenSent, FIRE_SEND_POLL_MS);
+      return;
+    }
+    fireReleaseTimerReference.current = undefined;
+    firePressedSequenceReference.current = undefined;
+    setFireDesired(false);
   }
 
   function endFire(): void {
@@ -138,18 +178,12 @@ export function useRoleControls({
     firePressedAtReference.current = undefined;
     const remainingMs = getFireReleaseDelay(pressedAt, performance.now());
     clearFireReleaseTimer();
-    if (remainingMs === 0) {
-      setFireDesired(false);
-      return;
-    }
-    fireReleaseTimerReference.current = window.setTimeout(() => {
-      fireReleaseTimerReference.current = undefined;
-      setFireDesired(false);
-    }, remainingMs);
+    fireReleaseTimerReference.current = window.setTimeout(releaseFireWhenSent, remainingMs);
   }
 
   function cancelFire(): void {
     firePressedAtReference.current = undefined;
+    firePressedSequenceReference.current = undefined;
     clearFireReleaseTimer();
     setFireDesired(false);
   }
