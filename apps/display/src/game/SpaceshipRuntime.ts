@@ -51,7 +51,7 @@ import {
 } from "./spaceshipViewModel.js";
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../model/shipPrediction.js";
-import { pickFocusedTarget } from "../combatFocus.js";
+import { pickFocusedTarget } from "../model/combatFocus.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 import {
   drawEnemyTank,

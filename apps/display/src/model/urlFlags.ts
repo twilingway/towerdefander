@@ -2,7 +2,7 @@ import { MAX_START_WAVE } from "@spaceship-defender/protocol";
 import { isPreviewMode } from "@spaceship-defender/client-shared";
 
 import { isDiagnosticsRequested } from "./diagnostics.js";
-import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "../visibleDemo.js";
+import { isVisibleDemoMode, readShipArchetypeId, readStartWave } from "./visibleDemo.js";
 
 export interface DisplayUrlFlags {
   readonly preview: boolean;

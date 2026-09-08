@@ -8,7 +8,7 @@ import {
   visibleDemoStatusEvent,
   type VisibleDemoCommand,
   type VisibleDemoStatus
-} from "./visibleDemo.js";
+} from "../../model/visibleDemo.js";
 
 interface VisibleDemoOverlayProps {
   readonly connectionStatus: string;

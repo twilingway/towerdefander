@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ModuleTreeWindow, summariseGains } from "./index.js";
-import { PREVIEW_ENDLESS_TIER, PREVIEW_MODULE_TIERS } from "../../previewMode.js";
+import { PREVIEW_ENDLESS_TIER, PREVIEW_MODULE_TIERS } from "../../model/previewMode.js";
 
 const SHIP = { maxHp: 540, shieldCapacity: 125, shieldArcRadians: Math.PI / 2, shieldRadius: 104 };
 

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
+import { VisibleDemoOverlay } from "./index.js";
 
 describe("VisibleDemoOverlay", () => {
   it("renders offline status, safe pause guidance, and all manual controls", () => {

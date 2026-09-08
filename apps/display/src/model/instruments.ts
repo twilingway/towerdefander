@@ -1,7 +1,7 @@
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import { PATCH_INTERVAL_MS } from "@spaceship-defender/protocol";
 
-import { countDrawnEntities } from "../combatHudViewModel.js";
+import { countDrawnEntities } from "./combatHudViewModel.js";
 import { readComponentCosts } from "./componentCost.js";
 import { readLiveView } from "./liveView.js";
 import type { LongTaskMeter } from "./longTasks.js";

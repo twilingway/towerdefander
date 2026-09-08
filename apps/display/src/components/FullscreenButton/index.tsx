@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fullscreenLabel, readFullscreenHost, toggleFullscreen } from "../../fullscreen.js";
+import { fullscreenLabel, readFullscreenHost, toggleFullscreen } from "./fullscreen.js";
 
 /**
  * The switch into fullscreen, offered in the lobby: that is where a room is set

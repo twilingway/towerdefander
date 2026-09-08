@@ -1,7 +1,7 @@
 import type { DisplayRoomView } from "@spaceship-defender/protocol";
 import { describe, expect, it } from "vitest";
 
-import { createPreviewRoomView } from "../previewMode.js";
+import { createPreviewRoomView } from "./previewMode.js";
 import { hasImmediateChange } from "./viewPublishing.js";
 
 function combat(): DisplayRoomView {

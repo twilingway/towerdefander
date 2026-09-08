@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import type { MaintenanceState, PublicShipCatalogue } from "@spaceship-defender/protocol";
 
-import { fetchMaintenance } from "../../serverStatus.js";
-import { fetchShipCatalogue } from "../../shipCatalogue.js";
+import { fetchMaintenance } from "../serverStatus.js";
+import { fetchShipCatalogue } from "../shipCatalogue.js";
 
 /**
  * The hulls a room can be opened on. Fetched once, and only informative: a

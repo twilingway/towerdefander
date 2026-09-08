@@ -10,7 +10,7 @@ import {
   type PublicShip
 } from "@spaceship-defender/protocol";
 
-import { VisibleDemoOverlay } from "../../VisibleDemoOverlay.js";
+import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
 
 interface CreateRoomScreenProps {
   readonly status: "idle" | "connecting" | "connected" | "reconnecting" | "error";

@@ -1,16 +1,16 @@
 import type { DisplayRoomView } from "@spaceship-defender/protocol";
 
-import { BossHealth } from "../../BossHealth.js";
+import { BossHealth } from "./BossHealth.js";
 import { CrewLatency } from "../../components/CrewLatency/index.js";
-import { getCurrentWaveUpgrade, selectBoss } from "../../combatHudViewModel.js";
+import { getCurrentWaveUpgrade, selectBoss } from "../../model/combatHudViewModel.js";
 import { roleLabel } from "@spaceship-defender/client-shared";
 import { encounterLabel } from "../../model/labels.js";
 import { ModuleTreeWindow, type ModuleTreeEntry } from "../../components/ModuleTreeWindow/index.js";
 import { SoloCockpit, type SoloCockpitProps } from "../SoloCockpit/index.js";
-import { SalvageCountdown } from "../../SalvageCountdown.js";
+import { SalvageCountdown } from "./SalvageCountdown.js";
 import { useWorldSlice } from "../../model/worldStore.js";
-import { WaveCountdown } from "../../WaveCountdown.js";
-import { WeaponHeat } from "../../WeaponHeat.js";
+import { WaveCountdown } from "./WaveCountdown.js";
+import { WeaponHeat } from "./WeaponHeat.js";
 
 /**
  * The battle panels, each subscribed to the one slice it draws.

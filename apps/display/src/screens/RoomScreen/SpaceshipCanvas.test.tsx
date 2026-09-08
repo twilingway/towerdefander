@@ -2,7 +2,7 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
+import type { SpaceshipRuntime } from "../../game/SpaceshipRuntime.js";
 import {
   SpaceshipCanvas,
   prepareRuntimeHydration,

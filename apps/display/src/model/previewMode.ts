@@ -1,5 +1,5 @@
 import type { PreviewPhase } from "@spaceship-defender/client-shared";
-import type { ModuleTreeEntry } from "./components/ModuleTreeWindow/index.js";
+import type { ModuleTreeEntry } from "../components/ModuleTreeWindow/index.js";
 import type {
   DisplayGameSnapshot,
   DisplayRoomView,

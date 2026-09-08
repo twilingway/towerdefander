@@ -18,10 +18,10 @@ import {
   closeDisplayRoom,
   confirmDisplayRoomClose,
   roomClosingMessage
-} from "../../displayRoomLifecycle.js";
-import { toDisplayRoomView, type NetworkRoomState } from "../../roomView.js";
+} from "../displayRoomLifecycle.js";
+import { toDisplayRoomView, type NetworkRoomState } from "../roomView.js";
 import { createActionId, nextVoteRevision } from "@spaceship-defender/client-shared";
-import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "../../visibleDemo.js";
+import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "../visibleDemo.js";
 import { GAME_SERVER_URL } from "../environment.js";
 import { recordSnapshotWork } from "../instruments.js";
 import { readLiveView, setLiveView } from "../liveView.js";

@@ -4,7 +4,7 @@ import {
   createRadarProjection,
   getShieldStatusLabel,
   projectWorldToRadar
-} from "./combatHudViewModel.js";
+} from "../../model/combatHudViewModel.js";
 
 /**
  * The radar, drawn into a canvas.

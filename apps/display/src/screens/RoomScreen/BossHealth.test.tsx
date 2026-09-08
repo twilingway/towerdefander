@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { BossHealth } from "./BossHealth.js";
-import { createPreviewRoomView } from "./previewMode.js";
+import { createPreviewRoomView } from "../../model/previewMode.js";
 
 function combat(): DisplayGameSnapshot {
   const game = createPreviewRoomView("combat").game;

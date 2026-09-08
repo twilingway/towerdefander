@@ -1,6 +1,6 @@
 import type { PublicWeaponHeatView } from "@spaceship-defender/protocol";
 
-import { getResourcePercent } from "./combatHudViewModel.js";
+import { getResourcePercent } from "../../model/combatHudViewModel.js";
 
 interface WeaponHeatRowProps {
   readonly weapon: PublicWeaponHeatView;

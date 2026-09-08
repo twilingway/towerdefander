@@ -1,12 +1,15 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
-import { getCurrentWaveUpgrade } from "./combatHudViewModel.js";
-import { readPixelRatioCap } from "./game/devicePixels.js";
-import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "./game/spaceshipViewModel.js";
-import type { SpaceshipRuntime } from "./game/SpaceshipRuntime.js";
-import type { PredictionDriver } from "./model/shipPrediction.js";
-import { findNearestVisibleDemoTarget, findNearestVisibleDemoThreat } from "./visibleDemo.js";
+import { getCurrentWaveUpgrade } from "../../model/combatHudViewModel.js";
+import { readPixelRatioCap } from "../../game/devicePixels.js";
+import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "../../game/spaceshipViewModel.js";
+import type { SpaceshipRuntime } from "../../game/SpaceshipRuntime.js";
+import type { PredictionDriver } from "../../model/shipPrediction.js";
+import {
+  findNearestVisibleDemoTarget,
+  findNearestVisibleDemoThreat
+} from "../../model/visibleDemo.js";
 
 interface SpaceshipCanvasProps {
   readonly game: DisplayGameSnapshot;
@@ -162,7 +165,7 @@ export function SpaceshipCanvas({
     const host = hostReference.current;
     if (host === null) return;
 
-    void import("./game/SpaceshipRuntime.js")
+    void import("../../game/SpaceshipRuntime.js")
       .then(({ createSpaceshipRuntime }) => {
         if (!disposed) {
           runtimeReference.current = createSpaceshipRuntime(host, latestGame.current, {

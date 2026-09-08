@@ -19,7 +19,7 @@ import {
   type ReactNode
 } from "react";
 
-import { PolledCombatRadar } from "./CombatRadar.js";
+import { PolledCombatRadar } from "./screens/RoomScreen/CombatRadar.js";
 import { useLetterboxBars } from "./model/hooks/useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
@@ -29,11 +29,11 @@ import { useSoloCockpit, type SoloCockpitControls } from "./model/hooks/useSoloC
 import { useBareControls } from "./model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "./model/hooks/useCockpitKeyboard.js";
 import { readAimAssistFromDevice, saveAimAssistToDevice } from "./model/aimAssistPreference.js";
-import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
-import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
-import { VisibleDemoOverlay } from "./VisibleDemoOverlay.js";
-import { RunResultOverlay } from "./RunResultOverlay.js";
-import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
+import { SpaceshipCanvas } from "./screens/RoomScreen/SpaceshipCanvas.js";
+import { TeamUpgradeOverlay } from "./screens/RoomScreen/TeamUpgradeOverlay.js";
+import { VisibleDemoOverlay } from "./components/VisibleDemoOverlay/index.js";
+import { RunResultOverlay } from "./screens/RoomScreen/RunResultOverlay.js";
+import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./model/previewMode.js";
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
 import { recordComponentCommit } from "./model/componentCost.js";
 import {
@@ -43,9 +43,9 @@ import {
   CountdownPanel,
   CrewLatencyPanel,
   ModuleWindowPanel
-} from "./screens/BattleScreen/panels.js";
+} from "./screens/RoomScreen/panels.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
-import { createControllerJoinUrl } from "./roomView.js";
+import { createControllerJoinUrl } from "./model/roomView.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
 import { CONTROLLER_URL, GAME_SERVER_URL } from "./model/environment.js";

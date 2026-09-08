@@ -1,6 +1,6 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 
-import { getResourcePercent, selectBoss } from "./combatHudViewModel.js";
+import { getResourcePercent, selectBoss } from "../../model/combatHudViewModel.js";
 
 interface BossHealthProps {
   readonly game: DisplayGameSnapshot;
