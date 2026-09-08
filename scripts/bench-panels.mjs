@@ -57,7 +57,7 @@ const startWave = Number(
  *
  * Attribution, not tuning: with React off the patch path the judder that is
  * left has to be either the drawing or the garbage, and turning one layer off
- * at a time is the only way to say which without guessing. `--off=фон,свечение`
+ * at a time is the only way to say which without guessing. `--off=векторы`
  * names them the way the panel does.
  */
 const switchesOff = (process.argv.find((argument) => argument.startsWith("--off="))?.slice(6) ?? "")
@@ -66,8 +66,6 @@ const switchesOff = (process.argv.find((argument) => argument.startsWith("--off=
   .filter((name) => name.length > 0);
 
 const SWITCHES = {
-  фон: { testId: "diagnostics-background-toggle", attribute: "data-background" },
-  свечение: { testId: "diagnostics-glow-toggle", attribute: "data-glow" },
   векторы: { testId: "diagnostics-vectors-toggle", attribute: "data-vectors" },
   предсказание: { testId: "diagnostics-prediction-toggle", attribute: "data-prediction" }
 };

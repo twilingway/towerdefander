@@ -22,7 +22,6 @@ import {
 
 import {
   advancePlayback,
-  backgroundTileOffset,
   createAngleTrack,
   createPlaybackClock,
   createPointTrack,
@@ -33,8 +32,6 @@ import {
   getArenaRingRadii,
   getArenaSpokes,
   getRimBandStroke,
-  BACKGROUND_COVER_MARGIN_PX,
-  getBackgroundCoverRect,
   getBackingStoreSize,
   getPhaserCameraScroll,
   getResponsiveViewport,
@@ -48,7 +45,6 @@ import {
   samplePointTrack,
   SnapshotResetLatch,
   type AngleTrack,
-  type BackgroundCoverRect,
   type MutableFocusCandidate,
   type PlaybackClock,
   type Point,
@@ -69,16 +65,6 @@ import {
   TANK_ART_HALF,
   TANK_VOID_COLOR
 } from "./tankArt.js";
-import {
-  BACKGROUND_LAYERS,
-  BACKGROUND_LAYER_DEPTH,
-  BACKGROUND_TEXTURE_KEYS,
-  backgroundLayerAlpha,
-  backgroundTextureKey,
-  isNebulaLayer,
-  type BackgroundBlendMode,
-  type BackgroundLayerConfig
-} from "./spaceBackground.js";
 
 /**
  * What the viewport spec reads: the camera's pixel rect and its zoom, both in
@@ -153,11 +139,6 @@ export interface ScenePrediction {
   read(entity: LiveEntity): LivePlacement | undefined;
 }
 
-interface BackgroundLayerState {
-  readonly sprite: Phaser.GameObjects.TileSprite;
-  readonly config: BackgroundLayerConfig;
-}
-
 type CombatEntity =
   | (PublicEnemyView & { readonly visualKind: "enemy" })
   | (PublicAsteroidView & { readonly visualKind: "asteroid" })
@@ -230,15 +211,7 @@ class SpaceshipScene extends Phaser.Scene {
   private readonly combatVisuals = new Map<string, CombatVisual>();
   /** Reused between frames; see `updateFocusCandidates`. */
   private readonly focusScratch: MutableFocusCandidate[] = [];
-  private readonly backgroundLayers: BackgroundLayerState[] = [];
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
-  /**
-   * Off, and not merely hidden: four full-screen tile sprites, three of them
-   * blended, measured forty-three points of torn frames on a tablet - the
-   * largest single thing on the field by a distance. Nothing creates them until
-   * the switch in the instrument panel asks for them.
-   */
-  private backgroundEnabled = false;
   /**
    * The prototype's picture instead of ours; see `readTankLook`. Read once at
    * construction because it decides what is baked, and a texture is baked once.
@@ -271,14 +244,6 @@ class SpaceshipScene extends Phaser.Scene {
    */
   private snapshotSource: (() => DisplayGameSnapshot | undefined) | undefined;
   /**
-   * Off keeps the shield's bloom down even while the sector is up.
-   *
-   * The filter is already the cheap kind - internal, on the arc's own target
-   * rather than the whole canvas - but "already cheap" is a claim, and the only
-   * way to price the remainder on a phone is to take it away there.
-   */
-  private glowEnabled = true;
-  /**
    * Off stops the five vector overlays that are cleared and rebuilt every frame
    * - the shield sector, the aim envelope, both focus rings and the beams.
    *
@@ -288,16 +253,8 @@ class SpaceshipScene extends Phaser.Scene {
    * pixel ratio - which is exactly why `dpr=1` changed nothing.
    */
   private vectorsEnabled = true;
-  private parallaxStrength = 1;
-  /** Accumulated idle-drift time in seconds, already scaled by the tuned drift speed. */
-  private backgroundDriftSeconds = 0;
   private viewportWidth = BASE_VIEWPORT_WIDTH;
   private viewportHeight = BASE_VIEWPORT_HEIGHT;
-  private backgroundCover: BackgroundCoverRect = getBackgroundCoverRect(
-    BASE_VIEWPORT_WIDTH,
-    BASE_VIEWPORT_HEIGHT,
-    1
-  );
   /**
    * Device pixels per CSS pixel, handed in by whoever sized the buffer. Only
    * the numbers measured in absolute pixels care - the background's cover
@@ -324,13 +281,6 @@ class SpaceshipScene extends Phaser.Scene {
     this.shieldTrack = createAngleTrack(snapshot.shield.angle, tick);
   }
 
-  preload(): void {
-    // All six PNGs up front so a nebula preset switch is an instant setTexture.
-    for (const key of BACKGROUND_TEXTURE_KEYS) {
-      this.load.image(key, `textures/${key.replace(/^bg-/, "")}.png`);
-    }
-  }
-
   create(): void {
     this.configureViewport(this.scale.gameSize.width, this.scale.gameSize.height);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -339,7 +289,6 @@ class SpaceshipScene extends Phaser.Scene {
     });
     this.focusCamera(this.snapshot.spaceship);
     this.drawArena();
-    if (this.backgroundEnabled) this.createBackground(this.snapshot.background);
     this.drawDecorations();
 
     /*
@@ -429,7 +378,6 @@ class SpaceshipScene extends Phaser.Scene {
 
   private updateScene(time: number, deltaMs: number): void {
     this.frames.recordFrame(time, this.game.loop.rawDelta);
-    this.updateBackground(deltaMs);
     this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
@@ -565,12 +513,8 @@ class SpaceshipScene extends Phaser.Scene {
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
-    const previousBackground = this.snapshot.background;
     const previousTick = this.snapshot.tick;
     this.snapshot = snapshot;
-    if (hasBackgroundChanged(previousBackground, snapshot.background)) {
-      this.applyBackgroundSettings(snapshot.background);
-    }
     const shouldSnap = this.snapshotReset.consumeForSnapshot();
     if (!this.sys.isActive()) return;
     // The framed slice comes from the balance preset, so a new run - or a
@@ -765,78 +709,6 @@ class SpaceshipScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Screen-fixed parallax layers: each TileSprite sits at scrollFactor 0 with its origin on the
-   * world corner, so it always covers the viewport regardless of camera scroll or zoom. Per frame
-   * its tile position is shifted by a fraction of the camera scroll (parallax) plus an accumulated
-   * idle drift; factors and drifts are carried over one-to-one from the demo.
-   */
-  private createBackground(background: DisplayGameSnapshot["background"]): void {
-    for (const config of BACKGROUND_LAYERS) {
-      const sprite = this.add
-        .tileSprite(
-          this.backgroundCover.x,
-          this.backgroundCover.y,
-          this.backgroundCover.width,
-          this.backgroundCover.height,
-          backgroundTextureKey(config.kind, background.nebulaPreset)
-        )
-        .setOrigin(0)
-        .setScrollFactor(0)
-        .setDepth(BACKGROUND_LAYER_DEPTH[config.kind])
-        .setTileScale(config.tileScale);
-      sprite.setBlendMode(backgroundBlendMode(config.blendMode));
-      sprite.alpha = backgroundLayerAlpha(config.kind, background.nebulaAlpha);
-      // The scene boots asynchronously, so the switch may already have been
-      // thrown before these existed.
-      sprite.setVisible(this.backgroundEnabled);
-      this.backgroundLayers.push({ sprite, config });
-    }
-  }
-
-  private applyBackgroundSettings(background: DisplayGameSnapshot["background"]): void {
-    for (const layer of this.backgroundLayers) {
-      if (!isNebulaLayer(layer.config.kind)) continue;
-      layer.sprite.setTexture(backgroundTextureKey(layer.config.kind, background.nebulaPreset));
-      layer.sprite.alpha = backgroundLayerAlpha(layer.config.kind, background.nebulaAlpha);
-    }
-    this.parallaxStrength = background.parallaxStrength;
-  }
-
-  /**
-   * Turns the parallax layers off, sprites and per-frame work together.
-   *
-   * Four full-screen tile sprites, three of them blended, are a plausible way to
-   * spend a phone's fill rate, and the only way to find out is to take them away
-   * on the phone that stutters. Hidden rather than destroyed: this is a question
-   * being asked, not a decision being made, and the answer has to be one button
-   * away in both directions.
-   */
-  /**
-   * Builds the sky the first time anyone asks for it, and hides it after that.
-   *
-   * A run starts without it - see the field above - so there is nothing to
-   * reveal until this has been on once. Kept switchable rather than deleted
-   * because the measurement that took it away is the one thing that could ever
-   * bring it back, and that measurement needs both sides.
-   */
-  setBackgroundEnabled(enabled: boolean): void {
-    this.backgroundEnabled = enabled;
-    if (enabled && this.backgroundLayers.length === 0) {
-      this.createBackground(this.snapshot.background);
-      return;
-    }
-    for (const layer of this.backgroundLayers) {
-      layer.sprite.setVisible(enabled);
-    }
-  }
-
-  /**
-   * The per-frame vector overlays on or off.
-   *
-   * Hidden as well as skipped: a path left on screen from the frame the switch
-   * was thrown would sit there frozen and read as a bug rather than an answer.
-   */
   setVectorsEnabled(enabled: boolean): void {
     this.vectorsEnabled = enabled;
     for (const drawing of [
@@ -868,43 +740,6 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
-  /**
-   * Kept as a switch with nothing behind it for exactly as long as it takes to
-   * notice: the shield's bloom is gone.
-   *
-   * It was one filter on one small object, and on a tablet it measured
-   * twenty-two points of torn frames - a mobile GPU pays for a render target
-   * and a shader pass per frame whatever the object's size. Nothing else on the
-   * field glows.
-   */
-  setGlowEnabled(enabled: boolean): void {
-    this.glowEnabled = enabled;
-  }
-
-  private updateBackground(deltaMs: number): void {
-    if (!this.backgroundEnabled || this.backgroundLayers.length === 0) return;
-    const scrollX = this.cameras.main.scrollX;
-    const scrollY = this.cameras.main.scrollY;
-    // Drift speed comes from the snapshot so a preset change retunes it live.
-    this.backgroundDriftSeconds += (deltaMs / 1000) * this.snapshot.background.driftSpeed;
-    for (const layer of this.backgroundLayers) {
-      const offset = backgroundTileOffset(
-        layer.config,
-        scrollX,
-        scrollY,
-        this.parallaxStrength,
-        this.backgroundDriftSeconds
-      );
-      layer.sprite.tilePositionX = modPositive(offset.x, layer.sprite.frame.source.width);
-      layer.sprite.tilePositionY = modPositive(offset.y, layer.sprite.frame.source.height);
-    }
-  }
-
-  /**
-   * Laser pulses, drawn straight from the authoritative endpoints. They are not
-   * entities and have no track to interpolate: the server says a beam existed
-   * for these two ticks, and the display shows exactly that.
-   */
   private drawLaserBeams(): void {
     if (this.beams === undefined) return;
     this.beams.clear();
@@ -1234,21 +1069,6 @@ class SpaceshipScene extends Phaser.Scene {
       viewport.screen.height
     );
     // Scroll-factor-0 layers still get zoomed around the camera origin, so their world rect is
-    // not the viewport window; keep both size and position in sync with it.
-    this.backgroundCover = getBackgroundCoverRect(
-      viewport.screen.width,
-      viewport.screen.height,
-      viewport.zoom,
-      // The only number here measured in pixels rather than world units, so the
-      // only one that has to be told the buffer got denser: left alone, the
-      // slack behind the edge would shrink by the ratio.
-      BACKGROUND_COVER_MARGIN_PX * this.pixelRatio
-    );
-    for (const layer of this.backgroundLayers) {
-      layer.sprite
-        .setPosition(this.backgroundCover.x, this.backgroundCover.y)
-        .setSize(this.backgroundCover.width, this.backgroundCover.height);
-    }
     // Published for the viewport spec, which has no other way to ask what the
     // camera is actually showing. Inert otherwise: a plain object, written once
     // per resize.
@@ -1537,32 +1357,6 @@ class SpaceshipScene extends Phaser.Scene {
     }
     return { object: container, healthBar };
   }
-}
-
-type BackgroundSettings = DisplayGameSnapshot["background"];
-
-function hasBackgroundChanged(previous: BackgroundSettings, next: BackgroundSettings): boolean {
-  return (
-    previous.parallaxStrength !== next.parallaxStrength ||
-    previous.driftSpeed !== next.driftSpeed ||
-    previous.nebulaAlpha !== next.nebulaAlpha ||
-    previous.nebulaPreset !== next.nebulaPreset
-  );
-}
-
-function backgroundBlendMode(mode: BackgroundBlendMode): Phaser.BlendModes {
-  switch (mode) {
-    case "screen":
-      return Phaser.BlendModes.SCREEN;
-    case "add":
-      return Phaser.BlendModes.ADD;
-    default:
-      return Phaser.BlendModes.NORMAL;
-  }
-}
-
-function modPositive(value: number, size: number): number {
-  return ((value % size) + size) % size;
 }
 
 function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
