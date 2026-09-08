@@ -355,12 +355,22 @@ function migrateEnemySkill(tuning: LegacyRecord, defaults: BalanceTuning): unkno
  * leftover key would fail the strict schema and take the operator's waves with
  * it, exactly the way one autopilot knob once did.
  */
-function migrateHelm(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
+function migrateHelm(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecord {
   const saved: LegacyRecord = { ...readRecord(tuning, "helm") };
   // Version 17 named this the counter angle; the release now aims at the
   // predicted resting point instead, so the old key has no home.
   delete saved.stopCounterRadians;
-  return { ...defaults.helm, ...saved };
+  return {
+    ...defaults.helm,
+    ...saved,
+    /*
+     * Taken back rather than kept, like the drive fields above: the arcade
+     * profile has no thumb gate and no heading filter, and those two are what
+     * decide whether the nose answers the finger on the frame it moved.
+     */
+    headingDeadbandRadians: defaults.helm.headingDeadbandRadians,
+    headingFilterSeconds: defaults.helm.headingFilterSeconds
+  };
 }
 
 /**
@@ -422,14 +432,42 @@ function migrateShipArchetypes(tuning: LegacyRecord, defaults: BalanceTuning): L
   };
 }
 
+/**
+ * The drive numbers an operator no longer owns.
+ *
+ * Normally a migration adds knobs and leaves tuned ones alone. This one takes
+ * six back, because the helm was changed on purpose and from the outside: the
+ * reference prototype's arcade profile replaced a hull that accelerated in a
+ * second and turned with inertia, and a preset that kept the old numbers would
+ * quietly keep the old feel while every other copy of the game had the new one.
+ * Whatever was in the file for these fields is replaced by the built-in value.
+ *
+ * The hull only. The turret is not on this list: the prototype points its
+ * barrel instantly, and taking that as well would delete the gunner's traverse
+ * along with everything built on it.
+ */
+const ARCADE_HELM_FIELDS = [
+  "spaceshipSpeedPerSecond",
+  "spaceshipAccelerationPerSecondSquared",
+  "spaceshipBrakingPerSecondSquared",
+  "spaceshipReverseSpeedFactor",
+  "headingMaxAngularSpeedPerSecond",
+  "headingAngularAccelerationPerSecondSquared",
+  "headingAngularBrakingPerSecondSquared"
+] as const satisfies readonly (keyof BalanceTuning)[];
+
 function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
   const campaign = readRecord(tuning, "waveCampaign");
+  const arcade = Object.fromEntries(
+    ARCADE_HELM_FIELDS.map((field) => [field, defaults[field]])
+  ) as Pick<BalanceTuning, (typeof ARCADE_HELM_FIELDS)[number]>;
   return {
     ...preset,
     tuning: {
       ...migratePlayerShip(tuning, defaults),
+      ...arcade,
       arenaRadius: tuning.arenaRadius ?? defaults.arenaRadius,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),

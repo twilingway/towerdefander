@@ -138,7 +138,23 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
   const rawDeployControlToken = environment.DEPLOY_CONTROL_TOKEN;
   const configuredBalancePath = environment.BALANCE_PRESET_PATH?.trim();
   const configuredBatchDirectory = environment.STATS_BATCH_DIR?.trim();
-  const gracefullyShutdown = environment.GRACEFUL_SHUTDOWN !== "false";
+  /*
+   * On in production, off while developing, and an explicit value wins either
+   * way.
+   *
+   * A graceful shutdown keeps the listener bound until the last room has
+   * drained, which is exactly right for a release behind a proxy and exactly
+   * wrong under a file watcher: save a file with a browser still in a room and
+   * the old process holds the port for the whole grace period while the new one
+   * tries to bind it, so the restart comes back as EADDRINUSE and the server is
+   * simply gone until it is started by hand. The container sets
+   * `NODE_ENV=production` (docker/api.Dockerfile), so the release keeps the
+   * drain it needs.
+   */
+  const gracefullyShutdown =
+    environment.GRACEFUL_SHUTDOWN === undefined
+      ? environment.NODE_ENV === "production"
+      : environment.GRACEFUL_SHUTDOWN !== "false";
   const allowStartWave = environment.ALLOW_START_WAVE === "true";
   const rawSparring = Number(environment.SPARRING_ENEMIES ?? "0");
   /*

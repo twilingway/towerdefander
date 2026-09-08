@@ -117,6 +117,26 @@ describe("advanceShipPose", () => {
 
 describe("SHIP_POSE_STAT_FIELDS", () => {
   /**
+   * A hull with weight, which the shipped one no longer has.
+   *
+   * The campaign flies the reference prototype's arcade profile: its angular
+   * accelerations reach the rate cap inside a single step, so changing one
+   * changes nothing a flight can show, and this guard - which is about the
+   * field list matching what the step reads, not about the numbers a release
+   * ships - would report four honest stats as dead. So it flies its own hull,
+   * slow enough that every knob still bites.
+   */
+  const geared: ShipStats = {
+    ...ship,
+    headingAngularAccelerationPerSecondSquared: 3,
+    headingAngularBrakingPerSecondSquared: 3,
+    turretAngularAccelerationPerSecondSquared: 2,
+    turretAngularBrakingPerSecondSquared: 3,
+    turretMaxAngularSpeedPerSecond: 1.4,
+    headingMaxAngularSpeedPerSecond: 2
+  };
+
+  /**
    * A flight that touches every part of the drive: a burn, a coast, a reverse,
    * a hull spin and a turret closing on a bearing. Without all five, a stat
    * could go missing from the list and nothing would notice.
@@ -159,12 +179,12 @@ describe("SHIP_POSE_STAT_FIELDS", () => {
   }
 
   it("names a stat only while the step still reads it", () => {
-    const baseline = mixedFlight(ship);
+    const baseline = mixedFlight(geared);
 
     const RIM_ONLY = "spaceshipRadius";
     const inert = SHIP_POSE_STAT_FIELDS.filter((field) => {
       if (field === RIM_ONLY) return false;
-      const moved = mixedFlight({ ...ship, [field]: ship[field] * 1.5 + 0.1 });
+      const moved = mixedFlight({ ...geared, [field]: geared[field] * 1.5 + 0.1 });
       return JSON.stringify(moved) === JSON.stringify(baseline);
     });
 

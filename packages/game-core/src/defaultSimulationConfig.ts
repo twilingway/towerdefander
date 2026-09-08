@@ -18,9 +18,19 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   spaceshipVisual: null,
   arenaRadius: 2200,
-  spaceshipAccelerationPerSecondSquared: 640,
-  spaceshipBrakingPerSecondSquared: 800,
-  spaceshipReverseSpeedFactor: 0.4,
+  /*
+   * The reference prototype's arcade profile, in our terms.
+   *
+   * It divides a top speed by three numbers to get its accelerations
+   * (`shared/tuning.ts`: 0.564, 0.327, 0.413), so at 620 units a second they
+   * come out near eleven hundred, nineteen hundred and fifteen hundred. What
+   * makes it read as arcade is not the speed but the shape: full thrust in half
+   * a second, a stop in less, and a reverse that is more than half of forward
+   * rather than a crawl.
+   */
+  spaceshipAccelerationPerSecondSquared: 1100,
+  spaceshipBrakingPerSecondSquared: 1500,
+  spaceshipReverseSpeedFactor: 0.58,
   spaceshipRadius: 52,
   inputTimeoutTicks: 15,
   // Reach is speed times lifetime, and the honest ceiling for it is half the
@@ -39,17 +49,31 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   turretMaxAngularSpeedPerSecond: (13 * Math.PI) / 30,
   turretAngularAccelerationPerSecondSquared: (13 * Math.PI) / 15,
   turretAngularBrakingPerSecondSquared: (13 * Math.PI) / 10,
-  // Off keeps the turret on a world bearing, which is what every run so
-  // far has been balanced against. An operator turns it on per preset.
+  /*
+   * Left where it was, deliberately.
+   *
+   * The arcade profile this drive comes from points its barrel instantly and
+   * carries it on the hull, and taking that too would delete the gunner's whole
+   * craft - traverse, braking, the tap, the overshoot a close target invites.
+   * Thirteen tests said so before a single one was rewritten. The hull flies
+   * like the prototype; the gun is still ours.
+   */
   turretMountedOnHull: false,
   shieldMaxAngularSpeedPerSecond: (13 * Math.PI) / 24,
   shieldAngularAccelerationPerSecondSquared: (13 * Math.PI) / 12,
   shieldAngularBrakingPerSecondSquared: (13 * Math.PI) / 8,
-  // Half a turn a second, started and stopped almost instantly: the hull has no
-  // visible flywheel, so angular inertia reads as input lag rather than weight.
-  headingMaxAngularSpeedPerSecond: Math.PI,
-  headingAngularAccelerationPerSecondSquared: 50,
-  headingAngularBrakingPerSecondSquared: 50,
+  /*
+   * Two hundred and forty degrees a second, and no angular inertia at all.
+   *
+   * The prototype's arcade profile turns at a hundred degrees a second on the
+   * keys and multiplies that by 2.4 for the stick; the cockpit is the stick, so
+   * that is the number the hull gets. `yawAccel` there is literally infinite -
+   * the heading is rate-limited and nothing else - and four hundred is our
+   * finite spelling of it: at sixty hertz the cap is reached in the first step.
+   */
+  headingMaxAngularSpeedPerSecond: (4 * Math.PI) / 3,
+  headingAngularAccelerationPerSecondSquared: 400,
+  headingAngularBrakingPerSecondSquared: 400,
   mgFireCooldownTicks: 6,
   mgProjectileSpeedPerSecond: 900,
   mgProjectileRadius: 5,

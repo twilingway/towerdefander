@@ -58,9 +58,16 @@ const DEFAULT_HELM: HelmTuning = {
   driveZoneShare: 0.42,
   /** Only the cockpit projects an aim point; the coop panels ignore it. */
   aimProjectionShare: 0.58,
-  // Three degrees and sixty milliseconds, both straight out of the lab.
-  headingDeadbandRadians: (3 * Math.PI) / 180,
-  headingFilterSeconds: 0.06,
+  /*
+   * Both off, because the arcade profile has neither.
+   *
+   * Three degrees of dead band and sixty milliseconds of filter came from the
+   * prototype's tank profile, where a forty-tonne hull is supposed to ignore
+   * thumb noise. Its arcade profile sets both to zero and the difference is the
+   * whole feel: the nose answers the finger on the frame the finger moved.
+   */
+  headingDeadbandRadians: 0,
+  headingFilterSeconds: 0,
   turretLeadRadians: 0.45
 };
 

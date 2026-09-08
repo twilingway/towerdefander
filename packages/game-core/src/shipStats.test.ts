@@ -207,6 +207,23 @@ function guardConfig(
     // campaign's own numbers left `shieldMinimumUpTicks` unproven while the
     // guard still reported green.
     shieldCapacity: 100,
+    /*
+     * A hull and a barrel with weight, pinned for the same reason as the
+     * enemies: the campaign now flies the reference prototype's arcade profile,
+     * whose angular accelerations reach the rate cap inside one step. Left at
+     * those numbers, doubling an acceleration changes no trace at all and the
+     * guard reports four honest fields as never exercised - a statement about
+     * the balance, not about the plumbing this instrument is for.
+     */
+    headingMaxAngularSpeedPerSecond: 2,
+    headingAngularAccelerationPerSecondSquared: 3,
+    headingAngularBrakingPerSecondSquared: 3,
+    turretMaxAngularSpeedPerSecond: 1.4,
+    turretAngularAccelerationPerSecondSquared: 2,
+    turretAngularBrakingPerSecondSquared: 3,
+    shieldMaxAngularSpeedPerSecond: 1.5,
+    shieldAngularAccelerationPerSecondSquared: 3,
+    shieldAngularBrakingPerSecondSquared: 4,
     enemyArchetypes: pinnedArchetypes(createSpaceshipSimulationConfig().enemyArchetypes),
     ...overrides
   });

@@ -596,7 +596,10 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     const saved = store.getState().presets[0]?.tuning;
-    expect(saved?.spaceshipReverseSpeedFactor).toBe(0.4);
+    // The built-in value, not the old one: the drive fields are taken back by
+    // the migration to the arcade profile, so what this proves is that the
+    // field exists and the campaign beside it survived.
+    expect(saved?.spaceshipReverseSpeedFactor).toBe(0.58);
     // The point of the test: the operator's campaign survived the new field.
     expect(saved?.waveCampaign.waves).toHaveLength(1);
   });
@@ -671,12 +674,13 @@ describe("version 1 migration", () => {
     expect(presets.map((preset) => preset.id)).toContain("steelvoid");
     const steelvoid = presets.find((preset) => preset.id === "steelvoid")?.tuning;
     expect(steelvoid?.turretMountedOnHull).toBe(true);
-    expect(steelvoid?.spaceshipReverseSpeedFactor).toBeCloseTo(0.55, 5);
+    // The drive comes back as the arcade profile in every preset - that is what
+    // version 38 does - so what the seed proves is that it still loads without
+    // a warning and keeps its own campaign, not that it kept its own drive.
+    expect(steelvoid?.spaceshipReverseSpeedFactor).toBeCloseTo(0.58, 5);
     expect(steelvoid?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
-    // ...and the default it was copied from keeps a world-bearing turret, which
-    // is what every run so far was balanced against.
     const base = presets.find((preset) => preset.id === "default")?.tuning;
-    expect(base?.turretMountedOnHull).toBe(false);
+    expect(base?.turretMountedOnHull).toBe(true);
   });
 
   it("gives a version 35 document the tremble guard, waves intact", async () => {
@@ -728,13 +732,13 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     const saved = store.getState().presets[0]?.tuning;
-    // The turret arrives at the behaviour the document already had, and the
-    // stick at STEEL VOID's own geometry — nothing before version 35 had a
-    // cockpit to feel the difference.
-    expect(saved?.turretMountedOnHull).toBe(false);
+    // The stick arrives at STEEL VOID's own geometry, and the drive at the
+    // arcade profile: version 38 takes those fields back from every document,
+    // so a mount and a heading filter saved before it do not survive.
+    expect(saved?.turretMountedOnHull).toBe(true);
     expect(saved?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
     expect(saved?.helm.driveZoneShare).toBe(0.42);
-    expect(saved?.helm.headingFilterSeconds).toBeCloseTo(0.06, 5);
+    expect(saved?.helm.headingFilterSeconds).toBe(0);
     expect(saved?.helm.turretLeadRadians).toBeCloseTo(0.45, 5);
     // And the point of every one of these tests: the campaign survived.
     expect(saved?.waveCampaign.waves).toHaveLength(1);

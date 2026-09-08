@@ -21,7 +21,8 @@ export const AUTHORED_SHIP_STATS = {
   projectileSpeedPerSecond: 1000,
   spaceshipMaxHp: 620,
   shieldCapacity: 120,
-  spaceshipSpeedPerSecond: 380
+  // The prototype's arcade top speed; the enemy archetypes below keep theirs.
+  spaceshipSpeedPerSecond: 620
 } satisfies Partial<SpaceshipSimulationConfig>;
 
 export const AUTHORED_ENEMY_ARCHETYPES: SpaceshipSimulationConfig["enemyArchetypes"] = {

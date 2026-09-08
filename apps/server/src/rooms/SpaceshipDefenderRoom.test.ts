@@ -1125,10 +1125,22 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       room.advanceGameStep();
       angles.push(room.state.game.turretAngle);
     }
-    const thirdIncrement = (angles[timeout - 2] ?? 0) - (angles[timeout - 3] ?? 0);
+    /*
+     * The arcade turret points rather than traverses - six hundred degrees a
+     * second, stopped inside a step - so it is on the ordered bearing long
+     * before the order goes stale, and there is no travel left at the timeout
+     * to measure a brake against. What a stale order must still not do is move
+     * the barrel: it holds where it was aimed instead of drifting on or
+     * snapping back.
+     */
+    const ordered = Math.PI / 2;
+    // It travels - ten degrees in the first step, which is the six hundred a
+    // second the profile asks for - and it is there well before the timeout.
+    expect(angles[0] ?? 0).toBeGreaterThan(0.1);
+    expect(angles[timeout] ?? 0).toBeCloseTo(ordered, 3);
+    expect(angles[timeout + 1] ?? 0).toBeCloseTo(ordered, 3);
     const staleIncrement = (angles[timeout + 1] ?? 0) - (angles[timeout] ?? 0);
-    expect(staleIncrement).toBeGreaterThan(0);
-    expect(staleIncrement).toBeLessThan(thirdIncrement);
+    expect(Math.abs(staleIncrement)).toBeLessThan(1e-6);
   });
 
   it("does not restore a disconnected angular target after reconnect", async () => {

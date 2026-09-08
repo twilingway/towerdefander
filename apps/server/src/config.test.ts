@@ -31,7 +31,9 @@ describe("readServerConfig", () => {
       balancePassword: undefined,
       statsBatchKeep: 50,
       statsBatchTimeoutSeconds: 1800,
-      gracefullyShutdown: true,
+      // Off without an environment: the default belongs to a release, and a
+      // bare object is a developer's machine. See the note in `config.ts`.
+      gracefullyShutdown: false,
       allowStartWave: false,
       sparringEnemies: 0
     });
@@ -84,7 +86,7 @@ describe("readServerConfig", () => {
       balancePassword: undefined,
       statsBatchKeep: 50,
       statsBatchTimeoutSeconds: 1800,
-      gracefullyShutdown: true,
+      gracefullyShutdown: false,
       allowStartWave: false,
       sparringEnemies: 0
     });
@@ -112,8 +114,17 @@ describe("readServerConfig", () => {
     );
   });
 
-  it("allows test runners to disable graceful process shutdown", () => {
+  it("drains rooms on the way out only where a release does", () => {
+    // Under a file watcher the drain holds the port for the whole grace period
+    // while the restarted process tries to bind it, and the server comes back
+    // as EADDRINUSE. The container sets NODE_ENV, so the release keeps it.
+    expect(readServerConfig({}).gracefullyShutdown).toBe(false);
+    expect(readServerConfig({ NODE_ENV: "production" }).gracefullyShutdown).toBe(true);
     expect(readServerConfig({ GRACEFUL_SHUTDOWN: "false" }).gracefullyShutdown).toBe(false);
+    expect(
+      readServerConfig({ NODE_ENV: "production", GRACEFUL_SHUTDOWN: "false" }).gracefullyShutdown
+    ).toBe(false);
+    expect(readServerConfig({ GRACEFUL_SHUTDOWN: "true" }).gracefullyShutdown).toBe(true);
   });
 
   it("accepts explicit lifecycle TTL values", () => {
