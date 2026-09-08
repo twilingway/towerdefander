@@ -1,4 +1,4 @@
-import { CAMERA_VIEW_ASPECT, ENEMY_BEAM_SOURCE } from "@spaceship-defender/protocol";
+import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import type {
   DisplayGameSnapshot,
   PublicAsteroidView,
@@ -11,6 +11,7 @@ import Phaser from "phaser";
 
 import { bakeRect, bakeShape } from "./bake.js";
 import { FrameMeter } from "./scene/frameMeter.js";
+import { AimingLayer } from "./scene/aiming.js";
 import { drawShield } from "./scene/shield.js";
 import {
   createEnemyHealthBar,
@@ -29,7 +30,6 @@ import {
   createSnappedVisualTransitions,
   extendAngleTrack,
   extendPointTrack,
-  fillFocusCandidates,
   getArenaRingRadii,
   getArenaSpokes,
   getRimBandStroke,
@@ -42,14 +42,12 @@ import {
   samplePointTrack,
   SnapshotResetLatch,
   type AngleTrack,
-  type MutableFocusCandidate,
   type PlaybackClock,
   type Point,
   type PointTrack
 } from "./spaceshipViewModel.js";
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../model/shipPrediction.js";
-import { pickFocusedTarget } from "../model/combatFocus.js";
 import { drawCatalogAssetById } from "./catalogRenderer.js";
 import {
   drawEnemyTank,
@@ -188,13 +186,6 @@ class SpaceshipScene extends Phaser.Scene {
   private noseMarker: Phaser.GameObjects.Image | undefined;
   private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Image | undefined;
-  private beams: Phaser.GameObjects.Graphics | undefined;
-  private aimEnvelope: Phaser.GameObjects.Image | undefined;
-  private focusRing: Phaser.GameObjects.Image | undefined;
-  /** What the ring held last frame, so it does not jump on every wobble. */
-  private focusedEntityId: string | undefined;
-  private noseFocus: Phaser.GameObjects.Image | undefined;
-  private noseFocusedEntityId: string | undefined;
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
   private headingTrack: AngleTrack;
@@ -206,8 +197,6 @@ class SpaceshipScene extends Phaser.Scene {
   private readonly frames = new FrameMeter();
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
-  /** Reused between frames; see `updateFocusCandidates`. */
-  private readonly focusScratch: MutableFocusCandidate[] = [];
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
   /**
    * The prototype's picture instead of ours; see `readTankLook`. Read once at
@@ -224,8 +213,7 @@ class SpaceshipScene extends Phaser.Scene {
    * whole exercise is trying to remove.
    */
   private prediction: ScenePrediction | undefined;
-  /** The reach and cone the aiming wedge was last built for. */
-  private aimEnvelopeShape: { readonly reach: number; readonly half: number } | undefined;
+  private aiming: AimingLayer | undefined;
   /**
    * Where the newest snapshot is, pulled rather than pushed.
    *
@@ -337,13 +325,16 @@ class SpaceshipScene extends Phaser.Scene {
     this.shield = this.add.image(0, 0, blank).setDepth(14);
     // Above the arena, below the shield: a pulse is over before it can hide
     // anything that matters.
-    this.beams = this.add.graphics().setDepth(13);
-    // Under everything that matters: it is a hint about where the gun can
-    // reach, and it must never sit on top of what is being aimed at.
-    this.aimEnvelope = this.add.image(0, 0, blank).setDepth(4).setVisible(false);
-    // Above the ships it marks, below the shield and the pulses.
-    this.focusRing = this.add.image(0, 0, blank).setDepth(12).setVisible(false);
-    this.noseFocus = this.add.image(0, 0, blank).setDepth(12).setVisible(false);
+    this.aiming = new AimingLayer(
+      this.add.graphics().setDepth(13),
+      // Under everything that matters: it is a hint about where the gun can
+      // reach, and it must never sit on top of what is being aimed at.
+      this.add.image(0, 0, blank).setDepth(4).setVisible(false),
+      // Above the ships it marks, below the shield and the pulses.
+      this.add.image(0, 0, blank).setDepth(12).setVisible(false),
+      this.add.image(0, 0, blank).setDepth(12).setVisible(false),
+      (key, half, draw) => this.bakedShape(key, half, draw)
+    );
     const tick = this.snapshot.tick;
     this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
@@ -414,13 +405,29 @@ class SpaceshipScene extends Phaser.Scene {
       // From the mount, which is where the simulation fires from too: the barrel
       // a crew sees is the barrel that shoots, so the envelope and the ring start
       // on it rather than at the hull's centre.
-      this.drawAimEnvelope(mount, this.turret.rotation);
+      this.aiming?.drawEnvelope(mount, this.turret.rotation, this.snapshot, this.vectorsEnabled);
       // One list, both rings: they ask the same question of the same ships, and
       // building it twice was two objects per enemy per frame of pure garbage.
-      const candidates = this.updateFocusCandidates(playbackTick);
-      this.drawFocusRing(mount, this.turret.rotation, candidates);
-      this.drawNoseFocus(spaceshipPosition, spaceshipHeading, candidates);
-      this.drawLaserBeams();
+      const candidates =
+        this.aiming?.updateCandidates(this.snapshot, (entityId) =>
+          this.readDrawnPoint(entityId, playbackTick)
+        ) ?? [];
+      this.aiming?.drawFocusRing(
+        mount,
+        this.turret.rotation,
+        candidates,
+        this.snapshot,
+        this.vectorsEnabled,
+        this.time.now
+      );
+      this.aiming?.drawNoseFocus(
+        spaceshipPosition,
+        spaceshipHeading,
+        candidates,
+        this.snapshot,
+        this.vectorsEnabled
+      );
+      this.aiming?.drawBeams(this.snapshot);
     }
     this.focusCamera(spaceshipPosition);
 
@@ -703,15 +710,8 @@ class SpaceshipScene extends Phaser.Scene {
 
   setVectorsEnabled(enabled: boolean): void {
     this.vectorsEnabled = enabled;
-    for (const drawing of [
-      this.shield,
-      this.aimEnvelope,
-      this.focusRing,
-      this.noseFocus,
-      this.beams
-    ]) {
-      drawing?.setVisible(enabled);
-    }
+    this.shield?.setVisible(enabled);
+    this.aiming?.setVisible(enabled);
   }
 
   /**
@@ -732,210 +732,12 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   /** The shield's bloom on or off, for pricing it on the device that pays. */
-  private drawLaserBeams(): void {
-    if (this.beams === undefined) return;
-    this.beams.clear();
-    for (const beam of this.snapshot.laserBeams) {
-      const style = beamStyle(beam.source);
-      this.beams.lineStyle(style.width, style.color, style.alpha);
-      this.beams.beginPath();
-      this.beams.moveTo(beam.fromX, beam.fromY);
-      this.beams.lineTo(beam.toX, beam.toY);
-      this.beams.strokePath();
-      this.beams.fillStyle(style.color, style.alpha);
-      this.beams.fillCircle(beam.fromX, beam.fromY, style.width);
-    }
-  }
-
-  /**
-   * Where the turret can reach, and - for a barrel that locks on - how far off
-   * the bore it will still take a lock. The fill says "inside here"; the two
-   * rays say where the edge is, because a wash of colour alone reads as glow
-   * rather than as a boundary.
-   *
-   * A barrel that locks onto nothing still gets a sliver, so the reach stays
-   * readable: the gunner's question is as often "does it even carry that far"
-   * as "am I on it".
-   */
-  /**
-   * Where the gun can reach, built once and then carried.
-   *
-   * The wedge is a filled path, and a filled path is triangulated every time it
-   * is drawn: under a phone's budget the tessellator and the graphics batcher
-   * together were most of a frame. Its shape does not change during a run -
-   * only where it points and where it starts - so it is built in the barrel's
-   * own coordinates and moved like any other object, and rebuilt only when the
-   * reach or the cone itself changes.
-   */
-  private drawAimEnvelope(origin: { readonly x: number; readonly y: number }, angle: number): void {
-    const layer = this.aimEnvelope;
-    if (layer === undefined) return;
-    const { reach, acquireHalfAngle } = this.snapshot.cannon;
-    if (reach <= 0) {
-      layer.setVisible(false);
-      return;
-    }
-    const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
-    const shape = this.aimEnvelopeShape;
-    if (shape?.reach !== reach || shape.half !== half) {
-      this.aimEnvelopeShape = { reach, half };
-      /*
-       * Baked at a fixed size and stretched to the reach, the way the arena
-       * floor is: a wedge nine hundred units long would be a nine-hundred pixel
-       * texture otherwise, and a fan of triangles carries that stretch without
-       * showing it. The barrel sits at the middle of the square, so half the
-       * texture is empty - which is the price of having the image turn about
-       * the gun rather than about its own bounding box.
-       */
-      const side = SpaceshipScene.AIM_TEXTURE_SIDE;
-      const drawn = side / 2;
-      const key = `aim:${String(Math.round(reach))}:${half.toFixed(3)}`;
-      layer.setTexture(
-        this.bakedShape(key, drawn, (graphics) => {
-          graphics.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
-          graphics.slice(0, 0, drawn, -half, half);
-          graphics.fillPath();
-          /*
-           * Drawn at the texture's scale, not the world's.
-           *
-           * The image is stretched from this square to twice the reach, and a
-           * stroke stretches with it: left at its world width the two edges
-           * came out three and a half times too thick and the cone read as a
-           * beam across the screen. The arena floor does the same arithmetic
-           * for the same reason.
-           */
-          graphics.lineStyle(
-            (AIM_ENVELOPE_STYLE.width * drawn) / reach,
-            AIM_ENVELOPE_STYLE.color,
-            AIM_ENVELOPE_STYLE.edgeAlpha
-          );
-          for (const edge of [-half, half]) {
-            graphics.beginPath();
-            graphics.moveTo(0, 0);
-            graphics.lineTo(Math.cos(edge) * drawn, Math.sin(edge) * drawn);
-            graphics.strokePath();
-          }
-        })
-      );
-      layer.setDisplaySize(reach * 2, reach * 2);
-    }
-    layer.setVisible(this.vectorsEnabled);
-    layer.setPosition(origin.x, origin.y);
-    layer.setRotation(angle);
-  }
-
-  /**
-   * A ring around the ship a shot would hit right now, breathing so it reads as
-   * live rather than as decoration. There is no lock in this game - the gunner
-   * turns a barrel - so the ring is read off the geometry every frame, and it
-   * moves the moment the bore does.
-   *
-   * Drawn at the interpolated positions, not the snapshot's, or it would sit a
-   * frame behind the ship it is marking.
-   */
-  private drawFocusRing(
-    origin: { readonly x: number; readonly y: number },
-    bearing: number,
-    candidates: readonly MutableFocusCandidate[]
-  ): void {
-    const layer = this.focusRing;
-    if (layer === undefined) return;
-    const focus = pickFocusedTarget({
-      origin,
-      bearing,
-      reach: this.snapshot.cannon.reach,
-      speed: this.snapshot.cannon.speed,
-      heldEntityId: this.focusedEntityId,
-      candidates
-    });
-    this.focusedEntityId = focus?.target.entityId;
-    if (focus === undefined) {
-      layer.setVisible(false);
-      return;
-    }
-    const { target, firable } = focus;
-    // A ring per calibre, and the breathing is the image's alpha rather than a
-    // colour drawn again: an alpha is a number on an existing texture.
-    const radius = Math.round(target.radius + FOCUS_RING_MARGIN);
-    const width = firable ? FOCUS_RING_FIRABLE_WIDTH : FOCUS_RING_WIDTH;
-    const colour = firable ? FOCUS_RING_FIRABLE_COLOR : FOCUS_RING_HELD_COLOR;
-    layer.setTexture(
-      this.bakedShape(
-        `focus:${firable ? "hot" : "held"}:${String(radius)}`,
-        radius + width + 2,
-        (graphics) => {
-          graphics.lineStyle(width, colour, 1);
-          graphics.strokeCircle(0, 0, radius);
-        }
-      )
-    );
-    layer.setVisible(this.vectorsEnabled);
-    layer.setPosition(target.x, target.y);
-    layer.setAlpha(firable ? 0.9 : 0.55 + 0.45 * Math.sin(this.time.now / FOCUS_RING_BREATH_MS));
-  }
-
-  /**
-   * The ship the nose gun is about to be fired into. Same question as the ring
-   * asks of the turret, put to the other barrel: the hull is this one's mount,
-   * so the bearing is the ship's own heading.
-   */
-  private drawNoseFocus(
-    origin: { readonly x: number; readonly y: number },
-    heading: number,
-    candidates: readonly MutableFocusCandidate[]
-  ): void {
-    const layer = this.noseFocus;
-    if (layer === undefined) return;
-    const focus = pickFocusedTarget({
-      origin,
-      bearing: heading,
-      reach: this.snapshot.machineGun.reach,
-      speed: this.snapshot.machineGun.speed,
-      heldEntityId: this.noseFocusedEntityId,
-      candidates
-    });
-    this.noseFocusedEntityId = focus?.target.entityId;
-    if (focus?.firable !== true) {
-      layer.setVisible(false);
-      return;
-    }
-    const { target } = focus;
-    const radius = Math.round(target.radius + NOSE_FOCUS_MARGIN);
-    layer.setTexture(
-      this.bakedShape(`nosefocus:${String(radius)}`, radius + NOSE_FOCUS_WIDTH + 2, (graphics) => {
-        graphics.lineStyle(NOSE_FOCUS_WIDTH, NOSE_FOCUS_COLOR, 0.85);
-        // Two arcs across the line of fire, drawn about the bore and then
-        // turned with the image, so the brackets open toward the shooter
-        // however the pair happens to be placed.
-        for (const side of [Math.PI / 2, -Math.PI / 2]) {
-          graphics.beginPath();
-          graphics.arc(0, 0, radius, side - NOSE_FOCUS_SWEEP, side + NOSE_FOCUS_SWEEP);
-          graphics.strokePath();
-        }
-      })
-    );
-    layer.setVisible(this.vectorsEnabled);
-    layer.setPosition(target.x, target.y);
-    layer.setRotation(Math.atan2(target.y - origin.y, target.x - origin.x));
-  }
-
-  /**
-   * The ships both rings are read against, at the positions being drawn rather
-   * than the ones last sent.
-   *
-   * Refills `focusScratch` instead of building a list, so a steady crowd costs
-   * nothing per frame. What makes that safe is that no candidate outlives the
-   * frame: both callers read the winner immediately and keep only its id.
-   */
-  private updateFocusCandidates(playbackTick: number): readonly MutableFocusCandidate[] {
-    return fillFocusCandidates(this.focusScratch, this.snapshot.enemyShips, (enemy) => {
-      const visual = this.combatVisuals.get(enemy.entityId);
-      if (visual === undefined) return enemy;
-      // Where it is drawn, from wherever the drawing came: the predictor when
-      // there is one, the track when there is not.
-      if (visual.live !== undefined) return visual.object;
-      return samplePointTrack(visual.position, playbackTick);
-    });
+  /** Where an enemy is drawn right now: the predictor when there is one, the track when there is not. */
+  private readDrawnPoint(entityId: string, playbackTick: number): Point | undefined {
+    const visual = this.combatVisuals.get(entityId);
+    if (visual === undefined) return undefined;
+    if (visual.live !== undefined) return visual.object;
+    return samplePointTrack(visual.position, playbackTick);
   }
 
   private drawShield(): void {
@@ -1132,7 +934,6 @@ class SpaceshipScene extends Phaser.Scene {
    * hundred and twelve over a nine-hundred unit reach is under two units a
    * pixel on a shape with no detail finer than its own edge.
    */
-  private static readonly AIM_TEXTURE_SIDE = 512;
 
   private bakedShape(
     key: string,
@@ -1317,60 +1118,6 @@ function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
     })),
     ...snapshot.homingMissiles.map((entity) => ({ ...entity, visualKind: "missile" as const }))
   ];
-}
-
-/**
- * The aiming envelope. Faint enough to read the arena through it, with edges
- * solid enough to be a line rather than a glow.
- */
-const AIM_ENVELOPE_STYLE = {
-  color: 0x7ef0ff,
-  fillAlpha: 0.05,
-  edgeAlpha: 0.28,
-  width: 2
-} as const;
-/**
- * The ring says two things in two colours. White while the target is merely the
- * one being held - breathing, so a still frame still reads as "this one, now".
- * Green the moment the barrel is actually on it and inside its reach, which is
- * the only moment a shot connects; that one holds steady, because a light that
- * means "fire" should not be blinking.
- */
-const FOCUS_RING_HELD_COLOR = 0xffffff;
-const FOCUS_RING_FIRABLE_COLOR = 0x62ff9b;
-const FOCUS_RING_WIDTH = 2;
-const FOCUS_RING_FIRABLE_WIDTH = 3;
-const FOCUS_RING_MARGIN = 10;
-const FOCUS_RING_BREATH_MS = 220;
-
-/**
- * The nose gun's mark: two brackets rather than a ring, and yellow rather than
- * white, because it is a different barrel with a different bore. The pilot flies
- * this one - the hull is the mount - so the ship it is about to be fired into is
- * worth saying out loud even though no envelope is drawn for it.
- */
-const NOSE_FOCUS_COLOR = 0xffd24a;
-const NOSE_FOCUS_WIDTH = 2;
-const NOSE_FOCUS_MARGIN = 16;
-/** Half the span of each bracket, so the pair reads as "( )" around the hull. */
-const NOSE_FOCUS_SWEEP = Math.PI / 5;
-
-/** A barrel with no lock cone still shows this much, so its reach is legible. */
-const AIM_MIN_HALF_ANGLE = 0.03;
-
-/** Turret and nose beams read apart the way their projectiles already do. */
-const LASER_CANNON_STYLE = { width: 3, color: 0x7ef0ff, alpha: 0.9 } as const;
-const LASER_NOSE_STYLE = { width: 2, color: 0xffd783, alpha: 0.85 } as const;
-/**
- * Hostile fire is red on this display and ours is not, so the beam follows the
- * same rule. Thicker than either of ours, because a hit that cannot be dodged
- * has to be the thing you see first.
- */
-const LASER_ENEMY_STYLE = { width: 4, color: 0xff5a4a, alpha: 0.9 } as const;
-
-function beamStyle(source: string) {
-  if (source === ENEMY_BEAM_SOURCE) return LASER_ENEMY_STYLE;
-  return source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
 }
 
 /**
