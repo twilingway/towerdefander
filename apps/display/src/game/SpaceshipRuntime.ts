@@ -10,6 +10,7 @@ import type {
 import Phaser from "phaser";
 
 import { bakeRect, bakeShape } from "./bake.js";
+import { FrameMeter } from "./scene/frameMeter.js";
 import {
   createEnemyHealthBar,
   drawEnemyBody,
@@ -111,14 +112,6 @@ const ARENA_FILL_ALPHA = 0.5;
  * because a shorter window makes the reading flicker faster than it can be
  * read.
  */
-/**
- * How much longer than the shortest frame of the window a frame has to run
- * before it counts as a stutter. Half again: a frame that misses its slot and
- * waits for the next one is a full double, so this catches a dropped frame with
- * room to spare and ignores the ordinary jitter of a busy compositor.
- */
-const STUTTER_RATIO = 1.5;
-const FRAME_WINDOW_MS = 1000;
 
 /**
  * The velocity a shell may be carried forward by, or nothing.
@@ -232,48 +225,7 @@ class SpaceshipScene extends Phaser.Scene {
   private playback: PlaybackClock;
   /** Arrival of the last snapshot that carried a new tick, for pace measuring. */
   private lastSnapshotAt: number | undefined;
-  /**
-   * The longest frame of the last completed second, in milliseconds.
-   *
-   * The frame counter beside it is an average smoothed across seconds, so one
-   * stalled frame never moves it at all - and a stall is precisely what a
-   * player calls a freeze. This is the other half of the same question, and it
-   * is collected here because the scene is the only thing that sees every
-   * frame.
-   */
-  private worstFrameMs = 0;
-  private frameWindowWorstMs = 0;
-  private frameWindowEndsAt = 0;
-  /*
-   * Smoothness, which the two numbers above cannot show between them. An
-   * average says whether the scene keeps up and the worst frame says whether it
-   * stopped; neither says whether it is *even*. Thirty frames of 16 ms and
-   * thirty of 33 average to a healthy 45 and hide a picture that judders the
-   * whole way.
-   *
-   * A stutter here is a frame that took half again as long as the shortest one
-   * this window. The shortest is the display's own cadence — it is the one
-   * figure a stall cannot inflate — so the measure calibrates itself to 60 Hz,
-   * 120 Hz or a throttled tab without being told which.
-   */
-  private stutterShare = 0;
-  /** Milliseconds a second the scene spends in its own update, and the worst one. */
-  private updateMsPerSecond = 0;
-  private worstUpdateMs = 0;
-  private frameWindowUpdateMs = 0;
-  private frameWindowWorstUpdateMs = 0;
-  private frameWindowFrames = 0;
-  private frameWindowStutters = 0;
-  private frameWindowShortestMs = Number.POSITIVE_INFINITY;
-  private frameWindowTotalMs = 0;
-  /**
-   * The average frame of the last second.
-   *
-   * Beside the worst on purpose: a rate says how many frames arrived, the worst
-   * says whether one of them was late, and only the mean says whether the whole
-   * second was heavy or one moment in it was.
-   */
-  private averageFrameMs = 0;
+  private readonly frames = new FrameMeter();
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
   /** Reused between frames; see `updateFocusCandidates`. */
@@ -318,22 +270,6 @@ class SpaceshipScene extends Phaser.Scene {
    * patch that spawned it, so the scene reads the wire itself.
    */
   private snapshotSource: (() => DisplayGameSnapshot | undefined) | undefined;
-  /**
-   * How many drawn entities came off the predictor last frame.
-   *
-   * The instrument that tells a working port from a silent fallback: the read
-   * path degrades quietly by design, so without a count on screen a world still
-   * being drawn from twenty-hertz snapshots looks exactly like one that is not.
-   */
-  private liveDrawnCount = 0;
-  /**
-   * How many drawn entities sat outside the camera last frame.
-   *
-   * The measurement an area filter has to earn its keep against: this cockpit
-   * shows a good part of the arena, so the share the room could stop sending is
-   * a number to read before it is a change to make.
-   */
-  private offscreenCount = 0;
   /**
    * Off keeps the shield's bloom down even while the sector is up.
    *
@@ -488,13 +424,11 @@ class SpaceshipScene extends Phaser.Scene {
     // a frame can run long because of this, or because of React committing a
     // snapshot beside it, or because the browser rasterised. Only a number says
     // which.
-    const spent = performance.now() - startedAt;
-    this.frameWindowUpdateMs += spent;
-    if (spent > this.frameWindowWorstUpdateMs) this.frameWindowWorstUpdateMs = spent;
+    this.frames.recordUpdate(performance.now() - startedAt);
   }
 
   private updateScene(time: number, deltaMs: number): void {
-    this.recordFrameTime(time);
+    this.frames.recordFrame(time, this.game.loop.rawDelta);
     this.updateBackground(deltaMs);
     this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
@@ -598,77 +532,35 @@ class SpaceshipScene extends Phaser.Scene {
       const { x, y } = visual.object;
       if (x < viewLeft || x > viewRight || y < viewTop || y > viewBottom) offscreen += 1;
     }
-    this.liveDrawnCount = liveDrawn;
-    this.offscreenCount = offscreen;
-  }
-
-  /**
-   * Keeps the worst frame of the running second, and publishes it when the
-   * second is over.
-   *
-   * `rawDelta` rather than the smoothed delta the scene is handed: the
-   * smoothing is what makes the average readable, and it is exactly what would
-   * hide the spike. Published only on a closed window, so the number does not
-   * change underneath a sampler that reads it twice a second.
-   */
-  private recordFrameTime(time: number): void {
-    if (this.frameWindowEndsAt === 0) {
-      // The first frame carries boot work no later frame repeats.
-      this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
-      return;
-    }
-    const raw = this.game.loop.rawDelta;
-    if (raw > this.frameWindowWorstMs) this.frameWindowWorstMs = raw;
-    this.frameWindowFrames += 1;
-    this.frameWindowTotalMs += raw;
-    if (raw > 0 && raw < this.frameWindowShortestMs) this.frameWindowShortestMs = raw;
-    if (raw > this.frameWindowShortestMs * STUTTER_RATIO) this.frameWindowStutters += 1;
-    if (time < this.frameWindowEndsAt) return;
-    this.worstFrameMs = this.frameWindowWorstMs;
-    this.stutterShare =
-      this.frameWindowFrames > 0 ? this.frameWindowStutters / this.frameWindowFrames : 0;
-    this.averageFrameMs =
-      this.frameWindowFrames > 0 ? this.frameWindowTotalMs / this.frameWindowFrames : 0;
-    this.updateMsPerSecond = this.frameWindowUpdateMs;
-    this.worstUpdateMs = this.frameWindowWorstUpdateMs;
-    this.frameWindowUpdateMs = 0;
-    this.frameWindowWorstUpdateMs = 0;
-    this.frameWindowWorstMs = 0;
-    this.frameWindowFrames = 0;
-    this.frameWindowTotalMs = 0;
-    this.frameWindowStutters = 0;
-    this.frameWindowShortestMs = Number.POSITIVE_INFINITY;
-    this.frameWindowEndsAt = time + FRAME_WINDOW_MS;
+    this.frames.recordDrawn(liveDrawn, offscreen);
   }
 
   readAverageFrameMs(): number {
-    return this.averageFrameMs;
+    return this.frames.readAverageFrameMs();
   }
 
   readWorstFrameMs(): number {
-    return this.worstFrameMs;
+    return this.frames.readWorstFrameMs();
   }
 
-  /** Share of the last second's frames that ran long, on `[0, 1]`. */
   readStutterShare(): number {
-    return this.stutterShare;
+    return this.frames.readStutterShare();
   }
 
-  /** Milliseconds of the last second the scene spent inside its own update. */
   readUpdateMsPerSecond(): number {
-    return this.updateMsPerSecond;
+    return this.frames.readUpdateMsPerSecond();
   }
 
   readWorstUpdateMs(): number {
-    return this.worstUpdateMs;
+    return this.frames.readWorstUpdateMs();
   }
 
   readLiveDrawnCount(): number {
-    return this.liveDrawnCount;
+    return this.frames.readLiveDrawnCount();
   }
 
   readOffscreenCount(): number {
-    return this.offscreenCount;
+    return this.frames.readOffscreenCount();
   }
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
