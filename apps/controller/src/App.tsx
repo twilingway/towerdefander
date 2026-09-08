@@ -21,6 +21,7 @@ import {
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Navigate, Route, Routes, matchPath, useNavigate } from "react-router";
 
 import {
   createScreenWakeLock,
@@ -66,7 +67,22 @@ export function ControllerApp() {
   const consentedLeaveReference = useRef<ControllerRoom | undefined>(undefined);
   const wakeLockReference = useRef<ScreenWakeLock | undefined>(undefined);
   wakeLockReference.current ??= createScreenWakeLock();
-  const [roomCode, setRoomCode] = useState(() => getRoomFromLocation(readBrowserSearch()));
+  const navigate = useNavigate();
+  const search = readBrowserSearch();
+  // The address names the room; the join form still owns the editable field,
+  // because a cold visit to /room/CODE has to ask for a name before it can
+  // seat anybody.
+  const [roomCode, setRoomCode] = useState(
+    () => getRoomFromLocation(readBrowserSearch()) || readRoomFromPath()
+  );
+  function goToRoom(code: string): void {
+    // The query carries the preview flag and the debug switches, and the scene
+    // reads some of them long after this navigation, so it travels along.
+    void navigate({ pathname: `/room/${code}`, search: readBrowserSearch() }, { replace: true });
+  }
+  function goToJoin(): void {
+    void navigate({ pathname: "/", search: readBrowserSearch() }, { replace: true });
+  }
   const [playerName, setPlayerName] = useState("");
   const [playerId, setPlayerId] = useState("");
   const [status, setStatus] = useState<ConnectionStatus>("join");
@@ -99,6 +115,20 @@ export function ControllerApp() {
   const inLobby = activeView?.phase === "lobby";
   const inCombat = activeView?.game?.encounter.phase === "combat";
 
+  // The display prints ?room=CODE into the QR code, so that link keeps working
+  // and turns itself into the room's address once.
+  useEffect(() => {
+    const legacy = getRoomFromLocation(readBrowserSearch());
+    if (legacy.length === 0) return;
+    const rest = new URLSearchParams(readBrowserSearch());
+    rest.delete("room");
+    const kept = rest.toString();
+    void navigate(
+      { pathname: `/room/${legacy}`, search: kept.length === 0 ? "" : `?${kept}` },
+      { replace: true }
+    );
+  }, []);
+
   useEffect(() => {
     if (preview) return;
     let disposed = false;
@@ -108,6 +138,7 @@ export function ControllerApp() {
       setRoomCode(session.roomId);
       setPlayerName(session.playerName);
       setStatus("reconnecting");
+      goToRoom(session.roomId);
       void new Client(gameServerUrl)
         .reconnect<NetworkRoomState>(session.token)
         .then((room) => {
@@ -170,6 +201,7 @@ export function ControllerApp() {
         playerName: normalizedName
       });
       attachRoom(room, normalizedName);
+      goToRoom(normalizedRoomCode);
     } catch (reason) {
       setError(toJoinError(reason));
       setStatus("join");
@@ -209,6 +241,7 @@ export function ControllerApp() {
       setPlayerId("");
       setRoomCode("");
       setStatus("join");
+      goToJoin();
       setError(
         result.success
           ? "Комната закрыта общим экраном или по тайм-ауту. Можно подключиться к другой комнате."
@@ -339,6 +372,7 @@ export function ControllerApp() {
     setRoomCode("");
     setError("");
     setStatus("join");
+    goToJoin();
     try {
       await leaveControllerRoom(room, readSessionStorage());
     } catch {
@@ -346,11 +380,16 @@ export function ControllerApp() {
     }
   }
 
-  if (
-    previewView === undefined &&
-    (status === "join" || status === "joining" || status === "disconnected")
-  ) {
-    return (
+  // Two addresses, and the second names a room. Which of the two screens the
+  // room's address shows is not the address's business: a cold visit to
+  // /room/CODE has no seat yet, so it gets the join form with the code filled
+  // in, and the panel appears once the server has seated the player.
+  const seated =
+    previewView !== undefined ||
+    (status !== "join" && status !== "joining" && status !== "disconnected");
+
+  if (!seated) {
+    const joinScreen = (
       <JoinScreen
         roomCode={roomCode}
         playerName={playerName}
@@ -362,6 +401,13 @@ export function ControllerApp() {
           void joinRoom();
         }}
       />
+    );
+    return (
+      <Routes>
+        <Route path="/" element={joinScreen} />
+        <Route path="/room/:code" element={joinScreen} />
+        <Route path="*" element={<Navigate replace to={{ pathname: "/", search }} />} />
+      </Routes>
     );
   }
 
@@ -381,7 +427,7 @@ export function ControllerApp() {
       </button>
     ) : null;
 
-  return (
+  const roomShell = (
     <main
       className={`controller-shell${inLobby ? " controller-shell--lobby" : ""}${shellPhaseModifier(
         activeView?.game?.encounter.phase
@@ -484,6 +530,14 @@ export function ControllerApp() {
       </section>
     </main>
   );
+
+  return (
+    <Routes>
+      <Route path="/" element={roomShell} />
+      <Route path="/room/:code" element={roomShell} />
+      <Route path="*" element={<Navigate replace to={{ pathname: "/", search }} />} />
+    </Routes>
+  );
 }
 
 /**
@@ -498,6 +552,12 @@ export function ControllerApp() {
  * Fire-and-forget by design: a fullscreen prompt must never delay the command
  * the player actually tapped for, and a refusal is not a connection error.
  */
+/** The room code the address names, empty on the join route. */
+function readRoomFromPath(): string {
+  if (typeof window === "undefined") return "";
+  return matchPath("/room/:code", window.location.pathname)?.params.code ?? "";
+}
+
 function requestImmersiveMode(): void {
   const host = readImmersiveHost();
   if (host !== undefined) void enterImmersiveMode(host);
