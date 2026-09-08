@@ -5,11 +5,8 @@ import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
-  MAX_START_WAVE,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
-  ROOM_REFUSED_AT_CAPACITY,
-  ROOM_REFUSED_FOR_MAINTENANCE,
   ROOM_TYPE,
   clientMessage,
   type UpgradeId,
@@ -23,13 +20,10 @@ import {
 } from "@spaceship-defender/protocol";
 import {
   createActionId,
-  createDefaultGameServerUrl,
   formatLatency,
-  isPreviewMode,
   nextVoteRevision,
   PreviewPhaseButtons,
   PreviewShell,
-  readStringEnvironment,
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
 import {
@@ -85,20 +79,16 @@ import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { createControllerJoinUrl, toDisplayRoomView, type NetworkRoomState } from "./roomView.js";
 import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
-import { isDiagnosticsRequested } from "./model/diagnostics.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
 import { advanceWork, createWorkMeter, recordWork } from "./model/workMeter.js";
 import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
 import { attachLongTaskMeter, type LongTaskMeter } from "./model/longTasks.js";
-import {
-  buildVisibleDemoWorld,
-  isVisibleDemoMode,
-  publishVisibleDemoWorld,
-  readShipArchetypeId,
-  readStartWave
-} from "./visibleDemo.js";
+import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "./visibleDemo.js";
 import { hasImmediateChange, needsRootRender, PASSIVE_PUBLISH_MS } from "./model/viewPublishing.js";
+import { CONTROLLER_URL, GAME_SERVER_URL } from "./model/environment.js";
+import { createFailureMessage } from "./model/roomFailure.js";
+import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -106,40 +96,19 @@ type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "
 /** Twenty a second: below what a barrel changes at, above what an eye reads. */
 const LIVE_HEAT_INTERVAL_MS = 50;
 
-const gameServerUrl = readStringEnvironment(
-  import.meta.env.VITE_GAME_SERVER_URL,
-  createDefaultGameServerUrl()
-);
-const controllerUrl = readStringEnvironment(
-  import.meta.env.VITE_CONTROLLER_URL,
-  createDefaultControllerUrl()
-);
-
 export function DisplayApp() {
   const portrait = useIsPortrait();
-  const visibleDemo = isVisibleDemoMode(
-    typeof window === "undefined" ? "" : window.location.search,
-    import.meta.env.DEV,
-    import.meta.env.VITE_VISIBLE_DEMO
-  );
-  // Development builds only. The server refuses the wave without its own flag,
-  // so this control never promises more than the server will do.
-  const allowStartWave = import.meta.env.DEV;
-  const initialStartWave = allowStartWave
-    ? readStartWave(typeof window === "undefined" ? "" : window.location.search, MAX_START_WAVE)
-    : 1;
-  // Lets a demo or a bookmark open the run on a named hull; the picker below
-  // still wins when someone touches it.
-  const urlShipArchetypeId = readShipArchetypeId(
-    typeof window === "undefined" ? "" : window.location.search
-  );
-  const preview = isPreviewMode(
-    typeof window === "undefined" ? "" : window.location.search,
-    import.meta.env.DEV
-  );
-  const diagnostics = isDiagnosticsRequested(
-    typeof window === "undefined" ? "" : window.location.search
-  );
+  const {
+    preview,
+    diagnostics,
+    visibleDemo,
+    allowStartWave,
+    initialStartWave,
+    shipArchetypeId: urlShipArchetypeId
+  } = readDisplayUrlFlags(readDisplaySearch(), {
+    dev: import.meta.env.DEV,
+    visibleDemo: import.meta.env.VITE_VISIBLE_DEMO
+  });
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   /** What was last handed to `setStatus`; see the guard in `applyRoomState`. */
@@ -499,7 +468,7 @@ export function DisplayApp() {
   );
   const activeStatus: ConnectionStatus = previewView === undefined ? status : "connected";
   const joinUrl = useMemo(
-    () => (view === undefined ? "" : createControllerJoinUrl(controllerUrl, view.roomId)),
+    () => (view === undefined ? "" : createControllerJoinUrl(CONTROLLER_URL, view.roomId)),
     [view]
   );
   // Which tree the crew is walking: this run's hull out of the catalogue, or
@@ -517,7 +486,7 @@ export function DisplayApp() {
   // own default hull.
   useEffect(() => {
     const controller = new AbortController();
-    void fetchShipCatalogue(gameServerUrl, controller.signal).then((catalogue) => {
+    void fetchShipCatalogue(GAME_SERVER_URL, controller.signal).then((catalogue) => {
       if (!controller.signal.aborted) setShipCatalogue(catalogue);
     });
     return () => {
@@ -533,7 +502,7 @@ export function DisplayApp() {
     if (status === "connected") return undefined;
     const controller = new AbortController();
     const poll = (): void => {
-      void fetchMaintenance(gameServerUrl, controller.signal).then((state) => {
+      void fetchMaintenance(GAME_SERVER_URL, controller.signal).then((state) => {
         if (!controller.signal.aborted) setMaintenance(state);
       });
     };
@@ -699,7 +668,7 @@ export function DisplayApp() {
     setCockpitPlayer(cockpitPlayerName);
     cockpitPlayerReference.current = cockpitPlayerName;
     try {
-      const room = await new Client(gameServerUrl).create<NetworkRoomState>(ROOM_TYPE, {
+      const room = await new Client(GAME_SERVER_URL).create<NetworkRoomState>(ROOM_TYPE, {
         // One connection with both duties when this device is also the pilot.
         // The two shapes differ in what they name, so the seat count only
         // travels with the display form.
@@ -1199,25 +1168,6 @@ export function PreviewControls({
       </label>
     </PreviewShell>
   );
-}
-
-function createFailureMessage(reason: unknown): string {
-  if (!(reason instanceof Error)) return "Не удалось создать комнату.";
-  if (reason.message === ROOM_REFUSED_FOR_MAINTENANCE) {
-    return "На сервере технические работы. Новые комнаты пока не создаются.";
-  }
-  if (reason.message === ROOM_REFUSED_AT_CAPACITY) {
-    return "Сервер занят: свободных комнат нет. Попробуйте через минуту.";
-  }
-  if (reason.message === "protocol_mismatch") {
-    return "Версия игры устарела. Обновите страницу.";
-  }
-  return reason.message;
-}
-
-function createDefaultControllerUrl(): string {
-  if (typeof window === "undefined") return "http://localhost:5174";
-  return `${window.location.protocol}//${window.location.hostname}:5174`;
 }
 
 /**
