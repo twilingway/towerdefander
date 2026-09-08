@@ -1,11 +1,9 @@
 import { Client, type Room } from "@colyseus/sdk";
 import type { MaintenanceState } from "@spaceship-defender/protocol";
-import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
-  PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
   ROOM_TYPE,
   clientMessage,
@@ -42,7 +40,6 @@ import { useLetterboxBars } from "./model/hooks/useLetterboxBars.js";
 import { PolledFpsReadout } from "./components/FpsReadout/index.js";
 import { LobbyLayout } from "./components/LobbyLayout/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
-import { countDrawnEntities } from "./combatHudViewModel.js";
 import { RotateNotice, useIsPortrait } from "./components/RotateNotice/index.js";
 import { useSoloCockpit, type SoloCockpitControls } from "./model/hooks/useSoloCockpit.js";
 import { useBareControls } from "./model/hooks/useBareControls.js";
@@ -59,7 +56,7 @@ import {
 } from "./displayRoomLifecycle.js";
 import { createPreviewRoomView, PREVIEW_CAMERA_VIEW_WIDTH } from "./previewMode.js";
 import { DiagnosticsHud } from "./components/DiagnosticsHud/index.js";
-import { readComponentCosts, recordComponentCommit } from "./model/componentCost.js";
+import { recordComponentCommit } from "./model/componentCost.js";
 import { publishWorld } from "./model/worldStore.js";
 import { writeLiveHeat } from "./model/liveHeat.js";
 import {
@@ -76,9 +73,6 @@ import { fetchMaintenance } from "./serverStatus.js";
 import { fetchShipCatalogue } from "./shipCatalogue.js";
 import { useShipPrediction } from "./model/hooks/useShipPrediction.js";
 import type { PredictionDriver } from "./model/shipPrediction.js";
-import { advanceWork, createWorkMeter, recordWork } from "./model/workMeter.js";
-import { attachTrafficMeter, type TrafficMeter } from "./model/trafficMeter.js";
-import { attachLongTaskMeter, type LongTaskMeter } from "./model/longTasks.js";
 import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "./visibleDemo.js";
 import { hasImmediateChange, needsRootRender, PASSIVE_PUBLISH_MS } from "./model/viewPublishing.js";
 import { CONTROLLER_URL, GAME_SERVER_URL } from "./model/environment.js";
@@ -86,6 +80,17 @@ import { createFailureMessage } from "./model/roomFailure.js";
 import { toAimWorld, toPredictionWorld } from "./model/cockpitWorld.js";
 import { selectModuleTree } from "./model/moduleTree.js";
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
+import { readLiveGame, readLiveView, setLiveView } from "./model/liveView.js";
+import {
+  readDiagnostics,
+  readFrameStats,
+  recordCommitWork,
+  recordSnapshotWork,
+  writeFrameStats,
+  writePlaybackDelay,
+  writePredictionLag
+} from "./model/instruments.js";
+import { useDiagnosticsMeters } from "./model/hooks/useDiagnosticsMeters.js";
 
 type DisplayRoom = Room<unknown, NetworkRoomState>;
 type ConnectionStatus = "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -117,7 +122,6 @@ export function DisplayApp() {
    * The scene pulls the world from here every frame it draws, which is what
    * lets the page below it commit at its own, far slower pace.
    */
-  const liveViewReference = useRef<DisplayRoomView | undefined>(undefined);
   const publishedViewReference = useRef<DisplayRoomView | undefined>(undefined);
   const publishedAtReference = useRef(0);
   const publishTimerReference = useRef<number | undefined>(undefined);
@@ -136,31 +140,12 @@ export function DisplayApp() {
   const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
   const [closingRoom, setClosingRoom] = useState(false);
   const [previewPhase, setPreviewPhase] = useState<PreviewPhase>("combat");
-  const frameStatsReference = useRef({
-    fps: 0,
-    averageFrameMs: 0,
-    worstFrameMs: 0,
-    stutterShare: 0,
-    updateMsPerSecond: 0,
-    worstUpdateMs: 0,
-    liveDrawn: 0,
-    offscreen: 0
-  });
   /**
    * Off means the ship is drawn from the authoritative angles alone. The point
    * of the switch is that it compares the two on one connection and one tick;
    * comparing two sessions would compare two networks instead.
    */
   const [predictionEnabled, setPredictionEnabled] = useState(true);
-  /**
-   * How far behind the room the world is drawn, measured rather than chosen.
-   *
-   * On the panel because it is the number an enemy's smoothness is bought with:
-   * too little and the interpolation runs out of snapshots and holds, which
-   * reads as a hull stopping dead and then jumping.
-   */
-  const playbackDelayReference = useRef(0);
-  const patchIntervalReference = useRef(0);
   /**
    * The ship this page is flying, as the reconciler currently has it.
    *
@@ -175,9 +160,6 @@ export function DisplayApp() {
    * because it is handed to Phaser once, not re-rendered.
    */
   const predictionDriverReference = useRef<PredictionDriver | undefined>(undefined);
-  /** Written every frame, read twice a second by the panel; never a render. */
-  const pendingInputReference = useRef(0);
-  const driftReference = useRef(0);
 
   /**
    * The parallax layers, asked about rather than settled: they are four
@@ -214,22 +196,6 @@ export function DisplayApp() {
    * the thing that draws its world is.
    */
   const [worldReady, setWorldReady] = useState(false);
-  const trafficReference = useRef<TrafficMeter | undefined>(undefined);
-  const longTasksReference = useRef<LongTaskMeter | undefined>(undefined);
-  /*
-   * Written on every patch and read twice a second. A ref rather than state:
-   * setting state here would add a render to the very work being measured.
-   */
-  const snapshotCost = useRef(createWorkMeter());
-
-  /*
-   * What React itself costs, from React's own stopwatch rather than a guess.
-   * Every patch replaces the view object, so the whole battle tree re-renders
-   * with it, and the number of long frames on a phone matches the number of
-   * patches almost exactly - which makes this the last unmeasured suspect.
-   */
-  const commitCost = useRef(createWorkMeter());
-
   const shellReference = useRef<HTMLElement>(null);
   const [previewCameraViewWidth, setPreviewCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
   const [shipCatalogue, setShipCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
@@ -298,66 +264,19 @@ export function DisplayApp() {
     setError("");
   }, [encounterPhase]);
 
-  /* The snapshot cost is published on its own beat, so it is shown even when the
-     byte counter could not attach to a socket. */
-  useEffect(() => {
-    if (!diagnostics) return undefined;
-    /*
-     * Rolls the windows and nothing else.
-     *
-     * There is no state here on purpose: a sample that re-rendered the page
-     * would be an instrument paying for itself four times a second, and the
-     * panel pulls these on its own beat.
-     */
-    const longTasks = attachLongTaskMeter(() => performance.now());
-    const timer = window.setInterval(() => {
-      const now = performance.now();
-      snapshotCost.current = advanceWork(snapshotCost.current, now);
-      commitCost.current = advanceWork(commitCost.current, now);
-      longTasksReference.current = longTasks.read(now);
-    }, 500);
-    return () => {
-      window.clearInterval(timer);
-      longTasks.detach();
-    };
-  }, [diagnostics]);
-
-  /*
-   * The byte counter, and only when the panel was asked for. It hooks the live
-   * socket rather than the SDK, so it has to be re-read as connections come and
-   * go - the probe follows the socket across a reconnect on its own, and the
-   * connection epoch is what brings a whole new room here.
-   */
-  useEffect(() => {
-    if (!diagnostics) return undefined;
-    const probe = attachTrafficMeter(
-      () => {
-        // The socket itself, not the SDK transport around it: the transport has
-        // no listeners to add, and everything the room sends passes through the
-        // socket's own `send`.
-        const connection = roomReference.current?.connection as
-          { transport?: { ws?: unknown } } | undefined;
-        return connection?.transport?.ws;
-      },
-      () => performance.now()
-    );
-
-    if (probe === undefined) {
-      // Undefined stands for "never attached", which the panel says in words.
-      trafficReference.current = undefined;
-      return undefined;
-    }
-    // Twice a second: the numbers are read, not watched, and a byte counter
-    // driving a React render at frame rate would be an instrument that costs
-    // the very thing it measures.
-    const timer = window.setInterval(() => {
-      trafficReference.current = probe.read(performance.now());
-    }, 500);
-    return () => {
-      window.clearInterval(timer);
-      probe.detach();
-    };
-  }, [diagnostics, connectionEpoch, status]);
+  useDiagnosticsMeters({
+    enabled: diagnostics,
+    readSocket: () => {
+      // The socket itself, not the SDK transport around it: the transport has
+      // no listeners to add, and everything the room sends passes through the
+      // socket's own `send`.
+      const connection = roomReference.current?.connection as
+        { transport?: { ws?: unknown } } | undefined;
+      return connection?.transport?.ws;
+    },
+    connectionEpoch,
+    status
+  });
 
   /*
    * The same gate the cockpit's own sending uses, and it has to be: the room
@@ -407,12 +326,10 @@ export function DisplayApp() {
       predictionDriverReference.current = driver;
     },
     onPending: (pending, driftEma) => {
-      pendingInputReference.current = pending;
-      driftReference.current = driftEma;
+      writePredictionLag(pending, driftEma);
     },
     onDelay: (delayMs, intervalMs) => {
-      playbackDelayReference.current = delayMs;
-      patchIntervalReference.current = intervalMs;
+      writePlaybackDelay(delayMs, intervalMs);
     }
   });
 
@@ -503,7 +420,6 @@ export function DisplayApp() {
    * it every frame, so a new function each render would be a new subscription
    * each render.
    */
-  const readLiveGame = useCallback(() => liveViewReference.current?.game ?? undefined, []);
 
   /**
    * Every instrument, read at the moment the panel asks.
@@ -522,16 +438,6 @@ export function DisplayApp() {
   latestViewReference.current = view;
   const readRadarGame = useCallback(() => latestViewReference.current?.game ?? undefined, []);
 
-  /** The three numbers the corner readout shows, pulled rather than pushed. */
-  const readFrameStats = useCallback(
-    () => ({
-      fps: frameStatsReference.current.fps,
-      worstFrameMs: frameStatsReference.current.worstFrameMs,
-      stutterShare: frameStatsReference.current.stutterShare
-    }),
-    []
-  );
-
   /*
    * The heat gauges, moved without a render.
    *
@@ -542,7 +448,7 @@ export function DisplayApp() {
    */
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const game = liveViewReference.current?.game;
+      const game = readLiveGame();
       const shell = shellReference.current;
       if (game != null && shell !== null) writeLiveHeat(shell, game);
     }, LIVE_HEAT_INTERVAL_MS);
@@ -550,32 +456,6 @@ export function DisplayApp() {
       window.clearInterval(timer);
     };
   }, []);
-
-  const readDiagnostics = useCallback(
-    () => ({
-      ...frameStatsReference.current,
-      sceneMsPerSecond: frameStatsReference.current.updateMsPerSecond,
-      worstSceneMs: frameStatsReference.current.worstUpdateMs,
-      serverStepMs: liveViewReference.current?.game?.serverStepMs ?? 0,
-      pingMs: liveViewReference.current?.displayLatencyMs ?? 0,
-      entityCount:
-        liveViewReference.current?.game == null
-          ? 0
-          : countDrawnEntities(liveViewReference.current.game),
-      playbackDelayMs: playbackDelayReference.current,
-      patchIntervalMs: patchIntervalReference.current,
-      pendingInput: pendingInputReference.current,
-      drift: driftReference.current,
-      traffic: trafficReference.current,
-      longTasks: longTasksReference.current,
-      tickHz: SIMULATION_TICK_RATE,
-      patchHz: Math.round(1000 / PATCH_INTERVAL_MS),
-      snapshot: snapshotCost.current,
-      commit: commitCost.current,
-      components: readComponentCosts(performance.now())
-    }),
-    []
-  );
 
   /** The seat this page holds when it is also the pilot. */
   const cockpitSeat =
@@ -777,11 +657,11 @@ export function DisplayApp() {
     }
     const builtInMs = performance.now() - startedAt;
     if (next === undefined) return;
-    snapshotCost.current = recordWork(snapshotCost.current, builtInMs, startedAt);
+    recordSnapshotWork(builtInMs, startedAt);
     // The scene gets it now, whatever the page does: it draws from this
     // reference every frame, and a shell that waited for a React commit would
     // appear late for exactly as long as the commit was deferred.
-    liveViewReference.current = next;
+    setLiveView(next);
     /*
      * Straight into the store, on the patch rather than on the page's slower
      * publish clock. A panel subscribed to a slice pays only when that slice
@@ -830,13 +710,13 @@ export function DisplayApp() {
     if (publishTimerReference.current !== undefined) return;
     publishTimerReference.current = window.setTimeout(() => {
       publishTimerReference.current = undefined;
-      const latest = liveViewReference.current;
+      const latest = readLiveView();
       if (latest !== undefined) publishView(latest, performance.now());
     }, due);
   }
 
   function resetToCreate(message: string): void {
-    liveViewReference.current = undefined;
+    setLiveView(undefined);
     publishedViewReference.current = undefined;
     publishWorld(undefined);
     setNetworkView(undefined);
@@ -959,7 +839,7 @@ export function DisplayApp() {
         <MeasuredWhenAsked
           measuring={diagnostics}
           onCommit={(actualDuration) => {
-            commitCost.current = recordWork(commitCost.current, actualDuration, performance.now());
+            recordCommitWork(actualDuration, performance.now());
           }}
         >
           <section id="game-canvas" className="game-stage" aria-label="Космическое поле боя">
@@ -985,7 +865,7 @@ export function DisplayApp() {
                   visibleDemo={visibleDemo}
                   vectorsEnabled={vectorsEnabled}
                   onFrameStats={(stats) => {
-                    frameStatsReference.current = stats;
+                    writeFrameStats(stats);
                   }}
                 />
               )}
