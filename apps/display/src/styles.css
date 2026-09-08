@@ -2113,6 +2113,28 @@ p {
 
 /* The only things here a finger may hit, kept at the top of the card and so as
    far from the sticks as the card allows. */
+/* Where the panel was, so the way back is where the way out was. */
+.diagnostics-reveal {
+  position: absolute;
+  z-index: 70;
+  top: 4.5rem;
+  left: 1rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid rgb(86 235 240 / 45%);
+  border-radius: 999px;
+  color: #bdfaff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgb(3 20 29 / 88%);
+  cursor: pointer;
+}
+
+.diagnostics-panel__toggle--hide {
+  border-color: rgb(255 145 145 / 45%);
+  color: #ffd4d4;
+}
+
 .diagnostics-panel__switches {
   display: flex;
   flex-wrap: wrap;

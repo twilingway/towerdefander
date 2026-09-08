@@ -61,6 +61,7 @@ export function DiagnosticsPanel({
   onToggleInterface,
   opaquePanels,
   onToggleOpaquePanels,
+  onHide,
   onToggleVectors
 }: {
   readonly fps: number;
@@ -129,10 +130,20 @@ export function DiagnosticsPanel({
   /** Panels the compositor draws over rather than through. */
   readonly opaquePanels: boolean;
   readonly onToggleOpaquePanels: () => void;
+  /** Takes the panel off the screen; the flag in the address stays as it is. */
+  readonly onHide: () => void;
 }) {
   return (
     <aside className="diagnostics-panel" data-testid="diagnostics-panel">
       <div className="diagnostics-panel__switches">
+        <button
+          type="button"
+          className="diagnostics-panel__toggle diagnostics-panel__toggle--hide"
+          data-testid="diagnostics-hide"
+          onClick={onHide}
+        >
+          Скрыть
+        </button>
         <button
           type="button"
           className="diagnostics-panel__toggle"

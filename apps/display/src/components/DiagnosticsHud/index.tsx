@@ -73,15 +73,49 @@ interface DiagnosticsHudProps {
  */
 export function DiagnosticsHud({ read, ...controls }: DiagnosticsHudProps) {
   const [readings, setReadings] = useState<DiagnosticsReadings>(read);
+  const [shown, setShown] = useState(true);
 
   useEffect(() => {
+    if (!shown) return undefined;
     const timer = window.setInterval(() => {
       setReadings(read());
     }, SAMPLE_INTERVAL_MS);
     return () => {
       window.clearInterval(timer);
     };
-  }, [read]);
+  }, [read, shown]);
 
-  return <DiagnosticsPanel {...readings} {...controls} />;
+  /*
+   * Unmounted rather than hidden, and the clock stops with it.
+   *
+   * The panel turned out to be the dearest thing on the screen it measures -
+   * more than half of the React it was reporting - so hiding it with a class
+   * would leave the measurement exactly where it was and only take the numbers
+   * away. What is left behind is one button, because a screen with no way back
+   * to the instruments would need the address bar.
+   */
+  if (!shown) {
+    return (
+      <button
+        type="button"
+        className="diagnostics-reveal"
+        data-testid="diagnostics-reveal"
+        onClick={() => {
+          setShown(true);
+        }}
+      >
+        Приборы
+      </button>
+    );
+  }
+
+  return (
+    <DiagnosticsPanel
+      {...readings}
+      {...controls}
+      onHide={() => {
+        setShown(false);
+      }}
+    />
+  );
 }

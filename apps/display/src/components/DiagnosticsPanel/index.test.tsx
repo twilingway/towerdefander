@@ -19,6 +19,7 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       averageFrameMs={6.1}
       tickHz={60}
       components={[]}
+      onHide={() => undefined}
       patchHz={30}
       longTasks={{ supported: true, perSecond: 0, worstMs: 0 }}
       liveDrawn={208}
