@@ -54,6 +54,17 @@ import type { LiveEntity, LiveEntityKind, LivePlacement } from "../model/shipPre
 import { pickFocusedTarget } from "../combatFocus.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 import {
+  drawEnemyTank,
+  drawTankArena,
+  drawTankArenaRim,
+  drawTankHull,
+  drawTankTurret,
+  ENEMY_ART_HALF,
+  readTankLook,
+  TANK_ART_HALF,
+  TANK_VOID_COLOR
+} from "./tankArt.js";
+import {
   BACKGROUND_LAYERS,
   BACKGROUND_LAYER_DEPTH,
   BACKGROUND_TEXTURE_KEYS,
@@ -270,6 +281,13 @@ class SpaceshipScene extends Phaser.Scene {
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
   private backgroundEnabled = true;
   /**
+   * The prototype's picture instead of ours; see `readTankLook`. Read once at
+   * construction because it decides what is baked, and a texture is baked once.
+   */
+  private readonly tankLook = readTankLook(
+    (globalThis as { location?: { search?: string } }).location?.search ?? ""
+  );
+  /**
    * The ship this page is flying, asked for once per drawn frame.
    *
    * Read here rather than handed down as a prop: the pose changes every frame,
@@ -378,7 +396,9 @@ class SpaceshipScene extends Phaser.Scene {
     });
     this.focusCamera(this.snapshot.spaceship);
     this.drawArena();
-    this.createBackground(this.snapshot.background);
+    // The prototype has no sky: under the flag the parallax is never built, so
+    // what is being compared is the arena and the hulls and nothing else.
+    if (!this.tankLook) this.createBackground(this.snapshot.background);
     this.drawDecorations();
 
     /*
@@ -389,18 +409,26 @@ class SpaceshipScene extends Phaser.Scene {
      */
     const shipRadius = this.snapshot.spaceship.radius;
     const hullVisual = this.snapshot.spaceshipVisual;
+    /*
+     * Under `?tanks=1` the prototype's hull, drawn at the art's own size and
+     * scaled to the ship: the tank is one fixed drawing, so a bake sized by the
+     * hull would clip a small one and pad a large one.
+     */
     this.spaceshipBody = this.add
       .image(
         this.snapshot.spaceship.x,
         this.snapshot.spaceship.y,
-        this.bakedShape(
-          `hull:${hullVisual?.shape ?? "default"}:${String(hullVisual?.modelScale ?? 1)}:${String(Math.round(shipRadius))}`,
-          shipRadius * (hullVisual?.modelScale ?? 1) * 1.35 + 6,
-          (graphics) => {
-            drawSpaceshipHull(graphics, this.snapshot);
-          }
-        )
+        this.tankLook
+          ? this.bakedShape("tank:hull", TANK_ART_HALF + 6, drawTankHull)
+          : this.bakedShape(
+              `hull:${hullVisual?.shape ?? "default"}:${String(hullVisual?.modelScale ?? 1)}:${String(Math.round(shipRadius))}`,
+              shipRadius * (hullVisual?.modelScale ?? 1) * 1.35 + 6,
+              (graphics) => {
+                drawSpaceshipHull(graphics, this.snapshot);
+              }
+            )
       )
+      .setScale(this.tankLook ? shipRadius / TANK_ART_HALF : 1)
       .setDepth(10)
       .setRotation(this.snapshot.spaceship.heading);
 
@@ -707,14 +735,44 @@ class SpaceshipScene extends Phaser.Scene {
    * showing it; that is the whole reason this shape can be baked and the shield
    * cannot.
    */
+  /**
+   * The floor. Ours by default, the prototype's under `?tanks=1`.
+   *
+   * Both are baked at a fixed resolution and stretched to the arena, and both
+   * divide their line widths by that stretch: an image drawn at two thousand
+   * pixels and shown at four thousand units returns a line twice as thick as it
+   * was written.
+   */
   private drawArena(): void {
     const centerX = this.snapshot.worldWidth / 2;
     const centerY = this.snapshot.worldHeight / 2;
-    this.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
-
     const radius = this.snapshot.arenaRadius;
     const diameter = radius * 2;
     const scale = SpaceshipScene.ARENA_TEXTURE_SIDE / diameter;
+
+    if (this.tankLook) {
+      this.cameras.main.setBackgroundColor(TANK_VOID_COLOR);
+      const floor = this.bakedShape(
+        `tankArena:floor:${String(Math.round(radius))}`,
+        SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
+        (graphics) => {
+          drawTankArena(graphics, radius * scale, scale);
+        }
+      );
+      this.add.image(centerX, centerY, floor).setDisplaySize(diameter, diameter).setDepth(0);
+      const rim = this.bakedShape(
+        `tankArena:rim:${String(Math.round(radius))}`,
+        SpaceshipScene.ARENA_TEXTURE_SIDE / 2,
+        (graphics) => {
+          drawTankArenaRim(graphics, radius * scale, scale);
+        }
+      );
+      this.add.image(centerX, centerY, rim).setDisplaySize(diameter, diameter).setDepth(3);
+      return;
+    }
+
+    this.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
+
     const band = getRimBandStroke(radius, this.snapshot.rimBandWidth);
 
     const floorKey = this.bakedShape(
@@ -1419,13 +1477,17 @@ class SpaceshipScene extends Phaser.Scene {
     if (entity.visualKind === "enemy") {
       const visual = resolveEnemyVisual(this.snapshot.enemyCatalogue, entity.kind);
       const key = `enemy:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(entity.radius))}`;
-      const body = this.add.image(
-        0,
-        0,
-        this.bakedShape(key, entity.radius * visual.modelScale * 1.35 + 4, (graphics) => {
-          drawEnemyBody(graphics, visual, entity.radius);
-        })
-      );
+      const body = this.add
+        .image(
+          0,
+          0,
+          this.tankLook
+            ? this.bakedShape("tank:enemy", ENEMY_ART_HALF + 6, drawEnemyTank)
+            : this.bakedShape(key, entity.radius * visual.modelScale * 1.35 + 4, (graphics) => {
+                drawEnemyBody(graphics, visual, entity.radius);
+              })
+        )
+        .setScale(this.tankLook ? (entity.radius * visual.modelScale) / ENEMY_ART_HALF : 1);
       container.add(body);
       if (visual.showHealthBar) {
         healthBar = createEnemyHealthBar(this, entity);
@@ -1784,18 +1846,33 @@ function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): Turre
   // The drawing is offset inside a container so the container itself still
   // turns about the ship's centre: nudging the asset must move the gun, never
   // the point it spins around.
-  const gun = scene.add.image(
-    0,
-    0,
-    bakeShape(
-      scene,
-      `turret:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(snapshot.spaceship.radius))}`,
-      snapshot.spaceship.radius * visual.modelScale * 1.6 + 6,
-      (graphics) => {
-        drawCatalogAssetById(graphics, visual.shape, snapshot.spaceship.radius * visual.modelScale);
-      }
-    )
+  const tankLook = readTankLook(
+    (globalThis as { location?: { search?: string } }).location?.search ?? ""
   );
+
+  const gun = scene.add
+    .image(
+      0,
+      0,
+      tankLook
+        ? bakeShape(scene, "tank:turret", TANK_ART_HALF + 24, drawTankTurret)
+        : bakeShape(
+            scene,
+            `turret:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(snapshot.spaceship.radius))}`,
+            snapshot.spaceship.radius * visual.modelScale * 1.6 + 6,
+            (graphics) => {
+              drawCatalogAssetById(
+                graphics,
+                visual.shape,
+                snapshot.spaceship.radius * visual.modelScale
+              );
+            }
+          )
+    )
+    // Where the prototype mounts it: a third along the sprite, so the barrel
+    // turns about the mantlet rather than about its own middle.
+    .setOrigin(tankLook ? 0.32 : 0.5, 0.5)
+    .setScale(tankLook ? snapshot.spaceship.radius / TANK_ART_HALF : 1);
   gun.setPosition(
     visual.pivotX * snapshot.spaceship.radius,
     visual.pivotY * snapshot.spaceship.radius
