@@ -1,4 +1,3 @@
-import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import Phaser from "phaser";
 
@@ -6,6 +5,7 @@ import { bakeShape } from "./bake.js";
 import { FrameMeter } from "./scene/frameMeter.js";
 import { AimingLayer } from "./scene/aiming.js";
 import { drawArena, drawDecorations } from "./scene/arena.js";
+import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH, CameraFrame } from "./scene/camera.js";
 import { createCombatVisual, getEntityHeading, type CombatEntity } from "./scene/entities.js";
 import { drawShield } from "./scene/shield.js";
 import { drawSpaceshipHull, setEnemyHealthBar, turretMountPoint } from "./entityArt.js";
@@ -19,8 +19,6 @@ import {
   extendAngleTrack,
   extendPointTrack,
   getBackingStoreSize,
-  getPhaserCameraScroll,
-  getResponsiveViewport,
   observePlaybackTick,
   reconcileStableIds,
   sampleAngleTrack,
@@ -35,25 +33,6 @@ import { watchDevicePixelRatio } from "./devicePixels.js";
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../model/shipPrediction.js";
 import { drawCatalogAssetById } from "./catalogRenderer.js";
 import { drawTankHull, drawTankTurret, readTankLook, TANK_ART_HALF } from "./tankArt.js";
-
-/**
- * What the viewport spec reads: the camera's pixel rect and its zoom, both in
- * the pixels the scene draws into rather than the CSS pixels the page is laid
- * out in. The two differ by `pixelRatio` on a dense panel, and the slice of
- * world - `width / zoom` - is the same number either way, which is the point.
- */
-interface DisplayCameraSlice {
-  readonly width: number;
-  readonly height: number;
-  readonly zoom: number;
-  readonly pixelRatio: number;
-  /** The whole glass, letterbox bars included. */
-  readonly canvasWidth: number;
-  readonly canvasHeight: number;
-}
-
-const BASE_VIEWPORT_WIDTH = 1600;
-const BASE_VIEWPORT_HEIGHT = 900;
 
 /**
  * How long the worst frame is gathered over before it is published. A second,
@@ -194,21 +173,7 @@ class SpaceshipScene extends Phaser.Scene {
    * pixel ratio - which is exactly why `dpr=1` changed nothing.
    */
   private vectorsEnabled = true;
-  private viewportWidth = BASE_VIEWPORT_WIDTH;
-  private viewportHeight = BASE_VIEWPORT_HEIGHT;
-  /**
-   * Device pixels per CSS pixel, handed in by whoever sized the buffer. Only
-   * the numbers measured in absolute pixels care - the background's cover
-   * margin - because everything else is world space multiplied by the camera
-   * zoom, and the zoom scaled with the buffer.
-   */
-  private pixelRatio = 1;
-  /** The glass, in the same pixels the scene draws into. */
-  private canvasWidth = BASE_VIEWPORT_WIDTH;
-  private canvasHeight = Math.round(BASE_VIEWPORT_WIDTH * CAMERA_VIEW_ASPECT);
-  /** The camera's own pixel rect, which is the frame centred inside the glass. */
-  private rendererWidth = BASE_VIEWPORT_WIDTH;
-  private rendererHeight = BASE_VIEWPORT_HEIGHT;
+  private readonly camera = new CameraFrame();
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("spaceship");
@@ -223,12 +188,18 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.configureViewport(this.scale.gameSize.width, this.scale.gameSize.height);
+    this.camera.configure(
+      this,
+      this.scale.gameSize.width,
+      this.scale.gameSize.height,
+      this.snapshot.cameraViewWidth,
+      this.snapshot.spaceship
+    );
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     });
-    this.focusCamera(this.snapshot.spaceship);
+    this.camera.focusOn(this, this.snapshot.spaceship);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) =>
       this.bakedShape(key, half, draw)
     );
@@ -392,7 +363,7 @@ class SpaceshipScene extends Phaser.Scene {
       );
       this.aiming?.drawBeams(this.snapshot);
     }
-    this.focusCamera(spaceshipPosition);
+    this.camera.focusOn(this, spaceshipPosition);
 
     /*
      * How far behind the newest snapshot the playback clock is running, in
@@ -406,8 +377,9 @@ class SpaceshipScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const viewLeft = camera.scrollX;
     const viewTop = camera.scrollY;
-    const viewRight = viewLeft + this.rendererWidth;
-    const viewBottom = viewTop + this.rendererHeight;
+    const renderer = this.camera.readRendererSize();
+    const viewRight = viewLeft + renderer.width;
+    const viewBottom = viewTop + renderer.height;
     for (const visual of this.combatVisuals.values()) {
       /*
        * One clock for the whole picture when there is a cockpit driving it.
@@ -482,7 +454,11 @@ class SpaceshipScene extends Phaser.Scene {
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.
     if (snapshot.cameraViewWidth !== framedWidth) {
-      this.configureViewport(this.canvasWidth, this.canvasHeight);
+      this.camera.reconfigure(
+        this,
+        snapshot.cameraViewWidth,
+        this.spaceshipBody ?? snapshot.spaceship
+      );
     }
     if (shouldSnap || this.spaceshipBody === undefined || this.turret === undefined) {
       this.snapToSnapshot(snapshot, snapshot.tick);
@@ -617,62 +593,18 @@ class SpaceshipScene extends Phaser.Scene {
    * and a scene that recomputed it would be a second opinion about one number.
    */
   setPixelRatio(ratio: number): void {
-    this.pixelRatio = ratio;
+    this.camera.setPixelRatio(ratio);
   }
 
   private readonly handleResize = (gameSize: Phaser.Structs.Size): void => {
-    this.configureViewport(gameSize.width, gameSize.height);
-  };
-
-  private configureViewport(actualWidth: number, actualHeight: number): void {
-    const viewport = getResponsiveViewport(
-      actualWidth,
-      actualHeight,
+    this.camera.configure(
+      this,
+      gameSize.width,
+      gameSize.height,
       this.snapshot.cameraViewWidth,
-      this.snapshot.cameraViewWidth * CAMERA_VIEW_ASPECT
+      this.spaceshipBody ?? this.snapshot.spaceship
     );
-    this.canvasWidth = actualWidth;
-    this.canvasHeight = actualHeight;
-    // Phaser centres a camera on its own pixel size, and the camera is the
-    // letterboxed frame now rather than the whole canvas - so the scroll and the
-    // background cover are measured against the frame, not the glass.
-    this.rendererWidth = viewport.screen.width;
-    this.rendererHeight = viewport.screen.height;
-    this.viewportWidth = viewport.width;
-    this.viewportHeight = viewport.height;
-    this.cameras.main.setZoom(viewport.zoom);
-    // The frame is centred in the glass and nothing is drawn outside it, so the
-    // slice of arena a crew sees is the same on an ultrawide monitor, a laptop
-    // and a tablet - the difference between them is the width of the bars.
-    this.cameras.main.setViewport(
-      viewport.screen.x,
-      viewport.screen.y,
-      viewport.screen.width,
-      viewport.screen.height
-    );
-    // Scroll-factor-0 layers still get zoomed around the camera origin, so their world rect is
-    // Published for the viewport spec, which has no other way to ask what the
-    // camera is actually showing. Inert otherwise: a plain object, written once
-    // per resize.
-    (globalThis as { __spaceshipDisplayCamera?: DisplayCameraSlice }).__spaceshipDisplayCamera = {
-      width: viewport.screen.width,
-      height: viewport.screen.height,
-      zoom: viewport.zoom,
-      pixelRatio: this.pixelRatio,
-      canvasWidth: actualWidth,
-      canvasHeight: actualHeight
-    };
-    this.focusCamera(this.spaceshipBody ?? this.snapshot.spaceship);
-  }
-
-  private focusCamera(focus: Point): void {
-    const scroll = getPhaserCameraScroll({
-      focus,
-      rendererWidth: this.rendererWidth,
-      rendererHeight: this.rendererHeight
-    });
-    this.cameras.main.setScroll(scroll.x, scroll.y);
-  }
+  };
 
   private reconcileCombatVisuals(toTick: number, snap: boolean): void {
     const incoming = collectCombatEntities(this.snapshot);
