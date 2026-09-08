@@ -35,13 +35,6 @@ interface SpaceshipCanvasProps {
     /** And how many of them sat outside the camera. */
     readonly offscreen: number;
   }) => void;
-  /**
-   * Parallax layers on or off. A question rather than a setting: four
-   * full-screen tile sprites, three of them blended, are a plausible way to
-   * spend a phone's fill rate, and the only way to know is to take them away on
-   * the phone that stutters.
-   */
-  /** The shield's bloom, the other thing worth ruling out on a phone. */
   /** The vector overlays rebuilt every frame - the last thing left to price. */
   readonly vectorsEnabled?: boolean;
   /**
