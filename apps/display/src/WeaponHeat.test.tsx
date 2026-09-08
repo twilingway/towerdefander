@@ -18,7 +18,9 @@ describe("WeaponHeat", () => {
     expect(markup).toContain('data-testid="machine-gun-heat"');
     expect(markup).toContain("62%");
     expect(markup).toContain("40 / 100");
-    expect(markup).toContain('style="width:40%"');
+    // Scaled rather than widened: a width change lays the panel out again, and
+    // that layout lands in whatever frame the arena is drawing.
+    expect(markup).toContain('style="transform:scaleX(0.4000)"');
   });
 
   it("warns per weapon without an invalid percentage at zero capacity", () => {

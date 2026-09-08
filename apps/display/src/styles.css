@@ -463,12 +463,17 @@ p {
   background: #07171f;
 }
 
+/* Full width, scaled down to the reading: a bar that changes its width makes
+   the browser lay the panel out again, and that layout lands in whatever frame
+   the arena happens to be drawing. A transform does not. */
 .hud-energy i {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
+  transform-origin: left;
   background: linear-gradient(90deg, #377dbb, #75d8ff);
-  transition: width 100ms linear;
+  transition: transform 100ms linear;
 }
 
 .hud-energy--hull i {
@@ -592,12 +597,15 @@ p {
   background: rgb(255 255 255 / 10%);
 }
 
+/* Scaled rather than widened, for the reason `.hud-energy i` carries. */
 .boss-health__bar i {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
+  transform-origin: left;
   background: linear-gradient(90deg, #ff5d4f, #ffb54a);
-  transition: width 120ms linear;
+  transition: transform 120ms linear;
 }
 
 .wave-countdown--warning {

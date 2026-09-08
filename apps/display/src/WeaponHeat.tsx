@@ -34,7 +34,11 @@ function WeaponHeatRow({ weapon, caption, meterLabel, testId, variant }: WeaponH
         aria-valuenow={weapon.heat}
         aria-valuetext={heatLabel}
       >
-        <i style={{ width: `${String(heatPercent)}%` }} />
+        {/* Scaled, not widened: a width change is a layout, and a layout of a
+            panel over the arena lands in the frame the arena is drawing. The
+            transform runs on the compositor and costs the main thread
+            nothing. */}
+        <i style={{ transform: `scaleX(${(heatPercent / 100).toFixed(4)})` }} />
       </div>
       <small>{weapon.overheated ? "ПЕРЕГРЕВ" : `${String(Math.round(heatPercent))}%`}</small>
     </div>

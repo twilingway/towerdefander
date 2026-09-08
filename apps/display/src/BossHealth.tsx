@@ -30,7 +30,8 @@ export function BossHealth({ game }: BossHealthProps) {
         aria-valuenow={Math.ceil(boss.hp)}
         aria-valuetext={`${String(Math.ceil(boss.hp))} из ${String(Math.round(boss.maxHp))}`}
       >
-        <i style={{ width: `${String(percent)}%` }} />
+        {/* Scaled rather than widened; see the note in `WeaponHeat`. */}
+        <i style={{ transform: `scaleX(${(percent / 100).toFixed(4)})` }} />
       </div>
       <small>
         {Math.ceil(boss.hp)} / {Math.round(boss.maxHp)}
