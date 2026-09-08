@@ -17,6 +17,8 @@
 
 import { chromium } from "@playwright/test";
 
+import { flyForMs } from "./fly-the-ship.mjs";
+
 const cpuThrottle = Number(
   process.argv.find((argument) => argument.startsWith("--cpu="))?.slice(6) ?? 1
 );
@@ -24,6 +26,10 @@ const seconds = Number(
   process.argv.find((argument) => argument.startsWith("--seconds="))?.slice(10) ?? 10
 );
 const url = process.env.BENCH_URL ?? "http://127.0.0.1:5193/";
+/** Which wave to open on, when the server was started with ALLOW_START_WAVE. */
+const startWave = Number(
+  process.argv.find((argument) => argument.startsWith("--wave="))?.slice(7) ?? 0
+);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -33,6 +39,13 @@ await page.goto(url, { waitUntil: "load" });
 
 await page.getByRole("button", { name: "1 игрок" }).click();
 await page.getByText("Играть с этого же устройства").click();
+if (startWave > 1) {
+  const field = page.getByLabel("Начать с волны (для тестов)");
+  if ((await field.count()) === 0) {
+    throw new Error("the server was not started with ALLOW_START_WAVE=true");
+  }
+  await field.fill(String(startWave));
+}
 await page.getByRole("button", { name: "Создать комнату" }).click();
 const ready = page.getByTestId("cockpit-ready");
 await ready.waitFor({ timeout: 60_000 });
@@ -55,8 +68,15 @@ await session.send("Profiler.enable");
 // A hundred microseconds: fine enough that a two-millisecond function lands in
 // twenty samples rather than one, coarse enough not to be the load itself.
 await session.send("Profiler.setSamplingInterval", { interval: 100 });
+/*
+ * Flown, not parked: a still ship measures a still picture. See
+ * `scripts/fly-the-ship.mjs`, which both harnesses share so their numbers
+ * describe the same fight.
+ */
+const flying = flyForMs(page, seconds * 1000);
+
 await session.send("Profiler.start");
-await sleep(seconds * 1000);
+await flying;
 const { profile } = await session.send("Profiler.stop");
 
 const byNode = new Map(profile.nodes.map((node) => [node.id, node]));

@@ -161,7 +161,7 @@ type CombatEntity =
 
 interface CombatVisual {
   readonly object: Phaser.GameObjects.Container;
-  readonly healthBar: Phaser.GameObjects.Graphics | undefined;
+  readonly healthBar: Phaser.GameObjects.Container | undefined;
   /**
    * The health the bar was last drawn at.
    *
@@ -203,13 +203,13 @@ class SpaceshipScene extends Phaser.Scene {
   private spaceshipBody: Phaser.GameObjects.Image | undefined;
   private noseMarker: Phaser.GameObjects.Image | undefined;
   private turret: TurretObject | undefined;
-  private shield: Phaser.GameObjects.Graphics | undefined;
+  private shield: Phaser.GameObjects.Image | undefined;
   private beams: Phaser.GameObjects.Graphics | undefined;
-  private aimEnvelope: Phaser.GameObjects.Graphics | undefined;
-  private focusRing: Phaser.GameObjects.Graphics | undefined;
+  private aimEnvelope: Phaser.GameObjects.Image | undefined;
+  private focusRing: Phaser.GameObjects.Image | undefined;
   /** What the ring held last frame, so it does not jump on every wobble. */
   private focusedEntityId: string | undefined;
-  private noseFocus: Phaser.GameObjects.Graphics | undefined;
+  private noseFocus: Phaser.GameObjects.Image | undefined;
   private noseFocusedEntityId: string | undefined;
   private shieldGlow: Phaser.Filters.Glow | undefined;
   private visualShieldAngle: number;
@@ -416,18 +416,25 @@ class SpaceshipScene extends Phaser.Scene {
       .setDepth(11)
       .setRotation(this.snapshot.spaceship.heading);
 
+    /*
+     * An empty texture to start on: every drawing below picks its own the first
+     * time it has something to show, and an image has to be created with some
+     * texture or Phaser puts a green box in its place.
+     */
+    const blank = this.bakedShape("blank", 1, () => undefined);
+
     this.turret = createTurret(this, this.snapshot);
-    this.shield = this.add.graphics().setDepth(14);
+    this.shield = this.add.image(0, 0, blank).setDepth(14);
     this.shieldGlow = attachShieldGlow(this.shield);
     // Above the arena, below the shield: a pulse is over before it can hide
     // anything that matters.
     this.beams = this.add.graphics().setDepth(13);
     // Under everything that matters: it is a hint about where the gun can
     // reach, and it must never sit on top of what is being aimed at.
-    this.aimEnvelope = this.add.graphics().setDepth(4);
+    this.aimEnvelope = this.add.image(0, 0, blank).setDepth(4).setVisible(false);
     // Above the ships it marks, below the shield and the pulses.
-    this.focusRing = this.add.graphics().setDepth(12);
-    this.noseFocus = this.add.graphics().setDepth(12);
+    this.focusRing = this.add.image(0, 0, blank).setDepth(12).setVisible(false);
+    this.noseFocus = this.add.image(0, 0, blank).setDepth(12).setVisible(false);
     const tick = this.snapshot.tick;
     this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
@@ -943,30 +950,45 @@ class SpaceshipScene extends Phaser.Scene {
     if (layer === undefined) return;
     const { reach, acquireHalfAngle } = this.snapshot.cannon;
     if (reach <= 0) {
-      layer.clear();
-      this.aimEnvelopeShape = undefined;
+      layer.setVisible(false);
       return;
     }
     const half = Math.max(acquireHalfAngle, AIM_MIN_HALF_ANGLE);
     const shape = this.aimEnvelopeShape;
     if (shape?.reach !== reach || shape.half !== half) {
       this.aimEnvelopeShape = { reach, half };
-      layer.clear();
-      layer.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
-      layer.slice(0, 0, reach, -half, half);
-      layer.fillPath();
-      layer.lineStyle(
-        AIM_ENVELOPE_STYLE.width,
-        AIM_ENVELOPE_STYLE.color,
-        AIM_ENVELOPE_STYLE.edgeAlpha
+      /*
+       * Baked at a fixed size and stretched to the reach, the way the arena
+       * floor is: a wedge nine hundred units long would be a nine-hundred pixel
+       * texture otherwise, and a fan of triangles carries that stretch without
+       * showing it. The barrel sits at the middle of the square, so half the
+       * texture is empty - which is the price of having the image turn about
+       * the gun rather than about its own bounding box.
+       */
+      const side = SpaceshipScene.AIM_TEXTURE_SIDE;
+      const drawn = side / 2;
+      const key = `aim:${String(Math.round(reach))}:${half.toFixed(3)}`;
+      layer.setTexture(
+        this.bakedShape(key, drawn, (graphics) => {
+          graphics.fillStyle(AIM_ENVELOPE_STYLE.color, AIM_ENVELOPE_STYLE.fillAlpha);
+          graphics.slice(0, 0, drawn, -half, half);
+          graphics.fillPath();
+          graphics.lineStyle(
+            AIM_ENVELOPE_STYLE.width,
+            AIM_ENVELOPE_STYLE.color,
+            AIM_ENVELOPE_STYLE.edgeAlpha
+          );
+          for (const edge of [-half, half]) {
+            graphics.beginPath();
+            graphics.moveTo(0, 0);
+            graphics.lineTo(Math.cos(edge) * drawn, Math.sin(edge) * drawn);
+            graphics.strokePath();
+          }
+        })
       );
-      for (const edge of [-half, half]) {
-        layer.beginPath();
-        layer.moveTo(0, 0);
-        layer.lineTo(Math.cos(edge) * reach, Math.sin(edge) * reach);
-        layer.strokePath();
-      }
+      layer.setDisplaySize(reach * 2, reach * 2);
     }
+    layer.setVisible(this.vectorsEnabled);
     layer.setPosition(origin.x, origin.y);
     layer.setRotation(angle);
   }
@@ -987,7 +1009,6 @@ class SpaceshipScene extends Phaser.Scene {
   ): void {
     const layer = this.focusRing;
     if (layer === undefined) return;
-    layer.clear();
     const focus = pickFocusedTarget({
       origin,
       bearing,
@@ -997,15 +1018,29 @@ class SpaceshipScene extends Phaser.Scene {
       candidates
     });
     this.focusedEntityId = focus?.target.entityId;
-    if (focus === undefined) return;
+    if (focus === undefined) {
+      layer.setVisible(false);
+      return;
+    }
     const { target, firable } = focus;
-    const alpha = firable ? 0.9 : 0.55 + 0.45 * Math.sin(this.time.now / FOCUS_RING_BREATH_MS);
-    layer.lineStyle(
-      firable ? FOCUS_RING_FIRABLE_WIDTH : FOCUS_RING_WIDTH,
-      firable ? FOCUS_RING_FIRABLE_COLOR : FOCUS_RING_HELD_COLOR,
-      alpha
+    // A ring per calibre, and the breathing is the image's alpha rather than a
+    // colour drawn again: an alpha is a number on an existing texture.
+    const radius = Math.round(target.radius + FOCUS_RING_MARGIN);
+    const width = firable ? FOCUS_RING_FIRABLE_WIDTH : FOCUS_RING_WIDTH;
+    const colour = firable ? FOCUS_RING_FIRABLE_COLOR : FOCUS_RING_HELD_COLOR;
+    layer.setTexture(
+      this.bakedShape(
+        `focus:${firable ? "hot" : "held"}:${String(radius)}`,
+        radius + width + 2,
+        (graphics) => {
+          graphics.lineStyle(width, colour, 1);
+          graphics.strokeCircle(0, 0, radius);
+        }
+      )
     );
-    layer.strokeCircle(target.x, target.y, target.radius + FOCUS_RING_MARGIN);
+    layer.setVisible(this.vectorsEnabled);
+    layer.setPosition(target.x, target.y);
+    layer.setAlpha(firable ? 0.9 : 0.55 + 0.45 * Math.sin(this.time.now / FOCUS_RING_BREATH_MS));
   }
 
   /**
@@ -1020,7 +1055,6 @@ class SpaceshipScene extends Phaser.Scene {
   ): void {
     const layer = this.noseFocus;
     if (layer === undefined) return;
-    layer.clear();
     const focus = pickFocusedTarget({
       origin,
       bearing: heading,
@@ -1030,19 +1064,28 @@ class SpaceshipScene extends Phaser.Scene {
       candidates
     });
     this.noseFocusedEntityId = focus?.target.entityId;
-    if (focus?.firable !== true) return;
-    const { target } = focus;
-    const radius = target.radius + NOSE_FOCUS_MARGIN;
-    const bearing = Math.atan2(target.y - origin.y, target.x - origin.x);
-    layer.lineStyle(NOSE_FOCUS_WIDTH, NOSE_FOCUS_COLOR, 0.85);
-    // Two arcs across the line of fire, so the brackets open toward the shooter
-    // however the pair happens to be turned.
-    for (const side of [Math.PI / 2, -Math.PI / 2]) {
-      const centre = bearing + side;
-      layer.beginPath();
-      layer.arc(target.x, target.y, radius, centre - NOSE_FOCUS_SWEEP, centre + NOSE_FOCUS_SWEEP);
-      layer.strokePath();
+    if (focus?.firable !== true) {
+      layer.setVisible(false);
+      return;
     }
+    const { target } = focus;
+    const radius = Math.round(target.radius + NOSE_FOCUS_MARGIN);
+    layer.setTexture(
+      this.bakedShape(`nosefocus:${String(radius)}`, radius + NOSE_FOCUS_WIDTH + 2, (graphics) => {
+        graphics.lineStyle(NOSE_FOCUS_WIDTH, NOSE_FOCUS_COLOR, 0.85);
+        // Two arcs across the line of fire, drawn about the bore and then
+        // turned with the image, so the brackets open toward the shooter
+        // however the pair happens to be placed.
+        for (const side of [Math.PI / 2, -Math.PI / 2]) {
+          graphics.beginPath();
+          graphics.arc(0, 0, radius, side - NOSE_FOCUS_SWEEP, side + NOSE_FOCUS_SWEEP);
+          graphics.strokePath();
+        }
+      })
+    );
+    layer.setVisible(this.vectorsEnabled);
+    layer.setPosition(target.x, target.y);
+    layer.setRotation(Math.atan2(target.y - origin.y, target.x - origin.x));
   }
 
   /**
@@ -1065,63 +1108,64 @@ class SpaceshipScene extends Phaser.Scene {
   }
 
   /**
-   * The shield, drawn where it actually points.
+   * The shield, baked once per state and turned to its bearing.
    *
-   * Built at its bearing rather than built once and rotated: the arc carries a
-   * glow, and a filtered object is composited through a focus region that does
-   * not travel with a rotation - turning the object tore the bloom off the
-   * crescent. The tessellation this costs is real and is paid for elsewhere,
-   * by baking what can be baked; correctness is not the place to save it.
+   * It was the last drawing left on the field, and the dearest: a hundred-point
+   * crescent, filled - which means triangulated - on every frame the sector was
+   * up, and a profile of a real wave put the tessellator and the graphics
+   * batcher at the top with it.
+   *
+   * It was drawn that way for a reason that no longer holds. Turning it used to
+   * tear the bloom off, because a `Graphics` object carries no width or height,
+   * Phaser calls it poorly bounded, and the focus region its filter is
+   * composited through does not follow a rotation. An `Image` has a size, so
+   * the filter follows the object like any other; the arc is baked centred on
+   * zero and the image is simply turned.
    */
   private drawShield(): void {
     if (this.shield === undefined || this.spaceshipBody === undefined) return;
-    this.shield.clear();
-    this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
     const style = getShieldVisualStyle(this.snapshot.shield.active);
-    const arc = getShieldArcRange(this.visualShieldAngle, this.snapshot.shield.arcHalfAngle);
-    // Drawn where the shield actually intercepts, not at a radius guessed from the hull.
     const radius = this.snapshot.shieldRadius;
-    // A filtered object is composited by a camera of its own, and one that
-    // focuses on the drawing context is told the main camera's size, scroll and
-    // zoom but never where the letterboxed frame sits in the glass - so the
-    // glow was laid down from the canvas corner while the hull was drawn from
-    // the frame's, and the raised shield drifted off the ship by the width of
-    // the bars. Focused on the arc itself, it travels with the hull instead.
-    const filterExtent = (radius + style.lineWidth + SHIELD_GLOW_DISTANCE) * 2;
-    this.shield.focusFiltersOverride(
-      filterExtent / 2,
-      filterExtent / 2,
-      filterExtent,
-      filterExtent
-    );
-    this.shield.lineStyle(style.lineWidth, style.color, style.alpha);
-    if (style.crescentThickness !== null) {
-      const crescent = getShieldCrescentPoints(arc.start, arc.end, radius, style.crescentThickness);
-      if (crescent.length > 0) {
-        // The vectors are reused: a crescent is a hundred points, and a hundred
-        // fresh objects sixty times a second is six thousand a second thrown
-        // away to say the same thing.
-        while (this.shieldPoints.length < crescent.length) {
-          this.shieldPoints.push(new Phaser.Math.Vector2(0, 0));
+    const half = this.snapshot.shield.arcHalfAngle;
+    // The bake is keyed by everything that changes its shape; the bearing is
+    // not one of those things, which is the whole point.
+    const key = `shield:${this.snapshot.shield.active ? "up" : "down"}:${String(Math.round(radius))}:${half.toFixed(3)}`;
+    const extent = radius + style.lineWidth + 4;
+    this.shield.setTexture(
+      this.bakedShape(key, extent, (graphics) => {
+        const arc = getShieldArcRange(0, half);
+        graphics.lineStyle(style.lineWidth, style.color, style.alpha);
+        if (style.crescentThickness !== null) {
+          const crescent = getShieldCrescentPoints(
+            arc.start,
+            arc.end,
+            radius,
+            style.crescentThickness
+          );
+          if (crescent.length > 0) {
+            graphics.fillStyle(style.color, style.alpha);
+            graphics.fillPoints(
+              crescent.map((point) => new Phaser.Math.Vector2(point.x, point.y)),
+              true,
+              true
+            );
+          }
+        } else if (style.dash === null) {
+          graphics.beginPath();
+          graphics.arc(0, 0, radius, arc.start, arc.end, false);
+          graphics.strokePath();
+        } else {
+          for (const segment of getShieldDashSegments(arc.start, arc.end, radius, style.dash)) {
+            graphics.beginPath();
+            graphics.arc(0, 0, radius, segment.start, segment.end, false);
+            graphics.strokePath();
+          }
         }
-        this.shieldPoints.length = crescent.length;
-        crescent.forEach((point, index) => {
-          this.shieldPoints[index]?.set(point.x, point.y);
-        });
-        this.shield.fillStyle(style.color, style.alpha);
-        this.shield.fillPoints(this.shieldPoints, true, true);
-      }
-    } else if (style.dash === null) {
-      this.shield.beginPath();
-      this.shield.arc(0, 0, radius, arc.start, arc.end, false);
-      this.shield.strokePath();
-    } else {
-      for (const segment of getShieldDashSegments(arc.start, arc.end, radius, style.dash)) {
-        this.shield.beginPath();
-        this.shield.arc(0, 0, radius, segment.start, segment.end, false);
-        this.shield.strokePath();
-      }
-    }
+      })
+    );
+    this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
+    this.shield.setRotation(this.visualShieldAngle);
+    this.shield.setVisible(this.vectorsEnabled);
     if (this.shieldGlow !== undefined) {
       this.shieldGlow.active = this.glowEnabled && this.snapshot.shield.active;
     }
@@ -1284,7 +1328,7 @@ class SpaceshipScene extends Phaser.Scene {
           visual.drawnHealth !== entity.hp
         ) {
           visual.drawnHealth = entity.hp;
-          drawEnemyHealthBar(visual.healthBar, entity);
+          setEnemyHealthBar(visual.healthBar, entity);
         }
       }
     }
@@ -1317,6 +1361,15 @@ class SpaceshipScene extends Phaser.Scene {
    */
   private static readonly ARENA_TEXTURE_SIDE = 2048;
 
+  /**
+   * Side of the baked aiming wedge, in texture pixels.
+   *
+   * Stretched to the barrel's reach, so this is resolution and not size. Five
+   * hundred and twelve over a nine-hundred unit reach is under two units a
+   * pixel on a shape with no detail finer than its own edge.
+   */
+  private static readonly AIM_TEXTURE_SIDE = 512;
+
   private bakedShape(
     key: string,
     half: number,
@@ -1327,10 +1380,10 @@ class SpaceshipScene extends Phaser.Scene {
 
   private createCombatVisual(entity: CombatEntity): {
     readonly object: Phaser.GameObjects.Container;
-    readonly healthBar: Phaser.GameObjects.Graphics | undefined;
+    readonly healthBar: Phaser.GameObjects.Container | undefined;
   } {
     const container = this.add.container(entity.x, entity.y).setDepth(getEntityDepth(entity));
-    let healthBar: Phaser.GameObjects.Graphics | undefined;
+    let healthBar: Phaser.GameObjects.Container | undefined;
     if (entity.visualKind === "enemy") {
       const visual = resolveEnemyVisual(this.snapshot.enemyCatalogue, entity.kind);
       const key = `enemy:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(entity.radius))}`;
@@ -1343,8 +1396,7 @@ class SpaceshipScene extends Phaser.Scene {
       );
       container.add(body);
       if (visual.showHealthBar) {
-        healthBar = this.add.graphics();
-        drawEnemyHealthBar(healthBar, entity);
+        healthBar = createEnemyHealthBar(this, entity);
         container.add(healthBar);
       }
     } else if (entity.visualKind === "asteroid") {
@@ -1614,13 +1666,15 @@ function beamStyle(source: string) {
   return source === "cannon" ? LASER_CANNON_STYLE : LASER_NOSE_STYLE;
 }
 
-function attachShieldGlow(shield: Phaser.GameObjects.Graphics): Phaser.Filters.Glow | undefined {
+function attachShieldGlow(shield: Phaser.GameObjects.Image): Phaser.Filters.Glow | undefined {
   shield.enableFilters();
-  // Graphics carries no width or height, so Phaser calls it poorly bounded and
-  // focuses its filters on the drawing context - the one path that drops the
-  // camera's own position. `drawShield` hands it the bounds instead, every
-  // frame, because the shield radius is bought and sold during a run.
-  shield.setFiltersFocusContext(false);
+  /*
+   * No focus override any more, and no context focusing either. Those existed
+   * because a `Graphics` object has no width or height for Phaser to bound a
+   * filter with; an image of the same arc has both, so the bloom is composited
+   * against the object itself and travels with it - including through the
+   * rotation that used to tear it off.
+   */
   const filters = shield.filters;
   if (filters === null) return undefined;
   /**
@@ -1734,6 +1788,28 @@ function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot): Turre
  * ends up at the texture's centre and the image's default origin lines up with
  * what the graphics version would have shown.
  */
+/**
+ * A drawing baked at its own size, origin at the top-left corner.
+ *
+ * The square bake above centres what it draws, which is right for a hull and
+ * wrong for a bar: a padded square cannot be scaled to show a fraction of
+ * itself without the padding scaling too.
+ */
+export function bakeRect(
+  scene: Phaser.Scene,
+  key: string,
+  width: number,
+  height: number,
+  draw: (graphics: Phaser.GameObjects.Graphics) => void
+): string {
+  if (scene.textures.exists(key)) return key;
+  const graphics = scene.make.graphics({ x: 0, y: 0 }, false);
+  draw(graphics);
+  graphics.generateTexture(key, Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(height)));
+  graphics.destroy();
+  return key;
+}
+
 export function bakeShape(
   scene: Phaser.Scene,
   key: string,
@@ -1772,21 +1848,74 @@ export function drawEnemyBody(
 const HEALTH_BAR_BACKGROUND = 0x2a0d16;
 const HEALTH_BAR_FILL = 0xff5f7a;
 
-export function drawEnemyHealthBar(
-  bar: Phaser.GameObjects.Graphics,
+/** Where a bar sits and how big it is, from the hull it belongs to. */
+export function healthBarBox(entity: Pick<PublicEnemyView, "radius">): {
+  readonly width: number;
+  readonly height: number;
+  readonly top: number;
+} {
+  const height = Math.max(5, entity.radius * 0.12);
+  return { width: entity.radius * 1.8, height, top: -entity.radius - height * 2.4 };
+}
+
+export function healthBarFraction(entity: Pick<PublicEnemyView, "hp" | "maxHp">): number {
+  if (!Number.isFinite(entity.maxHp) || entity.maxHp <= 0) return 0;
+  return Math.max(0, Math.min(1, entity.hp / entity.maxHp));
+}
+
+/**
+ * Two images rather than a drawing, for the same reason as everything else on
+ * the field.
+ *
+ * A wave is thirty hulls, and a `Graphics` bar on each of them is thirty
+ * objects re-walked and re-batched every frame whether or not anyone took
+ * damage - which is what a profile of a real wave found still standing after
+ * the arena and the hulls were baked. The frame is one texture, the fill is
+ * another, and a hit only changes how wide the second one is drawn.
+ */
+export function createEnemyHealthBar(
+  scene: Phaser.Scene,
+  entity: PublicEnemyView
+): Phaser.GameObjects.Container {
+  const { width, height, top } = healthBarBox(entity);
+  const size = `${String(Math.round(width))}x${String(Math.round(height))}`;
+  const frame = scene.add
+    .image(
+      0,
+      top,
+      bakeRect(scene, `hpframe:${size}`, width, height, (graphics) => {
+        graphics.fillStyle(HEALTH_BAR_BACKGROUND, 0.85);
+        graphics.fillRect(0, 0, width, height);
+        graphics.lineStyle(2, 0xffd1b0, 0.7);
+        graphics.strokeRect(1, 1, width - 2, height - 2);
+      })
+    )
+    .setOrigin(0.5, 0);
+  const fill = scene.add
+    .image(
+      -width / 2,
+      top,
+      bakeRect(scene, `hpfill:${size}`, width, height, (graphics) => {
+        graphics.fillStyle(HEALTH_BAR_FILL, 1);
+        graphics.fillRect(0, 0, width, height);
+      })
+    )
+    .setOrigin(0, 0);
+  const bar = scene.add.container(0, 0, [frame, fill]);
+  bar.setData("fill", fill);
+  setEnemyHealthBar(bar, entity);
+  return bar;
+}
+
+/** A hit only moves the right edge of the fill; nothing is drawn again. */
+export function setEnemyHealthBar(
+  bar: Phaser.GameObjects.Container,
   entity: PublicEnemyView
 ): void {
-  const width = entity.radius * 1.8;
-  const height = Math.max(5, entity.radius * 0.12);
-  const top = -entity.radius - height * 2.4;
-  const ratio = Math.max(0, Math.min(1, entity.hp / entity.maxHp));
-  bar.clear();
-  bar.fillStyle(HEALTH_BAR_BACKGROUND, 0.85);
-  bar.fillRect(-width / 2, top, width, height);
-  bar.fillStyle(HEALTH_BAR_FILL, 1);
-  bar.fillRect(-width / 2, top, width * ratio, height);
-  bar.lineStyle(2, 0xffd1b0, 0.7);
-  bar.strokeRect(-width / 2, top, width, height);
+  const fill = bar.getData("fill") as Phaser.GameObjects.Image | undefined;
+  if (fill === undefined) return;
+  const { width, height } = healthBarBox(entity);
+  fill.setDisplaySize(width * healthBarFraction(entity), height);
 }
 
 function getProjectileStyle(entity: PublicProjectileView): { fill: number; stroke: number } {

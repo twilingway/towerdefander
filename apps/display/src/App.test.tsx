@@ -36,9 +36,10 @@ describe("layout preview", () => {
     const markup = renderToStaticMarkup(<DisplayApp />);
 
     // The fixture holds one wave rock and one ambient one; only the first pays.
+    // That the radar still shows both is now a question for the painter's own
+    // test: the dial is a canvas, and a picture has no markup to search.
     expect(markup).toContain('data-testid="hud-field-counts"');
     expect(markup).toContain("Камни 1");
-    expect(markup).toContain('data-entity-id="preview-asteroid-2"');
   });
 
   it("keeps the room creation state without the preview parameter", () => {

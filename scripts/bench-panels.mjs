@@ -29,6 +29,8 @@
 // in an import would be a second browser download.
 import { chromium } from "@playwright/test";
 
+import { flyForMs } from "./fly-the-ship.mjs";
+
 const useLab = process.argv.includes("--lab");
 /*
  * The verdict without the instrument in the way.
@@ -223,12 +225,19 @@ if (cpuThrottle > 1) {
 const runs = [];
 for (const on of plain ? [true] : [true, false]) {
   await stand.setInterface(on);
+  /*
+   * Flown for the whole window, warm-up included: the ship is what puts shells,
+   * focus rings and moving hulls on the screen, and a sample taken while it
+   * coasts describes a picture nobody plays.
+   */
+  const flying = flyForMs(page, WARMUP_MS + SAMPLES * SAMPLE_INTERVAL_MS + 500);
   await sleep(WARMUP_MS);
   const samples = [];
   for (let i = 0; i < SAMPLES; i++) {
     await sleep(SAMPLE_INTERVAL_MS);
     samples.push(await stand.read());
   }
+  await flying;
   runs.push({ label: on ? "интерфейс ВКЛ" : "интерфейс ВЫКЛ", samples });
 }
 

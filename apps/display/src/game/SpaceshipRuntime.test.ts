@@ -10,7 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 import { drawCatalogAsset } from "./catalogRenderer.js";
 import {
   drawEnemyBody,
-  drawEnemyHealthBar,
+  healthBarBox,
+  healthBarFraction,
   drawSpaceshipHull,
   resolveEnemyVisual,
   turretMountPoint
@@ -227,23 +228,28 @@ describe("player hull", () => {
 });
 
 describe("boss health bar", () => {
+  /*
+   * The bar is two baked images now, so what is testable is the arithmetic that
+   * decides how wide the fill is drawn - the drawing itself happens once, into
+   * a texture, and never again.
+   */
   it("fills proportionally to remaining hull", () => {
-    const spy = graphicsSpy();
-    drawEnemyHealthBar(spy.graphics as never, enemy({ hp: 25, maxHp: 100 }));
-    const [background, fill] = spy.fillRects;
-    expect(background).toBeDefined();
-    expect(fill).toBeDefined();
-    expect(fill?.width).toBeCloseTo((background?.width ?? 0) * 0.25);
+    expect(healthBarFraction(enemy({ hp: 25, maxHp: 100 }))).toBeCloseTo(0.25);
   });
 
   it("clamps an over-full or negative hull", () => {
-    const over = graphicsSpy();
-    drawEnemyHealthBar(over.graphics as never, enemy({ hp: 400, maxHp: 100 }));
-    expect(over.fillRects[1]?.width).toBe(over.fillRects[0]?.width);
+    expect(healthBarFraction(enemy({ hp: 400, maxHp: 100 }))).toBe(1);
+    expect(healthBarFraction(enemy({ hp: -20, maxHp: 100 }))).toBe(0);
+  });
 
-    const under = graphicsSpy();
-    drawEnemyHealthBar(under.graphics as never, enemy({ hp: -20, maxHp: 100 }));
-    expect(under.fillRects[1]?.width).toBe(0);
+  it("reads an absent capacity as empty rather than full", () => {
+    expect(healthBarFraction(enemy({ hp: 40, maxHp: 0 }))).toBe(0);
+  });
+
+  it("sits above the hull it belongs to, never on it", () => {
+    const box = healthBarBox(enemy({ hp: 40, maxHp: 40 }));
+    expect(box.top + box.height).toBeLessThan(-enemy({ hp: 40, maxHp: 40 }).radius);
+    expect(box.width).toBeGreaterThan(0);
   });
 });
 

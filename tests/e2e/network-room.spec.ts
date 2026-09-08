@@ -62,7 +62,10 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     // The countdown is display-only now: controllers keep just their controls.
     await expect(display.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
     await expect(display.getByTestId("combat-radar")).toBeVisible();
-    await expect(display.getByTestId("combat-radar-spaceship")).toBeVisible();
+    // The dial is a canvas now, so there is no node for the ship marker to be;
+    // what can still be asserted from outside is that the canvas is on screen
+    // and that the counts beside it move, which the poll below does.
+    await expect(display.getByTestId("combat-radar-canvas")).toBeVisible();
     const battlefieldSnapshot = display.getByTestId("spaceship-world");
     await expect
       .poll(async () => {
