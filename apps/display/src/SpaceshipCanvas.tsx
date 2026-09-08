@@ -283,8 +283,16 @@ export function SpaceshipCanvas({
    * sentence.
    */
   const shellReference = useRef<HTMLDivElement | null>(null);
+  /*
+   * The world as text exists for the things that cannot read a canvas: the
+   * browser suite and the demo bot. Neither of them is a player, so a release
+   * build carries neither the element nor the timer that moves it. Both
+   * harnesses serve the display from a dev server, and the demo sets its own
+   * flag on top of that.
+   */
+  const readableWorld = import.meta.env.DEV || visibleDemo;
   useEffect(() => {
-    if (readGame === undefined) return undefined;
+    if (!readableWorld || readGame === undefined) return undefined;
     const timer = globalThis.setInterval(() => {
       const latest = readGame();
       const element = shellReference.current;
@@ -296,7 +304,7 @@ export function SpaceshipCanvas({
     return () => {
       globalThis.clearInterval(timer);
     };
-  }, [readGame, runNumber, visibleDemo]);
+  }, [readGame, readableWorld, runNumber, visibleDemo]);
 
   /*
    * Three branches, and the canvas is the first of them with nothing above it
@@ -316,18 +324,20 @@ export function SpaceshipCanvas({
         The world as text, on an element of its own: a browser test and the demo
         bot read it, nothing draws it, and it has no children to invalidate.
       */}
-      <div
-        ref={shellReference}
-        className="battlefield-shell"
-        data-testid="spaceship-world"
-        {...worldAttributes(game, runNumber, visibleDemo)}
-      >
-        <span className="sr-only">
-          Корабль находится в точке {Math.round(game.spaceship.x)}, {Math.round(game.spaceship.y)}.
-          Снарядов: {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
-          {game.enemyShips.length}.
-        </span>
-      </div>
+      {readableWorld && (
+        <div
+          ref={shellReference}
+          className="battlefield-shell"
+          data-testid="spaceship-world"
+          {...worldAttributes(game, runNumber, visibleDemo)}
+        >
+          <span className="sr-only">
+            Корабль находится в точке {Math.round(game.spaceship.x)}, {Math.round(game.spaceship.y)}
+            . Снарядов: {game.friendlyProjectiles.length + game.hostileProjectiles.length}. Врагов:{" "}
+            {game.enemyShips.length}.
+          </span>
+        </div>
+      )}
     </>
   );
 }
