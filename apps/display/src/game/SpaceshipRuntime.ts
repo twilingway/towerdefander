@@ -3,7 +3,7 @@ import Phaser from "phaser";
 
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH } from "./scene/camera.js";
-import { getBackingStoreSize } from "./spaceshipViewModel.js";
+import { getBackingStoreSize } from "./viewport.js";
 import { SpaceshipScene } from "./scene/SpaceshipScene.js";
 import type { ScenePrediction } from "./scene/entities.js";
 

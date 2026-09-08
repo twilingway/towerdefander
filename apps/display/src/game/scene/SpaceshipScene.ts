@@ -11,6 +11,7 @@ import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from 
 import { drawShield } from "./shield.js";
 import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
 
+import { type Point } from "../spaceshipViewModel.js";
 import {
   advancePlayback,
   createAngleTrack,
@@ -24,9 +25,8 @@ import {
   SnapshotResetLatch,
   type AngleTrack,
   type PlaybackClock,
-  type Point,
   type PointTrack
-} from "../spaceshipViewModel.js";
+} from "../playback.js";
 import { drawTankHull, readTankLook, TANK_ART_HALF } from "../tankArt.js";
 
 export class SpaceshipScene extends Phaser.Scene {

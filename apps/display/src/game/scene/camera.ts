@@ -1,7 +1,8 @@
 import type Phaser from "phaser";
 import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 
-import { getPhaserCameraScroll, getResponsiveViewport, type Point } from "../spaceshipViewModel.js";
+import { type Point } from "../spaceshipViewModel.js";
+import { getPhaserCameraScroll, getResponsiveViewport } from "../viewport.js";
 
 /** The frame a scene starts on before any glass has been measured. */
 export const BASE_VIEWPORT_WIDTH = 1600;

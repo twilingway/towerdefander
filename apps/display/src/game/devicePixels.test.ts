@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { readPixelRatioCap } from "./devicePixels.js";
-import { DEVICE_PIXEL_RATIO_CAP } from "./spaceshipViewModel.js";
+import { DEVICE_PIXEL_RATIO_CAP } from "./viewport.js";
 
 describe("readPixelRatioCap", () => {
   it("takes the ceiling the address asks for", () => {

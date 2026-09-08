@@ -9,15 +9,15 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
+import { reconcileStableIds } from "../spaceshipViewModel.js";
 import {
   createAngleTrack,
   createPointTrack,
   extendAngleTrack,
   extendPointTrack,
-  reconcileStableIds,
   type AngleTrack,
   type PointTrack
-} from "../spaceshipViewModel.js";
+} from "../playback.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
 import {
   createEnemyHealthBar,
