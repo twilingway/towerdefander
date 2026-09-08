@@ -1126,21 +1126,19 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       angles.push(room.state.game.turretAngle);
     }
     /*
-     * The arcade turret points rather than traverses - six hundred degrees a
-     * second, stopped inside a step - so it is on the ordered bearing long
-     * before the order goes stale, and there is no travel left at the timeout
-     * to measure a brake against. What a stale order must still not do is move
-     * the barrel: it holds where it was aimed instead of drifting on or
-     * snapping back.
+     * The turret traverses. The arcade profile version 38 applies is the hull's
+     * alone - migrations.ts says so where it lists the fields - so the barrel is
+     * still on its way when the order goes stale, which is the only state in
+     * which a brake can be measured at all.
+     *
+     * A stale order neither carries the barrel on at speed nor stops it dead:
+     * the step after the timeout is shorter than a step before it, and still
+     * forward.
      */
-    const ordered = Math.PI / 2;
-    // It travels - ten degrees in the first step, which is the six hundred a
-    // second the profile asks for - and it is there well before the timeout.
-    expect(angles[0] ?? 0).toBeGreaterThan(0.1);
-    expect(angles[timeout] ?? 0).toBeCloseTo(ordered, 3);
-    expect(angles[timeout + 1] ?? 0).toBeCloseTo(ordered, 3);
+    const thirdIncrement = (angles[timeout - 2] ?? 0) - (angles[timeout - 3] ?? 0);
     const staleIncrement = (angles[timeout + 1] ?? 0) - (angles[timeout] ?? 0);
-    expect(Math.abs(staleIncrement)).toBeLessThan(1e-6);
+    expect(staleIncrement).toBeGreaterThan(0);
+    expect(staleIncrement).toBeLessThan(thirdIncrement);
   });
 
   it("does not restore a disconnected angular target after reconnect", async () => {

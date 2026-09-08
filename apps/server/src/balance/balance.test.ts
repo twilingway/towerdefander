@@ -679,8 +679,12 @@ describe("version 1 migration", () => {
     // a warning and keeps its own campaign, not that it kept its own drive.
     expect(steelvoid?.spaceshipReverseSpeedFactor).toBeCloseTo(0.58, 5);
     expect(steelvoid?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
+    // The shipped default keeps a traversing turret; only the host's own preset
+    // bolts one to the hull. Version 38 takes the hull's drive back from every
+    // document and deliberately leaves the turret alone - see ARCADE_HELM_FIELDS
+    // in migrations.ts - so a mount saved either way survives as it was.
     const base = presets.find((preset) => preset.id === "default")?.tuning;
-    expect(base?.turretMountedOnHull).toBe(true);
+    expect(base?.turretMountedOnHull).toBe(false);
   });
 
   it("gives a version 35 document the tremble guard, waves intact", async () => {
@@ -732,10 +736,11 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     const saved = store.getState().presets[0]?.tuning;
-    // The stick arrives at STEEL VOID's own geometry, and the drive at the
-    // arcade profile: version 38 takes those fields back from every document,
-    // so a mount and a heading filter saved before it do not survive.
-    expect(saved?.turretMountedOnHull).toBe(true);
+    // The stick arrives at STEEL VOID's own geometry and the drive at the arcade
+    // profile, because version 38 takes those fields back from every document.
+    // The mount is not one of them: a document that never had the field gets the
+    // built-in default, which is a turret that traverses.
+    expect(saved?.turretMountedOnHull).toBe(false);
     expect(saved?.helm.driveDeadzoneShare).toBeCloseTo(0.12, 5);
     expect(saved?.helm.driveZoneShare).toBe(0.42);
     expect(saved?.helm.headingFilterSeconds).toBe(0);
