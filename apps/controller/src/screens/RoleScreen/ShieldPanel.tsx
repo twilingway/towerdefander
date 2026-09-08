@@ -1,6 +1,6 @@
 import type { PublicShieldView } from "@spaceship-defender/protocol";
 
-import { ActionZone } from "../../ActionZone.js";
+import { ActionZone } from "./ActionZone.js";
 import { Meter } from "../../components/Meter/index.js";
 
 interface ShieldPanelProps {

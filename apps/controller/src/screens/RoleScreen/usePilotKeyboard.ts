@@ -8,7 +8,7 @@ import {
   getHelmIntent,
   getTurretKeyboardVector,
   toHelmKeys
-} from "../../pilotKeyboard.js";
+} from "./pilotKeyboard.js";
 import type { PublicHelmView } from "@spaceship-defender/protocol";
 
 import type { RoleControls } from "./useRoleControls.js";

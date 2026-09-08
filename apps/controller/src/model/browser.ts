@@ -1,4 +1,4 @@
-import type { SessionStorage } from "../reconnectionSession.js";
+import type { SessionStorage } from "./reconnectionSession.js";
 
 export function readBrowserSearch(): string {
   return typeof window === "undefined" ? "" : window.location.search;

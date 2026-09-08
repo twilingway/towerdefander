@@ -5,9 +5,9 @@ import type {
   PublicWeaponHeatView
 } from "@spaceship-defender/protocol";
 
-import { ActionZone } from "../../ActionZone.js";
+import { ActionZone } from "./ActionZone.js";
 import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "@spaceship-defender/client-shared";
-import { VirtualStick } from "../../VirtualStick.js";
+import { VirtualStick } from "./VirtualStick.js";
 import { Meter } from "../../components/Meter/index.js";
 import type { ControlState } from "../../model/control.js";
 import {
@@ -15,7 +15,7 @@ import {
   SOLO_LAYOUTS,
   soloLayoutLabel,
   type SoloLayout
-} from "../../soloLayout.js";
+} from "./soloLayout.js";
 import { useRoleControls } from "./useRoleControls.js";
 import { usePilotKeyboard } from "./usePilotKeyboard.js";
 

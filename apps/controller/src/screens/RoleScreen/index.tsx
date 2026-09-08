@@ -11,7 +11,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import { AIM_COMMIT_SHARE, FULL_THROTTLE_SHARE } from "@spaceship-defender/client-shared";
-import { VirtualStick } from "../../VirtualStick.js";
+import { VirtualStick } from "./VirtualStick.js";
 import { readLocalStorage } from "../../model/browser.js";
 import type { ControlState } from "../../model/control.js";
 import {
@@ -19,7 +19,7 @@ import {
   readSoloLayout,
   saveSoloLayout,
   type SoloLayout
-} from "../../soloLayout.js";
+} from "./soloLayout.js";
 import { GunnerPanel } from "./GunnerPanel.js";
 import { PilotPanel } from "./PilotPanel.js";
 import { ShieldPanel } from "./ShieldPanel.js";

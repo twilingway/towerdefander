@@ -1,4 +1,4 @@
-import type { SessionStorage } from "./reconnectionSession.js";
+import type { SessionStorage } from "../../model/reconnectionSession.js";
 
 export const SOLO_LAYOUT_KEY = "spaceship-defender.solo-layout";
 

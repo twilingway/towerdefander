@@ -21,27 +21,27 @@ import {
   type PreviewPhase
 } from "@spaceship-defender/client-shared";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, Route, Routes, matchPath, useNavigate } from "react-router";
+import { Navigate, Route, Routes, matchPath, useLocation, useNavigate } from "react-router";
 
 import {
   createScreenWakeLock,
   enterImmersiveMode,
   readImmersiveHost,
   type ScreenWakeLock
-} from "./immersiveMode.js";
-import { createPreviewRoomView, previewPlayerId } from "./previewMode.js";
+} from "./model/immersiveMode.js";
+import { createPreviewRoomView, previewPlayerId } from "./model/previewMode.js";
 import {
   clearReconnectionSession,
   leaveControllerRoom,
   readReconnectionSession,
   saveReconnectionSession
-} from "./reconnectionSession.js";
+} from "./model/reconnectionSession.js";
 import {
   findCurrentPlayer,
   getRoomFromLocation,
   toControllerRoomView,
   type NetworkRoomState
-} from "./roomView.js";
+} from "./model/roomView.js";
 import { JoinScreen } from "./screens/JoinScreen/index.js";
 import { MaintenanceNotice } from "./components/MaintenanceNotice/index.js";
 import { LobbyScreen } from "./screens/LobbyScreen/index.js";
@@ -68,12 +68,17 @@ export function ControllerApp() {
   const wakeLockReference = useRef<ScreenWakeLock | undefined>(undefined);
   wakeLockReference.current ??= createScreenWakeLock();
   const navigate = useNavigate();
+  // The path is the router's own state, so it is read from the router. The
+  // query is not: half of it is read outside React, so it keeps one source.
+  const { pathname } = useLocation();
   const search = readBrowserSearch();
   // The address names the room; the join form still owns the editable field,
   // because a cold visit to /room/CODE has to ask for a name before it can
   // seat anybody.
   const [roomCode, setRoomCode] = useState(
-    () => getRoomFromLocation(readBrowserSearch()) || readRoomFromPath()
+    () =>
+      getRoomFromLocation(readBrowserSearch()) ||
+      (matchPath("/room/:code", pathname)?.params.code ?? "")
   );
   function goToRoom(code: string): void {
     // The query carries the preview flag and the debug switches, and the scene
@@ -552,12 +557,6 @@ export function ControllerApp() {
  * Fire-and-forget by design: a fullscreen prompt must never delay the command
  * the player actually tapped for, and a refusal is not a connection error.
  */
-/** The room code the address names, empty on the join route. */
-function readRoomFromPath(): string {
-  if (typeof window === "undefined") return "";
-  return matchPath("/room/:code", window.location.pathname)?.params.code ?? "";
-}
-
 function requestImmersiveMode(): void {
   const host = readImmersiveHost();
   if (host !== undefined) void enterImmersiveMode(host);

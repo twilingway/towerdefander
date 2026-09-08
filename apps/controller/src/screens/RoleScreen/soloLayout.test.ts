@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SessionStorage } from "./reconnectionSession.js";
+import type { SessionStorage } from "../../model/reconnectionSession.js";
 import {
   DEFAULT_SOLO_LAYOUT,
   SOLO_LAYOUT_KEY,

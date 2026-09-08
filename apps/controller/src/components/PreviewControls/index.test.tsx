@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ControllerApp } from "../../App.js";
@@ -12,7 +13,11 @@ describe("layout preview", () => {
   it("renders the play screen from a fixture instead of the join form", () => {
     vi.stubGlobal("window", { location: { search: "?preview=1" } });
 
-    const markup = renderToStaticMarkup(<ControllerApp />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <ControllerApp />
+      </MemoryRouter>
+    );
 
     expect(markup).toContain("Превью верстки");
     expect(markup).toContain("Комната PREVIEW");
@@ -22,7 +27,11 @@ describe("layout preview", () => {
   it("keeps the join form without the preview parameter", () => {
     vi.stubGlobal("window", { location: { search: "" } });
 
-    const markup = renderToStaticMarkup(<ControllerApp />);
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <ControllerApp />
+      </MemoryRouter>
+    );
 
     expect(markup).toContain('name="roomCode"');
     expect(markup).not.toContain("Превью верстки");
