@@ -15,7 +15,7 @@ import {
   drawSpaceshipHull,
   resolveEnemyVisual,
   turretMountPoint
-} from "./SpaceshipRuntime.js";
+} from "./entityArt.js";
 
 interface FillRectCall {
   readonly x: number;
