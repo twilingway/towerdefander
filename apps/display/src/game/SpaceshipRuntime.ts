@@ -761,30 +761,53 @@ class SpaceshipScene extends Phaser.Scene {
     this.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
   }
 
+  /**
+   * The obstacles, one image each.
+   *
+   * They never move and never change, and drawn into a `Graphics` they were
+   * still tessellated on every frame - the rounded rectangles in particular,
+   * which is a fan of triangles per corner. Baked per shape and size, a field
+   * of them costs a transform apiece.
+   */
   private drawDecorations(): void {
-    const graphics = this.add.graphics().setDepth(2);
     for (const obstacle of this.snapshot.obstacles) {
-      graphics.fillStyle(obstacle.kind === "circle" ? 0x305d63 : 0x435262, 0.78);
-      graphics.lineStyle(5, 0x78a4a4, 0.7);
+      const fill = obstacle.kind === "circle" ? 0x305d63 : 0x435262;
       if (obstacle.kind === "circle") {
-        graphics.fillCircle(obstacle.x, obstacle.y, obstacle.radius);
-        graphics.strokeCircle(obstacle.x, obstacle.y, obstacle.radius);
-      } else {
-        graphics.fillRoundedRect(
-          obstacle.x - obstacle.width / 2,
-          obstacle.y - obstacle.height / 2,
-          obstacle.width,
-          obstacle.height,
-          24
-        );
-        graphics.strokeRoundedRect(
-          obstacle.x - obstacle.width / 2,
-          obstacle.y - obstacle.height / 2,
-          obstacle.width,
-          obstacle.height,
-          24
-        );
+        const radius = Math.round(obstacle.radius);
+        this.add
+          .image(
+            obstacle.x,
+            obstacle.y,
+            this.bakedShape(`rock:field:${String(radius)}`, radius + 6, (graphics) => {
+              graphics.fillStyle(fill, 0.78);
+              graphics.fillCircle(0, 0, radius);
+              graphics.lineStyle(5, 0x78a4a4, 0.7);
+              graphics.strokeCircle(0, 0, radius);
+            })
+          )
+          .setDepth(2);
+        continue;
       }
+      const width = Math.round(obstacle.width);
+      const height = Math.round(obstacle.height);
+      this.add
+        .image(
+          obstacle.x,
+          obstacle.y,
+          bakeRect(
+            this,
+            `slab:${String(width)}x${String(height)}`,
+            width + 8,
+            height + 8,
+            (graphics) => {
+              graphics.fillStyle(fill, 0.78);
+              graphics.fillRoundedRect(4, 4, width, height, 24);
+              graphics.lineStyle(5, 0x78a4a4, 0.7);
+              graphics.strokeRoundedRect(4, 4, width, height, 24);
+            }
+          )
+        )
+        .setDepth(2);
     }
   }
 
