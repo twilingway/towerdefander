@@ -11,6 +11,7 @@ import Phaser from "phaser";
 
 import { bakeRect, bakeShape } from "./bake.js";
 import { FrameMeter } from "./scene/frameMeter.js";
+import { drawShield } from "./scene/shield.js";
 import {
   createEnemyHealthBar,
   drawEnemyBody,
@@ -35,10 +36,6 @@ import {
   getBackingStoreSize,
   getPhaserCameraScroll,
   getResponsiveViewport,
-  getShieldArcRange,
-  getShieldCrescentPoints,
-  getShieldDashSegments,
-  getShieldVisualStyle,
   observePlaybackTick,
   reconcileStableIds,
   sampleAngleTrack,
@@ -227,11 +224,6 @@ class SpaceshipScene extends Phaser.Scene {
    * whole exercise is trying to remove.
    */
   private prediction: ScenePrediction | undefined;
-  /** The geometry and state the shield arc was last built for. */
-  private shieldShape:
-    { readonly radius: number; readonly half: number; readonly active: boolean } | undefined;
-  /** Reused points for the shield's crescent; refilled, never rebuilt. */
-  private readonly shieldPoints: Phaser.Math.Vector2[] = [];
   /** The reach and cone the aiming wedge was last built for. */
   private aimEnvelopeShape: { readonly reach: number; readonly half: number } | undefined;
   /**
@@ -946,65 +938,16 @@ class SpaceshipScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * The shield, baked once per state and turned to its bearing.
-   *
-   * It was the last drawing left on the field, and the dearest: a hundred-point
-   * crescent, filled - which means triangulated - on every frame the sector was
-   * up, and a profile of a real wave put the tessellator and the graphics
-   * batcher at the top with it.
-   *
-   * It was drawn that way for a reason that no longer holds. Turning it used to
-   * tear the bloom off, because a `Graphics` object carries no width or height,
-   * Phaser calls it poorly bounded, and the focus region its filter is
-   * composited through does not follow a rotation. An `Image` has a size, so
-   * the filter follows the object like any other; the arc is baked centred on
-   * zero and the image is simply turned.
-   */
   private drawShield(): void {
     if (this.shield === undefined || this.spaceshipBody === undefined) return;
-    const style = getShieldVisualStyle(this.snapshot.shield.active);
-    const radius = this.snapshot.shieldRadius;
-    const half = this.snapshot.shield.arcHalfAngle;
-    // The bake is keyed by everything that changes its shape; the bearing is
-    // not one of those things, which is the whole point.
-    const key = `shield:${this.snapshot.shield.active ? "up" : "down"}:${String(Math.round(radius))}:${half.toFixed(3)}`;
-    const extent = radius + style.lineWidth + 4;
-    this.shield.setTexture(
-      this.bakedShape(key, extent, (graphics) => {
-        const arc = getShieldArcRange(0, half);
-        graphics.lineStyle(style.lineWidth, style.color, style.alpha);
-        if (style.crescentThickness !== null) {
-          const crescent = getShieldCrescentPoints(
-            arc.start,
-            arc.end,
-            radius,
-            style.crescentThickness
-          );
-          if (crescent.length > 0) {
-            graphics.fillStyle(style.color, style.alpha);
-            graphics.fillPoints(
-              crescent.map((point) => new Phaser.Math.Vector2(point.x, point.y)),
-              true,
-              true
-            );
-          }
-        } else if (style.dash === null) {
-          graphics.beginPath();
-          graphics.arc(0, 0, radius, arc.start, arc.end, false);
-          graphics.strokePath();
-        } else {
-          for (const segment of getShieldDashSegments(arc.start, arc.end, radius, style.dash)) {
-            graphics.beginPath();
-            graphics.arc(0, 0, radius, segment.start, segment.end, false);
-            graphics.strokePath();
-          }
-        }
-      })
+    drawShield(
+      this.shield,
+      this.spaceshipBody,
+      this.snapshot,
+      this.visualShieldAngle,
+      this.vectorsEnabled,
+      (key, half, draw) => this.bakedShape(key, half, draw)
     );
-    this.shield.setPosition(this.spaceshipBody.x, this.spaceshipBody.y);
-    this.shield.setRotation(this.visualShieldAngle);
-    this.shield.setVisible(this.vectorsEnabled);
   }
 
   private snapToSnapshot(snapshot: DisplayGameSnapshot, tick: number): void {
