@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { getCurrentWaveUpgrade } from "../../model/combatHudViewModel.js";
 import { readPixelRatioCap } from "../../game/devicePixels.js";
-import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "../../game/spaceshipViewModel.js";
+import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "../../game/viewport.js";
 import type { SpaceshipRuntime } from "../../game/SpaceshipRuntime.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
 import {

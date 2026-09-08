@@ -1,4 +1,4 @@
-import { DEVICE_PIXEL_RATIO_CAP } from "./spaceshipViewModel.js";
+import { DEVICE_PIXEL_RATIO_CAP } from "./viewport.js";
 
 /**
  * How much of the panel's own resolution the scene is allowed to use, and how

@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  advancePlayback,
-  backgroundTileOffset,
-  createPlaybackClock,
-  createPointTrack,
-  createPointTransition,
-  createSnappedVisualTransitions,
   getArenaRingRadii,
   getRimBandStroke,
   getArenaSpokes,
+  getShieldArcRange,
+  getShieldCrescentPoints,
+  getShieldDashSegments,
+  getShieldVisualStyle,
+  fillFocusCandidates,
+  reconcileStableIds,
+  type MutableFocusCandidate
+} from "./spaceshipViewModel.js";
+import {
+  backgroundTileOffset,
   DEVICE_PIXEL_RATIO_CAP,
   getBackgroundCoverRect,
   getBackingStoreSize,
@@ -17,25 +21,25 @@ import {
   nextPixelRatioCap,
   PIXEL_RATIO_FALLBACK_SAMPLES,
   getPhaserCameraScroll,
-  getResponsiveViewport,
+  getResponsiveViewport
+} from "./viewport.js";
+import {
+  advancePlayback,
+  createPlaybackClock,
+  createPointTrack,
+  createPointTransition,
+  createSnappedVisualTransitions,
   getSegmentAlpha,
-  getShieldArcRange,
-  getShieldCrescentPoints,
-  getShieldDashSegments,
-  getShieldVisualStyle,
   extendPointTrack,
-  fillFocusCandidates,
   interpolateAngle,
   interpolatePoint,
   PLAYBACK_MIN_LAG_TICKS,
   PLAYBACK_MAX_LAG_TICKS,
   observePlaybackTick,
-  reconcileStableIds,
   samplePointTrack,
-  SnapshotResetLatch,
-  type MutableFocusCandidate
-} from "./spaceshipViewModel.js";
-import type { PlaybackClock } from "./spaceshipViewModel.js";
+  SnapshotResetLatch
+} from "./playback.js";
+import type { PlaybackClock } from "./playback.js";
 
 describe("getLetterboxBars", () => {
   const frameFor = (glassWidth: number, glassHeight: number) => {

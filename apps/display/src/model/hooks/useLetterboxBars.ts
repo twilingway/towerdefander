@@ -1,7 +1,7 @@
 import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 import { useEffect, useState, type RefObject } from "react";
 
-import { getLetterboxBars, getResponsiveViewport } from "../../game/spaceshipViewModel.js";
+import { getLetterboxBars, getResponsiveViewport } from "../../game/viewport.js";
 
 /**
  * Where the letterbox leaves room on this glass, for the readouts to move into.

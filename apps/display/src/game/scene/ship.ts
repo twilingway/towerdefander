@@ -9,7 +9,7 @@ import {
   createSnappedVisualTransitions,
   type AngleTrack,
   type PointTrack
-} from "../spaceshipViewModel.js";
+} from "../playback.js";
 import { drawTankTurret, readTankLook, TANK_ART_HALF } from "../tankArt.js";
 
 export type TurretObject = Phaser.GameObjects.Components.Transform &
