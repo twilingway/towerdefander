@@ -87,12 +87,21 @@ apps/display    React shell + HUD, Phaser world (Phaser lives only here), solo c
 apps/controller React pilot/gunner/shield panels, touch + mouse + keyboard
 apps/server     Colyseus room, lifecycle timers, /health, /stats/rooms, /admin/balance
 apps/admin      React balance console: waves, enemy catalogue, director, camera frame, batch statistics
-packages/protocol   zod schemas, message names, shared constants (source of truth)
-packages/game-core  pure deterministic simulation
+packages/protocol       zod schemas, message names, shared constants (source of truth)
+packages/game-core      pure deterministic simulation
+packages/client-shared  what display and controller both need: preview shell, latency and role
+                        formatting, environment reads, shared control and upgrade pieces
+packages/config         shared TypeScript, ESLint and Prettier configuration
 ```
 
-`protocol` and `game-core` export `./src/index.ts` directly — apps consume TypeScript source, and
-only the server is bundled (tsup, `noExternal: game-core`).
+`protocol`, `game-core` and `client-shared` export `./src/index.ts` directly — apps consume
+TypeScript source, and only the server is bundled (tsup, `noExternal: game-core`).
+
+Every client app routes with `react-router`: `App.tsx` holds the route table and nothing else, and a
+screen never calls a router hook — see `docs/CODE_STYLE.md`, "Адрес: путь называет экран, запрос
+настраивает его". Debug and harness flags (`?diag`, `?tanks`, `?dpr`, `?demo`, `?wave`, `?ship`)
+stay query parameters read from `window.location.search`, never routes and never router state; some
+of them are read outside React, in `SpaceshipCanvas` and in the Phaser scene.
 
 ### Simulation
 
