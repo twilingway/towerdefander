@@ -18,7 +18,8 @@
     "phaser": "4.2.1",
     "qrcode.react": "4.2.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-router": "8.3.1"
   },
   "devDependencies": {
     "@types/react": "19.2.17",
