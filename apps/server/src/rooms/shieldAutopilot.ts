@@ -36,11 +36,49 @@ const RAISE_WITHIN_SECONDS = 0.9;
  */
 const HOLD_WITHIN_SECONDS = 2.5;
 /**
- * The shield drains twice as fast as it recharges, so the autopilot stops
- * spending below this share of the bank and lets it refill. Dropping the sector
- * is also what clears the rearm latch after a depletion.
+ * When to stop spending and when to start again, in **seconds of drain**.
+ *
+ * Seconds rather than shares of the bank, and that is the whole point. A share
+ * looks equivalent and is not: an operator who sets the capacity to 1200 gets a
+ * tenth of it - six seconds of shield - held back as an untouchable reserve, and
+ * a raise gate at sixty percent that asks for thirty-six seconds of drain, which
+ * at ten a second is a full minute with no sector at all. Seconds of drain make
+ * the rhythm the same whatever the bank: a big bank buys one long first hold
+ * instead of a different policy.
+ *
+ * The hold has to be worth the ramp. Every raise spends half a second getting
+ * up, during which the sector protects nothing, so raising for less than a few
+ * seconds of drain is how the blink started.
  */
-const MIN_ACTIVATION_ENERGY_FRACTION = 0.1;
+const DROP_BELOW_SECONDS = 1;
+const RAISE_ABOVE_SECONDS = 4;
+/**
+ * Ceilings for both, as shares of the bank, so a small bank still works.
+ *
+ * A capacity smaller than a few seconds of drain would otherwise never clear
+ * the raise gate and the sector would never go up at all.
+ */
+const DROP_BELOW_ENERGY_FRACTION = 0.1;
+/**
+ * How much of the bank has to be back before the sector goes up again.
+ *
+ * The other half of the blink, and the worse half. With one threshold the
+ * policy raised the sector the moment it had the floor back: a headless trace
+ * of a ship surrounded by six shells held for 5.4 s out of a full bank, and then
+ * degenerated into 1.5 s up against 2.5 s down, forever, taking the bank to
+ * zero every cycle. Once the reserve is a second and a half of drain, that is
+ * all a cycle can ever be.
+ *
+ * No threshold can make the sector stay up in a sustained fight: at twenty
+ * drained against ten recharged, holding for one second costs two seconds of
+ * refilling, so a third of the time is the ceiling whatever the policy does.
+ * What a threshold decides is the *rhythm* - and few long holds are worth more
+ * than many short ones, because every raise costs half a second of ramp during
+ * which the sector is not protecting anything. Measured, the trace turns into
+ * roughly three seconds up against six down: the same third of the time, spent
+ * in blocks a crew can read.
+ */
+const RAISE_ABOVE_ENERGY_FRACTION = 0.6;
 
 interface Threat {
   readonly x: number;
@@ -62,14 +100,26 @@ export function nextShieldIntent(
   // Raising counts as committed: dropping the intent mid-ramp throws away the
   // half second already spent and puts the sector up later than the shot.
   const committed = state.shieldPhase === "raising" || state.shieldPhase === "up";
-  const nearest = findNearestThreat(
+  const incoming = findNearestThreat(
     state,
     reach,
     committed ? HOLD_WITHIN_SECONDS : RAISE_WITHIN_SECONDS
   );
+  // A sector already up also stays up for the ships doing the shooting, not
+  // only for what is currently in the air. Shots are what this policy could
+  // see, and a crowd of enemies does not fire continuously - a gunship reloads
+  // for up to three and a half seconds - so between volleys there was nothing
+  // to hold for and the sector dropped, whatever the bank held. Surrounded is
+  // exactly when it should stay up.
+  const nearest = incoming ?? (committed ? findNearestArmedEnemy(state, config) : undefined);
   const capacity = state.ship.shieldCapacity;
-  const hasEnergy = state.shieldEnergy >= capacity * MIN_ACTIVATION_ENERGY_FRACTION;
-  const active = nearest !== undefined && hasEnergy;
+  const drain = state.ship.shieldDrainPerSecond;
+  // Hysteresis on the bank as well as on the distance: spend a sector down to
+  // the floor, then leave it down until there is a hold worth raising for.
+  const threshold = committed
+    ? Math.min(capacity * DROP_BELOW_ENERGY_FRACTION, drain * DROP_BELOW_SECONDS)
+    : Math.min(capacity * RAISE_ABOVE_ENERGY_FRACTION, drain * RAISE_ABOVE_SECONDS);
+  const active = nearest !== undefined && state.shieldEnergy >= threshold;
   return {
     // A zero vector keeps the sector where it already points, so an idle tick
     // does not swing the shield back to a stale bearing.
@@ -77,6 +127,35 @@ export function nextShieldIntent(
     active,
     receivedTick: state.clock.tick
   };
+}
+
+/**
+ * The nearest enemy close enough to be shooting at us, or nothing.
+ *
+ * Its own archetype's reach, rather than a number picked here: an interceptor
+ * that has to close in is not a reason to hold a sector, and a gunship that
+ * shells from nine hundred units away is.
+ */
+function findNearestArmedEnemy(
+  state: SpaceshipSimulationState,
+  config: SpaceshipSimulationConfig
+): { readonly bearing: { x: number; y: number } } | undefined {
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let bearing: { x: number; y: number } | undefined;
+  for (const enemy of state.enemies) {
+    const archetype = config.enemyArchetypes[enemy.kind];
+    if (archetype === undefined) continue;
+    let reach = 0;
+    for (const weapon of archetype.weapons) reach = Math.max(reach, weapon.engagementRange);
+    if (reach <= 0) continue;
+    const x = enemy.x - state.spaceship.x;
+    const y = enemy.y - state.spaceship.y;
+    const distance = Math.hypot(x, y);
+    if (distance > reach || distance >= bestDistance) continue;
+    bestDistance = distance;
+    bearing = distance === 0 ? { x: 1, y: 0 } : { x: x / distance, y: y / distance };
+  }
+  return bearing === undefined ? undefined : { bearing };
 }
 
 function findNearestThreat(

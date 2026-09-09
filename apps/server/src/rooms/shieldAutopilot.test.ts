@@ -99,6 +99,49 @@ describe("shield autopilot", () => {
     expect(nextShieldIntent({ ...state, shieldPhase: "up" }, config).active).toBe(false);
   });
 
+  it("keeps one rhythm whatever the operator set the bank to", () => {
+    /*
+     * Thresholds in seconds of drain rather than shares of the bank. A share
+     * looks equivalent and is not: at a capacity of 1200 a tenth of it is six
+     * seconds of shield held back untouched, and a raise gate at sixty percent
+     * asks for thirty-six seconds of drain - a full minute with no sector while
+     * it refills. What the bank should buy is a longer *first* hold, not a
+     * different policy.
+     */
+    const bigBank = createSpaceshipSimulationConfig({
+      enemySpawnIntervalTicks: 1000,
+      shieldCapacity: 1200
+    });
+    const state = createSpaceshipSimulationState(bigBank, 11);
+    const incoming = bullet(state, { x: 300, y: 0 }, { x: -720, y: 0 });
+    const world = { ...state, hostileProjectiles: [incoming] };
+    // Four seconds of drain is eighty of the twelve hundred: a sector down with
+    // that much back goes up, where a fraction of the bank would still be
+    // waiting for seven hundred and twenty.
+    expect(
+      nextShieldIntent({ ...world, shieldPhase: "down", shieldEnergy: 100 }, bigBank).active
+    ).toBe(true);
+    // And a sector already up spends down to a second of drain, not to a tenth
+    // of the bank.
+    expect(
+      nextShieldIntent({ ...world, shieldPhase: "up", shieldEnergy: 40 }, bigBank).active
+    ).toBe(true);
+    expect(
+      nextShieldIntent({ ...world, shieldPhase: "up", shieldEnergy: 10 }, bigBank).active
+    ).toBe(false);
+  });
+
+  it("does not raise for a hold too short to be worth the ramp", () => {
+    // Every raise spends half a second getting up, protecting nothing. Raising
+    // with a second of drain in the bank is how the blink started: up for a
+    // moment, cooling for a second, and around again.
+    const state = cleanState();
+    const incoming = bullet(state, { x: 300, y: 0 }, { x: -720, y: 0 });
+    const world = { ...state, hostileProjectiles: [incoming], shieldPhase: "down" as const };
+    expect(nextShieldIntent({ ...world, shieldEnergy: 25 }, config).active).toBe(false);
+    expect(nextShieldIntent({ ...world, shieldEnergy: 90 }, config).active).toBe(true);
+  });
+
   it("drops the sector while the bank is spent, which is what clears the latch", () => {
     const state = cleanState();
     const incoming = bullet(state, { x: 300, y: 0 }, { x: -720, y: 0 });
