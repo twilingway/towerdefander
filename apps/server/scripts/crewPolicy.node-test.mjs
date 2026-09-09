@@ -642,8 +642,15 @@ test("a drained shield is told to drop so the rearm latch clears", () => {
   assert.equal(planShield(drained, ROOKIE, createAutopilotMemory()).active, false);
 });
 
-test("below its reserve the shield spends only on what actually hurts", () => {
-  const battery = { angle: 0, active: false, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 };
+/** A memory whose sector is already up, which is half of what the floor asks. */
+function holdingMemory(seed = 1) {
+  const memory = createAutopilotMemory(seed);
+  memory.shieldActive = true;
+  return memory;
+}
+
+test("a raised sector below its reserve spends only on what actually hurts", () => {
+  const battery = { angle: 0, active: true, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 };
 
   // A rock is dodgeable and shootable, so the last of the battery is not spent
   // on it — the ship can answer a rock with the guns or with the helm.
@@ -651,29 +658,94 @@ test("below its reserve the shield spends only on what actually hurts", () => {
     shield: battery,
     asteroids: [entity("rock", 1, { x: 2400, y: 2200, velocityX: -240, radius: 26 })]
   });
-  assert.equal(planShield(drifting, ACE, createAutopilotMemory()).active, false);
+  assert.equal(planShield(drifting, ACE, holdingMemory()).active, false);
 
   // Aimed fire is neither: it is pointed at the ship and arrives regardless.
   const grazed = world({
     shield: battery,
     bullets: [entity("shot", 1, { x: 2400, y: 2200, velocityX: -900, radius: 7 })]
   });
-  assert.equal(planShield(grazed, ACE, createAutopilotMemory()).active, true);
+  assert.equal(planShield(grazed, ACE, holdingMemory()).active, true);
 
-  // A missile is not: refusing to raise here is how the ace used to die in a
+  // A missile is not: refusing to spend here is how the ace used to die in a
   // swarm, because under fire the energy never climbs back over the floor.
   const struck = world({
     shield: battery,
     missiles: [entity("missile", 1, { x: 2400, y: 2200, velocityX: -240, heading: Math.PI })]
   });
-  assert.equal(planShield(struck, ACE, createAutopilotMemory()).active, true);
+  assert.equal(planShield(struck, ACE, holdingMemory()).active, true);
 
   // Flat empty stays down whatever is coming: there is nothing left to spend.
   const empty = world({
     shield: { ...battery, energy: 0 },
     missiles: [entity("missile", 1, { x: 2400, y: 2200, velocityX: -240, heading: Math.PI })]
   });
-  assert.equal(planShield(empty, ACE, createAutopilotMemory()).active, false);
+  assert.equal(planShield(empty, ACE, holdingMemory()).active, false);
+});
+
+test("a dropped sector waits for a hold worth raising for", () => {
+  /*
+   * The other half of the battery's hysteresis, and the half that stops the
+   * strobe. Spending down to the floor and raising again the moment the floor
+   * is back measured as a cycle of a second and a half up against two and a
+   * half down, taking the bank to zero every time - and every raise spends half
+   * a second of ramp that protects nothing. So a sector that is already up
+   * keeps spending, while one that is down waits.
+   */
+  const shot = { bullets: [entity("shot", 1, { x: 2400, y: 2200, velocityX: -900, radius: 7 })] };
+  const low = world({
+    shield: { angle: 0, active: false, energy: 20, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    ...shot
+  });
+  assert.equal(planShield(low, ACE, createAutopilotMemory()).active, false);
+
+  // And it does come back rather than staying down: that was the failure the
+  // floor-only rule was written against.
+  const recovered = world({
+    shield: { angle: 0, active: false, energy: 62, capacity: 100, arcHalfAngle: Math.PI / 4 },
+    ...shot
+  });
+  assert.equal(planShield(recovered, ACE, createAutopilotMemory()).active, true);
+});
+
+test("the thresholds are seconds of drain when the drain is known", () => {
+  // At a capacity of 1200 a tenth of the bank is six seconds of shield held
+  // back untouched, and a raise gate at sixty percent asks for a full minute of
+  // refilling. Told the drain, both become the same few seconds they are at any
+  // other capacity.
+  const big = { angle: 0, active: true, energy: 40, capacity: 1200, arcHalfAngle: Math.PI / 4 };
+  const shot = { bullets: [entity("shot", 1, { x: 2400, y: 2200, velocityX: -900, radius: 7 })] };
+  const options = { shieldDrain: 20 };
+  assert.equal(
+    planShield(world({ shield: big, ...shot }), ACE, holdingMemory(), options).active,
+    true
+  );
+  // A rock, so the floor is what decides: aimed fire is allowed to spend past
+  // it, and at this capacity a share of the bank would not have been a floor at
+  // all - a tenth of 1200 is six seconds of shield.
+  const rock = {
+    asteroids: [entity("rock", 1, { x: 2400, y: 2200, velocityX: -240, radius: 26 })]
+  };
+  assert.equal(
+    planShield(world({ shield: { ...big, energy: 10 }, ...rock }), ACE, holdingMemory(), options)
+      .active,
+    false
+  );
+  assert.equal(
+    planShield(world({ shield: { ...big, energy: 200 }, ...rock }), ACE, holdingMemory(), options)
+      .active,
+    true
+  );
+  // Down with four seconds of drain back: worth raising for.
+  assert.equal(
+    planShield(
+      world({ shield: { ...big, active: false, energy: 90 }, ...shot }),
+      ACE,
+      createAutopilotMemory(),
+      options
+    ).active,
+    true
+  );
 });
 
 test("a missile inside the horizon turns the pilot across its bearing", () => {

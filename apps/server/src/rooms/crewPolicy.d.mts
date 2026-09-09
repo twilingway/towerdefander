@@ -123,6 +123,10 @@ export interface PolicyMemory {
 /** What the harness hands in beside the world: the numbers a run is fixed at. */
 export interface PolicyOptions {
   readonly archetypes?: Record<string, unknown>;
+  /** How near an enemy has to be to be worth raising the sector for; 0 means its own reach. */
+  readonly shieldRaiseRange?: number;
+  /** What holding the sector costs a second, which the client slice does not carry. */
+  readonly shieldDrain?: number;
   readonly cannonSpeed?: number;
   readonly mgSpeed?: number;
   readonly turretRate?: number;
@@ -173,11 +177,12 @@ export function directAim(spaceship: Vector, target: PolicyEntity | undefined): 
 export function nextShieldActive(current: boolean, energy: number): boolean;
 export function runWaveKey(runNumber: number, waveNumber: number): string;
 export function normalize(vector: Vector): Vector;
+/** Undefined when the preset carries no profile for that pair, which a caller has to answer for. */
 export function resolveAutopilotProfile(
   autopilot: unknown,
   level: AutopilotLevel,
   turretKind: FriendlyWeaponKind
-): AutopilotProfile;
+): AutopilotProfile | undefined;
 export function leadSpeedFor(kind: FriendlyWeaponKind, projectileSpeed: number): number;
 export function createAutopilotMemory(seed?: number): PolicyMemory;
 export function canonicalizeAngle(angle: number): number;
