@@ -1,0 +1,297 @@
+{
+  "app": "arcadia-effects",
+  "v": 2,
+  "doc": {
+    "v": 2,
+    "id": "fx_shield_impact",
+    "name": "Shield Impact",
+    "comp": {
+      "w": 256,
+      "h": 256,
+      "dur": 0.4,
+      "fps": 60
+    },
+    "cam": {
+      "comp": 0
+    },
+    "exp": {
+      "cols": 4,
+      "rows": 3,
+      "frames": 12,
+      "cellW": 64,
+      "cellH": 64,
+      "t0": 0,
+      "t1": 0.22,
+      "mode": "rgba",
+      "thr": 0,
+      "ss": 2
+    },
+    "textures": [],
+    "layers": [
+      {
+        "id": "lr_impact_sparks",
+        "type": "emitter",
+        "name": "Sparks",
+        "blend": "add",
+        "start": 0,
+        "end": 0.18,
+        "em": {
+          "x": 0,
+          "y": 122,
+          "shape": "circle",
+          "sx": 6,
+          "sy": 3,
+          "dir": "dir",
+          "angle": -90,
+          "spread": 78,
+          "speed": 600,
+          "speedRnd": 0.55,
+          "rate": 0,
+          "bursts": [
+            {
+              "t": 0,
+              "n": 20
+            }
+          ],
+          "seed": 17
+        },
+        "pt": {
+          "life": 0.18,
+          "lifeRnd": 0.4,
+          "sprite": {
+            "kind": "shape",
+            "id": "streak",
+            "p": {}
+          },
+          "size": 5,
+          "sizeRnd": 0.5,
+          "alignVel": true,
+          "stretch": 1,
+          "drag": 2.2,
+          "glow": 0.9,
+          "glowSize": 2,
+          "glowBlur": 0.22,
+          "sizeOL": {
+            "pts": [
+              {
+                "t": 0,
+                "v": 1
+              },
+              {
+                "t": 1,
+                "v": 0.25
+              }
+            ]
+          },
+          "opacityOL": {
+            "pts": [
+              {
+                "t": 0,
+                "v": 0
+              },
+              {
+                "t": 0.06,
+                "v": 0.32
+              },
+              {
+                "t": 0.55,
+                "v": 0.18
+              },
+              {
+                "t": 1,
+                "v": 0
+              }
+            ]
+          },
+          "grad": {
+            "stops": [
+              {
+                "t": 0,
+                "c": [214, 246, 255]
+              },
+              {
+                "t": 0.35,
+                "c": [132, 206, 255]
+              },
+              {
+                "t": 1,
+                "c": [34, 108, 226]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "lr_impact_flash",
+        "type": "sprite",
+        "name": "Flash",
+        "blend": "add",
+        "start": 0,
+        "end": 0.12,
+        "opacity": {
+          "keys": [
+            {
+              "t": 0,
+              "v": 0.95,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.03,
+              "v": 0.8,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.1,
+              "v": 0,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            }
+          ]
+        },
+        "sp": {
+          "sprite": {
+            "kind": "shape",
+            "id": "soft",
+            "p": {}
+          },
+          "size": 150,
+          "x": 0,
+          "y": 112,
+          "scale": {
+            "keys": [
+              {
+                "t": 0,
+                "v": 0.22,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              },
+              {
+                "t": 0.08,
+                "v": 0.95,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              }
+            ]
+          },
+          "aspect": 1,
+          "rot": 0,
+          "color": [196, 238, 255],
+          "squash": 0,
+          "glow": 0.9,
+          "glowSize": 1.7,
+          "glowBlur": 0.16,
+          "fps": 0
+        }
+      },
+      {
+        "id": "lr_impact_ring",
+        "type": "sprite",
+        "name": "Ripple",
+        "blend": "add",
+        "start": 0,
+        "end": 0.28,
+        "opacity": {
+          "keys": [
+            {
+              "t": 0,
+              "v": 0.85,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.08,
+              "v": 0.6,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.26,
+              "v": 0,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            }
+          ]
+        },
+        "sp": {
+          "sprite": {
+            "kind": "shape",
+            "id": "ring",
+            "p": {
+              "th": 0.14
+            }
+          },
+          "size": 150,
+          "x": 0,
+          "y": 126,
+          "scale": {
+            "keys": [
+              {
+                "t": 0,
+                "v": 0.12,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              },
+              {
+                "t": 0.2,
+                "v": 1.15,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              }
+            ]
+          },
+          "aspect": 1,
+          "rot": 0,
+          "color": [110, 190, 255],
+          "squash": 0,
+          "glow": 0.7,
+          "glowSize": 1.6,
+          "glowBlur": 0.2,
+          "fps": 0
+        }
+      }
+    ]
+  },
+  "tex": {}
+}

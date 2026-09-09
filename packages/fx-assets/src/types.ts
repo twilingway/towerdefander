@@ -5,14 +5,15 @@
  */
 
 /** Where an effect belongs, and the order the console lists them in. */
-export const FX_CATEGORIES = ["exhaust", "muzzle", "explosion", "destruction"] as const;
+export const FX_CATEGORIES = ["exhaust", "muzzle", "explosion", "destruction", "shield"] as const;
 export type FxCategory = (typeof FX_CATEGORIES)[number];
 
 export const FX_CATEGORY_LABELS: Record<FxCategory, string> = {
   exhaust: "Выхлоп",
   muzzle: "Выстрел",
   explosion: "Взрыв",
-  destruction: "Разрушение"
+  destruction: "Разрушение",
+  shield: "Щит"
 };
 
 /**

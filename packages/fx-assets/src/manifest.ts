@@ -97,5 +97,43 @@ export const FX_EFFECTS: readonly FxEffect[] = [
       fps: 32,
       duration: 0.5
     }
+  },
+  {
+    id: "shield-band",
+    title: "Барьер щита",
+    category: "shield",
+    hint: "Луп ленты энергии. Дисплей гнёт её по дуге поднятого сектора, поэтому в атласе она прямая и горизонтальная, а яркость берёт от заряда.",
+    oriented: false,
+    loop: true,
+    bytes: 246018,
+    url: new URL("../atlases/shield-band.png", import.meta.url).href,
+    meta: {
+      frameWidth: 256,
+      frameHeight: 36,
+      cols: 4,
+      rows: 4,
+      frames: 16,
+      fps: 32,
+      duration: 0.5
+    }
+  },
+  {
+    id: "shield-impact",
+    title: "Попадание в щит",
+    category: "shield",
+    hint: "Вспышка контакта, рябь и брызги искр, ~0.22 с. Направленный: в атласе смотрит вверх, точка контакта на нижней кромке.",
+    oriented: true,
+    loop: false,
+    bytes: 30512,
+    url: new URL("../atlases/shield-impact.png", import.meta.url).href,
+    meta: {
+      frameWidth: 64,
+      frameHeight: 64,
+      cols: 4,
+      rows: 3,
+      frames: 12,
+      fps: 54.55,
+      duration: 0.22
+    }
   }
 ];

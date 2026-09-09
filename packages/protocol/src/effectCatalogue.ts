@@ -20,6 +20,8 @@ export const FX_EFFECT_IDS = [
   "plasma-exhaust",
   "muzzle-flash",
   "muzzle-flash-mg",
+  "shield-band",
+  "shield-impact",
   "explosion",
   "debris-burst"
 ] as const;
