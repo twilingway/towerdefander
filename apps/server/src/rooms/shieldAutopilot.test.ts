@@ -68,6 +68,37 @@ describe("shield autopilot", () => {
     );
   });
 
+  it("holds a raised sector through the pause between shots", () => {
+    /*
+     * The blink this exists for. The policy is a per-tick decision with no
+     * memory, and the raise window is 0.9 s - but in a firefight the gap between
+     * two shells is routinely longer than that, so the sector dropped with most
+     * of the bank still full and paid a second of cooling plus half a second of
+     * raising to come back. A shell one and a half seconds out is too far to
+     * raise for and near enough to keep holding for.
+     */
+    const state = cleanState();
+    const far = bullet(state, { x: 1100, y: 0 }, { x: -700, y: 0 });
+    const world = { ...state, hostileProjectiles: [far] };
+
+    expect(nextShieldIntent({ ...world, shieldPhase: "down" }, config).active).toBe(false);
+    expect(nextShieldIntent({ ...world, shieldPhase: "up" }, config).active).toBe(true);
+    // Mid-ramp counts as committed too: dropping there throws away the half
+    // second already spent and puts the sector up later than the shot.
+    expect(nextShieldIntent({ ...world, shieldPhase: "raising" }, config).active).toBe(true);
+  });
+
+  it("still drops a held sector once the arena is quiet", () => {
+    // The hold is a wider window, not an open one: in a real lull the sector
+    // comes down and the bank refills, which is what this policy is for.
+    const state = cleanState();
+    const away = bullet(state, { x: 4000, y: 0 }, { x: 700, y: 0 });
+    expect(
+      nextShieldIntent({ ...state, shieldPhase: "up", hostileProjectiles: [away] }, config).active
+    ).toBe(false);
+    expect(nextShieldIntent({ ...state, shieldPhase: "up" }, config).active).toBe(false);
+  });
+
   it("drops the sector while the bank is spent, which is what clears the latch", () => {
     const state = cleanState();
     const incoming = bullet(state, { x: 300, y: 0 }, { x: -720, y: 0 });

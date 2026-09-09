@@ -17,6 +17,25 @@ import type {
 /** How early the sector goes up before a threat reaches the shield. */
 const RAISE_WITHIN_SECONDS = 0.9;
 /**
+ * How near something has to stay for a sector already committed to stay up.
+ *
+ * The raise window alone made the sector blink. It is a per-tick decision with
+ * no memory, so in a firefight - where the gap between two shells is routinely
+ * longer than 0.9 s - the shield dropped the moment nothing was inside that
+ * window, with most of the bank still full. Worse, the drop is not free: the
+ * machine spends a second cooling and half a second raising again, so every
+ * needless drop buys a second and a half of exposure to save a third of a
+ * second of drain.
+ *
+ * Two windows instead of one, wide enough to cover the pause between shots of a
+ * burst and between enemies taking turns: the sector goes up for something
+ * close, and stays up while anything is still coming. In a real lull it still
+ * drops and the bank still refills, which is the economy this policy is for -
+ * and the energy floor below is untouched, so a sustained fight still cycles on
+ * charge rather than on geometry.
+ */
+const HOLD_WITHIN_SECONDS = 2.5;
+/**
  * The shield drains twice as fast as it recharges, so the autopilot stops
  * spending below this share of the bank and lets it refill. Dropping the sector
  * is also what clears the rearm latch after a depletion.
@@ -40,7 +59,14 @@ export function nextShieldIntent(
   config: SpaceshipSimulationConfig
 ): TrustedShieldInput {
   const reach = config.shieldRadius;
-  const nearest = findNearestThreat(state, reach);
+  // Raising counts as committed: dropping the intent mid-ramp throws away the
+  // half second already spent and puts the sector up later than the shot.
+  const committed = state.shieldPhase === "raising" || state.shieldPhase === "up";
+  const nearest = findNearestThreat(
+    state,
+    reach,
+    committed ? HOLD_WITHIN_SECONDS : RAISE_WITHIN_SECONDS
+  );
   const capacity = state.ship.shieldCapacity;
   const hasEnergy = state.shieldEnergy >= capacity * MIN_ACTIVATION_ENERGY_FRACTION;
   const active = nearest !== undefined && hasEnergy;
@@ -55,13 +81,14 @@ export function nextShieldIntent(
 
 function findNearestThreat(
   state: SpaceshipSimulationState,
-  reach: number
+  reach: number,
+  withinSeconds: number
 ): { readonly bearing: { x: number; y: number } } | undefined {
   let bestSeconds = Number.POSITIVE_INFINITY;
   let bearing: { x: number; y: number } | undefined;
   for (const threat of threatsOf(state)) {
     const seconds = secondsToReach(state, threat, reach);
-    if (seconds === undefined || seconds > RAISE_WITHIN_SECONDS || seconds >= bestSeconds) continue;
+    if (seconds === undefined || seconds > withinSeconds || seconds >= bestSeconds) continue;
     bestSeconds = seconds;
     bearing = aimAt(state, threat, seconds);
   }

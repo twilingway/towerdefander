@@ -82,7 +82,7 @@ export interface ShieldImpactWorld {
  */
 export function resolveShieldImpact(
   threat: {
-    /** The last point the room published for it, not the drawn one. */
+    /** Where the scene drew it, which for a shell is the freshest point there is. */
     readonly x: number;
     readonly y: number;
     readonly velocity: { readonly x: number; readonly y: number };

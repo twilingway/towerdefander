@@ -353,11 +353,18 @@ export function reconcileCombatVisuals({
       bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
     }
     if (!snap && leaving?.blockEffect !== undefined && leaving.velocity !== undefined) {
-      // The last point the room published, not the drawn one: the drawn shell is
-      // extrapolated forward and the decision is made in the room's own frame.
-      const seen = leaving.position.current.to;
+      /*
+       * The point the scene drew, which for a shell is the freshest there is.
+       * The authoritative track is not: a shell is bound to the predictor, and a
+       * bound entity deliberately stops having its track extended - reading
+       * `position.current.to` therefore hands back where the shell was *born*,
+       * hundreds of units away, and that threw away 125 of 127 blocks in a
+       * measured fight. What the mixed clock costs instead is a contact up to a
+       * patch or two of travel behind the drawn shell, which is what the
+       * window either side of it is for.
+       */
       const impact = resolveShieldImpact(
-        { x: seen.x, y: seen.y, velocity: leaving.velocity },
+        { x: leaving.object.x, y: leaving.object.y, velocity: leaving.velocity },
         snapshot,
         shieldPose
       );
