@@ -14,6 +14,12 @@ import {
   EXHAUST_ROTATION_OFFSET,
   MUZZLE_ROTATION_OFFSET,
   getMuzzlePoint,
+  getShieldBandPoints,
+  getShieldBandAlpha,
+  getShieldImpact,
+  SHIELD_BAND_ALPHA_MAX,
+  SHIELD_BAND_ALPHA_MIN,
+  SHIELD_BAND_SEGMENTS,
   type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 import {
@@ -949,5 +955,148 @@ describe("muzzle geometry", () => {
     const point = getMuzzlePoint({ x: 0, y: 0 }, -Math.PI / 2, 32);
     expect(point.x).toBeCloseTo(0, 9);
     expect(point.y).toBeCloseTo(-32, 9);
+  });
+});
+
+describe("the barrier's spine", () => {
+  const RADIUS = 104;
+  const HALF = Math.PI / 4;
+
+  it("puts every point on the shield's own circle", () => {
+    // The band is bent along these points, so a point off the circle is a
+    // barrier that does not sit where the shield actually stops things.
+    for (const point of getShieldBandPoints(RADIUS, HALF)) {
+      expect(Math.hypot(point.x, point.y)).toBeCloseTo(RADIUS, 9);
+    }
+  });
+
+  it("spans the sector and is centred on zero", () => {
+    // Centred on zero is what lets the layer be turned to the bearing instead
+    // of rebuilt every frame, exactly as the baked crescent is.
+    const points = getShieldBandPoints(RADIUS, HALF);
+    const first = points[0];
+    const last = points.at(-1);
+    expect(points).toHaveLength(SHIELD_BAND_SEGMENTS + 1);
+    expect(Math.atan2(first?.y ?? 0, first?.x ?? 0)).toBeCloseTo(-HALF, 9);
+    expect(Math.atan2(last?.y ?? 0, last?.x ?? 0)).toBeCloseTo(HALF, 9);
+  });
+
+  it("follows a sector a module has widened", () => {
+    // The reason the band cannot be a baked picture: two cards widen the arc,
+    // and the geometry has to widen with it.
+    const wide = getShieldBandPoints(RADIUS, HALF + (20 * Math.PI) / 180);
+    const last = wide.at(-1);
+    expect(Math.atan2(last?.y ?? 0, last?.x ?? 0)).toBeCloseTo(HALF + (20 * Math.PI) / 180, 9);
+  });
+});
+
+describe("how solid the barrier is drawn", () => {
+  it("reads the charge, floor to ceiling", () => {
+    expect(getShieldBandAlpha(0, 100)).toBeCloseTo(SHIELD_BAND_ALPHA_MIN, 9);
+    expect(getShieldBandAlpha(100, 100)).toBeCloseTo(SHIELD_BAND_ALPHA_MAX, 9);
+    expect(getShieldBandAlpha(50, 100)).toBeGreaterThan(getShieldBandAlpha(10, 100));
+  });
+
+  it("never fades a raised shield out entirely", () => {
+    // A sector that is up must not look like one that is down, however close to
+    // collapse it is - the crew is deciding whether to drop it.
+    expect(getShieldBandAlpha(0, 100)).toBeGreaterThan(0.2);
+  });
+
+  it("survives a capacity of nothing", () => {
+    expect(getShieldBandAlpha(0, 0)).toBeCloseTo(SHIELD_BAND_ALPHA_MIN, 9);
+  });
+});
+
+describe("where a threat met the shield", () => {
+  const CENTRE = { x: 1000, y: 1000 };
+  const RADIUS = 104;
+  const QUERY = {
+    centre: CENTRE,
+    bearing: 0,
+    radius: RADIUS,
+    arcHalfAngle: Math.PI / 4,
+    reach: 60
+  };
+
+  it("meets it on the arc, ahead of the last known point", () => {
+    // The shell is still 40 units short of the barrier when it disappears, and
+    // the splash belongs on the barrier - not where the shell was last seen.
+    const impact = getShieldImpact({
+      ...QUERY,
+      from: { x: CENTRE.x + RADIUS + 40, y: CENTRE.y },
+      velocityX: -700,
+      velocityY: 0
+    });
+    expect(impact).toBeDefined();
+    expect(Math.hypot((impact?.x ?? 0) - CENTRE.x, (impact?.y ?? 0) - CENTRE.y)).toBeCloseTo(
+      RADIUS,
+      6
+    );
+    expect(impact?.normal).toBeCloseTo(0, 6);
+  });
+
+  it("still meets it when the display had already drawn the shell past it", () => {
+    // Interpolation carries a shell forward, so by the patch that removes it the
+    // drawn shell can be inside the barrier. Refusing that case would drop the
+    // splash on exactly the shots that were blocked hardest.
+    const impact = getShieldImpact({
+      ...QUERY,
+      from: { x: CENTRE.x + RADIUS - 8, y: CENTRE.y },
+      velocityX: -700,
+      velocityY: 0
+    });
+    expect(impact?.normal).toBeCloseTo(0, 6);
+  });
+
+  it("refuses a threat that struck outside the sector", () => {
+    // The one that has to fail: a shell into the ship's unshielded back is a
+    // hull hit, and a splash there would tell the crew their sector covers a
+    // side it does not.
+    expect(
+      getShieldImpact({
+        ...QUERY,
+        from: { x: CENTRE.x - RADIUS - 40, y: CENTRE.y },
+        velocityX: 700,
+        velocityY: 0
+      })
+    ).toBeUndefined();
+  });
+
+  it("refuses a threat too far away to have reached the arc", () => {
+    // A shell that expired elsewhere: its course would cross the sector, but
+    // not within the patch of travel that removal can account for.
+    expect(
+      getShieldImpact({
+        ...QUERY,
+        from: { x: CENTRE.x + RADIUS + 900, y: CENTRE.y },
+        velocityX: -700,
+        velocityY: 0
+      })
+    ).toBeUndefined();
+  });
+
+  it("refuses a threat with no course of its own", () => {
+    expect(
+      getShieldImpact({
+        ...QUERY,
+        from: { x: CENTRE.x + RADIUS + 10, y: CENTRE.y },
+        velocityX: 0,
+        velocityY: 0
+      })
+    ).toBeUndefined();
+  });
+
+  it("meets a sector turned away from the world's zero", () => {
+    // The sector is wherever the operator is holding it, so the sector test has
+    // to be relative to the bearing and wrap with it.
+    const impact = getShieldImpact({
+      ...QUERY,
+      bearing: Math.PI,
+      from: { x: CENTRE.x - RADIUS - 30, y: CENTRE.y },
+      velocityX: 700,
+      velocityY: 0
+    });
+    expect(Math.abs(impact?.normal ?? 0)).toBeCloseTo(Math.PI, 6);
   });
 });
