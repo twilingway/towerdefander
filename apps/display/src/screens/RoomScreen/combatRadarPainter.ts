@@ -99,10 +99,28 @@ export interface RingFractions {
  * is felt, slow enough that the arc slides. A jump of more than half the ring
  * is taken whole: that is a new run or a repair bay, not a drain.
  */
-export function easeRing(shown: number, target: number): number {
+export const RING_POLL_MS = 50;
+/**
+ * How fast the arc closes on its target, as a time constant in ms.
+ *
+ * Derived rather than chosen: the arc used to take a fifth of the remaining gap
+ * on every paint, and paints were a fixed 50 ms apart, so the rate it actually
+ * had is `exp(-50 / 224) = 0.8`. Keeping that number means this change fixes the
+ * stutter without also making the gauge feel different.
+ */
+export const RING_APPROACH_MS = 224;
+
+export function easeRing(shown: number, target: number, elapsedMs = RING_POLL_MS): number {
   const distance = target - shown;
   if (Math.abs(distance) > 0.5 || Math.abs(distance) < 0.002) return target;
-  return shown + distance * 0.2;
+  // Time, not paints. A fifth of the gap per paint is only a fixed speed while
+  // the paints are evenly spaced, and in a fight they are not: the dial is
+  // polled off the frame clock, so a busy frame stretches the gap to 50 or 66 ms
+  // and the arc lurches by two or three times as much as it should. Reading the
+  // elapsed time makes the arc move at one speed whenever it happens to be
+  // drawn, which is what the intermission made look correct and the fight did
+  // not.
+  return shown + distance * (1 - Math.exp(-Math.max(0, elapsedMs) / RING_APPROACH_MS));
 }
 
 /** A missing or zero capacity reads as an empty ring, never as a full one. */

@@ -194,12 +194,13 @@ describe("how wide a burst is drawn", () => {
     expect(burstWidth("muzzle", 52)).toBeGreaterThan(burstWidth("muzzle", 18));
   });
 
-  it("keeps a splash on the shield visible whatever made it", () => {
-    // Sized off the shell rather than a hull, and a shell is radius 2 to 4: with
-    // no floor the splash would be a few pixels across on a barrier 104 units
-    // out, which is the same mistake the enemy muzzle flash made.
-    expect(burstWidth("shield", 3)).toBeGreaterThan(3 * 4);
-    expect(burstWidth("shield", 2)).toBe(burstWidth("shield", 4));
+  it("sizes a splash on the shield off the barrier, not off the shell", () => {
+    // A shell is radius 2 to 4. Sized off it, the splash was a dot on an arc a
+    // hundred units out and could not be seen at all; sized off the barrier it
+    // covers a readable share of the sector and grows with a bigger shield.
+    expect(burstWidth("shield", 104)).toBeGreaterThan(60);
+    expect(burstWidth("shield", 104)).toBeLessThan(104);
+    expect(burstWidth("shield", 208)).toBeCloseTo(burstWidth("shield", 104) * 2, 6);
   });
 
   it("leaves the blast effects scaling by hull alone", () => {

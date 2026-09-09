@@ -363,6 +363,34 @@ describe("the status rings", () => {
     expect(shown).toBeCloseTo(0.6, 3);
   });
 
+  it("covers the same ground whether it was painted once or six times", () => {
+    /*
+     * The stutter this exists for. The arc used to take a fifth of the gap per
+     * paint with no time in the sum, so its speed was whatever the paint rate
+     * happened to be - even in the intermission, jumpy in a fight, where a busy
+     * frame stretches the gap from 33 to 66 ms. Same elapsed time, same place.
+     */
+    let steady = 1;
+    for (let step = 0; step < 6; step += 1) steady = easeRing(steady, 0.4, 33);
+    const stalled = easeRing(1, 0.4, 198);
+    expect(stalled).toBeCloseTo(steady, 2);
+  });
+
+  it("never overshoots, however long the frame was", () => {
+    // A backgrounded tab comes back with a gap of seconds; the arc lands on the
+    // target rather than past it.
+    expect(easeRing(1, 0.6, 10_000)).toBeCloseTo(0.6, 6);
+    expect(easeRing(0.6, 1, 10_000)).toBeCloseTo(1, 6);
+    expect(easeRing(1, 0.6, -5)).toBe(1);
+  });
+
+  it("keeps the speed it had when the dial was polled at a fixed 50 ms", () => {
+    // The rate is derived from the old constant rather than picked, so this
+    // change fixes the stutter without also retuning the gauge. A fifth of the
+    // gap, on a gap small enough not to be taken whole.
+    expect(easeRing(1, 0.6, 50)).toBeCloseTo(0.92, 4);
+  });
+
   it("takes a jump whole rather than sliding across the whole ring", () => {
     // A new run or a repair bay, not a drain: easing that would read as a bug.
     expect(easeRing(0.1, 1)).toBe(1);

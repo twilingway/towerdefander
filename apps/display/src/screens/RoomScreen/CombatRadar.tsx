@@ -91,6 +91,10 @@ export function PolledCombatRadar({
       frame = requestAnimationFrame(paint);
       const now = performance.now();
       if (now - paintedAt < REDRAW_INTERVAL_MS) return;
+      // How long the arcs have had to move, which is not the same as how long
+      // they were meant to have: a busy frame delays this paint, and the arcs
+      // have to cover that time rather than a fixed step.
+      const elapsedMs = paintedAt === 0 ? REDRAW_INTERVAL_MS : now - paintedAt;
       paintedAt = now;
       const element = canvas.current;
       const shell = host.current;
@@ -124,8 +128,8 @@ export function PolledCombatRadar({
         shownRings === undefined
           ? target
           : {
-              hull: easeRing(shownRings.hull, target.hull),
-              shield: easeRing(shownRings.shield, target.shield)
+              hull: easeRing(shownRings.hull, target.hull, elapsedMs),
+              shield: easeRing(shownRings.shield, target.shield, elapsedMs)
             };
 
       const scale = side / RADAR_UNITS;
