@@ -1,0 +1,603 @@
+{
+  "app": "arcadia-effects",
+  "v": 2,
+  "doc": {
+    "v": 2,
+    "id": "fx_debris_burst",
+    "name": "Debris Burst",
+    "comp": {
+      "w": 512,
+      "h": 512,
+      "dur": 0.6,
+      "fps": 60
+    },
+    "cam": {
+      "comp": 0
+    },
+    "exp": {
+      "cols": 4,
+      "rows": 4,
+      "frames": 16,
+      "cellW": 128,
+      "cellH": 128,
+      "t0": 0,
+      "t1": -1,
+      "mode": "rgba",
+      "thr": 0,
+      "ss": 2
+    },
+    "textures": [],
+    "layers": [
+      {
+        "id": "lr_debris_1",
+        "name": "Flash",
+        "type": "sprite",
+        "on": true,
+        "solo": false,
+        "start": 0,
+        "end": 0.35,
+        "blend": "add",
+        "opacity": {
+          "keys": [
+            {
+              "t": 0,
+              "v": 1,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.05,
+              "v": 1,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.3,
+              "v": 0,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            }
+          ]
+        },
+        "sp": {
+          "sprite": {
+            "kind": "shape",
+            "id": "soft",
+            "p": {}
+          },
+          "size": 260,
+          "x": 0,
+          "y": 0,
+          "scale": {
+            "keys": [
+              {
+                "t": 0,
+                "v": 0.25,
+                "i": {
+                  "m": "lin"
+                },
+                "o": {
+                  "m": "cust",
+                  "h": [0.49048413370123645, 1.3993543031754032]
+                }
+              },
+              {
+                "t": 0.16666666666666666,
+                "v": 0.8599290886780446,
+                "i": {
+                  "m": "cust",
+                  "h": [0.5731746814862423, 1.5806883505544354]
+                },
+                "o": {
+                  "m": "ease"
+                }
+              }
+            ]
+          },
+          "aspect": 1,
+          "rot": 0,
+          "color": [199, 248, 255],
+          "squash": 0.6,
+          "glow": 0.8,
+          "glowSize": 1.6,
+          "glowBlur": 0.15,
+          "fps": 0
+        },
+        "glowL": 0,
+        "glowLR": 24,
+        "fadeOn": false,
+        "fadeX": 0,
+        "fadeY": 0,
+        "fadeR": 220,
+        "fadeSoft": 0.5
+      },
+      {
+        "id": "lr_debris_2",
+        "name": "Debris",
+        "type": "emitter",
+        "on": true,
+        "solo": false,
+        "start": 0,
+        "end": 0.2,
+        "blend": "add",
+        "opacity": 1,
+        "em": {
+          "x": 0,
+          "y": 0,
+          "shape": "ring",
+          "sx": 10.3031005859375,
+          "sy": 10,
+          "dir": "out",
+          "angle": -90,
+          "spread": 40,
+          "speed": 741.212890625,
+          "speedRnd": 0.2,
+          "rate": 0,
+          "bursts": [
+            {
+              "t": 0,
+              "n": 40
+            }
+          ],
+          "seed": 1,
+          "branch": {
+            "chance": 0,
+            "spread": 35,
+            "lifeScale": 0.6,
+            "sizeScale": 0.7,
+            "speedScale": 1,
+            "maxGen": 2
+          }
+        },
+        "pt": {
+          "life": 0.6,
+          "lifeRnd": 0.2,
+          "sprite": {
+            "kind": "shape",
+            "id": "shard",
+            "p": {}
+          },
+          "size": 40,
+          "sizeRnd": 0.3,
+          "sizeOL": {
+            "pts": [
+              {
+                "t": 0,
+                "v": 1
+              },
+              {
+                "t": 0.601520288770444,
+                "v": 0.6690618699596774
+              },
+              {
+                "t": 1,
+                "v": 0.1
+              }
+            ]
+          },
+          "opacityOL": {
+            "pts": [
+              {
+                "t": 0,
+                "v": 0
+              },
+              {
+                "t": 0.17671160831629673,
+                "v": 0
+              },
+              {
+                "t": 0.3806197977511682,
+                "v": 1.0095425513482863
+              },
+              {
+                "t": 1,
+                "v": 0
+              }
+            ]
+          },
+          "grad": {
+            "stops": [
+              {
+                "t": 0,
+                "c": [255, 255, 255]
+              },
+              {
+                "t": 0.35,
+                "c": [89, 227, 226]
+              },
+              {
+                "t": 1,
+                "c": [26, 95, 150]
+              }
+            ]
+          },
+          "tintTex": false,
+          "rot": 0,
+          "rotRnd": 1,
+          "spin": 40,
+          "spinRnd": 1,
+          "alignVel": true,
+          "stretch": 0,
+          "gravX": 0,
+          "gravY": 0,
+          "drag": 3,
+          "turbAmp": 0,
+          "turbFreq": 1.5,
+          "squash": 1,
+          "glow": 0.5,
+          "glowSize": 1.6,
+          "glowBlur": 0.15,
+          "fps": 0,
+          "render": "sprite",
+          "trailCore": 0,
+          "zigzag": 0
+        },
+        "glowL": 0,
+        "glowLR": 24,
+        "fadeOn": false,
+        "fadeX": 0,
+        "fadeY": 0,
+        "fadeR": 220,
+        "fadeSoft": 0.5
+      },
+      {
+        "id": "lr_debris_3",
+        "name": "Sparks",
+        "type": "emitter",
+        "on": true,
+        "solo": false,
+        "start": 0,
+        "end": 0.2,
+        "blend": "add",
+        "opacity": 1,
+        "em": {
+          "x": 0,
+          "y": 0,
+          "shape": "point",
+          "sx": 60,
+          "sy": 60,
+          "dir": "out",
+          "angle": -90,
+          "spread": 40,
+          "speed": 640,
+          "speedRnd": 0.6,
+          "rate": 0,
+          "bursts": [
+            {
+              "t": 0,
+              "n": 40
+            }
+          ],
+          "seed": 1,
+          "branch": {
+            "chance": 0,
+            "spread": 35,
+            "lifeScale": 0.6,
+            "sizeScale": 0.7,
+            "speedScale": 1,
+            "maxGen": 2
+          }
+        },
+        "pt": {
+          "life": 0.5,
+          "lifeRnd": 0.5,
+          "sprite": {
+            "kind": "shape",
+            "id": "streak",
+            "p": {}
+          },
+          "size": 46,
+          "sizeRnd": 0.5,
+          "sizeOL": {
+            "pts": [
+              {
+                "t": 0,
+                "v": 1
+              },
+              {
+                "t": 0.6,
+                "v": 0.7
+              },
+              {
+                "t": 1,
+                "v": 0.1
+              }
+            ]
+          },
+          "opacityOL": {
+            "pts": [
+              {
+                "t": 0,
+                "v": 1
+              },
+              {
+                "t": 0.55,
+                "v": 0.85
+              },
+              {
+                "t": 1,
+                "v": 0
+              }
+            ]
+          },
+          "grad": {
+            "stops": [
+              {
+                "t": 0,
+                "c": [255, 255, 255]
+              },
+              {
+                "t": 0.3,
+                "c": [255, 227, 122]
+              },
+              {
+                "t": 0.7,
+                "c": [255, 144, 48]
+              },
+              {
+                "t": 1,
+                "c": [176, 48, 16]
+              }
+            ]
+          },
+          "tintTex": false,
+          "rot": 0,
+          "rotRnd": 1,
+          "spin": 40,
+          "spinRnd": 1,
+          "alignVel": true,
+          "stretch": 1.6,
+          "gravX": 0,
+          "gravY": 50.30322265625,
+          "drag": 2.5,
+          "turbAmp": 0,
+          "turbFreq": 1.5,
+          "squash": 0,
+          "glow": 0.4,
+          "glowSize": 1.6,
+          "glowBlur": 0.15,
+          "fps": 0,
+          "render": "sprite",
+          "trailCore": 0,
+          "zigzag": 0
+        },
+        "glowL": 0,
+        "glowLR": 24,
+        "fadeOn": false,
+        "fadeX": 0,
+        "fadeY": 0,
+        "fadeR": 220,
+        "fadeSoft": 0.5
+      },
+      {
+        "id": "lr_debris_4",
+        "name": "Wave Inner",
+        "type": "sprite",
+        "on": true,
+        "solo": false,
+        "start": -0.016666666666666666,
+        "end": 0.5833333333333331,
+        "blend": "add",
+        "opacity": {
+          "keys": [
+            {
+              "t": 0,
+              "v": 0.945181527217742,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.21666666666666667,
+              "v": 0.7,
+              "i": {
+                "m": "cust",
+                "h": [0.633435232035949, 0.2040531725291629]
+              },
+              "o": {
+                "m": "cust",
+                "h": [0.3250231765645444, 0.3602550096530656]
+              }
+            },
+            {
+              "t": 0.55,
+              "v": 0,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            }
+          ]
+        },
+        "sp": {
+          "sprite": {
+            "kind": "shape",
+            "id": "ring",
+            "p": {
+              "th": 0.1
+            }
+          },
+          "size": 200,
+          "x": 0,
+          "y": 0,
+          "scale": {
+            "keys": [
+              {
+                "t": 0.016666666666666666,
+                "v": 0.11561925975975096,
+                "i": {
+                  "m": "lin"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              },
+              {
+                "t": 0.21666666666666667,
+                "v": 0.9629512546999113,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              },
+              {
+                "t": 0.5,
+                "v": 2.4,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              }
+            ]
+          },
+          "aspect": 1,
+          "rot": 0,
+          "color": [117, 255, 239],
+          "squash": 1,
+          "glow": 0,
+          "glowSize": 1.6,
+          "glowBlur": 0.15,
+          "fps": 0
+        },
+        "glowL": 0,
+        "glowLR": 24,
+        "fadeOn": false,
+        "fadeX": 0,
+        "fadeY": 0,
+        "fadeR": 220,
+        "fadeSoft": 0.5
+      },
+      {
+        "id": "lr_debris_5",
+        "name": "Wave Outer",
+        "type": "sprite",
+        "on": true,
+        "solo": false,
+        "start": -0.016666666666666666,
+        "end": 0.5833333333333333,
+        "blend": "add",
+        "opacity": {
+          "keys": [
+            {
+              "t": 0,
+              "v": 0.95,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            },
+            {
+              "t": 0.2,
+              "v": 0.7,
+              "i": {
+                "m": "cust",
+                "h": [0.6346944396778078, 0.40321490675403204]
+              },
+              "o": {
+                "m": "cust",
+                "h": [0.36347122654121317, 0.2270903837845622]
+              }
+            },
+            {
+              "t": 0.55,
+              "v": 0,
+              "i": {
+                "m": "ease"
+              },
+              "o": {
+                "m": "ease"
+              }
+            }
+          ]
+        },
+        "sp": {
+          "sprite": {
+            "kind": "shape",
+            "id": "ring",
+            "p": {
+              "th": 0.1
+            }
+          },
+          "size": 200,
+          "x": 0,
+          "y": 0,
+          "scale": {
+            "keys": [
+              {
+                "t": 0,
+                "v": 0.12,
+                "i": {
+                  "m": "lin"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              },
+              {
+                "t": 0.25,
+                "v": 1.4427363545866936,
+                "i": {
+                  "m": "cust",
+                  "h": [0.6508096057742969, 0.5086520996315218]
+                },
+                "o": {
+                  "m": "cust",
+                  "h": [0.35727803623766485, 0.6966100999287428]
+                }
+              },
+              {
+                "t": 0.5,
+                "v": 2.4,
+                "i": {
+                  "m": "ease"
+                },
+                "o": {
+                  "m": "ease"
+                }
+              }
+            ]
+          },
+          "aspect": 1,
+          "rot": 0,
+          "color": [117, 255, 239],
+          "squash": 1,
+          "glow": 0,
+          "glowSize": 1.6,
+          "glowBlur": 0.15,
+          "fps": 0
+        },
+        "glowL": 0,
+        "glowLR": 24,
+        "fadeOn": false,
+        "fadeX": 0,
+        "fadeY": 0,
+        "fadeR": 220,
+        "fadeSoft": 0.5
+      }
+    ]
+  },
+  "tex": {}
+}

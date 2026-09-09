@@ -1,0 +1,30 @@
+{
+  "plasma-exhaust": {
+    "title": "Плазменный выхлоп",
+    "category": "exhaust",
+    "hint": "Луп сопла. В атласе струя смотрит вверх, дисплей поворачивает её по курсу корабля и растягивает по передней скорости.",
+    "oriented": true,
+    "loop": true
+  },
+  "muzzle-flash": {
+    "title": "Дульная вспышка",
+    "category": "muzzle",
+    "hint": "Короткий выброс у дула, около 0.14 с. Направленный: в атласе смотрит вверх, как выхлоп.",
+    "oriented": true,
+    "loop": false
+  },
+  "explosion": {
+    "title": "Взрыв",
+    "category": "explosion",
+    "hint": "Вспышка, искры, ударная волна, пламя и дым. Круговой — поворачивать не нужно.",
+    "oriented": false,
+    "loop": false
+  },
+  "debris-burst": {
+    "title": "Разрушение",
+    "category": "destruction",
+    "hint": "Кольцо ударной волны и разлёт осколков — под уничтожение врага или куска корпуса.",
+    "oriented": false,
+    "loop": false
+  }
+}

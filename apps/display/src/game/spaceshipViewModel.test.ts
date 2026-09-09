@@ -9,7 +9,9 @@ import {
   getShieldDashSegments,
   getShieldVisualStyle,
   fillFocusCandidates,
+  getExhaustPlume,
   reconcileStableIds,
+  EXHAUST_ROTATION_OFFSET,
   type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 import {
@@ -833,5 +835,81 @@ describe("playback lag sized from arrival lateness", () => {
     for (let frame = 0; frame < 9; frame += 1) clock = advancePlayback(clock, 16.7);
     expect(clock.tick).toBeGreaterThan(before);
     expect(clock.tick).toBeLessThan(clock.latestTick);
+  });
+});
+
+describe("engine plume", () => {
+  const TOP_SPEED = 620;
+  /** Heading of 0 points the nose along +X, as the baked nose marker does. */
+  const east = (velocityX: number, velocityY = 0) => ({ velocityX, velocityY, heading: 0 });
+
+  it("shows nothing on a parked ship", () => {
+    expect(getExhaustPlume(east(0), TOP_SPEED).visible).toBe(false);
+  });
+
+  it("shows nothing while reversing", () => {
+    expect(getExhaustPlume(east(-TOP_SPEED * 0.6), TOP_SPEED).visible).toBe(false);
+  });
+
+  it("shows nothing on a pure sideways drift", () => {
+    // The case that separates a projection from a magnitude: coasting out of a
+    // turn the hull moves fast with the nose across the motion, and |v| would
+    // light the engine at full throttle with nobody touching it.
+    expect(getExhaustPlume(east(0, TOP_SPEED), TOP_SPEED).visible).toBe(false);
+    expect(getExhaustPlume(east(0, -TOP_SPEED), TOP_SPEED).visible).toBe(false);
+  });
+
+  it("takes only the component along the nose", () => {
+    // Same speed, 60 degrees off the nose: half of it drives the ship forward.
+    const angled = { velocityX: TOP_SPEED * 0.5, velocityY: TOP_SPEED * 0.866, heading: 0 };
+    expect(getExhaustPlume(angled, TOP_SPEED).lengthUnits).toBeCloseTo(
+      getExhaustPlume(east(TOP_SPEED * 0.5), TOP_SPEED).lengthUnits,
+      6
+    );
+  });
+
+  it("grows with forward speed and saturates at the top", () => {
+    const quarter = getExhaustPlume(east(TOP_SPEED * 0.25), TOP_SPEED);
+    const half = getExhaustPlume(east(TOP_SPEED * 0.5), TOP_SPEED);
+    const full = getExhaustPlume(east(TOP_SPEED), TOP_SPEED);
+    expect(quarter.lengthUnits).toBeLessThan(half.lengthUnits);
+    expect(half.lengthUnits).toBeLessThan(full.lengthUnits);
+    expect(quarter.timeScale).toBeLessThan(full.timeScale);
+    expect(full.alpha).toBe(1);
+    // The jet lengthens faster than it widens, or full throttle would read as a
+    // fatter candle rather than a longer one.
+    expect(full.lengthUnits / quarter.lengthUnits).toBeGreaterThan(
+      full.widthUnits / quarter.widthUnits
+    );
+  });
+
+  it("clamps above top speed instead of growing without bound", () => {
+    const full = getExhaustPlume(east(TOP_SPEED), TOP_SPEED);
+    const over = getExhaustPlume(east(TOP_SPEED * 3), TOP_SPEED);
+    expect(over.lengthUnits).toBe(full.lengthUnits);
+    expect(over.alpha).toBe(1);
+  });
+
+  it("shows nothing when the run reports no top speed", () => {
+    // `ZERO_DRIVE` is what a snapshot without a drive block flattens to, so this
+    // is the real path on the first patch of a room, not a hypothetical.
+    expect(getExhaustPlume(east(300), 0).visible).toBe(false);
+  });
+});
+
+describe("engine plume geometry", () => {
+  const HEADINGS = [0, 0.7, Math.PI / 2, 2.4, Math.PI, -1.3, 5.9];
+
+  it("turns the plume against the nose at every heading", () => {
+    // The atlas plume points up (-Y) with its throat on the bottom edge, so a
+    // sprite at rotation `t` sends it along `(sin t, -cos t)`; it has to leave
+    // along the reverse of the nose, `(-cos h, -sin h)`. A flipped sign in the
+    // offset would put the flame in front of the ship, and nothing else here
+    // would notice.
+    for (const heading of HEADINGS) {
+      const rotation = heading + EXHAUST_ROTATION_OFFSET;
+      expect(Math.sin(rotation)).toBeCloseTo(-Math.cos(heading), 12);
+      expect(-Math.cos(rotation)).toBeCloseTo(-Math.sin(heading), 12);
+    }
   });
 });

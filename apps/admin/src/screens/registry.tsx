@@ -3,6 +3,7 @@ import type { BalancePresetsFile, BalanceTuning } from "@spaceship-defender/prot
 
 import { AutopilotScreen } from "./AutopilotScreen/index.js";
 import { DirectorScreen } from "./DirectorScreen/index.js";
+import { EffectsScreen } from "./EffectsScreen/index.js";
 import { EnemiesScreen } from "./EnemiesScreen/index.js";
 import { EnemySkillScreen } from "./EnemySkillScreen/index.js";
 import { HelmScreen } from "./HelmScreen/index.js";
@@ -18,6 +19,7 @@ export const TABS = [
   "enemySkill",
   "player",
   "ships",
+  "effects",
   "helm",
   "autopilot",
   "director",
@@ -32,6 +34,7 @@ export const TAB_LABELS: Record<Tab, string> = {
   enemySkill: "ИИ врага",
   player: "Игрок",
   ships: "Корабли",
+  effects: "Эффекты",
   helm: "Управление",
   autopilot: "Автопилот",
   director: "Директор",
@@ -50,6 +53,7 @@ export const TAB_PATHS: Record<Tab, string> = {
   enemySkill: "enemySkill",
   player: "player",
   ships: "ships",
+  effects: "effects",
   helm: "helm",
   autopilot: "autopilot",
   director: "director",
@@ -84,6 +88,9 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
     <PlayerScreen tuning={tuning} onChange={onTuningChange} />
   ),
   ships: ({ tuning, onTuningChange }) => <ShipsScreen tuning={tuning} onChange={onTuningChange} />,
+  // No slice of the context: the catalogue reads the generated manifest, so
+  // it needs neither the balance document nor the password.
+  effects: () => <EffectsScreen />,
   helm: ({ tuning, onTuningChange }) => <HelmScreen tuning={tuning} onChange={onTuningChange} />,
   autopilot: ({ tuning, onTuningChange }) => (
     <AutopilotScreen tuning={tuning} onChange={onTuningChange} />

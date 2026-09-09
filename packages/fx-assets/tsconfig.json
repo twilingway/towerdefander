@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The manifest resolves atlas URLs through `new URL(..., import.meta.url)`,
+    // which is DOM: `URL` and `ImportMeta.url` both come from that lib. Nothing
+    // here needs an ambient @types package.
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

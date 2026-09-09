@@ -10,6 +10,8 @@ export default tseslint.config(
       "eslint.config.js",
       "scripts/**",
       ".daily-worktrees/**",
+      // A git submodule: someone else's editor, and none of it is in a tsconfig.
+      "tools/arcadia-effects/**",
       "tools/daily-video-dashboard/**",
       "apps/controller/scripts/**",
       "apps/server/scripts/**",

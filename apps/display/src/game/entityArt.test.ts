@@ -8,6 +8,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { drawCatalogAsset } from "./catalogRenderer.js";
+import { EXHAUST_THROAT_UNITS } from "./spaceshipViewModel.js";
 import {
   drawEnemyBody,
   healthBarBox,
@@ -299,5 +300,30 @@ describe("turretMountPoint", () => {
     expect(nosed.y).toBeCloseTo(450);
     expect(reversed.y).toBeCloseTo(550);
     expect(reversed.x).toBeCloseTo(1000);
+  });
+});
+
+describe("exhaust throat mount", () => {
+  it("sits inside the tail, behind the hull's centre", () => {
+    // The plume reuses this helper with a negative mount, so a sign slip would
+    // hang the flame off the bow. `EXHAUST_ROTATION_OFFSET` is checked beside
+    // the plume itself in `spaceshipViewModel.test.ts`.
+    // Behind the centre and still under the hull: that is the whole point of it.
+    expect(EXHAUST_THROAT_UNITS).toBeGreaterThan(0);
+    expect(EXHAUST_THROAT_UNITS).toBeLessThan(1);
+    const ship = { x: 100, y: 50, radius: 30 };
+    for (const heading of [0, 0.7, Math.PI / 2, 2.4, Math.PI, -1.3, 5.9]) {
+      const throat = turretMountPoint(ship, heading, {
+        mountX: -EXHAUST_THROAT_UNITS,
+        mountY: 0
+      });
+      const alongNose =
+        (throat.x - ship.x) * Math.cos(heading) + (throat.y - ship.y) * Math.sin(heading);
+      // Against zero, not against the constant: comparing the offset with
+      // itself would pass for either sign, which is no check at all.
+      expect(alongNose).toBeLessThan(0);
+      expect(alongNose).toBeCloseTo(-EXHAUST_THROAT_UNITS * ship.radius, 9);
+      expect(Math.hypot(throat.x - ship.x, throat.y - ship.y)).toBeLessThan(ship.radius);
+    }
   });
 });
