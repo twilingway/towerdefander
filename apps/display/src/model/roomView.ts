@@ -138,6 +138,8 @@ export function toDisplayRoomView(
               display.spaceshipVisualShape,
               display.spaceshipVisualScale
             ),
+            shieldBandEffect: display.shieldBandEffect ?? "",
+            shieldImpactEffect: display.shieldImpactEffect ?? "",
             turretVisual:
               display.turretVisualShape === undefined || display.turretVisualShape.length === 0
                 ? null

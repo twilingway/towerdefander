@@ -177,7 +177,7 @@ export class SpaceshipScene extends Phaser.Scene {
     this.exhaust = new ExhaustLayer(this);
     this.bursts = new BurstLayer(this);
     this.turret = createTurret(this, this.snapshot);
-    this.shield = new ShieldLayer(this, blank, this.bake);
+    this.shield = new ShieldLayer(this, blank, this.bake, this.snapshot.shieldBandEffect);
     // Above the arena, below the shield: a pulse is over before it can hide
     // anything that matters.
     this.aiming = new AimingLayer(

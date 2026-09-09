@@ -122,6 +122,8 @@ describe("display room view", () => {
           backgroundNebulaAlpha: 0.5,
           backgroundNebulaPreset: "gold",
           spaceshipVisualShape: "ship-lancer",
+          shieldBandEffect: "plasma-exhaust",
+          shieldImpactEffect: "debris-burst",
           spaceshipVisualScale: 1.25,
           shieldRadius: 140,
           shieldPhase: "raising",
@@ -221,6 +223,11 @@ describe("display room view", () => {
     expect(view?.game?.hostileProjectiles).toHaveLength(1);
     expect(view?.game?.hostileProjectiles[0]).not.toHaveProperty("source");
     expect(view?.game?.spaceship.heading).toBe(Math.PI / 3);
+    // Chosen with the hull and published once per run, like its silhouette. The
+    // display falls back to its own baked pair only when these are empty, so a
+    // room that names them has to carry them across the adapter.
+    expect(view?.game?.shieldBandEffect).toBe("plasma-exhaust");
+    expect(view?.game?.shieldImpactEffect).toBe("debris-burst");
     expect(view?.game?.serverStepMs).toBe(0.42);
     expect(view?.game?.machineGun).toEqual({
       heat: 30,

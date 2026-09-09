@@ -892,6 +892,8 @@ export class SpaceshipDefenderRoom extends Room<{
     display.asteroidVisualShape = this.gameConfig.asteroidVisual?.shape ?? "";
     display.asteroidVisualScale = this.gameConfig.asteroidVisual?.modelScale ?? 1;
     display.spaceshipVisualShape = this.gameConfig.spaceshipVisual?.shape ?? "";
+    display.shieldBandEffect = this.gameConfig.shieldBandEffect;
+    display.shieldImpactEffect = this.gameConfig.shieldImpactEffect;
     display.spaceshipVisualScale = this.gameConfig.spaceshipVisual?.modelScale ?? 1;
     display.turretVisualShape = this.gameConfig.turretVisual?.shape ?? "";
     display.turretVisualScale = this.gameConfig.turretVisual?.modelScale ?? 1;

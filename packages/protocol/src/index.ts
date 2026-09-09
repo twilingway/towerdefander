@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 53 as const;
+export const PROTOCOL_VERSION = 54 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * How often the room broadcasts, in milliseconds.
@@ -829,6 +829,13 @@ export const displayGameSnapshotSchema = z
     asteroidVisual: entityVisualSchema,
     /** Look of the player hull; null keeps the display's own default silhouette. */
     spaceshipVisual: entityVisualSchema,
+    /**
+     * Effects the crew's shield is drawn with, chosen with the hull. An empty id
+     * means the display keeps its own baked effect, which is what a preset with
+     * no choice in it has.
+     */
+    shieldBandEffect: z.string(),
+    shieldImpactEffect: z.string(),
     turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,

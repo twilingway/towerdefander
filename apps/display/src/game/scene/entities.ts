@@ -415,7 +415,11 @@ export function reconcileCombatVisuals({
         ),
         blockEffect:
           entity.visualKind === "projectile" && entity.kind === "hostile"
-            ? SHIELD_BLOCK_EFFECT
+            ? // The hull's own mark when it names one; the baked default keeps a
+              // preset with no choice in it looking as it did.
+              snapshot.shieldImpactEffect.length > 0
+              ? snapshot.shieldImpactEffect
+              : SHIELD_BLOCK_EFFECT
             : undefined,
         hitEffect: archetype?.effects?.hit,
         shotEffect: archetype?.effects?.shot,

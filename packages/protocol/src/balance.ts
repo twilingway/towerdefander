@@ -6,14 +6,14 @@ import {
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
-import { FX_EVENT_EFFECT_IDS } from "./effectCatalogue.ts";
+import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 40 as const;
+export const BALANCE_FILE_VERSION = 41 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -91,6 +91,7 @@ export type SpawnKind = z.infer<typeof spawnKindSchema>;
 /** A silhouette from the shared visual catalogue; the asset carries its own colours. */
 export const visualAssetIdSchema = z.enum(VISUAL_ASSET_IDS);
 export const fxEventEffectIdSchema = z.enum(FX_EVENT_EFFECT_IDS);
+export const fxLoopEffectIdSchema = z.enum(FX_LOOP_EFFECT_IDS);
 
 /**
  * What an archetype plays on each of its events. Every slot is optional, and an
@@ -105,6 +106,22 @@ export const enemyEventEffectsSchema = z
   })
   .strict();
 export type EnemyEventEffects = z.infer<typeof enemyEventEffectsSchema>;
+
+/**
+ * The crew's own two: the barrier its raised sector is drawn as, and the mark a
+ * blocked shot leaves on it.
+ *
+ * Two lists rather than one, because the two slots are different kinds of
+ * effect: the barrier is a loop and the mark is a one-shot. An empty slot means
+ * "as it is now", so a hull nobody edited looks exactly as it did.
+ */
+export const shipEffectsSchema = z
+  .object({
+    shieldBand: fxLoopEffectIdSchema.optional(),
+    shieldImpact: fxEventEffectIdSchema.optional()
+  })
+  .strict();
+export type ShipEffects = z.infer<typeof shipEffectsSchema>;
 export const MODEL_SCALE_MIN = 0.2;
 export const MODEL_SCALE_MAX = 4;
 const modelScaleSchema = z.number().min(MODEL_SCALE_MIN).max(MODEL_SCALE_MAX);
@@ -811,6 +828,8 @@ export const shipArchetypeSchema = z
     description: z.string().min(1).max(240),
     /** Look of the hull; null keeps the display's own default silhouette. */
     visual: entityVisualSchema,
+    /** Barrier and impact effects for this hull's shield; empty means as it is. */
+    effects: shipEffectsSchema.optional(),
     /**
      * Informational until runs remember anything between themselves: shown
      * beside the hull so a locked ship does not appear out of nowhere later.

@@ -389,6 +389,14 @@ export function toSimulationConfig(
       ? {}
       : { cannonWeaponKind: hull.overrides.cannonWeaponKind }),
     ...(hull.overrides.mgWeaponKind === null ? {} : { mgWeaponKind: hull.overrides.mgWeaponKind }),
+    // The hull's own shield effects, the way its stats fold in: the simulation
+    // is handed a ship and never learns a choice was made.
+    ...(hull.effects?.shieldBand === undefined
+      ? {}
+      : { shieldBandEffect: hull.effects.shieldBand }),
+    ...(hull.effects?.shieldImpact === undefined
+      ? {}
+      : { shieldImpactEffect: hull.effects.shieldImpact }),
     moduleTiers: hull.tiers,
     endlessTier: hull.endlessTier
   });

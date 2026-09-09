@@ -241,6 +241,8 @@ export interface NetworkGameState {
     asteroidVisualShape?: string;
     asteroidVisualScale?: number;
     spaceshipVisualShape?: string;
+    shieldBandEffect?: string;
+    shieldImpactEffect?: string;
     spaceshipVisualScale?: number;
     turretVisualShape?: string;
     turretVisualScale?: number;

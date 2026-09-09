@@ -6,10 +6,7 @@ import {
   type FxEventEffectId
 } from "@spaceship-defender/protocol";
 
-import { spriteFrameStyle } from "../../components/fxSprite.js";
-
-/** A still from a third of the way in, where a burst is at its widest. */
-const THUMBNAIL_SCALE = 0.6;
+import { EffectSlotRow } from "../../components/EffectSlotRow.js";
 
 const SLOTS = [
   { key: "death", caption: "Смерть", hint: "Не выбрано — боссу взрыв, прочим обломки" },
@@ -74,44 +71,20 @@ export function EffectSlots({
 }): ReactElement {
   return (
     <div className="fx-slots" data-testid="enemy-effect-slots">
-      {SLOTS.map((slot) => {
-        const chosen = effects?.[slot.key] ?? "";
-        const effect = CHOICES.find((candidate) => candidate.id === chosen);
-        return (
-          <div className="fx-slots__row" key={slot.key}>
-            <label className="field">
-              <span className="field__caption">{slot.caption}</span>
-              <select
-                data-testid={`enemy-effect-${slot.key}`}
-                onChange={(event) => {
-                  onChange(withEffectSlot(effects, slot.key, event.target.value));
-                }}
-                value={chosen}
-              >
-                <option value="">как сейчас</option>
-                {CHOICES.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {effect === undefined ? (
-              <span className="fx-slots__hint">{slot.hint}</span>
-            ) : (
-              <span
-                className="fx-card__thumb"
-                data-testid={`enemy-effect-thumb-${slot.key}`}
-                style={spriteFrameStyle(
-                  effect,
-                  Math.floor(effect.meta.frames / 3),
-                  THUMBNAIL_SCALE
-                )}
-              />
-            )}
-          </div>
-        );
-      })}
+      {SLOTS.map((slot) => (
+        <EffectSlotRow
+          caption={slot.caption}
+          choices={CHOICES}
+          chosen={effects?.[slot.key] ?? ""}
+          hint={slot.hint}
+          key={slot.key}
+          onChange={(value) => {
+            onChange(withEffectSlot(effects, slot.key, value));
+          }}
+          slot={slot.key}
+          testIdPrefix="enemy-effect"
+        />
+      ))}
     </div>
   );
 }

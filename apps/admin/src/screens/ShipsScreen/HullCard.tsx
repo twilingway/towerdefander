@@ -10,6 +10,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
+import { ShieldEffectSlots } from "./ShieldEffectSlots.js";
 import { NumberField, WeaponKindField } from "../../components/fields.js";
 import { ModuleEditor } from "./ModuleEditor.js";
 
@@ -30,6 +31,16 @@ function requiredRoles(width: number): number {
 
 function coveredRoles(tier: readonly ShipModule[]): number {
   return new Set(tier.map(({ role }) => role)).size;
+}
+
+/**
+ * A hull with no choice in it carries no block, rather than an empty one: that
+ * is what keeps an untouched preset byte-identical after a save.
+ */
+function withoutEffects(hull: ShipArchetype): ShipArchetype {
+  const next = { ...hull };
+  delete next.effects;
+  return next;
 }
 
 export function HullCard({
@@ -119,6 +130,19 @@ export function HullCard({
             ...hull,
             visual: shape === null ? null : { shape, modelScale: hull.visual?.modelScale ?? 1 }
           });
+        }}
+      />
+
+      <h4 className="card__subtitle">Эффекты щита</h4>
+      <p className="screen__hint">
+        Барьер — это то, чем нарисован поднятый сектор; вспышка играется там, где щит остановил
+        снаряд. Выбор идёт с корпусом, поэтому за прогон он не меняется. «Как сейчас» оставляет
+        запечённые эффекты дисплея — ровно то, что видел любой пресет до появления слотов.
+      </p>
+      <ShieldEffectSlots
+        effects={hull.effects}
+        onChange={(effects) => {
+          onChange(effects === undefined ? withoutEffects(hull) : { ...hull, effects });
         }}
       />
 
