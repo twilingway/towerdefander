@@ -9,6 +9,7 @@ import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
 import { drawShield } from "./shield.js";
+import { BurstLayer } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
 import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
 
@@ -37,6 +38,7 @@ export class SpaceshipScene extends Phaser.Scene {
   private turret: TurretObject | undefined;
   private shield: Phaser.GameObjects.Image | undefined;
   private exhaust: ExhaustLayer | undefined;
+  private bursts: BurstLayer | undefined;
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
   private headingTrack: AngleTrack;
@@ -171,6 +173,7 @@ export class SpaceshipScene extends Phaser.Scene {
     const blank = this.bake("blank", 1, () => undefined);
 
     this.exhaust = new ExhaustLayer(this);
+    this.bursts = new BurstLayer(this);
     this.turret = createTurret(this, this.snapshot);
     this.shield = this.add.image(0, 0, blank).setDepth(14);
     // Above the arena, below the shield: a pulse is over before it can hide
@@ -477,7 +480,8 @@ export class SpaceshipScene extends Phaser.Scene {
       tankLook: this.tankLook,
       bake: this.bake,
       toTick,
-      snap
+      snap,
+      bursts: this.bursts
     });
   }
 }
