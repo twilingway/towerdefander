@@ -25,7 +25,7 @@ import {
   planGunner,
   planPilot,
   planShield
-} from "../../controller/scripts/visible-demo-policy.mjs";
+} from "../src/rooms/crewPolicy.mjs";
 import { planUpgradeVotes } from "../../controller/scripts/upgrade-vote-policy.mjs";
 // Imported straight from the server source, which works only because that file
 // has no runtime relative imports — see the comment in its own header.

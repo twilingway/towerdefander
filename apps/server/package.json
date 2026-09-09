@@ -12,7 +12,7 @@
     "dev": "node --env-file-if-exists=../../.env.local --import tsx --watch src/index.ts",
     "start": "node --env-file-if-exists=../../.env.local dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests && node --test scripts/autopilot-stats.node-test.mjs scripts/promote-balance-seed.node-test.mjs"
+    "test": "vitest run --passWithNoTests && node --test scripts/autopilot-stats.node-test.mjs scripts/promote-balance-seed.node-test.mjs scripts/crewPolicy.node-test.mjs"
   },
   "dependencies": {
     "@colyseus/auth": "0.18.2",
