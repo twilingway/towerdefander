@@ -89,7 +89,7 @@
 - [x] 8.1 Оформить change: proposal, design с отклонёнными альтернативами, дельты на
       `primitive-top-down-battlefield`, `balance-admin-console`, `codebase-structure`. Проверка:
       `pnpm spec:validate`.
-- [ ] 8.2 Полный гейт: `pnpm check`.
+- [x] 8.2 Полный гейт: `pnpm check`.
 - [ ] 8.3 Замер кадра до и после: `node scripts/profile-display.mjs --cpu=4 --wave=8` и
       `node scripts/bench-panels.mjs` — в кадре появился новый анимированный спрайт.
 - [ ] 8.4 Приёмка глазами: факел в полёте, а не на припаркованном корабле; каталог в консоли на
