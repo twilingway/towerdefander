@@ -439,6 +439,15 @@ export interface ShieldImpact {
   readonly y: number;
   /** Outward normal at the contact: where the splash has to point. */
   readonly normal: number;
+  /**
+   * The contact as an angle from the middle of the sector.
+   *
+   * What makes the splash placeable on a barrier that is drawn somewhere else.
+   * The decision is made against the room's own geometry, because that is what
+   * blocked the shot; the picture is a patch behind it, and an offset carries
+   * from one to the other where a world point cannot.
+   */
+  readonly offset: number;
 }
 
 /** Share of the reach a contact may be met *behind* the last known point. */
@@ -478,8 +487,8 @@ export function getShieldImpact(query: ShieldImpactQuery): ShieldImpact | undefi
   const x = query.from.x + dx * entry;
   const y = query.from.y + dy * entry;
   const normal = Math.atan2(y - query.centre.y, x - query.centre.x);
-  const offset = normal - query.bearing;
-  const delta = Math.atan2(Math.sin(offset), Math.cos(offset));
-  if (Math.abs(delta) > query.arcHalfAngle) return undefined;
-  return { x, y, normal };
+  const raw = normal - query.bearing;
+  const offset = Math.atan2(Math.sin(raw), Math.cos(raw));
+  if (Math.abs(offset) > query.arcHalfAngle) return undefined;
+  return { x, y, normal, offset };
 }

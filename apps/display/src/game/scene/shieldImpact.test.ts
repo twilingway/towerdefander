@@ -1,41 +1,79 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveShieldImpact, SHIELD_BLOCK_EFFECT } from "./shieldImpact.js";
+import { resolveShieldImpact, SHIELD_BLOCK_EFFECT, type ShieldPose } from "./shieldImpact.js";
 
-const CENTRE = { x: 500, y: 500 };
+const ROOM_CENTRE = { x: 500, y: 500 };
 const RADIUS = 104;
 
-function snapshot(active: boolean, arcHalfAngle = Math.PI / 4) {
+/** What the room says: the geometry that actually blocked the shot. */
+function world(active: boolean, arcHalfAngle = Math.PI / 4, angle = 0) {
   return {
     shieldRadius: RADIUS,
-    shield: {
-      active,
-      angle: 0,
-      arcHalfAngle,
-      energy: 40,
-      capacity: 100,
-      rearmRequired: false
-    }
+    shield: { active, angle, arcHalfAngle },
+    spaceship: ROOM_CENTRE
   };
 }
 
+/** What the scene drew: the same shield, a patch behind. */
+const DRAWN: ShieldPose = { centre: { x: 480, y: 500 }, bearing: -0.05 };
+
 /** A shell one patch short of the barrier, flying straight at it. */
 const INCOMING = {
-  x: CENTRE.x + RADIUS + 24,
-  y: CENTRE.y,
+  x: ROOM_CENTRE.x + RADIUS + 24,
+  y: ROOM_CENTRE.y,
   velocity: { x: -700, y: 0 }
 };
 
-const POSE = { centre: CENTRE, bearing: 0 };
-
 describe("deciding that the shield blocked a threat", () => {
-  it("places the splash on the barrier", () => {
-    const impact = resolveShieldImpact(INCOMING, snapshot(true), POSE);
+  it("decides against the room and draws on the barrier the crew sees", () => {
+    /*
+     * The bug this exists for. The hull is drawn interpolated, a patch behind
+     * the room, and at speed that is twenty units of offset; the shell, mean-
+     * while, is drawn extrapolated forward. Deciding the block from that mixed
+     * pair disagreed with the room about hits that had plainly happened. So the
+     * decision uses the room's centre and bearing - and the splash still lands
+     * on the drawn barrier, at the same angle across the sector.
+     */
+    const impact = resolveShieldImpact(INCOMING, world(true), DRAWN);
     expect(impact).toBeDefined();
-    expect(Math.hypot((impact?.x ?? 0) - CENTRE.x, (impact?.y ?? 0) - CENTRE.y)).toBeCloseTo(
-      RADIUS,
-      6
-    );
+    expect(impact?.offset).toBeCloseTo(0, 6);
+    // On the drawn barrier: its centre, its bearing, the shield's radius.
+    expect(impact?.x).toBeCloseTo(DRAWN.centre.x + Math.cos(DRAWN.bearing) * RADIUS, 6);
+    expect(impact?.y).toBeCloseTo(DRAWN.centre.y + Math.sin(DRAWN.bearing) * RADIUS, 6);
+    expect(
+      Math.hypot((impact?.x ?? 0) - DRAWN.centre.x, (impact?.y ?? 0) - DRAWN.centre.y)
+    ).toBeCloseTo(RADIUS, 6);
+  });
+
+  it("keeps a hit the drawn pose alone would have thrown away", () => {
+    // A shot stopped near the edge of a sector the operator is sweeping. In the
+    // room's frame it is inside; against a bearing a patch stale it reads as
+    // outside, and that is a splash the crew watched not happen.
+    const edge = Math.PI / 4 - 0.02;
+    const shell = {
+      x: ROOM_CENTRE.x + Math.cos(edge) * (RADIUS + 20),
+      y: ROOM_CENTRE.y + Math.sin(edge) * (RADIUS + 20),
+      velocity: { x: -700 * Math.cos(edge), y: -700 * Math.sin(edge) }
+    };
+    const sweeping: ShieldPose = { centre: ROOM_CENTRE, bearing: -0.09 };
+    expect(resolveShieldImpact(shell, world(true), sweeping)).toBeDefined();
+  });
+
+  it("allows a shot a hair outside the sector, and nothing further", () => {
+    // The room settles the block a tick before the display sees it, and the
+    // sector turns in that tick - so the edge carries a few degrees of slack.
+    // Wide enough to cover the gap, narrow enough that the shield still ends
+    // where it ends.
+    const just = (radians: number) => {
+      const shell = {
+        x: ROOM_CENTRE.x + Math.cos(radians) * (RADIUS + 20),
+        y: ROOM_CENTRE.y + Math.sin(radians) * (RADIUS + 20),
+        velocity: { x: -700 * Math.cos(radians), y: -700 * Math.sin(radians) }
+      };
+      return resolveShieldImpact(shell, world(true), { centre: ROOM_CENTRE, bearing: 0 });
+    };
+    expect(just(Math.PI / 4 + 0.04)).toBeDefined();
+    expect(just(Math.PI / 4 + 0.4)).toBeUndefined();
   });
 
   it("says nothing while the sector is down", () => {
@@ -45,20 +83,24 @@ describe("deciding that the shield blocked a threat", () => {
      * geometry would happily report a contact for all three, because the circle
      * the shell crosses is there whether or not anything is holding it.
      */
-    expect(resolveShieldImpact(INCOMING, snapshot(false), POSE)).toBeUndefined();
+    expect(resolveShieldImpact(INCOMING, world(false), DRAWN)).toBeUndefined();
   });
 
   it("says nothing when the scene has not drawn the shield", () => {
-    // No pose means the layer did not draw a barrier this frame, and a contact
-    // has nowhere to go.
-    expect(resolveShieldImpact(INCOMING, snapshot(true), undefined)).toBeUndefined();
+    expect(resolveShieldImpact(INCOMING, world(true), undefined)).toBeUndefined();
   });
 
   it("says nothing for a threat that is not moving", () => {
     // Without a course the last known point is all there is, and that point is
     // behind the barrier: the splash would appear inside the ship's own bubble.
     expect(
-      resolveShieldImpact({ ...INCOMING, velocity: { x: 0, y: 0 } }, snapshot(true), POSE)
+      resolveShieldImpact({ ...INCOMING, velocity: { x: 0, y: 0 } }, world(true), DRAWN)
+    ).toBeUndefined();
+  });
+
+  it("says nothing for a threat too far away to have reached the arc", () => {
+    expect(
+      resolveShieldImpact({ ...INCOMING, x: ROOM_CENTRE.x + RADIUS + 900 }, world(true), DRAWN)
     ).toBeUndefined();
   });
 
@@ -66,12 +108,12 @@ describe("deciding that the shield blocked a threat", () => {
     // Straight at the ship's flank: outside the default quarter-circle, inside
     // a sector the crew has widened.
     const flank = {
-      x: CENTRE.x + RADIUS * Math.cos(0.9),
-      y: CENTRE.y + RADIUS * Math.sin(0.9) + 30,
+      x: ROOM_CENTRE.x + RADIUS * Math.cos(0.9),
+      y: ROOM_CENTRE.y + RADIUS * Math.sin(0.9) + 30,
       velocity: { x: 0, y: -700 }
     };
-    expect(resolveShieldImpact(flank, snapshot(true), POSE)).toBeUndefined();
-    expect(resolveShieldImpact(flank, snapshot(true, Math.PI / 2), POSE)).toBeDefined();
+    expect(resolveShieldImpact(flank, world(true), DRAWN)).toBeUndefined();
+    expect(resolveShieldImpact(flank, world(true, Math.PI / 2), DRAWN)).toBeDefined();
   });
 
   it("names an effect the catalogue actually bakes", () => {

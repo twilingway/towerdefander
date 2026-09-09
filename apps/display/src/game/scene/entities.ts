@@ -353,8 +353,11 @@ export function reconcileCombatVisuals({
       bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
     }
     if (!snap && leaving?.blockEffect !== undefined && leaving.velocity !== undefined) {
+      // The last point the room published, not the drawn one: the drawn shell is
+      // extrapolated forward and the decision is made in the room's own frame.
+      const seen = leaving.position.current.to;
       const impact = resolveShieldImpact(
-        { x: leaving.object.x, y: leaving.object.y, velocity: leaving.velocity },
+        { x: seen.x, y: seen.y, velocity: leaving.velocity },
         snapshot,
         shieldPose
       );
