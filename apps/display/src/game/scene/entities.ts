@@ -9,6 +9,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
+import { burstKindFor, type BurstKind, type BurstLayer } from "./bursts.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
 import {
   createAngleTrack,
@@ -252,6 +253,14 @@ export interface CombatVisual {
    * that gap comes out of empty space.
    */
   live: LiveEntity | undefined;
+  /**
+   * Which burst this entity's removal plays, or none for the things that leave
+   * the snapshot for reasons other than being destroyed. Decided once, when the
+   * sprite is made, so the removal branch needs no catalogue lookup.
+   */
+  readonly burst: BurstKind | undefined;
+  /** Last known hull radius, which is what the burst is sized against. */
+  readonly radius: number;
 }
 
 function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
@@ -287,6 +296,7 @@ interface ReconcileRequest {
   readonly bake: BakeShape;
   readonly toTick: number;
   readonly snap: boolean;
+  readonly bursts: BurstLayer | undefined;
 }
 
 export function reconcileCombatVisuals({
@@ -297,13 +307,20 @@ export function reconcileCombatVisuals({
   tankLook,
   bake,
   toTick,
-  snap
+  snap,
+  bursts
 }: ReconcileRequest): void {
   const incoming = collectCombatEntities(snapshot);
   const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
   const plan = reconcileStableIds(visuals.keys(), incomingById.keys());
   for (const entityId of plan.remove) {
-    visuals.get(entityId)?.object.destroy();
+    const leaving = visuals.get(entityId);
+    // A snapping reconcile is a hydration or a fresh run, not a wave of deaths:
+    // bursting here would carpet the screen on every reconnect.
+    if (!snap && leaving?.burst !== undefined) {
+      bursts?.spawn(leaving.burst, leaving.object.x, leaving.object.y, leaving.radius);
+    }
+    leaving?.object.destroy();
     visuals.delete(entityId);
   }
   for (const entityId of [...plan.create, ...plan.update]) {
@@ -324,7 +341,13 @@ export function reconcileCombatVisuals({
         // earlier authoritative sample to walk it out of.
         position: createPointTrack(entity, toTick),
         angle: createAngleTrack(heading, toTick),
-        velocity: reckonableVelocity(entity)
+        velocity: reckonableVelocity(entity),
+        burst: burstKindFor(
+          entity.visualKind,
+          entity.visualKind === "enemy" &&
+            resolveEnemyVisual(snapshot.enemyCatalogue, entity.kind).isBoss
+        ),
+        radius: entity.radius
       });
     } else {
       // A binding missed at spawn - the sprite made from a view the room had
