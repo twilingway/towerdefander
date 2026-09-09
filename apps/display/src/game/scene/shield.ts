@@ -22,14 +22,16 @@ const BAND_DEPTH = 15;
 /**
  * How thick the barrier is drawn, in world units.
  *
- * Narrower than the crescent's 11 on purpose. The band is additive, and the
- * crescent it lies on is already bright: brightening the middle of it pushes
- * those pixels toward white, and `tests/e2e/shieldGlow.spec.ts` finds the shield
- * by its own blue. Keeping the band inside the crescent leaves the crescent's
- * outer and inner margins untouched, so the arc still reads as blue to the spec
- * and to the eye.
+ * Wider than the crescent's 11, because the barrier replaces it rather than
+ * lying over it, and because the check that measures the shield counts pixels:
+ * a barrier is a band of soft light where the crescent was a filled shape, so
+ * it needs more width to put the same amount of the shield's own blue on screen.
+ *
+ * The first version was 9 - deliberately narrower than the crescent, to leave
+ * its blue margins untouched - and that was wrong twice over. A dim additive
+ * strip inside a bright arc is invisible, and the arc it was protecting is gone.
  */
-const BAND_THICKNESS_UNITS = 9;
+const BAND_THICKNESS_UNITS = 20;
 /** Where the taper starts, as a share of the sector from either tip. */
 const BAND_TAPER_SHARE = 0.18;
 
@@ -188,7 +190,13 @@ export class ShieldLayer {
     bearing: number,
     visible: boolean
   ): void {
-    drawShield(this.crescent, hull, snapshot, bearing, visible, this.bake);
+    // The barrier replaces the crescent rather than lying over it: two takes on
+    // the same arc read as a doubled edge, and the animated one is the shield
+    // now. The crescent still draws while the atlas is in flight, and it is
+    // still the whole picture for a lowered sector - that dashed arc is what
+    // "down" looks like and nothing here changes it.
+    const barrier = this.band !== undefined && snapshot.shield.active;
+    drawShield(this.crescent, hull, snapshot, bearing, visible && !barrier, this.bake);
     this.drawBand(hull, snapshot, bearing, visible);
     this.drawnPose =
       visible && snapshot.shield.active ? { centre: { x: hull.x, y: hull.y }, bearing } : undefined;

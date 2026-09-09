@@ -412,7 +412,7 @@ export function getShieldBandPoints(
  * floor is deliberate - a shield that is up must never be invisible, or the
  * crew cannot tell it from a shield that is down.
  */
-export const SHIELD_BAND_ALPHA_MIN = 0.35;
+export const SHIELD_BAND_ALPHA_MIN = 0.5;
 export const SHIELD_BAND_ALPHA_MAX = 1;
 
 export function getShieldBandAlpha(energy: number, capacity: number): number {
