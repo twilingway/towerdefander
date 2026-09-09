@@ -67,13 +67,19 @@ Copy-Item .env.example .env.local
 pnpm dev
 ```
 
+Свежий клон дополнительно требует `git submodule update --init --recursive`: редактор эффектов
+подключён submodule-ом в `tools/arcadia-effects`. Без него собирается и играется всё, кроме
+`pnpm fx:*`, и CI его не трогает.
+
 Локальные адреса:
 
 - display: `http://localhost:5173`;
 - controller: `http://localhost:5174`;
 - консоль баланса: `http://localhost:5175`;
 - server/health: `http://localhost:2567` и `http://localhost:2567/health`;
-- room statistics: `http://localhost:2567/stats/rooms`.
+- room statistics: `http://localhost:2567/stats/rooms`;
+- редактор эффектов: `http://localhost:35179` — поднимается отдельно, `pnpm fx:edit`, и работает
+  поверх идущего `pnpm dev`.
 
 Lifecycle defaults задаются в `.env.example`: lobby 15 минут, одна combat wave 20 минут, result 10
 минут, отсутствие controller identities 5 минут и несбрасываемый hard lifetime комнаты 12 часов.
@@ -170,9 +176,17 @@ Auto-crew является только developer harness. Будущие NPC б
 | `pnpm campaign:preview`                            | Показать, что соберёт генератор кампании, ничего не записывая                    |
 | `pnpm campaign:author`                             | Пересобрать каталог врагов и таблицу волн в пресет (пишет `.bak`)                |
 | `pnpm benchmark:combat`                            | Худший случай шага симуляции и объём патчей состояния                            |
+| `pnpm fx:edit`                                     | Редактор эффектов на `http://localhost:35179`, правит исходники в репозитории    |
+| `pnpm fx:bake`                                     | Пересобрать атласы эффектов из исходников; нужен перед коммитом правок           |
 
 Переменные окружения для демонстрации: `DEMO_SHIP` (`guardian`, `blade`, `bastion`),
 `DEMO_BOT_LEVEL` (`rookie`, `veteran`, `ace`), `DEMO_START_WAVE` (номер волны).
+
+Эффекты живут в `packages/fx-assets`: исходник — JSON, вывод — запечённый спрайт-атлас, который и
+читает игра. Поэтому правка в редакторе видна не сразу: `pnpm fx:edit` после каждого сохранения
+перезапекает изменённый эффект сам, а вкладку дисплея нужно обновить руками — Phaser держит уже
+загруженную текстуру. Перед коммитом — полный `pnpm fx:bake`. Каталог всех эффектов с превью есть в
+консоли баланса, вкладка «Эффекты».
 
 Кампания собирается по числам из пресета — вкладка «Кампания волн» в консоли, карточка «Правила
 сборки кампании»: бюджет волны и его прирост, шаг между группами и интервалы внутри группы, пол
