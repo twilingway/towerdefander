@@ -423,8 +423,14 @@ export const waveCampaignSchema = z
 export type WaveCampaign = z.infer<typeof waveCampaignSchema>;
 
 /**
- * Skill levels of the visible-demo autopilot. Presentation-only, like
- * `cameraViewWidth`: the simulation never reads them, the demo harness does.
+ * Skill levels of the bot, and no longer presentation-only.
+ *
+ * They used to be: one bot lived in the controller and played the demonstration
+ * and the measured runs, while the room had a second, hard-coded one for a seat
+ * nobody was in. There is one now, in the room, so these numbers reach a real
+ * game - a crew of one has its sector flown by them, and an empty seat is flown
+ * by them too. The simulation still never reads the section: the room does, and
+ * hands the policy what it decides.
  */
 export const AUTOPILOT_LEVELS = ["rookie", "veteran", "ace"] as const;
 export const autopilotLevelSchema = z.enum(AUTOPILOT_LEVELS);
@@ -980,7 +986,7 @@ export const balanceTuningSchema = z
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background; the simulation never reads this section. */
     background: backgroundTuningSchema,
-    /** Demo autopilot skill levels; the simulation never reads this section. */
+    /** Bot skill levels; the room reads this section, the simulation does not. */
     autopilot: autopilotTuningSchema,
     /** Enemy skill profiles. Unlike the autopilot, the simulation does read these. */
     enemySkill: enemySkillTuningSchema,
