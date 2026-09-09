@@ -359,7 +359,14 @@ export function reconcileCombatVisuals({
         shieldPose
       );
       if (impact !== undefined) {
-        bursts?.spawn(leaving.blockEffect, impact.x, impact.y, leaving.radius, impact.normal);
+        // The barrier's radius, not the shell's: see `SPAN.shield`.
+        bursts?.spawn(
+          leaving.blockEffect,
+          impact.x,
+          impact.y,
+          snapshot.shieldRadius,
+          impact.normal
+        );
       }
     }
     leaving?.object.destroy();

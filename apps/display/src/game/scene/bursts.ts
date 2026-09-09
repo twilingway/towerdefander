@@ -34,9 +34,11 @@ const SPAN: Record<FxCategory, number> = {
   muzzle: 1.6,
   explosion: 5.5,
   destruction: 4.5,
-  // A splash on the barrier, sized off the shell that made it rather than off
-  // any hull, so a floor carries it the way a muzzle flash has one.
-  shield: 3
+  // A splash on the barrier is sized off the barrier: the thing that stopped
+  // the shot is what the crew is looking at, and the shell that made it is two
+  // units across. Sized off the shell it came out a floor-wide dot on an arc a
+  // hundred units out, and read as nothing at all.
+  shield: 0.75
 };
 
 /**
@@ -326,8 +328,7 @@ export class BurstLayer {
 /** How wide a burst is drawn, in world units. */
 export function burstWidth(category: FxCategory, radius: number): number {
   const scaled = radius * SPAN[category];
-  const floored = category === "muzzle" || category === "shield";
-  return floored ? Math.max(MUZZLE_MIN_UNITS, scaled) : scaled;
+  return category === "muzzle" ? Math.max(MUZZLE_MIN_UNITS, scaled) : scaled;
 }
 
 function textureKey(effectId: string): string {
