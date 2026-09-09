@@ -145,14 +145,20 @@ export interface ShieldPlan {
 
 export interface GunnerPlan {
   readonly aim: Vector;
-  readonly strength: number;
-  readonly cannon: boolean;
-  readonly machineGun: boolean;
+  readonly firing: boolean;
 }
 
-export interface PilotPlan {
+/** Turn and thrust alone: what the helm makes of a course. */
+export interface HelmIntent {
   readonly turn: number;
   readonly thrust: number;
+}
+
+export interface PilotPlan extends HelmIntent {
+  readonly vector: Vector;
+  readonly mgFiring: boolean;
+  /** A crossing break, which must not be flown in reverse. */
+  readonly crossing?: boolean;
 }
 
 export interface RankedTarget {
@@ -244,7 +250,7 @@ export function helmIntent(
   heading: number,
   memory: PolicyMemory,
   mayReverse?: boolean
-): PilotPlan;
+): HelmIntent;
 export function planPilot(
   world: PolicyWorld,
   profile: AutopilotProfile,

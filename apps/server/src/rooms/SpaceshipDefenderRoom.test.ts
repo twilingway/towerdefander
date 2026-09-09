@@ -284,6 +284,45 @@ function internals(room: SpaceshipDefenderRoom): RoomInternals {
   return room as unknown as RoomInternals;
 }
 
+describe("the seats the room drives itself", () => {
+  /**
+   * Ownership, not the seat list. The distinction is the whole reason this is
+   * not a one-line predicate: a room of one has a pilot seat only, and asking
+   * "is gunner among this room's roles" answers no - while the solo player is
+   * working that turret from the same panel.
+   */
+  const driven = (room: SpaceshipDefenderRoom): readonly string[] =>
+    (internals(room) as unknown as { roomDrivenRoles: () => readonly string[] }).roomDrivenRoles();
+
+  it("drives nothing while every seat has somebody in it", () => {
+    const { room } = startGame();
+    expect(driven(room)).toEqual([]);
+  });
+
+  it("covers a seat while its player is away, and hands it back", () => {
+    // Not a hypothetical: a dropped controller used to leave the ship dead on
+    // the arena for as long as the reconnection window lasted, being shot at.
+    // The seat stays theirs - this is cover, not eviction.
+    const { room, controllers } = startGame();
+    const gunner = controllers[1];
+    if (gunner === undefined) throw new Error("Expected a gunner.");
+    const seat = room.state.players.get(gunner.client.sessionId);
+    if (seat === undefined) throw new Error("Expected the gunner to hold a seat.");
+    seat.connected = false;
+    expect(driven(room)).toEqual(["gunner"]);
+    seat.connected = true;
+    expect(driven(room)).toEqual([]);
+  });
+
+  it("leaves the solo player their turret and takes only the sector", () => {
+    const room = createSoloRoom();
+    joinSolo(room);
+    // The gunner stream belongs to the pilot in a room of one, so a bot on it
+    // would fight the player for the same stick.
+    expect(driven(room)).toEqual(["shield"]);
+  });
+});
+
 /** Drops one hostile bullet a stone's throw from the hull, closing head-on. */
 function aimBulletAtHull(room: SpaceshipDefenderRoom): void {
   const runtime = internals(room);

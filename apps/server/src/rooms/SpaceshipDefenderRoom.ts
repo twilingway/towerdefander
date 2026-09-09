@@ -72,6 +72,8 @@ import { LifecycleSchedule } from "./lifecycleSchedule.js";
 import {
   createAutopilotMemory,
   leadSpeedFor,
+  planGunner,
+  planPilot,
   planShield,
   resolveAutopilotProfile
 } from "./crewPolicy.mjs";
@@ -731,7 +733,7 @@ export class SpaceshipDefenderRoom extends Room<{
     const previousLootWindow = this.gameState.lootWindowTicksRemaining;
     const projectionWasResult = this.state.game.encounter.phase === "result";
     // The stand takes every helper off the arena, and this is one of them.
-    if (sparringEnemies === 0) this.gameState = this.applyShieldAutopilot(this.gameState);
+    if (sparringEnemies === 0) this.gameState = this.applyCrewAutopilot(this.gameState);
     const stepStartedAt = this.nowMs();
     this.gameState = advanceSpaceshipSimulation(this.gameState, this.gameConfig);
     this.lastStepMs = this.nowMs() - stepStartedAt;
@@ -1103,31 +1105,77 @@ export class SpaceshipDefenderRoom extends Room<{
   }
 
   /**
-   * A crew without a shield operator still needs the sector up, so the room
-   * feeds the same trusted intent a player would have sent - decided by the
-   * same policy that plays whole measured runs.
+   * Every seat nobody is sitting in, driven by the policy that plays whole
+   * measured runs. The room feeds it the same trusted input a player would have
+   * sent, so there is no path a bot can take that a client could not.
    *
    * The policy is handed the client slice rather than the state: it is a model
    * of a player, and a bot that reads the whole simulation dodges what no player
    * could see, which would make every measurement of survivability this project
    * has incomparable with the ones before it.
    */
-  private applyShieldAutopilot(game: SpaceshipSimulationState): SpaceshipSimulationState {
-    if (this.crewRoles().includes("shield") || this.gameState?.encounterPhase !== "combat") {
-      return game;
-    }
+  private applyCrewAutopilot(game: SpaceshipSimulationState): SpaceshipSimulationState {
+    if (this.gameState?.encounterPhase !== "combat") return game;
     // No profile means the preset carries none for this turret and level, and a
-    // room does not invent one: the sector then behaves as it did with nobody
-    // in the seat before any of this existed, which is to say it stays down.
+    // room does not invent one: every seat then behaves as an empty seat did
+    // before any of this existed, which is to say nothing happens on it.
     const profile = this.crewProfile;
     if (profile === undefined) return game;
+    const driven = this.roomDrivenRoles();
+    if (driven.length === 0) return game;
+
     const world = buildCrewWorld(game, this.gameConfig, game.clock.tick * POLICY_TICK_MS);
-    const plan = planShield(world, profile, this.crewMemory, this.crewOptions);
-    return applyShieldInput(game, {
-      vector: plan.aim,
-      active: plan.active,
-      receivedTick: game.clock.tick
-    });
+    let next = game;
+    if (driven.includes("pilot")) {
+      const plan = planPilot(world, profile, this.crewMemory, this.crewOptions);
+      next = applyPilotInput(next, {
+        vector: plan.vector,
+        turn: plan.turn,
+        thrust: plan.thrust,
+        mgFiring: plan.mgFiring,
+        receivedTick: next.clock.tick
+      });
+    }
+    if (driven.includes("gunner")) {
+      const plan = planGunner(world, profile, this.crewMemory, this.crewOptions);
+      next = applyGunnerInput(next, {
+        vector: plan.aim,
+        firing: plan.firing,
+        receivedTick: next.clock.tick
+      });
+    }
+    if (driven.includes("shield")) {
+      const plan = planShield(world, profile, this.crewMemory, this.crewOptions);
+      next = applyShieldInput(next, {
+        vector: plan.aim,
+        active: plan.active,
+        receivedTick: next.clock.tick
+      });
+    }
+    return next;
+  }
+
+  /**
+   * Which seats the room is driving, which is every one no human owns.
+   *
+   * Ownership, not the seat list, and the difference matters in solo: a room of
+   * one has a pilot seat only, so asking "is gunner among this room's roles"
+   * answers no and the bot would fight the player for the turret they work from
+   * the same panel. `inputOwner` already knows the gunner stream belongs to the
+   * pilot there, so the question goes through it.
+   *
+   * A disconnected player still holds their seat - they get it back on
+   * reconnection, inside the grace window - but the room covers it while they
+   * are gone. The alternative is what used to happen: the ship stood dead on
+   * the arena for as long as the window lasted, being shot at.
+   */
+  private roomDrivenRoles(): readonly CrewRole[] {
+    const seated = new Set(
+      [...this.state.players.values()]
+        .filter((player) => player.connected)
+        .map((player) => player.role)
+    );
+    return CREW_ROLES.filter((role) => !seated.has(this.inputOwner(role)));
   }
 
   /**
