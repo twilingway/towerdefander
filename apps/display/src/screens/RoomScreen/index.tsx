@@ -17,6 +17,7 @@ import { useLetterboxBars } from "../../model/hooks/useLetterboxBars.js";
 import { useLiveHeat } from "../../model/hooks/useLiveHeat.js";
 import { useShipPrediction } from "../../model/hooks/useShipPrediction.js";
 import { useSoloCockpit, type SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
+import { useDevCockpitControls } from "../../model/devControls.js";
 import type { RoomSession } from "../../model/hooks/useRoomSession.js";
 import { readFrameStats, writePlaybackDelay, writePredictionLag } from "../../model/instruments.js";
 import { selectModuleTree } from "../../model/moduleTree.js";
@@ -192,6 +193,16 @@ export function RoomScreen({
     },
     ...cockpitControls
   });
+
+  /*
+   * The same orders on `window`, in a dev build only: the cockpit's triggers
+   * capture the pointer that pressed them, which a synthetic one cannot
+   * satisfy, so a browser check could fly and aim but never fire.
+   */
+  useDevCockpitControls(
+    cockpitControls,
+    session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat"
+  );
 
   // The readouts move into the letterbox on glass that leaves enough of one;
   // the frame is the camera's, so the arithmetic is the camera's too.
