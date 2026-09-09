@@ -105,7 +105,7 @@ export const FX_EFFECTS: readonly FxEffect[] = [
     hint: "Луп ленты энергии. Дисплей гнёт её по дуге поднятого сектора, поэтому в атласе она прямая и горизонтальная, а яркость берёт от заряда.",
     oriented: false,
     loop: true,
-    bytes: 246018,
+    bytes: 282776,
     url: new URL("../atlases/shield-band.png", import.meta.url).href,
     meta: {
       frameWidth: 256,
