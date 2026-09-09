@@ -36,6 +36,17 @@ const SPAN: Record<FxCategory, number> = {
   destruction: 4.5
 };
 
+/**
+ * Least width a muzzle flash is drawn at, in world units.
+ *
+ * A flash belongs to the gun, not to the hull carrying it: two ships with the
+ * same cannon flash the same. Sizing it purely by hull radius made an
+ * interceptor's (18) barely a third of the crew's (52), and once the multiplier
+ * came down to stop the crew's flash covering their own ship it left the
+ * enemies' too small to notice at all.
+ */
+const MUZZLE_MIN_UNITS = 40;
+
 /** Above the enemies it happens to (7), below the player's hull (10). */
 const DEPTH = 8;
 
@@ -210,7 +221,7 @@ export class BurstLayer {
     burst.sprite
       .setPosition(x, y)
       .setRotation(effect.oriented && heading !== undefined ? heading + MUZZLE_ROTATION_OFFSET : 0)
-      .setScale((radius * SPAN[effect.category]) / effect.meta.frameWidth)
+      .setScale(burstWidth(effect.category, radius) / effect.meta.frameWidth)
       .setVisible(true);
     burst.sprite.play({ key: animationKey(effectId), startFrame: 0 }, true);
   }
@@ -269,6 +280,12 @@ export class BurstLayer {
     pool.push(entry);
     return entry;
   }
+}
+
+/** How wide a burst is drawn, in world units. */
+export function burstWidth(category: FxCategory, radius: number): number {
+  const scaled = radius * SPAN[category];
+  return category === "muzzle" ? Math.max(MUZZLE_MIN_UNITS, scaled) : scaled;
 }
 
 function textureKey(effectId: string): string {

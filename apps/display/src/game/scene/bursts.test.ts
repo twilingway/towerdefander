@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BOSS_DEATH_EFFECT,
   OWN_MUZZLE_EFFECTS,
+  burstWidth,
   placeOwnShots,
   DEFAULT_ENEMY_DEATH_EFFECT,
   HIT_EFFECT_MIN_TICKS,
@@ -148,5 +149,29 @@ describe("placing the crew's own flashes", () => {
     ];
     placeOwnShots(undefined, shots, POSE);
     expect(shots).toHaveLength(0);
+  });
+});
+
+describe("how wide a burst is drawn", () => {
+  it("keeps a small hull's muzzle flash big enough to see", () => {
+    // An interceptor is radius 18 against the crew's 52. Scaling purely by hull
+    // made its flash a third of theirs, and the multiplier that stops the crew's
+    // flash covering their own ship then left the enemy's invisible. A flash
+    // belongs to the gun, so it has a floor.
+    expect(burstWidth("muzzle", 18)).toBeGreaterThan(18 * 2);
+    expect(burstWidth("muzzle", 18)).toBe(burstWidth("muzzle", 20));
+  });
+
+  it("still lets a big hull scale past the floor", () => {
+    // The crew's own flash was too big before and must not be pinned to the
+    // floor now: above it, the hull decides again.
+    expect(burstWidth("muzzle", 52)).toBeGreaterThan(burstWidth("muzzle", 18));
+  });
+
+  it("leaves the blast effects scaling by hull alone", () => {
+    // A boss should tear a bigger hole than an interceptor, with no floor
+    // flattening the difference.
+    expect(burstWidth("explosion", 90) / burstWidth("explosion", 18)).toBeCloseTo(5, 6);
+    expect(burstWidth("destruction", 90) / burstWidth("destruction", 18)).toBeCloseTo(5, 6);
   });
 });
