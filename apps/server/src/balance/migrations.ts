@@ -469,6 +469,11 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       ...migratePlayerShip(tuning, defaults),
       ...arcade,
       arenaRadius: tuning.arenaRadius ?? defaults.arenaRadius,
+      // Zero, from the defaults, means "the enemy's own weapon reach" - so a
+      // preset written before this knob existed keeps behaving exactly as it
+      // did rather than gaining a distance nobody chose.
+      shieldAutopilotRaiseRange:
+        tuning.shieldAutopilotRaiseRange ?? defaults.shieldAutopilotRaiseRange,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),

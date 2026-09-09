@@ -119,7 +119,8 @@ export function validateCombatConfig(config: CombatConfig): void {
     ["lootDriftDampingPerSecond", config.lootDriftDampingPerSecond],
     ["asteroidScoreReward", config.asteroidScoreReward],
     ["asteroidCreditReward", config.asteroidCreditReward],
-    ["missileInterceptScoreReward", config.missileInterceptScoreReward]
+    ["missileInterceptScoreReward", config.missileInterceptScoreReward],
+    ["shieldAutopilotRaiseRange", config.shieldAutopilotRaiseRange]
   ];
   for (const [name, value] of nonNegativeFinite) {
     if (!Number.isFinite(value) || value < 0) {

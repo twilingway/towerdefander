@@ -17,7 +17,20 @@ export function ShieldSection({ tuning, patch }: ShieldSectionProps) {
         и не тратит энергию; минимум работы нельзя оборвать раньше срока, а остывание не пускает
         включить его снова. Три нуля возвращают мгновенное переключение.
       </p>
+      <p className="screen__hint">
+        Дальность подъёма — это про экипаж без оператора щита: в соло и на двоих сектор ведёт
+        автопилот комнаты. Ноль означает «по дальности огня самого врага», как было всегда: ганшип,
+        бьющий с девятисот единиц, сектор поднимает, а перехватчику надо подлететь. Своё число
+        нужно, когда эта дальность врёт — например, идти на сближение со снайпером под прикрытием.
+      </p>
       <div className="card__grid">
+        <NumberField
+          caption="Дальность подъёма (автопилот)"
+          value={tuning.shieldAutopilotRaiseRange}
+          onChange={(shieldAutopilotRaiseRange) => {
+            patch({ shieldAutopilotRaiseRange });
+          }}
+        />
         <NumberField
           caption="Ёмкость"
           value={tuning.shieldCapacity}

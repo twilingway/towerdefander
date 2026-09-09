@@ -227,6 +227,15 @@ export interface CombatConfig {
   readonly shieldArcRadians: number;
   readonly shieldCapacity: number;
   readonly asteroidShieldHitCost: number;
+  /**
+   * How near an enemy has to be for a crew with no shield operator to raise the
+   * sector, in world units. Zero leaves the enemy's own weapon reach in charge,
+   * which is how the autopilot behaved before this was tunable.
+   *
+   * Read only by the room's shield autopilot, never by the step - an unmanned
+   * seat is a policy, and the simulation stays a function of its inputs.
+   */
+  readonly shieldAutopilotRaiseRange: number;
   readonly asteroidDamage: number;
   readonly friendlyProjectileDamage: number;
   readonly enemySpawnIntervalTicks: number;

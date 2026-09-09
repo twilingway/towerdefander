@@ -102,6 +102,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   shieldRadius: 104,
   shieldArcRadians: Math.PI / 2,
   asteroidShieldHitCost: 20,
+  shieldAutopilotRaiseRange: 0,
   asteroidDamage: 40,
   enemySpawnIntervalTicks: 36,
   ambientAsteroidIntervalMinTicks: 120,

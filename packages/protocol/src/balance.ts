@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 39 as const;
+export const BALANCE_FILE_VERSION = 40 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -918,6 +918,14 @@ export const balanceTuningSchema = z
     asteroidLifetimeTicks: positiveInteger,
     asteroidDamage: positiveFinite,
     asteroidShieldHitCost: positiveFinite,
+    /**
+     * How near an enemy has to be for a crew with no shield operator to raise
+     * the sector, in world units. Zero means "as far as that enemy can shoot
+     * from", which is what the autopilot did before this was a setting - and is
+     * still the sensible default, because a sniper's reach is exactly the
+     * distance a crew wants to close under cover.
+     */
+    shieldAutopilotRaiseRange: nonNegativeFinite,
     asteroidSpawnCost: positiveInteger,
     asteroidScoreReward: nonNegativeFinite,
     asteroidCreditReward: nonNegativeFinite,
