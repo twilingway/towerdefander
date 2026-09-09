@@ -1,0 +1,10 @@
+{
+  "frameWidth": 256,
+  "frameHeight": 36,
+  "cols": 4,
+  "rows": 4,
+  "frames": 16,
+  "fps": 32,
+  "duration": 0.5,
+  "mode": "rgba"
+}

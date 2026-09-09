@@ -27,6 +27,20 @@
     "oriented": false,
     "loop": false
   },
+  "shield-band": {
+    "title": "Барьер щита",
+    "category": "shield",
+    "hint": "Луп ленты энергии. Дисплей гнёт её по дуге поднятого сектора, поэтому в атласе она прямая и горизонтальная, а яркость берёт от заряда.",
+    "oriented": false,
+    "loop": true
+  },
+  "shield-impact": {
+    "title": "Попадание в щит",
+    "category": "shield",
+    "hint": "Вспышка контакта, рябь и брызги искр, ~0.22 с. Направленный: в атласе смотрит вверх, точка контакта на нижней кромке.",
+    "oriented": true,
+    "loop": false
+  },
   "muzzle-flash-mg": {
     "title": "Дульная вспышка (пулемёт)",
     "category": "muzzle",
