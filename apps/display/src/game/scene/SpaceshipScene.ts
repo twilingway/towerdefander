@@ -8,7 +8,7 @@ import { drawArena, drawDecorations } from "./arena.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
-import { drawShield } from "./shield.js";
+import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
 import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
@@ -36,7 +36,7 @@ export class SpaceshipScene extends Phaser.Scene {
   private spaceshipBody: Phaser.GameObjects.Image | undefined;
   private noseMarker: Phaser.GameObjects.Image | undefined;
   private turret: TurretObject | undefined;
-  private shield: Phaser.GameObjects.Image | undefined;
+  private shield: ShieldLayer | undefined;
   private exhaust: ExhaustLayer | undefined;
   private bursts: BurstLayer | undefined;
   /** Shots the crew fired since the last frame, placed from the drawn pose. */
@@ -177,7 +177,7 @@ export class SpaceshipScene extends Phaser.Scene {
     this.exhaust = new ExhaustLayer(this);
     this.bursts = new BurstLayer(this);
     this.turret = createTurret(this, this.snapshot);
-    this.shield = this.add.image(0, 0, blank).setDepth(14);
+    this.shield = new ShieldLayer(this, blank, this.bake);
     // Above the arena, below the shield: a pulse is over before it can hide
     // anything that matters.
     this.aiming = new AimingLayer(
@@ -440,13 +440,11 @@ export class SpaceshipScene extends Phaser.Scene {
 
   private drawShield(): void {
     if (this.shield === undefined || this.spaceshipBody === undefined) return;
-    drawShield(
-      this.shield,
+    this.shield.draw(
       this.spaceshipBody,
       this.snapshot,
       this.visualShieldAngle,
-      this.vectorsEnabled,
-      this.bake
+      this.vectorsEnabled
     );
   }
 
@@ -493,7 +491,8 @@ export class SpaceshipScene extends Phaser.Scene {
       toTick,
       snap,
       bursts: this.bursts,
-      ownShots: this.ownShots
+      ownShots: this.ownShots,
+      shieldPose: this.shield?.pose()
     });
   }
 }

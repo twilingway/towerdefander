@@ -375,3 +375,111 @@ export function getExhaustPlume(
 export function getMuzzlePoint(origin: Point, bearing: number, reach: number): Point {
   return { x: origin.x + Math.cos(bearing) * reach, y: origin.y + Math.sin(bearing) * reach };
 }
+
+/** Segments the band is bent over; enough that the arc reads as a curve. */
+export const SHIELD_BAND_SEGMENTS = 24;
+
+/**
+ * The spine of the animated barrier, in the layer's own frame.
+ *
+ * Local rather than world for the same reason the crescent is baked centred on
+ * zero: the sector's shape changes only when a module widens the arc, while its
+ * bearing changes every frame. Points computed here are rebuilt on a shape
+ * change and the object is simply turned the rest of the time.
+ *
+ * Angle zero is the middle of the sector, so a layer turned to the shield's
+ * bearing puts the band exactly where the crescent is.
+ */
+export function getShieldBandPoints(
+  radius: number,
+  arcHalfAngle: number,
+  segments: number = SHIELD_BAND_SEGMENTS
+): readonly Point[] {
+  const steps = Math.max(2, Math.floor(segments));
+  const arc = getShieldArcRange(0, arcHalfAngle);
+  const span = arc.end - arc.start;
+  return Array.from({ length: steps + 1 }, (_unused, index) => {
+    const angle = arc.start + (span * index) / steps;
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  });
+}
+
+/**
+ * How solid the barrier is drawn, from what is left in the bank.
+ *
+ * The charge is already on the wire and the crew reads it off a dial; putting it
+ * on the barrier itself means a sector about to collapse looks like one. The
+ * floor is deliberate - a shield that is up must never be invisible, or the
+ * crew cannot tell it from a shield that is down.
+ */
+export const SHIELD_BAND_ALPHA_MIN = 0.35;
+export const SHIELD_BAND_ALPHA_MAX = 1;
+
+export function getShieldBandAlpha(energy: number, capacity: number): number {
+  const charge = capacity > 0 ? clamp(energy / capacity, 0, 1) : 0;
+  return SHIELD_BAND_ALPHA_MIN + (SHIELD_BAND_ALPHA_MAX - SHIELD_BAND_ALPHA_MIN) * charge;
+}
+
+export interface ShieldImpactQuery {
+  /** Hull centre and shield bearing, both as the scene drew them. */
+  readonly centre: Point;
+  readonly bearing: number;
+  readonly radius: number;
+  readonly arcHalfAngle: number;
+  /** The threat's last known point and heading, from the same drawn frame. */
+  readonly from: Point;
+  readonly velocityX: number;
+  readonly velocityY: number;
+  /** How far along its own course the threat may be met. */
+  readonly reach: number;
+}
+
+export interface ShieldImpact {
+  readonly x: number;
+  readonly y: number;
+  /** Outward normal at the contact: where the splash has to point. */
+  readonly normal: number;
+}
+
+/** Share of the reach a contact may be met *behind* the last known point. */
+export const SHIELD_IMPACT_BACKTRACK = 0.25;
+
+/**
+ * Where a threat met the raised sector, or nothing if it never did.
+ *
+ * The display is what decides this, because the room does not publish it: a
+ * blocked shell simply stops being in the snapshot, and the shield's charge
+ * moves. Both of those are visible here, and a contact point is geometry.
+ *
+ * Extrapolation is the whole difficulty. The simulation removes a shell at the
+ * instant of impact, so its last published point is short of the arc by up to a
+ * patch of travel - taking the published point as the contact would put every
+ * splash inside the barrier. So the shell's own course is followed to where it
+ * crosses the shield's circle, and a crossing is accepted only within `reach`
+ * ahead and a quarter of that behind: the small backward window catches a shell
+ * the display had already drawn past the arc, while the bound keeps a shell that
+ * expired somewhere else from claiming a hit whose ray happens to pass here.
+ */
+export function getShieldImpact(query: ShieldImpactQuery): ShieldImpact | undefined {
+  const speed = Math.hypot(query.velocityX, query.velocityY);
+  if (speed <= 0) return undefined;
+  const dx = query.velocityX / speed;
+  const dy = query.velocityY / speed;
+  const fromX = query.from.x - query.centre.x;
+  const fromY = query.from.y - query.centre.y;
+  const along = fromX * dx + fromY * dy;
+  const discriminant =
+    along * along - (fromX * fromX + fromY * fromY - query.radius * query.radius);
+  if (discriminant < 0) return undefined;
+  // The entry crossing, and only that one: a shell deep inside the circle and
+  // heading out is one the shield failed to stop, not one it blocked.
+  const entry = -along - Math.sqrt(discriminant);
+  if (entry < -query.reach * SHIELD_IMPACT_BACKTRACK || entry > query.reach) return undefined;
+  const x = query.from.x + dx * entry;
+  const y = query.from.y + dy * entry;
+  const normal = Math.atan2(y - query.centre.y, x - query.centre.x);
+  const offset = normal - query.bearing;
+  const delta = Math.atan2(Math.sin(offset), Math.cos(offset));
+  if (Math.abs(delta) > query.arcHalfAngle) return undefined;
+  return { x, y, normal };
+}
