@@ -75,16 +75,24 @@ describe("placing the crew's own flashes", () => {
       y: number;
       radius: number;
       heading: number | undefined;
+      followKey: string | undefined;
     }[] = [];
-    const followed: { effectId: string; x: number; y: number; heading: number }[] = [];
+    const followed: { followKey: string; x: number; y: number; heading: number }[] = [];
     return {
       calls,
       followed,
-      spawn(effectId: string, x: number, y: number, radius: number, heading?: number) {
-        calls.push({ effectId, x, y, radius, heading });
+      spawn(
+        effectId: string,
+        x: number,
+        y: number,
+        radius: number,
+        heading?: number,
+        followKey?: string
+      ) {
+        calls.push({ effectId, x, y, radius, heading, followKey });
       },
-      followMuzzle(effectId: string, point: { x: number; y: number }, heading: number) {
-        followed.push({ effectId, x: point.x, y: point.y, heading });
+      followMuzzle(followKey: string, point: { x: number; y: number }, heading: number) {
+        followed.push({ followKey, x: point.x, y: point.y, heading });
       }
     };
   }
@@ -132,13 +140,31 @@ describe("placing the crew's own flashes", () => {
     // flash fell off the gun. Every frame puts it back.
     const sink = recorder();
     placeOwnShots(sink, [], POSE);
-    const cannon = sink.followed.find((f) => f.effectId === "muzzle-flash");
+    const cannon = sink.followed.find((f) => f.followKey === "cannon");
     expect(cannon?.x).toBeCloseTo(200, 9);
     expect(cannon?.y).toBeCloseTo(129, 9);
     expect(cannon?.heading).toBeCloseTo(Math.PI / 2, 9);
-    const mg = sink.followed.find((f) => f.effectId === "muzzle-flash-mg");
+    const mg = sink.followed.find((f) => f.followKey === "machineGun");
     expect(mg?.y).toBeCloseTo(100, 9);
     expect(mg?.heading).toBeCloseTo(0, 9);
+  });
+
+  it("claims only its own two flashes, never a whole effect", () => {
+    /*
+     * The regression this stands on. The crew's cannon and an enemy's gun fire
+     * the same effect out of the same pool, so following "everything playing of
+     * this effect" dragged every enemy's flash onto the crew's muzzle the frame
+     * after it appeared - the enemies looked like they had stopped firing
+     * altogether. What may be dragged is named by the barrel, not by the art.
+     */
+    const sink = recorder();
+    placeOwnShots(sink, [{ source: "cannon", shellRadius: 4 }], POSE);
+    expect(sink.calls[0]?.followKey).toBe("cannon");
+    expect(sink.followed.map((f) => f.followKey).sort()).toEqual(["cannon", "machineGun"]);
+    for (const claimed of sink.followed) {
+      expect(["cannon", "machineGun"]).toContain(claimed.followKey);
+      expect(claimed.followKey).not.toBe("muzzle-flash");
+    }
   });
 
   it("empties the queue, even with no layer to draw into", () => {
