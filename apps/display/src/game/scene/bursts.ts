@@ -133,7 +133,14 @@ export function placeOwnShots(
   };
   for (const shot of shots) {
     const { point, bearing } = muzzle(shot.source, shot.shellRadius);
-    bursts?.spawn(OWN_MUZZLE_EFFECTS[shot.source], point.x, point.y, pose.hullRadius, bearing);
+    bursts?.spawn(
+      OWN_MUZZLE_EFFECTS[shot.source],
+      point.x,
+      point.y,
+      pose.hullRadius,
+      bearing,
+      shot.source
+    );
   }
   shots.length = 0;
   /*
@@ -146,7 +153,7 @@ export function placeOwnShots(
    */
   for (const source of ["cannon", "machineGun"] as const) {
     const { point, bearing } = muzzle(source, OWN_SHELL_RADIUS_HINT);
-    bursts?.followMuzzle(OWN_MUZZLE_EFFECTS[source], point, bearing);
+    bursts?.followMuzzle(source, point, bearing);
   }
 }
 
@@ -176,6 +183,8 @@ interface PooledBurst {
 export class BurstLayer {
   private readonly scene: Phaser.Scene;
   private readonly pools = new Map<string, PooledBurst[]>();
+  /** The sprite each moving barrel is currently allowed to drag about. */
+  private readonly following = new Map<string, PooledBurst>();
   private disposed = false;
 
   constructor(scene: Phaser.Scene) {
@@ -210,7 +219,21 @@ export class BurstLayer {
    * oriented effect - one authored pointing up - to face the same way as the
    * hull; a circular effect ignores it.
    */
-  spawn(effectId: string, x: number, y: number, radius: number, heading?: number): void {
+  spawn(
+    effectId: string,
+    x: number,
+    y: number,
+    radius: number,
+    heading?: number,
+    /**
+     * Whose flash this is, when it belongs to a barrel that keeps moving. Only
+     * the sprite handed out under a key is dragged by `followMuzzle` for that
+     * key - without this, dragging everything busy in the pool pulled every
+     * enemy's flash onto the crew's own gun, because both fire the same effect
+     * out of the same pool.
+     */
+    followKey?: string
+  ): void {
     const effect = getFxEffect(effectId);
     const pool = this.pools.get(effectId);
     if (this.disposed || effect === undefined || pool === undefined) return;
@@ -224,19 +247,26 @@ export class BurstLayer {
       .setScale(burstWidth(effect.category, radius) / effect.meta.frameWidth)
       .setVisible(true);
     burst.sprite.play({ key: animationKey(effectId), startFrame: 0 }, true);
+    if (followKey !== undefined) this.following.set(followKey, burst);
   }
 
   /**
-   * Keeps whatever is still playing of one effect on a moving muzzle. Cheap by
-   * construction: at most a couple of sprites are ever busy for a given gun.
+   * Keeps one barrel's own flash on that barrel while it plays.
+   *
+   * Strictly the sprite spawned under this key: an earlier version moved
+   * everything busy in the effect's pool, and since the crew's cannon and an
+   * enemy's gun fire the same effect out of the same pool, every enemy flash was
+   * dragged onto the crew's muzzle the frame after it appeared. They looked like
+   * they had stopped happening at all.
    */
-  followMuzzle(effectId: string, point: Point, bearing: number): void {
-    const pool = this.pools.get(effectId);
-    if (this.disposed || pool === undefined) return;
-    for (const entry of pool) {
-      if (!entry.busy) continue;
-      entry.sprite.setPosition(point.x, point.y).setRotation(bearing + MUZZLE_ROTATION_OFFSET);
+  followMuzzle(followKey: string, point: Point, bearing: number): void {
+    const entry = this.following.get(followKey);
+    if (this.disposed || entry === undefined) return;
+    if (!entry.busy) {
+      this.following.delete(followKey);
+      return;
     }
+    entry.sprite.setPosition(point.x, point.y).setRotation(bearing + MUZZLE_ROTATION_OFFSET);
   }
 
   private take(effect: FxEffect, pool: PooledBurst[]): PooledBurst | undefined {
