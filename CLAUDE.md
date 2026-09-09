@@ -52,6 +52,7 @@ Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core
 | `pnpm benchmark:combat`                 | Worst-case combat room stepping benchmark                                          |
 | `pnpm stats:autopilot`                  | One headless measurement cell: N bot runs on one preset, level and crew            |
 | `pnpm stats:batch --out <dir>`          | The whole matrix — levels x enemy offsets x crew sizes x presets — into a report   |
+| `pnpm balance:promote`                  | Promotes the dev stand's balance into the committed seed, bumping its revision     |
 | `pnpm spec list` / `pnpm spec:validate` | OpenSpec change status and validation                                              |
 
 Every harness uses its own port block, so they can run while `pnpm dev` is up. `scripts/` spawns

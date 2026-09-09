@@ -184,29 +184,94 @@ drain_rooms() {
   log "Announced window plus ${DEPLOY_DRAIN_MINUTES} minute(s) passed; releasing anyway."
 }
 
+# Writes the seed onto the volume and puts the server on it. The restart is what
+# makes the numbers live: the file is placed behind the server's back, so unlike
+# a console save nothing updates the state it holds in memory.
+apply_balance_seed() {
+  local seed="$1" volume="$2" revision="$3"
+  # Over stdin rather than a bind mount: the checkout may live outside what the
+  # Docker host can mount, and a mount is not needed to write one file.
+  if ! docker run --rm -i -v "${volume}:/data" alpine sh -c 'cat > /data/balance.json' <"${seed}"; then
+    return 1
+  fi
+  printf '%s\n' "${revision}" |
+    docker run --rm -i -v "${volume}:/data" alpine sh -c 'cat > /data/.balance-seed-revision' ||
+    true
+  compose restart space-api >/dev/null 2>&1 || true
+}
+
 # The volume is the home of the balance the console writes; the committed seed
-# is what a host that has never run the game starts from. Seeding only ever
-# happens into an empty volume, so a release can never overwrite tuning an
-# operator saved. Promoting live tuning back into the seed is a separate,
-# deliberate act -- see scripts/export-balance-seed.sh.
+# is what a release delivers. Which of the two wins is decided by the revision
+# beside the seed, and that number moves only when someone promotes a dev
+# stand's balance on purpose -- so reformatting the file, or migrating it to a
+# newer version, never reaches a playing crew on its own. Promoting live tuning
+# back into the seed stays a separate act -- see scripts/export-balance-seed.sh.
 seed_balance_volume() {
   local seed="${REPO_DIR}/apps/server/presets/production.json"
+  local revision_file="${REPO_DIR}/apps/server/presets/production.revision"
   local volume="${COMPOSE_PROJECT}_space-api-data"
   if [ ! -f "${seed}" ]; then
     log "No seed preset in the checkout; the server will start on packaged defaults."
     return 0
   fi
-  if docker run --rm -v "${volume}:/data" alpine test -f /data/balance.json >/dev/null 2>&1; then
+
+  local checkout_revision=""
+  if [ -f "${revision_file}" ]; then
+    checkout_revision="$(tr -dc '0-9' <"${revision_file}")"
+  fi
+  : "${checkout_revision:=0}"
+
+  # Read before the volume is touched: a truncated seed would replace a working
+  # balance with nothing, and the crew would find that out mid-wave.
+  if ! node -e "
+const { readFileSync } = require('node:fs');
+const document = JSON.parse(readFileSync(process.argv[1], 'utf8'));
+if (!Array.isArray(document.presets) || document.presets.length === 0) {
+  throw new Error('The seed holds no presets.');
+}
+" "${seed}" >/dev/null 2>&1; then
+    log "The seed preset does not parse; the balance volume is left as it is."
     return 0
   fi
-  log "Balance volume is empty; seeding it from the committed preset."
-  # Over stdin rather than a bind mount: the checkout may live outside what the
-  # Docker host can mount, and a mount is not needed to write one file.
-  if docker run --rm -i -v "${volume}:/data" alpine sh -c 'cat > /data/balance.json' <"${seed}"; then
-    compose restart space-api >/dev/null 2>&1 || true
-    log "Seeded the balance volume and restarted the server onto it."
+
+  if ! docker run --rm -v "${volume}:/data" alpine test -f /data/balance.json >/dev/null 2>&1; then
+    log "Balance volume is empty; seeding it from the committed preset."
+    if apply_balance_seed "${seed}" "${volume}" "${checkout_revision}"; then
+      log "Seeded the balance volume at revision ${checkout_revision} and restarted the server onto it."
+    else
+      log "Could not seed the balance volume; the server stays on packaged defaults."
+    fi
+    return 0
+  fi
+
+  local applied_revision
+  applied_revision="$(docker run --rm -v "${volume}:/data" alpine cat /data/.balance-seed-revision 2>/dev/null | tr -dc '0-9' || true)"
+
+  if [ -z "${applied_revision}" ]; then
+    # A host that was already playing before revisions existed. Reading the
+    # missing number as zero would deliver the seed over tuning someone saved
+    # before a session -- the very accident the old empty-only rule prevented --
+    # so the number is adopted instead and delivery starts at the next promotion.
+    printf '%s\n' "${checkout_revision}" |
+      docker run --rm -i -v "${volume}:/data" alpine sh -c 'cat > /data/.balance-seed-revision' ||
+      true
+    log "Balance volume holds a saved balance and no revision; adopted ${checkout_revision} without touching it."
+    return 0
+  fi
+
+  if [ "${checkout_revision}" -le "${applied_revision}" ]; then
+    return 0
+  fi
+
+  log "Seed revision ${checkout_revision} is newer than ${applied_revision}; delivering it."
+  # The copy is what makes the overwrite reversible: whatever was saved from the
+  # console stays on the volume, named after the revision that replaced it.
+  docker run --rm -v "${volume}:/data" alpine \
+    cp /data/balance.json "/data/balance.pre-${checkout_revision}.json" >/dev/null 2>&1 || true
+  if apply_balance_seed "${seed}" "${volume}" "${checkout_revision}"; then
+    log "Delivered balance revision ${checkout_revision}; the previous file is /data/balance.pre-${checkout_revision}.json."
   else
-    log "Could not seed the balance volume; the server stays on packaged defaults."
+    log "Could not write the balance volume; the saved balance stays in play."
   fi
 }
 

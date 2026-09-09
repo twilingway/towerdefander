@@ -15,6 +15,7 @@
     "stats:autopilot": "pnpm --filter @spaceship-defender/server stats:autopilot",
     "stats:batch": "pnpm --filter @spaceship-defender/server stats:batch",
     "stats:matrix": "pnpm stats:batch --levels rookie,veteran,ace --hulls guardian,blade,bastion --runs 20 --seed 1 --max-waves 30",
+    "balance:promote": "pnpm --filter @spaceship-defender/server balance:promote",
     "campaign:author": "node apps/server/scripts/author-campaign.mjs",
     "campaign:preview": "node apps/server/scripts/author-campaign.mjs --dry-run",
     "demo:visible": "node scripts/run-visible-demo.mjs",

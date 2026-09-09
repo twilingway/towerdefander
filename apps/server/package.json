@@ -8,10 +8,11 @@
     "benchmark:combat": "pnpm run build && node dist/benchmarks/runCombatRoomBenchmark.js",
     "stats:autopilot": "node scripts/run-autopilot-stats.mjs",
     "stats:batch": "node scripts/run-balance-batch.mjs",
+    "balance:promote": "node --import tsx --env-file-if-exists=../../.env.local scripts/promote-balance-seed.mjs",
     "dev": "node --env-file-if-exists=../../.env.local --import tsx --watch src/index.ts",
     "start": "node --env-file-if-exists=../../.env.local dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests && node --test scripts/autopilot-stats.node-test.mjs"
+    "test": "vitest run --passWithNoTests && node --test scripts/autopilot-stats.node-test.mjs scripts/promote-balance-seed.node-test.mjs"
   },
   "dependencies": {
     "@colyseus/auth": "0.18.2",
