@@ -34,6 +34,7 @@ describe("readServerConfig", () => {
       // Off without an environment: the default belongs to a release, and a
       // bare object is a developer's machine. See the note in `config.ts`.
       gracefullyShutdown: false,
+      allowBotCrew: false,
       allowStartWave: false,
       sparringEnemies: 0
     });
@@ -87,6 +88,7 @@ describe("readServerConfig", () => {
       statsBatchKeep: 50,
       statsBatchTimeoutSeconds: 1800,
       gracefullyShutdown: false,
+      allowBotCrew: false,
       allowStartWave: false,
       sparringEnemies: 0
     });

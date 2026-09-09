@@ -120,6 +120,7 @@ const {
   absoluteTtlSeconds,
   allowStartWave,
   sparringEnemies,
+  allowBotCrew,
   maxConcurrentRooms
 } = readServerConfig();
 
@@ -371,6 +372,10 @@ export class SpaceshipDefenderRoom extends Room<{
       this.lifecycle.clear("display_reconnect_expired");
       this.updateStatusFromRoom();
       this.queueMetadataUpdate();
+      // With a bot crew allowed, the display is the only thing a run waits for:
+      // nobody is going to press ready. Without the aid this changes nothing,
+      // because the gate still wants every seat filled.
+      if (allowBotCrew) this.tryStartRun();
       return;
     }
 
@@ -838,7 +843,19 @@ export class SpaceshipDefenderRoom extends Room<{
 
   private tryStartRun(): void {
     const canStart = this.state.phase === "lobby" || this.gameState?.encounterPhase === "result";
-    if (!canStart || this.state.players.size !== this.state.crewSize || this.disposing) {
+    /*
+     * Every seat filled, unless the operator has said a bot may take one.
+     *
+     * Off by default, and not out of caution: a public room that began as soon
+     * as one player was ready would hand their friends' seats to a bot while
+     * they were still connecting. With the aid on, a display alone opens the
+     * run - which is the shape the visible demonstration and its headless twin
+     * want, and the only way a crew of one can be tried with bot crewmates.
+     */
+    const seatsAnswered = allowBotCrew
+      ? this.state.players.size <= this.state.crewSize
+      : this.state.players.size === this.state.crewSize;
+    if (!canStart || !seatsAnswered || this.disposing) {
       return;
     }
     // One check covers both entrances: a lobby that has not started yet, and a
