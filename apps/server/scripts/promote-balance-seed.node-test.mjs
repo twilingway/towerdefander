@@ -18,33 +18,40 @@ function promote(args) {
 }
 
 /**
- * The source is deliberately stamped with an older version than the code
- * carries: without the migration step the schema would reject it outright, so
- * this is what tells a working promotion from one that only copies the file.
+ * The stand's own file, copied rather than rewritten. Stamping it with an older
+ * version to force a migration is what an earlier draft did, and it only worked
+ * on a machine that already had an old file: the migration rescales everything
+ * counted in ticks, so a document already written at the current rate came out
+ * of it three times over its own ceiling. What the migration does to a genuinely
+ * old preset is settled in `src/balance/balance.test.ts`; this file is about the
+ * promotion around it.
  */
-function stageOutdatedSource(directory) {
-  const document = JSON.parse(readFileSync(livePreset, "utf8"));
+function stageSource(directory) {
   const source = join(directory, "balance.json");
-  writeFileSync(source, `${JSON.stringify({ ...document, version: 30 }, null, 2)}\n`, "utf8");
+  writeFileSync(source, readFileSync(livePreset, "utf8"), "utf8");
   return source;
 }
 
-test("an outdated dev file is migrated into the seed and the revision starts at one", () => {
+test("the dev file reaches the seed and the revision starts at one", () => {
   const directory = mkdtempSync(join(tmpdir(), "promote-seed-"));
-  const source = stageOutdatedSource(directory);
+  const source = stageSource(directory);
   const seed = join(directory, "production.json");
+  const sourceVersion = JSON.parse(readFileSync(source, "utf8")).version;
 
   promote(["--from", source, "--out", seed]);
 
   const written = JSON.parse(readFileSync(seed, "utf8"));
-  assert.ok(written.version > 30, `expected a migrated version, got ${String(written.version)}`);
+  assert.ok(
+    written.version >= sourceVersion,
+    `the seed went backwards: ${String(sourceVersion)} -> ${String(written.version)}`
+  );
   assert.ok(written.presets.length > 0);
   assert.equal(readFileSync(join(directory, "production.revision"), "utf8").trim(), "1");
 });
 
 test("promoting the same numbers twice leaves the revision alone", () => {
   const directory = mkdtempSync(join(tmpdir(), "promote-seed-"));
-  const source = stageOutdatedSource(directory);
+  const source = stageSource(directory);
   const seed = join(directory, "production.json");
   const revision = join(directory, "production.revision");
 
@@ -68,7 +75,7 @@ test("a missing dev file writes neither the seed nor the revision", () => {
 
 test("a broken dev file leaves an existing seed and its revision untouched", () => {
   const directory = mkdtempSync(join(tmpdir(), "promote-seed-"));
-  const source = stageOutdatedSource(directory);
+  const source = stageSource(directory);
   const seed = join(directory, "production.json");
   const revision = join(directory, "production.revision");
   promote(["--from", source, "--out", seed]);
