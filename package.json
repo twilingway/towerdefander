@@ -18,6 +18,7 @@
     "balance:promote": "pnpm --filter @spaceship-defender/server balance:promote",
     "campaign:author": "node apps/server/scripts/author-campaign.mjs",
     "campaign:preview": "node apps/server/scripts/author-campaign.mjs --dry-run",
+    "fx:edit": "node scripts/run-fx-editor.mjs",
     "fx:bake": "node scripts/bake-fx-atlases.mjs",
     "fx:editor": "node \"tools/arcadia-effects/Arcada Effects/server.mjs\"",
     "demo:visible": "node scripts/run-visible-demo.mjs",

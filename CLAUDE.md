@@ -57,6 +57,7 @@ Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core
 | `pnpm spec list` / `pnpm spec:validate` | OpenSpec change status and validation                                              |
 | `pnpm fx:bake`                          | Rebakes `packages/fx-assets` sprite atlases from their effect sources              |
 | `pnpm fx:editor`                        | The Arcadia Effects editor UI for hand-tuning an effect (port 5179)                |
+| `pnpm fx:edit`                          | The same editor over **our** sources, port 35179; saves, formats and rebakes       |
 
 Every harness uses its own port block, so they can run while `pnpm dev` is up. `scripts/` spawns
 child processes with `--import ./scripts/owned-process-guard.mjs` so stopping a harness kills only
