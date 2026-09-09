@@ -40,6 +40,13 @@ computer browsers as pilot, gunner, and shield operator.
 - **`stats:autopilot` and `stats:batch` measure `apps/server/data/balance.json` unless `--preset`
   says otherwise.** That is the operator's live file, so a console edit moves the numbers; a
   measurement worth comparing names its preset.
+- **Every task starts a branch off `main`, lands through a pull request, and merges only once CI is
+  green.** `main` is not a place to collect work: `scripts/watch-main-and-deploy.sh` on the host
+  pulls it and releases what it finds, so a commit pushed straight there is a release nobody
+  reviewed. It is also where a red gate hurts most — on 2026-09-09 a test that passed locally and
+  failed on the runner reached `main` directly and blocked the release until it was fixed, where a
+  pull request would have caught it and left `main` releasable. Branch from an up-to-date `main`,
+  open the pull request, wait for the `CI` check, merge it there.
 
 ## Spec-driven workflow
 

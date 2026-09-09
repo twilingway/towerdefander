@@ -196,6 +196,13 @@ project differs:
   assumes otherwise.
 - **Planning goes through OpenSpec.** For features, protocol changes and non-trivial refactors the
   `openspec-workflow` procedure outranks the generic decomposition rule.
+- **A task branches off `main` without asking, unlike the global default.** The global rule keeps
+  work on the checked-out branch and requires an explicit ask before creating one; here the standing
+  instruction is the opposite — start the task on a fresh branch off an up-to-date `main`, open a
+  pull request, merge it once CI is green (`AGENTS.md`, working agreements). Standing permission
+  covers exactly that: branching for the task at hand. Switching onto someone else's existing
+  branch, or pushing to `main` directly, still needs the user's words — `main` is what the host
+  releases.
 
 ## Conventions
 
