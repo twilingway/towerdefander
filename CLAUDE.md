@@ -108,9 +108,11 @@ of them are read outside React, in `SpaceshipCanvas` and in the Phaser scene.
 
 `packages/game-core` is pure: no Phaser, React, DOM, networking, wall-clock timers, or unseeded
 randomness. Randomness comes from `createSeededRandom(seed)`, time from `advanceClock`, and each
-step is a pure `advanceSpaceshipSimulation(state, config) -> state`. `fixedStepMs` is validated to
-be exactly `50` (20 Hz); the room drives it via `this.clock.setInterval` in `startSimulation()`.
-Simulation tests step explicitly rather than waiting on timers.
+step is a pure `advanceSpaceshipSimulation(state, config) -> state`. `fixedStepMs` is validated
+against `SIMULATION_TICK_RATE` — currently 60 Hz, so `1000/60` ms; the room drives it via
+`this.clock.setInterval` in `startSimulation()`. A preset written before the rate moved is rescaled
+once on the way forward, so everything it counts in ticks triples (`migrations.ts`). Simulation
+tests step explicitly rather than waiting on timers.
 
 ### Server room
 
