@@ -24,7 +24,7 @@ import {
   planPilot,
   planShield,
   runWaveKey
-} from "./visible-demo-policy.mjs";
+} from "../../server/src/rooms/crewPolicy.mjs";
 import { planUpgradeVotes } from "./upgrade-vote-policy.mjs";
 
 const STEP_MS = 50;

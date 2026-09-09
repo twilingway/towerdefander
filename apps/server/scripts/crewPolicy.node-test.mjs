@@ -25,7 +25,7 @@ import {
   rankTargets,
   runWaveKey,
   timeToContact
-} from "./visible-demo-policy.mjs";
+} from "../src/rooms/crewPolicy.mjs";
 
 test("intercept aim leads a moving target", () => {
   const aim = interceptAim({ x: 0, y: 0 }, { x: 100, y: 0, velocityX: 0, velocityY: 100 }, 200);
