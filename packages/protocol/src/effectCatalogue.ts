@@ -19,6 +19,7 @@
 export const FX_EFFECT_IDS = [
   "plasma-exhaust",
   "muzzle-flash",
+  "muzzle-flash-mg",
   "explosion",
   "debris-burst"
 ] as const;
@@ -32,5 +33,10 @@ export type FxEffectId = (typeof FX_EFFECT_IDS)[number];
  * effect therefore means naming it twice, which is the point - the second
  * mention is where somebody decides it makes sense as an event.
  */
-export const FX_EVENT_EFFECT_IDS = ["muzzle-flash", "explosion", "debris-burst"] as const;
+export const FX_EVENT_EFFECT_IDS = [
+  "muzzle-flash",
+  "muzzle-flash-mg",
+  "explosion",
+  "debris-burst"
+] as const;
 export type FxEventEffectId = (typeof FX_EVENT_EFFECT_IDS)[number];

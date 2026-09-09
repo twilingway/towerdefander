@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_BOSS_DEATH_EFFECT,
+  OWN_MUZZLE_EFFECTS,
+  placeOwnShots,
   DEFAULT_ENEMY_DEATH_EFFECT,
   HIT_EFFECT_MIN_TICKS,
   deathEffectFor,
@@ -60,5 +62,71 @@ describe("hit effect throttle", () => {
   it("allows the next one once the floor has passed", () => {
     expect(mayPlayHitEffect(HIT_EFFECT_MIN_TICKS, 0)).toBe(true);
     expect(mayPlayHitEffect(HIT_EFFECT_MIN_TICKS * 3, 0)).toBe(true);
+  });
+});
+
+describe("placing the crew's own flashes", () => {
+  /** Records what the layer was asked to draw, in place of a scene. */
+  function recorder() {
+    const calls: {
+      effectId: string;
+      x: number;
+      y: number;
+      radius: number;
+      heading: number | undefined;
+    }[] = [];
+    return {
+      calls,
+      spawn(effectId: string, x: number, y: number, radius: number, heading?: number) {
+        calls.push({ effectId, x, y, radius, heading });
+      }
+    };
+  }
+
+  /** Turret aimed along +Y, hull along +X: the two must not be confused. */
+  const POSE = {
+    mount: { x: 200, y: 100 },
+    hull: { x: 180, y: 100 },
+    heading: 0,
+    turretRotation: Math.PI / 2,
+    hullRadius: 26
+  } as const;
+
+  it("puts the cannon's flash on the turret, along the turret", () => {
+    // The reported bug in one assertion: with the turret turned across the hull
+    // the flash has to follow the turret. Reading the hull's heading here is
+    // what made it lag and stretch away from the gun.
+    const sink = recorder();
+    placeOwnShots(sink, [{ source: "cannon", shellRadius: 4 }], POSE);
+    expect(sink.calls).toHaveLength(1);
+    expect(sink.calls[0]?.effectId).toBe("muzzle-flash");
+    expect(sink.calls[0]?.x).toBeCloseTo(200, 9);
+    expect(sink.calls[0]?.y).toBeCloseTo(130, 9);
+    expect(sink.calls[0]?.heading).toBeCloseTo(Math.PI / 2, 9);
+  });
+
+  it("puts the nose gun's flash on the hull, along the hull, and warm", () => {
+    const sink = recorder();
+    placeOwnShots(sink, [{ source: "machineGun", shellRadius: 2 }], POSE);
+    expect(sink.calls[0]?.effectId).toBe("muzzle-flash-mg");
+    expect(sink.calls[0]?.x).toBeCloseTo(208, 9);
+    expect(sink.calls[0]?.y).toBeCloseTo(100, 9);
+    expect(sink.calls[0]?.heading).toBeCloseTo(0, 9);
+  });
+
+  it("gives the two guns different effects", () => {
+    // A machine gun wearing the cannon's plasma blue read as the same weapon
+    // firing twice.
+    expect(OWN_MUZZLE_EFFECTS.cannon).not.toBe(OWN_MUZZLE_EFFECTS.machineGun);
+  });
+
+  it("empties the queue, even with no layer to draw into", () => {
+    // The atlas may not have landed yet; the shot is still spent.
+    const shots = [
+      { source: "cannon" as const, shellRadius: 4 },
+      { source: "machineGun" as const, shellRadius: 2 }
+    ];
+    placeOwnShots(undefined, shots, POSE);
+    expect(shots).toHaveLength(0);
   });
 });

@@ -9,7 +9,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
-import { OWN_MUZZLE_EFFECT, deathEffectFor, mayPlayHitEffect, type BurstLayer } from "./bursts.js";
+import { deathEffectFor, mayPlayHitEffect, type BurstLayer, type OwnShot } from "./bursts.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
 import {
   createAngleTrack,
@@ -24,8 +24,7 @@ import {
   createEnemyHealthBar,
   drawEnemyBody,
   resolveEnemyVisual,
-  setEnemyHealthBar,
-  turretMountPoint
+  setEnemyHealthBar
 } from "../entityArt.js";
 import { drawEnemyTank, ENEMY_ART_HALF } from "../tankArt.js";
 
@@ -276,28 +275,6 @@ export interface CombatVisual {
  * theirs. The cannon leaves its mount and points along the turret; the nose gun
  * leaves the nose and points along the hull.
  */
-function ownMuzzle(
-  entity: CombatEntity,
-  snapshot: DisplayGameSnapshot
-): { readonly x: number; readonly y: number; readonly heading: number } | undefined {
-  const source = "source" in entity ? entity.source : undefined;
-  if (source === "cannon") {
-    const mount = turretMountPoint(
-      snapshot.spaceship,
-      snapshot.spaceship.heading,
-      snapshot.turretVisual
-    );
-    return { ...mount, heading: snapshot.turretAngle };
-  }
-  if (source !== "machineGun") return undefined;
-  const heading = snapshot.spaceship.heading;
-  return {
-    x: snapshot.spaceship.x + Math.cos(heading) * snapshot.spaceship.radius,
-    y: snapshot.spaceship.y + Math.sin(heading) * snapshot.spaceship.radius,
-    heading
-  };
-}
-
 function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
   return [
     ...snapshot.enemyShips.map((entity) => ({ ...entity, visualKind: "enemy" as const })),
@@ -332,6 +309,12 @@ interface ReconcileRequest {
   readonly toTick: number;
   readonly snap: boolean;
   readonly bursts: BurstLayer | undefined;
+  /**
+   * Shots the crew's own guns just fired, for the scene to place. Collected
+   * rather than drawn here: the muzzle has to come off the pose the scene draws,
+   * and reconcile runs on a patch arriving, not on a frame going out.
+   */
+  readonly ownShots: OwnShot[];
 }
 
 export function reconcileCombatVisuals({
@@ -343,7 +326,8 @@ export function reconcileCombatVisuals({
   bake,
   toTick,
   snap,
-  bursts
+  bursts,
+  ownShots
 }: ReconcileRequest): void {
   const incoming = collectCombatEntities(snapshot);
   const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
@@ -397,23 +381,17 @@ export function reconcileCombatVisuals({
       });
       /*
        * A friendly shell appearing is the crew firing, and this is the frame it
-       * first exists in. The flash is put on the barrel rather than on the
-       * shell: interpolation shows a shell where the last patch left it, which
-       * at shell speed is already a hull's width downrange.
+       * first exists in. Only the fact is recorded here; where it goes is the
+       * scene's to decide from the pose it draws, because the hull on screen is
+       * interpolated and the snapshot's is a patch behind it.
        *
        * Silent on a snapping reconcile, or a hydration would flash once for
        * every shell already in the air.
        */
       if (!snap && entity.visualKind === "projectile") {
-        const muzzle = ownMuzzle(entity, snapshot);
-        if (muzzle !== undefined) {
-          bursts?.spawn(
-            OWN_MUZZLE_EFFECT,
-            muzzle.x,
-            muzzle.y,
-            snapshot.spaceship.radius,
-            muzzle.heading
-          );
+        const source = "source" in entity ? entity.source : undefined;
+        if (source === "cannon" || source === "machineGun") {
+          ownShots.push({ source, shellRadius: entity.radius });
         }
       }
     } else {
@@ -459,12 +437,17 @@ export function reconcileCombatVisuals({
         // On the hull and along its heading, which is what the counter buys over
         // naming a shooter on every shell: a muzzle flash that faces the barrel.
         if (visual.shotEffect !== undefined) {
+          // At the leading edge of the hull, not at its centre: an enemy's own
+          // barrels are not on the snapshot, so the front along its heading is
+          // the honest muzzle - and a flash under the hull is a flash nobody
+          // sees.
+          const bearing = visual.object.rotation;
           bursts?.spawn(
             visual.shotEffect,
-            visual.object.x,
-            visual.object.y,
+            visual.object.x + Math.cos(bearing) * visual.radius,
+            visual.object.y + Math.sin(bearing) * visual.radius,
             visual.radius,
-            visual.object.rotation
+            bearing
           );
         }
       }
