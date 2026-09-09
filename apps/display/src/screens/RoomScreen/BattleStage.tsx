@@ -94,7 +94,17 @@ export function BattleStage({
           ) : (
             <SpaceshipCanvas
               game={view.game}
-              prediction={cockpit.driver}
+              /*
+               * Only a seat gets a predicted hull. The driver steps this page's
+               * own input, and its world is the render-time snapshot - which a
+               * combat page deliberately stops re-rendering. Handed to a
+               * spectator display, that draws the hull at the spawn point for
+               * the whole run, parks the camera on it, and leaves every other
+               * entity to be drawn at its true place around a ship that is not
+               * there. Unseated, the scene interpolates the snapshot track it
+               * pulls from the wire instead.
+               */
+              prediction={cockpit.seated ? cockpit.driver : undefined}
               // The preview has no room to read from: it renders a fixture
               // straight through the prop, and a reader that answers nothing
               // would leave its scene without a world at all.
