@@ -63,7 +63,21 @@ import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import { createRunSeed } from "./runSeed.js";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
-import { nextShieldIntent } from "./shieldAutopilot.js";
+/*
+ * The crew policy, in plain JavaScript beside this file, with its shapes in
+ * `crewPolicy.d.mts`. One policy runs the bot everywhere: this room drives an
+ * unmanned seat with it, and the measurement harness plays whole runs with it.
+ * Before this there were two, and the same defect had to be found twice.
+ */
+import {
+  createAutopilotMemory,
+  leadSpeedFor,
+  planShield,
+  resolveAutopilotProfile
+} from "./crewPolicy.mjs";
+import type { PolicyMemory, PolicyOptions } from "./crewPolicy.d.mts";
+import type { AutopilotProfile } from "@spaceship-defender/protocol";
+import { buildCrewWorld, POLICY_TICK_MS } from "./crewWorld.js";
 import { projectGameState } from "./stateProjection.js";
 import {
   upgradeErrorMessage,
@@ -172,6 +186,14 @@ export class SpaceshipDefenderRoom extends Room<{
   private readonly upgradeJournals = new Map<string, UpgradeJournalEntry[]>();
   private displaySessionId: string | undefined;
   private gameConfig: SpaceshipSimulationConfig = spaceshipSimulationConfig;
+  /**
+   * What the bot on an unmanned seat remembers and is tuned to, fixed for the
+   * run the way the config and the helm are: a console edit lands on the next
+   * run, not on the one being played.
+   */
+  private crewMemory: PolicyMemory = createAutopilotMemory();
+  private crewProfile: AutopilotProfile | undefined;
+  private crewOptions: PolicyOptions = {};
   /** Whether the armed loop advances the fight or idles through it. */
   private simulationRunning = false;
   private gameState: SpaceshipSimulationState | undefined;
@@ -833,7 +855,34 @@ export class SpaceshipDefenderRoom extends Room<{
     this.gameConfig = balance.getActiveSimulationConfig(this.state.shipArchetypeId);
     // The helm is input feel, not physics, so it rides beside the config rather
     // than inside it — and like the config, a run keeps what it started with.
-    const helm = balance.getActiveTuning().helm;
+    const tuning = balance.getActiveTuning();
+    /*
+     * The bot on an unmanned seat, set up beside the helm and for the same
+     * reason: both are the run's, not the console's, so an edit mid-run does not
+     * change the game being played. The level is the operator's own choice from
+     * the preset - the section that used to drive only the demo harness.
+     */
+    this.crewProfile = resolveAutopilotProfile(
+      tuning.autopilot,
+      tuning.autopilot.level,
+      this.gameConfig.cannonWeaponKind
+    );
+    // Seeded below, from the run's own seed, once that seed exists.
+    this.crewOptions = {
+      archetypes: this.gameConfig.enemyArchetypes,
+      cannonSpeed: leadSpeedFor(
+        this.gameConfig.cannonWeaponKind,
+        this.gameConfig.projectileSpeedPerSecond
+      ),
+      mgSpeed: leadSpeedFor(
+        this.gameConfig.mgWeaponKind,
+        this.gameConfig.mgProjectileSpeedPerSecond
+      ),
+      turretRate: this.gameConfig.turretMaxAngularSpeedPerSecond,
+      shieldRaiseRange: this.gameConfig.shieldAutopilotRaiseRange,
+      shieldDrain: this.gameConfig.shieldDrainPerSecond
+    };
+    const helm = tuning.helm;
     this.state.game.helm.scheme = helm.scheme;
     this.state.game.helm.headingLeadRadians = helm.headingLeadRadians;
     this.state.game.helm.stopDampening = helm.stopDampening;
@@ -856,11 +905,13 @@ export class SpaceshipDefenderRoom extends Room<{
     this.state.game.helm.turretAngularBraking =
       this.gameConfig.turretAngularBrakingPerSecondSquared;
     this.state.game.helm.turretMountedOnHull = this.gameConfig.turretMountedOnHull;
-    this.gameState = createCleanSpaceshipRun(
-      this.gameConfig,
-      createRunSeed(previousSeed),
-      this.startWave
-    );
+    const runSeed = createRunSeed(previousSeed);
+    // The bot's own stream comes off the run's seed, so replaying a seed replays
+    // the bot with it. A fresh memory per run also drops the target it had
+    // committed to and the sector it was holding, both of which belong to a
+    // fight that is over.
+    this.crewMemory = createAutopilotMemory(runSeed);
+    this.gameState = createCleanSpaceshipRun(this.gameConfig, runSeed, this.startWave);
     if (sparringEnemies > 0) {
       this.gameState = openSparringStand(
         this.gameState,
@@ -1053,13 +1104,30 @@ export class SpaceshipDefenderRoom extends Room<{
 
   /**
    * A crew without a shield operator still needs the sector up, so the room
-   * feeds the same trusted intent a player would have sent.
+   * feeds the same trusted intent a player would have sent - decided by the
+   * same policy that plays whole measured runs.
+   *
+   * The policy is handed the client slice rather than the state: it is a model
+   * of a player, and a bot that reads the whole simulation dodges what no player
+   * could see, which would make every measurement of survivability this project
+   * has incomparable with the ones before it.
    */
   private applyShieldAutopilot(game: SpaceshipSimulationState): SpaceshipSimulationState {
     if (this.crewRoles().includes("shield") || this.gameState?.encounterPhase !== "combat") {
       return game;
     }
-    return applyShieldInput(game, nextShieldIntent(game, this.gameConfig));
+    // No profile means the preset carries none for this turret and level, and a
+    // room does not invent one: the sector then behaves as it did with nobody
+    // in the seat before any of this existed, which is to say it stays down.
+    const profile = this.crewProfile;
+    if (profile === undefined) return game;
+    const world = buildCrewWorld(game, this.gameConfig, game.clock.tick * POLICY_TICK_MS);
+    const plan = planShield(world, profile, this.crewMemory, this.crewOptions);
+    return applyShieldInput(game, {
+      vector: plan.aim,
+      active: plan.active,
+      receivedTick: game.clock.tick
+    });
   }
 
   /**

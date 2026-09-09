@@ -224,6 +224,24 @@ const MISSILE_FORECAST_STEP = 0.1;
  */
 const SHIELD_SOURCE_MEMORY_MS = 3_000;
 /**
+ * The two sides of the battery's hysteresis, in seconds of drain.
+ *
+ * Seconds rather than shares of the bank, because a share is not equivalent:
+ * measured on a ship surrounded by six shells, one threshold gave fifteen
+ * raises in ninety seconds with the longest hold two seconds long, while these
+ * two give three raises and a hold of nearly a minute out of a full bank. The
+ * share is kept as a ceiling so a small bank still works.
+ *
+ * No threshold can make a sector stay up in a sustained fight: at twenty
+ * drained against ten recharged, a second of holding costs two of refilling, so
+ * a third of the time is the ceiling whatever this decides. What it decides is
+ * the rhythm, and few long holds beat many short ones - every raise spends half
+ * a second of ramp protecting nothing.
+ */
+const SHIELD_FLOOR_SECONDS = 1;
+const SHIELD_RESTART_SECONDS = 4;
+const SHIELD_RESTART_SHARE = 0.6;
+/**
  * How soon a missile has to land before it is worth the cannon while its
  * launcher is on the field. A boss puts missiles up faster than the mount can
  * clear them — this catalogue fires two every two seconds — so a gunner that
@@ -718,21 +736,95 @@ export function planShield(world, profile, memory, options = {}) {
     return { aim, active: memory.shieldActive };
   }
 
-  if (contact === undefined || contact.seconds > profile.shieldLeadTicks * (TICK_MS / 1000)) {
+  const incoming =
+    contact !== undefined && contact.seconds <= profile.shieldLeadTicks * (TICK_MS / 1000);
+  /*
+   * A ship in range counts, not only what is already in the air.
+   *
+   * Shots were all this decision could see, and that failed three ways at once
+   * in a real room. A crowd does not fire continuously - a gunship reloads for
+   * up to three and a half seconds - so between volleys nothing was inside the
+   * window and the sector dropped with the bank still full, paying a second of
+   * cooling and half a second of raising to come back. A shot only counts if it
+   * will actually reach the ring, so against a ship that is running or circling,
+   * where most shots miss astern, almost nothing ever qualified. And a sector
+   * that keeps dropping is a sector that is down when the volley does arrive.
+   */
+  if (!incoming && !armedEnemyInReach(world, options)) {
     // Dropping it is also what clears the rearm latch after a depletion.
     memory.shieldActive = false;
     return { aim, active: false };
   }
 
-  // The hit inside the window is already unavoidable, so a threshold that
-  // refuses to spend the last quarter of the battery just moves the damage onto
-  // the hull — under sustained fire the energy never climbs back and the shield
-  // never comes up again. Below the reserve the bot still spends, but only on
-  // what actually hurts: bullets get through, missiles and rocks do not.
-  const reserved = world.shield.energy <= world.shield.capacity * profile.shieldMinEnergy;
-  memory.shieldActive =
-    world.shield.energy > 0 && (!reserved || contact.weight >= COSTLY_THREAT_WEIGHT);
+  /*
+   * Two thresholds, not one, and the second is what stops the strobe.
+   *
+   * The hit inside the window is already unavoidable, so a floor that refuses
+   * to spend the last of the battery just moves the damage onto the hull -
+   * under sustained fire the energy never climbs back and the shield never
+   * comes up again. Below the floor the bot still spends, but only on what
+   * actually hurts: bullets get through, missiles and rocks do not.
+   *
+   * What one threshold cannot do is decide when to come *back*. Raising the
+   * moment the floor is back gave a measured cycle of a second and a half up
+   * against two and a half down, taking the bank to zero every time - and every
+   * raise costs half a second of ramp that protects nothing. So a sector that
+   * is down waits for a hold worth having.
+   */
+  const floor = shieldFloorEnergy(world, profile, options);
+  const restart = shieldRestartEnergy(world, options);
+  const enough = memory.shieldActive
+    ? world.shield.energy > floor ||
+      (contact !== undefined && contact.weight >= COSTLY_THREAT_WEIGHT)
+    : world.shield.energy >= restart;
+  memory.shieldActive = world.shield.energy > 0 && enough;
   return { aim, active: memory.shieldActive };
+}
+
+/**
+ * The nearest ship close enough to be shooting at us, if any.
+ *
+ * The operator's `shieldAutopilotRaiseRange` when they set one, and otherwise
+ * the archetype's own weapon reach: an interceptor that has to close in is not
+ * a reason to hold a sector, and a gunship shelling from nine hundred units
+ * away is. Nothing is a reason when the catalogue is not to hand, which is the
+ * case in a unit test that hands in no options.
+ */
+function armedEnemyInReach(world, options = {}) {
+  const chosen = options.shieldRaiseRange ?? 0;
+  const archetypes = options.archetypes;
+  for (const enemy of world.enemies) {
+    let reach = chosen;
+    if (reach <= 0) {
+      const archetype = archetypes?.[enemy.kind];
+      for (const weapon of archetype?.weapons ?? []) {
+        reach = Math.max(reach, weapon.engagementRange);
+      }
+    }
+    if (reach > 0 && distanceBetween(world.ship, enemy) <= reach) return true;
+  }
+  return false;
+}
+
+/**
+ * Where a raised sector stops spending, in energy.
+ *
+ * The operator's reserve, but never more than a second of drain: at a capacity
+ * of twelve hundred a tenth of the bank is six seconds of shield held back
+ * untouched, which is a reserve nobody asked for. Seconds of drain keep the
+ * rhythm the same whatever the bank is set to.
+ */
+function shieldFloorEnergy(world, profile, options = {}) {
+  const byReserve = world.shield.capacity * profile.shieldMinEnergy;
+  const drain = options.shieldDrain ?? 0;
+  return drain > 0 ? Math.min(byReserve, drain * SHIELD_FLOOR_SECONDS) : byReserve;
+}
+
+/** How much has to be back before a dropped sector is worth raising again. */
+function shieldRestartEnergy(world, options = {}) {
+  const byShare = world.shield.capacity * SHIELD_RESTART_SHARE;
+  const drain = options.shieldDrain ?? 0;
+  return drain > 0 ? Math.min(byShare, drain * SHIELD_RESTART_SECONDS) : byShare;
 }
 
 /**

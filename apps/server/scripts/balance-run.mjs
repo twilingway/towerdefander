@@ -16,7 +16,6 @@ import {
   createSpaceshipSimulationConfig,
   createSpaceshipSimulationState
 } from "@spaceship-defender/game-core";
-import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
 
 import {
   createAutopilotMemory,
@@ -27,9 +26,9 @@ import {
   planShield
 } from "../src/rooms/crewPolicy.mjs";
 import { planUpgradeVotes } from "../../controller/scripts/upgrade-vote-policy.mjs";
-// Imported straight from the server source, which works only because that file
-// has no runtime relative imports — see the comment in its own header.
-import { nextShieldIntent } from "../src/rooms/shieldAutopilot.ts";
+// The one place the crew slice is built, so this harness and the room cannot
+// drift into feeding the policy different games.
+import { buildCrewWorld } from "../src/rooms/crewWorld.ts";
 import { castUpgradeVotes } from "./upgrade-votes.mjs";
 import { createRunObserver } from "./stats-observer.mjs";
 
@@ -43,112 +42,6 @@ export const CREW_ROLES = ["pilot", "gunner", "shield"];
 
 export function defaultPresetPath() {
   return fileURLToPath(new URL("../data/balance.json", import.meta.url));
-}
-
-/**
- * The camera frame is what the bot can see, and it is the single most important
- * number in the whole harness: the policy refuses to target anything outside it,
- * exactly as it does when reading the real display.
- */
-function insideFrame(ship, cameraViewWidth, entity) {
-  return (
-    Math.abs(entity.x - ship.x) <= cameraViewWidth / 2 &&
-    Math.abs(entity.y - ship.y) <= (cameraViewWidth * CAMERA_VIEW_ASPECT) / 2
-  );
-}
-
-function toEntity(entity) {
-  return {
-    entityId: entity.id,
-    spawnSequence: entity.spawnSequence,
-    x: entity.x,
-    y: entity.y,
-    velocityX: entity.velocity.x,
-    velocityY: entity.velocity.y,
-    radius: entity.radius
-  };
-}
-
-/**
- * The same picture `buildVisibleDemoWorld` hands the bot in the browser, built
- * straight from simulation state instead of from a rendered snapshot. Kept in
- * the same shape on purpose: the policy must not be able to tell the difference
- * between this harness and a real run.
- */
-export function buildWorld(state, config, sampledAtMs) {
-  const ship = { x: state.spaceship.x, y: state.spaceship.y };
-  const framed = (entities) =>
-    entities.filter((entity) => insideFrame(ship, config.cameraViewWidth, entity));
-
-  return {
-    sampledAtMs,
-    tick: state.clock.tick,
-    phase: state.encounterPhase,
-    waveNumber: state.waveNumber,
-    salvageWindowSeconds: Math.ceil((state.lootWindowTicksRemaining * TICK_MS) / 1000),
-    cameraViewWidth: config.cameraViewWidth,
-    arenaRadius: config.arenaRadius,
-    worldWidth: config.worldWidth,
-    worldHeight: config.worldHeight,
-    shieldRadius: state.ship.shieldRadius,
-    turretAngle: state.turretAngle,
-    ship: {
-      x: state.spaceship.x,
-      y: state.spaceship.y,
-      heading: state.spaceshipHeading,
-      velocityX: state.spaceship.velocity.x,
-      velocityY: state.spaceship.velocity.y,
-      radius: state.ship.spaceshipRadius,
-      hp: state.spaceshipHp,
-      maxHp: state.ship.spaceshipMaxHp
-    },
-    shield: {
-      angle: state.shieldAngle,
-      active: state.shieldActive,
-      energy: state.shieldEnergy,
-      capacity: state.ship.shieldCapacity,
-      arcHalfAngle: state.ship.shieldArcRadians / 2
-    },
-    cannon: {
-      heat: state.cannonHeat,
-      capacity: state.ship.cannonHeatCapacity,
-      overheated: state.cannonOverheated,
-      // How far this barrel carries, which is what the fighting distance is a
-      // share of. A beam ends where its range does; anything that flies ends
-      // where its lifetime does.
-      reach:
-        config.cannonWeaponKind === "laser"
-          ? state.ship.cannonLaserRange
-          : (state.ship.projectileSpeedPerSecond * config.projectileLifetimeMs) / 1_000
-    },
-    machineGun: {
-      heat: state.mgHeat,
-      capacity: state.ship.mgHeatCapacity,
-      overheated: state.mgOverheated
-    },
-    enemies: framed(state.enemies).map((enemy) => ({
-      ...toEntity(enemy),
-      kind: enemy.kind,
-      heading: enemy.heading,
-      hp: enemy.hp,
-      maxHp: enemy.maxHp
-    })),
-    missiles: framed(state.homingMissiles).map((missile) => ({
-      ...toEntity(missile),
-      heading: missile.heading
-    })),
-    bullets: framed(state.hostileProjectiles).map(toEntity),
-    asteroids: framed(state.asteroids).map((rock) => ({
-      ...toEntity(rock),
-      hp: rock.hp,
-      maxHp: rock.maxHp
-    })),
-    loot: framed(state.lootDrops).map((drop) => ({
-      ...toEntity(drop),
-      kind: drop.kind,
-      amount: drop.amount
-    }))
-  };
 }
 
 /**
@@ -170,6 +63,10 @@ export function playRun(config, options) {
   const memory = createAutopilotMemory(seed);
   const policyOptions = {
     archetypes: config.enemyArchetypes,
+    // What the sector is worth raising for and what it costs to hold, both of
+    // which the policy cannot read off the client slice.
+    shieldRaiseRange: config.shieldAutopilotRaiseRange,
+    shieldDrain: config.shieldDrainPerSecond,
     cannonSpeed: leadSpeedFor(config.cannonWeaponKind, config.projectileSpeedPerSecond),
     mgSpeed: leadSpeedFor(config.mgWeaponKind, config.mgProjectileSpeedPerSecond),
     turretRate: config.turretMaxAngularSpeedPerSecond
@@ -190,7 +87,7 @@ export function playRun(config, options) {
     if (state.waveNumber > maxWaves) break;
     // Simulation time, never wall clock: that is what makes a run replayable.
     const nowMs = state.clock.tick * TICK_MS;
-    const world = buildWorld(state, config, nowMs);
+    const world = buildCrewWorld(state, config, nowMs);
 
     const pilot = planPilot(world, profile, memory, { ...policyOptions, nowMs });
     const gunner = planGunner(world, profile, memory, { ...policyOptions, nowMs });
@@ -207,15 +104,16 @@ export function playRun(config, options) {
       firing: gunner.firing,
       receivedTick: state.clock.tick
     });
-    if (seats.includes("shield")) {
+    // One policy for the sector whether or not a seat is manned: the room does
+    // the same, and a crew of one used to be measured against a second
+    // implementation that only it ever ran.
+    if (seats.includes("shield") || state.encounterPhase === "combat") {
       const shield = planShield(world, profile, memory, policyOptions);
       state = applyShieldInput(state, {
         vector: shield.aim,
         active: shield.active,
         receivedTick: state.clock.tick
       });
-    } else if (state.encounterPhase === "combat") {
-      state = applyShieldInput(state, nextShieldIntent(state, config));
     }
 
     if (state.encounterPhase === "intermission") {
