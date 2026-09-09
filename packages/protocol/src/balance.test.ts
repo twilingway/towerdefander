@@ -212,6 +212,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     asteroidLifetimeTicks: 500,
     asteroidDamage: 40,
     asteroidShieldHitCost: 20,
+    shieldAutopilotRaiseRange: 0,
     asteroidSpawnCost: 1,
     asteroidScoreReward: 10,
     asteroidCreditReward: 1,

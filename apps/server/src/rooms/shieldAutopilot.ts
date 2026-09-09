@@ -140,11 +140,13 @@ export function nextShieldIntent(
 }
 
 /**
- * The nearest enemy close enough to be shooting at us, or nothing.
+ * The nearest enemy close enough to matter, or nothing.
  *
- * Its own archetype's reach, rather than a number picked here: an interceptor
- * that has to close in is not a reason to hold a sector, and a gunship that
- * shells from nine hundred units away is.
+ * The operator's `shieldAutopilotRaiseRange` when they set one, and otherwise
+ * the enemy's own archetype reach - an interceptor that has to close in is not a
+ * reason to hold a sector, and a gunship that shells from nine hundred units
+ * away is. The setting exists for the case the reach gets wrong: closing on a
+ * sniper under cover wants a distance of the crew's choosing, not the sniper's.
  */
 function findNearestArmedEnemy(
   state: SpaceshipSimulationState,
@@ -153,10 +155,12 @@ function findNearestArmedEnemy(
   let bestDistance = Number.POSITIVE_INFINITY;
   let bearing: { x: number; y: number } | undefined;
   for (const enemy of state.enemies) {
-    const archetype = config.enemyArchetypes[enemy.kind];
-    if (archetype === undefined) continue;
-    let reach = 0;
-    for (const weapon of archetype.weapons) reach = Math.max(reach, weapon.engagementRange);
+    let reach = config.shieldAutopilotRaiseRange;
+    if (reach <= 0) {
+      const archetype = config.enemyArchetypes[enemy.kind];
+      if (archetype === undefined) continue;
+      for (const weapon of archetype.weapons) reach = Math.max(reach, weapon.engagementRange);
+    }
     if (reach <= 0) continue;
     const x = enemy.x - state.spaceship.x;
     const y = enemy.y - state.spaceship.y;

@@ -266,6 +266,7 @@ export function createDefaultTuning(): BalanceTuning {
     asteroidLifetimeTicks: config.asteroidLifetimeTicks,
     asteroidDamage: config.asteroidDamage,
     asteroidShieldHitCost: config.asteroidShieldHitCost,
+    shieldAutopilotRaiseRange: config.shieldAutopilotRaiseRange,
     asteroidSpawnCost: config.asteroidSpawnCost,
     asteroidScoreReward: config.asteroidScoreReward,
     asteroidCreditReward: config.asteroidCreditReward,

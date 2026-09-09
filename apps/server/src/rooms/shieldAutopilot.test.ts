@@ -155,6 +155,22 @@ describe("shield autopilot", () => {
     expect(intent.vector.x).toBeLessThan(-0.9);
   });
 
+  it("takes the operator's raise range over the enemy's own reach", () => {
+    // The case it exists for: closing on a sniper. Its reach is not the distance
+    // the crew wants to be covered from - they want to cross the gap under a
+    // sector, and that number is theirs.
+    const state = cleanState();
+    const distant = enemy(state, { x: -1500, y: 0 });
+    const world = { ...state, enemies: [distant], shieldPhase: "down" as const };
+    // Beyond a gunship's own nine hundred: nothing without a setting.
+    expect(nextShieldIntent(world, config).active).toBe(false);
+    const reaching = createSpaceshipSimulationConfig({
+      enemySpawnIntervalTicks: 1000,
+      shieldAutopilotRaiseRange: 2000
+    });
+    expect(nextShieldIntent(world, reaching).active).toBe(true);
+  });
+
   it("leaves the sector down for a ship still out of its own reach", () => {
     // The bound that keeps this from being "any enemy anywhere": an enemy that
     // cannot shoot us yet is not a reason to spend the bank. The distance is the

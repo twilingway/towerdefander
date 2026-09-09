@@ -313,6 +313,36 @@ describe("tick rescale gate", () => {
     expect(RETARGET(migrateBalanceDocument(legacyAt(37)))).toBe(expected);
   });
 
+  it("gives a preset written before the raise range that range at zero", () => {
+    /*
+     * Every new tuning field has to be answered here. One of them once wiped an
+     * operator's wave table, because a strict schema refuses a document that is
+     * missing a field and the whole file goes with it - so the migration adds it
+     * by name rather than hoping a spread covers it. Zero is the value that
+     * means "behave exactly as before", which is what a preset nobody edited
+     * deserves.
+     */
+    const migrated = migrateBalanceDocument({
+      version: BALANCE_FILE_VERSION - 1,
+      activePresetId: "seed",
+      presets: [
+        {
+          id: "seed",
+          name: "Seed",
+          tuning: (() => {
+            const tuning: Record<string, unknown> = { ...createDefaultTuning() };
+            delete tuning.shieldAutopilotRaiseRange;
+            return tuning;
+          })()
+        }
+      ]
+    }) as BalancePresetsFile;
+    expect(migrated.presets[0]?.tuning.shieldAutopilotRaiseRange).toBe(0);
+    // And the rest of the document survives it, which is the part that once did
+    // not: the waves are still there.
+    expect(migrated.presets[0]?.tuning.waveCampaign.waves.length).toBeGreaterThan(0);
+  });
+
   it("still triples a file written at twenty steps", () => {
     // The rescale itself has to keep working, or a genuinely old preset would
     // reload three times as fast as it was tuned.
