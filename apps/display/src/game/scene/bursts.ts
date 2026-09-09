@@ -104,7 +104,7 @@ export interface OwnShot {
 export function placeOwnShots(
   // Structural rather than the class, so the arithmetic can be tested against a
   // recorder without a scene.
-  bursts: Pick<BurstLayer, "spawn"> | undefined,
+  bursts: Pick<BurstLayer, "followMuzzle" | "spawn"> | undefined,
   shots: OwnShot[],
   pose: {
     readonly mount: Point;
@@ -114,15 +114,39 @@ export function placeOwnShots(
     readonly hullRadius: number;
   }
 ): void {
-  for (const shot of shots) {
-    const fromCannon = shot.source === "cannon";
+  const muzzle = (source: OwnShot["source"], shellRadius: number) => {
+    const fromCannon = source === "cannon";
     const bearing = fromCannon ? pose.turretRotation : pose.heading;
     const origin = fromCannon ? pose.mount : pose.hull;
-    const point = getMuzzlePoint(origin, bearing, pose.hullRadius + shot.shellRadius);
+    return { bearing, point: getMuzzlePoint(origin, bearing, pose.hullRadius + shellRadius) };
+  };
+  for (const shot of shots) {
+    const { point, bearing } = muzzle(shot.source, shot.shellRadius);
     bursts?.spawn(OWN_MUZZLE_EFFECTS[shot.source], point.x, point.y, pose.hullRadius, bearing);
   }
   shots.length = 0;
+  /*
+   * And every flash still playing is dragged back onto the barrel.
+   *
+   * A muzzle flash left where it was fired is honest - expelled gas does not
+   * travel with the ship - and at full speed the hull covers 149 units inside
+   * the 0.24s the flash lasts, so it reads as the flash falling off the gun.
+   * Glued to the muzzle is what reads as a gun firing, so that is what it does.
+   */
+  for (const source of ["cannon", "machineGun"] as const) {
+    const { point, bearing } = muzzle(source, OWN_SHELL_RADIUS_HINT);
+    bursts?.followMuzzle(OWN_MUZZLE_EFFECTS[source], point, bearing);
+  }
 }
+
+/**
+ * Stand-in shell radius for a flash already in flight.
+ *
+ * The shot that started it is long gone by then, and the difference between one
+ * shell's radius and another's is a couple of units on a muzzle offset of
+ * thirty - far under the width of the flash itself.
+ */
+const OWN_SHELL_RADIUS_HINT = 3;
 
 interface PooledBurst {
   readonly sprite: Phaser.GameObjects.Sprite;
@@ -189,6 +213,19 @@ export class BurstLayer {
       .setScale((radius * SPAN[effect.category]) / effect.meta.frameWidth)
       .setVisible(true);
     burst.sprite.play({ key: animationKey(effectId), startFrame: 0 }, true);
+  }
+
+  /**
+   * Keeps whatever is still playing of one effect on a moving muzzle. Cheap by
+   * construction: at most a couple of sprites are ever busy for a given gun.
+   */
+  followMuzzle(effectId: string, point: Point, bearing: number): void {
+    const pool = this.pools.get(effectId);
+    if (this.disposed || pool === undefined) return;
+    for (const entry of pool) {
+      if (!entry.busy) continue;
+      entry.sprite.setPosition(point.x, point.y).setRotation(bearing + MUZZLE_ROTATION_OFFSET);
+    }
   }
 
   private take(effect: FxEffect, pool: PooledBurst[]): PooledBurst | undefined {

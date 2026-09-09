@@ -100,6 +100,45 @@ the specs that poll them.
   start them on the default ports). `pnpm test:e2e` is the clean-room version and rebuilds the
   server bundle first.
 
+## Driving the solo cockpit from a script
+
+The cockpit is built for fingers, and that makes it hostile to automation. Its triggers call
+`setPointerCapture` on the pointer that pressed them (`CockpitTrigger.tsx`), which throws
+`NotFoundError` on a synthetic one and aborts the handler **before the gun fires** — so a session
+can fly the ship and swing the turret and still never shoot. What does and does not work, measured:
+
+| Input          | Works with                                                                |
+| -------------- | ------------------------------------------------------------------------- |
+| Helm (W/A/S/D) | `page.keyboard.down("w")` — a real hold. `press()` is too short to see    |
+| Sticks         | CDP `Input.dispatchTouchEvent` after `Emulation.setTouchEmulationEnabled` |
+| Fire triggers  | neither: the pointer capture refuses anything synthetic                   |
+
+So a dev build publishes the cockpit's own handlers instead, the way the camera publishes its slice:
+
+```js
+const d = window.__spaceshipDevControls; // dev builds only; absent in production
+d.helm(0, 1); // turn, thrust, both -1..1
+d.aim(0, 1, 1); // stick vector plus how far it is pushed
+d.cannon(true);
+d.machineGun(true);
+// ... d.helmRelease(), d.aimRelease(), d.cannon(false)
+```
+
+It is gated on `import.meta.env.DEV` and adds no path of its own: every order still goes through
+`useSoloCockpit` to the server as an ordinary intent, so a script cannot ask for anything a finger
+could not. It exists only while a cockpit player is seated and the encounter is in combat.
+
+## A quiet arena
+
+Wave 1 kills an unattended ship in well under a minute, which is not long enough to set up a look at
+anything. `SPARRING_ENEMIES=1` on the server gives a run with the wave script off — one hull and the
+drifting rocks of `sparringStand.ts`, nothing that shoots back — so the hull sits at full health for
+as long as the inspection takes. `SPARRING_ENEMIES=0` or unset plays the ordinary campaign; the cap
+is 8.
+
+Watch the clock even so: at 620 units a second a ship left under thrust reaches the arena rim in
+seconds and its guns fall silent. Re-create the room rather than wondering why nothing fires.
+
 ## Traps that cost hours
 
 - **Never edit source while a browser run is in flight.** Vite HMR pushes the edit into the live
@@ -110,5 +149,8 @@ the specs that poll them.
   harness that asserts a purchase must tolerate that and keep playing.
 - Trailing browsers hold the ports. If a harness dies badly, check for stray `chrome`/`node`
   processes before blaming the code.
+- A gun that stops firing is usually heat, not a bug: both barrels have an overheat latch, and a
+  couple of seconds held is enough to trip it. `machine-gun-heat` and `cannon-heat` carry
+  `data-heat`; read it before hunting anything else.
 - Report a browser check as done only after the run you actually watched finished; if a spec failed,
   paste the failure rather than re-running until it passes.

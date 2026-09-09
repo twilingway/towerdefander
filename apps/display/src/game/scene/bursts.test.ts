@@ -75,10 +75,15 @@ describe("placing the crew's own flashes", () => {
       radius: number;
       heading: number | undefined;
     }[] = [];
+    const followed: { effectId: string; x: number; y: number; heading: number }[] = [];
     return {
       calls,
+      followed,
       spawn(effectId: string, x: number, y: number, radius: number, heading?: number) {
         calls.push({ effectId, x, y, radius, heading });
+      },
+      followMuzzle(effectId: string, point: { x: number; y: number }, heading: number) {
+        followed.push({ effectId, x: point.x, y: point.y, heading });
       }
     };
   }
@@ -118,6 +123,21 @@ describe("placing the crew's own flashes", () => {
     // A machine gun wearing the cannon's plasma blue read as the same weapon
     // firing twice.
     expect(OWN_MUZZLE_EFFECTS.cannon).not.toBe(OWN_MUZZLE_EFFECTS.machineGun);
+  });
+
+  it("drags a flash already playing back onto the barrel", () => {
+    // A flash left where it was fired is honest and reads wrong: at full speed
+    // the hull covers 149 units inside the 0.24s it lasts, so it looks like the
+    // flash fell off the gun. Every frame puts it back.
+    const sink = recorder();
+    placeOwnShots(sink, [], POSE);
+    const cannon = sink.followed.find((f) => f.effectId === "muzzle-flash");
+    expect(cannon?.x).toBeCloseTo(200, 9);
+    expect(cannon?.y).toBeCloseTo(129, 9);
+    expect(cannon?.heading).toBeCloseTo(Math.PI / 2, 9);
+    const mg = sink.followed.find((f) => f.effectId === "muzzle-flash-mg");
+    expect(mg?.y).toBeCloseTo(100, 9);
+    expect(mg?.heading).toBeCloseTo(0, 9);
   });
 
   it("empties the queue, even with no layer to draw into", () => {
