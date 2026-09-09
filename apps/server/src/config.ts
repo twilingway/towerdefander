@@ -47,6 +47,18 @@ export interface ServerConfig {
    * operator turns it on, like the late-wave aid beside it.
    */
   sparringEnemies: number;
+  /**
+   * Whether a run may begin with seats nobody is sitting in, the room flying
+   * them.
+   *
+   * A harness aid, off unless the operator turns it on, and off for a reason
+   * rather than out of caution: a public room that started as soon as one
+   * player was ready would hand their friends' seats to a bot while they were
+   * still connecting. With it on, a display alone is enough to open a run -
+   * which is what the visible demonstration and its headless twin want, and
+   * what lets a crew of one be tried with bot crewmates.
+   */
+  allowBotCrew: boolean;
 }
 
 const MAX_PHASE_TTL_SECONDS = 86_400;
@@ -156,6 +168,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
       ? environment.NODE_ENV === "production"
       : environment.GRACEFUL_SHUTDOWN !== "false";
   const allowStartWave = environment.ALLOW_START_WAVE === "true";
+  const allowBotCrew = environment.ALLOW_BOT_CREW === "true";
   const rawSparring = Number(environment.SPARRING_ENEMIES ?? "0");
   /*
    * The stand started as a handful of bodies to watch, and eight was plenty for
@@ -305,6 +318,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     statsProcessGuardUrl: STATS_PROCESS_GUARD_URL,
     gracefullyShutdown,
     allowStartWave,
-    sparringEnemies
+    sparringEnemies,
+    allowBotCrew
   };
 }
