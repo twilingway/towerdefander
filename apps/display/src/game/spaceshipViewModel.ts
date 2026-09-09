@@ -450,8 +450,17 @@ export interface ShieldImpact {
   readonly offset: number;
 }
 
-/** Share of the reach a contact may be met *behind* the last known point. */
-export const SHIELD_IMPACT_BACKTRACK = 0.25;
+/**
+ * Share of the reach a contact may be met *behind* the threat's own point.
+ *
+ * A whole reach, not a quarter, because the point handed in is the one the
+ * scene drew and a shell is drawn extrapolated forward - by the frame the
+ * removal arrives it is usually already past the arc, so the crossing is
+ * behind it rather than ahead. Backwards and forwards are both a patch or two
+ * of its own travel: that is the width of the uncertainty, and nothing wider
+ * would be honest about it.
+ */
+export const SHIELD_IMPACT_BACKTRACK = 1;
 
 /**
  * Where a threat met the raised sector, or nothing if it never did.
