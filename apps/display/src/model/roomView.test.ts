@@ -149,7 +149,8 @@ describe("display room view", () => {
               radius: 24,
               heading: Math.PI,
               hp: 80,
-              maxHp: 100
+              maxHp: 100,
+              shotsFired: 0
             },
             {
               entityId: "enemy-1",
@@ -162,7 +163,8 @@ describe("display room view", () => {
               radius: 18,
               heading: Math.PI,
               hp: 40,
-              maxHp: 40
+              maxHp: 40,
+              shotsFired: 0
             }
           ]),
           asteroids: collection([]),

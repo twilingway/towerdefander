@@ -186,6 +186,13 @@ export class EnemyState extends Schema {
   @type("float32") heading = 0;
   @type("float32") hp = 0;
   @type("float32") maxHp = 0;
+  /**
+   * Shots fired, narrowed to the wire from the simulation's own unbounded
+   * count. The display compares it with the last value it drew, so it answers
+   * "did this enemy fire" and never "how many"; wrapping is therefore fine, and
+   * two bytes on forty hulls beats naming a shooter on every shell.
+   */
+  @type("uint16") shotsFired = 0;
 }
 
 export class AsteroidState extends Schema {
@@ -264,6 +271,14 @@ export class EnemyVisualState extends Schema {
   @type("float32") modelScale = 1;
   @type("boolean") showHealthBar = false;
   @type("boolean") isBoss = false;
+  /**
+   * What this archetype plays on each of its events; an empty string is an
+   * unset slot, which leaves the display's own rule. Strings are affordable
+   * here because the catalogue is published once per run, not per tick.
+   */
+  @type("string") effectDeath = "";
+  @type("string") effectHit = "";
+  @type("string") effectShot = "";
 }
 
 /**

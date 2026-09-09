@@ -546,11 +546,28 @@ function scaleTickFields(value: unknown, factor: number): unknown {
  */
 const TICK_RATE_BEFORE_60_HZ = 20;
 
+/**
+ * The first file version written at sixty steps a second.
+ *
+ * The rescale has to be gated on this rather than on "is this file legacy",
+ * which is what it used to ask. Every legacy version happened to predate the
+ * rate when the rescale was written, so the two questions had the same answer -
+ * and then the current version moved on, the versions written at 60 Hz started
+ * arriving as legacy, and their tick fields were tripled a second time. It
+ * surfaced the moment the committed seed became one version old: every autopilot
+ * interval in it blew its schema ceiling and the whole file was refused.
+ */
+const FIRST_60_HZ_BALANCE_VERSION = 37;
+
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;
   const isLegacy = LEGACY_BALANCE_FILE_VERSIONS.some((candidate) => candidate === version);
   if (!isRecord(raw) || !isLegacy) return raw;
   const defaults = createDefaultTuning();
+  const tickScale =
+    typeof version === "number" && version >= FIRST_60_HZ_BALANCE_VERSION
+      ? 1
+      : SIMULATION_TICK_RATE / TICK_RATE_BEFORE_60_HZ;
   return {
     ...raw,
     version: BALANCE_FILE_VERSION,
@@ -558,10 +575,7 @@ export function migrateBalanceDocument(raw: unknown): unknown {
     // already written at the new rate, and scaling them a second time would
     // triple every knob the operator never touched.
     presets: readArray(raw, "presets").map((preset) =>
-      migratePreset(
-        scaleTickFields(preset, SIMULATION_TICK_RATE / TICK_RATE_BEFORE_60_HZ),
-        defaults
-      )
+      migratePreset(scaleTickFields(preset, tickScale), defaults)
     )
   };
 }

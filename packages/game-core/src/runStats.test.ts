@@ -82,7 +82,8 @@ function enemyAt(x: number, y: number, hp: number, config: SpaceshipSimulationCo
     spawnedTick: 0,
     hp,
     maxHp: archetype.hp,
-    weaponCooldownTicks: archetype.weapons.map(() => 1000)
+    weaponCooldownTicks: archetype.weapons.map(() => 1000),
+    shotsFired: 0
   };
   return { enemy, archetype };
 }

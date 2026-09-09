@@ -6,13 +6,14 @@ import {
   MAX_ENEMY_ARCHETYPES,
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
+import { FX_EVENT_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 38 as const;
+export const BALANCE_FILE_VERSION = 39 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -89,6 +90,21 @@ export type SpawnKind = z.infer<typeof spawnKindSchema>;
 
 /** A silhouette from the shared visual catalogue; the asset carries its own colours. */
 export const visualAssetIdSchema = z.enum(VISUAL_ASSET_IDS);
+export const fxEventEffectIdSchema = z.enum(FX_EVENT_EFFECT_IDS);
+
+/**
+ * What an archetype plays on each of its events. Every slot is optional, and an
+ * empty one means "as it is now" rather than "nothing": a preset that names no
+ * effect at all plays exactly as it did before the slots existed.
+ */
+export const enemyEventEffectsSchema = z
+  .object({
+    death: fxEventEffectIdSchema.optional(),
+    hit: fxEventEffectIdSchema.optional(),
+    shot: fxEventEffectIdSchema.optional()
+  })
+  .strict();
+export type EnemyEventEffects = z.infer<typeof enemyEventEffectsSchema>;
 export const MODEL_SCALE_MIN = 0.2;
 export const MODEL_SCALE_MAX = 4;
 const modelScaleSchema = z.number().min(MODEL_SCALE_MIN).max(MODEL_SCALE_MAX);
@@ -97,7 +113,9 @@ export const enemyVisualSchema = z
     shape: visualAssetIdSchema,
     /** Drawn size relative to the hit radius; 1 means the model matches the hitbox. */
     modelScale: modelScaleSchema,
-    showHealthBar: z.boolean()
+    showHealthBar: z.boolean(),
+    /** Absent leaves the display's own rule; see `enemyEventEffectsSchema`. */
+    effects: enemyEventEffectsSchema.optional()
   })
   .strict();
 export type EnemyVisual = z.infer<typeof enemyVisualSchema>;

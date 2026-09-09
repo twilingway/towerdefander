@@ -135,6 +135,18 @@ export interface EntityVisual {
 
 export interface EnemyVisual extends EntityVisual {
   readonly showHealthBar: boolean;
+  /**
+   * What this archetype plays on each of its events. Display data, like
+   * `showHealthBar` beside it: the simulation carries it from the preset to the
+   * room and never reads it. An absent slot leaves the display's own rule.
+   */
+  readonly effects?:
+    | {
+        readonly death?: string | undefined;
+        readonly hit?: string | undefined;
+        readonly shot?: string | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -333,6 +345,13 @@ export interface CombatEnemyState extends MovingEntity {
   readonly maxHp: number;
   /** One entry per archetype weapon, in the archetype's order. */
   readonly weaponCooldownTicks: readonly number[];
+  /**
+   * Shots this enemy has fired, counted once per tick however many of its
+   * barrels went off. Purely a signal for the display, which compares it with
+   * the last value it drew; nothing in the simulation reads it. Unbounded here,
+   * because narrowing to the wire's width is the projection's job.
+   */
+  readonly shotsFired: number;
   readonly perception: EnemyPerception;
   /**
    * Seeded stream the aim spread draws from, advanced only on a tick this

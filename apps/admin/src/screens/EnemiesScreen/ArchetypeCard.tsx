@@ -9,6 +9,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
+import { EffectSlots } from "./EffectSlots.js";
 import { EnemyPreview } from "../../EnemyPreview.js";
 import { DegreesField, NumberField, PercentField } from "../../components/fields.js";
 import { ENEMY_SKILL_LEVEL_LABELS } from "../../model/enemySkillLabels.js";
@@ -211,6 +212,14 @@ export function ArchetypeCard({ kind, archetype, tuning, onChange }: ArchetypeCa
           </div>
         </div>
       </div>
+
+      <h4 className="card__subtitle">Эффекты событий</h4>
+      <EffectSlots
+        effects={archetype.visual.effects}
+        onChange={(effects) => {
+          patchVisual(kind, { effects });
+        }}
+      />
 
       <h4 className="card__subtitle">Характеристики</h4>
       <div className="card__grid">

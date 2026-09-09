@@ -286,6 +286,42 @@ describe("balance store", () => {
   });
 });
 
+describe("tick rescale gate", () => {
+  /**
+   * The rescale asks "was this file written before the rate moved", and for a
+   * while that was the same question as "is this file legacy" - every legacy
+   * version predated 60 Hz. Then the current version moved on, versions written
+   * at 60 Hz began arriving as legacy, and their tick fields were tripled a
+   * second time. The committed seed was the first casualty: one version behind,
+   * it became legacy and every autopilot interval in it blew its ceiling.
+   */
+  const RETARGET = (document: unknown): number | undefined => {
+    const file = document as BalancePresetsFile;
+    return file.presets[0]?.tuning.autopilot.profiles.kinetic.rookie.retargetIntervalTicks;
+  };
+  const legacyAt = (version: number): unknown => ({
+    version,
+    activePresetId: "seed",
+    presets: [{ id: "seed", name: "Seed", tuning: createDefaultTuning() }]
+  });
+
+  it("does not rescale a file that was already written at sixty steps", () => {
+    const defaults = createDefaultTuning();
+    const expected = defaults.autopilot.profiles.kinetic.rookie.retargetIntervalTicks;
+    // One version behind current, which is where the committed seed lives.
+    expect(RETARGET(migrateBalanceDocument(legacyAt(BALANCE_FILE_VERSION - 1)))).toBe(expected);
+    expect(RETARGET(migrateBalanceDocument(legacyAt(37)))).toBe(expected);
+  });
+
+  it("still triples a file written at twenty steps", () => {
+    // The rescale itself has to keep working, or a genuinely old preset would
+    // reload three times as fast as it was tuned.
+    const defaults = createDefaultTuning();
+    const expected = defaults.autopilot.profiles.kinetic.rookie.retargetIntervalTicks;
+    expect(RETARGET(migrateBalanceDocument(legacyAt(36)))).toBe(expected * 3);
+  });
+});
+
 describe("version 1 migration", () => {
   function legacyDocument() {
     const tuning = atLegacyTickRate(createDefaultTuning());

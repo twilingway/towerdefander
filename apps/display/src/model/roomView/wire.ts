@@ -57,6 +57,7 @@ export interface NetworkEnemyState extends NetworkCombatEntityState {
   heading: number;
   hp: number;
   maxHp: number;
+  shotsFired: number;
 }
 
 export interface NetworkAsteroidState extends NetworkCombatEntityState {
@@ -269,6 +270,10 @@ export interface NetworkEnemyVisualState {
   modelScale: number;
   showHealthBar: boolean;
   isBoss: boolean;
+  /** Empty is an unset slot, which leaves the display's own rule. */
+  effectDeath: string;
+  effectHit: string;
+  effectShot: string;
 }
 
 export interface NetworkRoomState {

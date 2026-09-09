@@ -55,7 +55,8 @@ export function createWorstCaseCombatFixture(
       aimRngState: 1,
       hp: 10_000,
       maxHp: 10_000,
-      weaponCooldownTicks: [10_000]
+      weaponCooldownTicks: [10_000],
+      shotsFired: 0
     } satisfies CombatEnemyState;
   });
   const asteroids = Array.from({ length: config.caps.asteroids }, (_, index) => {

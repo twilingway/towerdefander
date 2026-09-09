@@ -910,6 +910,9 @@ export class SpaceshipDefenderRoom extends Room<{
       entry.modelScale = archetype.visual.modelScale;
       entry.showHealthBar = archetype.visual.showHealthBar;
       entry.isBoss = archetype.spawnPolicy === "boss";
+      entry.effectDeath = archetype.visual.effects?.death ?? "";
+      entry.effectHit = archetype.visual.effects?.hit ?? "";
+      entry.effectShot = archetype.visual.effects?.shot ?? "";
       catalogue.set(kind, entry);
     }
   }

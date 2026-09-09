@@ -1095,3 +1095,26 @@ body {
 .fx-preview__meta dd {
   margin: 0;
 }
+
+/* Слоты эффектов архетипа: выбор и миниатюра выбранного кадра. */
+
+.fx-slots {
+  display: grid;
+  gap: 8px;
+}
+
+.fx-slots__row {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+}
+
+.fx-slots__row .field {
+  flex: 1;
+}
+
+.fx-slots__hint {
+  color: var(--ink-dim);
+  font-size: 12px;
+  padding-bottom: 6px;
+}

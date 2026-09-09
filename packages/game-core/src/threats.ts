@@ -167,16 +167,32 @@ export function moveAndSpawnThreats(
     });
     aimRngStates.set(enemy.id, aimRngState);
   }
-  enemies = enemies.map((enemy) => ({
-    ...enemy,
-    aimRngState: aimRngStates.get(enemy.id) ?? enemy.aimRngState,
-    weaponCooldownTicks: archetypeOf(config, enemy.kind).weapons.map((weapon, weaponIndex) => {
-      const remaining = enemy.weaponCooldownTicks[weaponIndex] ?? 0;
-      if (remaining > 0) return remaining;
-      if (!firedWeapons.has(`${enemy.id}:${String(weaponIndex)}`)) return remaining;
-      return Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier));
-    })
-  }));
+  enemies = enemies.map((enemy) => {
+    const weapons = archetypeOf(config, enemy.kind).weapons;
+    /*
+     * Membership of `firedWeapons` is exactly "fired this tick": the firing pass
+     * above returns early on any barrel whose cooldown is still running, so a
+     * weapon can only be in the set with its cooldown at zero.
+     *
+     * Counted once per tick however many barrels went off. Two flashes in one
+     * frame would land on top of each other, and the display asks whether this
+     * enemy fired, never how often.
+     */
+    const fired = weapons.some((_, weaponIndex) =>
+      firedWeapons.has(`${enemy.id}:${String(weaponIndex)}`)
+    );
+    return {
+      ...enemy,
+      aimRngState: aimRngStates.get(enemy.id) ?? enemy.aimRngState,
+      shotsFired: fired ? enemy.shotsFired + 1 : enemy.shotsFired,
+      weaponCooldownTicks: weapons.map((weapon, weaponIndex) => {
+        const remaining = enemy.weaponCooldownTicks[weaponIndex] ?? 0;
+        if (remaining > 0) return remaining;
+        if (!firedWeapons.has(`${enemy.id}:${String(weaponIndex)}`)) return remaining;
+        return Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier));
+      })
+    };
+  });
 
   let pendingSpawns = state.pendingSpawns;
   let spawnRngState = state.spawnRngState;

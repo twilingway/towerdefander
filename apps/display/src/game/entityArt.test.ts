@@ -88,6 +88,7 @@ function enemy(overrides: Partial<PublicEnemyView> = {}): PublicEnemyView {
     heading: 0,
     hp: 50,
     maxHp: 100,
+    shotsFired: 0,
     ...overrides
   };
 }

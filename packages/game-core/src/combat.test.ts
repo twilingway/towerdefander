@@ -648,7 +648,8 @@ describe("deterministic combat foundation", () => {
       spawnedTick: 0,
       hp: twinGun.hp,
       maxHp: twinGun.hp,
-      weaponCooldownTicks: [0, 0]
+      weaponCooldownTicks: [0, 0],
+      shotsFired: 0
     };
     const opened = advanceSpaceshipSimulation(
       { ...initial, pendingSpawns: [], enemies: [enemy] },
@@ -711,7 +712,8 @@ describe("deterministic combat foundation", () => {
       spawnedTick: 0,
       hp: mixedGun.hp,
       maxHp: mixedGun.hp,
-      weaponCooldownTicks: [0, 0, 0]
+      weaponCooldownTicks: [0, 0, 0],
+      shotsFired: 0
     };
     const opened = advanceSpaceshipSimulation(
       { ...initial, pendingSpawns: [], enemies: [enemy] },
@@ -797,7 +799,8 @@ describe("deterministic combat foundation", () => {
       spawnedTick: 0,
       hp: sentry.hp,
       maxHp: sentry.hp,
-      weaponCooldownTicks: [0]
+      weaponCooldownTicks: [0],
+      shotsFired: 0
     });
 
     const held = advanceSpaceshipSimulation(
@@ -912,7 +915,8 @@ describe("deterministic combat foundation", () => {
       spawnedTick: 0,
       hp: boss.hp,
       maxHp: boss.hp,
-      weaponCooldownTicks: [0]
+      weaponCooldownTicks: [0],
+      shotsFired: 0
     };
     const stepped = advanceSpaceshipSimulation(
       { ...initial, pendingSpawns: [], enemies: [bossEnemy] },
@@ -1306,7 +1310,8 @@ describe("combat motion and collision", () => {
       aimRngState: 1,
       hp: getEnemyArchetype(config, "gunship").hp,
       maxHp: getEnemyArchetype(config, "gunship").hp,
-      weaponCooldownTicks: [index < 3 ? 0 : 20]
+      weaponCooldownTicks: [index < 3 ? 0 : 20],
+      shotsFired: 0
     }));
     const asteroids: AsteroidState[] = Array.from({ length: 16 }, (_, index) => ({
       id: `asteroid-cap-${String(index)}`,
@@ -1546,7 +1551,8 @@ describe("enemy turn inertia", () => {
       spawnedTick: 0,
       hp: getEnemyArchetype(config, kind).hp,
       maxHp: getEnemyArchetype(config, kind).hp,
-      weaponCooldownTicks: [1_000_000]
+      weaponCooldownTicks: [1_000_000],
+      shotsFired: 0
     };
   }
 
