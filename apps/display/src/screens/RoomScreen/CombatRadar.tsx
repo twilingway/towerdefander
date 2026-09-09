@@ -1,4 +1,4 @@
-import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
+import { PATCH_INTERVAL_MS, type DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { useEffect, useRef } from "react";
 
 import { drawCombatRadar, easeRing, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
@@ -23,14 +23,20 @@ const MAX_PIXEL_RATIO = 2.5;
 /**
  * How often the dial is redrawn.
  *
- * Twenty times a second, not every frame. Drawn on the frame clock it was the
- * third most expensive thing in a profile of a real wave - fifty-five
- * milliseconds a second, most of it in text with an outline behind it and in
- * five attribute reads - and none of that buys anything on a dial that spans
- * the whole arena, where a dot moves a pixel a second. Twenty is still six
- * times fresher than the poll this replaced.
+ * Once per patch, not every frame. Drawn on the frame clock it was the third
+ * most expensive thing in a profile of a real wave - fifty-five milliseconds a
+ * second, most of it in text with an outline behind it and in five attribute
+ * reads - and none of that buys anything on a dial that spans the whole arena,
+ * where a dot moves a pixel a second.
+ *
+ * The rate is the room's patch rate rather than a round number, because that is
+ * the freshest this dial can possibly be: state arrives pushed, thirty times a
+ * second, and a poll faster than the data is pure heat. It used to be twenty,
+ * chosen for those crawling dots - but the hull and the shield are also on here,
+ * and they do not crawl. A hit takes a bar down in one tick, and reading it up
+ * to fifty milliseconds late is the one thing on this dial a crew notices.
  */
-const REDRAW_INTERVAL_MS = 50;
+const REDRAW_INTERVAL_MS = PATCH_INTERVAL_MS;
 
 interface RadarAttributes {
   readonly "data-enemy-count": string;
