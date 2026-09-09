@@ -1,6 +1,7 @@
 import {
   createSpaceshipSimulationConfig,
   createSpaceshipSimulationState,
+  type CombatEnemyState,
   type HostileProjectileState,
   type SpaceshipSimulationConfig,
   type SpaceshipSimulationState
@@ -39,6 +40,36 @@ function bullet(
     shieldHitCost: 10,
     lifetimeTicks: 100,
     visual: null
+  };
+}
+
+/** A gunship holding station at the given offset from the hull. */
+function enemy(
+  state: SpaceshipSimulationState,
+  offset: { x: number; y: number }
+): CombatEnemyState {
+  const x = state.spaceship.x + offset.x;
+  const y = state.spaceship.y + offset.y;
+  return {
+    id: "gunship-test",
+    spawnSequence: 1,
+    kind: "gunship",
+    previousX: x,
+    previousY: y,
+    x,
+    y,
+    velocity: { x: 0, y: 0 },
+    heading: 0,
+    angularVelocity: 0,
+    orbitSign: 1,
+    perception: { tick: -1, x: 0, y: 0, velocityX: 0, velocityY: 0 },
+    aimRngState: 1,
+    radius: 30,
+    spawnedTick: 0,
+    hp: 200,
+    maxHp: 200,
+    weaponCooldownTicks: [10_000],
+    shotsFired: 0
   };
 }
 
@@ -97,6 +128,46 @@ describe("shield autopilot", () => {
       nextShieldIntent({ ...state, shieldPhase: "up", hostileProjectiles: [away] }, config).active
     ).toBe(false);
     expect(nextShieldIntent({ ...state, shieldPhase: "up" }, config).active).toBe(false);
+  });
+
+  it("raises for the ships when nothing of theirs will land", () => {
+    /*
+     * Reported twice, and the same cause both times. A shot only counted if it
+     * would reach the shield ring, so a ship running from a group - or circling
+     * one - had almost nothing qualify: the shells miss astern. The sector then
+     * stayed down with enemies a few hull lengths away, and because an intent
+     * with no target carries a zero vector, which means "leave the sector where
+     * it is", it sat pointing at the tail while the fight was ahead.
+     */
+    const state = cleanState();
+    const behind = enemy(state, { x: -366, y: -40 });
+    const missing = bullet(state, { x: -200, y: -220 }, { x: 620, y: 0 });
+    const fleeing = {
+      ...state,
+      spaceship: { ...state.spaceship, velocity: { x: 620, y: 0 } },
+      enemies: [behind],
+      hostileProjectiles: [missing],
+      shieldPhase: "down" as const
+    };
+    const intent = nextShieldIntent(fleeing, config);
+    expect(intent.active).toBe(true);
+    // Facing the group, not held wherever it happened to be.
+    expect(intent.vector.x).toBeLessThan(-0.9);
+  });
+
+  it("leaves the sector down for a ship still out of its own reach", () => {
+    // The bound that keeps this from being "any enemy anywhere": an enemy that
+    // cannot shoot us yet is not a reason to spend the bank. The distance is the
+    // archetype's own `engagementRange`, so it is tuned in the console rather
+    // than here.
+    const state = cleanState();
+    const far = enemy(state, { x: -2400, y: 0 });
+    expect(nextShieldIntent({ ...state, enemies: [far], shieldPhase: "down" }, config).active).toBe(
+      false
+    );
+    expect(nextShieldIntent({ ...state, enemies: [far], shieldPhase: "up" }, config).active).toBe(
+      false
+    );
   });
 
   it("keeps one rhythm whatever the operator set the bank to", () => {

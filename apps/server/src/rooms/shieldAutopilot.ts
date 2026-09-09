@@ -105,13 +105,23 @@ export function nextShieldIntent(
     reach,
     committed ? HOLD_WITHIN_SECONDS : RAISE_WITHIN_SECONDS
   );
-  // A sector already up also stays up for the ships doing the shooting, not
-  // only for what is currently in the air. Shots are what this policy could
-  // see, and a crowd of enemies does not fire continuously - a gunship reloads
-  // for up to three and a half seconds - so between volleys there was nothing
-  // to hold for and the sector dropped, whatever the bank held. Surrounded is
-  // exactly when it should stay up.
-  const nearest = incoming ?? (committed ? findNearestArmedEnemy(state, config) : undefined);
+  /*
+   * The ships doing the shooting count, not only what is currently in the air.
+   *
+   * Shots were all this policy could see, and that failed in three ways at
+   * once. A crowd does not fire continuously - a gunship reloads for up to
+   * three and a half seconds - so between volleys there was nothing to hold
+   * for. A shot only counts if it will actually reach the shield ring, so
+   * against a ship that is running or circling, where most shots miss, nothing
+   * ever qualified and the sector stayed down with enemies all around. And when
+   * nothing qualified the intent carried a zero vector, which means "leave the
+   * sector where it is" - so it sat pointing at the tail while the fight was
+   * ahead.
+   *
+   * An enemy inside its own weapons' reach answers all three: it is a reason to
+   * raise, a reason to keep holding, and a bearing to face.
+   */
+  const nearest = incoming ?? findNearestArmedEnemy(state, config);
   const capacity = state.ship.shieldCapacity;
   const drain = state.ship.shieldDrainPerSecond;
   // Hysteresis on the bank as well as on the distance: spend a sector down to
