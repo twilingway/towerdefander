@@ -306,6 +306,18 @@ export const EXHAUST_THROAT_UNITS = 0.82;
  */
 export const EXHAUST_ROTATION_OFFSET = -Math.PI / 2;
 
+/**
+ * The other half of the same convention, for an effect that leaves *along* the
+ * thing it belongs to instead of against it - a muzzle flash rather than a
+ * plume.
+ *
+ * Same algebra, other sign: a sprite at rotation `t` sends its local -Y along
+ * `(sin t, -cos t)`, and a flash has to leave along `(cos a, sin a)`, which
+ * `t = a + pi/2` solves. Getting this wrong points the flash into the hull it
+ * was fired from, which is exactly what it looked like.
+ */
+export const MUZZLE_ROTATION_OFFSET = Math.PI / 2;
+
 /** Below this share of top speed the engine reads as off. */
 const PLUME_DEADZONE = 0.06;
 const PLUME_LENGTH_MIN = 0.9;
@@ -346,4 +358,20 @@ export function getExhaustPlume(
     alpha: clamp(drive / PLUME_ALPHA_KNEE, 0, 1),
     timeScale: PLUME_TIME_SCALE_MIN + (PLUME_TIME_SCALE_MAX - PLUME_TIME_SCALE_MIN) * drive
   };
+}
+
+/**
+ * Where a shot leaves a barrel: a point that far along that bearing.
+ *
+ * Two things this is careful about, both of them bugs that were seen on screen.
+ * The reach is the hull radius plus the shell's own, which is exactly what the
+ * simulation fires from - the turret's mount is its pivot, not the end of its
+ * barrel, and a flash put on the mount sits in the middle of the ship. And the
+ * origin and bearing must come from the pose the scene *drew*, not from the
+ * snapshot: the hull is drawn interpolated, roughly a patch behind the room, so
+ * a flash placed from the snapshot trails the visible gun by speed times that
+ * lag. Which is why it looked like the flash reacted to how fast the ship flew.
+ */
+export function getMuzzlePoint(origin: Point, bearing: number, reach: number): Point {
+  return { x: origin.x + Math.cos(bearing) * reach, y: origin.y + Math.sin(bearing) * reach };
 }

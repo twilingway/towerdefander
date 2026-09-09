@@ -12,6 +12,8 @@ import {
   getExhaustPlume,
   reconcileStableIds,
   EXHAUST_ROTATION_OFFSET,
+  MUZZLE_ROTATION_OFFSET,
+  getMuzzlePoint,
   type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 import {
@@ -911,5 +913,41 @@ describe("engine plume geometry", () => {
       expect(Math.sin(rotation)).toBeCloseTo(-Math.cos(heading), 12);
       expect(-Math.cos(rotation)).toBeCloseTo(-Math.sin(heading), 12);
     }
+  });
+});
+
+describe("muzzle geometry", () => {
+  const BEARINGS = [0, 0.7, Math.PI / 2, 2.4, Math.PI, -1.3, 5.9];
+
+  it("turns a flash along the shot, not against it", () => {
+    // The bug this exists to stop: the plume's offset was reused for the flash,
+    // which points an effect the other way. On a muzzle that put the cone inside
+    // the hull it was fired from - "behind the gun, somewhere mid-ship".
+    for (const bearing of BEARINGS) {
+      const rotation = bearing + MUZZLE_ROTATION_OFFSET;
+      expect(Math.sin(rotation)).toBeCloseTo(Math.cos(bearing), 12);
+      expect(-Math.cos(rotation)).toBeCloseTo(Math.sin(bearing), 12);
+    }
+  });
+
+  it("points the opposite way to the exhaust", () => {
+    // A plume leaves against its hull and a flash along its barrel; if these two
+    // ever agreed, one of them would be wrong.
+    expect(Math.abs(MUZZLE_ROTATION_OFFSET - EXHAUST_ROTATION_OFFSET)).toBeCloseTo(Math.PI, 12);
+  });
+
+  it("puts the muzzle that far along the bearing", () => {
+    // The same reach the simulation fires from: the hull radius plus the
+    // shell's own. Short of it and the flash is inside the ship.
+    expect(getMuzzlePoint({ x: 100, y: 50 }, 0, 26 + 4)).toEqual({ x: 130, y: 50 });
+  });
+
+  it("follows the bearing it is given rather than the hull's", () => {
+    // The cannon fires wherever its turret points, and the flash has to go
+    // there and not along the hull - which is why the bearing is a parameter
+    // and not read off the ship.
+    const point = getMuzzlePoint({ x: 0, y: 0 }, -Math.PI / 2, 32);
+    expect(point.x).toBeCloseTo(0, 9);
+    expect(point.y).toBeCloseTo(-32, 9);
   });
 });

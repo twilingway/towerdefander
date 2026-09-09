@@ -6,13 +6,18 @@ import {
   type FxEffect
 } from "@spaceship-defender/fx-assets";
 
-import { EXHAUST_ROTATION_OFFSET } from "../spaceshipViewModel.js";
+import { MUZZLE_ROTATION_OFFSET, getMuzzlePoint, type Point } from "../spaceshipViewModel.js";
 
 /**
- * The player's own guns. Not a preset slot: the archetype slots are the enemy's
- * business, and the crew's own barrels are the display's.
+ * The crew's own guns. Not preset slots: the archetype slots are the enemy's
+ * business, and the crew's own barrels are the display's. The nose gun gets its
+ * own warm flash - the cannon's plasma blue on a machine gun read as the same
+ * weapon firing twice.
  */
-export const OWN_MUZZLE_EFFECT = "muzzle-flash";
+export const OWN_MUZZLE_EFFECTS: Record<"cannon" | "machineGun", string> = {
+  cannon: "muzzle-flash",
+  machineGun: "muzzle-flash-mg"
+};
 
 /** What the display falls back to when a preset assigns nothing. */
 export const DEFAULT_BOSS_DEATH_EFFECT = "explosion";
@@ -26,7 +31,7 @@ export const DEFAULT_ENEMY_DEATH_EFFECT = "debris-burst";
  */
 const SPAN: Record<FxCategory, number> = {
   exhaust: 2,
-  muzzle: 2.4,
+  muzzle: 1.6,
   explosion: 5.5,
   destruction: 4.5
 };
@@ -76,6 +81,47 @@ export const HIT_EFFECT_MIN_TICKS = 12;
 
 export function mayPlayHitEffect(tick: number, lastPlayedTick: number | undefined): boolean {
   return lastPlayedTick === undefined || tick - lastPlayedTick >= HIT_EFFECT_MIN_TICKS;
+}
+
+/** One shot from the crew's own guns, waiting to be placed on screen. */
+export interface OwnShot {
+  readonly source: "cannon" | "machineGun";
+  /** The shell's own radius, which the muzzle offset counts in. */
+  readonly shellRadius: number;
+}
+
+/**
+ * Puts the crew's own flashes on the barrels that fired them, and empties the
+ * queue.
+ *
+ * Every number here is one the scene just drew, and that is the whole point:
+ * the hull on screen is interpolated, a patch behind the room, so a flash
+ * placed from the snapshot trails the visible gun by speed times that lag - it
+ * looked like the flash was reacting to how fast the ship flew, and with the
+ * turret turned back it ended up stretched far off the barrel. The cannon takes
+ * the turret's drawn bearing and its mount, the nose gun the hull's.
+ */
+export function placeOwnShots(
+  // Structural rather than the class, so the arithmetic can be tested against a
+  // recorder without a scene.
+  bursts: Pick<BurstLayer, "spawn"> | undefined,
+  shots: OwnShot[],
+  pose: {
+    readonly mount: Point;
+    readonly hull: Point;
+    readonly heading: number;
+    readonly turretRotation: number;
+    readonly hullRadius: number;
+  }
+): void {
+  for (const shot of shots) {
+    const fromCannon = shot.source === "cannon";
+    const bearing = fromCannon ? pose.turretRotation : pose.heading;
+    const origin = fromCannon ? pose.mount : pose.hull;
+    const point = getMuzzlePoint(origin, bearing, pose.hullRadius + shot.shellRadius);
+    bursts?.spawn(OWN_MUZZLE_EFFECTS[shot.source], point.x, point.y, pose.hullRadius, bearing);
+  }
+  shots.length = 0;
 }
 
 interface PooledBurst {
@@ -139,7 +185,7 @@ export class BurstLayer {
     burst.busy = true;
     burst.sprite
       .setPosition(x, y)
-      .setRotation(effect.oriented && heading !== undefined ? heading + EXHAUST_ROTATION_OFFSET : 0)
+      .setRotation(effect.oriented && heading !== undefined ? heading + MUZZLE_ROTATION_OFFSET : 0)
       .setScale((radius * SPAN[effect.category]) / effect.meta.frameWidth)
       .setVisible(true);
     burst.sprite.play({ key: animationKey(effectId), startFrame: 0 }, true);
@@ -162,6 +208,18 @@ export class BurstLayer {
     }
     const sprite = this.scene.add
       .sprite(0, 0, textureKey(effect.id))
+      /*
+       * Additive, because that is how the effect was lit. Its layers are drawn
+       * on `add` inside the editor and exported to RGBA, so the dark tail of
+       * every gradient survives as dark pixels with some alpha. Over space that
+       * goes unnoticed; over the ship's own hull it composited as a dark slab -
+       * the "black square between the flash and the gun".
+       */
+      .setBlendMode("ADD")
+      // An oriented effect is authored with its source on the bottom edge, so
+      // pinning that edge puts the source exactly where it was fired from and
+      // makes the sprite turn about it. A circular one stays centred.
+      .setOrigin(0.5, effect.oriented ? 1 : 0.5)
       .setDepth(DEPTH)
       .setVisible(false);
     const entry: PooledBurst = { sprite, busy: false };

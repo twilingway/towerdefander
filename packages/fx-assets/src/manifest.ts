@@ -48,7 +48,7 @@ export const FX_EFFECTS: readonly FxEffect[] = [
     hint: "Короткий выброс у дула, около 0.14 с. Направленный: в атласе смотрит вверх, как выхлоп.",
     oriented: true,
     loop: false,
-    bytes: 36877,
+    bytes: 75627,
     url: new URL("../atlases/muzzle-flash.png", import.meta.url).href,
     meta: {
       frameWidth: 96,
@@ -58,6 +58,25 @@ export const FX_EFFECTS: readonly FxEffect[] = [
       frames: 12,
       fps: 50,
       duration: 0.24
+    }
+  },
+  {
+    id: "muzzle-flash-mg",
+    title: "Дульная вспышка (пулемёт)",
+    category: "muzzle",
+    hint: "Тёплая короткая вспышка носового пулемёта, ~0.09 с. Направленная: в атласе смотрит вверх.",
+    oriented: true,
+    loop: false,
+    bytes: 10738,
+    url: new URL("../atlases/muzzle-flash-mg.png", import.meta.url).href,
+    meta: {
+      frameWidth: 64,
+      frameHeight: 64,
+      cols: 4,
+      rows: 2,
+      frames: 8,
+      fps: 50,
+      duration: 0.16
     }
   },
   {

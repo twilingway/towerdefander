@@ -9,7 +9,7 @@ import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
 import { drawShield } from "./shield.js";
-import { BurstLayer } from "./bursts.js";
+import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
 import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
 
@@ -39,6 +39,8 @@ export class SpaceshipScene extends Phaser.Scene {
   private shield: Phaser.GameObjects.Image | undefined;
   private exhaust: ExhaustLayer | undefined;
   private bursts: BurstLayer | undefined;
+  /** Shots the crew fired since the last frame, placed from the drawn pose. */
+  private readonly ownShots: OwnShot[] = [];
   private visualShieldAngle: number;
   private spaceshipTrack: PointTrack;
   private headingTrack: AngleTrack;
@@ -255,6 +257,15 @@ export class SpaceshipScene extends Phaser.Scene {
       predicted === undefined
         ? sampleAngleTrack(this.turretTrack, playbackTick)
         : predicted.turretAngle;
+    // From the numbers just drawn, not from the snapshot: that is what keeps the
+    // flash on the visible barrel however fast the hull is moving.
+    placeOwnShots(this.bursts, this.ownShots, {
+      mount,
+      hull: spaceshipPosition,
+      heading: spaceshipHeading,
+      turretRotation: this.turret.rotation,
+      hullRadius: this.snapshot.spaceship.radius
+    });
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     if (this.vectorsEnabled) {
       this.drawShield();
@@ -481,7 +492,8 @@ export class SpaceshipScene extends Phaser.Scene {
       bake: this.bake,
       toTick,
       snap,
-      bursts: this.bursts
+      bursts: this.bursts,
+      ownShots: this.ownShots
     });
   }
 }

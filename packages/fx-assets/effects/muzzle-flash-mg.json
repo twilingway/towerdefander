@@ -3,12 +3,12 @@
   "v": 2,
   "doc": {
     "v": 2,
-    "id": "fx_muzzle_flash",
-    "name": "Muzzle Flash",
+    "id": "fx_muzzle_flash_mg",
+    "name": "Muzzle Flash MG",
     "comp": {
       "w": 128,
       "h": 128,
-      "dur": 0.25,
+      "dur": 0.16,
       "fps": 60
     },
     "cam": {
@@ -16,12 +16,12 @@
     },
     "exp": {
       "cols": 4,
-      "rows": 3,
-      "frames": 12,
-      "cellW": 96,
-      "cellH": 96,
+      "rows": 2,
+      "frames": 8,
+      "cellW": 64,
+      "cellH": 64,
       "t0": 0,
-      "t1": 0.24,
+      "t1": 0.16,
       "mode": "rgba",
       "thr": 0,
       "ss": 2
@@ -29,43 +29,43 @@
     "textures": [],
     "layers": [
       {
-        "id": "lr_muzzle_sparks",
+        "id": "lr_mg_sparks",
         "type": "emitter",
         "name": "Sparks",
         "blend": "add",
         "start": 0,
-        "end": 0.05,
+        "end": 0.03,
         "em": {
           "x": 0,
           "y": 64,
           "shape": "point",
           "dir": "dir",
           "angle": -90,
-          "spread": 34,
-          "speed": 620,
+          "spread": 26,
+          "speed": 520,
           "speedRnd": 0.6,
           "rate": 0,
           "bursts": [
             {
               "t": 0,
-              "n": 26
+              "n": 12
             }
           ],
-          "seed": 1
+          "seed": 2
         },
         "pt": {
-          "life": 0.2,
+          "life": 0.12,
           "lifeRnd": 0.4,
           "sprite": {
             "kind": "shape",
             "id": "streak",
             "p": {}
           },
-          "size": 30,
+          "size": 22,
           "sizeRnd": 0.5,
           "alignVel": true,
           "stretch": 1.6,
-          "drag": 2.5,
+          "drag": 3,
           "glow": 0.4,
           "glowSize": 1.6,
           "glowBlur": 0.15,
@@ -76,7 +76,7 @@
                 "v": 1
               },
               {
-                "t": 0.35,
+                "t": 0.4,
                 "v": 0.5
               },
               {
@@ -92,8 +92,8 @@
                 "v": 1
               },
               {
-                "t": 0.55,
-                "v": 0.85
+                "t": 0.5,
+                "v": 0.8
               },
               {
                 "t": 1,
@@ -109,51 +109,51 @@
               },
               {
                 "t": 0.3,
-                "c": [206, 250, 255]
+                "c": [255, 238, 168]
               },
               {
                 "t": 0.7,
-                "c": [80, 186, 255]
+                "c": [255, 176, 48]
               },
               {
                 "t": 1,
-                "c": [26, 80, 190]
+                "c": [186, 74, 14]
               }
             ]
           }
         }
       },
       {
-        "id": "lr_muzzle_cone",
+        "id": "lr_mg_cone",
         "type": "emitter",
         "name": "Cone",
         "blend": "add",
         "start": 0,
-        "end": 0.04,
-        "glowL": 0.8,
-        "glowLR": 10,
+        "end": 0.025,
+        "glowL": 0.7,
+        "glowLR": 8,
         "em": {
           "x": 0,
           "y": 64,
           "shape": "circle",
-          "sx": 8,
-          "sy": 6,
+          "sx": 5,
+          "sy": 4,
           "dir": "dir",
           "angle": -90,
-          "spread": 20,
-          "speed": 340,
+          "spread": 18,
+          "speed": 260,
           "speedRnd": 0.5,
           "rate": 0,
           "bursts": [
             {
               "t": 0,
-              "n": 26
+              "n": 16
             }
           ],
-          "seed": 4
+          "seed": 5
         },
         "pt": {
-          "life": 0.15,
+          "life": 0.09,
           "lifeRnd": 0.3,
           "sprite": {
             "kind": "shape",
@@ -162,11 +162,11 @@
               "taper": 0.6
             }
           },
-          "size": 34,
+          "size": 26,
           "sizeRnd": 0.4,
           "alignVel": true,
-          "stretch": 1.1,
-          "drag": 3,
+          "stretch": 1,
+          "drag": 3.4,
           "glow": 0.3,
           "glowSize": 1.8,
           "glowBlur": 0.2,
@@ -174,7 +174,7 @@
             "pts": [
               {
                 "t": 0,
-                "v": 0.35
+                "v": 0.4
               },
               {
                 "t": 0.3,
@@ -190,11 +190,11 @@
             "pts": [
               {
                 "t": 0,
-                "v": 0.18
+                "v": 0.2
               },
               {
                 "t": 0.25,
-                "v": 0.35
+                "v": 0.38
               },
               {
                 "t": 1,
@@ -209,24 +209,28 @@
                 "c": [255, 255, 255]
               },
               {
-                "t": 0.35,
-                "c": [186, 246, 255]
+                "t": 0.3,
+                "c": [255, 238, 168]
+              },
+              {
+                "t": 0.7,
+                "c": [255, 176, 48]
               },
               {
                 "t": 1,
-                "c": [44, 126, 236]
+                "c": [186, 74, 14]
               }
             ]
           }
         }
       },
       {
-        "id": "lr_muzzle_flash",
+        "id": "lr_mg_flash",
         "type": "sprite",
         "name": "Flash",
         "blend": "add",
         "start": 0,
-        "end": 0.18,
+        "end": 0.1,
         "opacity": {
           "keys": [
             {
@@ -237,7 +241,7 @@
               }
             },
             {
-              "t": 0.03,
+              "t": 0.02,
               "v": 1,
               "i": {
                 "m": "ease"
@@ -247,7 +251,7 @@
               }
             },
             {
-              "t": 0.16,
+              "t": 0.09,
               "v": 0,
               "i": {
                 "m": "ease"
@@ -261,32 +265,32 @@
             "id": "soft",
             "p": {}
           },
-          "size": 44,
+          "size": 34,
           "x": 0,
-          "y": 58,
+          "y": 60,
           "aspect": 1,
           "rot": 0,
           "scale": {
             "keys": [
               {
                 "t": 0,
-                "v": 0.3,
+                "v": 0.35,
                 "o": {
                   "m": "ease"
                 }
               },
               {
-                "t": 0.1,
-                "v": 0.65,
+                "t": 0.06,
+                "v": 0.6,
                 "i": {
                   "m": "ease"
                 }
               }
             ]
           },
-          "color": [214, 250, 255],
+          "color": [255, 232, 158],
           "squash": 0,
-          "glow": 0.35,
+          "glow": 0.3,
           "glowSize": 1.6,
           "glowBlur": 0.15,
           "fps": 0
