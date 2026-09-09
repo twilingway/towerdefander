@@ -383,6 +383,9 @@ export class SpaceshipDisplayState extends Schema {
   @type("float32") asteroidVisualScale = 1;
   /** Empty means the display draws its own default hull silhouette. */
   @type("string") spaceshipVisualShape = "";
+  /** Empty means the display keeps its own baked effect for the shield. */
+  @type("string") shieldBandEffect = "";
+  @type("string") shieldImpactEffect = "";
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;

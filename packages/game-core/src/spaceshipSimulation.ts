@@ -68,6 +68,17 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    * for the player hull. The simulation never reads it.
    */
   readonly spaceshipVisual: EntityVisual | null;
+  /**
+   * Effects the crew's shield is drawn with: the barrier its raised sector
+   * becomes, and the mark a blocked shot leaves on it. An empty id keeps the
+   * display's own, which is what every preset written before the slots has.
+   *
+   * Visual, like `spaceshipVisual`, and carried here for the same reason: the
+   * hull is chosen before the run and the config is what the room publishes
+   * from. The step never reads either.
+   */
+  readonly shieldBandEffect: string;
+  readonly shieldImpactEffect: string;
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;

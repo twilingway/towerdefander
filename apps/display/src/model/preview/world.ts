@@ -143,6 +143,8 @@ export const PREVIEW_WORLD = {
   // The preset keeps the ambient rock at the display default, so the preview does too.
   asteroidVisual: null,
   spaceshipVisual: PREVIEW_SPACESHIP_VISUAL,
+  shieldBandEffect: "",
+  shieldImpactEffect: "",
   turretVisual: PREVIEW_TURRET_VISUAL,
   shieldRadius: 104,
   obstacles: []

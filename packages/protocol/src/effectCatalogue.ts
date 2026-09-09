@@ -38,7 +38,19 @@ export type FxEffectId = (typeof FX_EFFECT_IDS)[number];
 export const FX_EVENT_EFFECT_IDS = [
   "muzzle-flash",
   "muzzle-flash-mg",
+  "shield-impact",
   "explosion",
   "debris-burst"
 ] as const;
 export type FxEventEffectId = (typeof FX_EVENT_EFFECT_IDS)[number];
+
+/**
+ * The ones that may be hung on something continuous.
+ *
+ * The mirror of the list above, and the reason there are two: a loop in a
+ * one-shot slot plays forever or is cut off mid-cycle, and a one-shot in a
+ * continuous slot shows once and leaves the thing it was meant to dress bare.
+ * A slot names the list it draws from, so neither mistake is expressible.
+ */
+export const FX_LOOP_EFFECT_IDS = ["plasma-exhaust", "shield-band"] as const;
+export type FxLoopEffectId = (typeof FX_LOOP_EFFECT_IDS)[number];

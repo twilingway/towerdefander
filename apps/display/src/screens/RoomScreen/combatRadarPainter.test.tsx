@@ -125,6 +125,8 @@ const baseGame: DisplayGameSnapshot = {
   enemyCatalogue: [],
   asteroidVisual: null,
   spaceshipVisual: null,
+  shieldBandEffect: "",
+  shieldImpactEffect: "",
   turretVisual: null,
   shieldRadius: 104,
   obstacles: [],

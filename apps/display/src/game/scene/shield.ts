@@ -13,9 +13,8 @@ import {
   type Point
 } from "../spaceshipViewModel.js";
 
-const EFFECT_ID = "shield-band";
-const TEXTURE_KEY = "fx:shield-band";
-const ANIMATION_KEY = "fx:shield-band:loop";
+/** What a run plays when its hull names nothing. */
+export const DEFAULT_SHIELD_BAND_EFFECT = "shield-band";
 /** The crescent's own depth, unchanged, and the band right over it. */
 const CRESCENT_DEPTH = 14;
 const BAND_DEPTH = 15;
@@ -30,8 +29,12 @@ const BAND_DEPTH = 15;
  * The first version was 9 - deliberately narrower than the crescent, to leave
  * its blue margins untouched - and that was wrong twice over. A dim additive
  * strip inside a bright arc is invisible, and the arc it was protecting is gone.
+ *
+ * Widened from 20 to 26 when the operator's own tuning of the atlas came in four
+ * pixels short of the spec's floor on the smallest 4:3 screen. Thickness is the
+ * display's number and the atlas is theirs, so this is the side that gives.
  */
-const BAND_THICKNESS_UNITS = 20;
+const BAND_THICKNESS_UNITS = 26;
 /** Where the taper starts, as a share of the sector from either tip. */
 const BAND_TAPER_SHARE = 0.18;
 
@@ -146,6 +149,8 @@ export function drawShield(
 export class ShieldLayer {
   private readonly scene: Phaser.Scene;
   private readonly bake: BakeShape;
+  private readonly textureKey: string;
+  private readonly animationKey: string;
   private readonly crescent: Phaser.GameObjects.Image;
   private readonly effect: FxEffect | undefined;
   private readonly scale: number;
@@ -155,19 +160,30 @@ export class ShieldLayer {
   private drawnPose: ShieldPose | undefined;
   private disposed = false;
 
-  constructor(scene: Phaser.Scene, blankTexture: string, bake: BakeShape) {
+  /**
+   * The barrier's effect is chosen with the hull, so it is fixed for the run and
+   * settled here rather than watched: a mid-run change is not expressible, and
+   * the atlas has to be queued before the first frame either way.
+   */
+  constructor(scene: Phaser.Scene, blankTexture: string, bake: BakeShape, hullEffect: string) {
+    // An empty id is what a preset with no choice in it publishes, and the
+    // fallback belongs here rather than at the call site: the layer is what
+    // knows which effect it was written around.
+    const effectId = hullEffect.length > 0 ? hullEffect : DEFAULT_SHIELD_BAND_EFFECT;
     this.scene = scene;
     this.bake = bake;
     this.crescent = scene.add.image(0, 0, blankTexture).setDepth(CRESCENT_DEPTH);
-    this.effect = getFxEffect(EFFECT_ID);
+    this.textureKey = `fx:${effectId}`;
+    this.animationKey = `fx:${effectId}:loop`;
+    this.effect = getFxEffect(effectId);
     this.scale =
       this.effect === undefined ? 1 : BAND_THICKNESS_UNITS / this.effect.meta.frameHeight;
     if (this.effect === undefined) return;
-    if (scene.textures.exists(TEXTURE_KEY)) {
+    if (scene.textures.exists(this.textureKey)) {
       this.attach();
       return;
     }
-    scene.load.spritesheet(TEXTURE_KEY, this.effect.url, {
+    scene.load.spritesheet(this.textureKey, this.effect.url, {
       frameWidth: this.effect.meta.frameWidth,
       frameHeight: this.effect.meta.frameHeight,
       endFrame: this.effect.meta.frames - 1
@@ -259,11 +275,12 @@ export class ShieldLayer {
 
   private attach(): void {
     const effect = this.effect;
-    if (this.disposed || effect === undefined || !this.scene.textures.exists(TEXTURE_KEY)) return;
-    if (!this.scene.anims.exists(ANIMATION_KEY)) {
+    if (this.disposed || effect === undefined || !this.scene.textures.exists(this.textureKey))
+      return;
+    if (!this.scene.anims.exists(this.animationKey)) {
       this.scene.anims.create({
-        key: ANIMATION_KEY,
-        frames: this.scene.anims.generateFrameNumbers(TEXTURE_KEY, {
+        key: this.animationKey,
+        frames: this.scene.anims.generateFrameNumbers(this.textureKey, {
           start: 0,
           end: effect.meta.frames - 1
         }),
@@ -276,13 +293,13 @@ export class ShieldLayer {
     this.band = this.scene.add
       // A unit arc to start: the factory wants real points, and the first draw
       // replaces them with the sector's own once a snapshot says how wide it is.
-      .rope(0, 0, TEXTURE_KEY, 0, [...getShieldBandPoints(1, 1)], true)
+      .rope(0, 0, this.textureKey, 0, [...getShieldBandPoints(1, 1)], true)
       .setDepth(BAND_DEPTH)
       .setScale(this.scale)
       // The art is additive - a dark gradient tail is dark pixels with alpha,
       // and composited normally it would draw a box around the barrier.
       .setBlendMode("ADD")
       .setVisible(false);
-    this.band.play(ANIMATION_KEY);
+    this.band.play(this.animationKey);
   }
 }

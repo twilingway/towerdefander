@@ -17,6 +17,8 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   cameraViewWidth: 2500,
   background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
   spaceshipVisual: null,
+  shieldBandEffect: "",
+  shieldImpactEffect: "",
   arenaRadius: 2200,
   /*
    * The reference prototype's arcade profile, in our terms.
