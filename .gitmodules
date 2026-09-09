@@ -1,0 +1,3 @@
+[submodule "tools/arcadia-effects"]
+	path = tools/arcadia-effects
+	url = https://github.com/xaidan777/Arcadia-Effects

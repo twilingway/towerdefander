@@ -8,8 +8,9 @@ done) and applies here too. This file covers commands and architecture.
 
 ## Commands
 
-Node 22+ and pnpm 10.34.5 (`corepack enable pnpm`). Copy `.env.example` to `.env.local` before
-`pnpm dev`.
+Node 22+ and pnpm 10.34.5 (`corepack enable pnpm`). The visual-effects editor is a git submodule, so
+a fresh clone also needs `git submodule update --init --recursive` — nothing but `pnpm fx:*` depends
+on it, and CI never touches it. Copy `.env.example` to `.env.local` before `pnpm dev`.
 
 ```bash
 pnpm dev
@@ -54,6 +55,8 @@ Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core
 | `pnpm stats:batch --out <dir>`          | The whole matrix — levels x enemy offsets x crew sizes x presets — into a report   |
 | `pnpm balance:promote`                  | Promotes the dev stand's balance into the committed seed, bumping its revision     |
 | `pnpm spec list` / `pnpm spec:validate` | OpenSpec change status and validation                                              |
+| `pnpm fx:bake`                          | Rebakes `packages/fx-assets` sprite atlases from their effect sources              |
+| `pnpm fx:editor`                        | The Arcadia Effects editor UI for hand-tuning an effect (port 5179)                |
 
 Every harness uses its own port block, so they can run while `pnpm dev` is up. `scripts/` spawns
 child processes with `--import ./scripts/owned-process-guard.mjs` so stopping a harness kills only
@@ -93,6 +96,7 @@ packages/game-core      pure deterministic simulation
 packages/client-shared  what display and controller both need: preview shell, latency and role
                         formatting, environment reads, shared control and upgrade pieces
 packages/config         shared TypeScript, ESLint and Prettier configuration
+packages/fx-assets      baked sprite atlases: effect sources, the committed PNGs and a typed manifest
 ```
 
 `protocol`, `game-core` and `client-shared` export `./src/index.ts` directly — apps consume
@@ -174,12 +178,14 @@ protocol/room/economy changes). Read the relevant one before changing shared con
 
 ## Agent tooling
 
-`.claude/skills/` holds the skills Claude Code loads automatically: `browser-playwright` (Playwright
-MCP session, harness ports, `tests/e2e` conventions), `react-frontend` (display/controller React
-rules plus the vendored Vercel rule set in `.agents/skills/react-best-practices/`), and
-`phaser-display` (boundaries; the full text stays in `.agents/skills/phaser-display/SKILL.md`, which
-the other agent runners share). `.mcp.json` declares the `playwright` MCP server so a browser
-session is available without extra setup; it drives a browser only and does not start app servers.
+`.claude/skills/` holds the skills Claude Code loads automatically: `arcadia-effects` (the effects
+editor, the bake pipeline and the atlas conventions; full text in
+`.agents/skills/arcadia-effects/SKILL.md`), `browser-playwright` (Playwright MCP session, harness
+ports, `tests/e2e` conventions), `react-frontend` (display/controller React rules plus the vendored
+Vercel rule set in `.agents/skills/react-best-practices/`), and `phaser-display` (boundaries; the
+full text stays in `.agents/skills/phaser-display/SKILL.md`, which the other agent runners share).
+`.mcp.json` declares the `playwright` MCP server so a browser session is available without extra
+setup; it drives a browser only and does not start app servers.
 
 ### How the global rules apply here
 

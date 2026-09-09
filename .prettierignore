@@ -9,3 +9,6 @@ pnpm-lock.yaml
 
 # Snapshots a browser session drops beside the repo; never part of it.
 .playwright-mcp/
+
+# The visual-effects editor is a git submodule: upstream's formatting, not ours.
+tools/arcadia-effects/

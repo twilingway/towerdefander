@@ -267,3 +267,83 @@ export function fillFocusCandidates(
 export function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
+
+/**
+ * Engine plume, sized by how hard the ship is actually driving forward.
+ *
+ * The atlas is one loop and cannot carry throttle, so the throttle arrives here
+ * instead: length, width, brightness and playback rate all come off the same
+ * number. Thrust runs along the nose, so that number is the velocity projected
+ * onto the heading rather than its magnitude - drifting sideways out of a turn
+ * or backing up must not light the engine.
+ */
+export interface ExhaustPlume {
+  /** Idle, drifting or reversing: there is nothing to draw. */
+  readonly visible: boolean;
+  /** Length from the throat, in hull radii. */
+  readonly lengthUnits: number;
+  /** Width across the throat, in hull radii. */
+  readonly widthUnits: number;
+  readonly alpha: number;
+  /** Multiplier on the loop's own frame rate. */
+  readonly timeScale: number;
+}
+
+/**
+ * Where the throat sits, in hull radii behind the centre: inside the tail, so
+ * the birth edge of the plume is covered by the hull instead of ending in mid
+ * space. Fed to `turretMountPoint` as a mount, which already turns a hull-frame
+ * offset into world space.
+ */
+export const EXHAUST_THROAT_UNITS = 0.82;
+
+/**
+ * The plume is authored pointing up (-Y) with its throat on the bottom edge of
+ * the cell, so the sprite is placed with origin (0.5, 1) and turned this far
+ * from the heading. A sprite at rotation `t` sends its local -Y along
+ * `(sin t, -cos t)`; the exhaust has to leave along `(-cos h, -sin h)`, and
+ * `t = h - pi/2` is the angle that solves both.
+ */
+export const EXHAUST_ROTATION_OFFSET = -Math.PI / 2;
+
+/** Below this share of top speed the engine reads as off. */
+const PLUME_DEADZONE = 0.06;
+const PLUME_LENGTH_MIN = 0.9;
+const PLUME_LENGTH_MAX = 2.4;
+const PLUME_WIDTH_MIN = 0.55;
+const PLUME_WIDTH_MAX = 0.85;
+/** Share of throttle at which the plume is already at full brightness. */
+const PLUME_ALPHA_KNEE = 0.35;
+const PLUME_TIME_SCALE_MIN = 0.7;
+const PLUME_TIME_SCALE_MAX = 1.3;
+
+const HIDDEN_PLUME: ExhaustPlume = {
+  visible: false,
+  lengthUnits: 0,
+  widthUnits: 0,
+  alpha: 0,
+  timeScale: 1
+};
+
+export function getExhaustPlume(
+  motion: {
+    readonly velocityX: number;
+    readonly velocityY: number;
+    readonly heading: number;
+  },
+  maxSpeedPerSecond: number
+): ExhaustPlume {
+  if (!(maxSpeedPerSecond > 0)) return HIDDEN_PLUME;
+  const forward =
+    motion.velocityX * Math.cos(motion.heading) + motion.velocityY * Math.sin(motion.heading);
+  const throttle = clamp(forward / maxSpeedPerSecond, 0, 1);
+  if (throttle <= PLUME_DEADZONE) return HIDDEN_PLUME;
+  const drive = (throttle - PLUME_DEADZONE) / (1 - PLUME_DEADZONE);
+  return {
+    visible: true,
+    lengthUnits: PLUME_LENGTH_MIN + (PLUME_LENGTH_MAX - PLUME_LENGTH_MIN) * drive,
+    widthUnits: PLUME_WIDTH_MIN + (PLUME_WIDTH_MAX - PLUME_WIDTH_MIN) * drive,
+    alpha: clamp(drive / PLUME_ALPHA_KNEE, 0, 1),
+    timeScale: PLUME_TIME_SCALE_MIN + (PLUME_TIME_SCALE_MAX - PLUME_TIME_SCALE_MIN) * drive
+  };
+}
