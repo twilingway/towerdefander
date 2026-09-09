@@ -53,6 +53,7 @@ function sittingDuck(
     maxHp: 100_000,
     // Frozen: an enemy that manoeuvres would change the geometry under the test.
     weaponCooldownTicks: archetype.weapons.map(() => 100_000),
+    shotsFired: 0,
     speedPerSecondOverride: 0
   } as CombatEnemyState;
 }

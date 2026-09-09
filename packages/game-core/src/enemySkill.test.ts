@@ -77,7 +77,8 @@ function clusteredGunship(
     hp: 1_000_000,
     maxHp: 1_000_000,
     // Silent, so the wing is measured on where it goes and nothing else.
-    weaponCooldownTicks: [1_000_000]
+    weaponCooldownTicks: [1_000_000],
+    shotsFired: 0
   };
 }
 
@@ -200,7 +201,8 @@ describe("seeded aim spread", () => {
         {
           ...clusteredGunship(config, 3, centerX + 600, centerY),
           aimRngState: seed,
-          weaponCooldownTicks: [1]
+          weaponCooldownTicks: [1],
+          shotsFired: 0
         }
       ]
     };

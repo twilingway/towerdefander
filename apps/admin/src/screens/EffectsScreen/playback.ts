@@ -1,4 +1,9 @@
-import { getFxFrameOffset, type FxEffect } from "@spaceship-defender/fx-assets";
+import type { FxEffect } from "@spaceship-defender/fx-assets";
+
+// Moved to components/ when the archetype editor became its second consumer;
+// re-exported so a screen that only wants "one cell of a sheet" still has it
+// here beside the rest of the preview's own maths.
+export { spriteFrameStyle, type SpriteFrameStyle } from "../../components/fxSprite.js";
 
 /**
  * Which cell of the atlas is showing at a given moment. A loop wraps; a one-shot
@@ -16,34 +21,6 @@ export function frameForElapsed(effect: FxEffect, elapsedSeconds: number): numbe
 export function playbackProgress(effect: FxEffect, frame: number): number {
   if (effect.meta.frames <= 1) return 1;
   return frame / (effect.meta.frames - 1);
-}
-
-export interface SpriteFrameStyle {
-  readonly width: string;
-  readonly height: string;
-  readonly backgroundImage: string;
-  readonly backgroundSize: string;
-  readonly backgroundPosition: string;
-}
-
-/**
- * One cell of the sheet, shown through a window the size of that cell.
- *
- * A scaled background rather than a canvas: the browser already decodes and
- * filters the PNG, and stepping `background-position` costs nothing, so the
- * preview needs no image loading, no context and no per-frame draw call.
- */
-export function spriteFrameStyle(effect: FxEffect, frame: number, scale = 1): SpriteFrameStyle {
-  const { frameWidth, frameHeight, cols, rows } = effect.meta;
-  const offset = getFxFrameOffset(effect, frame);
-  const px = (value: number): string => `${String(Math.round(value * scale))}px`;
-  return {
-    width: px(frameWidth),
-    height: px(frameHeight),
-    backgroundImage: `url(${effect.url})`,
-    backgroundSize: `${px(frameWidth * cols)} ${px(frameHeight * rows)}`,
-    backgroundPosition: `-${px(offset.x)} -${px(offset.y)}`
-  };
 }
 
 /** `1.2 МБ` / `418 КБ` — the console's own readout, so it stays in Russian. */

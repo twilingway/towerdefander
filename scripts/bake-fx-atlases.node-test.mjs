@@ -11,6 +11,11 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+// Imported from source: Node strips the types, which is how the other harnesses
+// in this repository read the protocol too. It also keeps `fx-assets` free of a
+// dependency on the protocol - the check belongs to the bake, not to the pixels.
+import { FX_EFFECT_IDS, FX_EVENT_EFFECT_IDS } from "../packages/protocol/src/effectCatalogue.ts";
+
 const PACKAGE = fileURLToPath(new URL("../packages/fx-assets/", import.meta.url));
 const EFFECTS = join(PACKAGE, "effects");
 const ATLASES = join(PACKAGE, "atlases");
@@ -101,5 +106,28 @@ test("every effect source still parses and names its own export grid", () => {
       grid.frames <= grid.cols * grid.rows,
       `${id}: exp.frames exceeds the grid, so the bake would clamp it silently`
     );
+  }
+});
+
+test("the protocol names exactly the effects that were baked", () => {
+  // The server validates a preset against the protocol's list, and the atlases
+  // live in a package the server never sees. Baking an effect without naming it
+  // in the protocol would leave an atlas no preset could reference; naming one
+  // that was never baked would let a preset ask for a missing texture.
+  assert.deepEqual([...FX_EFFECT_IDS].sort(), sourceIds);
+});
+
+test("every event effect is a one-shot that exists", () => {
+  const loops = new Set();
+  for (const id of sourceIds) {
+    const file = JSON.parse(readFileSync(join(EFFECTS, `${id}.json`), "utf8"));
+    // A loop has no natural end, so hanging one on an event would either play
+    // forever or be cut off mid-cycle.
+    if (catalogue[id]?.loop === true) loops.add(id);
+    assert.ok(file.doc, `${id}: no document`);
+  }
+  for (const id of FX_EVENT_EFFECT_IDS) {
+    assert.ok(sourceIds.includes(id), `${id} is an event effect with no source`);
+    assert.ok(!loops.has(id), `${id} is a loop and cannot be hung on an event`);
   }
 });

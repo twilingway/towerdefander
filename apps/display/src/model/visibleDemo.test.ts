@@ -157,7 +157,8 @@ function enemy(entityId: string, spawnSequence: number, x: number, y: number) {
     kind: "gunship" as const,
     heading: 0,
     hp: 10,
-    maxHp: 10
+    maxHp: 10,
+    shotsFired: 0
   };
 }
 

@@ -261,7 +261,8 @@ function guardEnemies(
       spawnedTick: 0,
       hp: 20_000,
       maxHp: 20_000,
-      weaponCooldownTicks: archetype.weapons.map(() => 0)
+      weaponCooldownTicks: archetype.weapons.map(() => 0),
+      shotsFired: 0
     };
   });
 }

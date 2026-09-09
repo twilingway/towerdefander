@@ -5,6 +5,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import {
+  toEnemyEffects,
   toEntityVisual,
   toNebulaPreset,
   toPoseView,
@@ -155,7 +156,8 @@ export function toDisplayRoomView(
               shape: entry.shape,
               modelScale: entry.modelScale,
               showHealthBar: entry.showHealthBar,
-              isBoss: entry.isBoss
+              isBoss: entry.isBoss,
+              effects: toEnemyEffects(entry)
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),

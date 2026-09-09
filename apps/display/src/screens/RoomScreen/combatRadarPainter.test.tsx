@@ -140,7 +140,8 @@ const baseGame: DisplayGameSnapshot = {
       radius: 30,
       heading: 0,
       hp: 80,
-      maxHp: 80
+      maxHp: 80,
+      shotsFired: 0
     }
   ],
   lootDrops: [],

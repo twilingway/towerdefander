@@ -162,3 +162,25 @@ export function toNebulaPreset(preset: string | undefined): NebulaPreset {
 export function toPublicLatency(latencyMs: number | undefined): number | null {
   return latencyMs === undefined || latencyMs < 0 ? null : latencyMs;
 }
+
+/**
+ * The archetype's event effects, as the view carries them.
+ *
+ * The room has no optional field, so an unset slot arrives as an empty string;
+ * the view omits it instead, which is what lets a consumer write
+ * `effects?.death ?? fallback` and be done.
+ */
+export function toEnemyEffects(entry: {
+  readonly effectDeath?: string;
+  readonly effectHit?: string;
+  readonly effectShot?: string;
+}): { death?: string; hit?: string; shot?: string } | undefined {
+  const chosen = {
+    ...(entry.effectDeath === undefined || entry.effectDeath === ""
+      ? {}
+      : { death: entry.effectDeath }),
+    ...(entry.effectHit === undefined || entry.effectHit === "" ? {} : { hit: entry.effectHit }),
+    ...(entry.effectShot === undefined || entry.effectShot === "" ? {} : { shot: entry.effectShot })
+  };
+  return Object.keys(chosen).length === 0 ? undefined : chosen;
+}

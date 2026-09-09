@@ -260,6 +260,9 @@ function reconcileKeyed<TCore extends { readonly id: string }, TState>(
   }
 }
 
+/** `EnemyState.shotsFired` is a `uint16`, so the count comes back to zero here. */
+const ENEMY_SHOT_COUNTER_MODULUS = 65_536;
+
 function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
   target.entityId = source.id;
   target.spawnSequence = source.spawnSequence;
@@ -272,6 +275,9 @@ function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
   target.heading = source.heading;
   target.hp = source.hp;
   target.maxHp = source.maxHp;
+  // Narrowed here, not in the simulation: game-core counts without a ceiling,
+  // and only the published representation has a width.
+  target.shotsFired = source.shotsFired % ENEMY_SHOT_COUNTER_MODULUS;
 }
 
 function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {

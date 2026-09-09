@@ -4,6 +4,7 @@ export * from "./crewRoles.ts";
 export * from "./soloInput.ts";
 export * from "./enemyKinds.ts";
 export * from "./visualCatalog.ts";
+export * from "./effectCatalogue.ts";
 import { CREW_ROLES, crewRoleSchema, type CrewRole } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
@@ -16,6 +17,7 @@ import {
   MODULE_TIER_COUNT,
   backgroundTuningSchema,
   cameraViewWidthSchema,
+  enemyEventEffectsSchema,
   entityVisualSchema,
   friendlyWeaponKindSchema,
   helmSchemeSchema,
@@ -26,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 52 as const;
+export const PROTOCOL_VERSION = 53 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * How often the room broadcasts, in milliseconds.
@@ -432,7 +434,15 @@ export const publicEnemyViewSchema = z
     kind: enemyKindSchema,
     heading: finite,
     hp: finite.positive(),
-    maxHp: finite.positive()
+    maxHp: finite.positive(),
+    /**
+     * Shots this enemy has fired, at most one per tick however many of its
+     * barrels went off. The display compares it with the last value it drew, so
+     * it answers "did it fire" and never "how many"; wrapping is therefore
+     * harmless, and a narrow integer beats naming the shooter on every shell of
+     * every tick.
+     */
+    shotsFired: safeNonnegativeInteger
   })
   .strict()
   .superRefine((value, context) => {
@@ -731,7 +741,12 @@ export const publicEnemyCatalogueEntrySchema = z
     modelScale: z.number().min(0.2).max(4),
     showHealthBar: z.boolean(),
     /** Sent once per run: the display names the boss, it never guesses one. */
-    isBoss: z.boolean()
+    isBoss: z.boolean(),
+    /**
+     * What this archetype plays on each of its events. Sent once per run with
+     * the rest of its look; absent leaves the display's own rule.
+     */
+    effects: enemyEventEffectsSchema.optional()
   })
   .strict();
 export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;

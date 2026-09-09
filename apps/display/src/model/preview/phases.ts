@@ -95,7 +95,8 @@ export function createPreviewGame(
           kind: "gunship",
           heading: Math.PI,
           hp: 70,
-          maxHp: 90
+          maxHp: 90,
+          shotsFired: 0
         },
         {
           entityId: "preview-enemy-2",
@@ -108,7 +109,8 @@ export function createPreviewGame(
           kind: "missileCarrier",
           heading: 0,
           hp: 120,
-          maxHp: 140
+          maxHp: 140,
+          shotsFired: 0
         },
         {
           entityId: "preview-boss",
@@ -121,7 +123,8 @@ export function createPreviewGame(
           kind: "boss",
           heading: Math.PI / 2,
           hp: 1420,
-          maxHp: 2000
+          maxHp: 2000,
+          shotsFired: 0
         }
       ],
       lootDrops: [],

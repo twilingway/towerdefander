@@ -76,7 +76,8 @@ function burnerAt(
     spawnedTick: 0,
     hp: 100,
     maxHp: 100,
-    weaponCooldownTicks: [0]
+    weaponCooldownTicks: [0],
+    shotsFired: 0
   };
 }
 

@@ -9,7 +9,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
-import { burstKindFor, type BurstKind, type BurstLayer } from "./bursts.js";
+import { OWN_MUZZLE_EFFECT, deathEffectFor, mayPlayHitEffect, type BurstLayer } from "./bursts.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
 import {
   createAngleTrack,
@@ -24,7 +24,8 @@ import {
   createEnemyHealthBar,
   drawEnemyBody,
   resolveEnemyVisual,
-  setEnemyHealthBar
+  setEnemyHealthBar,
+  turretMountPoint
 } from "../entityArt.js";
 import { drawEnemyTank, ENEMY_ART_HALF } from "../tankArt.js";
 
@@ -254,13 +255,47 @@ export interface CombatVisual {
    */
   live: LiveEntity | undefined;
   /**
-   * Which burst this entity's removal plays, or none for the things that leave
-   * the snapshot for reasons other than being destroyed. Decided once, when the
-   * sprite is made, so the removal branch needs no catalogue lookup.
+   * What this entity plays on each of its events, resolved once when the sprite
+   * is made: the archetype's own slot where a preset assigned one, the display's
+   * fallback where it did not. Undefined is "nothing here" - which is every
+   * event of everything that is not an enemy.
    */
-  readonly burst: BurstKind | undefined;
-  /** Last known hull radius, which is what the burst is sized against. */
+  readonly deathEffect: string | undefined;
+  readonly hitEffect: string | undefined;
+  readonly shotEffect: string | undefined;
+  /** Last known hull radius, which is what a burst is sized against. */
   readonly radius: number;
+  /** Shot count this visual has already reacted to; see `drawnHealth`. */
+  drawnShots: number;
+  /** When the hit effect last played, so a beam cannot strobe the hull. */
+  hitEffectTick: number | undefined;
+}
+
+/**
+ * Where the crew's own shot left the ship, or undefined if the shell was not
+ * theirs. The cannon leaves its mount and points along the turret; the nose gun
+ * leaves the nose and points along the hull.
+ */
+function ownMuzzle(
+  entity: CombatEntity,
+  snapshot: DisplayGameSnapshot
+): { readonly x: number; readonly y: number; readonly heading: number } | undefined {
+  const source = "source" in entity ? entity.source : undefined;
+  if (source === "cannon") {
+    const mount = turretMountPoint(
+      snapshot.spaceship,
+      snapshot.spaceship.heading,
+      snapshot.turretVisual
+    );
+    return { ...mount, heading: snapshot.turretAngle };
+  }
+  if (source !== "machineGun") return undefined;
+  const heading = snapshot.spaceship.heading;
+  return {
+    x: snapshot.spaceship.x + Math.cos(heading) * snapshot.spaceship.radius,
+    y: snapshot.spaceship.y + Math.sin(heading) * snapshot.spaceship.radius,
+    heading
+  };
 }
 
 function collectCombatEntities(snapshot: DisplayGameSnapshot): CombatEntity[] {
@@ -317,8 +352,8 @@ export function reconcileCombatVisuals({
     const leaving = visuals.get(entityId);
     // A snapping reconcile is a hydration or a fresh run, not a wave of deaths:
     // bursting here would carpet the screen on every reconnect.
-    if (!snap && leaving?.burst !== undefined) {
-      bursts?.spawn(leaving.burst, leaving.object.x, leaving.object.y, leaving.radius);
+    if (!snap && leaving?.deathEffect !== undefined) {
+      bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
     }
     leaving?.object.destroy();
     visuals.delete(entityId);
@@ -329,6 +364,13 @@ export function reconcileCombatVisuals({
     const heading = getEntityHeading(entity);
     const visual = visuals.get(entityId);
     if (visual === undefined) {
+      // One lookup for the boss flag and all three slots; the removal branch
+      // then needs no catalogue at all. Only an enemy has an archetype - a
+      // shell or a rock carries no `kind`.
+      const archetype =
+        entity.visualKind === "enemy"
+          ? resolveEnemyVisual(snapshot.enemyCatalogue, entity.kind)
+          : undefined;
       const created = createCombatVisual(scene, entity, snapshot, tankLook, bake);
       created.object.setPosition(entity.x, entity.y);
       created.object.rotation = heading;
@@ -342,13 +384,38 @@ export function reconcileCombatVisuals({
         position: createPointTrack(entity, toTick),
         angle: createAngleTrack(heading, toTick),
         velocity: reckonableVelocity(entity),
-        burst: burstKindFor(
+        deathEffect: deathEffectFor(
           entity.visualKind,
-          entity.visualKind === "enemy" &&
-            resolveEnemyVisual(snapshot.enemyCatalogue, entity.kind).isBoss
+          archetype?.isBoss === true,
+          archetype?.effects?.death
         ),
-        radius: entity.radius
+        hitEffect: archetype?.effects?.hit,
+        shotEffect: archetype?.effects?.shot,
+        radius: entity.radius,
+        drawnShots: entity.visualKind === "enemy" ? entity.shotsFired : 0,
+        hitEffectTick: undefined
       });
+      /*
+       * A friendly shell appearing is the crew firing, and this is the frame it
+       * first exists in. The flash is put on the barrel rather than on the
+       * shell: interpolation shows a shell where the last patch left it, which
+       * at shell speed is already a hull's width downrange.
+       *
+       * Silent on a snapping reconcile, or a hydration would flash once for
+       * every shell already in the air.
+       */
+      if (!snap && entity.visualKind === "projectile") {
+        const muzzle = ownMuzzle(entity, snapshot);
+        if (muzzle !== undefined) {
+          bursts?.spawn(
+            OWN_MUZZLE_EFFECT,
+            muzzle.x,
+            muzzle.y,
+            snapshot.spaceship.radius,
+            muzzle.heading
+          );
+        }
+      }
     } else {
       // A binding missed at spawn - the sprite made from a view the room had
       // already moved past - would otherwise leave that one entity on the
@@ -372,13 +439,34 @@ export function reconcileCombatVisuals({
         visual.angle = extendAngleTrack(visual.angle, heading, toTick);
         visual.velocity = reckonableVelocity(entity);
       }
-      if (
-        visual.healthBar !== undefined &&
-        entity.visualKind === "enemy" &&
-        visual.drawnHealth !== entity.hp
-      ) {
+      if (entity.visualKind === "enemy" && visual.drawnHealth !== entity.hp) {
+        // Only a fall is a hit: a repair or a fresh maximum is not, and the bar
+        // is redrawn either way.
+        const tookHit = entity.hp < visual.drawnHealth;
         visual.drawnHealth = entity.hp;
-        setEnemyHealthBar(visual.healthBar, entity);
+        if (visual.healthBar !== undefined) setEnemyHealthBar(visual.healthBar, entity);
+        if (
+          tookHit &&
+          visual.hitEffect !== undefined &&
+          mayPlayHitEffect(toTick, visual.hitEffectTick)
+        ) {
+          visual.hitEffectTick = toTick;
+          bursts?.spawn(visual.hitEffect, visual.object.x, visual.object.y, visual.radius);
+        }
+      }
+      if (entity.visualKind === "enemy" && visual.drawnShots !== entity.shotsFired) {
+        visual.drawnShots = entity.shotsFired;
+        // On the hull and along its heading, which is what the counter buys over
+        // naming a shooter on every shell: a muzzle flash that faces the barrel.
+        if (visual.shotEffect !== undefined) {
+          bursts?.spawn(
+            visual.shotEffect,
+            visual.object.x,
+            visual.object.y,
+            visual.radius,
+            visual.object.rotation
+          );
+        }
       }
     }
   }

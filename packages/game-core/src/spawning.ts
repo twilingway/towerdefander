@@ -221,6 +221,7 @@ export function spawnEntity(
       weaponCooldownTicks: archetype.weapons.map((weapon) =>
         Math.max(1, Math.ceil(weapon.cooldownTicks / difficulty.tempoMultiplier))
       ),
+      shotsFired: 0,
       // Never looked yet, so the first step refreshes whatever the reaction
       // window is — otherwise a slow archetype would steer at its own spawn
       // point for half a second after it arrives.
