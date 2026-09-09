@@ -33,7 +33,10 @@ const SPAN: Record<FxCategory, number> = {
   exhaust: 2,
   muzzle: 1.6,
   explosion: 5.5,
-  destruction: 4.5
+  destruction: 4.5,
+  // A splash on the barrier, sized off the shell that made it rather than off
+  // any hull, so a floor carries it the way a muzzle flash has one.
+  shield: 3
 };
 
 /**
@@ -49,6 +52,14 @@ const MUZZLE_MIN_UNITS = 40;
 
 /** Above the enemies it happens to (7), below the player's hull (10). */
 const DEPTH = 8;
+/**
+ * Where a category is drawn instead, when the default is wrong for it.
+ *
+ * A splash on the shield has to sit over the barrier it lands on (15), and the
+ * barrier is over the hull - so the one depth that suits every blast and flash
+ * does not suit this one.
+ */
+const CATEGORY_DEPTH: Partial<Record<FxCategory, number>> = { shield: 16 };
 
 /**
  * Beyond this many at once the screen is already unreadable, and a burst nobody
@@ -298,7 +309,7 @@ export class BurstLayer {
       // pinning that edge puts the source exactly where it was fired from and
       // makes the sprite turn about it. A circular one stays centred.
       .setOrigin(0.5, effect.oriented ? 1 : 0.5)
-      .setDepth(DEPTH)
+      .setDepth(CATEGORY_DEPTH[effect.category] ?? DEPTH)
       .setVisible(false);
     const entry: PooledBurst = { sprite, busy: false };
     // Registered once per sprite, not per spawn: the pool reuses both the
@@ -315,7 +326,8 @@ export class BurstLayer {
 /** How wide a burst is drawn, in world units. */
 export function burstWidth(category: FxCategory, radius: number): number {
   const scaled = radius * SPAN[category];
-  return category === "muzzle" ? Math.max(MUZZLE_MIN_UNITS, scaled) : scaled;
+  const floored = category === "muzzle" || category === "shield";
+  return floored ? Math.max(MUZZLE_MIN_UNITS, scaled) : scaled;
 }
 
 function textureKey(effectId: string): string {

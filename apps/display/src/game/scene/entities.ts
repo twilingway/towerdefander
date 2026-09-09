@@ -11,6 +11,7 @@ import type {
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
 import { deathEffectFor, mayPlayHitEffect, type BurstLayer, type OwnShot } from "./bursts.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
+import { resolveShieldImpact, SHIELD_BLOCK_EFFECT, type ShieldPose } from "./shieldImpact.js";
 import {
   createAngleTrack,
   createPointTrack,
@@ -260,6 +261,15 @@ export interface CombatVisual {
    * event of everything that is not an enemy.
    */
   readonly deathEffect: string | undefined;
+  /**
+   * The splash this leaving the snapshot may mean, when the shield stopped it.
+   *
+   * Set for hostile shells and nothing else, and resolved at creation the way
+   * the other three slots are, so the removal branch needs no catalogue: what it
+   * still has to decide is whether the sector was actually what stopped this
+   * one, and that is geometry.
+   */
+  readonly blockEffect: string | undefined;
   readonly hitEffect: string | undefined;
   readonly shotEffect: string | undefined;
   /** Last known hull radius, which is what a burst is sized against. */
@@ -315,6 +325,8 @@ interface ReconcileRequest {
    * and reconcile runs on a patch arriving, not on a frame going out.
    */
   readonly ownShots: OwnShot[];
+  /** The shield as the scene drew it, for placing a splash on the barrier. */
+  readonly shieldPose: ShieldPose | undefined;
 }
 
 export function reconcileCombatVisuals({
@@ -327,7 +339,8 @@ export function reconcileCombatVisuals({
   toTick,
   snap,
   bursts,
-  ownShots
+  ownShots,
+  shieldPose
 }: ReconcileRequest): void {
   const incoming = collectCombatEntities(snapshot);
   const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
@@ -338,6 +351,16 @@ export function reconcileCombatVisuals({
     // bursting here would carpet the screen on every reconnect.
     if (!snap && leaving?.deathEffect !== undefined) {
       bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
+    }
+    if (!snap && leaving?.blockEffect !== undefined && leaving.velocity !== undefined) {
+      const impact = resolveShieldImpact(
+        { x: leaving.object.x, y: leaving.object.y, velocity: leaving.velocity },
+        snapshot,
+        shieldPose
+      );
+      if (impact !== undefined) {
+        bursts?.spawn(leaving.blockEffect, impact.x, impact.y, leaving.radius, impact.normal);
+      }
     }
     leaving?.object.destroy();
     visuals.delete(entityId);
@@ -373,6 +396,10 @@ export function reconcileCombatVisuals({
           archetype?.isBoss === true,
           archetype?.effects?.death
         ),
+        blockEffect:
+          entity.visualKind === "projectile" && entity.kind === "hostile"
+            ? SHIELD_BLOCK_EFFECT
+            : undefined,
         hitEffect: archetype?.effects?.hit,
         shotEffect: archetype?.effects?.shot,
         radius: entity.radius,
