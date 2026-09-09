@@ -124,3 +124,31 @@ describe("enemy shot counter", () => {
     expect(stepped.enemies[0]?.shotsFired).toBe(0);
   });
 });
+
+describe("the counter over a whole fight", () => {
+  it("keeps climbing across cooldowns, not just the first shot", () => {
+    /*
+     * The one this exists for. A counter that reaches one and sticks there
+     * would give a display exactly one muzzle flash per enemy per run, and
+     * nothing would look broken - the flash lasts a quarter of a second, so a
+     * pair of eyes on a live arena cannot tell "fired once" from "never fired
+     * again". Only the second increment proves the signal is a signal.
+     */
+    const config = twinConfig(1);
+    let state: SpaceshipSimulationState = withEnemy(
+      createSpaceshipSimulationState(config, 11),
+      twinAt(createSpaceshipSimulationState(config, 11), 1)
+    );
+    const seen: number[] = [];
+    // 400 cooldown ticks per shot, so a thousand steps hold two of them.
+    for (let tick = 0; tick < 1000; tick += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+      const count = state.enemies[0]?.shotsFired;
+      if (count !== undefined && seen.at(-1) !== count) seen.push(count);
+    }
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.at(-1)).toBeGreaterThan(1);
+    // One at a time, never a jump: the increment is per tick, not per barrel.
+    expect(seen).toEqual(seen.map((_, index) => index + 1));
+  });
+});
