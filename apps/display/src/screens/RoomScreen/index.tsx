@@ -2,6 +2,7 @@ import type { DisplayRoomView, PublicShip } from "@spaceship-defender/protocol";
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
 import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 
+import { readLiveGame } from "../../model/liveView.js";
 import { PolledFpsReadout } from "../../components/FpsReadout/index.js";
 import { LobbyLayout } from "../../components/LobbyLayout/index.js";
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
@@ -232,12 +233,23 @@ export function RoomScreen({
   /**
    * The world the dial reads, whichever half of the app is driving it.
    *
-   * The scene's reader answers only for a room; this one answers for the layout
-   * preview too, which has no room and hands its fixture straight down.
+   * The room's own store first, and the render-time view only as a fallback.
+   * That order is the whole point: this page deliberately does not re-render
+   * while the arena is drawing, so a reader that answers out of a render is as
+   * fresh as the last commit - which in a fight is seconds ago. The dial then
+   * held one reading while the shield drained past it and jumped when a commit
+   * finally happened, which is exactly what "the recovery bar is jerky" was.
+   * The scene and the heat gauges already read the store for this reason.
+   *
+   * The fallback is not dead code: the layout preview has no room, never writes
+   * the store, and hands its fixture down through the view.
    */
   const latestViewReference = useRef(view);
   latestViewReference.current = view;
-  const readRadarGame = useCallback(() => latestViewReference.current.game ?? undefined, []);
+  const readRadarGame = useCallback(
+    () => readLiveGame() ?? latestViewReference.current.game ?? undefined,
+    []
+  );
 
   useLiveHeat(shellReference);
 
