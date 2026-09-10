@@ -299,12 +299,20 @@ export class SpaceshipScene extends Phaser.Scene {
     this.camera.focusOn(this, spaceshipPosition);
 
     /*
-     * How far behind the newest snapshot the playback clock is running, in
-     * seconds. Shells are carried forward by exactly this much - to server
-     * present, never past it, so nothing is invented.
+     * How far behind the newest snapshot playback is meant to run, in seconds.
+     * Shells are carried forward by exactly this much - to server present,
+     * never past it, so nothing is invented.
+     *
+     * The lag the clock decided on rather than the gap this frame happens to
+     * show. The newest tick arrives two at a time thirty times a second while
+     * playback advances every frame, so the instantaneous difference sawtooths
+     * between a patch and the next: subtracting it from a shell that is already
+     * being interpolated forward cancels most of the motion and then returns it
+     * in a lurch. Measured on the stand, a shell drawn from the raw difference
+     * stepped 4 to 6 units a frame and then 20 or 30, at 2.21 times the spread
+     * of its own interpolated track.
      */
-    const behindSeconds =
-      Math.max(0, this.playback.latestTick - playbackTick) * (this.playback.msPerTick / 1000);
+    const behindSeconds = (this.playback.lagTicks * this.playback.msPerTick) / 1000;
     let liveDrawn = 0;
     let offscreen = 0;
     const camera = this.cameras.main;
