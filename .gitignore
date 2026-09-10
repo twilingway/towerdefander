@@ -33,3 +33,9 @@ artifacts/daily-videos/
 
 # Snapshots a browser session drops beside the repo; never part of it.
 .playwright-mcp/
+
+# The reconstructed history of the project: its facts, its prose, its frames
+# and the page built from them. Kept out for the same reason as the daily
+# videos - tens of megabytes of pictures that would sit in the repository
+# forever. It lives on this machine and in a published artifact instead.
+artifacts/project-history/
