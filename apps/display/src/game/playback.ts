@@ -1,4 +1,5 @@
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
+import { PLAYBACK_MAX_LAG_MS, PLAYBACK_MIN_LAG_MS } from "@spaceship-defender/protocol";
 
 import { clamp, type Point } from "./spaceshipViewModel.js";
 
@@ -196,27 +197,6 @@ export const NOMINAL_MS_PER_TICK = 1000 / SIMULATION_TICK_RATE;
 const MIN_MS_PER_TICK = NOMINAL_MS_PER_TICK / 2;
 const MAX_MS_PER_TICK = 250;
 
-/**
- * The floor on how far behind the newest tick playback aims to stay. One tick
- * absorbs a single late arrival on a link that does not otherwise misbehave,
- * and it is what a viewer beside the server pays.
- *
- * It used to be the whole story, and on a real link it is not. Measured against
- * this game's own public deployment over forty-five seconds: arrivals sat at a
- * median of 50.5 ms either way, but through the internet the tail reached
- * 158.7 ms, past the 100 ms a one-tick lag affords a single-tick patch. Fifteen
- * arrivals in eight hundred landed late, and the picture stood still for 0.46 s
- * of the run -- while the frame counter, drawing the same state over and over,
- * reported everything was fine.
- */
-export const PLAYBACK_MIN_LAG_MS = 50;
-/**
- * The ceiling. Lag is latency the viewer pays to watch, so a link that misbehaves
- * for a long stretch must not be allowed to turn the game into a recording. Kept
- * under `PLAYBACK_RESYNC_TICKS` so a lag at its ceiling is never itself mistaken
- * for hopeless drift.
- */
-export const PLAYBACK_MAX_LAG_MS = 200;
 /**
  * Lateness rises to the newest measurement at once and falls by this factor per
  * arrival. Asymmetric on purpose: the stall has already been paid for by the

@@ -48,6 +48,23 @@ export const ROOM_TYPE = "spaceship_defender" as const;
  * number of players.
  */
 export const PATCH_INTERVAL_MS = 1000 / 30;
+/**
+ * How far behind the newest tick a viewer plays, in milliseconds, and the
+ * ceiling a misbehaving link may push that to.
+ *
+ * Here rather than in the display because it is a budget two sides have to
+ * agree on: the display spends it absorbing a late arrival, and the pacing
+ * harness judges the room by it - a broadcast gap wider than the ticks it
+ * carries plus this floor is a gap that stalls the picture. Measured against
+ * this game's own public deployment, arrivals sat at a median of 50.5 ms
+ * either way while the tail reached 158.7 ms, which is what the ceiling is for.
+ *
+ * Milliseconds on purpose. Written as a count of ticks it silently changed
+ * meaning when the simulation moved from twenty steps a second to sixty, and
+ * the picture stalled for a year without a single check going red.
+ */
+export const PLAYBACK_MIN_LAG_MS = 50;
+export const PLAYBACK_MAX_LAG_MS = 200;
 export const PLAYER_CAPACITY = 3 as const;
 /** Seats a room may be created with; the crew fills them in CREW_ROLES order. */
 export const CREW_SIZES = [1, 2, 3] as const;
