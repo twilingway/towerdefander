@@ -13,6 +13,7 @@ export default tseslint.config(
       // A git submodule: someone else's editor, and none of it is in a tsconfig.
       "tools/arcadia-effects/**",
       "tools/daily-video-dashboard/**",
+      "tools/project-history-dashboard/**",
       "apps/controller/scripts/**",
       /*
        * Plain JavaScript on purpose, and the only such file under a `src`.

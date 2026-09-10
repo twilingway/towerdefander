@@ -12,3 +12,7 @@ pnpm-lock.yaml
 
 # The visual-effects editor is a git submodule: upstream's formatting, not ours.
 tools/arcadia-effects/
+
+# The project history is written by its own scripts and by hand beside them;
+# reflowing it would fight the generator on every rebuild.
+artifacts/project-history/
