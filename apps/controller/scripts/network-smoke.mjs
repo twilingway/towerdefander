@@ -524,6 +524,8 @@ async function waitForWaveCleared(timeoutMs) {
     observeArenaState();
     if (arenaViolation !== undefined) throw new Error(arenaViolation);
     if (encounter().phase === "intermission") return;
+    const ended = terminalRun();
+    if (ended !== undefined) throw new Error(ended);
     await delay(100);
   }
   const enemies = [...world().enemyShips.values()];
@@ -554,7 +556,15 @@ async function waitForShieldBlock(timeoutMs) {
     await delay(15);
     const current = shieldObservation();
     const tickDelta = current.tick - previous.tick;
-    if (tickDelta <= 0) continue;
+    if (tickDelta <= 0) {
+      // Inside the branch rather than above it: while ticks keep coming the
+      // wait does its job, and a block landing on the same patch as the defeat
+      // is still counted. It is the tick that stopped that means nothing more
+      // will ever be observed.
+      const ended = terminalRun();
+      if (ended !== undefined) throw new Error(ended);
+      continue;
+    }
     const removedNearShield = [...previous.projectiles.values()].some(
       (projectile) => projectile.distance <= 165 && !current.projectiles.has(projectile.entityId)
     );
@@ -768,6 +778,34 @@ function encounter() {
   return display.state.game.encounter;
 }
 
+/**
+ * Why no wait here can ever be satisfied again, or nothing.
+ *
+ * Every wait in this harness is written for a run that is still going: clear
+ * the wave, block with the sector, start the next one. A lost run satisfies
+ * none of them, so without this it is reported as whatever the wait happened to
+ * be watching, after that wait's whole deadline. On 2026-09-10 a hosted runner
+ * printed "Wave 1 did not end in 300 s: 6 alive, hull 0/620" - which reads as a
+ * stuck wave and was a defeat five minutes earlier. The scripted crew survives
+ * on a machine that keeps up, so only a slow one ever shows it.
+ */
+function terminalRun() {
+  // The early waits run before the display has joined and before a run exists,
+  // and they are waits like any other: reaching through an absent client here
+  // would turn "the server is still booting" into a crash.
+  const game = display?.state?.game;
+  if (game === undefined || game === null) return undefined;
+  const state = game.encounter;
+  if (state.phase !== "result" || state.outcome === null) return undefined;
+  const reason = state.defeatReason === null ? "" : ` (${state.defeatReason})`;
+  const hull = game.spaceship;
+  return (
+    `The run ended in ${state.outcome}${reason} on wave ${String(state.waveNumber)}: ` +
+    `hull ${hull.hp.toFixed(0)}/${hull.maxHp.toFixed(0)}, score ${String(state.score)}. ` +
+    `Nothing this harness waits for can happen after that.`
+  );
+}
+
 function durableThreats() {
   return [...world().enemyShips.values(), ...world().asteroids.values()];
 }
@@ -975,7 +1013,11 @@ async function waitFor(predicate, timeoutMs = 3_000, intervalMs = 25) {
   while (Date.now() < deadline) {
     observeArenaState();
     if (arenaViolation !== undefined) throw new Error(arenaViolation);
+    // The predicate first: a wait whose condition the last patch satisfied is
+    // answered, even if that same patch ended the run.
     if (await predicate()) return;
+    const ended = terminalRun();
+    if (ended !== undefined) throw new Error(ended);
     await delay(intervalMs);
   }
   throw new Error(`Network smoke timed out after ${String(timeoutMs)} ms.`);
