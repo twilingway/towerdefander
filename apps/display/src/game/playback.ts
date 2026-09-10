@@ -1,3 +1,5 @@
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
+
 import { clamp, type Point } from "./spaceshipViewModel.js";
 
 /**
@@ -175,10 +177,25 @@ export interface PlaybackClock {
   readonly lagTicks: number;
 }
 
-/** Stands in until the first pair of snapshots has been timed. */
-export const NOMINAL_MS_PER_TICK = 50;
-const MIN_MS_PER_TICK = 20;
+/**
+ * Stands in until the first pair of snapshots has been timed.
+ *
+ * Taken from the rate the room actually steps at rather than written down. It
+ * was 50 here while the simulation ran at 20 Hz, and stayed 50 when the
+ * simulation moved to sixty - which put the floor below it *above* the true
+ * tick, so the pace estimate could not reach reality and playback fell behind
+ * by a fifth of a second every second.
+ */
+export const NOMINAL_MS_PER_TICK = 1000 / SIMULATION_TICK_RATE;
+/**
+ * The floor and ceiling on that estimate: a room stepping twice as fast as
+ * this one, and a link so slow the picture is a recording either way. The floor
+ * has to sit under the nominal tick, or a link behaving perfectly is measured
+ * as late.
+ */
+const MIN_MS_PER_TICK = NOMINAL_MS_PER_TICK / 2;
 const MAX_MS_PER_TICK = 250;
+
 /**
  * The floor on how far behind the newest tick playback aims to stay. One tick
  * absorbs a single late arrival on a link that does not otherwise misbehave,
@@ -192,14 +209,14 @@ const MAX_MS_PER_TICK = 250;
  * of the run -- while the frame counter, drawing the same state over and over,
  * reported everything was fine.
  */
-export const PLAYBACK_MIN_LAG_TICKS = 1;
+export const PLAYBACK_MIN_LAG_MS = 50;
 /**
  * The ceiling. Lag is latency the viewer pays to watch, so a link that misbehaves
  * for a long stretch must not be allowed to turn the game into a recording. Kept
  * under `PLAYBACK_RESYNC_TICKS` so a lag at its ceiling is never itself mistaken
  * for hopeless drift.
  */
-export const PLAYBACK_MAX_LAG_TICKS = 4;
+export const PLAYBACK_MAX_LAG_MS = 200;
 /**
  * Lateness rises to the newest measurement at once and falls by this factor per
  * arrival. Asymmetric on purpose: the stall has already been paid for by the
@@ -208,7 +225,7 @@ export const PLAYBACK_MAX_LAG_TICKS = 4;
  */
 const LATENESS_DECAY = 0.995;
 /** Past this drift, correcting by rate is hopeless and playback jumps instead. */
-export const PLAYBACK_RESYNC_TICKS = 6;
+export const PLAYBACK_RESYNC_MS = 300;
 /** Weight of the newest measurement in the pace estimate. */
 const PACE_SMOOTHING = 0.2;
 /** Share of the drift taken back per tick of playback. */
@@ -225,7 +242,7 @@ export function createPlaybackClock(tick: number, msPerTick = NOMINAL_MS_PER_TIC
     gapEmaMs: pace,
     tickEma: 1,
     lateMs: 0,
-    lagTicks: PLAYBACK_MIN_LAG_TICKS
+    lagTicks: PLAYBACK_MIN_LAG_MS / pace
   };
 }
 
@@ -236,9 +253,9 @@ export function createPlaybackClock(tick: number, msPerTick = NOMINAL_MS_PER_TIC
  */
 function lagFromLateness(lateMs: number, msPerTick: number): number {
   return clamp(
-    PLAYBACK_MIN_LAG_TICKS + lateMs / msPerTick,
-    PLAYBACK_MIN_LAG_TICKS,
-    PLAYBACK_MAX_LAG_TICKS
+    (PLAYBACK_MIN_LAG_MS + lateMs) / msPerTick,
+    PLAYBACK_MIN_LAG_MS / msPerTick,
+    PLAYBACK_MAX_LAG_MS / msPerTick
   );
 }
 
@@ -260,8 +277,8 @@ export function observePlaybackTick(
   if (ticks === 0) return clock;
   if (!Number.isFinite(arrivalGapMs) || arrivalGapMs <= 0) return { ...clock, latestTick: tick };
   // Gap and tick count are smoothed apart and divided at the end. Smoothing the
-  // ratio instead would average 62 ms and 31 ms across single- and double-tick
-  // patches and land on 54 ms per tick where the room really runs 50.
+  // ratio instead would average across single- and double-tick patches and land
+  // between them, on a pace the room never ran.
   const gapEmaMs = clock.gapEmaMs + (arrivalGapMs - clock.gapEmaMs) * PACE_SMOOTHING;
   const tickEma = clock.tickEma + (ticks - clock.tickEma) * PACE_SMOOTHING;
   const msPerTick = clamp(gapEmaMs / tickEma, MIN_MS_PER_TICK, MAX_MS_PER_TICK);
@@ -289,7 +306,7 @@ export function advancePlayback(clock: PlaybackClock, deltaMs: number): Playback
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) return clock;
   const target = clock.latestTick - clock.lagTicks;
   const drift = target - clock.tick;
-  if (Math.abs(drift) > PLAYBACK_RESYNC_TICKS) return { ...clock, tick: target };
+  if (Math.abs(drift) > PLAYBACK_RESYNC_MS / clock.msPerTick) return { ...clock, tick: target };
   const rate = clamp(1 + drift * DRIFT_CORRECTION, MIN_PLAYBACK_RATE, MAX_PLAYBACK_RATE);
   const advanced = clock.tick + (deltaMs / clock.msPerTick) * rate;
   // Never render past the newest sample: there is nothing to interpolate

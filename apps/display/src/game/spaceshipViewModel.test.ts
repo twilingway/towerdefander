@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
+import { PATCH_INTERVAL_MS } from "@spaceship-defender/protocol";
 
 import {
   getArenaRingRadii,
@@ -43,8 +45,8 @@ import {
   extendPointTrack,
   interpolateAngle,
   interpolatePoint,
-  PLAYBACK_MIN_LAG_TICKS,
-  PLAYBACK_MAX_LAG_TICKS,
+  PLAYBACK_MIN_LAG_MS,
+  PLAYBACK_MAX_LAG_MS,
   observePlaybackTick,
   samplePointTrack,
   SnapshotResetLatch
@@ -606,6 +608,49 @@ describe("spaceship view model", () => {
     expect(frozenFrames).toBe(0);
   });
 
+  it("keeps the drawn point moving at the rates the room really runs", () => {
+    /*
+     * The case above models a 20 Hz room behind a 16 Hz patch timer, which is
+     * what this game used to be. Today the simulation steps at
+     * SIMULATION_TICK_RATE and the room patches every PATCH_INTERVAL_MS, so a
+     * patch carries two ticks and a tick is worth a third of what it was - and
+     * a clock whose pace estimate cannot go below the true tick length can
+     * never track it. It falls behind, leaves the two segments the track
+     * keeps, and every frame draws the same point until a resync jumps it
+     * forward: the judder an operator sees while the frame counter reports
+     * nothing wrong.
+     */
+    const frameMs = 1000 / 165;
+    const snapshotMs = PATCH_INTERVAL_MS;
+    const ticksPerPatch = Math.round(PATCH_INTERVAL_MS / (1000 / SIMULATION_TICK_RATE));
+    const positionAt = (tick: number) => ({ x: tick * 10, y: 0 });
+    let clock = createPlaybackClock(0);
+    let track = createPointTrack(positionAt(0), 0);
+    let latestTick = 0;
+    let elapsedMs = 0;
+    let nextSnapshotAt = snapshotMs;
+    let previousX = -1;
+    let frozenFrames = 0;
+
+    for (let frame = 0; frame < 1650; frame += 1) {
+      elapsedMs += frameMs;
+      while (elapsedMs >= nextSnapshotAt) {
+        const nextTick = latestTick + ticksPerPatch;
+        track = extendPointTrack(track, positionAt(nextTick), nextTick);
+        latestTick = nextTick;
+        clock = observePlaybackTick(clock, nextTick, snapshotMs);
+        nextSnapshotAt += snapshotMs;
+      }
+      clock = advancePlayback(clock, frameMs);
+      const drawn = samplePointTrack(track, clock.tick);
+      // The first second is the pace estimate settling.
+      if (frame > 165 && drawn.x <= previousX) frozenFrames += 1;
+      previousX = drawn.x;
+    }
+
+    expect(frozenFrames).toBe(0);
+  });
+
   it("re-anchors on a tick that moved backwards instead of freezing", () => {
     let clock = createPlaybackClock(0);
     clock = observePlaybackTick(clock, 400, 50);
@@ -767,9 +812,12 @@ describe("playback lag sized from arrival lateness", () => {
   }
 
   it("stays at the floor while arrivals are even", () => {
-    // A viewer beside the server pays one tick and no more.
-    const clock = feed(createPlaybackClock(0), 40, 50);
-    expect(clock.lagTicks).toBeCloseTo(PLAYBACK_MIN_LAG_TICKS, 2);
+    // A viewer beside the server pays the floor and no more. The clock is built
+    // for the room this case models rather than for the one the display ships
+    // against: a pace it has not learned yet reads its first arrivals as late,
+    // which is the safety buying slack it will hand back, not the floor moving.
+    const clock = feed(createPlaybackClock(0, 50), 40, 50);
+    expect(clock.lagTicks).toBeCloseTo(PLAYBACK_MIN_LAG_MS / clock.msPerTick, 2);
   });
 
   it("does not buy slack for a link that is merely far away", () => {
@@ -798,7 +846,7 @@ describe("playback lag sized from arrival lateness", () => {
     expect(settling.lagTicks).toBeLessThan(late.lagTicks);
     // A minute and a half of them: back to what a quiet link pays.
     const settled = feed(settling, 1_600, 50);
-    expect(settled.lagTicks).toBeCloseTo(PLAYBACK_MIN_LAG_TICKS, 1);
+    expect(settled.lagTicks).toBeCloseTo(PLAYBACK_MIN_LAG_MS / settled.msPerTick, 1);
   });
 
   it("gives it back slower than it took it", () => {
@@ -807,7 +855,7 @@ describe("playback lag sized from arrival lateness", () => {
     const briefly = feed(late, 20, 50);
     // Twenty even arrivals after the stall, most of the slack is still there:
     // the stall has already been paid for, and the next one is what matters.
-    expect(briefly.lagTicks).toBeGreaterThan(PLAYBACK_MIN_LAG_TICKS + 1);
+    expect(briefly.lagTicks).toBeGreaterThan(PLAYBACK_MIN_LAG_MS / briefly.msPerTick + 1);
   });
 
   it("never turns the game into a recording", () => {
@@ -815,7 +863,7 @@ describe("playback lag sized from arrival lateness", () => {
     for (let index = 0; index < 30; index += 1) {
       clock = observePlaybackTick(clock, clock.latestTick + 1, 2_000);
     }
-    expect(clock.lagTicks).toBeLessThanOrEqual(PLAYBACK_MAX_LAG_TICKS);
+    expect(clock.lagTicks).toBeLessThanOrEqual(PLAYBACK_MAX_LAG_MS / clock.msPerTick);
   });
 
   it("keeps playback behind by the lag it decided on while snapshots keep coming", () => {
