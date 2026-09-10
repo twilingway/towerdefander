@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
-import { PATCH_INTERVAL_MS } from "@spaceship-defender/protocol";
+import {
+  PATCH_INTERVAL_MS,
+  PLAYBACK_MAX_LAG_MS,
+  PLAYBACK_MIN_LAG_MS
+} from "@spaceship-defender/protocol";
 
 import {
   getArenaRingRadii,
@@ -45,8 +49,6 @@ import {
   extendPointTrack,
   interpolateAngle,
   interpolatePoint,
-  PLAYBACK_MIN_LAG_MS,
-  PLAYBACK_MAX_LAG_MS,
   observePlaybackTick,
   samplePointTrack,
   SnapshotResetLatch

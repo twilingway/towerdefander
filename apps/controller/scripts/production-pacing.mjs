@@ -9,25 +9,25 @@
  * the server produced per real second, and how unevenly the patches carrying
  * them landed.
  *
- * `PLAYBACK_LAG_TICKS` in the display is the budget: playback runs that many
- * ticks behind the newest one received, so an arrival later than that budget
- * has nothing left to interpolate towards and the picture stops. Gaps are
- * reported against it.
+ * `PLAYBACK_MIN_LAG_MS` in the protocol is the budget: a viewer plays that
+ * many milliseconds behind the newest tick received, so an arrival later than
+ * the ticks it carries plus that floor has nothing left to interpolate towards
+ * and the picture stops. Gaps are reported against it, and against the pace
+ * this run actually measured rather than against a nominal one - a number
+ * written down here is a number that goes stale the next time the room changes
+ * its step.
  *
  *   node apps/controller/scripts/production-pacing.mjs --api wss://host [--seconds 60]
  */
 import { Client } from "@colyseus/sdk";
 import {
+  PLAYBACK_MIN_LAG_MS,
   PROTOCOL_VERSION,
   ROOM_TYPE,
   clientMessage,
   serverLatencyProbeSchema,
   serverMessage
 } from "@spaceship-defender/protocol";
-
-/** Mirrors PLAYBACK_LAG_TICKS in apps/display; a gap past this stalls the picture. */
-const PLAYBACK_LAG_TICKS = 1;
-const NOMINAL_MS_PER_TICK = 50;
 
 const options = readOptions(process.argv.slice(2));
 const arrivals = [];
@@ -89,17 +89,16 @@ function report() {
   const spanMs = arrivals.reduce((total, { gapMs }) => total + gapMs, 0);
   const at = (share) => gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * share))];
 
-  // The budget the display has before the picture stops: the lag it keeps, plus
-  // the tick the patch itself carries.
-  const budgetMs = (PLAYBACK_LAG_TICKS + 1) * NOMINAL_MS_PER_TICK;
-  const overBudget = arrivals.filter(
-    ({ gapMs, ticks: n }) => gapMs > (n + PLAYBACK_LAG_TICKS) * NOMINAL_MS_PER_TICK
-  );
-  const stalledMs = overBudget.reduce(
-    (total, { gapMs, ticks: n }) =>
-      total + (gapMs - (n + PLAYBACK_LAG_TICKS) * NOMINAL_MS_PER_TICK),
-    0
-  );
+  // The pace this run measured, rather than the one the room is supposed to
+  // keep: the whole point of the harness is to catch a room that is not keeping
+  // it.
+  const msPerTick = spanMs / Math.max(1, ticks);
+  // The budget a viewer has before the picture stops: the lag it plays behind,
+  // plus the ticks the patch itself carries.
+  const budgetMs = PLAYBACK_MIN_LAG_MS + msPerTick;
+  const lateByMs = ({ gapMs, ticks: n }) => gapMs - (n * msPerTick + PLAYBACK_MIN_LAG_MS);
+  const overBudget = arrivals.filter((arrival) => lateByMs(arrival) > 0);
+  const stalledMs = overBudget.reduce((total, arrival) => total + lateByMs(arrival), 0);
 
   console.log("");
   console.log(
