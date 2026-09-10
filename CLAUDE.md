@@ -48,6 +48,7 @@ Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core
 | --------------------------------------- | ---------------------------------------------------------------------------------- |
 | `pnpm test:e2e`                         | Builds the server, then Playwright `tests/e2e` on isolated ports 35678/35173/35174 |
 | `pnpm smoke:network`                    | Headless Colyseus SDK client driving a real room (port 35677)                      |
+| `pnpm watch:bots`                       | Real Chrome on a room the room itself flies; reuses a running stand or starts one  |
 | `pnpm demo:visible`                     | Opens real Chrome, three SDK auto-crew controllers play a run (ports 36567/36173)  |
 | `pnpm demo:verify`                      | Headless assertion pass over the same demo; deliberately outside `pnpm check`      |
 | `pnpm benchmark:combat`                 | Worst-case combat room stepping benchmark                                          |
