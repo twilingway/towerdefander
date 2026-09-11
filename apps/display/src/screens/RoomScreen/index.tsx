@@ -48,6 +48,8 @@ interface RoomScreenProps {
   /** Present only in the layout preview; its presence *is* "this is a fixture". */
   readonly preview: RoomPreview | undefined;
   readonly onCloseRoom: () => void;
+  /** Leaving a match that is over for you, without ending it for the bots. */
+  readonly onLeaveRoom: () => void;
   readonly onReady: () => void;
   readonly onVote: RoomSession["sendCockpitVote"];
 }
@@ -71,6 +73,7 @@ export function RoomScreen({
   session,
   preview,
   onCloseRoom,
+  onLeaveRoom,
   onReady,
   onVote
 }: RoomScreenProps) {
@@ -352,6 +355,7 @@ export function RoomScreen({
           }}
           closingRoom={session?.closingRoom === true}
           onCloseRoom={onCloseRoom}
+          onLeaveRoom={onLeaveRoom}
           aimAssist={aimAssist}
           onAimAssistChange={setAimAssist}
         />

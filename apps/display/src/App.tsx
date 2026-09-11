@@ -74,10 +74,15 @@ export function DisplayApp() {
         onBack={() => {
           void navigate({ pathname: "/", search: readDisplaySearch() });
         }}
-        onStart={() => {
+        onStart={(cockpitPlayerName) => {
           // The room opens as a waiting room, so the screen stays put: the match
           // page is for a match, and this is a queue people are still joining.
-          void session.createArenaMatch();
+          //
+          // The name has to travel: it is what makes the connection a cockpit
+          // rather than a spectator, and dropping it here was the whole of "a
+          // bot flies my ship" - the room seated nobody and the sticks never
+          // armed, because neither side had been told anyone was flying.
+          void session.createArenaMatch(cockpitPlayerName);
         }}
       />
     );
@@ -142,6 +147,13 @@ export function DisplayApp() {
       session={session}
       preview={undefined}
       onCloseRoom={() => void session.closeRoom()}
+      onLeaveRoom={() => {
+        // Back to the queue rather than to the front door: somebody who has
+        // just been shot down wants the next match, not the mode grid.
+        void session.leaveRoom().then(() => {
+          void navigate({ pathname: "/arena", search: readDisplaySearch() }, { replace: true });
+        });
+      }}
       onReady={session.sendCockpitReady}
       onVote={session.sendCockpitVote}
     />

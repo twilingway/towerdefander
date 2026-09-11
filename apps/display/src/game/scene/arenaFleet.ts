@@ -1,8 +1,27 @@
 import type Phaser from "phaser";
 import type { DisplayGameSnapshot, PublicArenaShipView } from "@spaceship-defender/protocol";
 
+import {
+  createAngleTrack,
+  createPointTrack,
+  extendAngleTrack,
+  extendPointTrack,
+  sampleAngleTrack,
+  samplePointTrack,
+  type AngleTrack,
+  type PointTrack
+} from "../playback.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
 import { drawSpaceshipHull } from "../entityArt.js";
+
+/** Where the scene has actually drawn the player's own hull this frame. */
+export interface DrawnOwnPose {
+  readonly x: number;
+  readonly y: number;
+  readonly heading: number;
+  readonly turretAngle: number;
+  readonly shieldAngle: number;
+}
 
 /** Bakes a drawing centred on zero and hands back its texture key. */
 type BakeShape = (
@@ -25,8 +44,19 @@ interface FleetHull {
    * itself, so only its bars belong here.
    */
   readonly isSelf: boolean;
-  /** Where the last patch said this hull is; the frame walks toward it. */
-  target: { x: number; y: number; heading: number; turret: number; shieldAngle: number };
+  /**
+   * The last two authoritative samples, played back on the scene's own clock.
+   *
+   * The same tracks every other entity in the world is drawn from. They were a
+   * lerp toward the newest patch, which is a different clock from the rest of
+   * the picture: it eases, never quite arrives and changes speed with the frame
+   * rate, and a thin horizontal bar over the hull shows that as a twitch long
+   * before a rotating sprite does.
+   */
+  position: PointTrack;
+  heading: AngleTrack;
+  turretAngle: AngleTrack;
+  shieldAngle: AngleTrack;
   hp: number;
   maxHp: number;
   flashLeftMs: number;
@@ -61,16 +91,17 @@ const BAR_HEIGHT = 0.26;
 export class ArenaFleet {
   private readonly hulls = new Map<string, FleetHull>();
 
-  /** Takes the newest patch: targets, health, and a flash for anything hit. */
-  sync(scene: Phaser.Scene, snapshot: DisplayGameSnapshot, bake: BakeShape): void {
+  /** Takes the newest patch: a sample on every track, health, and a hit flash. */
+  sync(scene: Phaser.Scene, snapshot: DisplayGameSnapshot, bake: BakeShape, snap = false): void {
     // Every hull, the player's own included: the scene draws that one's art, but
     // its health and its sector are the same question a rival's bars answer, and
     // the answer belongs over the ship rather than only in a panel.
     const seen = new Set<string>();
+    const toTick = snapshot.tick;
 
     for (const ship of snapshot.arenaShips) {
       seen.add(ship.shipId);
-      const parts = this.hulls.get(ship.shipId) ?? this.create(scene, snapshot, ship, bake);
+      const parts = this.hulls.get(ship.shipId) ?? this.create(scene, snapshot, ship, bake, toTick);
       this.hulls.set(ship.shipId, parts);
 
       // Losing health is the only hit signal the arena has on the wire, and it
@@ -79,13 +110,19 @@ export class ArenaFleet {
       if (ship.hp < parts.hp - 0.01) parts.flashLeftMs = FLASH_MS;
       parts.hp = ship.hp;
       parts.maxHp = ship.maxHp;
-      parts.target = {
-        x: ship.x,
-        y: ship.y,
-        heading: ship.heading,
-        turret: ship.turretAngle,
-        shieldAngle: ship.shieldAngle
-      };
+      if (snap) {
+        // A hydration is not a move: there is no earlier sample to walk out of,
+        // so the tracks start again where the room says the hull is.
+        parts.position = createPointTrack(ship, toTick);
+        parts.heading = createAngleTrack(ship.heading, toTick);
+        parts.turretAngle = createAngleTrack(ship.turretAngle, toTick);
+        parts.shieldAngle = createAngleTrack(ship.shieldAngle, toTick);
+      } else {
+        parts.position = extendPointTrack(parts.position, ship, toTick);
+        parts.heading = extendAngleTrack(parts.heading, ship.heading, toTick);
+        parts.turretAngle = extendAngleTrack(parts.turretAngle, ship.turretAngle, toTick);
+        parts.shieldAngle = extendAngleTrack(parts.shieldAngle, ship.shieldAngle, toTick);
+      }
       parts.shield.setVisible(!parts.isSelf && ship.shieldActive);
       this.drawBars(parts, ship);
     }
@@ -98,25 +135,30 @@ export class ArenaFleet {
   }
 
   /**
-   * One frame of motion between patches.
+   * One drawn frame, on the scene's playback clock.
    *
-   * A plain lerp with a rate rather than a fixed share, so the catch-up speed
-   * does not depend on how often frames happen to arrive.
+   * The same clock the rest of the world is drawn on, which is the point: a
+   * rival and the shell flying past it have to be sampled at one moment or the
+   * shot misses on screen and lands in the room. The player's own hull is the
+   * exception - it is drawn from the predicted pose, so its bars are placed on
+   * that pose rather than on the sample the room last sent, which is where they
+   * were twitching against the ship they belong to.
    */
-  update(deltaMs: number): void {
-    const step = Math.min(1, deltaMs / 90);
+  update(playbackTick: number, deltaMs: number, own: DrawnOwnPose | undefined): void {
     for (const parts of this.hulls.values()) {
-      const x = parts.hull.x + (parts.target.x - parts.hull.x) * step;
-      const y = parts.hull.y + (parts.target.y - parts.hull.y) * step;
+      const mine = parts.isSelf && own !== undefined ? own : undefined;
+      const point = mine ?? samplePointTrack(parts.position, playbackTick);
+      const x = point.x;
+      const y = point.y;
       parts.hull
         .setPosition(x, y)
-        .setRotation(turnToward(parts.hull.rotation, parts.target.heading, step));
+        .setRotation(mine?.heading ?? sampleAngleTrack(parts.heading, playbackTick));
       parts.turret
         .setPosition(x, y)
-        .setRotation(turnToward(parts.turret.rotation, parts.target.turret, step));
+        .setRotation(mine?.turretAngle ?? sampleAngleTrack(parts.turretAngle, playbackTick));
       parts.shield
         .setPosition(x, y)
-        .setRotation(turnToward(parts.shield.rotation, parts.target.shieldAngle, step));
+        .setRotation(mine?.shieldAngle ?? sampleAngleTrack(parts.shieldAngle, playbackTick));
 
       const barY = y - parts.hull.displayHeight * 0.75;
       const left = x - parts.healthBack.displayWidth / 2;
@@ -172,7 +214,8 @@ export class ArenaFleet {
     scene: Phaser.Scene,
     snapshot: DisplayGameSnapshot,
     ship: PublicArenaShipView,
-    bake: BakeShape
+    bake: BakeShape,
+    toTick: number
   ): FleetHull {
     const radius = ship.radius;
     const hullVisual = snapshot.spaceshipVisual;
@@ -258,13 +301,12 @@ export class ArenaFleet {
       shieldBack: scene.add.image(ship.x, ship.y, pixelKey).setDepth(13).setTint(HEALTH_BACK),
       shieldFill: scene.add.image(ship.x, ship.y, pixelKey).setDepth(14).setTint(SHIELD_COLOR),
       flash: scene.add.image(ship.x, ship.y, flashKey).setDepth(15).setVisible(false),
-      target: {
-        x: ship.x,
-        y: ship.y,
-        heading: ship.heading,
-        turret: ship.turretAngle,
-        shieldAngle: ship.shieldAngle
-      },
+      // A hull appears already formed at the newest tick; there is no earlier
+      // authoritative sample to walk it out of.
+      position: createPointTrack(ship, toTick),
+      heading: createAngleTrack(ship.heading, toTick),
+      turretAngle: createAngleTrack(ship.turretAngle, toTick),
+      shieldAngle: createAngleTrack(ship.shieldAngle, toTick),
       hp: ship.hp,
       maxHp: ship.maxHp,
       flashLeftMs: 0
@@ -285,10 +327,4 @@ function destroyHull(parts: FleetHull): void {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
-}
-
-/** Shortest way round, so a hull crossing north does not spin the long way. */
-function turnToward(current: number, target: number, step: number): number {
-  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
-  return current + delta * step;
 }

@@ -220,10 +220,6 @@ export class SpaceshipScene extends Phaser.Scene {
 
   private updateScene(time: number, deltaMs: number): void {
     this.frames.recordFrame(time, this.game.loop.rawDelta);
-    // The other hulls of a match walk toward their last published position
-    // every frame; without it they would move twenty times a second and read
-    // as statues trading fire.
-    this.fleet.update(deltaMs);
     this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
@@ -275,6 +271,20 @@ export class SpaceshipScene extends Phaser.Scene {
       hullRadius: this.snapshot.spaceship.radius
     });
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
+    /*
+     * The rest of a match, on the clock the rest of the world is drawn on, and
+     * the player's own hull on the pose just drawn above. Here rather than at
+     * the top of the frame because that pose is what its bars hang from, and
+     * before it existed they hung from the last patch and twitched against the
+     * ship they belong to.
+     */
+    this.fleet.update(playbackTick, deltaMs, {
+      x: spaceshipPosition.x,
+      y: spaceshipPosition.y,
+      heading: spaceshipHeading,
+      turretAngle: this.turret.rotation,
+      shieldAngle: this.visualShieldAngle
+    });
     if (this.vectorsEnabled) {
       this.drawShield();
       // From the mount, which is where the simulation fires from too: the barrel
@@ -385,7 +395,7 @@ export class SpaceshipScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
     // Sixteen hulls, moved rather than rebuilt: the textures are shared and a
     // frame costs a position and two rotations each.
-    this.fleet.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw));
+    this.fleet.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw), shouldSnap);
     // The sheet is ground: redrawn when a zone changes state and at no other
     // time, which on a sixty-hertz patch stream is a handful of times a match.
     if (arenaZoneSignature(snapshot) !== zoneSignature) {

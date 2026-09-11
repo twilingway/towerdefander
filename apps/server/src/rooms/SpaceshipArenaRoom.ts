@@ -516,13 +516,28 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match === undefined) return;
     const game = this.state.game;
 
+    const player = match.ships[PLAYER_SLOT];
+
     game.tick = match.clock.tick;
     game.elapsedMs = Math.round(match.clock.elapsedMs);
     // Where the cockpit's replay starts. Left at zero it would count every
     // frame it ever sent as still in flight, and replay all of them.
     game.display.appliedInputSeq = this.appliedSoloSeq;
     game.arenaRadius = Math.round(this.config.arenaRadius);
-    game.encounter.phase = match.phase === "result" ? "result" : "combat";
+    /*
+     * A match ends for a player when their hull does, not when the field is
+     * down to one.
+     *
+     * Fifteen bots go on fighting after a human is shot down, and the room is
+     * right to keep stepping them - but the person watching has lost, and
+     * holding the picture in "combat" until the last bot falls is why the
+     * result only ever arrived with the room closing. The flags matter as much
+     * as the values: the view reads `outcome` as absent unless `hasOutcome`
+     * says otherwise, so an outcome written without them is an outcome nobody
+     * is shown.
+     */
+    const eliminated = this.playerSessionId !== undefined && player !== undefined && !player.alive;
+    game.encounter.phase = match.phase === "result" || eliminated ? "result" : "combat";
     game.encounter.encounterTick = match.clock.tick;
     // The contract wants a positive countdown during combat, and a match has
     // exactly one: what is left of its own clock.
@@ -534,13 +549,28 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     );
     // The room stays "active": a finished match is an encounter outcome, and
     // the room phase only knows lobby and active.
-    if (match.phase === "result") {
-      game.encounter.outcome = match.winnerShipId === null ? "defeat" : "victory";
+    if (eliminated) {
+      game.encounter.hasOutcome = true;
+      game.encounter.outcome = "defeat";
+      game.encounter.hasDefeatReason = true;
+      game.encounter.defeatReason = "spaceship_destroyed";
+    } else if (match.phase === "result") {
+      game.encounter.hasOutcome = true;
+      // Somebody winning is not the same as this somebody winning: with a
+      // player in the field the outcome is theirs, and only an unmanned screen
+      // reports the match's own.
+      game.encounter.outcome =
+        this.playerSessionId === undefined
+          ? match.winnerShipId === null
+            ? "defeat"
+            : "victory"
+          : match.winnerShipId === player?.id
+            ? "victory"
+            : "defeat";
     }
 
     this.publishZones(match);
 
-    const player = match.ships[PLAYER_SLOT];
     if (player !== undefined) mirrorPlayerShip(player, game);
 
     /*

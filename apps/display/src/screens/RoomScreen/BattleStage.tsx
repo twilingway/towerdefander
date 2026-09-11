@@ -11,6 +11,9 @@ import type { ModuleTree } from "../../model/moduleTree.js";
 import { saveAimAssistToDevice } from "../../model/aimAssistPreference.js";
 import type { SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
+import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
+
+import { ArenaResultOverlay } from "./ArenaResultOverlay.js";
 import { PolledCombatRadar } from "./CombatRadar.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
@@ -49,6 +52,8 @@ interface BattleStageProps {
   readonly cockpit: BattleCockpit;
   readonly closingRoom: boolean;
   readonly onCloseRoom: () => void;
+  /** Leaving without closing: what a downed arena pilot does instead. */
+  readonly onLeaveRoom: () => void;
   readonly aimAssist: boolean;
   readonly onAimAssistChange: (aimAssist: boolean) => void;
 }
@@ -71,6 +76,7 @@ export function BattleStage({
   cockpit,
   closingRoom,
   onCloseRoom,
+  onLeaveRoom,
   aimAssist,
   onAimAssistChange
 }: BattleStageProps) {
@@ -172,26 +178,45 @@ export function BattleStage({
               : { cockpit: { role: cockpit.seat.role, onVote: cockpit.onVote } })}
           />
         )}
-        {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
-          <RunResultOverlay
-            outcome={view.game.encounter.outcome}
-            defeatReason={view.game.encounter.defeatReason}
-            waveNumber={view.game.encounter.waveNumber}
-            score={view.game.encounter.score}
-            readyCount={view.players.filter(({ ready }) => ready).length}
-            crewSize={view.crewSize}
-            closing={closingRoom}
-            onClose={onCloseRoom}
-            {...(!cockpit.seated
-              ? {}
-              : {
-                  cockpit: {
-                    ready: cockpit.seat?.ready === true,
-                    onReady: cockpit.onReady
-                  }
-                })}
-          />
-        )}
+        {/*
+         * A match reports itself, a run reports itself, and they are not the
+         * same report: the arena has no wave to name, no score to total and no
+         * crew to agree on a rematch. The field is what tells them apart -
+         * sixteen published hulls is a match and nothing else has them.
+         */}
+        {view.game.encounter.phase === "result" &&
+          view.game.encounter.outcome !== null &&
+          view.game.arenaShips.length > 0 && (
+            <ArenaResultOverlay
+              outcome={view.game.encounter.outcome}
+              survivors={view.game.arenaShips.filter((ship) => !ship.isSelf).length}
+              fieldSize={ARENA_SHIP_COUNT}
+              leaving={closingRoom}
+              onLeave={onLeaveRoom}
+            />
+          )}
+        {view.game.encounter.phase === "result" &&
+          view.game.encounter.outcome !== null &&
+          view.game.arenaShips.length === 0 && (
+            <RunResultOverlay
+              outcome={view.game.encounter.outcome}
+              defeatReason={view.game.encounter.defeatReason}
+              waveNumber={view.game.encounter.waveNumber}
+              score={view.game.encounter.score}
+              readyCount={view.players.filter(({ ready }) => ready).length}
+              crewSize={view.crewSize}
+              closing={closingRoom}
+              onClose={onCloseRoom}
+              {...(!cockpit.seated
+                ? {}
+                : {
+                    cockpit: {
+                      ready: cockpit.seat?.ready === true,
+                      onReady: cockpit.onReady
+                    }
+                  })}
+            />
+          )}
         {/* The run's own hull, straight from the catalogue; the fixture is
           the preview's stand-in when no server answered. */}
         <MeteredPanel id="модули" measuring={diagnostics}>

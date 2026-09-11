@@ -63,6 +63,8 @@ export interface RoomSession {
   /** The arena's waiting room, while there is one; undefined outside the arena. */
   readonly arenaLobby: ArenaLobby | undefined;
   readonly closeRoom: () => Promise<void>;
+  /** Leaves without ending the room, and without the shared screen's question. */
+  readonly leaveRoom: () => Promise<void>;
   readonly sendCockpitReady: () => void;
   readonly sendCockpitVote: (upgradeId: UpgradeId) => void;
   /** The socket the byte counter hooks, read fresh on every reconnect. */
@@ -395,6 +397,40 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
     setError(message);
     setConnectionEpoch(0);
     setClosingRoom(false);
+    /*
+     * The match that is over stops being this session's match.
+     *
+     * Both of these outlived the room they belonged to: a queue still reading
+     * "started" sent the arena screen straight back into a room that no longer
+     * exists - which is what "it will not let me look for a new fight" was -
+     * and a cockpit name left standing would have armed the sticks on the next
+     * screen that happened to render.
+     */
+    setArenaLobby(undefined);
+    setCockpitPlayer(undefined);
+    cockpitPlayerReference.current = undefined;
+  }
+
+  /**
+   * Leaving a room without closing it, and without asking.
+   *
+   * The close button is a shared screen's gesture: it ends the room for
+   * everyone who is on it, so it asks first. A player whose hull is gone is
+   * only leaving - the match goes on without them - and being asked "are you
+   * sure" on the way out of a fight they have already lost is noise.
+   */
+  async function handleLeaveRoom(): Promise<void> {
+    const room = roomReference.current;
+    if (room === undefined) return;
+    setClosingRoom(true);
+    roomReference.current = undefined;
+    try {
+      await closeDisplayRoom(room);
+    } catch {
+      // A leave that the server never acknowledged still ends the session on
+      // this page; the room disposes itself when its last client is gone.
+    }
+    resetToCreate("");
   }
 
   async function handleCloseRoom(): Promise<void> {
@@ -427,6 +463,7 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
     createArenaMatch,
     arenaLobby,
     closeRoom: handleCloseRoom,
+    leaveRoom: handleLeaveRoom,
     sendCockpitReady,
     sendCockpitVote,
     readSocket: () => {
