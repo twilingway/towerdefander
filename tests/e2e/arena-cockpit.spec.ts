@@ -28,16 +28,28 @@ test("the arena seats the player rather than a bot", async ({ page }) => {
   const world = page.getByTestId("spaceship-world");
   await expect(world).toBeVisible({ timeout: 45_000 });
 
-  // A hull under autopilot is never still, so "it moved" proves nothing. A held
-  // key does: the helm turns for as long as it is down, and the autopilot has
-  // no reason to turn one way for a second and a half on cue.
-  const before = await readNumber(world, "data-spaceship-heading");
+  /*
+   * A hull under autopilot is never still, so "it moved" proves nothing. A held
+   * key does: the helm turns for as long as it is down, and the autopilot has no
+   * reason to turn one way on cue.
+   *
+   * Summed step by step rather than measured end to end. This hull turns at four
+   * radians a second, so a hold of any useful length carries it past a full
+   * circle and the difference between two bearings wraps back to nearly nothing
+   * - which is a test that fails when the helm works perfectly.
+   */
   await page.keyboard.down("KeyD");
-  await page.waitForTimeout(1_500);
-  const turned = await readNumber(world, "data-spaceship-heading");
+  let previous = await readNumber(world, "data-spaceship-heading");
+  let turned = 0;
+  for (let sample = 0; sample < 6; sample += 1) {
+    await page.waitForTimeout(120);
+    const now = await readNumber(world, "data-spaceship-heading");
+    turned += shortestDelta(now, previous);
+    previous = now;
+  }
   await page.keyboard.up("KeyD");
 
-  expect(shortestDelta(turned, before)).toBeGreaterThan(0.5);
+  expect(turned).toBeGreaterThan(1);
 });
 
 async function readNumber(target: Locator, attribute: string): Promise<number> {

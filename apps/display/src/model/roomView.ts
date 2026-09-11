@@ -111,7 +111,7 @@ export function toDisplayRoomView(
               secondsRemaining: zone.secondsRemaining
             })),
             arenaShips: [...display.arenaShips.values()].map((ship) => ({
-              shipId: ship.shipId,
+              entityId: ship.entityId,
               isSelf: ship.isSelf,
               x: ship.x,
               y: ship.y,

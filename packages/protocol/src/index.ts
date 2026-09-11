@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 56 as const;
+export const PROTOCOL_VERSION = 57 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -447,7 +447,12 @@ const circleObstacle = z
  */
 export const publicArenaShipViewSchema = z
   .object({
-    shipId: z.string().min(1).max(24),
+    /**
+     * Named like every other live entity on the wire, because that is what it
+     * is: the client's interpolation binds a sprite to a decoded reference by
+     * this key, and a hull with a key of its own could not be bound at all.
+     */
+    entityId: z.string().min(1).max(24),
     /** True for the hull this client is seated in, if it is seated at all. */
     isSelf: z.boolean(),
     x: finite,
@@ -1243,6 +1248,18 @@ export const ARENA_LOBBY_WAIT_SECONDS_PRODUCTION = 180;
  * seconds is long enough to watch and short enough not to be a second wait.
  */
 export const ARENA_BOT_FILL_MS = 2_500;
+
+/**
+ * How long a finished match stays open before the room lets go.
+ *
+ * A match outlives the player who lost it: fifteen hulls are still fighting
+ * when one is shot down, and a room that closed with its first casualty would
+ * end the fight for everyone still in it. So the room stops holding on to its
+ * clients and starts holding on to its match - it lives until the match is
+ * decided, whether or not anyone is still watching, and only then gives anyone
+ * left this long to read the result.
+ */
+export const ARENA_RESULT_HOLD_MS = 15_000;
 
 export const arenaLobbySchema = z
   .object({

@@ -278,13 +278,18 @@ export class SpaceshipScene extends Phaser.Scene {
      * before it existed they hung from the last patch and twitched against the
      * ship they belong to.
      */
-    this.fleet.update(playbackTick, deltaMs, {
-      x: spaceshipPosition.x,
-      y: spaceshipPosition.y,
-      heading: spaceshipHeading,
-      turretAngle: this.turret.rotation,
-      shieldAngle: this.visualShieldAngle
-    });
+    this.fleet.update(
+      playbackTick,
+      deltaMs,
+      {
+        x: spaceshipPosition.x,
+        y: spaceshipPosition.y,
+        heading: spaceshipHeading,
+        turretAngle: this.turret.rotation,
+        shieldAngle: this.visualShieldAngle
+      },
+      this.prediction
+    );
     if (this.vectorsEnabled) {
       this.drawShield();
       // From the mount, which is where the simulation fires from too: the barrel
@@ -395,7 +400,13 @@ export class SpaceshipScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
     // Sixteen hulls, moved rather than rebuilt: the textures are shared and a
     // frame costs a position and two rotations each.
-    this.fleet.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw), shouldSnap);
+    this.fleet.sync(
+      this,
+      snapshot,
+      (key, half, draw) => this.bake(key, half, draw),
+      shouldSnap,
+      this.prediction
+    );
     // The sheet is ground: redrawn when a zone changes state and at no other
     // time, which on a sixty-hertz patch stream is a handful of times a match.
     if (arenaZoneSignature(snapshot) !== zoneSignature) {

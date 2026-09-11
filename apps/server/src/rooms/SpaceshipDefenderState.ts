@@ -187,7 +187,7 @@ export class ArenaZoneView extends Schema {
  * runs on.
  */
 export class ArenaShipView extends Schema {
-  @type("string") shipId = "";
+  @type("string") entityId = "";
   @type("boolean") isSelf = false;
   @type("float32") x = 0;
   @type("float32") y = 0;

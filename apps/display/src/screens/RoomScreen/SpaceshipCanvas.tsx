@@ -173,7 +173,8 @@ export function SpaceshipCanvas({
           runtimeReference.current.setPredictionDriver({
             drive: () => latestPrediction.current?.drive(),
             bind: (entityId, kind) => latestPrediction.current?.bind(entityId, kind),
-            read: (entity) => latestPrediction.current?.read(entity)
+            read: (entity) => latestPrediction.current?.read(entity),
+            angleOf: (entity, field) => latestPrediction.current?.angleOf(entity, field) ?? 0
           });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;

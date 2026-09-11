@@ -34,7 +34,7 @@ export interface NetworkPlayerState {
 
 /** One whole hull in a match; empty in the campaign. */
 export interface NetworkArenaShipState {
-  shipId: string;
+  entityId: string;
   isSelf: boolean;
   x: number;
   y: number;

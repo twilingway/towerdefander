@@ -343,6 +343,45 @@ describe("tick rescale gate", () => {
     expect(migrated.presets[0]?.tuning.waveCampaign.waves.length).toBeGreaterThan(0);
   });
 
+  it("leaves a tuned helm alone once the arcade drive has landed", () => {
+    /*
+     * The arcade takeover replaces the operator's drive numbers with the
+     * built-ins, on purpose and exactly once - at version 38. Unconditional, it
+     * fired again on every later bump, so a helm tuned after that was silently
+     * handed back to the defaults the next time an unrelated field was added.
+     * That is a change the operator did not make and cannot see.
+     */
+    const tuned = {
+      ...createDefaultTuning(),
+      spaceshipSpeedPerSecond: 411,
+      headingMaxAngularSpeedPerSecond: 2.5
+    };
+    const migrated = migrateBalanceDocument({
+      version: BALANCE_FILE_VERSION - 1,
+      activePresetId: "seed",
+      presets: [{ id: "seed", name: "Seed", tuning: tuned }]
+    }) as BalancePresetsFile;
+    expect(migrated.presets[0]?.tuning.spaceshipSpeedPerSecond).toBe(411);
+    expect(migrated.presets[0]?.tuning.headingMaxAngularSpeedPerSecond).toBe(2.5);
+  });
+
+  it("still takes the helm from a preset written before the arcade drive", () => {
+    const defaults = createDefaultTuning();
+    const old = {
+      ...defaults,
+      spaceshipSpeedPerSecond: 380,
+      headingMaxAngularSpeedPerSecond: Math.PI
+    };
+    const migrated = migrateBalanceDocument({
+      version: 37,
+      activePresetId: "seed",
+      presets: [{ id: "seed", name: "Seed", tuning: old }]
+    }) as BalancePresetsFile;
+    expect(migrated.presets[0]?.tuning.spaceshipSpeedPerSecond).toBe(
+      defaults.spaceshipSpeedPerSecond
+    );
+  });
+
   it("still triples a file written at twenty steps", () => {
     // The rescale itself has to keep working, or a genuinely old preset would
     // reload three times as fast as it was tuned.

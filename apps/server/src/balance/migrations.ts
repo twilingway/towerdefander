@@ -439,19 +439,31 @@ function migrateShipArchetypes(tuning: LegacyRecord, defaults: BalanceTuning): L
 }
 
 /**
- * The drive numbers an operator no longer owns.
+ * The drive numbers an operator did not own, once.
  *
- * Normally a migration adds knobs and leaves tuned ones alone. This one takes
- * six back, because the helm was changed on purpose and from the outside: the
+ * Normally a migration adds knobs and leaves tuned ones alone. This one took
+ * seven back, because the helm was changed on purpose and from the outside: the
  * reference prototype's arcade profile replaced a hull that accelerated in a
  * second and turned with inertia, and a preset that kept the old numbers would
  * quietly keep the old feel while every other copy of the game had the new one.
- * Whatever was in the file for these fields is replaced by the built-in value.
+ *
+ * It is a one-time takeover and has to stay one. Left unconditional it fired
+ * again on every later version bump, so an operator who tuned the helm after
+ * the arcade landed lost it to the built-ins the next time any unrelated field
+ * was added - which is exactly what "the ship flies differently now and I
+ * changed nothing" is.
  *
  * The hull only. The turret is not on this list: the prototype points its
  * barrel instantly, and taking that as well would delete the gunner's traverse
  * along with everything built on it.
  */
+/**
+ * The version the arcade drive landed on. A preset written at or after it has
+ * already been through the takeover once, so its helm is the operator's again
+ * and no later migration may touch it.
+ */
+const FIRST_ARCADE_HELM_VERSION = 38;
+
 const ARCADE_HELM_FIELDS = [
   "spaceshipSpeedPerSecond",
   "spaceshipAccelerationPerSecondSquared",
@@ -462,13 +474,16 @@ const ARCADE_HELM_FIELDS = [
   "headingAngularBrakingPerSecondSquared"
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
-function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
+function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm: boolean): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
   const campaign = readRecord(tuning, "waveCampaign");
-  const arcade = Object.fromEntries(
-    ARCADE_HELM_FIELDS.map((field) => [field, defaults[field]])
-  ) as Pick<BalanceTuning, (typeof ARCADE_HELM_FIELDS)[number]>;
+  const arcade = takeArcadeHelm
+    ? (Object.fromEntries(ARCADE_HELM_FIELDS.map((field) => [field, defaults[field]])) as Pick<
+        BalanceTuning,
+        (typeof ARCADE_HELM_FIELDS)[number]
+      >)
+    : {};
   return {
     ...preset,
     tuning: {
@@ -582,6 +597,9 @@ export function migrateBalanceDocument(raw: unknown): unknown {
     typeof version === "number" && version >= FIRST_60_HZ_BALANCE_VERSION
       ? 1
       : SIMULATION_TICK_RATE / TICK_RATE_BEFORE_60_HZ;
+  // Only a file older than the arcade drive has its helm taken; see
+  // `ARCADE_HELM_FIELDS`.
+  const takeArcadeHelm = !(typeof version === "number" && version >= FIRST_ARCADE_HELM_VERSION);
   return {
     ...raw,
     version: BALANCE_FILE_VERSION,
@@ -589,7 +607,7 @@ export function migrateBalanceDocument(raw: unknown): unknown {
     // already written at the new rate, and scaling them a second time would
     // triple every knob the operator never touched.
     presets: readArray(raw, "presets").map((preset) =>
-      migratePreset(scaleTickFields(preset, tickScale), defaults)
+      migratePreset(scaleTickFields(preset, tickScale), defaults, takeArcadeHelm)
     )
   };
 }

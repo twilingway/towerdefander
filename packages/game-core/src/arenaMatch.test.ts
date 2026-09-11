@@ -18,6 +18,7 @@ import {
 import { type ArenaZone } from "./arenaZones.ts";
 import { arenaCentre, arenaSpawnMarks } from "./arenaMatch.ts";
 import { advanceArenaZones, createArenaZones, zoneAt } from "./arenaZones.ts";
+import { shipStatsFromConfig } from "./shipStats.ts";
 
 const botSeats: readonly ArenaShipSeat[] = Array.from({ length: ARENA_SHIP_COUNT }, () => ({
   control: "bot" as const,
@@ -275,6 +276,52 @@ describe("resolveArenaHits", () => {
 
     expect(after.hp).toBe(guarded.hp - 50);
     expect(after.shieldEnergy).toBe(guarded.shieldEnergy);
+  });
+});
+
+describe("the gun a match is fought with", () => {
+  /*
+   * The arena is the campaign's ship in a different fight, and the heat is the
+   * whole feel of the gun: a barrel that overheats on a different count is a
+   * different weapon, and a player who learned one would be handed the other.
+   * Only the hull and the shot are scaled for sixteen-way combat, and they are
+   * scaled on purpose.
+   */
+  it("gives every hull the campaign's own heat, the player's included", () => {
+    const campaign = shipStatsFromConfig(defaultArenaMatchConfig.ship);
+    const seats: readonly ArenaShipSeat[] = Array.from(
+      { length: ARENA_SHIP_COUNT },
+      (_unused, slot): ArenaShipSeat => ({
+        control: slot === 0 ? "human" : "bot",
+        botLevel: "veteran"
+      })
+    );
+    const state = createArenaMatch(defaultArenaMatchConfig, 7, seats);
+
+    expect(state.ships).toHaveLength(ARENA_SHIP_COUNT);
+    for (const ship of state.ships) {
+      expect(ship.stats.cannonHeatCapacity).toBe(campaign.cannonHeatCapacity);
+      expect(ship.stats.cannonHeatPerShot).toBe(campaign.cannonHeatPerShot);
+      expect(ship.stats.cannonCoolingPerSecond).toBe(campaign.cannonCoolingPerSecond);
+      expect(ship.stats.cannonRearmThreshold).toBe(campaign.cannonRearmThreshold);
+      expect(ship.stats.fireCooldownTicks).toBe(campaign.fireCooldownTicks);
+      expect(ship.stats.mgHeatCapacity).toBe(campaign.mgHeatCapacity);
+      expect(ship.stats.mgHeatPerShot).toBe(campaign.mgHeatPerShot);
+      expect(ship.stats.mgCoolingPerSecond).toBe(campaign.mgCoolingPerSecond);
+      expect(ship.stats.mgRearmThreshold).toBe(campaign.mgRearmThreshold);
+      expect(ship.stats.mgFireCooldownTicks).toBe(campaign.mgFireCooldownTicks);
+    }
+
+    // What a match does change, and nothing else: a longer-lived hull and a
+    // softer shot, because sixteen guns on one field is a density the campaign
+    // never has.
+    const first = shipAt(state, 0);
+    expect(first.maxHp).toBeCloseTo(
+      campaign.spaceshipMaxHp * defaultArenaMatchConfig.shipScaling.hull
+    );
+    expect(first.stats.friendlyProjectileDamage).toBeCloseTo(
+      campaign.friendlyProjectileDamage * defaultArenaMatchConfig.shipScaling.damage
+    );
   });
 });
 

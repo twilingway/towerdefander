@@ -267,6 +267,23 @@ export function useShipPrediction<
           mode: "lerp",
           fields: ["x", "y"]
         }),
+        /*
+         * The other fifteen hulls of a match, on the same terms as an enemy
+         * ship: they are steered by the same autopilot, so nothing about their
+         * next move can be reckoned, and they are interpolated instead. Three
+         * bearings rather than one - the nose, the gun and the sector - because
+         * a match draws all three and each has to ride the same clock as the
+         * position or it twitches against it.
+         */
+        predict.attachAll(collections, "arenaShips", {
+          mode: "lerp",
+          fields: ["x", "y"]
+        }),
+        predict.attachAll(collections, "arenaShips", {
+          mode: "lerp",
+          fields: ["heading", "turretAngle", "shieldAngle"],
+          angle: true
+        }),
         predict.attachAll(collections, "homingMissiles", {
           mode: "lerp",
           fields: ["heading"],
@@ -439,7 +456,9 @@ export function useShipPrediction<
         drawnPose.velocityY = state.velocityY;
         return drawnPose;
       };
-      latest.current.onDriver({ drive, bind, read });
+      const angleOf = (entity: LiveEntity, field: string): number =>
+        predict.value(entity.ref as DecodedHull, field as "heading");
+      latest.current.onDriver({ drive, bind, read, angleOf });
 
       /*
        * A driver of last resort, for the seconds before there is a scene.

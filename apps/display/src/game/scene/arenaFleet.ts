@@ -11,8 +11,10 @@ import {
   type AngleTrack,
   type PointTrack
 } from "../playback.js";
+import type { LiveEntity } from "../../model/shipPrediction.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
 import { drawSpaceshipHull } from "../entityArt.js";
+import type { ScenePrediction } from "./entities.js";
 
 /** Where the scene has actually drawn the player's own hull this frame. */
 export interface DrawnOwnPose {
@@ -44,6 +46,17 @@ interface FleetHull {
    * itself, so only its bars belong here.
    */
   readonly isSelf: boolean;
+  /**
+   * The hull as the interpolator sees it, bound once when the sprite is made.
+   *
+   * This is the path the campaign's enemies are drawn on and the one the solo
+   * mode was polished against: the library plays a collection back on its own
+   * measured delay, which is the clock every shell and every rock on the field
+   * is already drawn on. Running these sixteen on the scene's clock instead put
+   * them a few milliseconds off everything around them, and a fight between two
+   * clocks reads as a twitch.
+   */
+  live: LiveEntity | undefined;
   /**
    * The last two authoritative samples, played back on the scene's own clock.
    *
@@ -92,7 +105,13 @@ export class ArenaFleet {
   private readonly hulls = new Map<string, FleetHull>();
 
   /** Takes the newest patch: a sample on every track, health, and a hit flash. */
-  sync(scene: Phaser.Scene, snapshot: DisplayGameSnapshot, bake: BakeShape, snap = false): void {
+  sync(
+    scene: Phaser.Scene,
+    snapshot: DisplayGameSnapshot,
+    bake: BakeShape,
+    snap = false,
+    prediction?: ScenePrediction
+  ): void {
     // Every hull, the player's own included: the scene draws that one's art, but
     // its health and its sector are the same question a rival's bars answer, and
     // the answer belongs over the ship rather than only in a panel.
@@ -100,9 +119,14 @@ export class ArenaFleet {
     const toTick = snapshot.tick;
 
     for (const ship of snapshot.arenaShips) {
-      seen.add(ship.shipId);
-      const parts = this.hulls.get(ship.shipId) ?? this.create(scene, snapshot, ship, bake, toTick);
-      this.hulls.set(ship.shipId, parts);
+      seen.add(ship.entityId);
+      const parts =
+        this.hulls.get(ship.entityId) ?? this.create(scene, snapshot, ship, bake, toTick);
+      this.hulls.set(ship.entityId, parts);
+      // A binding missed at birth - a sprite made from a view the room had
+      // already moved past - would leave that one hull on the scene's clock for
+      // as long as it lives, which is the enemy layer's own rule.
+      parts.live ??= prediction?.bind(ship.entityId, "arenaShip");
 
       // Losing health is the only hit signal the arena has on the wire, and it
       // is enough: a flash where the shell landed is what makes a firefight
@@ -144,21 +168,32 @@ export class ArenaFleet {
    * that pose rather than on the sample the room last sent, which is where they
    * were twitching against the ship they belong to.
    */
-  update(playbackTick: number, deltaMs: number, own: DrawnOwnPose | undefined): void {
+  update(
+    playbackTick: number,
+    deltaMs: number,
+    own: DrawnOwnPose | undefined,
+    prediction: ScenePrediction | undefined
+  ): void {
     for (const parts of this.hulls.values()) {
       const mine = parts.isSelf && own !== undefined ? own : undefined;
-      const point = mine ?? samplePointTrack(parts.position, playbackTick);
+      // Bound first, the scene's own tracks second: the tracks are the fallback
+      // for a page with no prediction running, exactly as they are for enemies.
+      const live = mine === undefined ? parts.live : undefined;
+      const bound =
+        live !== undefined && prediction !== undefined ? prediction.read(live) : undefined;
+      const point = mine ?? bound ?? samplePointTrack(parts.position, playbackTick);
       const x = point.x;
       const y = point.y;
-      parts.hull
-        .setPosition(x, y)
-        .setRotation(mine?.heading ?? sampleAngleTrack(parts.heading, playbackTick));
-      parts.turret
-        .setPosition(x, y)
-        .setRotation(mine?.turretAngle ?? sampleAngleTrack(parts.turretAngle, playbackTick));
-      parts.shield
-        .setPosition(x, y)
-        .setRotation(mine?.shieldAngle ?? sampleAngleTrack(parts.shieldAngle, playbackTick));
+      const angle = (field: "heading" | "turretAngle" | "shieldAngle"): number => {
+        if (mine !== undefined) return mine[field];
+        if (bound !== undefined && live !== undefined && prediction !== undefined) {
+          return prediction.angleOf(live, field);
+        }
+        return sampleAngleTrack(parts[field], playbackTick);
+      };
+      parts.hull.setPosition(x, y).setRotation(angle("heading"));
+      parts.turret.setPosition(x, y).setRotation(angle("turretAngle"));
+      parts.shield.setPosition(x, y).setRotation(angle("shieldAngle"));
 
       const barY = y - parts.hull.displayHeight * 0.75;
       const left = x - parts.healthBack.displayWidth / 2;
@@ -301,6 +336,7 @@ export class ArenaFleet {
       shieldBack: scene.add.image(ship.x, ship.y, pixelKey).setDepth(13).setTint(HEALTH_BACK),
       shieldFill: scene.add.image(ship.x, ship.y, pixelKey).setDepth(14).setTint(SHIELD_COLOR),
       flash: scene.add.image(ship.x, ship.y, flashKey).setDepth(15).setVisible(false),
+      live: undefined,
       // A hull appears already formed at the newest tick; there is no earlier
       // authoritative sample to walk it out of.
       position: createPointTrack(ship, toTick),
