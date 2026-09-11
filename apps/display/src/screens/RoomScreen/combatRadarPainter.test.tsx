@@ -215,6 +215,7 @@ function recorder(): { context: RadarContext; ops: Op[] } {
     stroke: record("stroke"),
     clip: record("clip"),
     clearRect: record("clearRect"),
+    fillRect: record("fillRect"),
     fillText: (text: string, x: number, y: number) => {
       ops.push({
         call: "fillText",

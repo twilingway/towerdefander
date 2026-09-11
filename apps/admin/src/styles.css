@@ -1222,3 +1222,26 @@ body {
   font-weight: 700;
   letter-spacing: 0.08em;
 }
+
+/* Tabs, grouped by the game they belong to. */
+.tabs__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
+  border-right: 1px solid rgb(255 255 255 / 8%);
+}
+
+.tabs__group:last-child {
+  border-right: 0;
+}
+
+.tabs__group-label {
+  margin-right: 2px;
+  color: #7f9a96;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}

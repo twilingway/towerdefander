@@ -46,6 +46,38 @@ export const TAB_LABELS: Record<Tab, string> = {
 };
 
 /**
+ * Which game a tab belongs to.
+ *
+ * Two modes share one console, and most of what is tuned here is shared with
+ * them - the hulls, the effects, the helm, the presets. What is not shared is
+ * worth separating, because "waves" means nothing in the arena and "zones"
+ * means nothing in the campaign.
+ */
+export const TAB_GROUPS = ["campaign", "arena", "common"] as const;
+export type TabGroup = (typeof TAB_GROUPS)[number];
+
+export const TAB_GROUP_LABELS: Record<TabGroup, string> = {
+  campaign: "Кампания",
+  arena: "Арена",
+  common: "Общее"
+};
+
+export const TAB_GROUP_OF: Record<Tab, TabGroup> = {
+  waves: "campaign",
+  enemies: "campaign",
+  enemySkill: "campaign",
+  director: "campaign",
+  arena: "arena",
+  player: "common",
+  ships: "common",
+  effects: "common",
+  helm: "common",
+  autopilot: "common",
+  stats: "common",
+  presets: "common"
+};
+
+/**
  * The path segment each tab answers on. Mostly the id, with one exception:
  * `/stats/` on this origin is proxied to the API (docker/nginx-admin.conf), so
  * the statistics tab answers on `/statistics` instead.

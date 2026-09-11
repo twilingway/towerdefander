@@ -2991,3 +2991,20 @@ p {
   color: #e6b85c;
   font-size: 1.1rem;
 }
+
+/*
+ * The arena's dial: bigger, and over the right stick instead of the middle.
+ *
+ * A match has no hull ring and no shield ring on it, so the circle is all map -
+ * and the map is the one panel that decides where you drive next. The middle of
+ * the bottom edge belongs to the cockpit's own controls in solo, which is the
+ * other reason it moves out of there.
+ */
+.combat-radar--arena {
+  left: auto;
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: auto;
+  top: max(0.75rem, env(safe-area-inset-top));
+  width: clamp(13rem, 22vw, 20rem);
+  transform: none;
+}
