@@ -19,6 +19,7 @@ import { RunResultOverlay } from "./RunResultOverlay.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import {
+  ArenaHudPanel,
   BattleHudPanel,
   BossPanel,
   CockpitPanel,
@@ -138,7 +139,10 @@ export function BattleStage({
           )}
         </MeteredPanel>
         <MeteredPanel id="шапка" measuring={diagnostics}>
-          {switches.interfaceEnabled && <BattleHudPanel />}
+          {/* A match reads itself: how many are left, how many I took, where I
+            stand. The campaign's wave, score and credits mean nothing here. */}
+          {switches.interfaceEnabled &&
+            (view.game.arenaShips.length > 0 ? <ArenaHudPanel /> : <BattleHudPanel />)}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>
@@ -220,13 +224,15 @@ export function BattleStage({
         {/* The run's own hull, straight from the catalogue; the fixture is
           the preview's stand-in when no server answered. */}
         <MeteredPanel id="модули" measuring={diagnostics}>
-          {moduleTree !== undefined && switches.interfaceEnabled && (
-            <ModuleWindowPanel
-              tiers={moduleTree.tiers}
-              endlessTier={moduleTree.endlessTier}
-              initiallyShown={preview}
-            />
-          )}
+          {moduleTree !== undefined &&
+            switches.interfaceEnabled &&
+            view.game.arenaShips.length === 0 && (
+              <ModuleWindowPanel
+                tiers={moduleTree.tiers}
+                endlessTier={moduleTree.endlessTier}
+                initiallyShown={preview}
+              />
+            )}
         </MeteredPanel>
         {/*
         Stacked directly under the instrument panel and answering the same

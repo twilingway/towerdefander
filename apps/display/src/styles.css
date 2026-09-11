@@ -2993,18 +2993,127 @@ p {
 }
 
 /*
- * The arena's dial: bigger, and over the right stick instead of the middle.
+ * The arena's dial: the same place as the campaign's, and bigger.
  *
  * A match has no hull ring and no shield ring on it, so the circle is all map -
- * and the map is the one panel that decides where you drive next. The middle of
- * the bottom edge belongs to the cockpit's own controls in solo, which is the
- * other reason it moves out of there.
+ * and the map is the one panel that decides where you drive next, which is why
+ * it earns the extra width.
  */
 .combat-radar--arena {
-  left: auto;
-  right: max(0.75rem, env(safe-area-inset-right));
-  bottom: auto;
-  top: max(0.75rem, env(safe-area-inset-top));
   width: clamp(13rem, 22vw, 20rem);
-  transform: none;
+}
+
+/*
+ * The match head-up display: counts on the left, the ship on the right.
+ *
+ * Two groups pinned to the top corners rather than a row of cards across the
+ * middle, because the middle of the top edge is the match clock and the middle
+ * of the screen is the fight.
+ */
+.arena-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  pointer-events: none;
+}
+
+.arena-hud__counts {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.arena-hud__counts div {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 9rem;
+}
+
+.arena-hud__counts span {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7fd8e8;
+}
+
+.arena-hud__counts strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  color: #ffd98a;
+}
+
+.arena-hud__counts small {
+  font-size: 0.8rem;
+  color: #6ea7b8;
+}
+
+.arena-hud__ship {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: end;
+}
+
+.arena-gauge {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.arena-gauge__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7fd8e8;
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.arena-gauge__cells {
+  display: flex;
+  gap: 2px;
+}
+
+/* One cell of a gauge. Lit cells carry the gauge's colour; the rest stay as the
+   empty track, so the bar reads as a bar even when it is nearly out. */
+.arena-gauge__cells i {
+  width: 0.8rem;
+  height: 0.62rem;
+  border-radius: 1px;
+  background: rgb(125 200 220 / 18%);
+}
+
+.arena-gauge--hull .arena-gauge__cells i.is-lit {
+  background: #74e39b;
+}
+
+.arena-gauge--shield .arena-gauge__cells i.is-lit {
+  background: #63d8ff;
+}
+
+.arena-gauge--shield-down .arena-gauge__cells i.is-lit {
+  background: rgb(99 216 255 / 45%);
+}
+
+.arena-gauge--heat .arena-gauge__cells i.is-lit {
+  background: #ffd36f;
+}
+
+.arena-gauge--danger .arena-gauge__cells i.is-lit {
+  background: #ff6b5e;
+}
+
+@media (width <= 700px) {
+  .arena-gauge__label {
+    display: none;
+  }
+
+  .arena-gauge__cells i {
+    width: 0.5rem;
+  }
+
+  .arena-hud__counts div {
+    min-width: 7rem;
+  }
 }

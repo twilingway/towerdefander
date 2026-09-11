@@ -150,7 +150,7 @@ export function PolledCombatRadar({
   }, [read]);
 
   /*
-   * The arena moves the dial and drops its rings.
+   * The arena widens the dial and drops its rings.
    *
    * Told apart by the zone sheet rather than by a flag: only a match has one,
    * and the dial already reads the snapshot every frame. In a match the map is
@@ -164,7 +164,7 @@ export function PolledCombatRadar({
       ref={host}
       className={arena ? "combat-radar combat-radar--arena" : "combat-radar"}
       data-testid="combat-radar"
-      aria-label={arena ? "Карта матча справа" : "Мини-карта арены по центру снизу"}
+      aria-label={arena ? "Карта матча по центру снизу" : "Мини-карта арены по центру снизу"}
     >
       <canvas ref={canvas} data-testid="combat-radar-canvas" />
       <span className="sr-only">

@@ -598,6 +598,19 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     const eliminated = this.playerSessionId !== undefined && player !== undefined && !player.alive;
     game.encounter.phase = match.phase === "result" || eliminated ? "result" : "combat";
     game.encounter.encounterTick = match.clock.tick;
+    /*
+     * Kills, carried on the field the campaign calls a score.
+     *
+     * The arena publishes through the campaign's shape on purpose, and "how
+     * well did I do" is what this field is for in both modes - it is a count of
+     * wrecks with my name on them here and a count of points there. Counted
+     * from `eliminatedBy` rather than tallied as it happens, because the match
+     * already records who ended whom and a second tally could disagree with it.
+     */
+    game.encounter.score =
+      player === undefined
+        ? 0
+        : match.ships.filter((ship) => !ship.alive && ship.eliminatedBy === player.id).length;
     // The contract wants a positive countdown during combat, and a match has
     // exactly one: what is left of its own clock.
     game.encounter.waveSecondsRemaining = Math.max(
