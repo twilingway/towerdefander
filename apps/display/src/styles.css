@@ -2872,15 +2872,50 @@ p {
 @media (max-height: 34rem) {
   .mode-tile {
     aspect-ratio: auto;
-    height: clamp(4.5rem, 26vh, 8rem);
+    /* A third of the screen each: two tiles and a title, and nothing above
+       them going to waste. */
+    height: clamp(5rem, 34vh, 11rem);
+  }
+
+  /* Wide enough for the sentence, too short to spend the room on it: the
+     width query alone let it through on a phone lying down, and it spilled. */
+  .mode-tile__pitch {
+    display: none;
+  }
+
+  .mode-tile__frame {
+    padding: 0.55rem 0.85rem;
   }
 
   .start-title {
     font-size: clamp(1.1rem, 3.4vw, 2rem);
   }
 
+  .start-header {
+    gap: 0.05rem;
+  }
+
+  .start-rule span {
+    font-size: 0.55rem;
+  }
+
   .display-shell--start {
-    gap: 0.5rem;
-    padding-block: 0.5rem;
+    gap: 0.45rem;
+    padding-block: 0.4rem;
+  }
+}
+
+/*
+ * A phone lying down is wide and short - the one shape where two tiles side by
+ * side beat two stacked. Each then gets half the width and half again the
+ * height, which is what the empty band above them was costing.
+ */
+@media (max-height: 34rem) and (min-width: 34rem) {
+  .mode-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mode-tile {
+    height: clamp(6rem, 52vh, 14rem);
   }
 }
