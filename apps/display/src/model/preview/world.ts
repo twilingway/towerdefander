@@ -149,6 +149,7 @@ export const PREVIEW_WORLD = {
   shieldRadius: 104,
   // The campaign has no zone sheet; the arena fills this in.
   arenaZones: [],
+  arenaShips: [],
   obstacles: []
 };
 

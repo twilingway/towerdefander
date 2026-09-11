@@ -110,6 +110,24 @@ export function toDisplayRoomView(
               state: zone.state as "safe" | "warning" | "closed",
               secondsRemaining: zone.secondsRemaining
             })),
+            arenaShips: [...display.arenaShips.values()].map((ship) => ({
+              shipId: ship.shipId,
+              isSelf: ship.isSelf,
+              x: ship.x,
+              y: ship.y,
+              velocityX: ship.velocityX,
+              velocityY: ship.velocityY,
+              radius: ship.radius,
+              heading: ship.heading,
+              turretAngle: ship.turretAngle,
+              hp: ship.hp,
+              maxHp: ship.maxHp,
+              shieldAngle: ship.shieldAngle,
+              shieldActive: ship.shieldActive,
+              shieldRadius: ship.shieldRadius,
+              shieldArcHalfAngle: ship.shieldArcHalfAngle,
+              shotsFired: ship.shotsFired
+            })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"
                 ? {

@@ -179,6 +179,32 @@ export class ArenaZoneView extends Schema {
   @type("uint16") secondsRemaining = 0;
 }
 
+/**
+ * One hull in a match: the crew ship's own shape, sixteen times over.
+ *
+ * Float32 throughout, like every other combat quantity - the arena is 8800
+ * units across at most and a unit is well under a pixel on any screen this
+ * runs on.
+ */
+export class ArenaShipView extends Schema {
+  @type("string") shipId = "";
+  @type("boolean") isSelf = false;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") heading = 0;
+  @type("float32") turretAngle = 0;
+  @type("float32") hp = 0;
+  @type("float32") maxHp = 0;
+  @type("float32") shieldAngle = 0;
+  @type("boolean") shieldActive = false;
+  @type("float32") shieldRadius = 0;
+  @type("float32") shieldArcHalfAngle = 0;
+  @type("uint16") shotsFired = 0;
+}
+
 export class ObstacleState extends Schema {
   @type("string") obstacleId = "";
   @type("string") kind: "rectangle" | "circle" = "rectangle";
@@ -424,6 +450,7 @@ export class SpaceshipDisplayState extends Schema {
   @type("string") shieldPhase: ShieldPhase = "down";
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
   @type([ArenaZoneView]) arenaZones = new ArraySchema<ArenaZoneView>();
+  @type({ map: ArenaShipView }) arenaShips = new MapSchema<ArenaShipView>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
   @type({ map: AsteroidState }) asteroids = new MapSchema<AsteroidState>();

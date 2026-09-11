@@ -17,6 +17,8 @@ import {
   type ShipArchetype
 } from "@spaceship-defender/protocol";
 import {
+  ARENA_ZONE_COLUMNS,
+  ARENA_ZONE_ROWS,
   arenaSpawnMarks,
   createSpaceshipSimulationConfig,
   validateSpaceshipSimulationConfig,
@@ -305,7 +307,9 @@ export function createDefaultTuning(): BalanceTuning {
           x: Math.round(mark.x),
           y: Math.round(mark.y)
         })
-      )
+      ),
+      zoneColumns: ARENA_ZONE_COLUMNS,
+      zoneRows: ARENA_ZONE_ROWS
     },
     shipArchetypes: DEFAULT_SHIP_ARCHETYPES,
     defaultShipArchetypeId: DEFAULT_SHIP_ARCHETYPE_ID,

@@ -941,10 +941,21 @@ export type ArenaSpawnMark = z.infer<typeof arenaSpawnMarkSchema>;
 
 export const ARENA_SPAWN_MARKS = 16;
 
+export const ARENA_ZONE_GRID_MIN = 2;
+export const ARENA_ZONE_GRID_MAX = 20;
+
 export const arenaTuningSchema = z
   .object({
     /** Exactly one mark per seat: sixteen hulls, sixteen places to put them. */
-    spawnMarks: z.array(arenaSpawnMarkSchema).length(ARENA_SPAWN_MARKS).readonly()
+    spawnMarks: z.array(arenaSpawnMarkSchema).length(ARENA_SPAWN_MARKS).readonly(),
+    /**
+     * The sheet the field closes in, as a grid over the arena square. The
+     * rectangles are sized from the radius, so widening the arena widens them
+     * rather than adding more of them - the number of closures a match takes is
+     * what this decides.
+     */
+    zoneColumns: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
+    zoneRows: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX)
   })
   .strict();
 export type ArenaTuning = z.infer<typeof arenaTuningSchema>;

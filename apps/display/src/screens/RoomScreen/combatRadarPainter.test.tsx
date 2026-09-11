@@ -130,6 +130,7 @@ const baseGame: DisplayGameSnapshot = {
   turretVisual: null,
   shieldRadius: 104,
   arenaZones: [],
+  arenaShips: [],
   obstacles: [],
   enemyShips: [
     {

@@ -29,6 +29,12 @@ function readRecord(source: LegacyRecord, key: string): LegacyRecord {
   return isRecord(value) ? value : {};
 }
 
+/** A number from a legacy record, or undefined when it is anything else. */
+function readNumber(source: LegacyRecord, key: string): number | undefined {
+  const value = source[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function readArray(source: LegacyRecord, key: string): readonly unknown[] {
   const value = source[key];
   return Array.isArray(value) ? value : [];
@@ -601,7 +607,13 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
   if (!Array.isArray(marks) || marks.length !== defaults.arena.spawnMarks.length) {
     return defaults.arena;
   }
-  return { spawnMarks: marks as BalanceTuning["arena"]["spawnMarks"] };
+  return {
+    spawnMarks: marks as BalanceTuning["arena"]["spawnMarks"],
+    // A preset written before the grid was editable keeps the layout it played
+    // on, which is the default sheet.
+    zoneColumns: readNumber(arena, "zoneColumns") ?? defaults.arena.zoneColumns,
+    zoneRows: readNumber(arena, "zoneRows") ?? defaults.arena.zoneRows
+  };
 }
 
 /**

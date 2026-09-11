@@ -436,6 +436,39 @@ const circleObstacle = z
     radius: finite.positive()
   })
   .strict();
+/**
+ * One hull in a match, published whole.
+ *
+ * The arena's ships are not enemies: every one of them is a copy of the crew's
+ * own ship - the same hull, the same turret, the same shield - and the enemy
+ * entity the campaign publishes has room for none of that. So the arena gets
+ * its own collection, and the display draws all sixteen the way it draws the
+ * one in the campaign.
+ */
+export const publicArenaShipViewSchema = z
+  .object({
+    shipId: z.string().min(1).max(24),
+    /** True for the hull this client is seated in, if it is seated at all. */
+    isSelf: z.boolean(),
+    x: finite,
+    y: finite,
+    velocityX: finite,
+    velocityY: finite,
+    radius: finite,
+    heading: finite,
+    turretAngle: finite,
+    hp: finite,
+    maxHp: finite,
+    shieldAngle: finite,
+    shieldActive: z.boolean(),
+    shieldRadius: finite,
+    shieldArcHalfAngle: finite,
+    /** Shots fired, narrowed to the wire, so the display can flash a muzzle. */
+    shotsFired: z.number().int().min(0).max(65_535)
+  })
+  .strict();
+export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;
+
 export const ARENA_ZONE_STATES = ["safe", "warning", "closed"] as const;
 export const arenaZoneStateSchema = z.enum(ARENA_ZONE_STATES);
 export type ArenaZoneStateName = z.infer<typeof arenaZoneStateSchema>;
@@ -888,6 +921,8 @@ export const displayGameSnapshotSchema = z
      * rather than a diff of it.
      */
     arenaZones: z.array(publicArenaZoneViewSchema).max(144),
+    /** Every hull in a match; empty in the campaign, which has exactly one. */
+    arenaShips: z.array(publicArenaShipViewSchema).max(16),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),

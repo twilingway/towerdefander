@@ -3,15 +3,30 @@ import {
   ARENA_RADIUS_MAX,
   ARENA_RADIUS_MIN,
   ARENA_SPAWN_MARKS,
+  ARENA_ZONE_GRID_MAX,
+  ARENA_ZONE_GRID_MIN,
   type ArenaSpawnMark,
   type BalanceTuning
 } from "@spaceship-defender/protocol";
 
 import { NumberField } from "../../components/fields.js";
 
-/** The sheet the arena closes in, as the simulation builds it. */
-const ZONE_COLUMNS = 4;
-const ZONE_ROWS = 4;
+/**
+ * The even layout the marks start on: Vogel's spiral, which covers a disc with
+ * about the same gap between every pair of neighbours. The same arithmetic the
+ * simulation uses when a preset carries no marks of its own.
+ */
+function spiralMarks(count: number, radius: number): ArenaSpawnMark[] {
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  return Array.from({ length: count }, (_unused, index) => {
+    const distance = radius * Math.sqrt((index + 0.5) / count);
+    const angle = index * goldenAngle;
+    return {
+      x: Math.round(Math.cos(angle) * distance),
+      y: Math.round(Math.sin(angle) * distance)
+    };
+  });
+}
 
 interface ArenaScreenProps {
   readonly tuning: BalanceTuning;
@@ -39,10 +54,14 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
   const [dragging, setDragging] = useState<number | undefined>(undefined);
   const marks = tuning.arena.spawnMarks;
 
+  const columns = tuning.arena.zoneColumns;
+  const rows = tuning.arena.zoneRows;
+
   const setMark = (index: number, next: ArenaSpawnMark) => {
     onChange({
       ...tuning,
       arena: {
+        ...tuning.arena,
         spawnMarks: marks.map((mark, other) => (other === index ? next : mark))
       }
     });
@@ -70,23 +89,73 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
       <header className="screen__header">
         <h2>Арена</h2>
         <p className="screen__hint">
-          {String(ARENA_SPAWN_MARKS)} постоянных мест и сетка зон {String(ZONE_COLUMNS)}×
-          {String(ZONE_ROWS)}, по которой поле закрывается. Кто из кораблей встанет на какое место —
-          решает сид матча, а где сами места — решаете вы. Перетащите точку мышью или задайте
-          координаты числами; центр арены — ноль.
+          {String(ARENA_SPAWN_MARKS)} постоянных мест и сетка зон {String(columns)}×{String(rows)},
+          по которой поле закрывается: размер клетки считается от радиуса арены. Кто из кораблей
+          встанет на какое место — решает сид матча, а где сами места — решаете вы. Перетащите точку
+          мышью, задайте координаты числами или разложите всё заново по спирали.
         </p>
-        <NumberField
-          caption="Радиус арены"
-          min={ARENA_RADIUS_MIN}
-          step={50}
-          value={tuning.arenaRadius}
-          onChange={(arenaRadius) => {
-            onChange({
-              ...tuning,
-              arenaRadius: Math.min(ARENA_RADIUS_MAX, Math.max(ARENA_RADIUS_MIN, arenaRadius))
-            });
-          }}
-        />
+        <div className="arena-controls">
+          <NumberField
+            caption="Радиус арены"
+            min={ARENA_RADIUS_MIN}
+            step={50}
+            value={tuning.arenaRadius}
+            onChange={(arenaRadius) => {
+              onChange({
+                ...tuning,
+                arenaRadius: Math.min(ARENA_RADIUS_MAX, Math.max(ARENA_RADIUS_MIN, arenaRadius))
+              });
+            }}
+          />
+          <NumberField
+            caption="Зон по горизонтали"
+            min={ARENA_ZONE_GRID_MIN}
+            value={columns}
+            onChange={(value) => {
+              onChange({
+                ...tuning,
+                arena: {
+                  ...tuning.arena,
+                  zoneColumns: Math.min(ARENA_ZONE_GRID_MAX, Math.max(ARENA_ZONE_GRID_MIN, value))
+                }
+              });
+            }}
+          />
+          <NumberField
+            caption="Зон по вертикали"
+            min={ARENA_ZONE_GRID_MIN}
+            value={rows}
+            onChange={(value) => {
+              onChange({
+                ...tuning,
+                arena: {
+                  ...tuning.arena,
+                  zoneRows: Math.min(ARENA_ZONE_GRID_MAX, Math.max(ARENA_ZONE_GRID_MIN, value))
+                }
+              });
+            }}
+          />
+          {/*
+           * Widening the arena leaves the old marks huddled in the middle,
+           * because they were laid out for the radius the preset had then. This
+           * lays them out again for the radius it has now.
+           */}
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              onChange({
+                ...tuning,
+                arena: {
+                  ...tuning.arena,
+                  spawnMarks: spiralMarks(ARENA_SPAWN_MARKS, tuning.arenaRadius - 160)
+                }
+              });
+            }}
+          >
+            Разложить по спирали
+          </button>
+        </div>
       </header>
 
       <div className="arena-editor">
@@ -113,23 +182,25 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
            * cut into columns and rows - so what is judged here is what closes
            * there.
            */}
-          {Array.from({ length: ZONE_COLUMNS * ZONE_ROWS }, (_unused, index) => {
-            const column = index % ZONE_COLUMNS;
-            const row = Math.floor(index / ZONE_COLUMNS);
+          {Array.from({ length: columns * rows }, (_unused, index) => {
+            const column = index % columns;
+            const row = Math.floor(index / columns);
             return (
               <div
                 key={index}
                 className="arena-zone"
                 style={{
-                  left: `${String((column / ZONE_COLUMNS) * 100)}%`,
-                  top: `${String((row / ZONE_ROWS) * 100)}%`,
-                  width: `${String(100 / ZONE_COLUMNS)}%`,
-                  height: `${String(100 / ZONE_ROWS)}%`
+                  left: `${String((column / columns) * 100)}%`,
+                  top: `${String((row / rows) * 100)}%`,
+                  width: `${String(100 / columns)}%`,
+                  height: `${String(100 / rows)}%`
                 }}
               >
-                <span className="arena-zone__label">
-                  {String(column + 1)}:{String(row + 1)}
-                </span>
+                {columns <= 6 && rows <= 6 && (
+                  <span className="arena-zone__label">
+                    {String(column + 1)}:{String(row + 1)}
+                  </span>
+                )}
               </div>
             );
           })}

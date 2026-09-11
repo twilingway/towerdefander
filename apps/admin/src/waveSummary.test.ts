@@ -301,7 +301,9 @@ function tuning(): BalanceTuning {
       spawnMarks: Array.from({ length: 16 }, (_unused, index) => ({
         x: index * 100 - 800,
         y: index * 50 - 400
-      }))
+      })),
+      zoneColumns: 10,
+      zoneRows: 10
     },
     autopilot: {
       level: "veteran",

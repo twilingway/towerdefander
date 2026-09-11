@@ -5,6 +5,7 @@ import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
 import { arenaZoneSignature, drawArena, drawArenaZones, drawDecorations } from "./arena.js";
+import { ArenaFleet } from "./arenaFleet.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
@@ -368,6 +369,8 @@ export class SpaceshipScene extends Phaser.Scene {
 
   /** The baked zone sheet, replaced whenever a zone changes state. */
   private zoneLayer: Phaser.GameObjects.Image | undefined;
+  /** The other hulls of a match; empty in the campaign, which has one ship. */
+  private readonly fleet = new ArenaFleet();
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
@@ -376,6 +379,9 @@ export class SpaceshipScene extends Phaser.Scene {
     this.snapshot = snapshot;
     const shouldSnap = this.snapshotReset.consumeForSnapshot();
     if (!this.sys.isActive()) return;
+    // Sixteen hulls, moved rather than rebuilt: the textures are shared and a
+    // frame costs a position and two rotations each.
+    this.fleet.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw));
     // The sheet is ground: redrawn when a zone changes state and at no other
     // time, which on a sixty-hertz patch stream is a handful of times a match.
     if (arenaZoneSignature(snapshot) !== zoneSignature) {

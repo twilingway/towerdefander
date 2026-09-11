@@ -1245,3 +1245,12 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+
+/* Radius, grid and the respread button, on one line above the map. */
+.arena-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin-top: 8px;
+}

@@ -32,6 +32,26 @@ export interface NetworkPlayerState {
   latencyMs: number;
 }
 
+/** One whole hull in a match; empty in the campaign. */
+export interface NetworkArenaShipState {
+  shipId: string;
+  isSelf: boolean;
+  x: number;
+  y: number;
+  velocityX: number;
+  velocityY: number;
+  radius: number;
+  heading: number;
+  turretAngle: number;
+  hp: number;
+  maxHp: number;
+  shieldAngle: number;
+  shieldActive: boolean;
+  shieldRadius: number;
+  shieldArcHalfAngle: number;
+  shotsFired: number;
+}
+
 /** One rectangle of the arena's sheet; empty in the campaign. */
 export interface NetworkArenaZoneState {
   zoneId: number;
@@ -265,6 +285,7 @@ export interface NetworkGameState {
     shieldPhase?: ShieldPhase;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     arenaZones: ValueCollection<NetworkArenaZoneState>;
+    arenaShips: ValueCollection<NetworkArenaShipState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;

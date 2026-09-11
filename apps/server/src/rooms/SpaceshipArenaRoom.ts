@@ -24,9 +24,9 @@ import { getBalanceStore } from "../balance/index.js";
 import { ArenaBots } from "./arenaBots.js";
 import { createRunSeed } from "./runSeed.js";
 import {
+  ArenaShipView,
   ArenaZoneView,
   DISPLAY_VIEW_TAG,
-  EnemyState,
   ProjectileState,
   SpaceshipDefenderState
 } from "./SpaceshipDefenderState.js";
@@ -34,9 +34,6 @@ import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
 
 /** The slot the human takes. It flies on autopilot until a cockpit claims it. */
 const PLAYER_SLOT = 0;
-
-/** Where hull sequence numbers start, clear of the shots' own numbering. */
-const SHIP_SEQUENCE_BASE = 900_000;
 
 /**
  * A match of sixteen hulls, published through the campaign's own state.
@@ -84,7 +81,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       arenaRadius: ship.arenaRadius,
       // The operator's layout, edited on the console's arena screen. Absent
       // marks would mean the built-in spiral, which is what they started as.
-      spawnMarks: tuning.arena.spawnMarks
+      spawnMarks: tuning.arena.spawnMarks,
+      // The sheet is the operator's too: its rectangles are sized from the
+      // radius, so a wider arena keeps the same number of closures.
+      zoneColumns: tuning.arena.zoneColumns,
+      zoneRows: tuning.arena.zoneRows
     };
 
     const seats: readonly ArenaShipSeat[] = Array.from(
@@ -308,33 +309,39 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     const player = match.ships[PLAYER_SLOT];
     if (player !== undefined) mirrorPlayerShip(player, game);
 
-    const rivals = new Map(
-      match.ships
-        .filter((ship) => ship.alive && ship.slot !== PLAYER_SLOT)
-        .map((ship) => [ship.id, ship] as const)
-    );
+    /*
+     * Every hull, whole.
+     *
+     * The rivals used to travel as enemy entities, which is what the campaign
+     * has room for - a position, a heading and a health bar. They are not
+     * enemies: each is a copy of the crew's own ship, shield and turret
+     * included, flown by the same autopilot, and the display has to be able to
+     * draw them that way.
+     */
+    const fleet = new Map(match.ships.filter((ship) => ship.alive).map((ship) => [ship.id, ship]));
     reconcile(
-      game.display.enemyShips,
-      rivals,
+      game.display.arenaShips,
+      fleet,
       (ship) => {
-        const entity = new EnemyState();
-        entity.entityId = ship.id;
-        // Globally unique across every entity on the wire, which the display
-        // contract checks: a hull's slot and a shot's sequence both start at
-        // zero, and the two collections share one numbering.
-        entity.spawnSequence = SHIP_SEQUENCE_BASE + ship.slot;
-        entity.kind = "gunship";
-        return entity;
+        const view = new ArenaShipView();
+        view.shipId = ship.id;
+        view.isSelf = ship.slot === PLAYER_SLOT;
+        return view;
       },
-      (entity, ship) => {
-        entity.x = ship.spaceship.x;
-        entity.y = ship.spaceship.y;
-        entity.velocityX = ship.spaceship.velocity.x;
-        entity.velocityY = ship.spaceship.velocity.y;
-        entity.radius = ship.stats.spaceshipRadius;
-        entity.heading = ship.heading;
-        entity.hp = ship.hp;
-        entity.maxHp = ship.maxHp;
+      (view, ship) => {
+        view.x = ship.spaceship.x;
+        view.y = ship.spaceship.y;
+        view.velocityX = ship.spaceship.velocity.x;
+        view.velocityY = ship.spaceship.velocity.y;
+        view.radius = ship.stats.spaceshipRadius;
+        view.heading = ship.heading;
+        view.turretAngle = ship.turretAngle;
+        view.hp = ship.hp;
+        view.maxHp = ship.maxHp;
+        view.shieldAngle = ship.shieldAngle;
+        view.shieldActive = ship.shieldActive;
+        view.shieldRadius = ship.stats.shieldRadius;
+        view.shieldArcHalfAngle = ship.stats.shieldArcRadians / 2;
       }
     );
 

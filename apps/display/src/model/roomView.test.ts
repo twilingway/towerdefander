@@ -129,6 +129,7 @@ describe("display room view", () => {
           shieldPhase: "raising",
           enemyCatalogue: [],
           arenaZones: collection([]),
+          arenaShips: collection([]),
           obstacles: collection([
             {
               obstacleId: "cloud",
