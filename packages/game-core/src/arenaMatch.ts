@@ -61,36 +61,30 @@ export function createArenaMatch(
     mgDamage: campaignStats.mgDamage * config.shipScaling.damage
   };
   /*
-   * The seed has to reach the field, or every match is the same match.
+   * Sixteen fixed marks, handed out at random.
    *
-   * With sixteen identical hulls the arithmetic is symmetric, and the first
-   * bot-only batch proved it: ten seeds, ten identical matches down to the tick.
-   * So the field is seeded - and scattered over the whole disc rather than
-   * around one ring, because a ring is a starting line and a free-for-all has
-   * none. `sqrt` on the radius is what makes it even by area instead of
-   * crowding the middle.
+   * Vogel's spiral - the golden angle with a square-root radius - is the
+   * cheapest way to cover a disc evenly: every mark ends up about as far from
+   * its neighbours as every other, with no ring for a crowd to line up on and
+   * no pile in the middle. The marks never move, so the field is the same shape
+   * every match; what the seed decides is who stands where, which is the part
+   * that has to be different.
    */
   const random = createSeededRandom(matchSeed);
-  const placed: { x: number; y: number }[] = [];
-  const takePosition = () => {
-    const minimumGap = config.ship.spaceshipRadius * 6;
-    for (let attempt = 0; attempt < 64; attempt += 1) {
-      const angle = random.next() * Math.PI * 2;
-      const radius = config.spawnRadius * Math.sqrt(random.next());
-      const candidate = { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
-      const clear = placed.every(
-        (other) => Math.hypot(other.x - candidate.x, other.y - candidate.y) >= minimumGap
-      );
-      if (clear || attempt === 63) {
-        placed.push(candidate);
-        return candidate;
-      }
-    }
-    throw new Error("unreachable: the loop always places on its last attempt");
-  };
+  const marks = config.spawnMarks ?? arenaSpawnMarks(config.shipCount, config.spawnRadius);
+  const order = marks.map((_mark, index) => index);
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random.next() * (index + 1));
+    const held = order[index];
+    const other = order[swap];
+    if (held === undefined || other === undefined) continue;
+    order[index] = other;
+    order[swap] = held;
+  }
 
   const ships = seats.slice(0, config.shipCount).map((seat, slot) => {
-    const { x, y } = takePosition();
+    const mark = marks[order[slot] ?? slot] ?? { x: 0, y: 0 };
+    const { x, y } = mark;
     // Facing nowhere in particular, which is what "the match just started"
     // looks like when nobody was lined up on a rim.
     const heading = canonicalizeAngle(random.next() * Math.PI * 2);
@@ -149,6 +143,27 @@ export function createArenaMatch(
     beams: [],
     nextProjectileSequence: 1
   };
+}
+
+/**
+ * The match's spawn marks: fixed, even, and the same every time.
+ *
+ * Exported because they are a property of the arena rather than of a match - a
+ * display can draw them, a test can measure them, and a future mode can spawn
+ * a wave on them.
+ */
+export function arenaSpawnMarks(
+  count: number,
+  radius: number
+): readonly { readonly x: number; readonly y: number }[] {
+  // The golden angle. Successive marks land as far from each other as the
+  // circle allows, which is what makes the spacing come out even.
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  return Array.from({ length: count }, (_unused, index) => {
+    const distance = radius * Math.sqrt((index + 0.5) / count);
+    const angle = index * goldenAngle;
+    return { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance };
+  });
 }
 
 /** One fixed step of a match: pure, and the only place arena arithmetic lives. */
@@ -364,7 +379,7 @@ function applyRingDamage(
   return ships.map((ship) => {
     if (!ship.alive) return ship;
     const distance = Math.hypot(ship.spaceship.x, ship.spaceship.y);
-    const damage = ringDamageForStep(distance, ring, config);
+    const damage = ringDamageForStep(distance, ring, config, ship.maxHp);
     if (damage === 0) return ship;
     const hp = Math.max(0, ship.hp - damage);
     return { ...ship, hp, alive: hp > 0 };

@@ -73,11 +73,18 @@ export function ringPositionAt(tick: number, config: ArenaMatchConfig): ArenaRin
  * caller applies it straight to the hull: this is the one damage in the game
  * the shield does not intercept, because a hull tank would otherwise simply
  * wait the ring out and the whole mechanic would stop working.
+ *
+ * The rate is a share of the hull's own maximum, which is what makes the last
+ * phase arithmetic rather than a guess: at `60` shares a second and sixty steps
+ * a second, one step takes a whole hull, so everyone still outside dies on the
+ * same tick and a match cannot run forever. Only a hull that healed inside that
+ * step lives to see the next one.
  */
 export function ringDamageForStep(
   distance: number,
   ring: ArenaRingPosition,
-  config: ArenaMatchConfig
+  config: ArenaMatchConfig,
+  maxHp: number
 ): number {
   const depth = distance - ring.radius;
   if (depth <= 0) return 0;
@@ -89,5 +96,5 @@ export function ringDamageForStep(
   // Full rate once a ship is a hull radius outside; a scratch right on the line.
   const hullRadius = Math.max(1, config.ship.spaceshipRadius);
   const severity = Math.min(1, depth / hullRadius);
-  return phase.damagePerSecond * severity * secondsPerStep;
+  return maxHp * phase.damageShareOfMaxHpPerSecond * severity * secondsPerStep;
 }

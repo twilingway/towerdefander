@@ -1,5 +1,8 @@
 import { useRef, useState } from "react";
-import type { PublicShip } from "@spaceship-defender/protocol";
+import type { ArenaLobby, PublicShip } from "@spaceship-defender/protocol";
+
+import { CatalogAssetShape } from "@spaceship-defender/client-shared";
+import { getVisualAsset } from "@spaceship-defender/protocol";
 
 import { ShipTile } from "../../components/ShipTile/index.js";
 import { useRemoteNavigation } from "../../model/hooks/useRemoteNavigation.js";
@@ -8,7 +11,12 @@ import { defaultUnlockedShipId, isShipUnlocked } from "../../model/shipAccess.js
 interface ArenaSetupScreenProps {
   readonly ships: readonly PublicShip[];
   readonly defaultShipId: string | undefined;
+  readonly status: "idle" | "connecting" | "connected" | "reconnecting" | "error";
+  readonly error: string;
+  /** The waiting room, once one is open: who is in it and how long it waits. */
+  readonly lobby: ArenaLobby | undefined;
   readonly onBack: () => void;
+  readonly onStart: () => void;
 }
 
 /**
@@ -18,7 +26,15 @@ interface ArenaSetupScreenProps {
  * each, so "two players on one ship" is a question for the mode that has crews,
  * not for this one.
  */
-export function ArenaSetupScreen({ ships, defaultShipId, onBack }: ArenaSetupScreenProps) {
+export function ArenaSetupScreen({
+  ships,
+  defaultShipId,
+  status,
+  error,
+  lobby,
+  onBack,
+  onStart
+}: ArenaSetupScreenProps) {
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   const [pilotName, setPilotName] = useState("Пилот");
   const shell = useRef<HTMLElement | null>(null);
@@ -75,13 +91,70 @@ export function ArenaSetupScreen({ ships, defaultShipId, onBack }: ArenaSetupScr
         )}
         {ship !== undefined && <p className="ship-pitch">{ship.description}</p>}
 
-        <p className="hint">
-          Матч ещё не запускается: симуляция арены готова и покрыта тестами, комната для неё —
-          следующий шаг.
-        </p>
-        <button type="button" className="setup-go" disabled>
-          В бой
-        </button>
+        {lobby === undefined ? (
+          <>
+            <p className="hint">
+              Прототип: все шестнадцать кораблей ведёт автопилот — тот же, что водит пустые места в
+              кампании. Ваш корабль пока летит сам, экран показывает бой.
+            </p>
+            {error.length > 0 && <p className="error-message">{error}</p>}
+            <button
+              type="button"
+              className="setup-go"
+              disabled={status === "connecting"}
+              onClick={onStart}
+            >
+              {status === "connecting" ? "Открываем матч…" : "В бой"}
+            </button>
+          </>
+        ) : (
+          <div className="queue">
+            <h2 className="setup-step">Сбор на матч</h2>
+            {/*
+             * Sixteen hulls rather than a number and a bar: the question a
+             * player has is "how full is this", and a row of silhouettes
+             * answers it without being read. Lit ones are people who are here,
+             * dim ones are the seats bots will take when the wait runs out.
+             */}
+            <div
+              className="queue__fleet"
+              role="progressbar"
+              aria-label="Игроки в очереди"
+              aria-valuenow={lobby.players}
+              aria-valuemin={0}
+              aria-valuemax={lobby.capacity}
+            >
+              {Array.from({ length: lobby.capacity }, (_unused, index) => (
+                <span
+                  key={index}
+                  className={`queue__hull${
+                    index < lobby.players
+                      ? " is-taken"
+                      : index < lobby.players + lobby.bots
+                        ? " is-bot"
+                        : ""
+                  }`}
+                >
+                  <svg viewBox="0 0 64 64" role="presentation">
+                    <CatalogAssetShape
+                      asset={getVisualAsset(ship?.visual?.shape ?? "")}
+                      radius={22}
+                      center={32}
+                    />
+                  </svg>
+                </span>
+              ))}
+            </div>
+            <p className="queue__caption">
+              <strong>{String(lobby.players + lobby.bots)}</strong> из {String(lobby.capacity)} —{" "}
+              {lobby.started
+                ? "поле собрано, матч начинается…"
+                : lobby.bots > 0
+                  ? `игроков ${String(lobby.players)}, остальные места занимают боты…`
+                  : `ждём игроков ещё ${String(lobby.secondsRemaining)} с, остальных доберут боты`}
+            </p>
+          </div>
+        )}
       </section>
     </main>
   );

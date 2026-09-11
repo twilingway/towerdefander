@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 41 as const;
+export const BALANCE_FILE_VERSION = 42 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -929,6 +929,28 @@ export const shipArchetypeTableSchema = z
     }
   });
 
+/**
+ * One spawn mark, in arena coordinates: the centre of the disc is the origin,
+ * which is the frame the arena simulation itself is written in.
+ *
+ * The operator moves these, so they are data rather than a formula. The seed
+ * still decides who stands where; this decides where the marks are.
+ */
+export const arenaSpawnMarkSchema = z
+  .object({ x: z.number(), y: z.number() })
+  .strict();
+export type ArenaSpawnMark = z.infer<typeof arenaSpawnMarkSchema>;
+
+export const ARENA_SPAWN_MARKS = 16;
+
+export const arenaTuningSchema = z
+  .object({
+    /** Exactly one mark per seat: sixteen hulls, sixteen places to put them. */
+    spawnMarks: z.array(arenaSpawnMarkSchema).length(ARENA_SPAWN_MARKS).readonly()
+  })
+  .strict();
+export type ArenaTuning = z.infer<typeof arenaTuningSchema>;
+
 export const balanceTuningSchema = z
   .object({
     enemyArchetypes: enemyArchetypeTableSchema,
@@ -992,6 +1014,8 @@ export const balanceTuningSchema = z
     enemySkill: enemySkillTuningSchema,
     /** Keyboard helm feel; the simulation never reads this section either. */
     helm: helmTuningSchema,
+    /** Where an arena match puts its sixteen hulls. Only the arena reads it. */
+    arena: arenaTuningSchema,
 
     // --- Ship archetypes: which hull a run is played on ---
     /** Hulls a room may be created with, each with its own ten-tier tree. */

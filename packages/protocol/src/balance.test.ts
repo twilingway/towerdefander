@@ -305,6 +305,14 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       turretLeadRadians: 0.45
     },
     autopilot: autopilotTuning(),
+    // Sixteen marks, because that is what the schema asks for; where they are
+    // is the operator's business and never the schema's.
+    arena: {
+      spawnMarks: Array.from({ length: 16 }, (_unused, index) => ({
+        x: index * 100 - 800,
+        y: index * 50 - 400
+      }))
+    },
     enemySkill: {
       offset: 0,
       profiles: {

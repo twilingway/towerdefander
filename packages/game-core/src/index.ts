@@ -15,6 +15,7 @@ export * from "./arenaRing.ts";
 export {
   IDLE_ARENA_INTENT,
   advanceArenaMatch,
+  arenaSpawnMarks,
   createArenaMatch,
   type ArenaShipSeat
 } from "./arenaMatch.ts";

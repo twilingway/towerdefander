@@ -16,6 +16,7 @@ import {
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
 import { ringDamageForStep, ringPositionAt } from "./arenaRing.ts";
+import { arenaSpawnMarks } from "./arenaMatch.ts";
 
 const botSeats: readonly ArenaShipSeat[] = Array.from({ length: ARENA_SHIP_COUNT }, () => ({
   control: "bot" as const,
@@ -110,14 +111,47 @@ describe("createArenaMatch", () => {
   });
 
   it("starts differently for a different seed", () => {
-    // The whole point of the scatter: ten seeds used to produce ten identical
-    // matches, because sixteen identical hulls on an even ring is a symmetric
-    // problem with a symmetric answer.
+    // Ten seeds used to produce ten identical matches, because sixteen equal
+    // hulls on an even ring is a symmetric problem with a symmetric answer.
     const other = createArenaMatch(defaultArenaMatchConfig, 99, botSeats);
 
     expect(other.ships.map((ship) => ship.spaceship.x)).not.toEqual(
       match().ships.map((ship) => ship.spaceship.x)
     );
+  });
+
+  it("hands out the same sixteen marks whatever the seed", () => {
+    // The field's shape belongs to the arena; only who stands where is the
+    // seed's business.
+    const marks = arenaSpawnMarks(ARENA_SHIP_COUNT, defaultArenaMatchConfig.spawnRadius);
+    const key = (point: { x: number; y: number }) => `${point.x.toFixed(3)}:${point.y.toFixed(3)}`;
+    const expected = new Set(marks.map(key));
+
+    for (const seed of [11, 4242, 99]) {
+      const taken = createArenaMatch(defaultArenaMatchConfig, seed, botSeats).ships.map((ship) =>
+        key({ x: ship.spaceship.x, y: ship.spaceship.y })
+      );
+      expect(new Set(taken)).toEqual(expected);
+      expect(taken.length).toBe(new Set(taken).size);
+    }
+  });
+
+  it("keeps the marks evenly apart", () => {
+    const marks = arenaSpawnMarks(ARENA_SHIP_COUNT, defaultArenaMatchConfig.spawnRadius);
+    const nearest = marks.map((mark, index) =>
+      Math.min(
+        ...marks
+          .filter((_other, other) => other !== index)
+          .map((other) => Math.hypot(other.x - mark.x, other.y - mark.y))
+      )
+    );
+    const smallest = Math.min(...nearest);
+    const largest = Math.max(...nearest);
+
+    // Even, not identical: a disc cannot be tiled by sixteen equal distances,
+    // and the spiral's spread is what "as even as a circle allows" means.
+    expect(smallest).toBeGreaterThan(defaultArenaMatchConfig.ship.spaceshipRadius * 8);
+    expect(largest / smallest).toBeLessThan(1.6);
   });
 
   it("keeps the typed caps adding up to the total", () => {
@@ -249,15 +283,17 @@ describe("the ring", () => {
   it("burns a hull outside the boundary and stops at the line", () => {
     const ring = ringPositionAt(5000, defaultArenaMatchConfig);
 
-    expect(ringDamageForStep(ring.radius, ring, defaultArenaMatchConfig)).toBe(0);
-    expect(ringDamageForStep(ring.radius + 200, ring, defaultArenaMatchConfig)).toBeGreaterThan(0);
+    expect(ringDamageForStep(ring.radius, ring, defaultArenaMatchConfig, 1000)).toBe(0);
+    expect(
+      ringDamageForStep(ring.radius + 200, ring, defaultArenaMatchConfig, 1000)
+    ).toBeGreaterThan(0);
   });
 
   it("goes through a raised shield, because the shield never sees it", () => {
     const config: ArenaMatchConfig = {
       ...defaultArenaMatchConfig,
       // One tick long, so the very first step already finds both hulls outside.
-      ringPhases: [{ radius: 200, durationTicks: 1, damagePerSecond: 600 }],
+      ringPhases: [{ radius: 200, durationTicks: 1, damageShareOfMaxHpPerSecond: 1 }],
       matchTickLimit: 10_000
     };
     const seats: readonly ArenaShipSeat[] = [
@@ -278,6 +314,46 @@ describe("the ring", () => {
     const without = pick(after.ships, 1);
     expect(withShield.hp).toBeLessThan(start.ships[0]?.hp ?? 0);
     expect(withShield.hp).toBeCloseTo(without.hp, 6);
+  });
+});
+
+describe("the closing phase", () => {
+  it("empties a full hull in a single step, so a match cannot run forever", () => {
+    // The arithmetic the phase is stated in: shares a second times the length
+    // of a step. Sixty shares at sixty steps a second is one whole hull per
+    // step, and everyone still outside therefore dies on the same tick.
+    const phases = defaultArenaMatchConfig.ringPhases;
+    const closing = phases[phases.length - 1];
+    const secondsPerStep = defaultArenaMatchConfig.ship.fixedStepMs / 1000;
+
+    expect((closing?.damageShareOfMaxHpPerSecond ?? 0) * secondsPerStep).toBeGreaterThanOrEqual(1);
+  });
+
+  it("kills every hull left outside on the same tick", () => {
+    const config: ArenaMatchConfig = {
+      ...defaultArenaMatchConfig,
+      shipCount: 3,
+      matchTickLimit: 10_000,
+      ringPhases: [{ radius: 0, durationTicks: 1, damageShareOfMaxHpPerSecond: 60 }]
+    };
+    const seats: readonly ArenaShipSeat[] = [
+      { control: "bot", botLevel: "veteran" },
+      { control: "bot", botLevel: "veteran" },
+      { control: "bot", botLevel: "veteran" }
+    ];
+    const start = createArenaMatch(config, 5, seats);
+    // One of them healed inside that step, the way a repair would: it is the
+    // only thing that can survive the closing tick.
+    const healed: ArenaMatchState = {
+      ...start,
+      ships: start.ships.map((ship, index) =>
+        index === 0 ? { ...ship, hp: ship.maxHp * 2 } : ship
+      )
+    };
+
+    const after = advanceArenaMatch(healed, new Map(), config);
+
+    expect(after.ships.filter((ship) => ship.alive).map((ship) => ship.slot)).toEqual([0]);
   });
 });
 

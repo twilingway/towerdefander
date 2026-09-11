@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import {
+  ARENA_SPAWN_MARKS,
   BALANCE_FILE_VERSION,
   balancePresetsFileSchema,
   balanceTuningSchema,
@@ -16,6 +17,7 @@ import {
   type ShipArchetype
 } from "@spaceship-defender/protocol";
 import {
+  arenaSpawnMarks,
   createSpaceshipSimulationConfig,
   validateSpaceshipSimulationConfig,
   type SpaceshipSimulationConfig
@@ -295,6 +297,16 @@ export function createDefaultTuning(): BalanceTuning {
     autopilot: DEFAULT_AUTOPILOT,
     enemySkill: config.enemySkill,
     helm: DEFAULT_HELM,
+    // The spiral the arena used to compute, written down: the operator can now
+    // drag a mark, and a preset that never touches this plays as it always did.
+    arena: {
+      spawnMarks: arenaSpawnMarks(ARENA_SPAWN_MARKS, config.arenaRadius - 160).map(
+        (mark: { readonly x: number; readonly y: number }) => ({
+          x: Math.round(mark.x),
+          y: Math.round(mark.y)
+        })
+      )
+    },
     shipArchetypes: DEFAULT_SHIP_ARCHETYPES,
     defaultShipArchetypeId: DEFAULT_SHIP_ARCHETYPE_ID,
     spaceshipVisual: config.spaceshipVisual,

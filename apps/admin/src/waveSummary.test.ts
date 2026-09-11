@@ -297,6 +297,12 @@ function tuning(): BalanceTuning {
         ace: enemySkillProfile()
       }
     },
+    arena: {
+      spawnMarks: Array.from({ length: 16 }, (_unused, index) => ({
+        x: index * 100 - 800,
+        y: index * 50 - 400
+      }))
+    },
     autopilot: {
       level: "veteran",
       profiles: {

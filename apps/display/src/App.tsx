@@ -57,15 +57,30 @@ export function DisplayApp() {
     />
   );
 
-  const arenaRoute = (
-    <ArenaSetupScreen
-      ships={shipCatalogue?.ships ?? []}
-      defaultShipId={flags.shipArchetypeId ?? shipCatalogue?.defaultShipId}
-      onBack={() => {
-        void navigate({ pathname: "/", search: readDisplaySearch() });
-      }}
-    />
-  );
+  // The queue holds this screen until the server says the match began.
+  const arenaRoute =
+    seated && session.arenaLobby?.started === true ? (
+      <Navigate
+        replace
+        to={{ pathname: `/room/${session.view.roomId}`, search: readDisplaySearch() }}
+      />
+    ) : (
+      <ArenaSetupScreen
+        ships={shipCatalogue?.ships ?? []}
+        defaultShipId={flags.shipArchetypeId ?? shipCatalogue?.defaultShipId}
+        status={session.status}
+        error={session.error}
+        lobby={session.arenaLobby}
+        onBack={() => {
+          void navigate({ pathname: "/", search: readDisplaySearch() });
+        }}
+        onStart={() => {
+          // The room opens as a waiting room, so the screen stays put: the match
+          // page is for a match, and this is a queue people are still joining.
+          void session.createArenaMatch();
+        }}
+      />
+    );
 
   const createRoute = seated ? (
     <Navigate

@@ -1,7 +1,10 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
   PROTOCOL_VERSION,
+  ARENA_ROOM_TYPE,
   ROOM_TYPE,
+  arenaLobbySchema,
+  type ArenaLobby,
   clientMessage,
   roomClosingSchema,
   serverErrorSchema,
@@ -52,6 +55,10 @@ export interface RoomSession {
     startWave: number,
     cockpitPlayerName?: string
   ) => Promise<string | undefined>;
+  /** Opens an arena match: sixteen hulls, no crew to assemble. */
+  readonly createArenaMatch: () => Promise<string | undefined>;
+  /** The arena's waiting room, while there is one; undefined outside the arena. */
+  readonly arenaLobby: ArenaLobby | undefined;
   readonly closeRoom: () => Promise<void>;
   readonly sendCockpitReady: () => void;
   readonly sendCockpitVote: (upgradeId: UpgradeId) => void;
@@ -85,6 +92,7 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
   /** Read inside room callbacks, which close over the first render. */
   const cockpitPlayerReference = useRef<string | undefined>(undefined);
   const [closingRoom, setClosingRoom] = useState(false);
+  const [arenaLobby, setArenaLobby] = useState<ArenaLobby | undefined>(undefined);
   const publisher = useViewPublisher(setNetworkView, readLiveView);
 
   /** A refusal is about the command, not the run: a new phase clears it. */
@@ -158,6 +166,118 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
     // went fullscreen first would be thrown back out by pressing Готов.
   }
 
+  /**
+   * Everything a live room needs wired to it, whichever mode opened it.
+   *
+   * Lifted out when the arena became a second way in: the handlers below are
+   * the session, not the campaign, and a copy of them for the second room type
+   * would have drifted on the first fix to either.
+   */
+  function attachRoom(room: DisplayRoom): void {
+    roomReference.current = room;
+    room.onStateChange((state) => {
+      if (roomReference.current === room) applyRoomState(state);
+    });
+    applyRoomState(room.state);
+    room.onMessage(serverMessage.arenaLobby, (payload: unknown) => {
+      const parsed = arenaLobbySchema.safeParse(payload);
+      if (!parsed.success || roomReference.current !== room) return;
+      setArenaLobby(parsed.data);
+    });
+    room.onMessage(serverMessage.latencyProbe, (payload: unknown) => {
+      const result = serverLatencyProbeSchema.safeParse(payload);
+      if (!result.success) return;
+      room.send(clientMessage.latencyPong, {
+        protocolVersion: PROTOCOL_VERSION,
+        roomId: room.roomId,
+        probeId: result.data.probeId
+      });
+    });
+    /*
+     * The refusals the room sends back. The display never listened for these
+     * — it had nothing to send and so nothing to be refused — and the cockpit
+     * inherited that silence: every rejected packet went to a channel with no
+     * handler, and the ship simply did not move, with the reason sitting one
+     * unregistered listener away.
+     */
+    room.onMessage(serverMessage.error, (payload: unknown) => {
+      const parsed = serverErrorSchema.safeParse(payload);
+      const reason = parsed.success ? parsed.data.code : "unknown";
+      /*
+       * `invalid_phase` on the continuous streams is expected and means
+       * nothing: a packet in flight when the wave ends lands after the room
+       * has left combat, and the room says so. Painting that on screen — and
+       * never clearing it — turned a transient into a banner that sat over
+       * the intermission reading "Gameplay input requires combat", which is
+       * why the upgrade cards looked broken when they were not.
+       */
+      // Always in the console: a refusal nobody can see is what turned this
+      // into three rounds of guessing. Only the banner is filtered.
+      console.warn(`Room refused a command: ${reason}`);
+      if (reason === "invalid_phase") return;
+      if (cockpitPlayerReference.current !== undefined) {
+        setError(parsed.success ? parsed.data.message : "Команда отклонена.");
+      }
+    });
+    room.onMessage(serverMessage.roomClosing, (payload: unknown) => {
+      const result = roomClosingSchema.safeParse(payload);
+      if (!result.success || roomReference.current !== room) return;
+      room.reconnection.enabled = false;
+      roomReference.current = undefined;
+      resetToCreate(roomClosingMessage(result.data.reason));
+    });
+    room.onDrop(() => {
+      if (roomReference.current !== room) return;
+      statusReference.current = "reconnecting";
+      setStatus("reconnecting");
+      setError("Связь прервана. Восстанавливаем общий экран…");
+      setConnectionEpoch((value) => value + 1);
+    });
+    room.onReconnect(() => {
+      if (roomReference.current !== room) return;
+      statusReference.current = "connected";
+      setStatus("connected");
+      setError("");
+    });
+    room.onError((_code, message) => {
+      if (roomReference.current !== room) return;
+      statusReference.current = "error";
+      setStatus("error");
+      setError(message ?? "Сервер сообщил об ошибке.");
+    });
+    room.onLeave(() => {
+      if (roomReference.current !== room) return;
+      roomReference.current = undefined;
+      resetToCreate("Комната закрыта. Создайте новую сессию.");
+    });
+  }
+
+  /**
+   * The arena's way in. No crew size and no hull yet: a match is sixteen ships
+   * the server spawns itself, and the one the player will take flies on the
+   * same autopilot as the rest until a cockpit claims it.
+   */
+  async function createArenaMatch(): Promise<string | undefined> {
+    statusReference.current = "connecting";
+    setStatus("connecting");
+    setError("");
+    setClosingRoom(false);
+    try {
+      const room = await new Client(GAME_SERVER_URL).create<NetworkRoomState>(ARENA_ROOM_TYPE, {
+        role: "display" as const,
+        protocolVersion: PROTOCOL_VERSION
+      });
+      roomReference.current = room;
+      attachRoom(room);
+      return room.roomId;
+    } catch (cause) {
+      statusReference.current = "error";
+      setStatus("error");
+      setError(cause instanceof Error ? cause.message : "Не удалось открыть матч.");
+      return undefined;
+    }
+  }
+
   async function createRoom(
     crewSize: CrewSize,
     shipArchetypeId: string | undefined,
@@ -186,77 +306,7 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
         // exactly what it always did.
         ...(startWave > 1 ? { startWave } : {})
       });
-      roomReference.current = room;
-      room.onStateChange((state) => {
-        if (roomReference.current === room) applyRoomState(state);
-      });
-      applyRoomState(room.state);
-      room.onMessage(serverMessage.latencyProbe, (payload: unknown) => {
-        const result = serverLatencyProbeSchema.safeParse(payload);
-        if (!result.success) return;
-        room.send(clientMessage.latencyPong, {
-          protocolVersion: PROTOCOL_VERSION,
-          roomId: room.roomId,
-          probeId: result.data.probeId
-        });
-      });
-      /*
-       * The refusals the room sends back. The display never listened for these
-       * — it had nothing to send and so nothing to be refused — and the cockpit
-       * inherited that silence: every rejected packet went to a channel with no
-       * handler, and the ship simply did not move, with the reason sitting one
-       * unregistered listener away.
-       */
-      room.onMessage(serverMessage.error, (payload: unknown) => {
-        const parsed = serverErrorSchema.safeParse(payload);
-        const reason = parsed.success ? parsed.data.code : "unknown";
-        /*
-         * `invalid_phase` on the continuous streams is expected and means
-         * nothing: a packet in flight when the wave ends lands after the room
-         * has left combat, and the room says so. Painting that on screen — and
-         * never clearing it — turned a transient into a banner that sat over
-         * the intermission reading "Gameplay input requires combat", which is
-         * why the upgrade cards looked broken when they were not.
-         */
-        // Always in the console: a refusal nobody can see is what turned this
-        // into three rounds of guessing. Only the banner is filtered.
-        console.warn(`Room refused a command: ${reason}`);
-        if (reason === "invalid_phase") return;
-        if (cockpitPlayerReference.current !== undefined) {
-          setError(parsed.success ? parsed.data.message : "Команда отклонена.");
-        }
-      });
-      room.onMessage(serverMessage.roomClosing, (payload: unknown) => {
-        const result = roomClosingSchema.safeParse(payload);
-        if (!result.success || roomReference.current !== room) return;
-        room.reconnection.enabled = false;
-        roomReference.current = undefined;
-        resetToCreate(roomClosingMessage(result.data.reason));
-      });
-      room.onDrop(() => {
-        if (roomReference.current !== room) return;
-        statusReference.current = "reconnecting";
-        setStatus("reconnecting");
-        setError("Связь прервана. Восстанавливаем общий экран…");
-        setConnectionEpoch((value) => value + 1);
-      });
-      room.onReconnect(() => {
-        if (roomReference.current !== room) return;
-        statusReference.current = "connected";
-        setStatus("connected");
-        setError("");
-      });
-      room.onError((_code, message) => {
-        if (roomReference.current !== room) return;
-        statusReference.current = "error";
-        setStatus("error");
-        setError(message ?? "Сервер сообщил об ошибке.");
-      });
-      room.onLeave(() => {
-        if (roomReference.current !== room) return;
-        roomReference.current = undefined;
-        resetToCreate("Комната закрыта. Создайте новую сессию.");
-      });
+      attachRoom(room);
       return room.roomId;
     } catch (reason) {
       statusReference.current = "error";
@@ -365,6 +415,8 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
     room: roomReference.current,
     sessionId: roomReference.current?.sessionId ?? "",
     createRoom,
+    createArenaMatch,
+    arenaLobby,
     closeRoom: handleCloseRoom,
     sendCockpitReady,
     sendCockpitVote,

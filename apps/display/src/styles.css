@@ -2919,3 +2919,75 @@ p {
     height: clamp(6rem, 52vh, 14rem);
   }
 }
+
+/* The arena's waiting room: how many are in, and how long it still waits. */
+.queue {
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* Sixteen seats as sixteen hulls: lit means somebody is in it. */
+.queue__fleet {
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.queue__hull {
+  display: block;
+  padding: 0.2rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.5rem;
+  background: rgb(6 20 20 / 70%);
+  opacity: 0.35;
+  filter: grayscale(1);
+  transition:
+    opacity 200ms ease,
+    filter 200ms ease;
+}
+
+.queue__hull.is-taken {
+  border-color: rgb(230 184 92 / 55%);
+  background: rgb(19 45 42 / 85%);
+  opacity: 1;
+  filter: none;
+}
+
+/* A seat a bot took: lit, but cooler than a person's, so the two are one
+   glance apart. */
+.queue__hull.is-bot {
+  border-color: rgb(80 170 200 / 45%);
+  background: rgb(14 34 44 / 85%);
+  opacity: 0.9;
+  filter: grayscale(0.35) hue-rotate(150deg);
+  animation: queue-seat-in 260ms ease-out;
+}
+
+@keyframes queue-seat-in {
+  from {
+    opacity: 0.2;
+    transform: scale(0.82);
+  }
+
+  to {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
+.queue__hull svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.queue__caption {
+  margin: 0;
+  color: #8fb2ac;
+  font-size: 0.85rem;
+}
+
+.queue__caption strong {
+  color: #e6b85c;
+  font-size: 1.1rem;
+}

@@ -28,8 +28,14 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 54 as const;
+export const PROTOCOL_VERSION = 55 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
+/**
+ * The arena's own room type. A second type rather than a flag on the first:
+ * the two run different simulations, and a room that could be either would
+ * have to answer every message for both.
+ */
+export const ARENA_ROOM_TYPE = "spaceship_arena" as const;
 /**
  * How often the room broadcasts, in milliseconds.
  *
@@ -1147,8 +1153,48 @@ export const clientMessage = {
 export const serverMessage = {
   error: "server:error",
   latencyProbe: "server:latency-probe",
-  roomClosing: "room:closing"
+  roomClosing: "room:closing",
+  /** The arena's waiting room: who is in it, and how long it still waits. */
+  arenaLobby: "arena:lobby"
 } as const;
+
+/**
+ * How long an arena match waits for people before the server fills the rest of
+ * the field with bots.
+ *
+ * Ten seconds while the mode is being tested, because a tester opening the
+ * screen wants a fight, not a wait. The production number is three minutes -
+ * long enough for a room code to travel to a friend - and the two live here
+ * together so the short one is visibly temporary.
+ */
+export const ARENA_LOBBY_WAIT_SECONDS = 10;
+export const ARENA_LOBBY_WAIT_SECONDS_PRODUCTION = 180;
+
+/**
+ * How long the bots take to fill the empty seats once the wait is over.
+ *
+ * They could all appear at once - the server has nothing to wait for - but a
+ * queue that jumps from one to sixteen in a single frame reads as a glitch,
+ * and one that fills seat by seat reads as players arriving. Two and a half
+ * seconds is long enough to watch and short enough not to be a second wait.
+ */
+export const ARENA_BOT_FILL_MS = 2_500;
+
+export const arenaLobbySchema = z
+  .object({
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    /** People in the waiting room right now; it falls when somebody leaves. */
+    players: z.number().int().min(0),
+    /** Seats already taken by server-driven hulls, once the wait is over. */
+    bots: z.number().int().min(0),
+    /** Seats in the match, so a display can draw "3 of 16". */
+    capacity: z.number().int().min(1),
+    secondsRemaining: z.number().int().min(0),
+    /** True once the wait is over and the match has started. */
+    started: z.boolean()
+  })
+  .strict();
+export type ArenaLobby = z.infer<typeof arenaLobbySchema>;
 export const serverErrorCodeSchema = z.enum([
   "invalid_message",
   "protocol_mismatch",

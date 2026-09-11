@@ -482,6 +482,9 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       // existed must gain it, not fail the strict schema and take the
       // operator's waves down with it.
       helm: migrateHelm(tuning, defaults),
+      // A preset written before the arena existed gains the spiral the code
+      // used to compute, so nothing about an older file changes how it plays.
+      arena: migrateArena(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
       // Field by field, like the helm: a preset saved before salvage existed
       // must gain every knob, not fail the strict schema and take the
@@ -583,6 +586,22 @@ export function migrateBalanceDocument(raw: unknown): unknown {
       migratePreset(scaleTickFields(preset, tickScale), defaults)
     )
   };
+}
+
+/**
+ * The arena's spawn marks, or the defaults when a preset has none.
+ *
+ * All or nothing rather than field by field: a partial set of marks is not a
+ * layout, and the schema wants exactly sixteen of them.
+ */
+function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTuning["arena"] {
+  const arena = tuning.arena;
+  if (!isRecord(arena)) return defaults.arena;
+  const marks = arena.spawnMarks;
+  if (!Array.isArray(marks) || marks.length !== defaults.arena.spawnMarks.length) {
+    return defaults.arena;
+  }
+  return { spawnMarks: marks as BalanceTuning["arena"]["spawnMarks"] };
 }
 
 /**

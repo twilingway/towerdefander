@@ -98,8 +98,17 @@ export interface ArenaBeamState {
 export interface ArenaRingPhase {
   readonly radius: number;
   readonly durationTicks: number;
-  /** Hull damage a second outside the boundary, at the depth the ship is at. */
-  readonly damagePerSecond: number;
+  /**
+   * What the zone takes a second, as a share of the hull's own maximum.
+   *
+   * A share rather than a number of points, so the zone means the same thing
+   * to every hull however much health it carries - and so the last phase can
+   * be stated as the thing it has to be: enough to empty a full hull inside a
+   * single step, which is what ends a match that nobody is willing to end.
+   * `1` is a whole hull a second; `60` at sixty steps a second is a whole hull
+   * in one step.
+   */
+  readonly damageShareOfMaxHpPerSecond: number;
 }
 
 /** What one hull asks for this tick, already validated by whoever owns it. */
@@ -146,6 +155,12 @@ export interface ArenaMatchConfig {
   readonly shipScaling: ArenaShipScaling;
   readonly arenaRadius: number;
   readonly spawnRadius: number;
+  /**
+   * Where hulls start, in arena coordinates. Null means the even spiral this
+   * module computes; a preset that has been edited hands its own marks here,
+   * which is what makes the layout the operator's rather than the code's.
+   */
+  readonly spawnMarks: readonly { readonly x: number; readonly y: number }[] | null;
   readonly shipCount: number;
   readonly matchTickLimit: number;
   readonly ringPhases: readonly ArenaRingPhase[];

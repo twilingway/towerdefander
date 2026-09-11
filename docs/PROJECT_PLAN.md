@@ -46,7 +46,7 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
 
 | Контракт                     | Значение | Где                                          |
 | ---------------------------- | -------: | -------------------------------------------- |
-| `PROTOCOL_VERSION`           |     `54` | `packages/protocol/src/index.ts`             |
+| `PROTOCOL_VERSION`           |     `55` | `packages/protocol/src/index.ts`             |
 | `BALANCE_FILE_VERSION`       |     `41` | `packages/protocol/src/balance.ts`           |
 | `BALANCE_STATS_FILE_VERSION` |      `3` | `packages/protocol/src/balanceStats.ts`      |
 | `SIMULATION_TICK_RATE`       |  `60 Гц` | `packages/game-core/src/combatValidation.ts` |

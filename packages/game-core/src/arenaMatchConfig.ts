@@ -13,11 +13,16 @@ export const ARENA_SHIP_COUNT = 16;
  * moves.
  */
 export const DEFAULT_ARENA_RING_PHASES = [
-  { radius: 2200, durationTicks: 1800, damagePerSecond: 30 },
-  { radius: 1500, durationTicks: 1800, damagePerSecond: 30 },
-  { radius: 900, durationTicks: 1800, damagePerSecond: 40 },
-  { radius: 400, durationTicks: 1800, damagePerSecond: 50 },
-  { radius: 150, durationTicks: 1800, damagePerSecond: 70 }
+  // Share of the hull a second: 5% is a warning you can fly out of, 25% is a
+  // wall you cannot sit against.
+  { radius: 2200, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.05 },
+  { radius: 1500, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.08 },
+  { radius: 900, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.14 },
+  { radius: 400, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.25 },
+  // The closing phase: the safe zone is gone, and a whole hull a step goes with
+  // it. Everyone still out there dies on the same tick - which is the point,
+  // because it is what guarantees a match ends.
+  { radius: 0, durationTicks: 1800, damageShareOfMaxHpPerSecond: 60 }
 ] as const satisfies ArenaMatchConfig["ringPhases"];
 
 /**
@@ -43,6 +48,7 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   // held off the wall by enough room to turn.
   spawnRadius: defaultSpaceshipSimulationConfig.arenaRadius - 160,
   shipCount: ARENA_SHIP_COUNT,
+  spawnMarks: null,
   matchTickLimit: 9_000,
   ringPhases: DEFAULT_ARENA_RING_PHASES,
   caps: DEFAULT_ARENA_CAPS
