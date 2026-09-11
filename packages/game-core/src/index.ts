@@ -9,3 +9,7 @@ export {
   type ShipPose,
   type ShipPoseStats
 } from "./shipPose.ts";
+export * from "./arenaMatchTypes.ts";
+export * from "./arenaMatchConfig.ts";
+export * from "./arenaRing.ts";
+export { IDLE_ARENA_INTENT, advanceArenaMatch, createArenaMatch, type ArenaShipSeat } from "./arenaMatch.ts";
