@@ -70,16 +70,34 @@ function shotAt(
 }
 
 describe("createArenaMatch", () => {
-  it("puts sixteen hulls on the spawn ring, noses inward", () => {
+  it("scatters sixteen hulls over the whole arena, none on top of another", () => {
     const state = match();
 
     expect(state.ships).toHaveLength(ARENA_SHIP_COUNT);
     for (const ship of state.ships) {
       const distance = Math.hypot(ship.spaceship.x, ship.spaceship.y);
-      expect(distance).toBeCloseTo(defaultArenaMatchConfig.spawnRadius, 6);
-      const inward = Math.atan2(-ship.spaceship.y, -ship.spaceship.x);
-      expect(Math.cos(ship.heading - inward)).toBeCloseTo(1, 6);
+      expect(distance).toBeLessThanOrEqual(defaultArenaMatchConfig.spawnRadius);
     }
+
+    for (const ship of state.ships) {
+      for (const other of state.ships) {
+        if (other.id === ship.id) continue;
+        const gap = Math.hypot(
+          other.spaceship.x - ship.spaceship.x,
+          other.spaceship.y - ship.spaceship.y
+        );
+        expect(gap).toBeGreaterThan(defaultArenaMatchConfig.ship.spaceshipRadius * 2);
+      }
+    }
+  });
+
+  it("uses the whole disc rather than one ring", () => {
+    // Even by area: the ring version put every hull at the same distance from
+    // the centre, which is a starting line, not a free-for-all.
+    const distances = match().ships.map((ship) => Math.hypot(ship.spaceship.x, ship.spaceship.y));
+    const spread = Math.max(...distances) - Math.min(...distances);
+
+    expect(spread).toBeGreaterThan(defaultArenaMatchConfig.spawnRadius * 0.4);
   });
 
   it("starts identically for the same seed", () => {
@@ -88,6 +106,17 @@ describe("createArenaMatch", () => {
 
     expect(second.ships.map((ship) => [ship.id, ship.spaceship.x, ship.spaceship.y])).toEqual(
       first.ships.map((ship) => [ship.id, ship.spaceship.x, ship.spaceship.y])
+    );
+  });
+
+  it("starts differently for a different seed", () => {
+    // The whole point of the scatter: ten seeds used to produce ten identical
+    // matches, because sixteen identical hulls on an even ring is a symmetric
+    // problem with a symmetric answer.
+    const other = createArenaMatch(defaultArenaMatchConfig, 99, botSeats);
+
+    expect(other.ships.map((ship) => ship.spaceship.x)).not.toEqual(
+      match().ships.map((ship) => ship.spaceship.x)
     );
   });
 

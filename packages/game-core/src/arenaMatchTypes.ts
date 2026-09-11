@@ -129,8 +129,21 @@ export interface ArenaMatchCaps {
  * differently in the two modes would make every measurement of one useless for
  * the other.
  */
+/**
+ * How long a hull lives in the arena, relative to the campaign it is balanced
+ * in. Sixteen ships firing at each other is a density the campaign never has:
+ * at campaign numbers a match resolved in twenty seconds, before the ring had
+ * moved once. These two scale the hull and the shot instead of forking the
+ * catalogue, so a change to the ship still reaches both modes.
+ */
+export interface ArenaShipScaling {
+  readonly hull: number;
+  readonly damage: number;
+}
+
 export interface ArenaMatchConfig {
   readonly ship: SpaceshipSimulationConfig;
+  readonly shipScaling: ArenaShipScaling;
   readonly arenaRadius: number;
   readonly spawnRadius: number;
   readonly shipCount: number;

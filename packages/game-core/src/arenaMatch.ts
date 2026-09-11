@@ -12,7 +12,7 @@ import {
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
 import { ringDamageForStep, ringPositionAt } from "./arenaRing.ts";
-import { advanceClock } from "./primitives.ts";
+import { advanceClock, createSeededRandom } from "./primitives.ts";
 import { advanceAngularTraverse, canonicalizeAngle, clamp } from "./simulationMath.ts";
 import { advanceShipPose, type ShipPose } from "./shipPose.ts";
 import { shipStatsFromConfig, type ShipStats } from "./shipStats.ts";
@@ -53,12 +53,47 @@ export function createArenaMatch(
   matchSeed: number,
   seats: readonly ArenaShipSeat[]
 ): ArenaMatchState {
-  const baseStats = shipStatsFromConfig(config.ship);
+  const campaignStats = shipStatsFromConfig(config.ship);
+  const baseStats: ShipStats = {
+    ...campaignStats,
+    spaceshipMaxHp: campaignStats.spaceshipMaxHp * config.shipScaling.hull,
+    friendlyProjectileDamage: campaignStats.friendlyProjectileDamage * config.shipScaling.damage,
+    mgDamage: campaignStats.mgDamage * config.shipScaling.damage
+  };
+  /*
+   * The seed has to reach the field, or every match is the same match.
+   *
+   * With sixteen identical hulls the arithmetic is symmetric, and the first
+   * bot-only batch proved it: ten seeds, ten identical matches down to the tick.
+   * So the field is seeded - and scattered over the whole disc rather than
+   * around one ring, because a ring is a starting line and a free-for-all has
+   * none. `sqrt` on the radius is what makes it even by area instead of
+   * crowding the middle.
+   */
+  const random = createSeededRandom(matchSeed);
+  const placed: { x: number; y: number }[] = [];
+  const takePosition = () => {
+    const minimumGap = config.ship.spaceshipRadius * 6;
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      const angle = random.next() * Math.PI * 2;
+      const radius = config.spawnRadius * Math.sqrt(random.next());
+      const candidate = { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+      const clear = placed.every(
+        (other) => Math.hypot(other.x - candidate.x, other.y - candidate.y) >= minimumGap
+      );
+      if (clear || attempt === 63) {
+        placed.push(candidate);
+        return candidate;
+      }
+    }
+    throw new Error("unreachable: the loop always places on its last attempt");
+  };
+
   const ships = seats.slice(0, config.shipCount).map((seat, slot) => {
-    const angle = canonicalizeAngle((slot / config.shipCount) * Math.PI * 2);
-    const x = Math.cos(angle) * config.spawnRadius;
-    const y = Math.sin(angle) * config.spawnRadius;
-    const heading = canonicalizeAngle(angle + Math.PI);
+    const { x, y } = takePosition();
+    // Facing nowhere in particular, which is what "the match just started"
+    // looks like when nobody was lined up on a rim.
+    const heading = canonicalizeAngle(random.next() * Math.PI * 2);
     const stats = seat.stats ?? baseStats;
     return {
       id: `ship-${String(slot + 1)}`,

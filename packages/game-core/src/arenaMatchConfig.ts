@@ -4,19 +4,20 @@ import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 export const ARENA_SHIP_COUNT = 16;
 
 /**
- * Five minutes, five phases.
+ * Two and a half minutes, five phases of thirty seconds.
  *
  * The shape is the arena GDD's - hold, then three squeezes, then a pen nobody
- * can hide in - on half its clock, because a prototype is judged by how many
- * matches fit in an evening. Every number here is a starting guess: the first
- * bot-only batch is what turns them into balance.
+ * can hide in - on a quarter of its clock, because the first bot-only batch
+ * finished matches in twenty seconds flat and a ring that never moves is not a
+ * mechanic. These numbers are a hypothesis the next batch either keeps or
+ * moves.
  */
 export const DEFAULT_ARENA_RING_PHASES = [
-  { radius: 2200, durationTicks: 3600, damagePerSecond: 30 },
-  { radius: 1500, durationTicks: 3600, damagePerSecond: 30 },
-  { radius: 900, durationTicks: 3600, damagePerSecond: 40 },
-  { radius: 400, durationTicks: 3600, damagePerSecond: 50 },
-  { radius: 150, durationTicks: 3600, damagePerSecond: 70 }
+  { radius: 2200, durationTicks: 1800, damagePerSecond: 30 },
+  { radius: 1500, durationTicks: 1800, damagePerSecond: 30 },
+  { radius: 900, durationTicks: 1800, damagePerSecond: 40 },
+  { radius: 400, durationTicks: 1800, damagePerSecond: 50 },
+  { radius: 150, durationTicks: 1800, damagePerSecond: 70 }
 ] as const satisfies ArenaMatchConfig["ringPhases"];
 
 /**
@@ -34,12 +35,15 @@ export const DEFAULT_ARENA_CAPS = {
 
 export const defaultArenaMatchConfig: ArenaMatchConfig = {
   ship: defaultSpaceshipSimulationConfig,
+  // Measured, not guessed: at 1x/1x sixteen bots finished each other in 16-21
+  // seconds and the ring never closed once. See `pnpm arena:match`.
+  shipScaling: { hull: 2.5, damage: 0.7 },
   arenaRadius: defaultSpaceshipSimulationConfig.arenaRadius,
-  // Inside the wall by a hull's length and change: sixteen ships on the rim
-  // itself would spawn already scraping it.
-  spawnRadius: defaultSpaceshipSimulationConfig.arenaRadius - 400,
+  // The spawn disc, not a spawn ring: hulls are scattered anywhere inside it,
+  // held off the wall by enough room to turn.
+  spawnRadius: defaultSpaceshipSimulationConfig.arenaRadius - 160,
   shipCount: ARENA_SHIP_COUNT,
-  matchTickLimit: 18_000,
+  matchTickLimit: 9_000,
   ringPhases: DEFAULT_ARENA_RING_PHASES,
   caps: DEFAULT_ARENA_CAPS
 };

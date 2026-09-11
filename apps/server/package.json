@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsup --config tsup.config.ts",
     "benchmark:combat": "pnpm run build && node dist/benchmarks/runCombatRoomBenchmark.js",
+    "arena:match": "node --import tsx scripts/arena-match.mjs",
     "stats:autopilot": "node scripts/run-autopilot-stats.mjs",
     "stats:batch": "node scripts/run-balance-batch.mjs",
     "balance:promote": "node --import tsx --env-file-if-exists=../../.env.local scripts/promote-balance-seed.mjs",
