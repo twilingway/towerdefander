@@ -2,6 +2,7 @@ import { Room, type Client } from "colyseus";
 import { StateView, type MapSchema } from "@colyseus/schema";
 import {
   ARENA_SHIP_COUNT,
+  IDLE_ARENA_INTENT,
   advanceArenaMatch,
   createArenaMatch,
   defaultArenaMatchConfig,
@@ -16,17 +17,24 @@ import {
   CAMERA_VIEW_WIDTH_MAX,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
+  clientMessage,
+  gunnerInputCommandSchema,
+  pilotInputCommandSchema,
   serverMessage,
+  shieldInputCommandSchema,
   type ArenaLobby
 } from "@spaceship-defender/protocol";
 
 import { getBalanceStore } from "../balance/index.js";
 import { ArenaBots } from "./arenaBots.js";
 import { createRunSeed } from "./runSeed.js";
+import type { ArenaShipIntent } from "@spaceship-defender/game-core";
+
 import {
   ArenaShipView,
   ArenaZoneView,
   DISPLAY_VIEW_TAG,
+  PlayerState,
   ProjectileState,
   SpaceshipDefenderState
 } from "./SpaceshipDefenderState.js";
@@ -58,6 +66,17 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private botsSeated = 0;
   /** The last sheet published, as a string; see `publishZones`. */
   private zoneSignature = "";
+  /**
+   * What the seated player is asking for right now.
+   *
+   * Held rather than queued: the arena does not predict on the client yet, so
+   * a frame is a statement of intent that stands until the next one, the same
+   * way a held stick does. Undefined while nobody is flying, which is when the
+   * autopilot takes the seat.
+   */
+  private playerIntent: ArenaShipIntent | undefined;
+  /** True once a client has claimed the player slot, which stops the bot. */
+  private playerSeated = false;
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -96,7 +115,13 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
     const seats: readonly ArenaShipSeat[] = Array.from(
       { length: this.config.shipCount },
-      (): ArenaShipSeat => ({ control: "bot", botLevel: tuning.autopilot.level })
+      (_unused, slot): ArenaShipSeat => ({
+        // The player's slot is marked human at creation; the bot layer skips
+        // it, and an empty one is simply a human who never turned up, which
+        // the step handles by leaving the hull on its own autopilot.
+        control: slot === PLAYER_SLOT ? "human" : "bot",
+        botLevel: tuning.autopilot.level
+      })
     );
     this.match = createArenaMatch(this.config, createRunSeed(undefined), seats);
     this.bots = new ArenaBots(
@@ -160,16 +185,80 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.broadcastLobby();
   }
 
-  override onJoin(client: Client): void {
+  /**
+   * The player's own hull, driven from the cockpit.
+   *
+   * The arena reuses the campaign's three input messages rather than inventing
+   * its own: they already carry a bearing, a throttle and a trigger, already
+   * have schemas, and a solo cockpit already sends them. What changes is only
+   * where they land - one slot of sixteen instead of the room's single ship.
+   */
+  private readonly inputHandlers = {
+    [clientMessage.pilotInput]: (_client: Client, payload: unknown) => {
+      const parsed = pilotInputCommandSchema.safeParse(payload);
+      if (!parsed.success) return;
+      const command = parsed.data;
+      this.playerIntent = {
+        ...(this.playerIntent ?? IDLE_ARENA_INTENT),
+        driveVector: command.vector,
+        turn: command.turn ?? null,
+        thrust: command.thrust ?? null,
+        headingTargetAngle: bearingOf(command.vector),
+        mgFiring: command.mgFiring
+      };
+    },
+    [clientMessage.gunnerInput]: (_client: Client, payload: unknown) => {
+      const parsed = gunnerInputCommandSchema.safeParse(payload);
+      if (!parsed.success) return;
+      this.playerIntent = {
+        ...(this.playerIntent ?? IDLE_ARENA_INTENT),
+        turretTargetAngle: bearingOf(parsed.data.aim),
+        firing: parsed.data.firing
+      };
+    },
+    [clientMessage.shieldInput]: (_client: Client, payload: unknown) => {
+      const parsed = shieldInputCommandSchema.safeParse(payload);
+      if (!parsed.success) return;
+      this.playerIntent = {
+        ...(this.playerIntent ?? IDLE_ARENA_INTENT),
+        shieldTargetAngle: bearingOf(parsed.data.aim),
+        shieldActive: parsed.data.active
+      };
+    }
+  };
+
+  override onJoin(client: Client, unsafeOptions?: unknown): void {
     // Everyone watching gets the world branch: the arena has no controller
     // panels of its own yet, so there is nothing to gate off anybody.
     const view = (client.view ??= new StateView());
     view.add(this.state.game, DISPLAY_VIEW_TAG);
     this.state.displayConnected = true;
+    /*
+     * A cockpit claims the player slot; a plain display only watches.
+     *
+     * The seat is also published as a player, because that is what the cockpit
+     * on the client looks for before it starts sending: one roster entry, in
+     * the pilot role, already ready - a match has no readiness to wait for.
+     */
+    const options = unsafeOptions as { role?: unknown; playerName?: unknown } | undefined;
+    if (options?.role === "solo") {
+      this.playerSeated = true;
+      const seat = new PlayerState();
+      seat.playerId = client.sessionId;
+      seat.playerName = typeof options.playerName === "string" ? options.playerName : "Пилот";
+      seat.role = "pilot";
+      seat.ready = true;
+      seat.connected = true;
+      this.state.players.set(client.sessionId, seat);
+    }
+    for (const [name, handler] of Object.entries(this.inputHandlers)) {
+      this.onMessage(name, handler);
+    }
     this.broadcastLobby();
   }
 
-  override onLeave(): void {
+  override onLeave(client?: Client): void {
+    if (client !== undefined) this.state.players.delete(client.sessionId);
     if (this.clients.length === 0) this.state.displayConnected = false;
     // Somebody closing their tab has to leave the queue they were counted in.
     this.broadcastLobby();
@@ -245,7 +334,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match.phase === "result") return;
 
     const started = performance.now();
-    this.match = advanceArenaMatch(match, bots.intentsFor(match, this.config), this.config);
+    const intents = new Map(bots.intentsFor(match, this.config));
+    const player = match.ships[PLAYER_SLOT];
+    // The seated player's own frame wins over whatever the bot wanted for that
+    // hull, and an empty seat keeps flying itself.
+    if (this.playerSeated && player !== undefined) {
+      intents.set(player.id, this.playerIntent ?? IDLE_ARENA_INTENT);
+    }
+    this.match = advanceArenaMatch(match, intents, this.config);
     this.state.game.display.serverStepMs = performance.now() - started;
     this.publish();
   }
@@ -364,6 +460,12 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly");
     mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile");
   }
+}
+
+/** A stick reading is a direction; the simulation wants the bearing of it. */
+function bearingOf(vector: { readonly x: number; readonly y: number }): number | null {
+  if (vector.x === 0 && vector.y === 0) return null;
+  return Math.atan2(vector.y, vector.x);
 }
 
 function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["game"]): void {

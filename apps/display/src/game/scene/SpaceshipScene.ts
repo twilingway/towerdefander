@@ -220,6 +220,10 @@ export class SpaceshipScene extends Phaser.Scene {
 
   private updateScene(time: number, deltaMs: number): void {
     this.frames.recordFrame(time, this.game.loop.rawDelta);
+    // The other hulls of a match walk toward their last published position
+    // every frame; without it they would move twenty times a second and read
+    // as statues trading fire.
+    this.fleet.update(deltaMs);
     this.playback = advancePlayback(this.playback, deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;

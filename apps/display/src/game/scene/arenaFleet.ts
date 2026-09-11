@@ -15,10 +15,23 @@ interface FleetHull {
   readonly hull: Phaser.GameObjects.Image;
   readonly turret: Phaser.GameObjects.Image;
   readonly shield: Phaser.GameObjects.Image;
+  readonly healthBack: Phaser.GameObjects.Image;
+  readonly healthFill: Phaser.GameObjects.Image;
+  readonly flash: Phaser.GameObjects.Image;
+  /** Where the last patch said this hull is; the frame walks toward it. */
+  target: { x: number; y: number; heading: number; turret: number; shieldAngle: number };
+  hp: number;
+  maxHp: number;
+  flashLeftMs: number;
 }
 
 const RIVAL_TINT = 0xff9f8a;
 const SHIELD_COLOR = 0x63d8ff;
+const HEALTH_BACK = 0x0a1a22;
+const HEALTH_HIGH = 0x74e39b;
+const HEALTH_LOW = 0xff6b5e;
+const FLASH_COLOR = 0xffe6a0;
+const FLASH_MS = 140;
 
 /**
  * The other fifteen ships of a match, drawn as what they are.
@@ -26,16 +39,19 @@ const SHIELD_COLOR = 0x63d8ff;
  * Not enemies: every hull in the arena is a copy of the crew's own ship, with
  * the same silhouette, the same turret and the same shield, flown by the same
  * autopilot. So they are drawn from the same art rather than from the enemy
- * catalogue - the only difference is a tint, because a player still has to
- * find themselves on a field of sixteen identical ships.
+ * catalogue - the only difference is a tint, because a player still has to find
+ * themselves on a field of sixteen identical ships.
  *
- * Baked and reused, like everything else on this field: one hull texture, one
- * turret texture and one shield arc serve all sixteen, and the per-frame work
- * is a position and two rotations each.
+ * Baked and reused: one hull texture, one turret, one shield arc and one bar
+ * serve all sixteen, so a frame is a position and a couple of rotations each.
+ * Between patches the hulls are walked toward the last position the server
+ * gave, or they would stand still twenty times a second and look like statues
+ * shooting at each other.
  */
 export class ArenaFleet {
   private readonly hulls = new Map<string, FleetHull>();
 
+  /** Takes the newest patch: targets, health, and a flash for anything hit. */
   sync(scene: Phaser.Scene, snapshot: DisplayGameSnapshot, bake: BakeShape): void {
     const fleet = snapshot.arenaShips.filter((ship) => !ship.isSelf);
     const seen = new Set<string>();
@@ -45,30 +61,78 @@ export class ArenaFleet {
       const parts = this.hulls.get(ship.shipId) ?? this.create(scene, snapshot, ship, bake);
       this.hulls.set(ship.shipId, parts);
 
-      parts.hull.setPosition(ship.x, ship.y).setRotation(ship.heading);
-      parts.turret.setPosition(ship.x, ship.y).setRotation(ship.turretAngle);
-      parts.shield
-        .setPosition(ship.x, ship.y)
-        .setRotation(ship.shieldAngle)
-        .setVisible(ship.shieldActive);
+      // Losing health is the only hit signal the arena has on the wire, and it
+      // is enough: a flash where the shell landed is what makes a firefight
+      // legible from across the room.
+      if (ship.hp < parts.hp - 0.01) parts.flashLeftMs = FLASH_MS;
+      parts.hp = ship.hp;
+      parts.maxHp = ship.maxHp;
+      parts.target = {
+        x: ship.x,
+        y: ship.y,
+        heading: ship.heading,
+        turret: ship.turretAngle,
+        shieldAngle: ship.shieldAngle
+      };
+      parts.shield.setVisible(ship.shieldActive);
+      this.drawHealth(parts, ship.radius);
     }
 
     for (const [id, parts] of this.hulls) {
       if (seen.has(id)) continue;
-      parts.hull.destroy();
-      parts.turret.destroy();
-      parts.shield.destroy();
+      destroyHull(parts);
       this.hulls.delete(id);
     }
   }
 
-  destroy(): void {
+  /**
+   * One frame of motion between patches.
+   *
+   * A plain lerp with a rate rather than a fixed share, so the catch-up speed
+   * does not depend on how often frames happen to arrive.
+   */
+  update(deltaMs: number): void {
+    const step = Math.min(1, deltaMs / 90);
     for (const parts of this.hulls.values()) {
-      parts.hull.destroy();
-      parts.turret.destroy();
-      parts.shield.destroy();
+      const x = parts.hull.x + (parts.target.x - parts.hull.x) * step;
+      const y = parts.hull.y + (parts.target.y - parts.hull.y) * step;
+      parts.hull
+        .setPosition(x, y)
+        .setRotation(turnToward(parts.hull.rotation, parts.target.heading, step));
+      parts.turret
+        .setPosition(x, y)
+        .setRotation(turnToward(parts.turret.rotation, parts.target.turret, step));
+      parts.shield
+        .setPosition(x, y)
+        .setRotation(turnToward(parts.shield.rotation, parts.target.shieldAngle, step));
+
+      const barY = y - parts.hull.displayHeight * 0.75;
+      parts.healthBack.setPosition(x, barY);
+      parts.healthFill.setPosition(x - parts.healthBack.displayWidth / 2, barY).setOrigin(0, 0.5);
+
+      if (parts.flashLeftMs <= 0) {
+        parts.flash.setVisible(false);
+        continue;
+      }
+      parts.flashLeftMs -= deltaMs;
+      parts.flash
+        .setPosition(x, y)
+        .setVisible(true)
+        .setAlpha(Math.max(0, parts.flashLeftMs / FLASH_MS));
     }
+  }
+
+  destroy(): void {
+    for (const parts of this.hulls.values()) destroyHull(parts);
     this.hulls.clear();
+  }
+
+  private drawHealth(parts: FleetHull, radius: number): void {
+    const share = parts.maxHp <= 0 ? 0 : Math.max(0, Math.min(1, parts.hp / parts.maxHp));
+    parts.healthBack.setDisplaySize(radius * 2.2, radius * 0.28);
+    parts.healthFill
+      .setDisplaySize(Math.max(1, radius * 2.2 * share), radius * 0.28)
+      .setTint(share > 0.35 ? HEALTH_HIGH : HEALTH_LOW);
   }
 
   private create(
@@ -104,14 +168,16 @@ export class ArenaFleet {
       }
     );
 
-    // One arc, turned rather than redrawn: the sector is the same shape on
-    // every ship, and a Graphics per hull would be fifteen shapes re-walked
-    // every frame for a picture that never changes.
+    /*
+     * One arc, turned rather than redrawn, and thick enough to survive the
+     * camera: the arena is framed four thousand units wide, so a line of six
+     * units came out two pixels and read as nothing at all.
+     */
     const shieldKey = bake(
       `arenaShield:${String(Math.round(ship.shieldRadius))}:${ship.shieldArcHalfAngle.toFixed(2)}`,
-      ship.shieldRadius + 8,
+      ship.shieldRadius + 14,
       (graphics) => {
-        graphics.lineStyle(6, SHIELD_COLOR, 0.75);
+        graphics.lineStyle(18, SHIELD_COLOR, 0.85);
         graphics.beginPath();
         graphics.arc(
           0,
@@ -125,10 +191,47 @@ export class ArenaFleet {
       }
     );
 
+    const pixelKey = bake("arenaPixel", 2, (graphics) => {
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillRect(-2, -2, 4, 4);
+    });
+    const flashKey = bake("arenaHitFlash", 26, (graphics) => {
+      graphics.fillStyle(FLASH_COLOR, 0.9);
+      graphics.fillCircle(0, 0, 22);
+    });
+
     return {
       hull: scene.add.image(ship.x, ship.y, hullKey).setDepth(10).setTint(RIVAL_TINT),
       turret: scene.add.image(ship.x, ship.y, turretKey).setDepth(12).setTint(RIVAL_TINT),
-      shield: scene.add.image(ship.x, ship.y, shieldKey).setDepth(11).setVisible(false)
+      shield: scene.add.image(ship.x, ship.y, shieldKey).setDepth(11).setVisible(false),
+      healthBack: scene.add.image(ship.x, ship.y, pixelKey).setDepth(13).setTint(HEALTH_BACK),
+      healthFill: scene.add.image(ship.x, ship.y, pixelKey).setDepth(14).setTint(HEALTH_HIGH),
+      flash: scene.add.image(ship.x, ship.y, flashKey).setDepth(15).setVisible(false),
+      target: {
+        x: ship.x,
+        y: ship.y,
+        heading: ship.heading,
+        turret: ship.turretAngle,
+        shieldAngle: ship.shieldAngle
+      },
+      hp: ship.hp,
+      maxHp: ship.maxHp,
+      flashLeftMs: 0
     };
   }
+}
+
+function destroyHull(parts: FleetHull): void {
+  parts.hull.destroy();
+  parts.turret.destroy();
+  parts.shield.destroy();
+  parts.healthBack.destroy();
+  parts.healthFill.destroy();
+  parts.flash.destroy();
+}
+
+/** Shortest way round, so a hull crossing north does not spin the long way. */
+function turnToward(current: number, target: number, step: number): number {
+  const delta = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+  return current + delta * step;
 }

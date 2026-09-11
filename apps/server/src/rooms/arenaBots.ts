@@ -56,7 +56,8 @@ export class ArenaBots {
     const tick = state.clock.tick;
 
     for (const ship of state.ships) {
-      if (ship.control !== "bot") continue;
+      // Human slots are driven too: a seat nobody claimed has to keep flying,
+      // and the room overwrites this hull's intent the moment somebody does.
       if (!ship.alive) {
         this.intents.delete(ship.id);
         continue;
