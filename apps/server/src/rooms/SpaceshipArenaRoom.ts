@@ -13,6 +13,7 @@ import {
 import {
   ARENA_BOT_FILL_MS,
   ARENA_LOBBY_WAIT_SECONDS,
+  CAMERA_VIEW_WIDTH_MAX,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
   serverMessage,
@@ -102,10 +103,17 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.state.game.encounter.waveNumber = 1;
     // The campaign frames a fight around one ship; a match is sixteen of them
     // spread over the whole disc, so the arena watches the arena.
-    // The whole disc, and no wider: the frame is capped at the world's own
-    // width, and a camera past that is refused by the display contract.
+    /*
+     * As much of the disc as the contract allows.
+     *
+     * A match wants the whole field in frame, but the camera width is capped
+     * by the balance schema - and an arena larger than that cap simply cannot
+     * be shown whole. Clamping here rather than widening the cap: the number
+     * is shared with the campaign, where a frame that size is a different
+     * decision entirely.
+     */
     this.state.game.display.cameraViewWidth = Math.min(
-      ship.worldWidth,
+      CAMERA_VIEW_WIDTH_MAX,
       this.config.arenaRadius * 2
     );
     this.state.game.display.spaceshipVisualShape = ship.spaceshipVisual?.shape ?? "";

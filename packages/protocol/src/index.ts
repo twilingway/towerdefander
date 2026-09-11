@@ -887,7 +887,7 @@ export const displayGameSnapshotSchema = z
      * a few times a match rather than every tick, so the whole sheet travels
      * rather than a diff of it.
      */
-    arenaZones: z.array(publicArenaZoneViewSchema).max(64),
+    arenaZones: z.array(publicArenaZoneViewSchema).max(144),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
