@@ -68,7 +68,7 @@ export function buildArenaWorld(
     waveNumber: 1,
     salvageWindowSeconds: 0,
     cameraViewWidth,
-    arenaRadius: state.ringRadius,
+    arenaRadius: config.arenaRadius,
     worldWidth: config.ship.worldWidth,
     worldHeight: config.ship.worldHeight,
     shieldRadius: stats.shieldRadius,

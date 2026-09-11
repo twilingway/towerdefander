@@ -11,7 +11,7 @@ export {
 } from "./shipPose.ts";
 export * from "./arenaMatchTypes.ts";
 export * from "./arenaMatchConfig.ts";
-export * from "./arenaRing.ts";
+export * from "./arenaZones.ts";
 export {
   IDLE_ARENA_INTENT,
   advanceArenaMatch,

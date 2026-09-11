@@ -11,7 +11,8 @@ import {
   type ArenaShipIntent,
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
-import { ringDamageForStep, ringPositionAt } from "./arenaRing.ts";
+import { type ArenaZone } from "./arenaZones.ts";
+import { advanceArenaZones, createArenaZones, zoneDamageForBite } from "./arenaZones.ts";
 import { advanceClock, createSeededRandom } from "./primitives.ts";
 import { advanceAngularTraverse, canonicalizeAngle, clamp } from "./simulationMath.ts";
 import { advanceShipPose, type ShipPose } from "./shipPose.ts";
@@ -71,7 +72,20 @@ export function createArenaMatch(
    * that has to be different.
    */
   const random = createSeededRandom(matchSeed);
-  const marks = config.spawnMarks ?? arenaSpawnMarks(config.shipCount, config.spawnRadius);
+  /*
+   * World coordinates, not disc-centred ones.
+   *
+   * `advanceShipPose` holds a hull inside a circle centred on the middle of the
+   * world - the same clamp the campaign flies under - so an arena written
+   * around zero had every ship pinned to the wall on its first step, which is
+   * exactly what the early matches looked like. The marks and the zones are
+   * authored around zero because that is the frame an operator thinks in, and
+   * the centre is added here, once.
+   */
+  const centre = arenaCentre(config);
+  const marks = (config.spawnMarks ?? arenaSpawnMarks(config.shipCount, config.spawnRadius)).map(
+    (mark) => ({ x: mark.x + centre.x, y: mark.y + centre.y })
+  );
   const order = marks.map((_mark, index) => index);
   for (let index = order.length - 1; index > 0; index -= 1) {
     const swap = Math.floor(random.next() * (index + 1));
@@ -127,22 +141,25 @@ export function createArenaMatch(
     } satisfies ArenaShipState;
   });
 
-  const ring = ringPositionAt(0, config);
   return {
     clock: { tick: 0, elapsedMs: 0 },
     matchSeed,
     phase: "combat",
     outcome: null,
     winnerShipId: null,
-    ringPhaseIndex: ring.phaseIndex,
-    ringRadius: ring.radius,
-    nextRingRadius: ring.nextRadius,
-    ringPhaseTicksRemaining: ring.ticksRemaining,
+    zones: createArenaZones(config),
+    ticksUntilNextClosure: config.zoneIntervalTicks,
+    ticksUntilZoneDamage: config.zoneDamageIntervalTicks,
     ships,
     projectiles: [],
     beams: [],
     nextProjectileSequence: 1
   };
+}
+
+/** The middle of the world, which is the middle of the arena disc. */
+export function arenaCentre(config: ArenaMatchConfig): { readonly x: number; readonly y: number } {
+  return { x: config.ship.worldWidth / 2, y: config.ship.worldHeight / 2 };
 }
 
 /**
@@ -176,7 +193,7 @@ export function advanceArenaMatch(
 
   const clock = advanceClock(state.clock, config.ship.fixedStepMs);
   const tick = clock.tick;
-  const ring = ringPositionAt(tick, config);
+  const sheet = advanceArenaZones(state.zones, state.ships, state.ticksUntilNextClosure, config);
 
   let projectileSequence = state.nextProjectileSequence;
   const ships: ArenaShipState[] = [];
@@ -209,9 +226,13 @@ export function advanceArenaMatch(
     ships.push(fired.ship);
   }
 
-  const flying = [...moveArenaProjectiles(state.projectiles, tick, config), ...spawned];
+  const flying = [
+    ...moveArenaProjectiles(state.projectiles, tick, config, arenaCentre(config)),
+    ...spawned
+  ];
   const resolved = resolveArenaHits(ships, flying, config);
-  const burned = applyRingDamage(resolved.ships, ring, config);
+  const biting = state.ticksUntilZoneDamage <= 1;
+  const burned = biting ? applyZoneDamage(resolved.ships, sheet.zones, config) : resolved.ships;
   const settled = settleEliminations(burned, tick);
   const verdict = matchVerdict(settled, tick, config);
 
@@ -221,10 +242,9 @@ export function advanceArenaMatch(
     phase: verdict.phase,
     outcome: verdict.outcome,
     winnerShipId: verdict.winnerShipId,
-    ringPhaseIndex: ring.phaseIndex,
-    ringRadius: ring.radius,
-    nextRingRadius: ring.nextRadius,
-    ringPhaseTicksRemaining: ring.ticksRemaining,
+    zones: sheet.zones,
+    ticksUntilNextClosure: sheet.ticksUntilNextClosure,
+    ticksUntilZoneDamage: biting ? config.zoneDamageIntervalTicks : state.ticksUntilZoneDamage - 1,
     ships: settled,
     projectiles: resolved.projectiles,
     beams,
@@ -272,7 +292,7 @@ function advanceShipSystems(
       velocity: advanced.spaceship.velocity,
       radius: stats.spaceshipRadius
     },
-    { centerX: 0, centerY: 0, radius: config.arenaRadius }
+    { centerX: arenaCentre(config).x, centerY: arenaCentre(config).y, radius: config.arenaRadius }
   );
 
   const shield = advanceShield(ship, intent, secondsPerStep);
@@ -371,18 +391,28 @@ function advanceShield(
   };
 }
 
-function applyRingDamage(
+/**
+ * The closed part of the field, applied to whoever is standing in it.
+ *
+ * Straight to the hull, past the shield and its arc: a shield that stopped this
+ * would let a hull tank sit in a dead zone and wait the match out, which is the
+ * one thing the sheet exists to prevent.
+ */
+function applyZoneDamage(
   ships: readonly ArenaShipState[],
-  ring: ReturnType<typeof ringPositionAt>,
+  zones: readonly ArenaZone[],
   config: ArenaMatchConfig
 ): readonly ArenaShipState[] {
   return ships.map((ship) => {
     if (!ship.alive) return ship;
-    const distance = Math.hypot(ship.spaceship.x, ship.spaceship.y);
-    const damage = ringDamageForStep(distance, ring, config, ship.maxHp);
+    const damage = zoneDamageForBite(ship, zones, config);
     if (damage === 0) return ship;
-    const hp = Math.max(0, ship.hp - damage);
-    return { ...ship, hp, alive: hp > 0 };
+    const remaining = ship.hp - damage;
+    // Six bites of a sixth are a whole hull in arithmetic and a hair over one
+    // in floating point, which left a ship alive on a hundredth of a point.
+    // The beat is supposed to be countable, so the last one finishes it.
+    const alive = remaining > 1e-6;
+    return { ...ship, hp: alive ? remaining : 0, alive };
   });
 }
 

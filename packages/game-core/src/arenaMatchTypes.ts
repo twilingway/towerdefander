@@ -1,3 +1,4 @@
+import { type ArenaZone } from "./arenaZones.ts";
 import { type SimulationClock } from "./primitives.ts";
 import { type ShipStats } from "./shipStats.ts";
 import {
@@ -92,24 +93,12 @@ export interface ArenaBeamState {
 }
 
 /**
- * One step of the ring. The safe radius runs from the previous phase's radius
- * to this one across `durationTicks`, so the boundary moves rather than jumps.
+ * What the closed part of the field takes a second, as a share of the hull's
+ * own maximum.
+ *
+ * A share rather than a number of points, so a closed zone means the same
+ * thing to every hull however much health it carries.
  */
-export interface ArenaRingPhase {
-  readonly radius: number;
-  readonly durationTicks: number;
-  /**
-   * What the zone takes a second, as a share of the hull's own maximum.
-   *
-   * A share rather than a number of points, so the zone means the same thing
-   * to every hull however much health it carries - and so the last phase can
-   * be stated as the thing it has to be: enough to empty a full hull inside a
-   * single step, which is what ends a match that nobody is willing to end.
-   * `1` is a whole hull a second; `60` at sixty steps a second is a whole hull
-   * in one step.
-   */
-  readonly damageShareOfMaxHpPerSecond: number;
-}
 
 /** What one hull asks for this tick, already validated by whoever owns it. */
 export interface ArenaShipIntent {
@@ -163,7 +152,21 @@ export interface ArenaMatchConfig {
   readonly spawnMarks: readonly { readonly x: number; readonly y: number }[] | null;
   readonly shipCount: number;
   readonly matchTickLimit: number;
-  readonly ringPhases: readonly ArenaRingPhase[];
+  /** The sheet the field is cut into; see `arenaZones.ts`. */
+  readonly zoneColumns: number;
+  readonly zoneRows: number;
+  /** How often the next zone is picked, and how long its warning lasts. */
+  readonly zoneIntervalTicks: number;
+  readonly zoneWarningTicks: number;
+  /**
+   * The zone bites on a beat rather than continuously: every
+   * `zoneDamageIntervalTicks` it takes `zoneDamageShareOfMaxHp` of the hull's
+   * maximum. Six beats kill a full hull, which is what makes the escape a
+   * decision - you can cross a closed zone, you cannot live in one - and what
+   * makes a repair inside it worth something.
+   */
+  readonly zoneDamageIntervalTicks: number;
+  readonly zoneDamageShareOfMaxHp: number;
   readonly caps: ArenaMatchCaps;
 }
 
@@ -174,10 +177,11 @@ export interface ArenaMatchState {
   readonly outcome: ArenaMatchOutcome | null;
   readonly winnerShipId: string | null;
 
-  readonly ringPhaseIndex: number;
-  readonly ringRadius: number;
-  readonly nextRingRadius: number;
-  readonly ringPhaseTicksRemaining: number;
+  /** The sheet of zones and their states, in the order they were built. */
+  readonly zones: readonly ArenaZone[];
+  readonly ticksUntilNextClosure: number;
+  /** Ticks until the closed zones take their next bite. */
+  readonly ticksUntilZoneDamage: number;
 
   readonly ships: readonly ArenaShipState[];
   readonly projectiles: readonly ArenaProjectileState[];

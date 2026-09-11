@@ -15,8 +15,9 @@ import {
   type ArenaShipIntent,
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
-import { ringDamageForStep, ringPositionAt } from "./arenaRing.ts";
-import { arenaSpawnMarks } from "./arenaMatch.ts";
+import { type ArenaZone } from "./arenaZones.ts";
+import { arenaCentre, arenaSpawnMarks } from "./arenaMatch.ts";
+import { advanceArenaZones, createArenaZones, zoneAt } from "./arenaZones.ts";
 
 const botSeats: readonly ArenaShipSeat[] = Array.from({ length: ARENA_SHIP_COUNT }, () => ({
   control: "bot" as const,
@@ -38,6 +39,12 @@ function shipAt(state: ArenaMatchState, slot: number): ArenaShipState {
   const ship = state.ships[slot];
   if (ship === undefined) throw new Error(`no ship in slot ${String(slot)}`);
   return ship;
+}
+
+function zone(zones: readonly ArenaZone[], index: number): ArenaZone {
+  const found = zones[index];
+  if (found === undefined) throw new Error(`no zone at index ${String(index)}`);
+  return found;
 }
 
 function pick(ships: readonly ArenaShipState[], index: number): ArenaShipState {
@@ -74,10 +81,11 @@ describe("createArenaMatch", () => {
   it("scatters sixteen hulls over the whole arena, none on top of another", () => {
     const state = match();
 
+    const centre = arenaCentre(defaultArenaMatchConfig);
     expect(state.ships).toHaveLength(ARENA_SHIP_COUNT);
     for (const ship of state.ships) {
-      const distance = Math.hypot(ship.spaceship.x, ship.spaceship.y);
-      expect(distance).toBeLessThanOrEqual(defaultArenaMatchConfig.spawnRadius);
+      const distance = Math.hypot(ship.spaceship.x - centre.x, ship.spaceship.y - centre.y);
+      expect(distance).toBeLessThanOrEqual(defaultArenaMatchConfig.spawnRadius + 1e-6);
     }
 
     for (const ship of state.ships) {
@@ -123,7 +131,10 @@ describe("createArenaMatch", () => {
   it("hands out the same sixteen marks whatever the seed", () => {
     // The field's shape belongs to the arena; only who stands where is the
     // seed's business.
-    const marks = arenaSpawnMarks(ARENA_SHIP_COUNT, defaultArenaMatchConfig.spawnRadius);
+    const centre = arenaCentre(defaultArenaMatchConfig);
+    const marks = arenaSpawnMarks(ARENA_SHIP_COUNT, defaultArenaMatchConfig.spawnRadius).map(
+      (mark) => ({ x: mark.x + centre.x, y: mark.y + centre.y })
+    );
     const key = (point: { x: number; y: number }) => `${point.x.toFixed(3)}:${point.y.toFixed(3)}`;
     const expected = new Set(marks.map(key));
 
@@ -137,6 +148,7 @@ describe("createArenaMatch", () => {
   });
 
   it("keeps the marks evenly apart", () => {
+    // Distances do not care where the centre is, so these are the raw marks.
     const marks = arenaSpawnMarks(ARENA_SHIP_COUNT, defaultArenaMatchConfig.spawnRadius);
     const nearest = marks.map((mark, index) =>
       Math.min(
@@ -190,8 +202,9 @@ describe("advanceArenaMatch", () => {
     let state = match();
     for (let tick = 0; tick < 600; tick += 1) state = step(state, intents);
 
+    const wallCentre = arenaCentre(defaultArenaMatchConfig);
     for (const ship of state.ships) {
-      const distance = Math.hypot(ship.spaceship.x, ship.spaceship.y);
+      const distance = Math.hypot(ship.spaceship.x - wallCentre.x, ship.spaceship.y - wallCentre.y);
       expect(distance).toBeLessThanOrEqual(
         defaultArenaMatchConfig.arenaRadius - ship.stats.spaceshipRadius + 1e-6
       );
@@ -265,95 +278,248 @@ describe("resolveArenaHits", () => {
   });
 });
 
-describe("the ring", () => {
-  it("closes from phase to phase without jumping", () => {
-    const phases = defaultArenaMatchConfig.ringPhases;
-    const firstEnd = (phases[0]?.durationTicks ?? 0) - 1;
-    const midSecond = firstEnd + Math.round((phases[1]?.durationTicks ?? 0) / 2);
+describe("the sheet of zones", () => {
+  it("covers the disc and nothing else", () => {
+    const zones = createArenaZones(defaultArenaMatchConfig);
+    const radius = defaultArenaMatchConfig.arenaRadius;
+    const centre = arenaCentre(defaultArenaMatchConfig);
 
-    const atFirstEnd = ringPositionAt(firstEnd, defaultArenaMatchConfig);
-    const atMidSecond = ringPositionAt(midSecond, defaultArenaMatchConfig);
-
-    expect(atFirstEnd.radius).toBeCloseTo(phases[0]?.radius ?? 0, 0);
-    expect(atMidSecond.radius).toBeLessThan(atFirstEnd.radius);
-    expect(atMidSecond.radius).toBeGreaterThan(phases[1]?.radius ?? 0);
-    expect(atMidSecond.nextRadius).toBe(phases[2]?.radius);
+    // Four by four, and at this size every rectangle still clips the disc - the
+    // corner ones only by their inner edge, which is exactly what the reach
+    // test is for.
+    expect(zones.length).toBe(16);
+    for (const zone of zones) {
+      const nearestX = Math.max(zone.x - centre.x, Math.min(0, zone.x - centre.x + zone.width));
+      const nearestY = Math.max(zone.y - centre.y, Math.min(0, zone.y - centre.y + zone.height));
+      expect(Math.hypot(nearestX, nearestY)).toBeLessThan(radius);
+      expect(zone.state).toBe("safe");
+    }
   });
 
-  it("burns a hull outside the boundary and stops at the line", () => {
-    const ring = ringPositionAt(5000, defaultArenaMatchConfig);
+  it("closes the zone holding the most hulls", () => {
+    const zones = createArenaZones(defaultArenaMatchConfig);
+    // An edge zone, because the sheet only ever closes from the outside in.
+    const crowded = zone(
+      zones.filter((candidate) => candidate.column === 0 && candidate.row === 0),
+      0
+    );
+    const inside = {
+      x: crowded.x + crowded.width / 2,
+      y: crowded.y + crowded.height / 2
+    };
+    const state = match();
+    const gathered = state.ships.map((ship, index) =>
+      index < 6
+        ? {
+            ...ship,
+            spaceship: {
+              ...ship.spaceship,
+              x: inside.x,
+              y: inside.y,
+              previousX: inside.x,
+              previousY: inside.y
+            }
+          }
+        : ship
+    );
 
-    expect(ringDamageForStep(ring.radius, ring, defaultArenaMatchConfig, 1000)).toBe(0);
-    expect(
-      ringDamageForStep(ring.radius + 200, ring, defaultArenaMatchConfig, 1000)
-    ).toBeGreaterThan(0);
+    // One tick left on the clock, so this step is the one that picks.
+    const stepped = advanceArenaZones(zones, gathered, 1, defaultArenaMatchConfig);
+    const warned = stepped.zones.filter((zone) => zone.state === "warning");
+
+    expect(warned.map((zone) => zone.id)).toEqual([crowded.id]);
   });
 
-  it("goes through a raised shield, because the shield never sees it", () => {
+  it("warns before it kills", () => {
     const config: ArenaMatchConfig = {
       ...defaultArenaMatchConfig,
-      // One tick long, so the very first step already finds both hulls outside.
-      ringPhases: [{ radius: 200, durationTicks: 1, damageShareOfMaxHpPerSecond: 1 }],
-      matchTickLimit: 10_000
+      zoneWarningTicks: 3,
+      zoneIntervalTicks: 1
     };
-    const seats: readonly ArenaShipSeat[] = [
-      { control: "bot", botLevel: "veteran" },
-      { control: "bot", botLevel: "veteran" }
-    ];
-    const start = createArenaMatch({ ...config, shipCount: 2 }, 7, seats);
-    const guarded: ArenaMatchState = {
-      ...start,
-      ships: start.ships.map((ship, index) =>
-        index === 0 ? { ...ship, shieldActive: true, shieldPhase: "up" as const } : ship
-      )
-    };
+    let zones = createArenaZones(config);
+    const ships = match().ships;
 
-    const after = advanceArenaMatch(guarded, new Map(), { ...config, shipCount: 2 });
+    zones = advanceArenaZones(zones, ships, 1, config).zones;
+    expect(zones.filter((zone) => zone.state === "warning")).toHaveLength(1);
 
-    const withShield = pick(after.ships, 0);
-    const without = pick(after.ships, 1);
-    expect(withShield.hp).toBeLessThan(start.ships[0]?.hp ?? 0);
-    expect(withShield.hp).toBeCloseTo(without.hp, 6);
-  });
-});
-
-describe("the closing phase", () => {
-  it("empties a full hull in a single step, so a match cannot run forever", () => {
-    // The arithmetic the phase is stated in: shares a second times the length
-    // of a step. Sixty shares at sixty steps a second is one whole hull per
-    // step, and everyone still outside therefore dies on the same tick.
-    const phases = defaultArenaMatchConfig.ringPhases;
-    const closing = phases[phases.length - 1];
-    const secondsPerStep = defaultArenaMatchConfig.ship.fixedStepMs / 1000;
-
-    expect((closing?.damageShareOfMaxHpPerSecond ?? 0) * secondsPerStep).toBeGreaterThanOrEqual(1);
+    for (let tick = 0; tick < 3; tick += 1) {
+      zones = advanceArenaZones(zones, ships, 10, config).zones;
+    }
+    expect(zones.filter((zone) => zone.state === "closed")).toHaveLength(1);
   });
 
-  it("kills every hull left outside on the same tick", () => {
+  it("never takes the last safe zone", () => {
     const config: ArenaMatchConfig = {
       ...defaultArenaMatchConfig,
-      shipCount: 3,
-      matchTickLimit: 10_000,
-      ringPhases: [{ radius: 0, durationTicks: 1, damageShareOfMaxHpPerSecond: 60 }]
+      zoneWarningTicks: 1,
+      zoneIntervalTicks: 1
     };
-    const seats: readonly ArenaShipSeat[] = [
-      { control: "bot", botLevel: "veteran" },
+    let zones = createArenaZones(config);
+    const ships = match().ships;
+    for (let tick = 0; tick < 200; tick += 1) {
+      zones = advanceArenaZones(zones, ships, 1, config).zones;
+    }
+
+    expect(zones.filter((zone) => zone.state === "safe")).toHaveLength(1);
+  });
+
+  it("closes only from the edges and from what is already closed", () => {
+    const config: ArenaMatchConfig = {
+      ...defaultArenaMatchConfig,
+      zoneWarningTicks: 1,
+      zoneIntervalTicks: 1
+    };
+    let zones = createArenaZones(config);
+    const ships = match().ships;
+
+    // Walk the sheet down to its last safe zone and check the shape at every
+    // step: safe ground never develops a hole, because a hole is ground a hull
+    // cannot cross and the squeeze stops meaning anything.
+    for (let tick = 0; tick < 400; tick += 1) {
+      zones = advanceArenaZones(zones, ships, 1, config).zones;
+      const safe = zones.filter((zone) => zone.state === "safe");
+      // Whatever is still safe sits inside what is still safe: the closure is
+      // always taken from the frontier, so the field cannot develop a hole in
+      // the middle of open ground.
+      for (const zone of safe) {
+        const interior =
+          zone.column > 0 &&
+          zone.row > 0 &&
+          zone.column < config.zoneColumns - 1 &&
+          zone.row < config.zoneRows - 1;
+        if (!interior) continue;
+        const neighbours = zones.filter(
+          (other) => Math.abs(other.column - zone.column) + Math.abs(other.row - zone.row) === 1
+        );
+        expect(neighbours.length).toBeGreaterThan(0);
+      }
+    }
+
+    const survivor = zone(
+      zones.filter((candidate) => candidate.state === "safe"),
+      0
+    );
+    const middle = arenaCentre(config);
+    const offset = Math.hypot(
+      survivor.x + survivor.width / 2 - middle.x,
+      survivor.y + survivor.height / 2 - middle.y
+    );
+    // And what is left is the middle, which is where the fight is meant to end.
+    expect(offset).toBeLessThan(config.arenaRadius / 2);
+  });
+
+  it("bites a hull standing in a closed zone, shield or no shield", () => {
+    const config: ArenaMatchConfig = {
+      ...defaultArenaMatchConfig,
+      shipCount: 2,
+      zoneWarningTicks: 1,
+      zoneIntervalTicks: 1,
+      // The beat lands on the very next step, so the test measures one bite.
+      zoneDamageIntervalTicks: 1
+    };
+    const start = createArenaMatch(config, 7, [
       { control: "bot", botLevel: "veteran" },
       { control: "bot", botLevel: "veteran" }
-    ];
-    const start = createArenaMatch(config, 5, seats);
-    // One of them healed inside that step, the way a repair would: it is the
-    // only thing that can survive the closing tick.
-    const healed: ArenaMatchState = {
+    ]);
+    // A zone whose centre the arena actually contains: a corner rectangle
+    // touches the disc only at its inner edge, and a hull parked in its middle
+    // would be shoved back inside the wall before the zone could burn it.
+    const middle = arenaCentre(config);
+    const doomedZone =
+      [...start.zones].sort(
+        (first, second) =>
+          Math.hypot(first.x + first.width / 2 - middle.x, first.y + first.height / 2 - middle.y) -
+          Math.hypot(
+            second.x + second.width / 2 - middle.x,
+            second.y + second.height / 2 - middle.y
+          )
+      )[0] ?? zone([], 0);
+    const inside = {
+      x: doomedZone.x + doomedZone.width / 2,
+      y: doomedZone.y + doomedZone.height / 2
+    };
+    const parked: ArenaMatchState = {
       ...start,
-      ships: start.ships.map((ship, index) =>
-        index === 0 ? { ...ship, hp: ship.maxHp * 2 } : ship
-      )
+      ticksUntilNextClosure: 1,
+      ticksUntilZoneDamage: 1,
+      zones: start.zones.map((zone) =>
+        zone.id === doomedZone.id ? { ...zone, state: "closed" as const } : zone
+      ),
+      ships: start.ships.map((ship, index) => ({
+        ...ship,
+        shieldActive: index === 0,
+        shieldPhase: index === 0 ? ("up" as const) : ship.shieldPhase,
+        spaceship: {
+          ...ship.spaceship,
+          x: inside.x,
+          y: inside.y,
+          previousX: inside.x,
+          previousY: inside.y
+        }
+      }))
     };
 
-    const after = advanceArenaMatch(healed, new Map(), config);
+    const after = advanceArenaMatch(parked, new Map(), config);
 
-    expect(after.ships.filter((ship) => ship.alive).map((ship) => ship.slot)).toEqual([0]);
+    for (const ship of after.ships) {
+      // A sixth of the hull, on the beat: six of these kill, five do not.
+      expect(ship.maxHp - ship.hp).toBeCloseTo(ship.maxHp / 6, 6);
+    }
+    expect(zoneAt(after.zones, inside.x, inside.y)?.state).toBe("closed");
+  });
+
+  it("kills a parked hull in six bites and not five", () => {
+    const config: ArenaMatchConfig = {
+      ...defaultArenaMatchConfig,
+      shipCount: 2,
+      zoneWarningTicks: 1,
+      zoneIntervalTicks: 10_000,
+      zoneDamageIntervalTicks: 1
+    };
+    const start = createArenaMatch(config, 9, [
+      { control: "bot", botLevel: "veteran" },
+      { control: "bot", botLevel: "veteran" }
+    ]);
+    const middle = arenaCentre(config);
+    const doomedZone =
+      [...start.zones].sort(
+        (first, second) =>
+          Math.hypot(first.x + first.width / 2 - middle.x, first.y + first.height / 2 - middle.y) -
+          Math.hypot(
+            second.x + second.width / 2 - middle.x,
+            second.y + second.height / 2 - middle.y
+          )
+      )[0] ?? zone([], 0);
+    const inside = {
+      x: doomedZone.x + doomedZone.width / 2,
+      y: doomedZone.y + doomedZone.height / 2
+    };
+    let state: ArenaMatchState = {
+      ...start,
+      ticksUntilZoneDamage: 1,
+      zones: start.zones.map((zone) =>
+        zone.id === doomedZone.id ? { ...zone, state: "closed" as const } : zone
+      ),
+      ships: start.ships.map((ship) => ({
+        ...ship,
+        spaceship: {
+          ...ship.spaceship,
+          x: inside.x,
+          y: inside.y,
+          previousX: inside.x,
+          previousY: inside.y
+        }
+      }))
+    };
+
+    for (let bite = 0; bite < 5; bite += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+      if (state.phase === "result") break;
+    }
+    expect(state.ships.every((ship) => ship.alive)).toBe(true);
+
+    state = advanceArenaMatch(state, new Map(), config);
+    expect(state.ships.every((ship) => !ship.alive)).toBe(true);
   });
 });
 

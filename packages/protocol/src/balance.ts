@@ -936,9 +936,7 @@ export const shipArchetypeTableSchema = z
  * The operator moves these, so they are data rather than a formula. The seed
  * still decides who stands where; this decides where the marks are.
  */
-export const arenaSpawnMarkSchema = z
-  .object({ x: z.number(), y: z.number() })
-  .strict();
+export const arenaSpawnMarkSchema = z.object({ x: z.number(), y: z.number() }).strict();
 export type ArenaSpawnMark = z.infer<typeof arenaSpawnMarkSchema>;
 
 export const ARENA_SPAWN_MARKS = 16;

@@ -34,17 +34,6 @@ import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
 const PLAYER_SLOT = 0;
 
 /**
- * The arena thinks in a disc centred on zero; the display's world is a square
- * with its origin in a corner. One offset bridges them, applied to every
- * position on the way out - and only there, so the simulation keeps the frame
- * its geometry is written in.
- */
-interface WorldOffset {
-  readonly x: number;
-  readonly y: number;
-}
-
-/**
  * A match of sixteen hulls, published through the campaign's own state.
  *
  * The arena has its own simulation but not, yet, its own contract: this room
@@ -65,7 +54,6 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private started = false;
   /** Seats taken by bots so far, while the fill animation runs. */
   private botsSeated = 0;
-  private offset: WorldOffset = { x: 0, y: 0 };
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -102,7 +90,6 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       resolveAutopilotProfile(tuning.autopilot, tuning.autopilot.level, ship.cannonWeaponKind)
     );
 
-    this.offset = { x: ship.worldWidth / 2, y: ship.worldHeight / 2 };
     this.state.game.worldWidth = ship.worldWidth;
     this.state.game.worldHeight = ship.worldHeight;
     this.state.game.encounter.phase = "combat";
@@ -245,15 +232,6 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
     game.tick = match.clock.tick;
     game.elapsedMs = Math.round(match.clock.elapsedMs);
-    /*
-     * The arena's real wall, not the ring.
-     *
-     * Publishing the ring here was the obvious trick - the display would draw
-     * the boundary closing for free - but the contract checks every hull
-     * against this radius, and a hull outside the ring is exactly what the ring
-     * is for. The ring needs a field of its own; until it has one, the display
-     * shows the arena and the ring is felt rather than seen.
-     */
     game.arenaRadius = Math.round(this.config.arenaRadius);
     game.encounter.phase = match.phase === "result" ? "result" : "combat";
     game.encounter.encounterTick = match.clock.tick;
@@ -272,7 +250,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     }
 
     const player = match.ships[PLAYER_SLOT];
-    if (player !== undefined) mirrorPlayerShip(player, game, this.offset);
+    if (player !== undefined) mirrorPlayerShip(player, game);
 
     const rivals = new Map(
       match.ships
@@ -311,18 +289,16 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         .filter((shot) => shot.ownerShipId !== player?.id)
         .map((shot) => [shot.id, shot] as const)
     );
-    mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly", this.offset);
-    mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile", this.offset);
+    mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly");
+    mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile");
   }
 }
 
-function mirrorPlayerShip(
-  ship: ArenaShipState,
-  game: SpaceshipDefenderState["game"],
-  offset: WorldOffset
-): void {
-  game.spaceship.x = ship.spaceship.x + offset.x;
-  game.spaceship.y = ship.spaceship.y + offset.y;
+function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["game"]): void {
+  // The arena already thinks in world coordinates, the same ones the display
+  // draws in, so nothing is translated here any more.
+  game.spaceship.x = ship.spaceship.x;
+  game.spaceship.y = ship.spaceship.y;
   game.spaceship.velocityX = ship.spaceship.velocity.x;
   game.spaceship.velocityY = ship.spaceship.velocity.y;
   game.spaceship.radius = ship.stats.spaceshipRadius;
@@ -364,8 +340,7 @@ function mirrorProjectiles(
       spawnSequence: number;
     }
   >,
-  kind: "friendly" | "hostile",
-  offset: WorldOffset
+  kind: "friendly" | "hostile"
 ): void {
   reconcile(
     target,
@@ -378,8 +353,8 @@ function mirrorProjectiles(
       return entity;
     },
     (entity, shot) => {
-      entity.x = shot.x + offset.x;
-      entity.y = shot.y + offset.y;
+      entity.x = shot.x;
+      entity.y = shot.y;
       entity.velocityX = shot.velocity.x;
       entity.velocityY = shot.velocity.y;
       entity.radius = shot.radius;

@@ -4,26 +4,29 @@ import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
 export const ARENA_SHIP_COUNT = 16;
 
 /**
- * Two and a half minutes, five phases of thirty seconds.
+ * The sheet a match is played on, and how fast it closes.
  *
- * The shape is the arena GDD's - hold, then three squeezes, then a pen nobody
- * can hide in - on a quarter of its clock, because the first bot-only batch
- * finished matches in twenty seconds flat and a ring that never moves is not a
- * mechanic. These numbers are a hypothesis the next batch either keeps or
- * moves.
+ * Four by four over the arena square: sixteen rectangles, the corner ones
+ * clipped by the disc to slivers. A closure therefore moves the fight without
+ * taking a quarter of the field at once. A zone every thirty seconds with a
+ * five-second warning gives a hull time to read the board and drive, and no
+ * time to sit.
  */
-export const DEFAULT_ARENA_RING_PHASES = [
-  // Share of the hull a second: 5% is a warning you can fly out of, 25% is a
-  // wall you cannot sit against.
-  { radius: 2200, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.05 },
-  { radius: 1500, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.08 },
-  { radius: 900, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.14 },
-  { radius: 400, durationTicks: 1800, damageShareOfMaxHpPerSecond: 0.25 },
-  // The closing phase: the safe zone is gone, and a whole hull a step goes with
-  // it. Everyone still out there dies on the same tick - which is the point,
-  // because it is what guarantees a match ends.
-  { radius: 0, durationTicks: 1800, damageShareOfMaxHpPerSecond: 60 }
-] as const satisfies ArenaMatchConfig["ringPhases"];
+export const ARENA_ZONE_COLUMNS = 4;
+export const ARENA_ZONE_ROWS = 4;
+export const ARENA_ZONE_INTERVAL_TICKS = 1_800;
+export const ARENA_ZONE_WARNING_TICKS = 300;
+/**
+ * The beat, and the bite.
+ *
+ * Five seconds apart and a sixth of the hull each time: six beats kill anyone
+ * who stays, five leave them alive, and a hull that heals between beats lives
+ * longer than one that does not. Wargaming publishes neither number for Steel
+ * Hunter, so these are ours - stated as a share so they mean the same thing to
+ * every hull, and as a beat so a player can count them.
+ */
+export const ARENA_ZONE_DAMAGE_INTERVAL_TICKS = 300;
+export const ARENA_ZONE_DAMAGE_SHARE = 1 / 6;
 
 /**
  * A kinetic barrel holds `lifetime / cooldown` shots in the air: the turret
@@ -50,6 +53,11 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   shipCount: ARENA_SHIP_COUNT,
   spawnMarks: null,
   matchTickLimit: 9_000,
-  ringPhases: DEFAULT_ARENA_RING_PHASES,
+  zoneColumns: ARENA_ZONE_COLUMNS,
+  zoneRows: ARENA_ZONE_ROWS,
+  zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
+  zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
+  zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
+  zoneDamageShareOfMaxHp: ARENA_ZONE_DAMAGE_SHARE,
   caps: DEFAULT_ARENA_CAPS
 };

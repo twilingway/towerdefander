@@ -173,7 +173,8 @@ export function expireArenaBeams(
 export function moveArenaProjectiles(
   projectiles: readonly ArenaProjectileState[],
   tick: number,
-  config: ArenaMatchConfig
+  config: ArenaMatchConfig,
+  centre: { readonly x: number; readonly y: number }
 ): readonly ArenaProjectileState[] {
   const secondsPerStep = config.ship.fixedStepMs / 1000;
   const lifetimeTicks = Math.max(
@@ -187,7 +188,7 @@ export function moveArenaProjectiles(
     if (tick - projectile.spawnedTick >= lifetimeTicks) continue;
     const x = projectile.x + projectile.velocity.x * secondsPerStep;
     const y = projectile.y + projectile.velocity.y * secondsPerStep;
-    if (Math.hypot(x, y) > envelope) continue;
+    if (Math.hypot(x - centre.x, y - centre.y) > envelope) continue;
     moved.push({ ...projectile, previousX: projectile.x, previousY: projectile.y, x, y });
   }
   return moved;
