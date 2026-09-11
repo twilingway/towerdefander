@@ -2369,7 +2369,7 @@ p {
 
 .mode-grid {
   display: grid;
-  width: min(110rem, 94vw);
+  width: min(96rem, 94vw);
   gap: clamp(0.6rem, 1.6vh, 1.25rem);
   grid-template-columns: 1fr;
 }
@@ -2383,9 +2383,12 @@ p {
 .mode-tile {
   position: relative;
   min-height: 0;
-  /* A television is not a phone held at arm's length: the tiles take a third of
-     the screen's height, up to a size that still reads as a pair of cards. */
-  height: clamp(5.5rem, 32vh, 26rem);
+  /* The tile is exactly as wide-to-tall as the crop behind it - 16:5 - so cover
+     has nothing left to cut and the whole scene survives at every size. Height
+     follows width, and the grid below caps the width on a television. */
+  aspect-ratio: 16 / 5;
+  height: auto;
+  min-height: 5.5rem;
   padding: 0;
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 1rem;
@@ -2503,10 +2506,12 @@ p {
   gap: 0.35rem;
   width: min(58rem, 100%);
   padding: clamp(1rem, 3vw, 2rem);
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 1.25rem;
-  background: rgb(10 30 29 / 86%);
-  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 35%);
+  background: rgb(6 20 20 / 93%);
+  box-shadow:
+    0 1.5rem 4rem rgb(0 0 0 / 60%),
+    0 0 0 1px rgb(0 0 0 / 40%);
   text-align: left;
 }
 
@@ -2856,5 +2861,26 @@ p {
 
   .place-tile__caption {
     font-size: 0.68rem;
+  }
+}
+
+/*
+ * A phone on its side is 375 tall: two 16:5 tiles plus a title would not fit,
+ * so there the ratio gives way to a height and cover crops the sides again.
+ * The whole scene is a luxury of tall screens.
+ */
+@media (max-height: 34rem) {
+  .mode-tile {
+    aspect-ratio: auto;
+    height: clamp(4.5rem, 26vh, 8rem);
+  }
+
+  .start-title {
+    font-size: clamp(1.1rem, 3.4vw, 2rem);
+  }
+
+  .display-shell--start {
+    gap: 0.5rem;
+    padding-block: 0.5rem;
   }
 }
