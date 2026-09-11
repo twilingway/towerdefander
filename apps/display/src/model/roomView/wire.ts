@@ -49,6 +49,8 @@ export interface NetworkArenaShipState {
   shieldActive: boolean;
   shieldRadius: number;
   shieldArcHalfAngle: number;
+  shieldEnergy: number;
+  shieldCapacity: number;
   shotsFired: number;
 }
 

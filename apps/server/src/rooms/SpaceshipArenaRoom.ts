@@ -4,8 +4,10 @@ import {
   ARENA_SHIP_COUNT,
   IDLE_ARENA_INTENT,
   advanceArenaMatch,
+  canonicalizeAngle,
   createArenaMatch,
   defaultArenaMatchConfig,
+  normalizeVector,
   type ArenaMatchConfig,
   type ArenaMatchState,
   type ArenaShipSeat,
@@ -17,6 +19,9 @@ import {
   CAMERA_VIEW_WIDTH_MAX,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
+  SOLO_INPUT_BUFFER_SIZE,
+  SOLO_INPUT_RANGES,
+  SoloInput,
   clientMessage,
   gunnerInputCommandSchema,
   pilotInputCommandSchema,
@@ -56,6 +61,21 @@ const PLAYER_SLOT = 0;
  */
 export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> {
   override maxClients = ARENA_SHIP_COUNT;
+  /**
+   * The cockpit's own input stream, exactly as the campaign defines it.
+   *
+   * This is the path a seated player actually uses: `pilot:input` and the other
+   * two messages are what a phone on a shared screen sends, and a cockpit stops
+   * sending them the moment it has a ship of its own to replay - it rides this
+   * acknowledged stream instead. The arena had the messages and not the stream,
+   * which is precisely why the hull kept flying itself with a player at the
+   * sticks: the frames arrived at a room that had never asked for them.
+   */
+  private readonly soloInputs = this.defineInput(SoloInput, {
+    bufferMaxSize: SOLO_INPUT_BUFFER_SIZE,
+    seqField: "seq",
+    sanitize: SOLO_INPUT_RANGES
+  });
   private config: ArenaMatchConfig = defaultArenaMatchConfig;
   private match: ArenaMatchState | undefined;
   private bots: ArenaBots | undefined;
@@ -75,8 +95,22 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    * autopilot takes the seat.
    */
   private playerIntent: ArenaShipIntent | undefined;
-  /** True once a client has claimed the player slot, which stops the bot. */
-  private playerSeated = false;
+  /** Whoever claimed the player slot, which is what stops the bot flying it. */
+  private playerSessionId: string | undefined;
+  /** The last cockpit frame actually spent, published so the replay can start. */
+  private appliedSoloSeq = 0;
+  /**
+   * The bearing the hull was last told to hold.
+   *
+   * A released stick sends a zero vector, which names no bearing at all; the
+   * campaign's helm keeps the previous one in that case, and the client's own
+   * prediction assumes it does. Forgetting it here would brake the hull the
+   * instant a thumb lifts while the predictor kept turning - the two would
+   * disagree every time a player let go.
+   */
+  private playerHeadingTarget: number | null = null;
+  /** The same, for the gun: a released aim stick keeps the bearing it had. */
+  private playerTurretTarget: number | null = null;
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -105,6 +139,10 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // radius, so a wider arena keeps the same number of closures.
       zoneColumns: tuning.arena.zoneColumns,
       zoneRows: tuning.arena.zoneRows,
+      // How long the fight is allowed to last, straight from the console: the
+      // sheet and the clock are one setting in two halves, and a match shorter
+      // than the sheet ends with ground still safe.
+      matchTickLimit: tuning.arena.matchTickLimit,
       zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
       zoneWarningTicks: tuning.arena.zoneWarningTicks,
       zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
@@ -165,6 +203,36 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     drive.turretAngularAcceleration = ship.turretAngularAccelerationPerSecondSquared;
     drive.turretAngularBraking = ship.turretAngularBrakingPerSecondSquared;
     drive.hullRadius = ship.spaceshipRadius;
+
+    /*
+     * The helm block, which only a cockpit reads.
+     *
+     * Without it the sticks fall back on the schema's defaults, and the two
+     * that matter most are zero there: the dead zones. A thumb is never still,
+     * and two pixels of slip on the ring is a couple of degrees of commanded
+     * heading - the tremble the preset's dead zone exists to absorb. The mount
+     * flag belongs here for the same reason: it decides what a stick bearing
+     * means, and the client replays with it.
+     */
+    const helm = this.state.game.helm;
+    helm.scheme = tuning.helm.scheme;
+    helm.headingLeadRadians = tuning.helm.headingLeadRadians;
+    helm.stopDampening = tuning.helm.stopDampening;
+    helm.rotateInPlaceThrottle = tuning.helm.rotateInPlaceThrottle;
+    helm.driveDeadzoneShare = tuning.helm.driveDeadzoneShare;
+    helm.aimDeadzoneShare = tuning.helm.aimDeadzoneShare;
+    helm.driveZoneShare = tuning.helm.driveZoneShare;
+    helm.aimProjectionShare = tuning.helm.aimProjectionShare;
+    helm.headingDeadbandRadians = tuning.helm.headingDeadbandRadians;
+    helm.headingFilterSeconds = tuning.helm.headingFilterSeconds;
+    helm.turretLeadRadians = tuning.helm.turretLeadRadians;
+    helm.hullAngularBrakingPerSecondSquared = ship.headingAngularBrakingPerSecondSquared;
+    helm.hullAngularMaxSpeed = ship.headingMaxAngularSpeedPerSecond;
+    helm.hullAngularAcceleration = ship.headingAngularAccelerationPerSecondSquared;
+    helm.turretAngularMaxSpeed = ship.turretMaxAngularSpeedPerSecond;
+    helm.turretAngularAcceleration = ship.turretAngularAccelerationPerSecondSquared;
+    helm.turretAngularBraking = ship.turretAngularBrakingPerSecondSquared;
+    helm.turretMountedOnHull = ship.turretMountedOnHull;
     this.state.game.cannon.kind = ship.cannonWeaponKind;
     this.state.game.cannon.reach = leadSpeedFor(
       ship.cannonWeaponKind,
@@ -242,7 +310,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
      */
     const options = unsafeOptions as { role?: unknown; playerName?: unknown } | undefined;
     if (options?.role === "solo") {
-      this.playerSeated = true;
+      this.playerSessionId = client.sessionId;
       const seat = new PlayerState();
       seat.playerId = client.sessionId;
       seat.playerName = typeof options.playerName === "string" ? options.playerName : "Пилот";
@@ -259,6 +327,13 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
   override onLeave(client?: Client): void {
     if (client !== undefined) this.state.players.delete(client.sessionId);
+    // The seat goes back to the autopilot rather than standing still: a hull
+    // nobody is flying is exactly the case the bot layer was written for.
+    if (client !== undefined && client.sessionId === this.playerSessionId) {
+      this.playerSessionId = undefined;
+      this.playerIntent = undefined;
+      this.playerHeadingTarget = null;
+    }
     if (this.clients.length === 0) this.state.displayConnected = false;
     // Somebody closing their tab has to leave the queue they were counted in.
     this.broadcastLobby();
@@ -338,12 +413,66 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     const player = match.ships[PLAYER_SLOT];
     // The seated player's own frame wins over whatever the bot wanted for that
     // hull, and an empty seat keeps flying itself.
-    if (this.playerSeated && player !== undefined) {
-      intents.set(player.id, this.playerIntent ?? IDLE_ARENA_INTENT);
+    if (this.playerSessionId !== undefined && player !== undefined) {
+      this.takeCockpitFrame(this.playerSessionId);
+      const autopilot = intents.get(player.id) ?? IDLE_ARENA_INTENT;
+      intents.set(player.id, {
+        ...(this.playerIntent ?? IDLE_ARENA_INTENT),
+        /*
+         * The shield stays with the autopilot, because the cockpit has no
+         * control for it. A solo seat in the campaign is helm and gun - the
+         * sector is a third pair of hands, and an empty crew seat is what the
+         * policy layer exists to fill. Taking it away here would simply mean
+         * nobody ever raises it.
+         */
+        shieldTargetAngle: autopilot.shieldTargetAngle,
+        shieldActive: autopilot.shieldActive
+      });
     }
     this.match = advanceArenaMatch(match, intents, this.config);
     this.state.game.display.serverStepMs = performance.now() - started;
     this.publish();
+  }
+
+  /**
+   * One cockpit frame per step, and never two.
+   *
+   * The client steps its own ship once for every frame it sends and replays
+   * everything the room has not acknowledged; a room that spent two frames in
+   * one step would acknowledge a state it never produced, and the replay would
+   * start from a pose that does not exist. What is left in the buffer waits for
+   * the next step, exactly as the campaign's helm does.
+   */
+  private takeCockpitFrame(sessionId: string): void {
+    const frame = this.soloInputs.get(sessionId).next();
+    if (frame === undefined) return;
+
+    const drive = { x: frame.vectorX, y: frame.vectorY };
+    const helmTurn = frame.hasHelm ? frame.turn : null;
+    const aimTurn = frame.hasAimTurn ? frame.aimTurn : null;
+    this.playerHeadingTarget = heldTarget(drive, helmTurn, this.playerHeadingTarget);
+    this.playerTurretTarget = heldTarget(
+      { x: frame.aimX, y: frame.aimY },
+      aimTurn,
+      this.playerTurretTarget
+    );
+
+    this.playerIntent = {
+      // Normalised the way the room stores it, so both sides step the same
+      // vector rather than one a fraction longer.
+      driveVector: normalizeVector(drive),
+      turn: helmTurn,
+      thrust: frame.hasHelm ? frame.thrust : null,
+      headingTargetAngle: this.playerHeadingTarget,
+      turretTargetAngle: this.playerTurretTarget,
+      turretTurn: aimTurn,
+      firing: frame.firing,
+      mgFiring: frame.mgFiring,
+      // Filled from the autopilot by the caller; the cockpit has no sector.
+      shieldTargetAngle: null,
+      shieldActive: false
+    };
+    this.appliedSoloSeq = frame.seq;
   }
 
   /**
@@ -389,6 +518,9 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
     game.tick = match.clock.tick;
     game.elapsedMs = Math.round(match.clock.elapsedMs);
+    // Where the cockpit's replay starts. Left at zero it would count every
+    // frame it ever sent as still in flight, and replay all of them.
+    game.display.appliedInputSeq = this.appliedSoloSeq;
     game.arenaRadius = Math.round(this.config.arenaRadius);
     game.encounter.phase = match.phase === "result" ? "result" : "combat";
     game.encounter.encounterTick = match.clock.tick;
@@ -444,6 +576,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         view.shieldActive = ship.shieldActive;
         view.shieldRadius = ship.stats.shieldRadius;
         view.shieldArcHalfAngle = ship.stats.shieldArcRadians / 2;
+        view.shieldEnergy = ship.shieldEnergy;
+        view.shieldCapacity = ship.stats.shieldCapacity;
       }
     );
 
@@ -466,6 +600,24 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 function bearingOf(vector: { readonly x: number; readonly y: number }): number | null {
   if (vector.x === 0 && vector.y === 0) return null;
   return Math.atan2(vector.y, vector.x);
+}
+
+/**
+ * The bearing a stick names, or the one it named last.
+ *
+ * The client's own replay resolves it exactly this way, and it has to: a rate
+ * command names no bearing at all, and a released stick sends a zero vector,
+ * which is not "point north" but "keep going where you were pointed".
+ */
+function heldTarget(
+  vector: { readonly x: number; readonly y: number },
+  turn: number | null,
+  previous: number | null
+): number | null {
+  if (turn !== null) return null;
+  const normalized = normalizeVector(vector);
+  const bearing = bearingOf(normalized);
+  return bearing === null ? previous : canonicalizeAngle(bearing);
 }
 
 function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["game"]): void {

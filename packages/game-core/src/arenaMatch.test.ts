@@ -355,6 +355,36 @@ describe("the sheet of zones", () => {
     expect(zones.filter((zone) => zone.state === "closed")).toHaveLength(1);
   });
 
+  it("keeps turning zones amber on its own beat, whatever the old ones are doing", () => {
+    /*
+     * The complaint this answers: "no new amber until the last one is red".
+     * The sheet's beat is the interval and nothing else - a zone going amber
+     * does not hold the next pick - so an amber that lasts longer than the
+     * interval simply means several are amber at once. With the two set equal,
+     * which is where the arena started, exactly one is amber at any moment and
+     * the next appears on the same tick the old one reddens, which is what
+     * reads as waiting.
+     */
+    const config: ArenaMatchConfig = {
+      ...defaultArenaMatchConfig,
+      zoneIntervalTicks: 2,
+      zoneWarningTicks: 9
+    };
+    let zones = createArenaZones(config);
+    let countdown = config.zoneIntervalTicks;
+    const ships = match().ships;
+
+    for (let tick = 0; tick < 8; tick += 1) {
+      const stepped = advanceArenaZones(zones, ships, countdown, config);
+      zones = stepped.zones;
+      countdown = stepped.ticksUntilNextClosure;
+    }
+
+    // Four beats of two ticks, none of them red yet: the amber lasts nine.
+    expect(zones.filter((candidate) => candidate.state === "warning")).toHaveLength(4);
+    expect(zones.filter((candidate) => candidate.state === "closed")).toHaveLength(0);
+  });
+
   it("never takes the last safe zone", () => {
     const config: ArenaMatchConfig = {
       ...defaultArenaMatchConfig,

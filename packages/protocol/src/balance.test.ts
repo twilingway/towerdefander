@@ -314,6 +314,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       })),
       zoneColumns: 10,
       zoneRows: 10,
+      matchTickLimit: 9000,
       zoneIntervalTicks: 900,
       zoneWarningTicks: 900,
       zoneDamageIntervalTicks: 300,

@@ -613,6 +613,9 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     // on, which is the default sheet.
     zoneColumns: readNumber(arena, "zoneColumns") ?? defaults.arena.zoneColumns,
     zoneRows: readNumber(arena, "zoneRows") ?? defaults.arena.zoneRows,
+    // A preset written before the match clock was a setting keeps the length it
+    // was played at, which is the default.
+    matchTickLimit: readNumber(arena, "matchTickLimit") ?? defaults.arena.matchTickLimit,
     zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
     zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
     zoneDamageIntervalTicks:

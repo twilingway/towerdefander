@@ -194,7 +194,14 @@ export function drawDecorations(
 const ZONE_CLOSED_COLOR = 0xb03a3a;
 const ZONE_CLOSED_ALPHA = 0.16;
 const ZONE_WARNING_COLOR = 0xe6b85c;
-const ZONE_WARNING_ALPHA = 0.1;
+/*
+ * Brighter than the ground that is already killing, not fainter.
+ *
+ * The warning is the one a player has to act on - the red is a fact, the amber
+ * is a deadline - and at a tenth it was the harder of the two to notice, which
+ * is what "no new amber zones appear" looked like from the cockpit.
+ */
+const ZONE_WARNING_ALPHA = 0.24;
 
 /**
  * The arena's sheet of zones, drawn once per change.

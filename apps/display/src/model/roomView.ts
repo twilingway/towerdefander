@@ -126,6 +126,8 @@ export function toDisplayRoomView(
               shieldActive: ship.shieldActive,
               shieldRadius: ship.shieldRadius,
               shieldArcHalfAngle: ship.shieldArcHalfAngle,
+              shieldEnergy: ship.shieldEnergy,
+              shieldCapacity: ship.shieldCapacity,
               shotsFired: ship.shotsFired
             })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>

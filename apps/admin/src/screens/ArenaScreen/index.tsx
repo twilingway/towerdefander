@@ -10,6 +10,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { NumberField, SecondsField } from "../../components/fields.js";
+import { TICK_SECONDS } from "../../waveSummary.js";
 
 /**
  * The even layout the marks start on: Vogel's spiral, which covers a disc with
@@ -26,6 +27,55 @@ function spiralMarks(count: number, radius: number): ArenaSpawnMark[] {
       y: Math.round(Math.sin(angle) * distance)
     };
   });
+}
+
+/**
+ * How many rectangles the sheet actually has.
+ *
+ * The grid is laid over the arena square and the arena is the disc inscribed in
+ * it, so the corners are rectangles the field never reaches - the simulation
+ * drops them when it builds the sheet, and the count has to match or every
+ * duration below is wrong. The radius cancels: the disc is always inscribed, so
+ * only the grid decides.
+ */
+function liveZoneCount(columns: number, rows: number): number {
+  const width = 2 / columns;
+  const height = 2 / rows;
+  let count = 0;
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const x = -1 + column * width;
+      const y = -1 + row * height;
+      const nearestX = Math.max(x, Math.min(0, x + width));
+      const nearestY = Math.max(y, Math.min(0, y + height));
+      if (Math.hypot(nearestX, nearestY) < 1) count += 1;
+    }
+  }
+  return count;
+}
+
+function zoneWord(count: number): string {
+  const tail = count % 100;
+  if (tail >= 11 && tail <= 14) return "зон";
+  switch (count % 10) {
+    case 1:
+      return "зона";
+    case 2:
+    case 3:
+    case 4:
+      return "зоны";
+    default:
+      return "зон";
+  }
+}
+
+/** A duration for reading: the console edits seconds, an operator thinks in minutes. */
+function formatTicks(ticks: number): string {
+  const seconds = Math.round(ticks * TICK_SECONDS);
+  if (seconds < 60) return `${String(seconds)} с`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds - minutes * 60;
+  return rest === 0 ? `${String(minutes)} мин` : `${String(minutes)} мин ${String(rest)} с`;
 }
 
 interface ArenaScreenProps {
@@ -56,6 +106,23 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
 
   const columns = tuning.arena.zoneColumns;
   const rows = tuning.arena.zoneRows;
+
+  /*
+   * What the sheet and the clock add up to.
+   *
+   * The field takes one rectangle per interval and never takes the last safe
+   * one, so a full collapse costs (zones - 1) intervals plus the amber the last
+   * one still has to sit through. A match shorter than that simply ends with
+   * ground still green, and the operator should be able to see that before the
+   * first hull spawns rather than after the first match.
+   */
+  const zoneCount = liveZoneCount(columns, rows);
+  const closures = Math.max(0, zoneCount - 1);
+  const interval = tuning.arena.zoneIntervalTicks;
+  const warning = tuning.arena.zoneWarningTicks;
+  const limit = tuning.arena.matchTickLimit;
+  const fullRedTicks = closures * interval + warning;
+  const redByEnd = Math.max(0, Math.min(closures, Math.floor((limit - warning) / interval)));
 
   const patchArena = (values: Partial<BalanceTuning["arena"]>) => {
     onChange({ ...tuning, arena: { ...tuning.arena, ...values } });
@@ -201,8 +268,26 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ zoneBitesToKill: Math.max(1, Math.round(zoneBitesToKill)) });
             }}
           />
+          <SecondsField
+            caption="Матч длится"
+            ticks={limit}
+            onChange={(matchTickLimit) => {
+              patchArena({ matchTickLimit });
+            }}
+          />
           <p className="hint">
             За тик снимается {(100 / tuning.arena.zoneBitesToKill).toFixed(1)}% максимума корпуса.
+          </p>
+          <p className="hint" data-testid="arena-closure-budget">
+            Сетка {String(columns)}×{String(rows)} — это {String(zoneCount)} {zoneWord(zoneCount)}{" "}
+            на диске, закрывается {String(closures)}. Всё поле краснеет за{" "}
+            <strong>{formatTicks(fullRedTicks)}</strong>. За матч в {formatTicks(limit)} успеет
+            покраснеть {String(redByEnd)} из {String(closures)}
+            {redByEnd < closures
+              ? ` — чтобы поле закрылось целиком, новая зона нужна раз в ${formatTicks(
+                  Math.max(1, Math.floor((limit - warning) / Math.max(1, closures)))
+                )}.`
+              : "."}
           </p>
         </div>
       </section>

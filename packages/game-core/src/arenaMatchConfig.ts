@@ -28,6 +28,16 @@ export const ARENA_ZONE_DAMAGE_INTERVAL_TICKS = 300;
 export const ARENA_ZONE_DAMAGE_SHARE = 1 / 6;
 
 /**
+ * How long a match may run before it is called on the clock.
+ *
+ * Two and a half minutes, which is a fight rather than a full collapse of the
+ * sheet: eighty-eight rectangles at one closure every fifteen seconds would
+ * take twenty-two. The operator moves both from the console, and the console
+ * prints what the pair adds up to.
+ */
+export const ARENA_MATCH_TICK_LIMIT = 9_000;
+
+/**
  * A kinetic barrel holds `lifetime / cooldown` shots in the air: the turret
  * about 4,5 and the nose about 6,8. Sixteen hulls firing without pause is
  * therefore near 180, and the ceiling is set above that rather than at it, so
@@ -51,7 +61,7 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   spawnRadius: defaultSpaceshipSimulationConfig.arenaRadius - 160,
   shipCount: ARENA_SHIP_COUNT,
   spawnMarks: null,
-  matchTickLimit: 9_000,
+  matchTickLimit: ARENA_MATCH_TICK_LIMIT,
   zoneColumns: ARENA_ZONE_COLUMNS,
   zoneRows: ARENA_ZONE_ROWS,
   zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,

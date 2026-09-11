@@ -202,6 +202,8 @@ export class ArenaShipView extends Schema {
   @type("boolean") shieldActive = false;
   @type("float32") shieldRadius = 0;
   @type("float32") shieldArcHalfAngle = 0;
+  @type("float32") shieldEnergy = 0;
+  @type("float32") shieldCapacity = 0;
   @type("uint16") shotsFired = 0;
 }
 

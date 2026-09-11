@@ -89,7 +89,18 @@ export const FRIENDLY_WEAPON_KIND_LABELS: Record<FriendlyWeaponKind, string> = {
  * and the value in the file are two different numbers with the same name.
  */
 function tickHint(ticks: number): string {
-  return `· ${String(Math.round(ticks))} ${tickWord(Math.round(ticks))}`;
+  const whole = Math.round(ticks);
+  // Both units, because the field is edited in one and stored in the other: a
+  // caption that names only ticks leaves the number in the box unexplained.
+  return `· ${formatSeconds(ticksToSeconds(whole))} (${String(whole)} ${tickWord(whole)})`;
+}
+
+/** Seconds for reading rather than for editing: minutes once it is worth it. */
+function formatSeconds(seconds: number): string {
+  if (seconds < 60) return `${String(Number(seconds.toFixed(2)))} с`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds - minutes * 60);
+  return rest === 0 ? `${String(minutes)} мин` : `${String(minutes)} мин ${String(rest)} с`;
 }
 
 function tickWord(ticks: number): string {

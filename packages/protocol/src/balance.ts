@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 42 as const;
+export const BALANCE_FILE_VERSION = 43 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -956,6 +956,15 @@ export const arenaTuningSchema = z
      */
     zoneColumns: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
     zoneRows: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
+    /**
+     * How long a match may run before it is called.
+     *
+     * It has to be read against the sheet rather than on its own: the field
+     * takes one closure per interval, so a match shorter than the sheet needs
+     * simply ends with most of the ground still safe. The console does that
+     * arithmetic beside the field.
+     */
+    matchTickLimit: positiveInteger,
     /** How often the next zone is picked and turns amber. */
     zoneIntervalTicks: positiveInteger,
     /** How long amber lasts before that zone starts killing. */

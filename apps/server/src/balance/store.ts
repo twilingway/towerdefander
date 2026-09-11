@@ -17,6 +17,7 @@ import {
   type ShipArchetype
 } from "@spaceship-defender/protocol";
 import {
+  ARENA_MATCH_TICK_LIMIT,
   ARENA_ZONE_COLUMNS,
   ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
   ARENA_ZONE_DAMAGE_SHARE,
@@ -314,6 +315,7 @@ export function createDefaultTuning(): BalanceTuning {
       ),
       zoneColumns: ARENA_ZONE_COLUMNS,
       zoneRows: ARENA_ZONE_ROWS,
+      matchTickLimit: ARENA_MATCH_TICK_LIMIT,
       zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
       zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
       zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,

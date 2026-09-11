@@ -17,7 +17,14 @@ interface FleetHull {
   readonly shield: Phaser.GameObjects.Image;
   readonly healthBack: Phaser.GameObjects.Image;
   readonly healthFill: Phaser.GameObjects.Image;
+  readonly shieldBack: Phaser.GameObjects.Image;
+  readonly shieldFill: Phaser.GameObjects.Image;
   readonly flash: Phaser.GameObjects.Image;
+  /**
+   * Whether this is the hull the player is flying. The scene draws that one
+   * itself, so only its bars belong here.
+   */
+  readonly isSelf: boolean;
   /** Where the last patch said this hull is; the frame walks toward it. */
   target: { x: number; y: number; heading: number; turret: number; shieldAngle: number };
   hp: number;
@@ -32,6 +39,9 @@ const HEALTH_HIGH = 0x74e39b;
 const HEALTH_LOW = 0xff6b5e;
 const FLASH_COLOR = 0xffe6a0;
 const FLASH_MS = 140;
+/** Bar geometry, in hull radii, so it scales with whatever ship is flown. */
+const BAR_WIDTH = 2.2;
+const BAR_HEIGHT = 0.26;
 
 /**
  * The other fifteen ships of a match, drawn as what they are.
@@ -53,10 +63,12 @@ export class ArenaFleet {
 
   /** Takes the newest patch: targets, health, and a flash for anything hit. */
   sync(scene: Phaser.Scene, snapshot: DisplayGameSnapshot, bake: BakeShape): void {
-    const fleet = snapshot.arenaShips.filter((ship) => !ship.isSelf);
+    // Every hull, the player's own included: the scene draws that one's art, but
+    // its health and its sector are the same question a rival's bars answer, and
+    // the answer belongs over the ship rather than only in a panel.
     const seen = new Set<string>();
 
-    for (const ship of fleet) {
+    for (const ship of snapshot.arenaShips) {
       seen.add(ship.shipId);
       const parts = this.hulls.get(ship.shipId) ?? this.create(scene, snapshot, ship, bake);
       this.hulls.set(ship.shipId, parts);
@@ -74,8 +86,8 @@ export class ArenaFleet {
         turret: ship.turretAngle,
         shieldAngle: ship.shieldAngle
       };
-      parts.shield.setVisible(ship.shieldActive);
-      this.drawHealth(parts, ship.radius);
+      parts.shield.setVisible(!parts.isSelf && ship.shieldActive);
+      this.drawBars(parts, ship);
     }
 
     for (const [id, parts] of this.hulls) {
@@ -107,8 +119,12 @@ export class ArenaFleet {
         .setRotation(turnToward(parts.shield.rotation, parts.target.shieldAngle, step));
 
       const barY = y - parts.hull.displayHeight * 0.75;
+      const left = x - parts.healthBack.displayWidth / 2;
       parts.healthBack.setPosition(x, barY);
-      parts.healthFill.setPosition(x - parts.healthBack.displayWidth / 2, barY).setOrigin(0, 0.5);
+      parts.healthFill.setPosition(left, barY).setOrigin(0, 0.5);
+      const shieldY = barY - parts.healthBack.displayHeight * 1.1;
+      parts.shieldBack.setPosition(x, shieldY);
+      parts.shieldFill.setPosition(left, shieldY).setOrigin(0, 0.5);
 
       if (parts.flashLeftMs <= 0) {
         parts.flash.setVisible(false);
@@ -127,12 +143,29 @@ export class ArenaFleet {
     this.hulls.clear();
   }
 
-  private drawHealth(parts: FleetHull, radius: number): void {
-    const share = parts.maxHp <= 0 ? 0 : Math.max(0, Math.min(1, parts.hp / parts.maxHp));
-    parts.healthBack.setDisplaySize(radius * 2.2, radius * 0.28);
+  /**
+   * Two bars over the hull: what it has left, and what its sector has left.
+   *
+   * Sized from the patch rather than from the frame - they change when the
+   * numbers change, which is twenty times a second at most, while the frame
+   * runs at whatever the screen does.
+   */
+  private drawBars(parts: FleetHull, ship: PublicArenaShipView): void {
+    const width = ship.radius * BAR_WIDTH;
+    const height = ship.radius * BAR_HEIGHT;
+    const health = parts.maxHp <= 0 ? 0 : clamp01(parts.hp / parts.maxHp);
+    parts.healthBack.setDisplaySize(width, height);
     parts.healthFill
-      .setDisplaySize(Math.max(1, radius * 2.2 * share), radius * 0.28)
-      .setTint(share > 0.35 ? HEALTH_HIGH : HEALTH_LOW);
+      .setDisplaySize(Math.max(1, width * health), height)
+      .setTint(health > 0.35 ? HEALTH_HIGH : HEALTH_LOW);
+
+    const shield = ship.shieldCapacity <= 0 ? 0 : clamp01(ship.shieldEnergy / ship.shieldCapacity);
+    const thin = height * 0.6;
+    parts.shieldBack.setDisplaySize(width, thin);
+    parts.shieldFill.setDisplaySize(Math.max(1, width * shield), thin);
+    // A sector that is up reads as lit; a charged but lowered one still shows
+    // what it holds, because that is what a player is deciding about.
+    parts.shieldFill.setAlpha(ship.shieldActive ? 1 : 0.45);
   }
 
   private create(
@@ -200,12 +233,30 @@ export class ArenaFleet {
       graphics.fillCircle(0, 0, 22);
     });
 
+    /*
+     * The player's own art is the scene's job, not this class's: it is drawn
+     * from the predicted pose, with its own shield and its own turret. Only the
+     * bars are added here, so the hull that matters most is not the one hull
+     * without a readout over it.
+     */
+    const own = ship.isSelf;
     return {
-      hull: scene.add.image(ship.x, ship.y, hullKey).setDepth(10).setTint(RIVAL_TINT),
-      turret: scene.add.image(ship.x, ship.y, turretKey).setDepth(12).setTint(RIVAL_TINT),
+      isSelf: own,
+      hull: scene.add
+        .image(ship.x, ship.y, hullKey)
+        .setDepth(10)
+        .setTint(RIVAL_TINT)
+        .setVisible(!own),
+      turret: scene.add
+        .image(ship.x, ship.y, turretKey)
+        .setDepth(12)
+        .setTint(RIVAL_TINT)
+        .setVisible(!own),
       shield: scene.add.image(ship.x, ship.y, shieldKey).setDepth(11).setVisible(false),
       healthBack: scene.add.image(ship.x, ship.y, pixelKey).setDepth(13).setTint(HEALTH_BACK),
       healthFill: scene.add.image(ship.x, ship.y, pixelKey).setDepth(14).setTint(HEALTH_HIGH),
+      shieldBack: scene.add.image(ship.x, ship.y, pixelKey).setDepth(13).setTint(HEALTH_BACK),
+      shieldFill: scene.add.image(ship.x, ship.y, pixelKey).setDepth(14).setTint(SHIELD_COLOR),
       flash: scene.add.image(ship.x, ship.y, flashKey).setDepth(15).setVisible(false),
       target: {
         x: ship.x,
@@ -227,7 +278,13 @@ function destroyHull(parts: FleetHull): void {
   parts.shield.destroy();
   parts.healthBack.destroy();
   parts.healthFill.destroy();
+  parts.shieldBack.destroy();
+  parts.shieldFill.destroy();
   parts.flash.destroy();
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 /** Shortest way round, so a hull crossing north does not spin the long way. */

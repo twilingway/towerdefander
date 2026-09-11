@@ -304,6 +304,7 @@ function tuning(): BalanceTuning {
       })),
       zoneColumns: 10,
       zoneRows: 10,
+      matchTickLimit: 9000,
       zoneIntervalTicks: 900,
       zoneWarningTicks: 900,
       zoneDamageIntervalTicks: 300,
@@ -348,7 +349,7 @@ describe("wave summary", () => {
     expect(summary.spawnCost).toBe(3 * 2 + 2 * 1);
     // The wave lasts as long as its last arrival, not as the sum of both waits:
     // the first group ends at tick 40, the second starts at 30 and ends at 40.
-    expect(summary.spawnSeconds).toBeCloseTo(40 * 0.05);
+    expect(summary.spawnSeconds).toBeCloseTo(40 / 60);
   });
 
   it("flags a wave that costs more than the director budget of the same number", () => {
@@ -403,8 +404,8 @@ describe("tick and second conversion", () => {
     for (const ticks of [1, 12, 30, 180, 600]) {
       expect(secondsToTicks(ticksToSeconds(ticks))).toBe(ticks);
     }
-    expect(ticksToSeconds(12)).toBe(0.6);
-    expect(secondsToTicks(0.6)).toBe(12);
+    expect(ticksToSeconds(12)).toBe(0.2);
+    expect(secondsToTicks(0.2)).toBe(12);
   });
 
   it("keeps a tiny value at one tick instead of zero", () => {
@@ -413,8 +414,8 @@ describe("tick and second conversion", () => {
   });
 
   it("snaps a value between ticks to the nearest step", () => {
-    expect(secondsToTicks(0.62)).toBe(12);
-    expect(secondsToTicks(0.68)).toBe(14);
+    expect(secondsToTicks(0.205)).toBe(12);
+    expect(secondsToTicks(0.215)).toBe(13);
   });
 });
 
@@ -422,10 +423,10 @@ describe("weapon reach", () => {
   it("turns projectile speed and lifetime into world units", () => {
     const weapon = archetype(2).weapons[0];
     if (weapon === undefined) throw new Error("fixture must carry a weapon");
-    // 440 units per second for 180 ticks of 50 ms.
-    expect(weaponReach(weapon)).toBe(3960);
+    // 440 units per second for 180 ticks of a sixtieth of a second.
+    expect(weaponReach(weapon)).toBe(1320);
     expect(
       weaponReach({ ...weapon, projectileSpeedPerSecond: 900, projectileLifetimeTicks: 120 })
-    ).toBe(5400);
+    ).toBe(1800);
   });
 });
