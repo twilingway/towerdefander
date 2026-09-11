@@ -955,7 +955,22 @@ export const arenaTuningSchema = z
      * what this decides.
      */
     zoneColumns: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
-    zoneRows: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX)
+    zoneRows: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
+    /** How often the next zone is picked and turns amber. */
+    zoneIntervalTicks: positiveInteger,
+    /** How long amber lasts before that zone starts killing. */
+    zoneWarningTicks: positiveInteger,
+    /** The beat a closed zone bites on. */
+    zoneDamageIntervalTicks: positiveInteger,
+    /**
+     * Beats a full hull survives in a closed zone.
+     *
+     * Stated as a count rather than as a share because that is the thing being
+     * decided - "six bites and you are gone" - and the share the simulation
+     * takes each beat is one over it, of the hull's maximum. A ship that
+     * repairs between beats therefore lives longer, which is the point.
+     */
+    zoneBitesToKill: z.number().int().min(1).max(60)
   })
   .strict();
 export type ArenaTuning = z.infer<typeof arenaTuningSchema>;

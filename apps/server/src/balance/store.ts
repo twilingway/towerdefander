@@ -18,7 +18,11 @@ import {
 } from "@spaceship-defender/protocol";
 import {
   ARENA_ZONE_COLUMNS,
+  ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
+  ARENA_ZONE_DAMAGE_SHARE,
+  ARENA_ZONE_INTERVAL_TICKS,
   ARENA_ZONE_ROWS,
+  ARENA_ZONE_WARNING_TICKS,
   arenaSpawnMarks,
   createSpaceshipSimulationConfig,
   validateSpaceshipSimulationConfig,
@@ -309,7 +313,11 @@ export function createDefaultTuning(): BalanceTuning {
         })
       ),
       zoneColumns: ARENA_ZONE_COLUMNS,
-      zoneRows: ARENA_ZONE_ROWS
+      zoneRows: ARENA_ZONE_ROWS,
+      zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
+      zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
+      zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
+      zoneBitesToKill: Math.round(1 / ARENA_ZONE_DAMAGE_SHARE)
     },
     shipArchetypes: DEFAULT_SHIP_ARCHETYPES,
     defaultShipArchetypeId: DEFAULT_SHIP_ARCHETYPE_ID,

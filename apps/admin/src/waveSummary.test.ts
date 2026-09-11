@@ -303,7 +303,11 @@ function tuning(): BalanceTuning {
         y: index * 50 - 400
       })),
       zoneColumns: 10,
-      zoneRows: 10
+      zoneRows: 10,
+      zoneIntervalTicks: 900,
+      zoneWarningTicks: 900,
+      zoneDamageIntervalTicks: 300,
+      zoneBitesToKill: 6
     },
     autopilot: {
       level: "veteran",

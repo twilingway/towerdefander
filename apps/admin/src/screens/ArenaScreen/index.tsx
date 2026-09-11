@@ -9,7 +9,7 @@ import {
   type BalanceTuning
 } from "@spaceship-defender/protocol";
 
-import { NumberField } from "../../components/fields.js";
+import { NumberField, SecondsField } from "../../components/fields.js";
 
 /**
  * The even layout the marks start on: Vogel's spiral, which covers a disc with
@@ -56,6 +56,10 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
 
   const columns = tuning.arena.zoneColumns;
   const rows = tuning.arena.zoneRows;
+
+  const patchArena = (values: Partial<BalanceTuning["arena"]>) => {
+    onChange({ ...tuning, arena: { ...tuning.arena, ...values } });
+  };
 
   const setMark = (index: number, next: ArenaSpawnMark) => {
     onChange({
@@ -143,6 +147,7 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           <button
             type="button"
             className="ghost"
+            data-testid="arena-respread"
             onClick={() => {
               onChange({
                 ...tuning,
@@ -157,6 +162,50 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           </button>
         </div>
       </header>
+
+      <section className="card">
+        <h4 className="card__subtitle">Как закрывается поле</h4>
+        <p className="screen__hint">
+          Зона сначала желтеет, потом начинает убивать. Урон идёт тиками: за один тик снимается доля
+          максимума корпуса, равная единице, делённой на число тиков до гибели — поэтому корабль,
+          который успевает чиниться, живёт дольше шести тиков, а зашедший целым умирает ровно на
+          шестом.
+        </p>
+        <div className="arena-controls">
+          <SecondsField
+            caption="Новая зона каждые"
+            ticks={tuning.arena.zoneIntervalTicks}
+            onChange={(zoneIntervalTicks) => {
+              patchArena({ zoneIntervalTicks });
+            }}
+          />
+          <SecondsField
+            caption="Жёлтая держится"
+            ticks={tuning.arena.zoneWarningTicks}
+            onChange={(zoneWarningTicks) => {
+              patchArena({ zoneWarningTicks });
+            }}
+          />
+          <SecondsField
+            caption="Тик урона каждые"
+            ticks={tuning.arena.zoneDamageIntervalTicks}
+            onChange={(zoneDamageIntervalTicks) => {
+              patchArena({ zoneDamageIntervalTicks });
+            }}
+          />
+          <NumberField
+            caption="Тиков до гибели"
+            min={1}
+            value={tuning.arena.zoneBitesToKill}
+            onChange={(zoneBitesToKill) => {
+              patchArena({ zoneBitesToKill: Math.max(1, Math.round(zoneBitesToKill)) });
+            }}
+          />
+          <p className="hint">
+            За тик снимается {(100 / tuning.arena.zoneBitesToKill).toFixed(1)}% максимума корпуса.
+          </p>
+        </div>
+      </section>
 
       <div className="arena-editor">
         <div

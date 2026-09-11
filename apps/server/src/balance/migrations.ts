@@ -612,7 +612,12 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     // A preset written before the grid was editable keeps the layout it played
     // on, which is the default sheet.
     zoneColumns: readNumber(arena, "zoneColumns") ?? defaults.arena.zoneColumns,
-    zoneRows: readNumber(arena, "zoneRows") ?? defaults.arena.zoneRows
+    zoneRows: readNumber(arena, "zoneRows") ?? defaults.arena.zoneRows,
+    zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
+    zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
+    zoneDamageIntervalTicks:
+      readNumber(arena, "zoneDamageIntervalTicks") ?? defaults.arena.zoneDamageIntervalTicks,
+    zoneBitesToKill: readNumber(arena, "zoneBitesToKill") ?? defaults.arena.zoneBitesToKill
   };
 }
 

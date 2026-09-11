@@ -85,7 +85,13 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // The sheet is the operator's too: its rectangles are sized from the
       // radius, so a wider arena keeps the same number of closures.
       zoneColumns: tuning.arena.zoneColumns,
-      zoneRows: tuning.arena.zoneRows
+      zoneRows: tuning.arena.zoneRows,
+      zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
+      zoneWarningTicks: tuning.arena.zoneWarningTicks,
+      zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
+      // The operator decides how many beats a full hull takes; the simulation
+      // takes one over that, of the maximum, on each of them.
+      zoneDamageShareOfMaxHp: 1 / tuning.arena.zoneBitesToKill
     };
 
     const seats: readonly ArenaShipSeat[] = Array.from(
