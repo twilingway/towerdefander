@@ -10,6 +10,9 @@ import type { Page } from "@playwright/test";
  */
 export async function openCampaign(display: Page, crewSize: 1 | 2 | 3): Promise<void> {
   await display.getByRole("button", { name: "Кампания I: Завеса" }).click();
+  // The setup opens on "this device is the whole game"; a crew with phones is
+  // the other answer, and only then does a number of them mean anything.
+  await display.getByRole("button", { name: "Общий экран" }).click();
   await display
     .getByRole("button", { name: crewSize === 1 ? "1 игрок" : `${String(crewSize)} игрока` })
     .click();

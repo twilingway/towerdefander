@@ -27,7 +27,7 @@ export function ArenaSetupScreen({ ships, defaultShipId, onBack }: ArenaSetupScr
   const ship = ships.find((candidate) => candidate.id === shipId);
 
   return (
-    <main className="display-shell display-shell--setup" ref={shell}>
+    <main className="display-shell display-shell--setup is-arena" ref={shell}>
       <section className="setup-card">
         <header className="setup-head">
           <button type="button" className="link-button" onClick={onBack}>

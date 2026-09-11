@@ -292,6 +292,10 @@ async function enterMode(display, recipe, status) {
   try {
     const tile = display.getByRole("button", { name: recipe.mode });
     if ((await tile.count()) > 0) await tile.first().click();
+    if (recipe.place !== undefined) {
+      const place = display.getByRole("button", { name: recipe.place });
+      if ((await place.count()) > 0) await place.first().click();
+    }
   } catch (error) {
     status.push(`Режим не выбран: ${firstLine(error)}`);
   }

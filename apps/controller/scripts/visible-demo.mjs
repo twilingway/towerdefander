@@ -169,6 +169,7 @@ try {
   if (!headless) await keepVisiblePageActive(context, page);
   abortIfStopped();
   await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
+  await page.getByRole("button", { name: "Общий экран" }).click();
   await page.getByRole("button", { name: "3 игрока" }).click();
   await page.getByRole("button", { name: "В бой" }).click();
   abortIfStopped();

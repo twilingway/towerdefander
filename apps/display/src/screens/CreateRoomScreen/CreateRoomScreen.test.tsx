@@ -19,7 +19,7 @@ describe("CreateRoomScreen", () => {
   it("offers the controls when the server is taking rooms", () => {
     const markup = renderToStaticMarkup(<CreateRoomScreen {...base} maintenance={undefined} />);
     expect(markup).toContain("В бой");
-    expect(markup).toContain("Состав");
+    expect(markup).toContain("Где играете");
     expect(markup).not.toContain("maintenance-notice");
   });
 
@@ -31,7 +31,7 @@ describe("CreateRoomScreen", () => {
       <CreateRoomScreen {...base} maintenance={{ active: true, secondsRemaining: 900 }} />
     );
     expect(markup).not.toContain("В бой");
-    expect(markup).not.toContain("Состав");
+    expect(markup).not.toContain("Где играете");
     expect(markup).toContain("Технические работы через 15 мин");
     expect(markup).toContain("maintenance-notice--prominent");
     // The game still says what it is; only the promises are gone.

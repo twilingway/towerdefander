@@ -74,6 +74,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.goto(`http://127.0.0.1:${String(DISPLAY_PORT)}/`, { waitUntil: "load" });
   await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
+  await page.getByRole("button", { name: "Общий экран" }).click();
   await page
     .getByRole("button", { name: `${String(crew)} игрок`, exact: false })
     .first()

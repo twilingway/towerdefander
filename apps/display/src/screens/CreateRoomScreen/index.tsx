@@ -99,7 +99,7 @@ export function CreateRoomScreen({
     );
   }
   return (
-    <main className="display-shell display-shell--setup" ref={shell}>
+    <main className="display-shell display-shell--setup is-campaign" ref={shell}>
       <section className="setup-card">
         <header className="setup-head">
           <button type="button" className="link-button" onClick={onBack}>
@@ -110,11 +110,16 @@ export function CreateRoomScreen({
           <p className="setup-lede">{crewPitch(cockpit ? 0 : crewSize)}</p>
         </header>
 
-        <h2 className="setup-step">Кто играет</h2>
-        <div className="crew-grid" role="group" aria-label="Состав">
+        {/*
+         * Two questions, not one list. "Solo" and "1" sat side by side and read
+         * as the same choice, when they are different games: one is this device
+         * being the whole thing, the other is this screen plus a phone.
+         */}
+        <h2 className="setup-step">Где играете</h2>
+        <div className="place-grid" role="group" aria-label="Где играете">
           <button
             type="button"
-            className={`crew-tile${cockpit ? " is-selected" : ""}`}
+            className={`place-tile${cockpit ? " is-selected" : ""}`}
             aria-label="Соло"
             aria-pressed={cockpit}
             onClick={() => {
@@ -122,26 +127,49 @@ export function CreateRoomScreen({
               setCrewSize(1);
             }}
           >
-            <span className="crew-tile__count">Соло</span>
-            <span className="crew-tile__caption">Этот экран — кокпит</span>
+            <span className="place-tile__title">На этом устройстве</span>
+            <span className="place-tile__caption">
+              Экран становится кокпитом: арена снизу, стики поверх неё. Телефон не нужен.
+            </span>
           </button>
-          {CREW_SIZES.map((size) => (
-            <button
-              type="button"
-              key={size}
-              className={`crew-tile${!cockpit && size === crewSize ? " is-selected" : ""}`}
-              aria-label={crewSizeLabel(size)}
-              aria-pressed={!cockpit && size === crewSize}
-              onClick={() => {
-                setCockpit(false);
-                setCrewSize(size);
-              }}
-            >
-              <span className="crew-tile__count">{String(size)}</span>
-              <span className="crew-tile__caption">{crewSizeLabel(size)}</span>
-            </button>
-          ))}
+          <button
+            type="button"
+            className={`place-tile${cockpit ? "" : " is-selected"}`}
+            aria-label="Общий экран"
+            aria-pressed={!cockpit}
+            onClick={() => {
+              setCockpit(false);
+            }}
+          >
+            <span className="place-tile__title">Общий экран и телефоны</span>
+            <span className="place-tile__caption">
+              Этот экран показывает бой, игроки подключаются по QR-коду со своих телефонов.
+            </span>
+          </button>
         </div>
+
+        {!cockpit && (
+          <>
+            <h2 className="setup-step">Сколько телефонов</h2>
+            <div className="crew-grid" role="group" aria-label="Состав">
+              {CREW_SIZES.map((size) => (
+                <button
+                  type="button"
+                  key={size}
+                  className={`crew-tile${size === crewSize ? " is-selected" : ""}`}
+                  aria-label={crewSizeLabel(size)}
+                  aria-pressed={size === crewSize}
+                  onClick={() => {
+                    setCrewSize(size);
+                  }}
+                >
+                  <span className="crew-tile__count">{String(size)}</span>
+                  <span className="crew-tile__caption">{crewRoles(size)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         {cockpit && (
           <label className="field">
             <span className="field__caption">Имя пилота</span>
@@ -220,6 +248,15 @@ export function CreateRoomScreen({
 
 function crewSizeLabel(crewSize: CrewSize): string {
   return crewSize === 1 ? "1 игрок" : `${String(crewSize)} игрока`;
+}
+
+/** What each phone actually does, which is the part a size alone never says. */
+function crewRoles(crewSize: CrewSize): string {
+  return crewSize === 1
+    ? "корабль и турель"
+    : crewSize === 2
+      ? "корабль + орудие"
+      : "корабль, орудие, щит";
 }
 
 /** Zero is the cockpit: one player on this very screen, no phone in the room. */

@@ -2350,7 +2350,7 @@ p {
 
 .start-title {
   margin: 0;
-  font-size: clamp(1.35rem, 7vw, 3rem);
+  font-size: clamp(1.35rem, 4vw, 4rem);
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2369,7 +2369,7 @@ p {
 
 .mode-grid {
   display: grid;
-  width: min(70rem, 100%);
+  width: min(110rem, 94vw);
   gap: clamp(0.6rem, 1.6vh, 1.25rem);
   grid-template-columns: 1fr;
 }
@@ -2383,7 +2383,9 @@ p {
 .mode-tile {
   position: relative;
   min-height: 0;
-  height: clamp(5.5rem, 22vh, 15rem);
+  /* A television is not a phone held at arm's length: the tiles take a third of
+     the screen's height, up to a size that still reads as a pair of cards. */
+  height: clamp(5.5rem, 32vh, 26rem);
   padding: 0;
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 1rem;
@@ -2430,7 +2432,7 @@ p {
 .mode-tile__frame {
   display: grid;
   height: 100%;
-  padding: clamp(0.75rem, 2vw, 1.25rem);
+  padding: clamp(0.75rem, 2vw, 2.5rem);
   gap: 0.15rem;
   align-content: center;
   justify-items: start;
@@ -2440,14 +2442,14 @@ p {
 
 .mode-tile__eyebrow {
   color: #e6b85c;
-  font-size: clamp(0.6rem, 2.4vw, 0.7rem);
+  font-size: clamp(0.6rem, 0.9vw, 0.85rem);
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
 }
 
 .mode-tile__title {
-  font-size: clamp(1.05rem, 5vw, 2rem);
+  font-size: clamp(1.05rem, 2.8vw, 2.75rem);
   font-weight: 900;
   letter-spacing: 0.05em;
   line-height: 1.05;
@@ -2456,7 +2458,7 @@ p {
 
 .mode-tile__subtitle {
   color: #cfe3df;
-  font-size: clamp(0.75rem, 3vw, 0.9rem);
+  font-size: clamp(0.75rem, 1.3vw, 1.2rem);
   font-weight: 700;
 }
 
@@ -2465,11 +2467,11 @@ p {
    player can do without. */
 .mode-tile__pitch {
   display: none;
-  margin-top: 0.2rem;
+  margin-top: 0.3rem;
   color: #b9d3ce;
-  font-size: 0.8rem;
+  font-size: clamp(0.8rem, 1vw, 1.05rem);
   font-weight: 500;
-  max-width: 26rem;
+  max-width: 34rem;
 }
 
 @media (min-width: 40rem) {
@@ -2485,7 +2487,7 @@ p {
   border: 1px solid rgb(230 184 92 / 45%);
   border-radius: 999px;
   color: #e6b85c;
-  font-size: clamp(0.62rem, 2.6vw, 0.7rem);
+  font-size: clamp(0.62rem, 0.9vw, 0.9rem);
   font-weight: 800;
 }
 
@@ -2775,5 +2777,84 @@ p {
 
   .hint {
     font-size: 0.7rem;
+  }
+}
+
+/*
+ * The setup screens stand on their own key art, darkened until the card on top
+ * of it is the thing being read. The full illustration goes here rather than
+ * the tile crop: its own title belongs on the screen the mode is being set up
+ * on, and there is room for it behind a card.
+ */
+.display-shell--setup.is-campaign,
+.display-shell--setup.is-arena {
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+.display-shell--setup.is-campaign {
+  background-image:
+    linear-gradient(180deg, rgb(4 12 22 / 82%), rgb(4 12 22 / 94%)), url("/art/campaign-full.jpg");
+}
+
+.display-shell--setup.is-arena {
+  background-image:
+    linear-gradient(180deg, rgb(12 6 22 / 82%), rgb(12 6 22 / 94%)), url("/art/arena-full.jpg");
+}
+
+/*
+ * Where you play is a different question from how many of you there are, so it
+ * gets its own row of two wide tiles with a sentence each. The crew sizes below
+ * it only appear once the answer is "the big screen and phones".
+ */
+.place-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 36rem) {
+  .place-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.place-tile {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  min-height: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.9rem;
+  color: #f6f4e8;
+  background: rgb(19 45 42 / 85%);
+  text-align: left;
+}
+
+.place-tile.is-selected {
+  border-color: #e6b85c;
+  box-shadow: inset 0 0 0 1px #e6b85c;
+}
+
+.place-tile__title {
+  font-size: clamp(0.9rem, 1.5vw, 1.15rem);
+  font-weight: 800;
+}
+
+.place-tile__caption {
+  color: #b9d3ce;
+  font-size: clamp(0.72rem, 1vw, 0.85rem);
+  font-weight: 500;
+}
+
+@media (max-height: 34rem) {
+  .place-tile {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .place-tile__caption {
+    font-size: 0.68rem;
   }
 }
