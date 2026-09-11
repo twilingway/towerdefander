@@ -163,6 +163,22 @@ export class TeamUpgradeState extends Schema {
   @type("boolean") hasSelection = false;
 }
 
+/**
+ * One rectangle of the arena's sheet. Narrow on purpose: the whole sheet is
+ * sixteen of these and it moves a few times a match, so it costs nothing next
+ * to the entities that move every tick.
+ */
+export class ArenaZoneView extends Schema {
+  @type("uint8") zoneId = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") width = 0;
+  @type("float32") height = 0;
+  /** "safe" | "warning" | "closed"; a string because it changes twice a zone. */
+  @type("string") state = "safe";
+  @type("uint16") secondsRemaining = 0;
+}
+
 export class ObstacleState extends Schema {
   @type("string") obstacleId = "";
   @type("string") kind: "rectangle" | "circle" = "rectangle";
@@ -407,6 +423,7 @@ export class SpaceshipDisplayState extends Schema {
    */
   @type("string") shieldPhase: ShieldPhase = "down";
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
+  @type([ArenaZoneView]) arenaZones = new ArraySchema<ArenaZoneView>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
   @type({ map: AsteroidState }) asteroids = new MapSchema<AsteroidState>();

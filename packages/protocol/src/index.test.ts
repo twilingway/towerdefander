@@ -214,6 +214,7 @@ function displayRoom(): DisplayRoomView {
         nebulaAlpha: 0.72,
         nebulaPreset: "blue"
       },
+      arenaZones: [],
       enemyCatalogue: [],
       asteroidVisual: null,
       spaceshipVisual: null,

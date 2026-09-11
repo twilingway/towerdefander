@@ -1,11 +1,17 @@
 import { useRef, useState } from "react";
 import {
+  ARENA_RADIUS_MAX,
+  ARENA_RADIUS_MIN,
   ARENA_SPAWN_MARKS,
   type ArenaSpawnMark,
   type BalanceTuning
 } from "@spaceship-defender/protocol";
 
 import { NumberField } from "../../components/fields.js";
+
+/** The sheet the arena closes in, as the simulation builds it. */
+const ZONE_COLUMNS = 4;
+const ZONE_ROWS = 4;
 
 interface ArenaScreenProps {
   readonly tuning: BalanceTuning;
@@ -62,12 +68,25 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
   return (
     <section className="screen">
       <header className="screen__header">
-        <h2>Точки появления</h2>
+        <h2>Арена</h2>
         <p className="screen__hint">
-          {String(ARENA_SPAWN_MARKS)} постоянных мест на арене радиуса {String(radius)}. Кто из
-          кораблей встанет на какое — решает сид матча, а где сами места — решаете вы. Перетащите
-          точку мышью или задайте координаты числами; центр арены — ноль.
+          {String(ARENA_SPAWN_MARKS)} постоянных мест и сетка зон {String(ZONE_COLUMNS)}×
+          {String(ZONE_ROWS)}, по которой поле закрывается. Кто из кораблей встанет на какое место —
+          решает сид матча, а где сами места — решаете вы. Перетащите точку мышью или задайте
+          координаты числами; центр арены — ноль.
         </p>
+        <NumberField
+          caption="Радиус арены"
+          min={ARENA_RADIUS_MIN}
+          step={50}
+          value={tuning.arenaRadius}
+          onChange={(arenaRadius) => {
+            onChange({
+              ...tuning,
+              arenaRadius: Math.min(ARENA_RADIUS_MAX, Math.max(ARENA_RADIUS_MIN, arenaRadius))
+            });
+          }}
+        />
       </header>
 
       <div className="arena-editor">
@@ -87,13 +106,33 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           }}
         >
           <div className="arena-map__wall" />
-          {[1500, 900, 400].map((ring) => (
-            <div
-              key={ring}
-              className="arena-map__ring"
-              style={{ inset: `${String(((radius - ring) / radius) * 50)}%` }}
-            />
-          ))}
+          {/*
+           * The zone sheet, bright: on this screen it is the subject, while the
+           * shared screen keeps it faint so the fight stays readable through it.
+           * Built the way the simulation builds it - the square around the disc
+           * cut into columns and rows - so what is judged here is what closes
+           * there.
+           */}
+          {Array.from({ length: ZONE_COLUMNS * ZONE_ROWS }, (_unused, index) => {
+            const column = index % ZONE_COLUMNS;
+            const row = Math.floor(index / ZONE_COLUMNS);
+            return (
+              <div
+                key={index}
+                className="arena-zone"
+                style={{
+                  left: `${String((column / ZONE_COLUMNS) * 100)}%`,
+                  top: `${String((row / ZONE_ROWS) * 100)}%`,
+                  width: `${String(100 / ZONE_COLUMNS)}%`,
+                  height: `${String(100 / ZONE_ROWS)}%`
+                }}
+              >
+                <span className="arena-zone__label">
+                  {String(column + 1)}:{String(row + 1)}
+                </span>
+              </div>
+            );
+          })}
           {marks.map((mark, index) => (
             <button
               type="button"

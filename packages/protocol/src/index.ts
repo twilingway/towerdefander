@@ -436,6 +436,24 @@ const circleObstacle = z
     radius: finite.positive()
   })
   .strict();
+export const ARENA_ZONE_STATES = ["safe", "warning", "closed"] as const;
+export const arenaZoneStateSchema = z.enum(ARENA_ZONE_STATES);
+export type ArenaZoneStateName = z.infer<typeof arenaZoneStateSchema>;
+
+export const publicArenaZoneViewSchema = z
+  .object({
+    zoneId: z.number().int().min(0),
+    x: finite,
+    y: finite,
+    width: finite,
+    height: finite,
+    state: arenaZoneStateSchema,
+    /** Seconds left on a warning, so a display can count it down. */
+    secondsRemaining: z.number().int().min(0)
+  })
+  .strict();
+export type PublicArenaZoneView = z.infer<typeof publicArenaZoneViewSchema>;
+
 export const publicObstacleViewSchema = z.discriminatedUnion("kind", [
   rectangleObstacle,
   circleObstacle
@@ -862,6 +880,14 @@ export const displayGameSnapshotSchema = z
     turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,
+    /**
+     * The arena's sheet of zones, empty in the campaign.
+     *
+     * Published on the display branch because it is world, not panel: it moves
+     * a few times a match rather than every tick, so the whole sheet travels
+     * rather than a diff of it.
+     */
+    arenaZones: z.array(publicArenaZoneViewSchema).max(64),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),

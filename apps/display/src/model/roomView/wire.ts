@@ -32,6 +32,17 @@ export interface NetworkPlayerState {
   latencyMs: number;
 }
 
+/** One rectangle of the arena's sheet; empty in the campaign. */
+export interface NetworkArenaZoneState {
+  zoneId: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  state: string;
+  secondsRemaining: number;
+}
+
 export interface NetworkObstacleState {
   obstacleId: string;
   kind: "rectangle" | "circle";
@@ -253,6 +264,7 @@ export interface NetworkGameState {
     shieldRadius?: number;
     shieldPhase?: ShieldPhase;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
+    arenaZones: ValueCollection<NetworkArenaZoneState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;

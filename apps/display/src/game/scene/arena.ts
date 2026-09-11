@@ -189,3 +189,73 @@ export function drawDecorations(
       .setDepth(2);
   }
 }
+
+/** Faint red for ground that is already killing, amber for ground about to. */
+const ZONE_CLOSED_COLOR = 0xb03a3a;
+const ZONE_CLOSED_ALPHA = 0.16;
+const ZONE_WARNING_COLOR = 0xe6b85c;
+const ZONE_WARNING_ALPHA = 0.1;
+
+/**
+ * The arena's sheet of zones, drawn once per change.
+ *
+ * Baked rather than drawn, like everything else on this floor: the sheet moves
+ * a handful of times in a match, and a `Graphics` would be re-walked on every
+ * one of the sixty frames between. The texture key carries the states, so the
+ * bake is reused until a zone actually changes - which is the same reason the
+ * server only republishes the sheet when its signature moves.
+ *
+ * Deliberately faint. On the shared screen the fight has to stay readable
+ * through it; the console draws the same sheet at full strength, because there
+ * the sheet *is* the subject.
+ */
+export function arenaZoneSignature(snapshot: DisplayGameSnapshot): string {
+  return snapshot.arenaZones.map((zone) => zone.state.charAt(0)).join("");
+}
+
+export function drawArenaZones(
+  scene: Phaser.Scene,
+  snapshot: DisplayGameSnapshot,
+  bake: BakeShape
+): Phaser.GameObjects.Image | undefined {
+  const zones = snapshot.arenaZones;
+  if (zones.length === 0) return undefined;
+
+  const centerX = snapshot.worldWidth / 2;
+  const centerY = snapshot.worldHeight / 2;
+  const radius = snapshot.arenaRadius;
+  const diameter = radius * 2;
+  const scale = ARENA_TEXTURE_SIDE / diameter;
+  const signature = arenaZoneSignature(snapshot);
+
+  const key = bake(
+    `arena:zones:${String(Math.round(radius))}:${signature}`,
+    ARENA_TEXTURE_SIDE / 2,
+    (graphics) => {
+      for (const zone of zones) {
+        if (zone.state === "safe") continue;
+        const closed = zone.state === "closed";
+        graphics.fillStyle(
+          closed ? ZONE_CLOSED_COLOR : ZONE_WARNING_COLOR,
+          closed ? ZONE_CLOSED_ALPHA : ZONE_WARNING_ALPHA
+        );
+        graphics.fillRect(
+          (zone.x - centerX) * scale,
+          (zone.y - centerY) * scale,
+          zone.width * scale,
+          zone.height * scale
+        );
+        graphics.lineStyle(2, closed ? ZONE_CLOSED_COLOR : ZONE_WARNING_COLOR, closed ? 0.5 : 0.7);
+        graphics.strokeRect(
+          (zone.x - centerX) * scale,
+          (zone.y - centerY) * scale,
+          zone.width * scale,
+          zone.height * scale
+        );
+      }
+    }
+  );
+
+  // Over the floor, under everything that moves: it is ground, not an entity.
+  return scene.add.image(centerX, centerY, key).setDisplaySize(diameter, diameter).setDepth(1);
+}

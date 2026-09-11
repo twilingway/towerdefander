@@ -129,6 +129,7 @@ const baseGame: DisplayGameSnapshot = {
   shieldImpactEffect: "",
   turretVisual: null,
   shieldRadius: 104,
+  arenaZones: [],
   obstacles: [],
   enemyShips: [
     {

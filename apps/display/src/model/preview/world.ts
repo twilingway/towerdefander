@@ -147,6 +147,8 @@ export const PREVIEW_WORLD = {
   shieldImpactEffect: "",
   turretVisual: PREVIEW_TURRET_VISUAL,
   shieldRadius: 104,
+  // The campaign has no zone sheet; the arena fills this in.
+  arenaZones: [],
   obstacles: []
 };
 

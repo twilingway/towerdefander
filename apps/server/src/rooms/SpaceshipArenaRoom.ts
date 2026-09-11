@@ -23,6 +23,7 @@ import { getBalanceStore } from "../balance/index.js";
 import { ArenaBots } from "./arenaBots.js";
 import { createRunSeed } from "./runSeed.js";
 import {
+  ArenaZoneView,
   DISPLAY_VIEW_TAG,
   EnemyState,
   ProjectileState,
@@ -54,6 +55,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private started = false;
   /** Seats taken by bots so far, while the fill animation runs. */
   private botsSeated = 0;
+  /** The last sheet published, as a string; see `publishZones`. */
+  private zoneSignature = "";
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -224,6 +227,41 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.publish();
   }
 
+  /**
+   * The sheet, published only when it actually changed.
+   *
+   * Sixteen rectangles that move a few times a match have no business being
+   * rebuilt sixty times a second: the signature is the states in order, and an
+   * unchanged signature means the clients already have it. Colyseus would have
+   * sent nothing either way - it diffs - but rebuilding the array would have
+   * made it think everything changed.
+   */
+  private publishZones(match: ArenaMatchState): void {
+    const signature = match.zones
+      .map(
+        (zone) => `${String(zone.id)}:${zone.state}:${String(Math.ceil(zone.ticksRemaining / 60))}`
+      )
+      .join("|");
+    if (signature === this.zoneSignature) return;
+    this.zoneSignature = signature;
+
+    const target = this.state.game.display.arenaZones;
+    target.clear();
+    for (const zone of match.zones) {
+      const view = new ArenaZoneView();
+      view.zoneId = zone.id;
+      view.x = zone.x;
+      view.y = zone.y;
+      view.width = zone.width;
+      view.height = zone.height;
+      view.state = zone.state;
+      view.secondsRemaining = Math.ceil(
+        (zone.ticksRemaining * this.config.ship.fixedStepMs) / 1_000
+      );
+      target.push(view);
+    }
+  }
+
   /** Mirrors the match into the campaign-shaped state, by id. */
   private publish(): void {
     const match = this.match;
@@ -248,6 +286,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match.phase === "result") {
       game.encounter.outcome = match.winnerShipId === null ? "defeat" : "victory";
     }
+
+    this.publishZones(match);
 
     const player = match.ships[PLAYER_SLOT];
     if (player !== undefined) mirrorPlayerShip(player, game);

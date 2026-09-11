@@ -4,7 +4,7 @@ import Phaser from "phaser";
 import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
-import { drawArena, drawDecorations } from "./arena.js";
+import { arenaZoneSignature, drawArena, drawArenaZones, drawDecorations } from "./arena.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
@@ -122,6 +122,9 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
+    this.zoneLayer = drawArenaZones(this, this.snapshot, (key, half, draw) =>
+      this.bake(key, half, draw)
+    );
     drawDecorations(this, this.snapshot, this.bake);
 
     /*
@@ -363,12 +366,24 @@ export class SpaceshipScene extends Phaser.Scene {
     return this.frames;
   }
 
+  /** The baked zone sheet, replaced whenever a zone changes state. */
+  private zoneLayer: Phaser.GameObjects.Image | undefined;
+
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
     const previousTick = this.snapshot.tick;
+    const zoneSignature = arenaZoneSignature(this.snapshot);
     this.snapshot = snapshot;
     const shouldSnap = this.snapshotReset.consumeForSnapshot();
     if (!this.sys.isActive()) return;
+    // The sheet is ground: redrawn when a zone changes state and at no other
+    // time, which on a sixty-hertz patch stream is a handful of times a match.
+    if (arenaZoneSignature(snapshot) !== zoneSignature) {
+      this.zoneLayer?.destroy();
+      this.zoneLayer = drawArenaZones(this, snapshot, (key, half, draw) =>
+        this.bake(key, half, draw)
+      );
+    }
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.
     if (snapshot.cameraViewWidth !== framedWidth) {

@@ -101,6 +101,15 @@ export function toDisplayRoomView(
             },
             credits: game.credits,
             teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
+            arenaZones: [...display.arenaZones.values()].map((zone) => ({
+              zoneId: zone.zoneId,
+              x: zone.x,
+              y: zone.y,
+              width: zone.width,
+              height: zone.height,
+              state: zone.state as "safe" | "warning" | "closed",
+              secondsRemaining: zone.secondsRemaining
+            })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"
                 ? {
