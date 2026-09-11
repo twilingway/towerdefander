@@ -217,6 +217,18 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     display.turretPivotY = ship.turretVisual?.pivotY ?? 0;
     display.asteroidVisualShape = ship.asteroidVisual?.shape ?? "";
     display.asteroidVisualScale = ship.asteroidVisual?.modelScale ?? 1;
+    /*
+     * The sky, which the arena was flying without.
+     *
+     * The campaign projects it with the rest of its display block and a match
+     * never did, so the field came out as an empty black square: no nebula, no
+     * stars, no parallax. Four numbers, fixed for the match like the
+     * silhouettes are.
+     */
+    display.backgroundParallaxStrength = ship.background.parallaxStrength;
+    display.backgroundDriftSpeed = ship.background.driftSpeed;
+    display.backgroundNebulaAlpha = ship.background.nebulaAlpha;
+    display.backgroundNebulaPreset = ship.background.nebulaPreset;
     display.shieldBandEffect = ship.shieldBandEffect;
     display.shieldImpactEffect = ship.shieldImpactEffect;
     display.shieldRadius = ship.shieldRadius;

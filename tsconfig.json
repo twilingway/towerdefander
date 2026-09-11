@@ -1,6 +1,10 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    /* Browser specs run code inside the page as well as around it: an
+       assertion about layout has to ask the document, and the document only
+       exists here. */
+    "lib": ["ES2023", "DOM"],
     "types": ["node", "@playwright/test"]
   },
   "include": ["playwright.config.ts", "tests/**/*.ts"]

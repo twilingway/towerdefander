@@ -52,6 +52,53 @@ test("the arena seats the player rather than a bot", async ({ page }) => {
   expect(turned).toBeGreaterThan(1);
 });
 
+test("the match shows its own readouts, on the top edge", async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.goto(displayUrl);
+  await page.getByRole("button", { name: "Арена: Талос" }).click();
+  await page.getByRole("button", { name: "Соло" }).click();
+  await page.getByRole("button", { name: "В бой" }).click();
+
+  await expect(page.getByTestId("spaceship-world")).toBeVisible({ timeout: 45_000 });
+
+  /*
+   * Visible, and in the half of the screen it was designed for.
+   *
+   * The campaign's header is pinned to the bottom edge as a grid that flanks
+   * the dial, and the match panel inherited that placement - it rendered every
+   * frame, behind the radar, where nobody could see it. A class being present
+   * is therefore not the test; where the box lands is.
+   */
+  const kills = page.getByTestId("arena-hud-kills");
+  await expect(kills).toBeVisible();
+  const box = await kills.boundingBox();
+  const viewport = page.viewportSize();
+  if (box === null || viewport === null) throw new Error("the readout has no box");
+  expect(box.y).toBeLessThan(viewport.height / 3);
+
+  /*
+   * And it is lifted over the world rather than lying under it.
+   *
+   * Playwright calls an element visible when it has a box and is not hidden,
+   * which a header left in normal flow underneath the whole battlefield canvas
+   * satisfies perfectly - it rendered, in the right place, and no one could see
+   * it. The panel is pointer-transparent, so hit-testing cannot answer this
+   * either; what says it is the stacking it was given.
+   */
+  const stacking = await page.evaluate(() => {
+    const header = document.querySelector(".arena-hud");
+    if (header === null) return null;
+    const style = getComputedStyle(header);
+    return { position: style.position, zIndex: Number(style.zIndex) };
+  });
+  expect(stacking?.position).not.toBe("static");
+  expect(stacking?.zIndex).toBeGreaterThanOrEqual(20);
+
+  // And the campaign's own three are gone: a match has no waves and no economy.
+  await expect(page.getByText("Кредиты", { exact: true })).toHaveCount(0);
+});
+
 async function readNumber(target: Locator, attribute: string): Promise<number> {
   const raw = await target.getAttribute(attribute);
   const value = Number(raw);

@@ -3010,12 +3010,50 @@ p {
  * middle, because the middle of the top edge is the match clock and the middle
  * of the screen is the fight.
  */
+/*
+ * The match panel lives on the top edge, over the world.
+ *
+ * It has to lift itself out of the flow and say so: every other battle panel is
+ * absolutely placed above the canvas at this depth, and a header left in normal
+ * flow is drawn at the top of the shell and then covered by the battlefield -
+ * rendered, correct, and invisible, which is exactly what it did.
+ */
 .arena-hud {
+  position: absolute;
+  z-index: 25;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  left: max(0.75rem, env(safe-area-inset-left));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
   pointer-events: none;
+}
+
+/*
+ * A match keeps one control in the room header - the way out - and it belongs
+ * in the corner rather than in the corner's place: with the room code gone the
+ * row had nothing on its left, so the button slid across and sat on the counts.
+ */
+.room-header--match {
+  justify-content: flex-end;
+}
+
+/* ...and the gauges drop below it, because both want the same corner. */
+.arena-hud__ship {
+  margin-top: 2.8rem;
+}
+
+/* Both groups carry the same glass the rest of the battle panels are drawn on,
+   so they read against a nebula as well as against empty space. */
+.arena-hud__counts,
+.arena-hud__ship {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgb(71 224 233 / 28%);
+  border-radius: 0.75rem;
+  background: rgb(3 20 29 / 62%);
+  box-shadow: 0 0.5rem 1.8rem rgb(0 0 0 / 28%);
 }
 
 .arena-hud__counts {

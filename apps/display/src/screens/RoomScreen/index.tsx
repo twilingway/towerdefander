@@ -216,6 +216,8 @@ export function RoomScreen({
     view.game != null
   );
   const joinUrl = useMemo(() => createControllerJoinUrl(CONTROLLER_URL, view.roomId), [view]);
+  /** Sixteen published hulls is a match and nothing else has them. */
+  const match = (view.game?.arenaShips.length ?? 0) > 0;
   const moduleTree = selectModuleTree(ships, view.shipArchetypeId, preview !== undefined);
 
   /**
@@ -272,35 +274,58 @@ export function RoomScreen({
           onCameraViewWidthChange={preview.onCameraViewWidthChange}
         />
       )}
-      <header className="room-header">
-        <div>
-          <p className="eyebrow">Комната</p>
-          <strong className="room-code">{view.roomId}</strong>
-        </div>
-        <div className="room-network">
-          <div className={`phase-badge phase-badge--${view.phase}`}>
-            {view.phase === "active" ? "Корабль в бою" : "Собираем экипаж"}
+      <header className={`room-header${match ? " room-header--match" : ""}`}>
+        {/*
+         * A match has no room to publish and no crew to join it: the code is
+         * how a phone finds a shared screen, and the badge names a phase the
+         * arena does not have. Both sat on top of the readouts a pilot actually
+         * uses, which is where they were.
+         */}
+        {!match && (
+          <div>
+            <p className="eyebrow">Комната</p>
+            <strong className="room-code">{view.roomId}</strong>
           </div>
+        )}
+        <div className="room-network">
+          {!match && (
+            <div className={`phase-badge phase-badge--${view.phase}`}>
+              {view.phase === "active" ? "Корабль в бою" : "Собираем экипаж"}
+            </div>
+          )}
           {/*
             The instrument panel says both of these, and says them better. While
             it is open the header gives the room back rather than printing the
             same numbers twice; without the flag nothing here changes.
           */}
-          {!diagnostics && (
+          {!match && !diagnostics && (
             <span className="latency-indicator" aria-live="polite">
               Экран → сервер {formatLatency(view.displayLatencyMs)}
             </span>
           )}
-          {view.game !== null && !diagnostics && <PolledFpsReadout read={readFrameStats} />}
+          {!match && view.game !== null && !diagnostics && (
+            <PolledFpsReadout read={readFrameStats} />
+          )}
+          {/*
+           * Leaving a match is not closing a room. The fifteen other hulls go
+           * on fighting, and the room lives until the match is decided.
+           */}
           <button
             type="button"
             className="room-close-button"
             onClick={() => {
-              onCloseRoom();
+              if (match) onLeaveRoom();
+              else onCloseRoom();
             }}
             disabled={session?.closingRoom === true}
           >
-            {session?.closingRoom === true ? "Закрываем комнату…" : "Закрыть комнату"}
+            {session?.closingRoom === true
+              ? match
+                ? "Выходим…"
+                : "Закрываем комнату…"
+              : match
+                ? "Выйти из боя"
+                : "Закрыть комнату"}
           </button>
         </div>
       </header>

@@ -241,7 +241,9 @@ export function BattleStage({
         flag goes away.
       */}
         <MeteredPanel id="экипаж" measuring={diagnostics}>
-          {!diagnostics && <CrewLatencyPanel />}
+          {/* A crew roster over a match is four dashes and a line about
+            purchases: there is no crew, and nothing to buy. */}
+          {!diagnostics && view.game.arenaShips.length === 0 && <CrewLatencyPanel />}
         </MeteredPanel>
       </section>
     </MeasuredWhenAsked>
