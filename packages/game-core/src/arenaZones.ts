@@ -123,20 +123,23 @@ export function advanceArenaZones(
 /**
  * One bite of the zone for a hull standing where it stands.
  *
- * Called on the beat, not every step: a zone that ground a hull down
- * continuously would be a slope, and what a player has to read here is a
- * countdown - how many more of these can I take, and can I be out by then.
+ * Called on the beat rather than every step, and measured against the hull's
+ * maximum: a sixth of it each time, so six beats finish a ship that drove in
+ * whole and repairs genuinely buy more. A slope would be unreadable; a beat is
+ * something a player counts.
  */
 export function zoneDamageForBite(
   ship: ArenaShipState,
   zones: readonly ArenaZone[],
   config: ArenaMatchConfig
 ): number {
-  const zone = zoneAt(zones, ship.spaceship.x, ship.spaceship.y);
-  // Outside every zone means outside the sheet, which is outside the arena: the
-  // wall already holds a hull in, so this is only reached by rounding.
-  if (zone?.state !== "closed") return 0;
+  if (!isInClosedZone(ship, zones)) return 0;
   return ship.maxHp * config.zoneDamageShareOfMaxHp;
+}
+
+/** Whether this hull is standing in ground that is already killing. */
+export function isInClosedZone(ship: ArenaShipState, zones: readonly ArenaZone[]): boolean {
+  return zoneAt(zones, ship.spaceship.x, ship.spaceship.y)?.state === "closed";
 }
 
 export function zoneAt(zones: readonly ArenaZone[], x: number, y: number): ArenaZone | undefined {

@@ -34,6 +34,9 @@ import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
 /** The slot the human takes. It flies on autopilot until a cockpit claims it. */
 const PLAYER_SLOT = 0;
 
+/** Where hull sequence numbers start, clear of the shots' own numbering. */
+const SHIP_SEQUENCE_BASE = 900_000;
+
 /**
  * A match of sixteen hulls, published through the campaign's own state.
  *
@@ -99,7 +102,12 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.state.game.encounter.waveNumber = 1;
     // The campaign frames a fight around one ship; a match is sixteen of them
     // spread over the whole disc, so the arena watches the arena.
-    this.state.game.display.cameraViewWidth = this.config.arenaRadius * 2.2;
+    // The whole disc, and no wider: the frame is capped at the world's own
+    // width, and a camera past that is refused by the display contract.
+    this.state.game.display.cameraViewWidth = Math.min(
+      ship.worldWidth,
+      this.config.arenaRadius * 2
+    );
     this.state.game.display.spaceshipVisualShape = ship.spaceshipVisual?.shape ?? "";
     this.state.game.display.spaceshipVisualScale = ship.spaceshipVisual?.modelScale ?? 1;
     this.state.game.display.shieldRadius = ship.shieldRadius;
@@ -303,7 +311,10 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       (ship) => {
         const entity = new EnemyState();
         entity.entityId = ship.id;
-        entity.spawnSequence = ship.slot;
+        // Globally unique across every entity on the wire, which the display
+        // contract checks: a hull's slot and a shot's sequence both start at
+        // zero, and the two collections share one numbering.
+        entity.spawnSequence = SHIP_SEQUENCE_BASE + ship.slot;
         entity.kind = "gunship";
         return entity;
       },

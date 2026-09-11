@@ -284,10 +284,10 @@ describe("the sheet of zones", () => {
     const radius = defaultArenaMatchConfig.arenaRadius;
     const centre = arenaCentre(defaultArenaMatchConfig);
 
-    // Four by four, and at this size every rectangle still clips the disc - the
-    // corner ones only by their inner edge, which is exactly what the reach
-    // test is for.
-    expect(zones.length).toBe(16);
+    // Ten by ten over the square, minus the corner rectangles the disc never
+    // reaches - which is what the reach test above is for.
+    expect(zones.length).toBeGreaterThan(60);
+    expect(zones.length).toBeLessThan(100);
     for (const zone of zones) {
       const nearestX = Math.max(zone.x - centre.x, Math.min(0, zone.x - centre.x + zone.width));
       const nearestY = Math.max(zone.y - centre.y, Math.min(0, zone.y - centre.y + zone.height));
@@ -298,9 +298,16 @@ describe("the sheet of zones", () => {
 
   it("closes the zone holding the most hulls", () => {
     const zones = createArenaZones(defaultArenaMatchConfig);
-    // An edge zone, because the sheet only ever closes from the outside in.
+    const middle = arenaCentre(defaultArenaMatchConfig);
+    const fromCentre = (candidate: ArenaZone) =>
+      Math.hypot(
+        candidate.x + candidate.width / 2 - middle.x,
+        candidate.y + candidate.height / 2 - middle.y
+      );
+    // The outermost layer closes first, so the crowd has to stand in it for the
+    // crowd rule to be the one under test.
     const crowded = zone(
-      zones.filter((candidate) => candidate.column === 0 && candidate.row === 0),
+      [...zones].sort((first, second) => fromCentre(second) - fromCentre(first)),
       0
     );
     const inside = {
@@ -325,9 +332,9 @@ describe("the sheet of zones", () => {
 
     // One tick left on the clock, so this step is the one that picks.
     const stepped = advanceArenaZones(zones, gathered, 1, defaultArenaMatchConfig);
-    const warned = stepped.zones.filter((zone) => zone.state === "warning");
+    const warned = stepped.zones.filter((candidate) => candidate.state === "warning");
 
-    expect(warned.map((zone) => zone.id)).toEqual([crowded.id]);
+    expect(warned.map((candidate) => candidate.id)).toEqual([crowded.id]);
   });
 
   it("warns before it kills", () => {
@@ -462,7 +469,8 @@ describe("the sheet of zones", () => {
     const after = advanceArenaMatch(parked, new Map(), config);
 
     for (const ship of after.ships) {
-      // A sixth of the hull, on the beat: six of these kill, five do not.
+      // A sixth of the maximum, on the beat: six of these kill a hull that
+      // drove in whole, and a repair between beats buys another one.
       expect(ship.maxHp - ship.hp).toBeCloseTo(ship.maxHp / 6, 6);
     }
     expect(zoneAt(after.zones, inside.x, inside.y)?.state).toBe("closed");

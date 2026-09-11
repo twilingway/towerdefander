@@ -166,6 +166,14 @@ export interface ArenaMatchConfig {
    * makes a repair inside it worth something.
    */
   readonly zoneDamageIntervalTicks: number;
+  /**
+   * What one beat takes, as a share of the hull's own maximum.
+   *
+   * A sixth: six beats kill a hull that entered whole, and the share is of the
+   * maximum rather than of what is left, so a hull that repairs between beats
+   * genuinely outlasts the zone. That is the difference between a countdown a
+   * player can fight and one they cannot.
+   */
   readonly zoneDamageShareOfMaxHp: number;
   readonly caps: ArenaMatchCaps;
 }

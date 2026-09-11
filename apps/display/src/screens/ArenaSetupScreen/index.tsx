@@ -16,7 +16,8 @@ interface ArenaSetupScreenProps {
   /** The waiting room, once one is open: who is in it and how long it waits. */
   readonly lobby: ArenaLobby | undefined;
   readonly onBack: () => void;
-  readonly onStart: () => void;
+  /** Cockpit means this device flies the match as well as showing it. */
+  readonly onStart: (cockpitPlayerName: string | undefined) => void;
 }
 
 /**
@@ -37,6 +38,9 @@ export function ArenaSetupScreen({
 }: ArenaSetupScreenProps) {
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   const [pilotName, setPilotName] = useState("Пилот");
+  // Solo on this screen by default, like the campaign: it is the shortest path
+  // from opening the page to flying.
+  const [cockpit, setCockpit] = useState(true);
   const shell = useRef<HTMLElement | null>(null);
   useRemoteNavigation(shell, { onBack });
   const shipId = pickedShipId ?? defaultUnlockedShipId(ships, defaultShipId);
@@ -56,6 +60,38 @@ export function ArenaSetupScreen({
             побеждает последний живой.
           </p>
         </header>
+
+        <h2 className="setup-step">Где играете</h2>
+        <div className="place-grid" role="group" aria-label="Где играете">
+          <button
+            type="button"
+            className={`place-tile${cockpit ? " is-selected" : ""}`}
+            aria-label="Соло"
+            aria-pressed={cockpit}
+            onClick={() => {
+              setCockpit(true);
+            }}
+          >
+            <span className="place-tile__title">На этом устройстве</span>
+            <span className="place-tile__caption">
+              Экран становится кокпитом: матч идёт здесь же, телефон не нужен.
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`place-tile${cockpit ? "" : " is-selected"}`}
+            aria-label="Общий экран"
+            aria-pressed={!cockpit}
+            onClick={() => {
+              setCockpit(false);
+            }}
+          >
+            <span className="place-tile__title">Общий экран и телефон</span>
+            <span className="place-tile__caption">
+              Этот экран показывает матч, вы подключаетесь к нему по QR-коду.
+            </span>
+          </button>
+        </div>
 
         <h2 className="setup-step">Пилот</h2>
         <label className="field">
@@ -101,8 +137,10 @@ export function ArenaSetupScreen({
             <button
               type="button"
               className="setup-go"
-              disabled={status === "connecting"}
-              onClick={onStart}
+              disabled={status === "connecting" || (cockpit && pilotName.trim().length === 0)}
+              onClick={() => {
+                onStart(cockpit ? pilotName.trim() : undefined);
+              }}
             >
               {status === "connecting" ? "Открываем матч…" : "В бой"}
             </button>

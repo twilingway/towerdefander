@@ -181,7 +181,18 @@ export function moveArenaProjectiles(
     1,
     Math.round(config.ship.projectileLifetimeMs / config.ship.fixedStepMs)
   );
-  const envelope = config.arenaRadius + config.ship.worldPadding;
+  /*
+   * The arena's own envelope, clipped to the world.
+   *
+   * A shot may outlive the disc by a padding, but never the world: positions
+   * travel as coordinates inside a square, and one past its edge is refused by
+   * the display contract - which is what it looked like when the screen froze
+   * on its last good snapshot.
+   */
+  const envelope = Math.min(
+    config.arenaRadius + config.ship.worldPadding,
+    Math.min(config.ship.worldWidth, config.ship.worldHeight) / 2
+  );
 
   const moved: ArenaProjectileState[] = [];
   for (const projectile of projectiles) {

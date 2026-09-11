@@ -6,24 +6,23 @@ export const ARENA_SHIP_COUNT = 16;
 /**
  * The sheet a match is played on, and how fast it closes.
  *
- * Four by four over the arena square: sixteen rectangles, the corner ones
- * clipped by the disc to slivers. A closure therefore moves the fight without
- * taking a quarter of the field at once. A zone every thirty seconds with a
- * five-second warning gives a hull time to read the board and drive, and no
- * time to sit.
+ * Ten by ten over the arena square, so one closure takes a slice of the field
+ * rather than a quarter of it and the squeeze can be steered where the fight
+ * is. A zone turns amber every fifteen seconds and starts killing fifteen
+ * seconds after that: time to read the board and drive, no time to sit.
  */
-export const ARENA_ZONE_COLUMNS = 4;
-export const ARENA_ZONE_ROWS = 4;
-export const ARENA_ZONE_INTERVAL_TICKS = 1_800;
-export const ARENA_ZONE_WARNING_TICKS = 300;
+export const ARENA_ZONE_COLUMNS = 10;
+export const ARENA_ZONE_ROWS = 10;
+export const ARENA_ZONE_INTERVAL_TICKS = 900;
+export const ARENA_ZONE_WARNING_TICKS = 900;
 /**
  * The beat, and the bite.
  *
- * Five seconds apart and a sixth of the hull each time: six beats kill anyone
- * who stays, five leave them alive, and a hull that heals between beats lives
- * longer than one that does not. Wargaming publishes neither number for Steel
- * Hunter, so these are ours - stated as a share so they mean the same thing to
- * every hull, and as a beat so a player can count them.
+ * Five seconds apart, a sixth of the hull's maximum each: six beats kill a ship
+ * that drove in whole, and a ship that repairs between them lives longer -
+ * which is what makes the zone something to fight rather than a verdict.
+ * Wargaming publishes neither number for Steel Hunter, so these are ours; a
+ * beat rather than a slope, so a player can count them.
  */
 export const ARENA_ZONE_DAMAGE_INTERVAL_TICKS = 300;
 export const ARENA_ZONE_DAMAGE_SHARE = 1 / 6;

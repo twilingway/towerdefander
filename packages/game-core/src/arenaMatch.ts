@@ -12,7 +12,12 @@ import {
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
 import { type ArenaZone } from "./arenaZones.ts";
-import { advanceArenaZones, createArenaZones, zoneDamageForBite } from "./arenaZones.ts";
+import {
+  advanceArenaZones,
+  createArenaZones,
+  isInClosedZone,
+  zoneDamageForBite
+} from "./arenaZones.ts";
 import { advanceClock, createSeededRandom } from "./primitives.ts";
 import { advanceAngularTraverse, canonicalizeAngle, clamp } from "./simulationMath.ts";
 import { advanceShipPose, type ShipPose } from "./shipPose.ts";
@@ -405,12 +410,10 @@ function applyZoneDamage(
 ): readonly ArenaShipState[] {
   return ships.map((ship) => {
     if (!ship.alive) return ship;
-    const damage = zoneDamageForBite(ship, zones, config);
-    if (damage === 0) return ship;
-    const remaining = ship.hp - damage;
-    // Six bites of a sixth are a whole hull in arithmetic and a hair over one
-    // in floating point, which left a ship alive on a hundredth of a point.
-    // The beat is supposed to be countable, so the last one finishes it.
+    if (!isInClosedZone(ship, zones)) return ship;
+    const remaining = ship.hp - zoneDamageForBite(ship, zones, config);
+    // Six sixths are a whole hull in arithmetic and a hair over one in floating
+    // point; the beat is meant to be countable, so the sixth one finishes it.
     const alive = remaining > 1e-6;
     return { ...ship, hp: alive ? remaining : 0, alive };
   });

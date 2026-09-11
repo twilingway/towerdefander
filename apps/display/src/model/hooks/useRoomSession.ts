@@ -55,8 +55,11 @@ export interface RoomSession {
     startWave: number,
     cockpitPlayerName?: string
   ) => Promise<string | undefined>;
-  /** Opens an arena match: sixteen hulls, no crew to assemble. */
-  readonly createArenaMatch: () => Promise<string | undefined>;
+  /**
+   * Opens an arena match: sixteen hulls, no crew to assemble. A name means this
+   * device is also the pilot, the way the campaign's cockpit works.
+   */
+  readonly createArenaMatch: (cockpitPlayerName?: string) => Promise<string | undefined>;
   /** The arena's waiting room, while there is one; undefined outside the arena. */
   readonly arenaLobby: ArenaLobby | undefined;
   readonly closeRoom: () => Promise<void>;
@@ -257,14 +260,20 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
    * the server spawns itself, and the one the player will take flies on the
    * same autopilot as the rest until a cockpit claims it.
    */
-  async function createArenaMatch(): Promise<string | undefined> {
+  async function createArenaMatch(cockpitPlayerName?: string): Promise<string | undefined> {
     statusReference.current = "connecting";
     setStatus("connecting");
     setError("");
     setClosingRoom(false);
+    setCockpitPlayer(cockpitPlayerName);
+    cockpitPlayerReference.current = cockpitPlayerName;
     try {
       const room = await new Client(GAME_SERVER_URL).create<NetworkRoomState>(ARENA_ROOM_TYPE, {
-        role: "display" as const,
+        // Solo is one connection that both draws the match and flies in it,
+        // which is the same shape the campaign's cockpit joins with.
+        ...(cockpitPlayerName === undefined
+          ? { role: "display" as const }
+          : { role: "solo" as const, playerName: cockpitPlayerName }),
         protocolVersion: PROTOCOL_VERSION
       });
       roomReference.current = room;
