@@ -1,5 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+import { openCampaign } from "./openCampaign.js";
+
 const testHost = process.env.E2E_HOST?.trim() ?? "127.0.0.1";
 const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
 const controllerUrl = process.env.E2E_CONTROLLER_URL ?? `http://${testHost}:5174`;
@@ -12,7 +14,7 @@ test("a seated pilot steers the hull like a tank", async ({ browser }) => {
     contexts.push(displayContext);
     const display = await displayContext.newPage();
     await display.goto(displayUrl);
-    await display.getByRole("button", { name: "Создать комнату" }).click();
+    await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");
 

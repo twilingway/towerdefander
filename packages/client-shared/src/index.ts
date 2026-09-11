@@ -3,6 +3,8 @@ export { createDefaultGameServerUrl, readStringEnvironment } from "./environment
 export { isPreviewMode, previewPhaseLabel, PREVIEW_PHASES } from "./preview.js";
 export type { PreviewPhase } from "./preview.js";
 export { PreviewPhaseButtons, PreviewShell } from "./PreviewShell.js";
+export { CatalogAssetShape } from "./catalogSvg.js";
+export type { CatalogAssetShapeProps } from "./catalogSvg.js";
 export {
   AIM_COMMIT_SHARE,
   FULL_THROTTLE_SHARE,

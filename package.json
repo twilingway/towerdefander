@@ -19,6 +19,7 @@
     "campaign:author": "node apps/server/scripts/author-campaign.mjs",
     "campaign:preview": "node apps/server/scripts/author-campaign.mjs --dry-run",
     "fx:edit": "node scripts/run-fx-editor.mjs",
+    "art:prepare": "node scripts/prepare-key-art.mjs",
     "fx:bake": "node scripts/bake-fx-atlases.mjs",
     "fx:editor": "node \"tools/arcadia-effects/Arcada Effects/server.mjs\"",
     "dev:bots": "cross-env ALLOW_BOT_CREW=true ALLOW_START_WAVE=true node scripts/run-dev.mjs",

@@ -168,7 +168,9 @@ try {
   await page.goto(displayUrl, { waitUntil: "domcontentloaded" });
   if (!headless) await keepVisiblePageActive(context, page);
   abortIfStopped();
-  await page.getByRole("button", { name: "Создать комнату" }).click();
+  await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
+  await page.getByRole("button", { name: "3 игрока" }).click();
+  await page.getByRole("button", { name: "В бой" }).click();
   abortIfStopped();
   const roomId = (await page.locator(".room-code").innerText()).trim();
   if (roomId.length === 0) throw new Error("Display did not publish a room code.");

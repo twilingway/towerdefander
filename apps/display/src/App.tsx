@@ -7,9 +7,11 @@ import { useRoomSession } from "./model/hooks/useRoomSession.js";
 import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
 import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
+import { ArenaSetupScreen } from "./screens/ArenaSetupScreen/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { PreviewRoomRoute } from "./screens/RoomScreen/PreviewRoomRoute.js";
 import { RoomScreen } from "./screens/RoomScreen/index.js";
+import { StartScreen } from "./screens/StartScreen/index.js";
 
 export function DisplayApp() {
   // The query is the whole configuration surface, and it keeps one reader: half
@@ -36,6 +38,35 @@ export function DisplayApp() {
     (session.status === "connected" || session.status === "reconnecting") &&
     session.view !== undefined;
 
+  // The mode grid is the front door, and the campaign setup is a screen of its
+  // own behind it: two games, not one game with a switch on it.
+  const startRoute = seated ? (
+    <Navigate
+      replace
+      to={{ pathname: `/room/${session.view.roomId}`, search: readDisplaySearch() }}
+    />
+  ) : (
+    <StartScreen
+      maintenance={maintenance}
+      onPick={(mode) => {
+        void navigate({
+          pathname: mode === "arena" ? "/arena" : "/campaign",
+          search: readDisplaySearch()
+        });
+      }}
+    />
+  );
+
+  const arenaRoute = (
+    <ArenaSetupScreen
+      ships={shipCatalogue?.ships ?? []}
+      defaultShipId={flags.shipArchetypeId ?? shipCatalogue?.defaultShipId}
+      onBack={() => {
+        void navigate({ pathname: "/", search: readDisplaySearch() });
+      }}
+    />
+  );
+
   const createRoute = seated ? (
     <Navigate
       replace
@@ -44,6 +75,9 @@ export function DisplayApp() {
   ) : (
     <CreateRoomScreen
       maintenance={maintenance}
+      onBack={() => {
+        void navigate({ pathname: "/", search: readDisplaySearch() });
+      }}
       status={session.status}
       error={session.error}
       visibleDemo={flags.visibleDemo}
@@ -102,7 +136,9 @@ export function DisplayApp() {
 
   return (
     <Routes>
-      <Route path="/" element={flags.preview ? previewRoute : createRoute} />
+      <Route path="/" element={flags.preview ? previewRoute : startRoute} />
+      <Route path="/campaign" element={flags.preview ? previewRoute : createRoute} />
+      <Route path="/arena" element={flags.preview ? previewRoute : arenaRoute} />
       <Route path="/preview" element={flags.preview ? previewRoute : createRoute} />
       <Route path="/room/:code" element={roomRoute} />
       <Route

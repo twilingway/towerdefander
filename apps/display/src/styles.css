@@ -2286,3 +2286,494 @@ p {
 .display-shell[data-panels="opaque"] .machine-gun-hud {
   background: #08181f;
 }
+
+/*
+ * The front door: a grid of modes, then a setup screen behind each one.
+ *
+ * Big-Picture tiles rather than squares: wide, short, and sized off the
+ * viewport height, so both modes and the title fit one phone screen without a
+ * scroll. Each tile carries its own key art with a dark gradient over it, so
+ * the text stays readable whatever the illustration does. The art lives in
+ * `public/art/`; without the files the gradient alone still reads as a tile
+ * rather than as a broken image.
+ */
+.display-shell--start {
+  align-content: center;
+  justify-items: center;
+  gap: clamp(0.75rem, 2vh, 1.5rem);
+  padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
+  text-align: center;
+  /* Deep space without an image: two nebulae, a cold rim light and a scatter of
+     stars, all painted. It has to hold the screen on its own, because the key
+     art may not be in `public/art/` on a given checkout. */
+  background:
+    radial-gradient(2px 2px at 18% 22%, rgb(255 255 255 / 55%), transparent 60%),
+    radial-gradient(1.5px 1.5px at 72% 16%, rgb(255 255 255 / 45%), transparent 60%),
+    radial-gradient(1.5px 1.5px at 38% 72%, rgb(255 255 255 / 40%), transparent 60%),
+    radial-gradient(2px 2px at 84% 64%, rgb(255 255 255 / 35%), transparent 60%),
+    radial-gradient(1.5px 1.5px at 56% 40%, rgb(255 255 255 / 30%), transparent 60%),
+    radial-gradient(circle at 15% 12%, rgb(43 123 150 / 35%), transparent 45%),
+    radial-gradient(circle at 88% 82%, rgb(120 70 190 / 30%), transparent 45%), #050c12;
+}
+
+/* The rule above the title, the way the key art draws it: a hairline that opens
+   out of nothing, a diamond in the middle, and nothing else. */
+.start-rule {
+  display: grid;
+  align-items: center;
+  gap: 0.6rem;
+  grid-template-columns: clamp(2rem, 12vw, 7rem) auto clamp(2rem, 12vw, 7rem);
+  color: #e6b85c;
+}
+
+.start-rule::before,
+.start-rule::after {
+  content: "";
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e6b85c);
+}
+
+.start-rule::after {
+  background: linear-gradient(90deg, #e6b85c, transparent);
+}
+
+.start-rule span {
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+}
+
+.start-header {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: center;
+}
+
+.start-title {
+  margin: 0;
+  font-size: clamp(1.35rem, 7vw, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #ffffff 35%, #9fb6c4 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 2.5rem rgb(120 190 255 / 25%);
+}
+
+.start-lede {
+  margin: 0;
+  color: #b9d3ce;
+  font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+}
+
+.mode-grid {
+  display: grid;
+  width: min(70rem, 100%);
+  gap: clamp(0.6rem, 1.6vh, 1.25rem);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 56rem) {
+  .mode-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.mode-tile {
+  position: relative;
+  min-height: 0;
+  height: clamp(5.5rem, 22vh, 15rem);
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1rem;
+  background-color: #0a1f22;
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 45%);
+  overflow: hidden;
+  /* Cut corners, like the frames in the key art. */
+  clip-path: polygon(
+    0 0,
+    calc(100% - 1.1rem) 0,
+    100% 1.1rem,
+    100% 100%,
+    1.1rem 100%,
+    0 calc(100% - 1.1rem)
+  );
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.mode-tile:hover,
+.mode-tile:focus-visible {
+  border-color: #e6b85c;
+  box-shadow:
+    0 1rem 2.5rem rgb(0 0 0 / 45%),
+    0 0 0 1px rgb(230 184 92 / 60%),
+    0 0 2rem rgb(230 184 92 / 25%);
+  transform: translateY(-0.2rem);
+}
+
+.mode-tile--campaign {
+  background-image:
+    linear-gradient(100deg, rgb(4 12 22 / 88%) 0%, rgb(4 12 22 / 35%) 65%), url("/art/campaign.jpg");
+}
+
+.mode-tile--arena {
+  background-image:
+    linear-gradient(100deg, rgb(12 6 22 / 88%) 0%, rgb(12 6 22 / 35%) 65%), url("/art/arena.jpg");
+}
+
+.mode-tile__frame {
+  display: grid;
+  height: 100%;
+  padding: clamp(0.75rem, 2vw, 1.25rem);
+  gap: 0.15rem;
+  align-content: center;
+  justify-items: start;
+  text-align: left;
+  color: #f6f4e8;
+}
+
+.mode-tile__eyebrow {
+  color: #e6b85c;
+  font-size: clamp(0.6rem, 2.4vw, 0.7rem);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.mode-tile__title {
+  font-size: clamp(1.05rem, 5vw, 2rem);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.mode-tile__subtitle {
+  color: #cfe3df;
+  font-size: clamp(0.75rem, 3vw, 0.9rem);
+  font-weight: 700;
+}
+
+/* The pitch is the first thing to go on a phone: two tiles, a title and a
+   badge have to share one screen, and the sentence is the only part of that a
+   player can do without. */
+.mode-tile__pitch {
+  display: none;
+  margin-top: 0.2rem;
+  color: #b9d3ce;
+  font-size: 0.8rem;
+  font-weight: 500;
+  max-width: 26rem;
+}
+
+@media (min-width: 40rem) {
+  .mode-tile__pitch {
+    display: block;
+  }
+}
+
+.mode-tile__crew {
+  margin-top: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+  border: 1px solid rgb(230 184 92 / 45%);
+  border-radius: 999px;
+  color: #e6b85c;
+  font-size: clamp(0.62rem, 2.6vw, 0.7rem);
+  font-weight: 800;
+}
+
+.display-shell--setup {
+  justify-items: center;
+  align-content: start;
+  gap: 0.75rem;
+  padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
+}
+
+.setup-card {
+  display: grid;
+  gap: 0.35rem;
+  width: min(58rem, 100%);
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 1.25rem;
+  background: rgb(10 30 29 / 86%);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 35%);
+  text-align: left;
+}
+
+.setup-head h1 {
+  margin: 0.1rem 0 0.3rem;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+}
+
+.setup-lede {
+  margin: 0;
+  color: #b9d3ce;
+  font-size: clamp(0.8rem, 1.3vw, 1rem);
+}
+
+.setup-step {
+  margin: clamp(0.6rem, 1.6vh, 1.1rem) 0 0.4rem;
+  color: #8fb2ac;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.link-button {
+  min-height: 0;
+  padding: 0;
+  color: #8fb2ac;
+  background: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  justify-self: start;
+}
+
+.link-button:hover {
+  color: #e6b85c;
+}
+
+.crew-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.crew-tile {
+  display: grid;
+  gap: 0.1rem;
+  align-content: center;
+  min-height: 0;
+  padding: 0.6rem 0.4rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.75rem;
+  color: #f6f4e8;
+  background: rgb(19 45 42 / 85%);
+  text-align: center;
+}
+
+.crew-tile.is-selected {
+  border-color: #e6b85c;
+  color: #172015;
+  background: #e6b85c;
+}
+
+.crew-tile__count {
+  font-size: clamp(0.95rem, 2.2vw, 1.3rem);
+  font-weight: 900;
+}
+
+.crew-tile__caption {
+  font-size: 0.65rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.ship-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ship-tile {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  align-content: start;
+  justify-items: center;
+  min-height: 0;
+  padding: 0.6rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.9rem;
+  color: #f6f4e8;
+  background: rgb(19 45 42 / 85%);
+  text-align: center;
+}
+
+.ship-tile.is-selected {
+  border-color: #e6b85c;
+  box-shadow: inset 0 0 0 1px #e6b85c;
+}
+
+.ship-tile.is-locked {
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.ship-tile__art {
+  display: block;
+  width: clamp(2.75rem, 9vh, 4.5rem);
+  border-radius: 0.6rem;
+  background: radial-gradient(circle at 50% 45%, rgb(43 123 97 / 35%), transparent 70%);
+}
+
+.ship-tile__art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ship-tile__name {
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  font-weight: 800;
+}
+
+/* The pitch is the first thing to go on a phone: the name and the silhouette
+   already say which hull this is, and three tiles have to share one row. */
+.ship-tile__pitch {
+  display: none;
+  color: #b9d3ce;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+@media (min-width: 40rem) {
+  .ship-tile__pitch {
+    display: block;
+  }
+}
+
+.ship-tile__lock {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgb(8 19 19 / 85%);
+  color: #e6b85c;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.setup-go {
+  width: 100%;
+  min-height: 3rem;
+  margin-top: clamp(0.6rem, 1.6vh, 1.25rem);
+}
+
+/*
+ * A television has no pointer: whatever the remote is on has to be obvious
+ * across a room. `:focus-visible` alone is not enough here, because the focus
+ * is moved programmatically by the arrow keys - so plain `:focus` carries it.
+ */
+.mode-tile:focus,
+.crew-tile:focus,
+.ship-tile:focus,
+.setup-go:focus,
+.link-button:focus {
+  outline: 2px solid #e6b85c;
+  outline-offset: 3px;
+}
+
+/* Phones get the half-size art: same picture, a quarter of the bytes. */
+@media (max-width: 40rem) {
+  .mode-tile--campaign {
+    background-image:
+      linear-gradient(100deg, rgb(4 12 22 / 90%) 0%, rgb(4 12 22 / 30%) 62%, transparent 100%),
+      url("/art/campaign@sm.jpg"),
+      radial-gradient(circle at 78% 30%, rgb(70 140 200 / 55%), transparent 58%),
+      linear-gradient(140deg, #0b2030, #071119);
+  }
+
+  .mode-tile--arena {
+    background-image:
+      linear-gradient(100deg, rgb(12 6 22 / 90%) 0%, rgb(12 6 22 / 30%) 62%, transparent 100%),
+      url("/art/arena@sm.jpg"),
+      radial-gradient(circle at 78% 30%, rgb(150 80 210 / 55%), transparent 58%),
+      linear-gradient(140deg, #1a0f2b, #0a0714);
+  }
+}
+
+/*
+ * A phone held sideways is 375 tall, and that is the screen the setup has to
+ * fit: the mode, the crew, a hull and the button, with nothing scrolled out of
+ * reach. So the copy goes first, then the padding, then the size of the art -
+ * in that order, because a sentence explains what the tiles already show.
+ */
+@media (max-height: 34rem) {
+  .display-shell--setup {
+    padding-block: 0.5rem;
+  }
+
+  .setup-card {
+    gap: 0.2rem;
+    padding: 0.75rem;
+    border-radius: 0.9rem;
+  }
+
+  .setup-lede {
+    display: none;
+  }
+
+  .setup-head h1 {
+    margin: 0 0 0.2rem;
+    font-size: 1.05rem;
+  }
+
+  .setup-step {
+    margin: 0.45rem 0 0.3rem;
+    font-size: 0.65rem;
+  }
+
+  .crew-tile {
+    padding: 0.35rem 0.25rem;
+  }
+
+  .crew-tile__count {
+    font-size: 0.95rem;
+  }
+
+  .crew-tile__caption {
+    font-size: 0.6rem;
+  }
+
+  .ship-tile {
+    padding: 0.4rem 0.3rem;
+  }
+
+  .ship-tile__art {
+    width: clamp(1.75rem, 7vh, 2.75rem);
+  }
+
+  .ship-tile__name {
+    font-size: 0.8rem;
+  }
+
+  .setup-go {
+    min-height: 2.5rem;
+    margin-top: 0.5rem;
+  }
+
+  /* The name sits on one line with its caption instead of above it. */
+  .setup-card .field {
+    display: grid;
+    gap: 0.4rem;
+    align-items: center;
+    grid-template-columns: auto 1fr;
+    margin: 0;
+  }
+
+  .setup-card .field__caption {
+    font-size: 0.65rem;
+  }
+
+  .setup-card .field__input {
+    min-height: 2.25rem;
+  }
+
+  .hint {
+    font-size: 0.7rem;
+  }
+}

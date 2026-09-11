@@ -7,7 +7,7 @@ import {
   type VisualAssetId
 } from "@spaceship-defender/protocol";
 
-import { CatalogAssetShape } from "./catalogSvg.js";
+import { CatalogAssetShape } from "@spaceship-defender/client-shared";
 
 const CATEGORY_LABELS: Record<VisualAssetCategory, string> = {
   ship: "Корабли",
