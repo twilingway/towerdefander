@@ -69,6 +69,25 @@ function zoneWord(count: number): string {
   }
 }
 
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function shotWord(count: number): string {
+  const tail = count % 100;
+  if (tail >= 11 && tail <= 14) return "выстрелов";
+  switch (count % 10) {
+    case 1:
+      return "выстрел";
+    case 2:
+    case 3:
+    case 4:
+      return "выстрела";
+    default:
+      return "выстрелов";
+  }
+}
+
 /** A duration for reading: the console edits seconds, an operator thinks in minutes. */
 function formatTicks(ticks: number): string {
   const seconds = Math.round(ticks * TICK_SECONDS);
@@ -122,6 +141,15 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
   const warning = tuning.arena.zoneWarningTicks;
   const limit = tuning.arena.matchTickLimit;
   const fullRedTicks = closures * interval + warning;
+  // What the two multipliers add up to in the only unit that matters at the
+  // table: how long a hull stands in front of a gun.
+  const shotsToKill = Math.max(
+    1,
+    Math.ceil(
+      (tuning.spaceshipMaxHp * tuning.arena.hullScaling) /
+        Math.max(0.0001, tuning.friendlyProjectileDamage * tuning.arena.damageScaling)
+    )
+  );
   const redByEnd = Math.max(0, Math.min(closures, Math.floor((limit - warning) / interval)));
 
   const patchArena = (values: Partial<BalanceTuning["arena"]>) => {
@@ -229,6 +257,48 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           </button>
         </div>
       </header>
+
+      <section className="card">
+        <h4 className="card__subtitle">Корабль в матче</h4>
+        <p className="screen__hint">
+          Матч играется тем же кораблём, что и кампания, — но шестнадцать стволов на одном поле это
+          плотность, которой в кампании нет: на кампанейских числах бой заканчивался за двадцать
+          секунд, раньше первого сужения. Поэтому корпусу множитель, а выстрелу делитель. Числа
+          действуют одинаково на игрока и на ботов — корабль в арене один на всех.
+        </p>
+        <div className="arena-controls">
+          <NumberField
+            caption="Корпус ×"
+            min={0.1}
+            step={0.1}
+            value={tuning.arena.hullScaling}
+            onChange={(hullScaling) => {
+              patchArena({ hullScaling: Math.max(0.1, hullScaling) });
+            }}
+          />
+          <NumberField
+            caption="Урон ×"
+            min={0.1}
+            step={0.05}
+            value={tuning.arena.damageScaling}
+            onChange={(damageScaling) => {
+              patchArena({ damageScaling: Math.max(0.1, damageScaling) });
+            }}
+          />
+          <p className="hint" data-testid="arena-ship-scaling">
+            Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
+            <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}
+            HP, снаряд {String(round2(tuning.friendlyProjectileDamage))} →{" "}
+            <strong>
+              {String(round2(tuning.friendlyProjectileDamage * tuning.arena.damageScaling))}
+            </strong>
+            , пулемёт {String(round2(tuning.mgDamage))} →{" "}
+            <strong>{String(round2(tuning.mgDamage * tuning.arena.damageScaling))}</strong>. Это{" "}
+            <strong>{String(shotsToKill)}</strong> {shotWord(shotsToKill)} из пушки, чтобы снять
+            целый корпус.
+          </p>
+        </div>
+      </section>
 
       <section className="card">
         <h4 className="card__subtitle">Как закрывается поле</h4>

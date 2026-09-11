@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 43 as const;
+export const BALANCE_FILE_VERSION = 44 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -965,6 +965,17 @@ export const arenaTuningSchema = z
      * arithmetic beside the field.
      */
     matchTickLimit: positiveInteger,
+    /**
+     * What a match does to the ship the campaign is balanced around.
+     *
+     * Sixteen guns on one field is a density the campaign never has: at
+     * campaign numbers a match was over in twenty seconds, before the field had
+     * closed once. So the hull is multiplied and the shot is divided rather
+     * than the arena forking its own ship - one ship, two fights, and the
+     * difference between them stated as two numbers the operator can move.
+     */
+    hullScaling: positiveFinite,
+    damageScaling: positiveFinite,
     /** How often the next zone is picked and turns amber. */
     zoneIntervalTicks: positiveInteger,
     /** How long amber lasts before that zone starts killing. */

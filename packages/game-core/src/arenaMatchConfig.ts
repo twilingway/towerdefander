@@ -38,6 +38,14 @@ export const ARENA_ZONE_DAMAGE_SHARE = 1 / 6;
 export const ARENA_MATCH_TICK_LIMIT = 9_000;
 
 /**
+ * What a match does to the campaign's ship, measured rather than guessed: at
+ * 1x/1x sixteen bots finished each other in 16-21 seconds and the field never
+ * closed once. See `pnpm arena:match`.
+ */
+export const ARENA_HULL_SCALING = 2.5;
+export const ARENA_DAMAGE_SCALING = 0.7;
+
+/**
  * A kinetic barrel holds `lifetime / cooldown` shots in the air: the turret
  * about 4,5 and the nose about 6,8. Sixteen hulls firing without pause is
  * therefore near 180, and the ceiling is set above that rather than at it, so
@@ -54,7 +62,7 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   ship: defaultSpaceshipSimulationConfig,
   // Measured, not guessed: at 1x/1x sixteen bots finished each other in 16-21
   // seconds and the ring never closed once. See `pnpm arena:match`.
-  shipScaling: { hull: 2.5, damage: 0.7 },
+  shipScaling: { hull: ARENA_HULL_SCALING, damage: ARENA_DAMAGE_SCALING },
   arenaRadius: defaultSpaceshipSimulationConfig.arenaRadius,
   // The spawn disc, not a spawn ring: hulls are scattered anywhere inside it,
   // held off the wall by enough room to turn.

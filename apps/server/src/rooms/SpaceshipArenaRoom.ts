@@ -157,6 +157,9 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // sheet and the clock are one setting in two halves, and a match shorter
       // than the sheet ends with ground still safe.
       matchTickLimit: tuning.arena.matchTickLimit,
+      // The campaign's ship, stretched for a sixteen-way fight by two numbers
+      // the operator owns rather than by constants nobody can reach.
+      shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
       zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
       zoneWarningTicks: tuning.arena.zoneWarningTicks,
       zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,

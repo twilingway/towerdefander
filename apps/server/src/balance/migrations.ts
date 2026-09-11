@@ -634,6 +634,10 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     // A preset written before the match clock was a setting keeps the length it
     // was played at, which is the default.
     matchTickLimit: readNumber(arena, "matchTickLimit") ?? defaults.arena.matchTickLimit,
+    // A preset written before the match ship was a setting keeps the hull and
+    // the shot it was played with, which is what the built-ins state.
+    hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
+    damageScaling: readNumber(arena, "damageScaling") ?? defaults.arena.damageScaling,
     zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
     zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
     zoneDamageIntervalTicks:
