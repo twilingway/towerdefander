@@ -1,26 +1,29 @@
 # SpaceShip Defender — план проекта
 
+- Версия документа: 2026-09-11
+- Что это: карта состояния проекта и очередь работ. Продуктовая часть живёт в
+  `docs/GAME_DESIGN_DOCUMENT.md`, соревновательный режим — в `docs/ARENA_GAME_DESIGN_DOCUMENT.md`,
+  точное поведение — в `openspec/specs/`, ход работ — в `openspec/changes/`.
+
 ## 1. Product north star
 
-SpaceShip Defender — кооперативный top-down space wave-defense для общего большого экрана и трёх
-browser controllers. Команда управляет одним развиваемым космическим кораблём, уничтожает
-нарастающие волны, зарабатывает credits и в целевой версии модернизирует корпус, щиты и оружие прямо
-во время боя.
+SpaceShip Defender — кооперативный top-down space wave-defense для общего большого экрана и до трёх
+browser controllers. Экипаж ведёт один развиваемый космический корабль, разбирает нарастающие волны,
+зарабатывает credits и между волнами покупает модули из дерева выбранного корпуса.
 
-Роли:
+Роли: pilot ведёт корабль и носовой пулемёт, gunner наводит главное орудие, shield operator держит
+сектор щита. Размер экипажа — 1, 2 или 3: незанятые системы ведёт серверный автопилот, а соло-игрок
+получает и мир, и рычаги на одном устройстве.
 
-- pilot перемещает корабль и уклоняется;
-- gunner направляет и использует weapons;
-- shield operator направляет и переключает энергетический сектор.
-
-Server является единственным источником trusted state. Controllers отправляют intents, а display
-интерполирует authoritative snapshots.
+Server — единственный источник trusted state. Controllers отправляют intents, display интерполирует
+authoritative snapshots.
 
 ## 2. Архитектура
 
 ```text
-Shared display                         Three browser controllers
+Shared display                         До трёх browser controllers
 React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
+Соло-кокпит на том же экране           Консоль баланса (локальная сеть)
                 \                      /
                  \ Colyseus WebSocket /
                   Authoritative server
@@ -28,109 +31,111 @@ React HUD + Phaser 2D world            Pilot / Gunner / Shield React UI
              deterministic TypeScript core
 ```
 
-- `apps/display` — большой экран, React HUD и Phaser world;
+- `apps/display` — большой экран, React HUD, Phaser world и соло-кокпит;
 - `apps/controller` — responsive role controllers;
-- `apps/server` — Colyseus room, validation, simulation, lifecycle и statistics;
-- `apps/admin` — консоль баланса: волны, каталог врагов, директор и кадр камеры;
-- `packages/game-core` — pure fixed-step simulation без DOM/network/timers;
-- `packages/protocol` — strict protocol v17 и shared schemas.
+- `apps/server` — Colyseus room, validation, simulation, lifecycle, статистика и `/admin/*`;
+- `apps/admin` — консоль баланса: волны, враги, ИИ врага, директор, корабли, игрок, управление,
+  эффекты, автопилот, пресеты и статистика прогонов;
+- `packages/game-core` — pure fixed-step simulation без DOM, сети и таймеров;
+- `packages/protocol` — строгие zod-схемы, имена сообщений и общие константы;
+- `packages/client-shared` — то, что нужно и display, и controller;
+- `packages/fx-assets` — запечённые атласы эффектов и типизированный манифест;
+- `packages/config` — общие TypeScript, ESLint и Prettier.
 
-## 3. Реализованный foundation
+## 3. Версии контрактов
 
-- один spaceship, три стабильные role slots;
-- круглая authoritative арена `4400×4400`, радиус `2200`, и fullscreen camera с cosmic overscan;
-- 20 Hz fixed-step, мягкое движение и плавный traverse turret/shield;
-- hold-fire, shield toggle, drain/recharge и authoritative RTT;
-- каталог из пяти архетипов — перехватчик, ганшип, снайпер, ракетоносец и босс — с собственными
-  силуэтами, орудиями и дальностями открытия огня;
-- явная таблица волн поверх процедурного директора и постоянный seeded-поток астероидов, входящих с
-  разных сторон арены;
-- файл пресетов баланса и защищённый `/admin/balance`, из которого консоль правит кампанию, врагов и
-  кадр камеры без пересборки сервера;
-- seeded spawn/RNG, swept collisions, HP, damage, score и defeat;
-- общий credits balance и 600-tick командное голосование за один paid role upgrade;
-- result, unanimous rematch, explicit exit/close, reconnect/replacement;
-- 20-минутный deadline каждой combat wave, timeout defeat, room TTL и защищённая read-only
-  statistics page;
-- network smoke и display + 3 controllers Playwright.
+| Контракт                     | Значение | Где                                          |
+| ---------------------------- | -------: | -------------------------------------------- |
+| `PROTOCOL_VERSION`           |     `54` | `packages/protocol/src/index.ts`             |
+| `BALANCE_FILE_VERSION`       |     `41` | `packages/protocol/src/balance.ts`           |
+| `BALANCE_STATS_FILE_VERSION` |      `3` | `packages/protocol/src/balanceStats.ts`      |
+| `SIMULATION_TICK_RATE`       |  `60 Гц` | `packages/game-core/src/combatValidation.ts` |
 
-Worst-case 196-entity benchmark на Ryzen 9 5900X/Node 22: pure-step p95 около 0,12 ms,
-room-step+sync p95 около 0,27 ms при целевом бюджете 2 ms.
+Протокол ломается жёстко: несовпадение версии даёт `protocol_mismatch`, а не тихий дрейф. Пресет
+баланса мигрируется вперёд; отчёты статистики чужой версии отбрасываются без миграции, потому что
+измерение метрики с изменившимся смыслом хуже отсутствующего.
 
-## 4. Завершённый identity foundation
+## 4. Реализованный фундамент
 
-Source tree очищен от двух прежних product names и использует единый contract:
+**Симуляция и комната.** Детерминированное ядро с фиксированным шагом `1000/60` мс, seeded RNG,
+swept collisions и жёсткими entity caps (`40` врагов, `16` астероидов, `12` единиц лута, `96`
+вражеских снарядов, `12` ракет, `32` своих снаряда, `208` динамических сущностей суммарно). Комната
+идёт по реальному времени с ограниченным навёрстыванием, а не по срабатываниям таймера. Круглая
+арена `4400×4400` с радиусом `2200` по умолчанию, настраиваемым в пределах `1100…8800`.
 
-- brand `SpaceShip Defender`;
-- code vocabulary `Spaceship`/`spaceship`;
-- npm scope `@spaceship-defender/*`;
-- Colyseus room type `spaceship_defender`;
-- public `game.spaceship` и hard-cut versioned protocol, развившийся до текущего v17;
-- `SpaceshipDefenderRoom/State` и `SpaceshipSimulation*` API;
-- удаление unused classic defense core/assets/spec catalog entries;
-- обновление UI, tests, scripts, README, GDD, AGENTS и OpenSpec context.
+**Экипаж.** Комната создаётся на `1`, `2` или `3` игроков. Роли раздаются в пределах размера
+экипажа, пустые места ведёт сервер (щит — своей политикой), клавиатура пилота водит корпус танковым
+рулём, а соло-панель держит корабль и турель двумя независимыми зонами на одном устройстве.
 
-Gameplay, balance, authority, reconnect и rematch при рефакторинге численно не изменились. Existing
-rooms v9 не мигрируют: server/display/controllers обновляются одновременно. Полная история change
-сохранена в `openspec/changes/archive/2026-08-23-spaceship-defender-identity-refactor/`.
+**Корабль.** Три корпуса каталога — Страж, Клинок, Бастион — выбираются на display перед QR-кодом.
+Статы корабля считаются от базы пресета и всех купленных модулей сразу, поэтому порядок покупок не
+влияет на результат. Орудие и носовой пулемёт греются; щит проходит фазы с минимальной
+длительностью. Три вида доставки урона у экипажа — `kinetic`, `laser`, `missile`; у врагов —
+`bullet`, `missile`, `laser`.
 
-## 5. Завершённый arena foundation
+**Прогрессия.** Между волнами — `1800` тиков передышки и один общий оффер: карты доступного тира
+дерева выбранного корпуса по `5` credits, за которые голосуют все роли. Дерево — десять тиров ширин
+`1,2,2,2,2,3,3,3,4,4` плюс повторяемый хвост; случайности в оффере нет, тир выбирается числом
+покупок. Score и credits — разные ресурсы; покупка списывает общий баланс атомарно и защищена
+`actionId` с монотонной ревизией.
 
-- server-authoritative круглая геометрия вместо прямоугольного gameplay bounds;
-- spaceship и enemy ships целиком остаются внутри окружности, сохраняя касательное движение;
-- projectiles, missiles и asteroids очищаются по внешней circular envelope;
-- seeded ambient asteroids появляются каждые 2–5 секунд во время combat, входят с разных сторон и
-  пересекают арену по случайным воспроизводимым траекториям;
-- display рисует круговую границу и маскирует игровую сетку, оставляя снаружи глубокий космос.
+**Волны.** Тридцать прописанных волн поверх процедурного директора (`baseBudget 14`, `+2` за волну,
+cap `120`, HP `+4%` за волну с cap `×8`, темп `+2%` с cap `×3`, босс каждые `5` волн). Записи волны
+несут собственный старт внутри волны, поэтому волна идёт потоком, а не блоками. Каталог врагов — 30
+архетипов с тремя уровнями мастерства (`rookie`, `veteran`, `ace`) и общим сдвигом сложности
+прогона. Каждая волна имеет server-authoritative deadline (`ROOM_WAVE_TTL_SECONDS`).
 
-## 6. Gameplay foundation — credits и team upgrades
+**Лут.** Убитые враги оставляют обломки, которые чинят корпус или возвращают энергию щита;
+выигранная волна держится открытой `900` тиков (босс — `1800`), пока обломки на поле.
 
-- score остаётся нетратимым результатом run, credits принадлежат всему экипажу;
-- награда за цель живёт в каталоге архетипов: wave asteroid и перехватчик `1`, ганшип `2`, снайпер
-  `3`, ракетоносец `4`, босс `30` credits, а ambient targets и missiles не позволяют фармить валюту;
-- projectile kill и shield interception ракеты/астероида дают одинаковый однократный score reward;
-- между waves экипаж 30 секунд голосует за одну из cards pilot/gunner/shield стоимостью 5 credits;
-- protocol v17, revision и action journal защищают vote/reconnect/duplicate delivery;
-- balance, votes и итоговый modifier являются server-authoritative.
+**Картинка.** Параллакс-фон космоса под ареной, запечённые атласы эффектов в `packages/fx-assets`,
+эффекты по событиям архетипа, живой барьер щита с отметками блокировки, вспышки стволов, факел
+двигателя, круглый радар с камнями и счётчиком оплачиваемых. Статичная геометрия печётся в текстуру:
+`Graphics` — инструмент рисования, а не объект на поле.
 
-Покупки непосредственно во время combat, tier prices и persistent economy остаются отдельным будущим
-change после balance pass.
+**Операции.** Защищённый `/admin/balance` и консоль из одиннадцати экранов, продвижение пресета в
+committed seed по ревизии, окно технических работ, read-only статистика комнат, измерение RTT
+каждого соединения, безголовый стенд статистики прогонов с матричными батчами, ежедневный визуальный
+отчёт по истории проекта, четыре контейнера продакшена за существующим reverse proxy.
 
-## 7. Следующий visual change — deep-space art pass
+## 5. Ход работ
 
-Цель:
+OpenSpec — учёт: `openspec/specs/` описывает поведение, `openspec/changes/` — незавершённое,
+`openspec/changes/archive/` — историю (48 завершённых changes на дату документа).
 
-- original 2D pseudo-3D spaceship;
-- layered stars/nebulae/dust и parallax;
-- engine trails, projectile impacts, shield refraction и explosions;
-- modern particles/shaders с fallback для Android TV;
-- читаемость gameplay поверх красивого глубокого космоса.
+Активные changes (27) делятся на три кучи:
 
-Не входит: настоящий 3D, campaign/trading map, торговля, RPG и копирование assets/интерфейса
-«Космических Рейнджеров». Референс означает только ощущение глубокого космоса.
+1. **Плавность и край арены** — `rim-band-visible`, `elastic-arena-rim`, `starfield-seam`,
+   `jitter-sized-playback-buffer`, `client-prediction`, `smoothness-instruments`. Здесь лежит
+   основная незакрытая работа кодом.
+2. **Бой и баланс** — `wave-timeline-and-bestiary`, `boss-inside-wave-budget`, `enemy-laser-weapon`,
+   `enemy-turn-inertia-and-ace-survivability`, `weapon-kinds`, `loot-and-repair`,
+   `boss-health-readout`, `arena-radius-in-preset`, `helm-tuning`, `balance-statistics-console`.
+3. **Стенды и автопилот** — `visible-demo-harness`, `one-autopilot-in-the-room`,
+   `autopilot-aim-and-balance-stats`, `autopilot-threat-forecast`, `autopilot-crossing-not-reverse`,
+   `solo-cockpit`, `wave-balance-admin`, `maintenance-mode`, `production-deployment`,
+   `ship-shield-effect-slots`, `daily-dev-video-reporter`.
 
-## 8. Дальнейшие этапы
+## 6. Очередь
 
-1. Провести balance pass credits/rewards в консоли и спроектировать отдельную in-combat
-   modernization.
-2. Добавить архетипы `charger`/`support`, elites и многофазных боссов вместе с balance pass.
-3. Реализовать accepted 2D art/VFX/audio pipeline с Android TV budget.
-4. Добавить thin Capacitor Android TV shell, launcher, fullscreen, wake lock и lifecycle.
+1. Закрыть плавность: край арены, шов звёздного неба, буфер воспроизведения, предсказание своего
+   корабля.
+2. Довести расписание волн и бестиарий до конца, затем измерить кампанию батчем, а не на глаз.
+3. `campaign-progress` — память между прогонами (localStorage, аккаунты позже); последняя из пяти
+   частей плана дерева тиров, четыре уже в коде.
+4. Определить условие победы кампании: фиксированная последняя волна, босс, эвакуация или другой
+   явный objective. Сейчас кампания растёт бесконечно и кончается только поражением.
+5. Арена «Голодные игры» — отдельный режим по `docs/ARENA_GAME_DESIGN_DOCUMENT.md`, восемь changes,
+   первые два дают играбельный бой двух кораблей. В коде режима нет ничего.
+6. Audio pass и тонкая Capacitor-оболочка для Android TV.
 
-## 9. Видимый demo/test harness
+## 7. Definition of done для каждого change
 
-Отдельная команда `pnpm demo:visible` показывает общий экран в headed Chrome и управляет тремя
-обычными controller connections. Harness не меняет protocol, balance или trusted state и служит для
-совместного визуального тестирования movement/fire/shield, смены волн и будущего проектирования NPC.
-`pnpm demo:verify` конечным сценарием проверяет бой, team-upgrade vote и переход к wave 2.
-
-## 10. Definition of done для каждого change
-
-- proposal/specs/design/tasks согласованы;
-- protocol versioned и boundary validation покрыта;
-- resource-spending commands idempotent;
-- deterministic core и reconnect scenarios протестированы;
-- narrow checks, `pnpm check`, `pnpm spec:validate`, network smoke и Playwright зелёные;
-- docs/environment examples обновлены;
-- read-only reviewer не имеет blocker/high/medium findings;
-- после ручного подтверждения change архивирован, а commit/push выполняются по команде пользователя.
+- proposal, delta specs, design и tasks согласованы, `pnpm spec:validate` зелёный;
+- протокол версионирован, boundary validation покрыта, ресурсные команды идемпотентны;
+- детерминированное ядро и сценарии reconnect покрыты тестами;
+- `pnpm check` зелёный целиком — формат, lint, типы, unit, сборка, сетевой smoke и Playwright;
+- документация и `.env.example` обновлены;
+- read-only reviewer не оставил findings уровня blocker, high или medium;
+- приёмка глазами оператора там, где change меняет картинку или ощущение управления;
+- после подтверждения change архивируется, commit и push выполняются по команде пользователя.

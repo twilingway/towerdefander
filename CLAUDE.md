@@ -44,21 +44,27 @@ pnpm --filter @spaceship-defender/game-core exec vitest run src/combat.test.ts -
 
 Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core,protocol}`.
 
-| Command                                 | Purpose                                                                            |
-| --------------------------------------- | ---------------------------------------------------------------------------------- |
-| `pnpm test:e2e`                         | Builds the server, then Playwright `tests/e2e` on isolated ports 35678/35173/35174 |
-| `pnpm smoke:network`                    | Headless Colyseus SDK client driving a real room (port 35677)                      |
-| `pnpm watch:bots`                       | Real Chrome on a room the room itself flies; reuses a running stand or starts one  |
-| `pnpm demo:visible`                     | Opens real Chrome, three SDK auto-crew controllers play a run (ports 36567/36173)  |
-| `pnpm demo:verify`                      | Headless assertion pass over the same demo; deliberately outside `pnpm check`      |
-| `pnpm benchmark:combat`                 | Worst-case combat room stepping benchmark                                          |
-| `pnpm stats:autopilot`                  | One headless measurement cell: N bot runs on one preset, level and crew            |
-| `pnpm stats:batch --out <dir>`          | The whole matrix — levels x enemy offsets x crew sizes x presets — into a report   |
-| `pnpm balance:promote`                  | Promotes the dev stand's balance into the committed seed, bumping its revision     |
-| `pnpm spec list` / `pnpm spec:validate` | OpenSpec change status and validation                                              |
-| `pnpm fx:bake`                          | Rebakes `packages/fx-assets` sprite atlases from their effect sources              |
-| `pnpm fx:editor`                        | The Arcadia Effects editor UI for hand-tuning an effect (port 5179)                |
-| `pnpm fx:edit`                          | The same editor over **our** sources, port 35179; saves, formats and rebakes       |
+| Command                                  | Purpose                                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| `pnpm test:e2e`                          | Builds the server, then Playwright `tests/e2e` on isolated ports 35678/35173/35174 |
+| `pnpm smoke:network`                     | Headless Colyseus SDK client driving a real room (port 35677)                      |
+| `pnpm watch:bots`                        | Real Chrome on a room the room itself flies; reuses a running stand or starts one  |
+| `pnpm demo:visible`                      | Opens real Chrome, three SDK auto-crew controllers play a run (ports 36567/36173)  |
+| `pnpm demo:verify`                       | Headless assertion pass over the same demo; deliberately outside `pnpm check`      |
+| `pnpm benchmark:combat`                  | Worst-case combat room stepping benchmark                                          |
+| `pnpm stats:autopilot`                   | One headless measurement cell: N bot runs on one preset, level and crew            |
+| `pnpm stats:batch --out <dir>`           | The whole matrix — levels x enemy offsets x crew sizes x presets — into a report   |
+| `pnpm stats:matrix`                      | That batch with the standing arguments: three levels x three hulls, 20 runs each   |
+| `pnpm campaign:author`                   | Re-authors the enemy catalogue and wave table into the operator's preset           |
+| `pnpm campaign:preview`                  | The same authoring pass as a dry run, writing nothing                              |
+| `pnpm demo:guardian` / `blade`/`bastion` | The visible demo pinned to one hull; `pnpm demo:boss` opens it on wave 5           |
+| `pnpm dev:bots`                          | `pnpm dev` with the bot crew and the start-wave flag allowed                       |
+| `pnpm history:evidence` / `:build`       | Rebuilds the project-history report; `pnpm history:dashboard` serves it            |
+| `pnpm balance:promote`                   | Promotes the dev stand's balance into the committed seed, bumping its revision     |
+| `pnpm spec list` / `pnpm spec:validate`  | OpenSpec change status and validation                                              |
+| `pnpm fx:bake`                           | Rebakes `packages/fx-assets` sprite atlases from their effect sources              |
+| `pnpm fx:editor`                         | The Arcadia Effects editor UI for hand-tuning an effect (port 5179)                |
+| `pnpm fx:edit`                           | The same editor over **our** sources, port 35179; saves, formats and rebakes       |
 
 Every harness uses its own port block, so they can run while `pnpm dev` is up. `scripts/` spawns
 child processes with `--import ./scripts/owned-process-guard.mjs` so stopping a harness kills only
@@ -140,14 +146,14 @@ tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 47) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 54) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
-they carry their own `BALANCE_FILE_VERSION` (currently 35) with migrations in
+they carry their own `BALANCE_FILE_VERSION` (currently 41) with migrations in
 `apps/server/src/balance/migrations.ts`, and a balance-only change bumps that file version instead
 of the protocol. `packages/protocol/src/balanceStats.ts` does the same for the measurement reports
-the statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 1) — but those have **no
+the statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 3) — but those have **no
 migrations**: a report of another version is dropped and counted, because a measurement of a metric
 whose meaning has changed is worse than no measurement.
 

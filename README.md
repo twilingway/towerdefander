@@ -1,6 +1,6 @@
 # SpaceShip Defender
 
-Кооперативный top-down space wave-defense для общего большого экрана и трёх игроков. Один
+Кооперативный top-down space wave-defense для общего большого экрана и одного-трёх игроков. Один
 развиваемый космический корабль управляется из браузеров телефонов, планшетов или компьютеров:
 
 - pilot перемещает корабль;
@@ -13,12 +13,12 @@ state; клиенты отправляют только intents.
 
 ## Текущий gameplay
 
-- deterministic fixed-step simulation 20 Hz и protocol v46;
+- deterministic fixed-step simulation 60 Hz и protocol v54;
 - круглая server-authoritative арена `4400×4400`, радиус `2200`, кадр камеры настраивается балансом;
-- каталог из пяти врагов — перехватчик, ганшип, снайпер, ракетоносец и босс, — который редактируется
+- каталог из тридцати врагов — двадцать обычных архетипов и десять боссов, — который редактируется
   из консоли баланса без пересборки сервера;
-- явная таблица волн поверх процедурного директора и постоянный поток астероидов с разных сторон
-  арены;
+- тридцать прописанных волн расписанием поверх процедурного директора и постоянный поток астероидов
+  с разных сторон арены;
 - у каждого орудия врага своя дальность открытия огня: вне её ствол молчит и держит заряд;
 - friendly/hostile projectiles и limited-turn homing missiles;
 - swept collisions, HP, damage, score, общий credits balance и directional shield interception;
@@ -49,7 +49,7 @@ apps/
   server/        authoritative Colyseus room, lifecycle и statistics
   admin/         консоль баланса: волны, враги, директор, камера
 packages/
-  protocol/      protocol v17 schemas и shared contracts
+  protocol/      protocol v54 schemas и shared contracts
   game-core/     pure deterministic simulation без DOM/network/timers
   config/        shared TypeScript configuration
 openspec/        current specs и change lifecycle
