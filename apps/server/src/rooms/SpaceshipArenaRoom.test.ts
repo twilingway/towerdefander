@@ -23,6 +23,7 @@ function initRoom<T extends object>(room: T): T {
 /** The private surface this file reaches into, named rather than cast inline. */
 interface ArenaInternals {
   match: ArenaMatchState | undefined;
+  playerSessionId: string | undefined;
   config: ArenaMatchConfig;
   started: boolean;
   publish: () => void;
@@ -53,6 +54,106 @@ function playToTheEnd(internals: ArenaInternals): void {
   internals.match = match;
   internals.started = true;
 }
+
+/** Puts a pilot in the player's seat, which is what the room gates on. */
+function seat(internals: ArenaInternals): string {
+  internals.playerSessionId = "pilot-1";
+  internals.started = true;
+  const match = internals.match;
+  if (match === undefined) throw new Error("the room built no match");
+  const player = match.ships[0];
+  if (player === undefined) throw new Error("the match has no player slot");
+  return player.id;
+}
+
+/** Wrecks one hull without touching the rest of the match. */
+function wreck(internals: ArenaInternals, slot: number): void {
+  const match = internals.match;
+  if (match === undefined) throw new Error("the room built no match");
+  internals.match = {
+    ...match,
+    ships: match.ships.map((ship, index) =>
+      index === slot ? { ...ship, hp: 0, alive: false } : ship
+    )
+  };
+}
+
+/** Everything the contract is told about the encounter, read back off the state. */
+function encounterOf(room: SpaceshipArenaRoom): Record<string, unknown> {
+  const encounter = room.state.game.encounter;
+  return {
+    phase: encounter.phase,
+    outcome: encounter.hasOutcome ? encounter.outcome : null,
+    defeatReason: encounter.hasDefeatReason ? encounter.defeatReason : null,
+    waveNumber: encounter.waveNumber,
+    encounterTick: encounter.encounterTick,
+    phaseTicksRemaining: encounter.phaseTicksRemaining,
+    waveSecondsRemaining: encounter.waveSecondsRemaining,
+    lootWindowSecondsRemaining: encounter.lootWindowSecondsRemaining,
+    score: encounter.score
+  };
+}
+
+describe("every way a match can end", () => {
+  /*
+   * Three endings, and all three published a view the display refuses - which
+   * is a frozen picture and no message at all. They are checked here one by
+   * one rather than argued about, because the only difference between them is
+   * two fields and the contract cares about both.
+   */
+  it("survives the player being shot down while the others fight on", () => {
+    const { room, internals } = arenaRoom();
+    seat(internals);
+    wreck(internals, 0);
+    internals.publish();
+
+    const encounter = encounterOf(room);
+    expect(encounter.phase).toBe("result");
+    expect(encounter.outcome).toBe("defeat");
+    expect(encounter.defeatReason).toBe("spaceship_destroyed");
+    expect(encounter.waveSecondsRemaining).toBe(0);
+    expect(publicEncounterViewSchema.safeParse(encounter).error?.issues ?? []).toEqual([]);
+  });
+
+  it("survives the player being the last one in the sky", () => {
+    const { room, internals } = arenaRoom();
+    const playerId = seat(internals);
+    const match = internals.match;
+    if (match === undefined) throw new Error("the room built no match");
+    internals.match = {
+      ...match,
+      phase: "result",
+      winnerShipId: playerId,
+      ships: match.ships.map((ship, index) =>
+        index === 0 ? ship : { ...ship, hp: 0, alive: false }
+      )
+    };
+    internals.publish();
+
+    const encounter = encounterOf(room);
+    expect(encounter.phase).toBe("result");
+    expect(encounter.outcome).toBe("victory");
+    // A victory with a defeat reason on it is refused as loudly as a defeat
+    // without one; the contract checks the pair, not either half.
+    expect(encounter.defeatReason).toBeNull();
+    expect(encounter.waveSecondsRemaining).toBe(0);
+    expect(publicEncounterViewSchema.safeParse(encounter).error?.issues ?? []).toEqual([]);
+  });
+
+  it("survives the clock running out with the player still flying", () => {
+    const { room, internals } = arenaRoom();
+    seat(internals);
+    playToTheEnd(internals);
+    internals.publish();
+
+    const encounter = encounterOf(room);
+    expect(encounter.phase).toBe("result");
+    expect(encounter.outcome).toBe("defeat");
+    expect(encounter.defeatReason).toBe("wave_timeout");
+    expect(encounter.waveSecondsRemaining).toBe(0);
+    expect(publicEncounterViewSchema.safeParse(encounter).error?.issues ?? []).toEqual([]);
+  });
+});
 
 describe("the arena's published encounter", () => {
   it("drops the match clock when the match is over", () => {
