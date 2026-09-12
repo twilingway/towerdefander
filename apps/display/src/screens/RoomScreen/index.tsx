@@ -26,6 +26,7 @@ import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/preview/world.js";
 import { createControllerJoinUrl } from "../../model/roomView.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
 import { BattleStage } from "./BattleStage.js";
+import { SettingsPanel } from "./SettingsPanel.js";
 import { PreviewControls } from "./PreviewControls.js";
 
 /** The switcher the layout preview puts over the room, and nothing else has. */
@@ -310,26 +311,33 @@ export function RoomScreen({
             <PolledFpsReadout read={readFrameStats} />
           )}
           {/*
-           * Leaving a match is not closing a room. The fifteen other hulls go
+           * The way out lives behind the gear rather than beside the readouts.
+           *
+           * A red button in the corner of a fight is the brightest thing on the
+           * screen and the one a pilot least wants to press; behind a gear it
+           * is where somebody looks when they have decided to leave, next to
+           * the other thing they came to change.
+           *
+           * Leaving a match is not closing a room: the fifteen other hulls go
            * on fighting, and the room lives until the match is decided.
            */}
-          <button
-            type="button"
-            className="room-close-button"
-            onClick={() => {
-              if (match) onLeaveRoom();
-              else onCloseRoom();
+          <SettingsPanel
+            action={{
+              label:
+                session?.closingRoom === true
+                  ? match
+                    ? "Выходим…"
+                    : "Закрываем комнату…"
+                  : match
+                    ? "Выйти из боя"
+                    : "Закрыть комнату",
+              disabled: session?.closingRoom === true,
+              onClick: () => {
+                if (match) onLeaveRoom();
+                else onCloseRoom();
+              }
             }}
-            disabled={session?.closingRoom === true}
-          >
-            {session?.closingRoom === true
-              ? match
-                ? "Выходим…"
-                : "Закрываем комнату…"
-              : match
-                ? "Выйти из боя"
-                : "Закрыть комнату"}
-          </button>
+          />
         </div>
       </header>
       {session !== undefined && session.error.length > 0 && (

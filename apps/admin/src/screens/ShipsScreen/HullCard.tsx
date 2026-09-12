@@ -10,6 +10,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
+import { HullSoundSlots } from "./HullSoundSlots.js";
 import { ShieldEffectSlots } from "./ShieldEffectSlots.js";
 import { NumberField, WeaponKindField } from "../../components/fields.js";
 import { ModuleEditor } from "./ModuleEditor.js";
@@ -40,6 +41,12 @@ function coveredRoles(tier: readonly ShipModule[]): number {
 function withoutEffects(hull: ShipArchetype): ShipArchetype {
   const next = { ...hull };
   delete next.effects;
+  return next;
+}
+
+function withoutSounds(hull: ShipArchetype): ShipArchetype {
+  const next = { ...hull };
+  delete next.sounds;
   return next;
 }
 
@@ -144,6 +151,20 @@ export function HullCard({
         effects={hull.effects}
         onChange={(effects) => {
           onChange(effects === undefined ? withoutEffects(hull) : { ...hull, effects });
+        }}
+      />
+
+      <h4 className="card__subtitle">Звуки корпуса</h4>
+      <p className="screen__hint">
+        Два ствола звучат по отдельности, иначе очередь и залп читаются как одно оружие,
+        стрельнувшее дважды. Попадание — это то, что слышно, когда достаётся этому корпусу;
+        уничтожение — его гибель, и в матче арены она же гибель любого соперника, потому что корабль
+        там один на всех. Кнопка ▶ проигрывает тот же файл, который услышит игрок.
+      </p>
+      <HullSoundSlots
+        sounds={hull.sounds}
+        onChange={(sounds) => {
+          onChange(sounds === undefined ? withoutSounds(hull) : { ...hull, sounds });
         }}
       />
 

@@ -388,16 +388,57 @@ describe("the field's supply run", () => {
     expect(state.loot.filter((drop) => drop.kind === "gear").length).toBeGreaterThan(0);
   });
 
-  it("never lands in ground that is already killing, and leaves when it closes", () => {
+  it("never lands in ground that is already killing", () => {
     const config = supplyConfig({ zoneIntervalTicks: 1, zoneWarningTicks: 1, zonesPerClosure: 4 });
     let state = match(config);
+    const seen = new Set(state.loot.map((drop) => drop.id));
     for (let tick = 0; tick < 120; tick += 1) {
       state = advanceArenaMatch(state, new Map(), config);
       for (const drop of state.loot) {
+        // Only where a drop *appeared*: ground that closes over one already
+        // lying is a different question, answered by the test below.
+        if (seen.has(drop.id)) continue;
+        seen.add(drop.id);
         const zone = state.zones.find((candidate) => candidate.id === drop.zoneId);
         expect(zone?.state).not.toBe("closed");
       }
     }
+  });
+
+  /*
+   * A drop the field closed over is taken away by the next supply beat, not by
+   * the tick the ground turned.
+   *
+   * The gap between the two is deliberate: a crate visibly inside the zone for
+   * a while is a decision - worth some hull to whoever thinks the trip is worth
+   * it - and the supply run tidying up after itself is what ends the offer.
+   */
+  it("keeps a swallowed drop until the next beat, then takes it", () => {
+    const beat = 20;
+    const config = supplyConfig({
+      lootIntervalTicks: beat,
+      zoneIntervalTicks: 10_000,
+      zoneWarningTicks: 10_000
+    });
+    let state = advanceArenaMatch(match(config), new Map(), config);
+    const drop = state.loot[0];
+    expect(drop).toBeDefined();
+    if (drop === undefined) return;
+
+    state = {
+      ...state,
+      zones: state.zones.map((zone) =>
+        zone.id === drop.zoneId ? { ...zone, state: "closed" as const } : zone
+      )
+    };
+    for (let tick = 0; tick < beat - 2; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+      expect(state.loot.map((held) => held.id)).toContain(drop.id);
+    }
+    for (let tick = 0; tick < 3; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+    expect(state.loot.map((held) => held.id)).not.toContain(drop.id);
   });
 
   it("holds the caps however long the field goes uncollected", () => {

@@ -339,6 +339,10 @@ export class EnemyVisualState extends Schema {
   @type("string") effectDeath = "";
   @type("string") effectHit = "";
   @type("string") effectShot = "";
+  /** And what it is heard doing, on the same terms. */
+  @type("string") soundDeath = "";
+  @type("string") soundHit = "";
+  @type("string") soundShot = "";
 }
 
 /**
@@ -452,6 +456,16 @@ export class SpaceshipDisplayState extends Schema {
   @type("string") shieldImpactEffect = "";
   @type("string") shipDeathEffect = "";
   @type("string") shipMuzzleEffect = "";
+  /**
+   * What this hull is heard doing; an empty string is an unset slot, which
+   * leaves the display's own rule. Strings on the display branch are
+   * affordable for the same reason the effects above are: chosen once for the
+   * room rather than sampled every tick.
+   */
+  @type("string") shipCannonSound = "";
+  @type("string") shipMgSound = "";
+  @type("string") shipHitSound = "";
+  @type("string") shipDeathSound = "";
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;

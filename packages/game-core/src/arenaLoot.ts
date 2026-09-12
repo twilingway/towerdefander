@@ -146,8 +146,14 @@ export function advanceArenaLoot(
     sequence += 1;
   }
 
-  // Whatever the closing field has swallowed goes with it: a drop under a red
-  // rectangle is bait no one may take.
+  /*
+   * And what the closing field has swallowed goes with the beat.
+   *
+   * On the beat rather than on the tick the ground turned: a crate that is
+   * visibly inside the zone for a while is a decision - worth six bites of hull
+   * to whoever thinks the trip is worth it - and the supply run tidying up
+   * after itself is what eventually takes it off the board.
+   */
   dropped = dropped.filter((drop) => zoneOf(zones, drop.zoneId)?.state !== "closed");
 
   return {

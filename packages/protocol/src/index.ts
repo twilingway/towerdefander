@@ -5,6 +5,7 @@ export * from "./soloInput.ts";
 export * from "./enemyKinds.ts";
 export * from "./visualCatalog.ts";
 export * from "./effectCatalogue.ts";
+export * from "./audioCatalogue.ts";
 import { CREW_ROLES, crewRoleSchema, type CrewRole } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
@@ -18,6 +19,7 @@ import {
   backgroundTuningSchema,
   cameraViewWidthSchema,
   enemyEventEffectsSchema,
+  enemySoundsSchema,
   entityVisualSchema,
   friendlyWeaponKindSchema,
   helmSchemeSchema,
@@ -28,7 +30,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 65 as const;
+export const PROTOCOL_VERSION = 66 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -885,7 +887,9 @@ export const publicEnemyCatalogueEntrySchema = z
      * What this archetype plays on each of its events. Sent once per run with
      * the rest of its look; absent leaves the display's own rule.
      */
-    effects: enemyEventEffectsSchema.optional()
+    effects: enemyEventEffectsSchema.optional(),
+    /** And what it is heard doing, on the same terms. */
+    sounds: enemySoundsSchema.optional()
   })
   .strict();
 export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;
@@ -979,6 +983,11 @@ export const displayGameSnapshotSchema = z
     shipDeathEffect: z.string(),
     /** What its turret flashes; empty leaves the display's own. */
     shipMuzzleEffect: z.string(),
+    /** What this hull is heard doing; empty leaves the display's own. */
+    shipCannonSound: z.string(),
+    shipMgSound: z.string(),
+    shipHitSound: z.string(),
+    shipDeathSound: z.string(),
     turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,

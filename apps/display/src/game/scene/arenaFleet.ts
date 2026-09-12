@@ -22,6 +22,7 @@ import {
   type BurstLayer
 } from "./bursts.js";
 import type { ScenePrediction } from "./entities.js";
+import type { SceneAudio } from "./sceneAudio.js";
 import { ShieldBand } from "./shield.js";
 
 /** Where the scene has actually drawn the player's own hull this frame. */
@@ -152,6 +153,10 @@ export class ArenaFleet {
   private readonly bands: ShieldBand[] = [];
   /** Kept from the last patch so a drawn frame can spend a banked shot. */
   private bursts: BurstLayer | undefined;
+  /** And the same for the shot being heard, which is spent on the same frame. */
+  private sounds: SceneAudio | undefined;
+  /** The hull's gun, kept for the same reason: a flash is spent on a drawn frame. */
+  private cannonSound = "";
 
   /** Takes the newest patch: a sample on every track, health, and a hit flash. */
   sync(
@@ -160,12 +165,15 @@ export class ArenaFleet {
     bake: BakeShape,
     snap = false,
     prediction?: ScenePrediction,
-    bursts?: BurstLayer
+    bursts?: BurstLayer,
+    sounds?: SceneAudio
   ): void {
     // Every hull, the player's own included: the scene draws that one's art, but
     // its health and its sector are the same question a rival's bars answer, and
     // the answer belongs over the ship rather than only in a panel.
     this.bursts = bursts;
+    this.sounds = sounds;
+    this.cannonSound = snapshot.shipCannonSound;
     const seen = new Set<string>();
     const toTick = snapshot.tick;
     // The hull's own choice from the console, with the display's baked mark
@@ -214,6 +222,12 @@ export class ArenaFleet {
       if (ship.hp < parts.hp - 0.01) {
         parts.flashLeftMs = FLASH_MS;
         bursts?.spawn(DEFAULT_ENEMY_DEATH_EFFECT, parts.hull.x, parts.hull.y, ship.radius * 0.6);
+        sounds?.play(
+          snapshot.shipHitSound,
+          parts.hull.x,
+          parts.hull.y,
+          parts.isSelf ? "own" : "enemyShot"
+        );
       }
       /*
        * A block is its own event, counted by the room.
@@ -262,6 +276,15 @@ export class ArenaFleet {
         // behind it: a preset that names nothing plays what it always played.
         const effect = deathEffectFor("enemy", false, snapshot.shipDeathEffect);
         if (effect !== undefined) bursts?.spawn(effect, parts.hull.x, parts.hull.y, ship.radius);
+        // Every hull in a match is the same hull, so one wreck sounds like any
+        // other - including the player's own, which is the one they most need.
+        sounds?.play(
+          snapshot.shipDeathSound.length > 0 ? snapshot.shipDeathSound : "explosion",
+          parts.hull.x,
+          parts.hull.y,
+          // A player's own wreck is theirs to hear whatever they switched off.
+          parts.isSelf ? "own" : "enemyDeath"
+        );
         parts.hull.setVisible(false);
         parts.turret.setVisible(false);
         parts.shield.setVisible(false);
@@ -364,6 +387,7 @@ export class ArenaFleet {
             parts.turret.rotation,
             parts.followKey
           );
+          this.sounds?.play(this.cannonSound, muzzle.x, muzzle.y, "enemyShot");
         }
         /*
          * And the flash still playing is dragged back onto the barrel, exactly

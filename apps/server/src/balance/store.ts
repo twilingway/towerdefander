@@ -449,6 +449,12 @@ export function toSimulationConfig(
       : { shieldImpactEffect: hull.effects.shieldImpact }),
     ...(hull.effects?.death === undefined ? {} : { shipDeathEffect: hull.effects.death }),
     ...(hull.effects?.muzzle === undefined ? {} : { shipMuzzleEffect: hull.effects.muzzle }),
+    // And what it is heard doing, folded in the same way and for the same
+    // reason: an unset slot is absent rather than empty, so the built-in stands.
+    ...(hull.sounds?.cannonShot === undefined ? {} : { shipCannonSound: hull.sounds.cannonShot }),
+    ...(hull.sounds?.mgShot === undefined ? {} : { shipMgSound: hull.sounds.mgShot }),
+    ...(hull.sounds?.hit === undefined ? {} : { shipHitSound: hull.sounds.hit }),
+    ...(hull.sounds?.death === undefined ? {} : { shipDeathSound: hull.sounds.death }),
     moduleTiers: hull.tiers,
     endlessTier: hull.endlessTier
   });

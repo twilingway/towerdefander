@@ -83,6 +83,15 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly shipDeathEffect: string;
   /** What this hull's turret flashes; empty leaves the display's own. */
   readonly shipMuzzleEffect: string;
+  /**
+   * What this hull is heard doing; empty is silence the display may fill with
+   * its own default. Presentation, like the effects above it: the simulation
+   * carries the choice without ever reading it, so one hull travels whole.
+   */
+  readonly shipCannonSound: string;
+  readonly shipMgSound: string;
+  readonly shipHitSound: string;
+  readonly shipDeathSound: string;
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;

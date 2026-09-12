@@ -294,6 +294,10 @@ export interface NetworkGameState {
     shieldImpactEffect?: string;
     shipDeathEffect?: string;
     shipMuzzleEffect?: string;
+    shipCannonSound?: string;
+    shipMgSound?: string;
+    shipHitSound?: string;
+    shipDeathSound?: string;
     spaceshipVisualScale?: number;
     turretVisualShape?: string;
     turretVisualScale?: number;
@@ -330,6 +334,10 @@ export interface NetworkEnemyVisualState {
   effectDeath: string;
   effectHit: string;
   effectShot: string;
+  /** And what it is heard doing, on the same terms. */
+  soundDeath: string;
+  soundHit: string;
+  soundShot: string;
 }
 
 export interface NetworkRoomState {

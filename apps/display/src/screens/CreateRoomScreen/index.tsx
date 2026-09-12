@@ -1,6 +1,8 @@
 import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+import { MENU_THEME } from "../../audio/themes.js";
+import { useMusicTrack } from "../../audio/useMusicTrack.js";
 
 import { useRef, useState } from "react";
 import {
@@ -64,6 +66,7 @@ export function CreateRoomScreen({
   onBack,
   onCreate
 }: CreateRoomScreenProps) {
+  useMusicTrack(MENU_THEME);
   // Solo on this very screen is the default, because it is the shortest path
   // from opening the page to flying: no phone, no second person, no waiting.
   const [crewSize, setCrewSize] = useState<CrewSize>(1);

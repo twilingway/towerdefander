@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import type { ArenaLobby, PublicShip } from "@spaceship-defender/protocol";
 
 import { CatalogAssetShape } from "@spaceship-defender/client-shared";
+import { MENU_THEME } from "../../audio/themes.js";
+import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { getVisualAsset } from "@spaceship-defender/protocol";
 
 import { ShipTile } from "../../components/ShipTile/index.js";
@@ -36,6 +38,7 @@ export function ArenaSetupScreen({
   onBack,
   onStart
 }: ArenaSetupScreenProps) {
+  useMusicTrack(MENU_THEME);
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   const [pilotName, setPilotName] = useState("Пилот");
   // Solo on this screen by default, like the campaign: it is the shortest path

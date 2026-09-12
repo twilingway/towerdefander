@@ -319,6 +319,15 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     display.shieldImpactEffect = ship.shieldImpactEffect;
     display.shipDeathEffect = ship.shipDeathEffect;
     display.shipMuzzleEffect = ship.shipMuzzleEffect;
+    /*
+     * Every hull in a match is this hull, so one set of sounds covers the
+     * field: what the player is heard firing is what fifteen rivals are heard
+     * firing, which is also what a kill of any of them sounds like.
+     */
+    display.shipCannonSound = ship.shipCannonSound;
+    display.shipMgSound = ship.shipMgSound;
+    display.shipHitSound = ship.shipHitSound;
+    display.shipDeathSound = ship.shipDeathSound;
     display.shieldRadius = ship.shieldRadius;
     // The drive block is what a predicting client replays from; the arena does
     // not predict yet, but the contract asks for real numbers and they exist.

@@ -147,6 +147,14 @@ export interface EnemyVisual extends EntityVisual {
         readonly shot?: string | undefined;
       }
     | undefined;
+  /** And what it is heard doing, carried on exactly the same terms. */
+  readonly sounds?:
+    | {
+        readonly death?: string | undefined;
+        readonly hit?: string | undefined;
+        readonly shot?: string | undefined;
+      }
+    | undefined;
 }
 
 /**

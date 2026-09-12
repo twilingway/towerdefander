@@ -966,6 +966,10 @@ export class SpaceshipDefenderRoom extends Room<{
     display.shieldImpactEffect = this.gameConfig.shieldImpactEffect;
     display.shipDeathEffect = this.gameConfig.shipDeathEffect;
     display.shipMuzzleEffect = this.gameConfig.shipMuzzleEffect;
+    display.shipCannonSound = this.gameConfig.shipCannonSound;
+    display.shipMgSound = this.gameConfig.shipMgSound;
+    display.shipHitSound = this.gameConfig.shipHitSound;
+    display.shipDeathSound = this.gameConfig.shipDeathSound;
     display.spaceshipVisualScale = this.gameConfig.spaceshipVisual?.modelScale ?? 1;
     display.turretVisualShape = this.gameConfig.turretVisual?.shape ?? "";
     display.turretVisualScale = this.gameConfig.turretVisual?.modelScale ?? 1;
@@ -987,6 +991,9 @@ export class SpaceshipDefenderRoom extends Room<{
       entry.effectDeath = archetype.visual.effects?.death ?? "";
       entry.effectHit = archetype.visual.effects?.hit ?? "";
       entry.effectShot = archetype.visual.effects?.shot ?? "";
+      entry.soundDeath = archetype.visual.sounds?.death ?? "";
+      entry.soundHit = archetype.visual.sounds?.hit ?? "";
+      entry.soundShot = archetype.visual.sounds?.shot ?? "";
       catalogue.set(kind, entry);
     }
   }

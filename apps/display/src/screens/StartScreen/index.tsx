@@ -2,6 +2,9 @@ import { useRef } from "react";
 import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+import { SettingsPanel } from "../RoomScreen/SettingsPanel.js";
+import { MENU_THEME } from "../../audio/themes.js";
+import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { useRemoteNavigation } from "../../model/hooks/useRemoteNavigation.js";
 
 export type GameMode = "campaign" | "arena";
@@ -48,11 +51,17 @@ const MODES: readonly ModeTile[] = [
 
 /** The first screen: what game are we playing tonight. */
 export function StartScreen({ maintenance, onPick }: StartScreenProps) {
+  useMusicTrack(MENU_THEME);
   const shell = useRef<HTMLElement | null>(null);
   useRemoteNavigation(shell);
 
   return (
     <main className="display-shell display-shell--start" ref={shell}>
+      {/* The volume is set here as often as in the fight: this is the screen
+        somebody is on when they decide the room is too loud. */}
+      <div className="start-settings">
+        <SettingsPanel />
+      </div>
       <header className="start-header">
         <p className="start-rule">
           <span>Выберите режим</span>

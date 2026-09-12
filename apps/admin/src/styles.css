@@ -1254,3 +1254,22 @@ body {
   align-items: end;
   margin-top: 8px;
 }
+
+/* A sound has no thumbnail, so the play button is the thumbnail. */
+.sound-slots__play {
+  padding: 0.25rem 0.6rem;
+  line-height: 1;
+}
+
+.sound-library {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0.2rem 0 0;
+}
+
+.sound-library__item {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.78rem;
+}

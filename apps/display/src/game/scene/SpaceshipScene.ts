@@ -10,6 +10,7 @@ import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
+import { sceneAudioFor, type SceneAudio } from "./sceneAudio.js";
 import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
@@ -41,6 +42,11 @@ export class SpaceshipScene extends Phaser.Scene {
   private shield: ShieldLayer | undefined;
   private exhaust: ExhaustLayer | undefined;
   private bursts: BurstLayer | undefined;
+  /**
+   * Where events go to be heard. The listener is the camera, so the sink reads
+   * the newest snapshot rather than holding a copy of one.
+   */
+  private readonly sounds: SceneAudio = sceneAudioFor(() => this.snapshot);
   /** Shots the crew fired since the last frame, placed from the drawn pose. */
   private readonly ownShots: OwnShot[] = [];
   private visualShieldAngle: number;
@@ -265,14 +271,21 @@ export class SpaceshipScene extends Phaser.Scene {
         : predicted.turretAngle;
     // From the numbers just drawn, not from the snapshot: that is what keeps the
     // flash on the visible barrel however fast the hull is moving.
-    placeOwnShots(this.bursts, this.ownShots, {
-      mount,
-      hull: spaceshipPosition,
-      heading: spaceshipHeading,
-      turretRotation: this.turret.rotation,
-      hullRadius: this.snapshot.spaceship.radius,
-      turretMuzzleEffect: this.snapshot.shipMuzzleEffect
-    });
+    placeOwnShots(
+      this.bursts,
+      this.ownShots,
+      {
+        mount,
+        hull: spaceshipPosition,
+        heading: spaceshipHeading,
+        turretRotation: this.turret.rotation,
+        hullRadius: this.snapshot.spaceship.radius,
+        turretMuzzleEffect: this.snapshot.shipMuzzleEffect,
+        cannonSound: this.snapshot.shipCannonSound,
+        mgSound: this.snapshot.shipMgSound
+      },
+      this.sounds
+    );
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     /*
      * The rest of a match, on the clock the rest of the world is drawn on, and
@@ -418,7 +431,8 @@ export class SpaceshipScene extends Phaser.Scene {
       (key, half, draw) => this.bake(key, half, draw),
       shouldSnap,
       this.prediction,
-      this.bursts
+      this.bursts,
+      this.sounds
     );
     // The sheet is ground: redrawn when a zone changes state and at no other
     // time, which on a sixty-hertz patch stream is a handful of times a match.
@@ -559,7 +573,8 @@ export class SpaceshipScene extends Phaser.Scene {
       snap,
       bursts: this.bursts,
       ownShots: this.ownShots,
-      shieldPose: this.shield?.pose()
+      shieldPose: this.shield?.pose(),
+      sounds: this.sounds
     });
   }
 }

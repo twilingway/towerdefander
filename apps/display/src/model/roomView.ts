@@ -6,6 +6,7 @@ import {
 
 import {
   toEnemyEffects,
+  toEnemySounds,
   toEntityVisual,
   toNebulaPreset,
   toPoseView,
@@ -185,6 +186,10 @@ export function toDisplayRoomView(
             shieldImpactEffect: display.shieldImpactEffect ?? "",
             shipDeathEffect: display.shipDeathEffect ?? "",
             shipMuzzleEffect: display.shipMuzzleEffect ?? "",
+            shipCannonSound: display.shipCannonSound ?? "",
+            shipMgSound: display.shipMgSound ?? "",
+            shipHitSound: display.shipHitSound ?? "",
+            shipDeathSound: display.shipDeathSound ?? "",
             turretVisual:
               display.turretVisualShape === undefined || display.turretVisualShape.length === 0
                 ? null
@@ -204,7 +209,8 @@ export function toDisplayRoomView(
               modelScale: entry.modelScale,
               showHealthBar: entry.showHealthBar,
               isBoss: entry.isBoss,
-              effects: toEnemyEffects(entry)
+              effects: toEnemyEffects(entry),
+              sounds: toEnemySounds(entry)
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),

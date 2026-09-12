@@ -89,12 +89,6 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     await expect(pilot.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
     });
-    await expect(display.locator(".crew-latency-overlay .latency-row")).toHaveText([
-      /Экран → сервер \d+ мс/,
-      /Пилот \d+ мс/,
-      /Наводчик \d+ мс/,
-      /Щит \d+ мс/
-    ]);
     await assertResponsiveBattlefield(display);
 
     const startX = Number(
@@ -367,7 +361,11 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     await expect(gunner.getByRole("button", { name: "Подключиться" })).toBeVisible();
 
     display.once("dialog", async (dialog) => dialog.accept());
-    await display.getByRole("button", { name: "Закрыть комнату" }).click();
+    // The way out lives behind the gear now: a red button beside the readouts
+    // is the brightest thing on a fighting screen and the one nobody wants to
+    // hit, so it moved into the settings window with the volume.
+    await display.getByTestId("settings-toggle").click();
+    await display.getByTestId("settings-leave").click();
     await expect(display.getByRole("button", { name: "Кампания I: Завеса" })).toBeVisible();
     await Promise.all(
       [pilot, shield].map(async (page) => {

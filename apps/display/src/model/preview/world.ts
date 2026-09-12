@@ -147,6 +147,10 @@ export const PREVIEW_WORLD = {
   shieldImpactEffect: "",
   shipDeathEffect: "",
   shipMuzzleEffect: "",
+  shipCannonSound: "",
+  shipMgSound: "",
+  shipHitSound: "",
+  shipDeathSound: "",
   turretVisual: PREVIEW_TURRET_VISUAL,
   shieldRadius: 104,
   // The campaign has no zone sheet; the arena fills this in.

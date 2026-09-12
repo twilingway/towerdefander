@@ -944,7 +944,13 @@ p {
   background: #9e3f3a;
 }
 
-.display-shell--battle > .room-header .room-close-button {
+/*
+ * The battle header lets clicks through to the field; its own controls do not.
+ *
+ * There is one of them now - the gear, which the way out moved behind - and it
+ * has to take a press where the header itself deliberately does not.
+ */
+.display-shell--battle > .room-header .settings {
   pointer-events: auto;
 }
 
@@ -3050,8 +3056,10 @@ p {
 }
 
 /* ...and the gauges drop below it, because both want the same corner. */
+/* Clear of the gear in the corner above it, which is what the header row is
+   now: one square button rather than a row of readouts. */
 .arena-hud__ship {
-  margin-top: 2.8rem;
+  margin-top: 3.4rem;
 }
 
 /* Both groups carry the same glass the rest of the battle panels are drawn on,
@@ -3209,4 +3217,118 @@ p {
 .intermission-card--default {
   border-color: rgb(255 211 111 / 45%);
   box-shadow: inset 0 0 0 1px rgb(255 211 111 / 18%);
+}
+
+/*
+ * Everything that is not the fight, behind one gear.
+ *
+ * Closed it is one button in the corner of the header - the field is what the
+ * screen is for. Open it is a small window hanging under that button, which is
+ * where the volume and the way out both live.
+ */
+.settings {
+  position: relative;
+  display: inline-block;
+}
+
+.settings__toggle {
+  /*
+   * A square, which takes saying twice: the shell gives every button a
+   * `min-height` for the thumb, and a minimum beats a height - so the gear came
+   * out as tall as a touch target and as wide as an icon.
+   */
+  width: 2.4rem;
+  height: 2.4rem;
+  min-height: 0;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: rgb(226 240 255 / 88%);
+  cursor: pointer;
+  background: rgb(6 14 26 / 62%);
+  border: 1px solid rgb(120 190 255 / 28%);
+  border-radius: 0.6rem;
+}
+
+.settings__toggle:hover {
+  border-color: rgb(120 190 255 / 55%);
+}
+
+.settings__window {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 14rem;
+  padding: 0.6rem 0.7rem;
+  background: rgb(6 14 26 / 92%);
+  border: 1px solid rgb(120 190 255 / 24%);
+  border-radius: 0.6rem;
+}
+
+.settings__row {
+  display: grid;
+  grid-template-columns: 3.6rem 1fr 2ch;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: rgb(198 220 244 / 82%);
+}
+
+.settings__row input {
+  width: 100%;
+}
+
+.settings__row strong {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.settings__check {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: rgb(198 220 244 / 82%);
+  cursor: pointer;
+}
+
+.settings__mute,
+.settings__leave {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  color: rgb(226 240 255 / 88%);
+  cursor: pointer;
+  background: rgb(14 28 46 / 78%);
+  border: 1px solid rgb(120 190 255 / 28%);
+  border-radius: 0.45rem;
+}
+
+.settings__mute--on {
+  color: rgb(255 214 130 / 95%);
+  border-color: rgb(255 196 92 / 55%);
+}
+
+/* The way out is the one destructive thing in the window, and reads like it. */
+.settings__leave {
+  margin-top: 0.2rem;
+  color: rgb(255 208 208 / 95%);
+  background: rgb(74 20 26 / 85%);
+  border-color: rgb(226 92 92 / 45%);
+}
+
+.settings__leave:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* The start screen has no header to hang it in, so it gets the corner. */
+.start-settings {
+  position: absolute;
+  z-index: 40;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
 }

@@ -1,0 +1,19 @@
+{
+  "name": "@spaceship-defender/audio-assets",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./music": "./src/music.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "6.0.2",
+    "vitest": "4.1.10"
+  }
+}
