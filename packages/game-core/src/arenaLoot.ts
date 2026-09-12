@@ -75,20 +75,15 @@ export function advanceArenaLoot(
 ): ArenaLootStep {
   const held = advanceCaptures(loot, ships, hurt, config);
 
-  // Nothing new until the field has been fought over for a while: a drop that
-  // arrives with the first shot is picked up on the way past rather than
-  // crossed for.
-  if (clock.tick < config.lootFirstSpawnTicks) {
-    return {
-      loot: held.loot,
-      taken: held.taken,
-      ticksUntilLoot: config.lootIntervalTicks,
-      ticksUntilCargo: config.lootCargoIntervalTicks,
-      nextLootSequence,
-      rngState
-    };
-  }
-
+  /*
+   * The opening quiet is the first countdown, not a gate in front of it.
+   *
+   * Held as a separate test it delayed the first drop by the hold-off *and*
+   * then a full interval - a field told "first loot after fifteen seconds, then
+   * one a minute" put nothing out for seventy-five. The match starts both
+   * clocks at the hold-off instead, so the field's own numbers mean what they
+   * say and the count-down is the only mechanism.
+   */
   const commonDue = ticksUntilLoot <= 1;
   const cargoDue = ticksUntilCargo <= 1;
   if (!commonDue && !cargoDue) {
@@ -106,15 +101,30 @@ export function advanceArenaLoot(
   let dropped = [...held.loot];
   let sequence = nextLootSequence;
 
-  // One of each common kind per beat, so the two fill the board together.
-  const wanted: ArenaLootKind[] = commonDue ? ["ammo", "gear"] : [];
+  /*
+   * A beat fills the board rather than adding to it.
+   *
+   * The field is meant to be stocked: as many drops as the caps allow, wherever
+   * there is open ground for them, and the interval is how often what has been
+   * taken or swallowed is put back. One a beat left a nearly empty board for
+   * most of a match, which is a supply line nobody plans around.
+   */
+  const wanted: ArenaLootKind[] = [];
+  // The heavy one first, and outside the board's cap.
+  //
+  // The cap is the common two - sixteen of each - and the cargo is the rare
+  // exception everybody is crossing the field for. Queued behind a full board
+  // it never landed at all, which is the one drop that must always land.
   if (cargoDue) wanted.push("cargo");
+  if (commonDue) {
+    for (let index = 0; index < config.lootCapPerKind; index += 1) wanted.push("ammo", "gear");
+  }
 
   for (const kind of wanted) {
-    const free = openZones(dropped, zones);
+    const free = openZones(dropped, zones, kind, config);
     if (free.length === 0) break;
-    if (dropped.length >= config.lootSceneCap) break;
     if (kind !== "cargo" && countOf(dropped, kind) >= config.lootCapPerKind) continue;
+    if (kind !== "cargo" && commonCount(dropped) >= config.lootSceneCap) continue;
     // The stream the campaign's salvage rolls on: a state in, a state out, so
     // the same seed replays the same supply run.
     const [nextSeed, roll] = nextUint32(seed);
@@ -203,13 +213,44 @@ function advanceCaptures(
   return { loot: held, taken };
 }
 
-/** Rectangles that are neither killing nor already holding a drop. */
+/**
+ * Where a drop of this kind may land.
+ *
+ * The common two take any ground that is not already killing and not already
+ * holding something. The heavy one is choosier on both counts: never in a
+ * rectangle that has started to close - a prize worth crossing the field for
+ * must not expire while somebody is crossing - and drawn from the half nearest
+ * the middle, so the thing everybody wants is where the field is herding them
+ * anyway rather than out on a rim they are being pushed off.
+ */
 function openZones(
   loot: readonly ArenaLootState[],
-  zones: readonly ArenaZone[]
+  zones: readonly ArenaZone[],
+  kind: ArenaLootKind,
+  config: ArenaMatchConfig
 ): readonly ArenaZone[] {
   const taken = new Set(loot.map((drop) => drop.zoneId));
-  return zones.filter((zone) => zone.state !== "closed" && !taken.has(zone.id));
+  const free = zones.filter((zone) => zone.state !== "closed" && !taken.has(zone.id));
+  if (kind !== "cargo") return free;
+
+  const settled = free.filter((zone) => zone.state === "safe");
+  if (settled.length <= 2) return settled;
+  const centreX = config.ship.worldWidth / 2;
+  const centreY = config.ship.worldHeight / 2;
+  const byDistance = [...settled].sort(
+    (left, right) =>
+      distanceFromCentre(left, centreX, centreY) - distanceFromCentre(right, centreX, centreY)
+  );
+  return byDistance.slice(0, Math.max(1, Math.ceil(byDistance.length / 2)));
+}
+
+function distanceFromCentre(zone: ArenaZone, centreX: number, centreY: number): number {
+  return Math.hypot(zone.x + zone.width / 2 - centreX, zone.y + zone.height / 2 - centreY);
+}
+
+/** The board's own cap counts the common two; the cargo is beside it. */
+function commonCount(loot: readonly ArenaLootState[]): number {
+  return loot.filter((drop) => drop.kind !== "cargo").length;
 }
 
 function countOf(loot: readonly ArenaLootState[], kind: ArenaLootKind): number {

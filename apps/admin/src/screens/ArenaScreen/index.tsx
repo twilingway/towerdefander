@@ -332,6 +332,29 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ damageScaling: Math.max(0.1, damageScaling) });
             }}
           />
+          <p className="hint" data-testid="arena-ship-scaling">
+            Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
+            <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}
+            HP, снаряд {String(round2(tuning.friendlyProjectileDamage))} →{" "}
+            <strong>
+              {String(round2(tuning.friendlyProjectileDamage * tuning.arena.damageScaling))}
+            </strong>
+            , пулемёт {String(round2(tuning.mgDamage))} →{" "}
+            <strong>{String(round2(tuning.mgDamage * tuning.arena.damageScaling))}</strong>. Это{" "}
+            <strong>{String(shotsToKill)}</strong> {shotWord(shotsToKill)} из пушки, чтобы снять
+            целый корпус.
+          </p>
+        </div>
+      </section>
+
+      <section className="card">
+        <h4 className="card__subtitle">Разведка</h4>
+        <p className="screen__hint">
+          Поле шире кадра в несколько раз, поэтому радар показывает только то, что нашла развёртка.
+          Радиус задан в экранах, а не в единицах: расширение кадра не должно молча менять дальность
+          скана. Груз виден всем и без скана — он того стоит.
+        </p>
+        <div className="arena-controls">
           <NumberField
             caption="Радиус скана (экранов)"
             min={0.5}
@@ -355,6 +378,27 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ scanRevealTicks });
             }}
           />
+          <p className="hint" data-testid="arena-scan-reach">
+            Скан находит всех в{" "}
+            <strong>
+              {String(Math.round(tuning.arena.cameraViewWidth * tuning.arena.scanRadiusScreens))}
+            </strong>{" "}
+            единицах — это {String(round2(tuning.arena.scanRadiusScreens))} экрана при кадре в{" "}
+            {String(Math.round(tuning.arena.cameraViewWidth))}. Найденные держатся на радаре{" "}
+            {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
+            {formatTicks(tuning.arena.scanCooldownTicks)}.
+          </p>
+        </div>
+      </section>
+
+      <section className="card">
+        <h4 className="card__subtitle">Снабжение</h4>
+        <p className="screen__hint">
+          Точки падают по таймеру в свободные квадраты и исчезают вместе с квадратом, когда тот
+          краснеет. Забирается точка стоянием: корабль держится в круге, и захват сбивается, если он
+          вышел или в него попали. Что даёт точка — пока ничего: награда ждёт дерева развития боя.
+        </p>
+        <div className="arena-controls">
           <SecondsField
             caption="Первый лут через"
             ticks={tuning.arena.lootFirstSpawnTicks}
@@ -403,28 +447,6 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               )}
             </strong>{" "}
             грузов.
-          </p>
-          <p className="hint" data-testid="arena-scan-reach">
-            Скан находит всех в{" "}
-            <strong>
-              {String(Math.round(tuning.arena.cameraViewWidth * tuning.arena.scanRadiusScreens))}
-            </strong>{" "}
-            единицах — это {String(round2(tuning.arena.scanRadiusScreens))} экрана при кадре в{" "}
-            {String(Math.round(tuning.arena.cameraViewWidth))}. Найденные держатся на радаре{" "}
-            {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
-            {formatTicks(tuning.arena.scanCooldownTicks)}.
-          </p>
-          <p className="hint" data-testid="arena-ship-scaling">
-            Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
-            <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}
-            HP, снаряд {String(round2(tuning.friendlyProjectileDamage))} →{" "}
-            <strong>
-              {String(round2(tuning.friendlyProjectileDamage * tuning.arena.damageScaling))}
-            </strong>
-            , пулемёт {String(round2(tuning.mgDamage))} →{" "}
-            <strong>{String(round2(tuning.mgDamage * tuning.arena.damageScaling))}</strong>. Это{" "}
-            <strong>{String(shotsToKill)}</strong> {shotWord(shotsToKill)} из пушки, чтобы снять
-            целый корпус.
           </p>
         </div>
       </section>

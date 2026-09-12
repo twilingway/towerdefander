@@ -32,6 +32,7 @@ interface Drop {
   /** The ring that fills while a hull stands in the circle. */
   readonly hold: Phaser.GameObjects.Graphics;
   readonly radius: number;
+  readonly colour: number;
   share: number;
 }
 
@@ -120,15 +121,22 @@ export class ArenaLootLayer {
        */
       hold: scene.add.graphics().setDepth(4),
       radius: drop.captureRadius,
+      colour,
       share: -1
     };
   }
 }
 
-/** Red while the circle is empty, green while somebody is serving the hold. */
+/**
+ * The circle, and how much of the hold is served.
+ *
+ * One colour whatever is happening: the arc says how far the count has got, and
+ * a ring that also changed colour would be two signals for one fact. The
+ * animation of a capture is a separate thing and will arrive as one.
+ */
 function drawHold(drop: Drop, x: number, y: number): void {
   drop.hold.clear();
-  drop.hold.lineStyle(4, drop.share > 0 ? 0x74e39b : 0xff6b5e, 0.85);
+  drop.hold.lineStyle(4, drop.colour, 0.85);
   drop.hold.beginPath();
   drop.hold.arc(
     x,

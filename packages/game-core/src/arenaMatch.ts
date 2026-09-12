@@ -157,8 +157,9 @@ export function createArenaMatch(
     winnerShipId: null,
     zones: createArenaZones(config),
     loot: [],
-    ticksUntilLoot: config.lootIntervalTicks,
-    ticksUntilCargo: config.lootCargoIntervalTicks,
+    // Both start on the opening quiet; after that each keeps its own interval.
+    ticksUntilLoot: config.lootFirstSpawnTicks,
+    ticksUntilCargo: config.lootFirstSpawnTicks,
     nextLootSequence: 1,
     // A stream of its own, so a change to how the field drops cannot move where
     // the hulls spawned or what the bots decided.

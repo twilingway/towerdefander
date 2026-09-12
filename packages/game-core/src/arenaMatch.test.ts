@@ -331,16 +331,29 @@ describe("the field's supply run", () => {
     expect(state.loot.filter((drop) => drop.kind === "gear").length).toBeLessThanOrEqual(
       config.lootCapPerKind
     );
-    expect(state.loot.length).toBeLessThanOrEqual(config.lootSceneCap);
+    // The cap is the common two; the heavy drop is the rare exception beside
+    // it, and a board that refused it would never put one out at all.
+    expect(state.loot.filter((drop) => drop.kind !== "cargo").length).toBeLessThanOrEqual(
+      config.lootSceneCap
+    );
   });
 
-  it("waits out the opening before it drops anything", () => {
-    const config = supplyConfig({ lootFirstSpawnTicks: 30 });
+  it("waits out the opening and then drops, not an interval later", () => {
+    /*
+     * The field's numbers have to mean what they say: "first loot after thirty
+     * ticks, then one every hundred" put nothing out for a hundred and thirty,
+     * because the opening quiet was a gate in front of the countdown rather
+     * than the countdown itself.
+     */
+    const config = supplyConfig({ lootFirstSpawnTicks: 30, lootIntervalTicks: 100 });
     let state = match(config);
     for (let tick = 0; tick < 29; tick += 1) {
       state = advanceArenaMatch(state, new Map(), config);
     }
     expect(state.loot).toHaveLength(0);
+
+    state = advanceArenaMatch(state, new Map(), config);
+    expect(state.loot.length).toBeGreaterThan(0);
   });
 
   it("hands a drop over only after the hold is served", () => {
@@ -421,6 +434,31 @@ describe("the field's supply run", () => {
     const dropped = state.loot.find((candidate) => candidate.id === drop.id);
     expect(dropped?.captureShipId).not.toBe(state.ships[0]?.id);
     expect(dropped?.captureTicks ?? 0).toBeLessThanOrEqual(1);
+  });
+
+  it("puts the heavy drop on settled ground, nearer the middle", () => {
+    /*
+     * The cargo is what everybody wants, so where it lands decides where the
+     * fight is. Never on ground that has started to close - a prize must not
+     * expire while somebody is crossing to it - and drawn from the half nearest
+     * the centre, which is where the closing field is herding them anyway.
+     */
+    const config = supplyConfig({ lootCargoIntervalTicks: 1, lootIntervalTicks: 10_000 });
+    let state = match(config);
+    const centreX = config.ship.worldWidth / 2;
+    const centreY = config.ship.worldHeight / 2;
+    const rim = Math.hypot(config.arenaRadius, config.arenaRadius);
+
+    for (let tick = 0; tick < 10; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+    const cargo = state.loot.filter((drop) => drop.kind === "cargo");
+    expect(cargo.length).toBeGreaterThan(0);
+    for (const drop of cargo) {
+      const zone = state.zones.find((candidate) => candidate.id === drop.zoneId);
+      expect(zone?.state).toBe("safe");
+      expect(Math.hypot(drop.x - centreX, drop.y - centreY)).toBeLessThan(rim * 0.75);
+    }
   });
 
   it("replays the same supply run from the same seed", () => {

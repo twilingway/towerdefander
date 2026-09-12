@@ -885,7 +885,16 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       (view, drop) => {
         view.x = drop.x;
         view.y = drop.y;
-        view.revealed = fresh && this.revealed.has(drop.id);
+        /*
+         * The heavy drop is on every dial from the moment it lands.
+         *
+         * It is worth crossing the field for, which only works if everyone
+         * knows it is there: a cargo nobody can see is a prize one lucky sweep
+         * collects, and a cargo everyone can see is a fight with a time and a
+         * place. The common two stay behind the sweep, which is what the sweep
+         * is for.
+         */
+        view.revealed = drop.kind === "cargo" || (fresh && this.revealed.has(drop.id));
         // The circle and how much of the hold is served: the display draws a
         // ring from the pair, and neither is worth computing twice.
         view.captureRadius = this.config.ship.spaceshipRadius * this.config.lootCaptureRadiusHulls;

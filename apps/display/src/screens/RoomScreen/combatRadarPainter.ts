@@ -360,8 +360,10 @@ export function drawCombatRadar(
    * What the sweep found, on the same terms as the hulls it found: the route a
    * pilot picks after a sweep is usually toward a drop rather than toward a
    * fight, and knowing where every crate on the field is without paying for the
-   * look would make the sweep worth nothing. Colour says which kind without a
-   * legend - the same three the world draws them in.
+   * look would make the sweep worth nothing. The heavy one is the exception the
+   * room makes - it is worth crossing the field for, which only works if
+   * everybody knows it is there. Colour says which kind without a legend - the
+   * same three the world draws them in.
    */
   for (const drop of game.arenaLoot) {
     if (!drop.revealed) continue;
