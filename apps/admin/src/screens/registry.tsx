@@ -5,6 +5,7 @@ import { ArenaScreen } from "./ArenaScreen/index.js";
 import { AutopilotScreen } from "./AutopilotScreen/index.js";
 import { DirectorScreen } from "./DirectorScreen/index.js";
 import { EffectsScreen } from "./EffectsScreen/index.js";
+import { SoundsScreen } from "./SoundsScreen/index.js";
 import { EnemiesScreen } from "./EnemiesScreen/index.js";
 import { EnemySkillScreen } from "./EnemySkillScreen/index.js";
 import { HelmScreen } from "./HelmScreen/index.js";
@@ -21,6 +22,7 @@ export const TABS = [
   "player",
   "ships",
   "effects",
+  "sounds",
   "helm",
   "autopilot",
   "director",
@@ -37,6 +39,7 @@ export const TAB_LABELS: Record<Tab, string> = {
   player: "Игрок",
   ships: "Корабли",
   effects: "Эффекты",
+  sounds: "Звуки",
   helm: "Управление",
   autopilot: "Автопилот",
   director: "Директор",
@@ -71,6 +74,7 @@ export const TAB_GROUP_OF: Record<Tab, TabGroup> = {
   player: "common",
   ships: "common",
   effects: "common",
+  sounds: "common",
   helm: "common",
   autopilot: "common",
   stats: "common",
@@ -89,6 +93,7 @@ export const TAB_PATHS: Record<Tab, string> = {
   player: "player",
   ships: "ships",
   effects: "effects",
+  sounds: "sounds",
   helm: "helm",
   autopilot: "autopilot",
   director: "director",
@@ -127,6 +132,7 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
   // No slice of the context: the catalogue reads the generated manifest, so
   // it needs neither the balance document nor the password.
   effects: () => <EffectsScreen />,
+  sounds: () => <SoundsScreen />,
   helm: ({ tuning, onTuningChange }) => <HelmScreen tuning={tuning} onChange={onTuningChange} />,
   autopilot: ({ tuning, onTuningChange }) => (
     <AutopilotScreen tuning={tuning} onChange={onTuningChange} />

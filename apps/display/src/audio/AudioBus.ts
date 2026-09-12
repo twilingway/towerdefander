@@ -36,6 +36,15 @@ export interface SoundPlacement {
  */
 const MAX_VOICES = 6;
 const MIN_GAP_MS = 25;
+/**
+ * How far each copy is detuned, at random.
+ *
+ * The same file played twenty times a second stops reading as twenty shots and
+ * starts reading as a stuck loop - a few per cent either way is what the ear
+ * uses to tell repetition from rhythm, and it is the oldest trick in game
+ * audio for exactly this reason.
+ */
+const PITCH_JITTER = 0.03;
 
 /**
  * The one speaker in the room.
@@ -97,7 +106,7 @@ export class AudioBus {
   }
 
   /** Plays one event, if it is worth hearing from where the camera is. */
-  play(id: SoundId | undefined, placement?: SoundPlacement): void {
+  play(id: SoundId | undefined, placement?: SoundPlacement, rate = 1): void {
     if (id === undefined) return;
     if (!channelAllowed(this.settings, placement?.channel ?? "own")) return;
     const bus = busGain(this.settings, "sounds");
@@ -136,6 +145,7 @@ export class AudioBus {
     voice.connect(this.sfxGain ?? context.destination);
     const source = context.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = rate * (1 + (Math.random() - 0.5) * 2 * PITCH_JITTER);
     source.connect(voice);
     source.addEventListener("ended", () => {
       const playing = this.voices.get(id);
@@ -148,6 +158,13 @@ export class AudioBus {
     live.push(source);
     this.voices.set(id, live);
     source.start();
+  }
+
+  /** Cuts every copy of one sound short: a trigger let go mid-burst. */
+  stop(id: SoundId): void {
+    const live = this.voices.get(id);
+    if (live === undefined) return;
+    for (const source of [...live]) source.stop();
   }
 
   /**

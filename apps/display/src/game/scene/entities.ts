@@ -520,7 +520,7 @@ export function reconcileCombatVisuals({
             bearing
           );
         }
-        sounds?.play(visual.shotSound, visual.object.x, visual.object.y, "enemyShot");
+        sounds?.weapon(visual.shotSound, visual.object.x, visual.object.y, "enemyShot");
       }
     }
   }

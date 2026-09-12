@@ -24,3 +24,36 @@ export const SOUND_FILES: Readonly<Record<string, string>> = {
   explosion: new URL("../sounds/explosion.mp3", import.meta.url).href,
   "boss-explosion": new URL("../sounds/boss-explosion.mp3", import.meta.url).href
 };
+
+/**
+ * What is actually inside each sample, measured rather than assumed.
+ *
+ * Two of these files are bursts, not shots: the machine gun is eight rounds
+ * eighty milliseconds apart, and playing the whole thing on every trigger pull
+ * is the mush it sounds like. So a sample says how many shots it contains and
+ * how fast, and the display plays it once per that many shots, stretched to the
+ * weapon's own rate of fire - which is what keeps it in step when that rate
+ * becomes something a crew upgrades.
+ *
+ * Measured off the decoded waveform: 5 ms RMS windows, an onset counted where
+ * the envelope crosses a quarter of the peak having been below a tenth. The
+ * same pass found up to two seconds of pure silence on the end of every file,
+ * which is why they are shorter now than the originals.
+ */
+export interface SoundShape {
+  /** Rounds in the recording; one means it is a single event, not a burst. */
+  readonly shots: number;
+  /** Milliseconds between them, as recorded. Meaningless when `shots` is one. */
+  readonly shotGapMs: number;
+}
+
+export const SOUND_SHAPES: Readonly<Record<string, SoundShape>> = {
+  cannon: { shots: 1, shotGapMs: 0 },
+  // One round, cut from the last of the recorded burst so it carries its own
+  // decay: a gun that fires faster is then simply heard firing faster, with no
+  // sample stretched and no pitch drifting up as its rate of fire is upgraded.
+  "machine-gun": { shots: 1, shotGapMs: 0 },
+  "machine-gun-alt": { shots: 8, shotGapMs: 100 },
+  explosion: { shots: 1, shotGapMs: 0 },
+  "boss-explosion": { shots: 1, shotGapMs: 0 }
+};

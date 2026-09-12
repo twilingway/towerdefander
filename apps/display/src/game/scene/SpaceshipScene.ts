@@ -229,6 +229,9 @@ export class SpaceshipScene extends Phaser.Scene {
     this.frames.recordFrame(time, this.game.loop.rawDelta);
     this.playback = advancePlayback(this.playback, deltaMs);
     this.loot.update(deltaMs);
+    // A trigger let go has to be heard being let go: a burst sample keeps
+    // playing until somebody notices no more shots are arriving.
+    this.sounds.settle(time);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
     const playbackTick = this.playback.tick;

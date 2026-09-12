@@ -21,6 +21,29 @@ export const SOUND_IDS = [
 ] as const;
 export type SoundId = (typeof SOUND_IDS)[number];
 
+/**
+ * What kind of thing a sound is, for the console to group them by.
+ *
+ * The same split the effects catalogue makes and for the same reason: a list of
+ * five is a list, a list of forty is a drawer, and the groups are what keeps it
+ * a list while it grows.
+ */
+export const SOUND_CATEGORIES = ["weapon", "explosion"] as const;
+export type SoundCategory = (typeof SOUND_CATEGORIES)[number];
+
+export const SOUND_CATEGORY_LABELS: Readonly<Record<SoundCategory, string>> = {
+  weapon: "Оружие",
+  explosion: "Взрывы"
+};
+
+export const SOUND_CATEGORY_OF: Readonly<Record<SoundId, SoundCategory>> = {
+  cannon: "weapon",
+  "machine-gun": "weapon",
+  "machine-gun-alt": "weapon",
+  explosion: "explosion",
+  "boss-explosion": "explosion"
+};
+
 /** What the console calls each one; the id is a file name, this is the label. */
 export const SOUND_LABELS: Readonly<Record<SoundId, string>> = {
   cannon: "Пушка",

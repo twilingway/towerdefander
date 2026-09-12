@@ -2,6 +2,7 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 
 import { audioBus } from "../../audio/AudioBus.js";
 import { asSoundId } from "../../audio/catalogue.js";
+import { createBurstTracker } from "../../audio/burst.js";
 import type { SoundChannel } from "../../audio/mixer.js";
 
 /**
@@ -14,23 +15,51 @@ import type { SoundChannel } from "../../audio/mixer.js";
  */
 export interface SceneAudio {
   play: (id: string | undefined, x: number, y: number, channel?: SoundChannel) => void;
+  /**
+   * A shot from a repeating weapon. Separate from `play` because a burst sample
+   * must not be started on every round, and because a weapon's rate of fire is
+   * something the sample has to be kept in step with; see `burst.ts`.
+   */
+  weapon: (id: string | undefined, x: number, y: number, channel?: SoundChannel) => void;
+  /** Once a frame: stops a burst whose trigger has been let go. */
+  settle: (nowMs: number) => void;
 }
 
 /** The listener is the camera: what is framed is what is heard at full volume. */
 export function sceneAudioFor(read: () => DisplayGameSnapshot): SceneAudio {
+  const bursts = createBurstTracker();
+  const placement = (x: number, y: number, channel: SoundChannel) => {
+    const snapshot = read();
+    return {
+      x,
+      y,
+      listenerX: snapshot.spaceship.x,
+      listenerY: snapshot.spaceship.y,
+      frameWidth: snapshot.cameraViewWidth,
+      channel
+    };
+  };
+
   return {
     play(id, x, y, channel = "own") {
       const sound = asSoundId(id);
       if (sound === undefined) return;
-      const snapshot = read();
-      audioBus().play(sound, {
-        x,
-        y,
-        listenerX: snapshot.spaceship.x,
-        listenerY: snapshot.spaceship.y,
-        frameWidth: snapshot.cameraViewWidth,
-        channel
-      });
+      audioBus().play(sound, placement(x, y, channel));
+    },
+
+    weapon(id, x, y, channel = "own") {
+      const sound = asSoundId(id);
+      if (sound === undefined) return;
+      const start = bursts.shot(sound, performance.now());
+      if (start === null) return;
+      audioBus().play(sound, placement(x, y, channel), start.rate);
+    },
+
+    settle(nowMs) {
+      for (const id of bursts.settle(nowMs)) {
+        const sound = asSoundId(id);
+        if (sound !== undefined) audioBus().stop(sound);
+      }
     }
   };
 }

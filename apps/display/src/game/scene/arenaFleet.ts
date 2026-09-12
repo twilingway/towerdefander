@@ -387,7 +387,7 @@ export class ArenaFleet {
             parts.turret.rotation,
             parts.followKey
           );
-          this.sounds?.play(this.cannonSound, muzzle.x, muzzle.y, "enemyShot");
+          this.sounds?.weapon(this.cannonSound, muzzle.x, muzzle.y, "enemyShot");
         }
         /*
          * And the flash still playing is dragged back onto the barrel, exactly

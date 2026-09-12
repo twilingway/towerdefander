@@ -157,7 +157,7 @@ export function placeOwnShots(
     readonly cannonSound?: string;
     readonly mgSound?: string;
   },
-  sounds?: { play: (id: string | undefined, x: number, y: number) => void }
+  sounds?: { weapon: (id: string | undefined, x: number, y: number) => void }
 ): void {
   const muzzle = (source: OwnShot["source"], shellRadius: number) => {
     const fromCannon = source === "cannon";
@@ -176,7 +176,7 @@ export function placeOwnShots(
       shot.source
     );
     // On the barrel, like the flash: the shot is heard where it left the ship.
-    sounds?.play(shot.source === "cannon" ? pose.cannonSound : pose.mgSound, point.x, point.y);
+    sounds?.weapon(shot.source === "cannon" ? pose.cannonSound : pose.mgSound, point.x, point.y);
   }
   shots.length = 0;
   /*
