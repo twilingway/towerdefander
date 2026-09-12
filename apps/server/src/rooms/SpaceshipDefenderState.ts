@@ -212,6 +212,14 @@ export class ArenaShipView extends Schema {
   @type("uint16") shieldBlocks = 0;
 }
 
+/** One drop on the field: where it is and what it is worth. */
+export class ArenaLootView extends Schema {
+  @type("string") entityId = "";
+  @type("string") kind: "ammo" | "gear" | "cargo" = "ammo";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+}
+
 export class ObstacleState extends Schema {
   @type("string") obstacleId = "";
   @type("string") kind: "rectangle" | "circle" = "rectangle";
@@ -420,6 +428,7 @@ export class SpaceshipDisplayState extends Schema {
   /** The last solo input frame the room applied; the cockpit replays past it. */
   @type("uint32") appliedInputSeq = 0;
   /** The radar sweep: when it may be asked for again, and how long it lasts. */
+  @type({ map: ArenaLootView }) arenaLoot = new MapSchema<ArenaLootView>();
   @type("uint16") scanReadySeconds = 0;
   @type("uint16") scanRevealSecondsRemaining = 0;
   /** The run's live drive numbers and the pose the client replays from. */

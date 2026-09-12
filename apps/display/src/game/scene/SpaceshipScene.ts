@@ -6,6 +6,7 @@ import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
 import { arenaZoneSignature, drawArena, drawArenaZones, drawDecorations } from "./arena.js";
 import { ArenaFleet } from "./arenaFleet.js";
+import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
@@ -221,6 +222,7 @@ export class SpaceshipScene extends Phaser.Scene {
   private updateScene(time: number, deltaMs: number): void {
     this.frames.recordFrame(time, this.game.loop.rawDelta);
     this.playback = advancePlayback(this.playback, deltaMs);
+    this.loot.update(deltaMs);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
     const playbackTick = this.playback.tick;
@@ -398,6 +400,7 @@ export class SpaceshipScene extends Phaser.Scene {
   private zoneLayer: Phaser.GameObjects.Image | undefined;
   /** The other hulls of a match; empty in the campaign, which has one ship. */
   private readonly fleet = new ArenaFleet();
+  private readonly loot = new ArenaLootLayer();
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
@@ -408,6 +411,7 @@ export class SpaceshipScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
     // Sixteen hulls, moved rather than rebuilt: the textures are shared and a
     // frame costs a position and two rotations each.
+    this.loot.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw));
     this.fleet.sync(
       this,
       snapshot,

@@ -11,6 +11,7 @@ import {
   type ArenaShipIntent,
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
+import { advanceArenaLoot } from "./arenaLoot.ts";
 import { type ArenaZone } from "./arenaZones.ts";
 import {
   advanceArenaZones,
@@ -155,6 +156,13 @@ export function createArenaMatch(
     outcome: null,
     winnerShipId: null,
     zones: createArenaZones(config),
+    loot: [],
+    ticksUntilLoot: config.lootIntervalTicks,
+    ticksUntilCargo: config.lootCargoIntervalTicks,
+    nextLootSequence: 1,
+    // A stream of its own, so a change to how the field drops cannot move where
+    // the hulls spawned or what the bots decided.
+    lootRngState: (matchSeed ^ 0x5f37_59df) >>> 0 || 0x6d2b_79f5,
     ticksUntilNextClosure: config.zoneIntervalTicks,
     ticksUntilZoneDamage: config.zoneDamageIntervalTicks,
     ships,
@@ -201,6 +209,16 @@ export function advanceArenaMatch(
   const clock = advanceClock(state.clock, config.ship.fixedStepMs);
   const tick = clock.tick;
   const sheet = advanceArenaZones(state.zones, state.ships, state.ticksUntilNextClosure, config);
+  const supply = advanceArenaLoot(
+    state.loot,
+    sheet.zones,
+    clock,
+    state.ticksUntilLoot,
+    state.ticksUntilCargo,
+    state.nextLootSequence,
+    state.lootRngState,
+    config
+  );
 
   let projectileSequence = state.nextProjectileSequence;
   const ships: ArenaShipState[] = [];
@@ -250,6 +268,11 @@ export function advanceArenaMatch(
     outcome: verdict.outcome,
     winnerShipId: verdict.winnerShipId,
     zones: sheet.zones,
+    loot: supply.loot,
+    ticksUntilLoot: supply.ticksUntilLoot,
+    ticksUntilCargo: supply.ticksUntilCargo,
+    nextLootSequence: supply.nextLootSequence,
+    lootRngState: supply.rngState,
     ticksUntilNextClosure: sheet.ticksUntilNextClosure,
     ticksUntilZoneDamage: biting ? config.zoneDamageIntervalTicks : state.ticksUntilZoneDamage - 1,
     ships: settled,

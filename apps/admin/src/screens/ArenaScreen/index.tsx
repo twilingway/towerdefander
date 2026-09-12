@@ -122,6 +122,14 @@ interface ArenaScreenProps {
 const BOX = 520;
 
 /**
+ * The caps the simulation holds the field to. Stated here rather than imported
+ * because this console depends on the protocol and not on the core; they are
+ * code's numbers either way, and the line below only reads them out.
+ */
+const LOOT_CAP_PER_KIND = 16;
+const LOOT_SCENE_CAP = 32;
+
+/**
  * Where a match puts its sixteen hulls.
  *
  * The map is the editor: a mark is dragged where it belongs and the numbers
@@ -347,6 +355,55 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ scanRevealTicks });
             }}
           />
+          <SecondsField
+            caption="Первый лут через"
+            ticks={tuning.arena.lootFirstSpawnTicks}
+            onChange={(lootFirstSpawnTicks) => {
+              patchArena({ lootFirstSpawnTicks });
+            }}
+          />
+          <SecondsField
+            caption="Лут каждые"
+            ticks={tuning.arena.lootIntervalTicks}
+            onChange={(lootIntervalTicks) => {
+              patchArena({ lootIntervalTicks });
+            }}
+          />
+          <SecondsField
+            caption="Груз каждые"
+            ticks={tuning.arena.lootCargoIntervalTicks}
+            onChange={(lootCargoIntervalTicks) => {
+              patchArena({ lootCargoIntervalTicks });
+            }}
+          />
+          <p className="hint" data-testid="arena-loot-budget">
+            За каждый отрезок падает по одной жёлтой и одной зелёной точке, каждая — в свободный
+            квадрат, никогда в красный. Больше {String(LOOT_CAP_PER_KIND)} каждого вида и{" "}
+            {String(LOOT_SCENE_CAP)} точек на поле одновременно не бывает. За матч в{" "}
+            {formatTicks(limit)} успеет выпасть{" "}
+            <strong>
+              {String(
+                Math.max(
+                  0,
+                  Math.floor(
+                    (limit - tuning.arena.lootFirstSpawnTicks) / tuning.arena.lootIntervalTicks
+                  )
+                )
+              )}
+            </strong>{" "}
+            пар и{" "}
+            <strong>
+              {String(
+                Math.max(
+                  0,
+                  Math.floor(
+                    (limit - tuning.arena.lootFirstSpawnTicks) / tuning.arena.lootCargoIntervalTicks
+                  )
+                )
+              )}
+            </strong>{" "}
+            грузов.
+          </p>
           <p className="hint" data-testid="arena-scan-reach">
             Скан находит всех в{" "}
             <strong>

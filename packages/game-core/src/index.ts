@@ -12,6 +12,7 @@ export {
 export * from "./arenaMatchTypes.ts";
 export * from "./arenaMatchConfig.ts";
 export * from "./arenaZones.ts";
+export * from "./arenaLoot.ts";
 export {
   IDLE_ARENA_INTENT,
   advanceArenaMatch,

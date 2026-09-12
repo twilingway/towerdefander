@@ -1,3 +1,4 @@
+import { type ArenaLootState } from "./arenaLoot.ts";
 import { type ArenaZone } from "./arenaZones.ts";
 import { type SimulationClock } from "./primitives.ts";
 import { type ShipStats } from "./shipStats.ts";
@@ -177,6 +178,16 @@ export interface ArenaMatchConfig {
   readonly zoneIntervalTicks: number;
   /** Rectangles taken on each beat; the sheet moves as a band, not a tile. */
   readonly zonesPerClosure: number;
+  /**
+   * The field's supply run: when it starts, how often it drops, how often the
+   * heavy one comes, and how much may lie about at once.
+   */
+  readonly lootFirstSpawnTicks: number;
+  readonly lootIntervalTicks: number;
+  readonly lootCargoIntervalTicks: number;
+  /** Per common kind, and across everything on the field at once. */
+  readonly lootCapPerKind: number;
+  readonly lootSceneCap: number;
   readonly zoneWarningTicks: number;
   /**
    * The zone bites on a beat rather than continuously: every
@@ -215,4 +226,11 @@ export interface ArenaMatchState {
   readonly projectiles: readonly ArenaProjectileState[];
   readonly beams: readonly ArenaBeamState[];
   readonly nextProjectileSequence: number;
+
+  /** What the field has put out and not had taken. */
+  readonly loot: readonly ArenaLootState[];
+  readonly ticksUntilLoot: number;
+  readonly ticksUntilCargo: number;
+  readonly nextLootSequence: number;
+  readonly lootRngState: number;
 }

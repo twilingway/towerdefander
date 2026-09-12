@@ -235,6 +235,7 @@ const testGame = {
   shieldRadius: 104,
   arenaZones: [],
   arenaShips: [],
+  arenaLoot: [],
   obstacles: [],
   enemyShips: [],
   lootDrops: [],

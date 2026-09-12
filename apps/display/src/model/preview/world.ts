@@ -152,6 +152,7 @@ export const PREVIEW_WORLD = {
   // The campaign has no zone sheet; the arena fills this in.
   arenaZones: [],
   arenaShips: [],
+  arenaLoot: [],
   obstacles: []
 };
 

@@ -667,6 +667,13 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     scanRadiusScreens: readNumber(arena, "scanRadiusScreens") ?? defaults.arena.scanRadiusScreens,
     scanCooldownTicks: readNumber(arena, "scanCooldownTicks") ?? defaults.arena.scanCooldownTicks,
     scanRevealTicks: readNumber(arena, "scanRevealTicks") ?? defaults.arena.scanRevealTicks,
+    // A preset from before the supply run gains it: a field with no drops at
+    // all is not a balance anybody chose.
+    lootFirstSpawnTicks:
+      readNumber(arena, "lootFirstSpawnTicks") ?? defaults.arena.lootFirstSpawnTicks,
+    lootIntervalTicks: readNumber(arena, "lootIntervalTicks") ?? defaults.arena.lootIntervalTicks,
+    lootCargoIntervalTicks:
+      readNumber(arena, "lootCargoIntervalTicks") ?? defaults.arena.lootCargoIntervalTicks,
     zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
     zoneDamageIntervalTicks:
       readNumber(arena, "zoneDamageIntervalTicks") ?? defaults.arena.zoneDamageIntervalTicks,

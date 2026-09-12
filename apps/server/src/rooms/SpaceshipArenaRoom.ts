@@ -41,6 +41,7 @@ import { createRunSeed } from "./runSeed.js";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
 import {
+  ArenaLootView,
   ArenaShipView,
   ArenaZoneView,
   DISPLAY_VIEW_TAG,
@@ -214,6 +215,10 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
       zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
       zonesPerClosure: tuning.arena.zonesPerClosure,
+      // The supply run's clocks are the operator's; its caps are the code's.
+      lootFirstSpawnTicks: tuning.arena.lootFirstSpawnTicks,
+      lootIntervalTicks: tuning.arena.lootIntervalTicks,
+      lootCargoIntervalTicks: tuning.arena.lootCargoIntervalTicks,
       zoneWarningTicks: tuning.arena.zoneWarningTicks,
       zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
       // The operator decides how many beats a full hull takes; the simulation
@@ -844,6 +849,30 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         // against what it last drew, so a wrap costs one missed flash.
         view.shotsFired = ship.shotsFired % 65_536;
         view.shieldBlocks = ship.shieldBlocks % 65_536;
+      }
+    );
+
+    /*
+     * The field's drops, reconciled by id like everything else.
+     *
+     * Position never changes once a drop is put down, so this is a create and a
+     * delete and nothing in between - the update writes the same numbers back
+     * and Colyseus sends none of them.
+     */
+    reconcile(
+      game.display.arenaLoot,
+      new Map(match.loot.map((drop) => [drop.id, drop] as const)),
+      (drop, id) => {
+        const view = new ArenaLootView();
+        view.entityId = id;
+        view.kind = drop.kind;
+        view.x = drop.x;
+        view.y = drop.y;
+        return view;
+      },
+      (view, drop) => {
+        view.x = drop.x;
+        view.y = drop.y;
       }
     );
 

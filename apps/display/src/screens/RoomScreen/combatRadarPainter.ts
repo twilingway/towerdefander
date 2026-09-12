@@ -354,6 +354,28 @@ export function drawCombatRadar(
    * fades on the room's clock: the mark is a photograph, not a tracker, which
    * is what makes a sweep worth timing.
    */
+  /*
+   * The field's drops, on the one panel that can show the whole field.
+   *
+   * Always drawn, unlike the hulls: a supply crate does not hide, and the dial
+   * is how a pilot decides which way to cross. Colour says which kind without a
+   * legend - the same three the world draws them in.
+   */
+  for (const drop of game.arenaLoot) {
+    const point = projectWorldToRadar(
+      drop.x,
+      drop.y,
+      game.worldWidth,
+      game.worldHeight,
+      projection
+    );
+    context.fillStyle =
+      drop.kind === "cargo" ? "#63b8ff" : drop.kind === "gear" ? "#74e39b" : "#ffc65c";
+    context.beginPath();
+    context.arc(point.x, point.y, 2.6, 0, Math.PI * 2);
+    context.fill();
+  }
+
   context.fillStyle = "#ffb454";
   context.strokeStyle = "#ffe6bd";
   context.lineWidth = 1.2;

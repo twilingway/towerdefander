@@ -21,6 +21,21 @@ export const ARENA_ZONE_INTERVAL_TICKS = 900;
 export const ARENA_ZONES_PER_CLOSURE = 10;
 
 /**
+ * The field's supply run, after Steel Hunter's.
+ *
+ * A drop a minute of each common kind, a heavy one every two, and nothing at
+ * all for the first quarter minute - a drop that arrives with the first shot is
+ * picked up on the way past rather than crossed for. The caps are what keep the
+ * board readable while nobody is collecting: sixteen of each kind, and
+ * thirty-two on the field altogether.
+ */
+export const ARENA_LOOT_FIRST_SPAWN_TICKS = 900;
+export const ARENA_LOOT_INTERVAL_TICKS = 3_600;
+export const ARENA_LOOT_CARGO_INTERVAL_TICKS = 7_200;
+export const ARENA_LOOT_CAP_PER_KIND = 16;
+export const ARENA_LOOT_SCENE_CAP = 32;
+
+/**
  * The radar sweep, as Steel Hunter plays it: a pilot presses for a look around,
  * waits out a cooldown, and what the sweep found stays on the dial for a while
  * after it has moved. Two and a half screens is far enough to plan a route and
@@ -89,6 +104,11 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   zoneRows: ARENA_ZONE_ROWS,
   zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
   zonesPerClosure: ARENA_ZONES_PER_CLOSURE,
+  lootFirstSpawnTicks: ARENA_LOOT_FIRST_SPAWN_TICKS,
+  lootIntervalTicks: ARENA_LOOT_INTERVAL_TICKS,
+  lootCargoIntervalTicks: ARENA_LOOT_CARGO_INTERVAL_TICKS,
+  lootCapPerKind: ARENA_LOOT_CAP_PER_KIND,
+  lootSceneCap: ARENA_LOOT_SCENE_CAP,
   zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
   zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
   zoneDamageShareOfMaxHp: ARENA_ZONE_DAMAGE_SHARE,

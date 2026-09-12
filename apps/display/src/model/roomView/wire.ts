@@ -57,6 +57,14 @@ export interface NetworkArenaShipState {
   shieldBlocks: number;
 }
 
+/** One drop on the arena's field; empty in the campaign. */
+export interface NetworkArenaLootState {
+  entityId: string;
+  kind: string;
+  x: number;
+  y: number;
+}
+
 /** One rectangle of the arena's sheet; empty in the campaign. */
 export interface NetworkArenaZoneState {
   zoneId: number;
@@ -295,6 +303,7 @@ export interface NetworkGameState {
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     arenaZones: ValueCollection<NetworkArenaZoneState>;
     arenaShips: ValueCollection<NetworkArenaShipState>;
+    arenaLoot: ValueCollection<NetworkArenaLootState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;

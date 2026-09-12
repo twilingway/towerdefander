@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 62 as const;
+export const PROTOCOL_VERSION = 63 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -504,6 +504,24 @@ export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;
  */
 export const MAX_ARENA_ZONES = 512;
 
+/** What the field puts out on a timer; a wreck's spoils are not among them. */
+export const ARENA_LOOT_KINDS = ["ammo", "gear", "cargo"] as const;
+export const arenaLootKindSchema = z.enum(ARENA_LOOT_KINDS);
+export type ArenaLootKindName = z.infer<typeof arenaLootKindSchema>;
+
+export const publicArenaLootViewSchema = z
+  .object({
+    entityId: z.string().min(1).max(24),
+    kind: arenaLootKindSchema,
+    x: finite,
+    y: finite
+  })
+  .strict();
+export type PublicArenaLootView = z.infer<typeof publicArenaLootViewSchema>;
+
+/** Two kinds capped at sixteen each, and the field capped at thirty-two. */
+export const MAX_ARENA_LOOT = 64;
+
 export const ARENA_ZONE_STATES = ["safe", "warning", "closed"] as const;
 export const arenaZoneStateSchema = z.enum(ARENA_ZONE_STATES);
 export type ArenaZoneStateName = z.infer<typeof arenaZoneStateSchema>;
@@ -962,6 +980,8 @@ export const displayGameSnapshotSchema = z
     arenaZones: z.array(publicArenaZoneViewSchema).max(MAX_ARENA_ZONES),
     /** Every hull in a match; empty in the campaign, which has exactly one. */
     arenaShips: z.array(publicArenaShipViewSchema).max(16),
+    /** What the field has put out and nobody has taken. */
+    arenaLoot: z.array(publicArenaLootViewSchema).max(MAX_ARENA_LOOT),
     /**
      * The sweep: seconds until it may be asked for again, and seconds the last
      * one still has left on the dial. Zero on the first means the button is

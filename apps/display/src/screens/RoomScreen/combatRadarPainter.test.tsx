@@ -135,6 +135,7 @@ const baseGame: DisplayGameSnapshot = {
   shieldRadius: 104,
   arenaZones: [],
   arenaShips: [],
+  arenaLoot: [],
   obstacles: [],
   enemyShips: [
     {

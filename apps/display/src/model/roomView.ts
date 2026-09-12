@@ -110,6 +110,12 @@ export function toDisplayRoomView(
               state: zone.state as "safe" | "warning" | "closed",
               secondsRemaining: zone.secondsRemaining
             })),
+            arenaLoot: [...display.arenaLoot.values()].map((drop) => ({
+              entityId: drop.entityId,
+              kind: drop.kind as "ammo" | "gear" | "cargo",
+              x: drop.x,
+              y: drop.y
+            })),
             arenaShips: [...display.arenaShips.values()].map((ship) => ({
               entityId: ship.entityId,
               isSelf: ship.isSelf,

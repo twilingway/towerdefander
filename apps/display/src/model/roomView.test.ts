@@ -130,6 +130,7 @@ describe("display room view", () => {
           enemyCatalogue: [],
           arenaZones: collection([]),
           arenaShips: collection([]),
+          arenaLoot: collection([]),
           obstacles: collection([
             {
               obstacleId: "cloud",

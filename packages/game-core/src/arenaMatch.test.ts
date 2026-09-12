@@ -279,6 +279,83 @@ describe("resolveArenaHits", () => {
   });
 });
 
+describe("the field's supply run", () => {
+  /** A sheet with one rectangle closed, so the rule about red ground can bite. */
+  function supplyConfig(overrides: Partial<ArenaMatchConfig> = {}): ArenaMatchConfig {
+    return {
+      ...defaultArenaMatchConfig,
+      lootFirstSpawnTicks: 0,
+      lootIntervalTicks: 1,
+      lootCargoIntervalTicks: 10_000,
+      ...overrides
+    };
+  }
+
+  it("puts a drop in a rectangle, and never a second one in the same", () => {
+    const config = supplyConfig();
+    let state = match(config);
+    for (let tick = 0; tick < 40; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+
+    expect(state.loot.length).toBeGreaterThan(4);
+    const zones = state.loot.map((drop) => drop.zoneId);
+    expect(new Set(zones).size).toBe(zones.length);
+    // One of each common kind a beat, so the two fill the board together.
+    expect(state.loot.filter((drop) => drop.kind === "ammo").length).toBeGreaterThan(0);
+    expect(state.loot.filter((drop) => drop.kind === "gear").length).toBeGreaterThan(0);
+  });
+
+  it("never lands in ground that is already killing, and leaves when it closes", () => {
+    const config = supplyConfig({ zoneIntervalTicks: 1, zoneWarningTicks: 1, zonesPerClosure: 4 });
+    let state = match(config);
+    for (let tick = 0; tick < 120; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+      for (const drop of state.loot) {
+        const zone = state.zones.find((candidate) => candidate.id === drop.zoneId);
+        expect(zone?.state).not.toBe("closed");
+      }
+    }
+  });
+
+  it("holds the caps however long the field goes uncollected", () => {
+    const config = supplyConfig();
+    let state = match(config);
+    for (let tick = 0; tick < 400; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+
+    expect(state.loot.filter((drop) => drop.kind === "ammo").length).toBeLessThanOrEqual(
+      config.lootCapPerKind
+    );
+    expect(state.loot.filter((drop) => drop.kind === "gear").length).toBeLessThanOrEqual(
+      config.lootCapPerKind
+    );
+    expect(state.loot.length).toBeLessThanOrEqual(config.lootSceneCap);
+  });
+
+  it("waits out the opening before it drops anything", () => {
+    const config = supplyConfig({ lootFirstSpawnTicks: 30 });
+    let state = match(config);
+    for (let tick = 0; tick < 29; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+    expect(state.loot).toHaveLength(0);
+  });
+
+  it("replays the same supply run from the same seed", () => {
+    const config = supplyConfig();
+    const run = (): ArenaMatchState => {
+      let state = createArenaMatch(config, 4242, botSeats);
+      for (let tick = 0; tick < 60; tick += 1) {
+        state = advanceArenaMatch(state, new Map(), config);
+      }
+      return state;
+    };
+    expect(run().loot).toEqual(run().loot);
+  });
+});
+
 describe("the gun a match is fought with", () => {
   /*
    * The arena is the campaign's ship in a different fight, and the heat is the
