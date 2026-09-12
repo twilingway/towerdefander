@@ -304,6 +304,39 @@ describe("resolveArenaHits", () => {
     expect(resolved.projectiles).toHaveLength(0);
   });
 
+  it("stops a shell at the barrier rather than at the hull", () => {
+    /*
+     * A sector stands off the hull by its own radius, and a shell it stopped has
+     * to die there: swept against the hull alone, a blocked shell crossed the
+     * whole barrier on screen before vanishing, and one that clipped the arc but
+     * would have missed the hull was never stopped at all.
+     */
+    const state = match();
+    const target = shipAt(state, 1);
+    const guarded = {
+      ...target,
+      shieldActive: true,
+      shieldAngle: Math.PI,
+      shieldEnergy: target.stats.shieldCapacity
+    };
+
+    // Just past the hull's own edge and well inside the barrier, so the only
+    // thing that can stop it is the sector standing off the ship.
+    const offset = target.stats.spaceshipRadius + 4;
+    const shot = shotAt(
+      "ship-1",
+      { x: target.spaceship.x - 400, y: target.spaceship.y - offset },
+      { x: target.spaceship.x + 400, y: target.spaceship.y - offset },
+      40
+    );
+
+    const resolved = resolveArenaHits([guarded], [shot], defaultArenaMatchConfig);
+    const after = pick(resolved.ships, 0);
+    expect(after.hp).toBe(guarded.hp);
+    expect(after.shieldEnergy).toBeLessThan(guarded.shieldEnergy);
+    expect(resolved.projectiles).toHaveLength(0);
+  });
+
   it("takes the hull when the shot comes from behind the arc", () => {
     const state = match();
     const target = shipAt(state, 0);

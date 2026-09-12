@@ -254,9 +254,34 @@ export function resolveArenaHits(
   for (const projectile of projectiles) {
     let bestTime: number | null = null;
     let bestShip: ArenaShipState | null = null;
+    let bestOnShield = false;
 
     for (const ship of ships) {
       if (!ship.alive || ship.id === projectile.ownerShipId) continue;
+      /*
+       * Two circles, earliest wins - the campaign's own rule.
+       *
+       * A sector stands off the hull, so a shell it stops must die where it
+       * met the barrier and not a hull's width further in. Swept against the
+       * hull alone, a blocked shell flew visibly through the shield before
+       * vanishing, and a shell that clipped the barrier but would have missed
+       * the hull was never stopped at all.
+       */
+      if (ship.shieldActive) {
+        const shieldTime = relativeSweptCircleTime(
+          projectileEntity(projectile),
+          shipEntity(ship, config.ship.spaceshipRadius, ship.stats.shieldRadius)
+        );
+        if (
+          shieldTime !== null &&
+          insideShieldArc(projectile, shieldTime, ship) &&
+          (bestTime === null || shieldTime < bestTime)
+        ) {
+          bestTime = shieldTime;
+          bestShip = ship;
+          bestOnShield = true;
+        }
+      }
       const time = relativeSweptCircleTime(
         projectileEntity(projectile),
         shipEntity(ship, config.ship.spaceshipRadius)
@@ -265,13 +290,14 @@ export function resolveArenaHits(
       if (bestTime === null || time < bestTime) {
         bestTime = time;
         bestShip = ship;
+        bestOnShield = false;
       }
     }
 
     if (bestShip === null || bestTime === null) continue;
     spent.add(projectile.id);
 
-    if (blockedByShield(projectile, bestTime, bestShip)) {
+    if (bestOnShield) {
       // A share of the shell rather than the whole of it; see the config.
       shieldSpend.set(
         bestShip.id,
@@ -312,7 +338,8 @@ export function resolveArenaHits(
   };
 }
 
-function blockedByShield(
+/** Whether the shell crossed the barrier inside the sector it covers. */
+function insideShieldArc(
   projectile: ArenaProjectileState,
   timeOfImpact: number,
   ship: ArenaShipState
@@ -338,7 +365,12 @@ function projectileEntity(projectile: ArenaProjectileState): MovingEntity {
   };
 }
 
-function shipEntity(ship: ArenaShipState, fallbackRadius: number): MovingEntity {
+function shipEntity(
+  ship: ArenaShipState,
+  fallbackRadius: number,
+  /** The circle to sweep against; the hull's own unless the sector is asked for. */
+  radius?: number
+): MovingEntity {
   return {
     id: ship.id,
     spawnSequence: ship.slot,
@@ -347,7 +379,7 @@ function shipEntity(ship: ArenaShipState, fallbackRadius: number): MovingEntity 
     x: ship.spaceship.x,
     y: ship.spaceship.y,
     velocity: ship.spaceship.velocity,
-    radius: ship.stats.spaceshipRadius || fallbackRadius,
+    radius: radius ?? (ship.stats.spaceshipRadius || fallbackRadius),
     spawnedTick: 0
   };
 }
