@@ -223,6 +223,7 @@ function displayRoom(): DisplayRoomView {
       spaceshipVisual: null,
       shieldBandEffect: "",
       shieldImpactEffect: "",
+      shipDeathEffect: "",
       turretVisual: null,
       shieldRadius: 104,
       obstacles: [{ obstacleId: "rock", kind: "circle", x: 400, y: 300, radius: 70 }],

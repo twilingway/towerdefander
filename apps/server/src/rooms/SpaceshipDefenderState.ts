@@ -437,6 +437,7 @@ export class SpaceshipDisplayState extends Schema {
   /** Empty means the display keeps its own baked effect for the shield. */
   @type("string") shieldBandEffect = "";
   @type("string") shieldImpactEffect = "";
+  @type("string") shipDeathEffect = "";
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;

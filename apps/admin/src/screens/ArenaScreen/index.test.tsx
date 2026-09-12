@@ -9,6 +9,8 @@ const ARENA: ArenaTuning = {
   zoneColumns: 10,
   zoneRows: 10,
   matchTickLimit: 9_000,
+  fieldRadius: 2200,
+  cameraViewWidth: 2500,
   hullScaling: 2.5,
   damageScaling: 0.7,
   zonesPerClosure: 1,

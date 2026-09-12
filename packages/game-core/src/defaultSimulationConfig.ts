@@ -19,6 +19,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   spaceshipVisual: null,
   shieldBandEffect: "",
   shieldImpactEffect: "",
+  shipDeathEffect: "",
   arenaRadius: 2200,
   /*
    * The reference prototype's arcade profile, in our terms.

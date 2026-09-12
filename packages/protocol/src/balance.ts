@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 46 as const;
+export const BALANCE_FILE_VERSION = 47 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -126,7 +126,9 @@ export type EnemyEventEffects = z.infer<typeof enemyEventEffectsSchema>;
 export const shipEffectsSchema = z
   .object({
     shieldBand: fxLoopEffectIdSchema.optional(),
-    shieldImpact: fxEventEffectIdSchema.optional()
+    shieldImpact: fxEventEffectIdSchema.optional(),
+    /** What a wreck of this hull plays. Empty leaves the display's own. */
+    death: fxEventEffectIdSchema.optional()
   })
   .strict();
 export type ShipEffects = z.infer<typeof shipEffectsSchema>;
@@ -980,6 +982,16 @@ export const arenaTuningSchema = z
      * arithmetic beside the field.
      */
     matchTickLimit: positiveInteger,
+    /**
+     * The match's own field, and its own frame.
+     *
+     * Both used to be the campaign's: one radius and one camera width served
+     * both modes, so widening the arena to something a sixteen-way fight needs
+     * dragged the campaign onto a field ten times too big for it. Two games,
+     * two fields.
+     */
+    fieldRadius: arenaRadiusSchema,
+    cameraViewWidth: cameraViewWidthSchema,
     /**
      * What a match does to the ship the campaign is balanced around.
      *

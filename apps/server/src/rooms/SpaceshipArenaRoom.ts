@@ -174,12 +174,30 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
     const balance = getBalanceStore();
     const tuning = balance.getActiveTuning();
-    const ship = balance.getActiveSimulationConfig(tuning.defaultShipArchetypeId);
+    /*
+     * The campaign's ship on the arena's field.
+     *
+     * Everything about the hull comes from the console's player screen, and
+     * everything about the ground comes from the arena's own: the two modes
+     * shared one radius until now, so a field wide enough for sixteen hulls
+     * dragged the campaign onto it. The world is derived from the radius and
+     * the core validates that it is, so all three move together.
+     */
+    const fieldRadius = tuning.arena.fieldRadius;
+    const hull = balance.getActiveSimulationConfig(tuning.defaultShipArchetypeId);
+    const ship = {
+      ...hull,
+      arenaRadius: fieldRadius,
+      worldWidth: fieldRadius * 2,
+      worldHeight: fieldRadius * 2
+    };
     this.state.shipArchetypeId = tuning.defaultShipArchetypeId;
     this.config = {
       ...defaultArenaMatchConfig,
       ship,
-      arenaRadius: ship.arenaRadius,
+      arenaRadius: fieldRadius,
+      // The spawn disc is the field's, held off the wall by room to turn.
+      spawnRadius: fieldRadius - 160,
       // The operator's layout, edited on the console's arena screen. Absent
       // marks would mean the built-in spiral, which is what they started as.
       spawnMarks: tuning.arena.spawnMarks,
@@ -241,7 +259,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
      * frame's job is to make a ship the size a ship is.
      */
     const display = this.state.game.display;
-    display.cameraViewWidth = Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.cameraViewWidth);
+    display.cameraViewWidth = Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth);
     /*
      * The hull as the console draws it, whole.
      *
@@ -274,6 +292,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     display.backgroundNebulaPreset = ship.background.nebulaPreset;
     display.shieldBandEffect = ship.shieldBandEffect;
     display.shieldImpactEffect = ship.shieldImpactEffect;
+    display.shipDeathEffect = ship.shipDeathEffect;
     display.shieldRadius = ship.shieldRadius;
     // The drive block is what a predicting client replays from; the arena does
     // not predict yet, but the contract asks for real numbers and they exist.
@@ -836,8 +855,17 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         .filter((shot) => shot.ownerShipId !== player?.id)
         .map((shot) => [shot.id, shot] as const)
     );
-    mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly");
-    mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile");
+    /*
+     * Both sides fire the same ship, so both sides fire the same shell: a
+     * match is sixteen copies of the crew's own hull, and a rival's tracer
+     * being a different colour from yours would be a lie about the weapon.
+     */
+    const look = {
+      cannon: this.config.ship.projectileVisual,
+      machineGun: this.config.ship.mgProjectileVisual
+    };
+    mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly", look);
+    mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile", look);
   }
 }
 
@@ -899,6 +927,9 @@ function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["ga
   pose.turretAngle = ship.turretAngle;
 }
 
+/** A shell's drawn look, as narrow as this file needs it: a shape and a size. */
+type ShellLook = { readonly shape: string; readonly modelScale: number } | null;
+
 function mirrorProjectiles(
   target: MapSchema<ProjectileState>,
   source: ReadonlyMap<
@@ -909,9 +940,12 @@ function mirrorProjectiles(
       velocity: { x: number; y: number };
       radius: number;
       spawnSequence: number;
+      source: "cannon" | "machineGun";
     }
   >,
-  kind: "friendly" | "hostile"
+  kind: "friendly" | "hostile",
+  /** The look each barrel's shell is drawn with, as the console chose it. */
+  look: { readonly cannon: ShellLook; readonly machineGun: ShellLook }
 ): void {
   reconcile(
     target,
@@ -921,6 +955,16 @@ function mirrorProjectiles(
       entity.entityId = id;
       entity.spawnSequence = shot.spawnSequence;
       entity.kind = kind;
+      /*
+       * Set once at spawn, like the campaign does it: a shell's look never
+       * changes, so it costs nothing per tick - and without it every shot in a
+       * match came out as the display's own fallback dot rather than the
+       * sprite the operator chose on the player screen.
+       */
+      entity.source = shot.source;
+      const visual = shot.source === "machineGun" ? look.machineGun : look.cannon;
+      entity.visualShape = visual?.shape ?? "";
+      entity.visualScale = visual?.modelScale ?? 1;
       return entity;
     },
     (entity, shot) => {

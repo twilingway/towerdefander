@@ -129,6 +129,7 @@ const baseGame: DisplayGameSnapshot = {
   spaceshipVisual: null,
   shieldBandEffect: "",
   shieldImpactEffect: "",
+  shipDeathEffect: "",
   turretVisual: null,
   shieldRadius: 104,
   arenaZones: [],

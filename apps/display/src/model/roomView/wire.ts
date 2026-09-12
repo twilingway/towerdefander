@@ -280,6 +280,7 @@ export interface NetworkGameState {
     spaceshipVisualShape?: string;
     shieldBandEffect?: string;
     shieldImpactEffect?: string;
+    shipDeathEffect?: string;
     spaceshipVisualScale?: number;
     turretVisualShape?: string;
     turretVisualScale?: number;

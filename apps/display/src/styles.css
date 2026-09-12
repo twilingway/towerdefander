@@ -3195,3 +3195,9 @@ p {
   background: rgb(3 20 29 / 70%);
   cursor: default;
 }
+
+/* The card the room will take if the intermission runs out with no vote. */
+.intermission-card--default {
+  border-color: rgb(255 211 111 / 45%);
+  box-shadow: inset 0 0 0 1px rgb(255 211 111 / 18%);
+}

@@ -315,6 +315,8 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       zoneColumns: 10,
       zoneRows: 10,
       matchTickLimit: 9000,
+      fieldRadius: 2200,
+      cameraViewWidth: 2500,
       hullScaling: 2.5,
       damageScaling: 0.7,
       scanRadiusScreens: 2.5,

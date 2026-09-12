@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import {
   ARENA_RADIUS_MAX,
   ARENA_RADIUS_MIN,
+  CAMERA_VIEW_WIDTH_MAX,
+  CAMERA_VIEW_WIDTH_MIN,
   ARENA_SPAWN_MARKS,
   ARENA_ZONE_GRID_MAX,
   ARENA_ZONE_GRID_MIN,
@@ -133,7 +135,7 @@ const BOX = 520;
  * match reads.
  */
 export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
-  const radius = tuning.arenaRadius;
+  const radius = tuning.arena.fieldRadius;
   const surface = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState<number | undefined>(undefined);
   const marks = tuning.arena.spawnMarks;
@@ -216,15 +218,30 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           мышью, задайте координаты числами или разложите всё заново по спирали.
         </p>
         <div className="arena-controls">
+          {/* The match's own field and its own frame: the campaign keeps the
+            numbers on the player screen, and neither mode drags the other. */}
           <NumberField
             caption="Радиус арены"
             min={ARENA_RADIUS_MIN}
             step={50}
-            value={tuning.arenaRadius}
-            onChange={(arenaRadius) => {
-              onChange({
-                ...tuning,
-                arenaRadius: Math.min(ARENA_RADIUS_MAX, Math.max(ARENA_RADIUS_MIN, arenaRadius))
+            value={tuning.arena.fieldRadius}
+            onChange={(fieldRadius) => {
+              patchArena({
+                fieldRadius: Math.min(ARENA_RADIUS_MAX, Math.max(ARENA_RADIUS_MIN, fieldRadius))
+              });
+            }}
+          />
+          <NumberField
+            caption="Ширина кадра"
+            min={CAMERA_VIEW_WIDTH_MIN}
+            step={50}
+            value={tuning.arena.cameraViewWidth}
+            onChange={(cameraViewWidth) => {
+              patchArena({
+                cameraViewWidth: Math.min(
+                  CAMERA_VIEW_WIDTH_MAX,
+                  Math.max(CAMERA_VIEW_WIDTH_MIN, cameraViewWidth)
+                )
               });
             }}
           />
@@ -270,7 +287,7 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
                 ...tuning,
                 arena: {
                   ...tuning.arena,
-                  spawnMarks: spiralMarks(ARENA_SPAWN_MARKS, tuning.arenaRadius - 160)
+                  spawnMarks: spiralMarks(ARENA_SPAWN_MARKS, tuning.arena.fieldRadius - 160)
                 }
               });
             }}
@@ -333,10 +350,10 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           <p className="hint" data-testid="arena-scan-reach">
             Скан находит всех в{" "}
             <strong>
-              {String(Math.round(tuning.cameraViewWidth * tuning.arena.scanRadiusScreens))}
+              {String(Math.round(tuning.arena.cameraViewWidth * tuning.arena.scanRadiusScreens))}
             </strong>{" "}
             единицах — это {String(round2(tuning.arena.scanRadiusScreens))} экрана при кадре в{" "}
-            {String(Math.round(tuning.cameraViewWidth))}. Найденные держатся на радаре{" "}
+            {String(Math.round(tuning.arena.cameraViewWidth))}. Найденные держатся на радаре{" "}
             {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
             {formatTicks(tuning.arena.scanCooldownTicks)}.
           </p>
@@ -500,7 +517,7 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               <span className="arena-list__index">{index + 1}</span>
               <NumberField
                 caption="X"
-                min={-tuning.arenaRadius}
+                min={-tuning.arena.fieldRadius}
                 value={mark.x}
                 onChange={(x) => {
                   setMark(index, { ...mark, x });
@@ -508,7 +525,7 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               />
               <NumberField
                 caption="Y"
-                min={-tuning.arenaRadius}
+                min={-tuning.arena.fieldRadius}
                 value={mark.y}
                 onChange={(y) => {
                   setMark(index, { ...mark, y });

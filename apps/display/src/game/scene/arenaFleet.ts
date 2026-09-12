@@ -207,7 +207,9 @@ export class ArenaFleet {
        */
       if (!ship.alive && !parts.wrecked) {
         parts.wrecked = true;
-        const effect = deathEffectFor("enemy", false, undefined);
+        // The hull's own choice from the console, with the display's fallback
+        // behind it: a preset that names nothing plays what it always played.
+        const effect = deathEffectFor("enemy", false, snapshot.shipDeathEffect);
         if (effect !== undefined) bursts?.spawn(effect, parts.hull.x, parts.hull.y, ship.radius);
         parts.hull.setVisible(false);
         parts.turret.setVisible(false);

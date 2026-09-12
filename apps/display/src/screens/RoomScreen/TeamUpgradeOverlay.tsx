@@ -53,7 +53,19 @@ export function TeamUpgradeOverlay({
         <p>Сервер готовит карточки…</p>
       ) : (
         <ul className="intermission-cards" aria-label="Карточки командного голосования">
-          {offer.cards.map((card) => {
+          {offer.cards.map((card, index) => {
+            /*
+             * What the room will take if nobody answers.
+             *
+             * The first affordable card, which is exactly the rule the
+             * simulation applies when the intermission runs out - said out loud
+             * here so the choice is visible rather than a surprise a wave later.
+             */
+            const affordable = credits >= card.price;
+            const byDefault =
+              affordable &&
+              CREW_ROLES.every((role) => teamUpgrade.votes[role] === null) &&
+              offer.cards.findIndex((candidate) => credits >= candidate.price) === index;
             const voters = CREW_ROLES.filter(
               (role) => teamUpgrade.votes[role]?.upgradeId === card.upgradeId
             );
@@ -64,15 +76,23 @@ export function TeamUpgradeOverlay({
                 <small>{summariseModuleEffects(card.effects)}</small>
                 <small>{roleLabel(card.role)}</small>
                 <small>
-                  {voters.length === 0
-                    ? "Голосов нет"
-                    : `Голоса: ${voters.map((role) => roleLabel(role)).join(", ")}`}
+                  {voters.length > 0
+                    ? `Голоса: ${voters.map((role) => roleLabel(role)).join(", ")}`
+                    : byDefault
+                      ? "Возьмём это, если никто не выберет"
+                      : "Голосов нет"}
                 </small>
               </>
             );
             return (
               <li
-                className={`intermission-card${voters.length > 0 ? " intermission-card--voted" : ""}`}
+                className={`intermission-card${
+                  voters.length > 0
+                    ? " intermission-card--voted"
+                    : byDefault
+                      ? " intermission-card--default"
+                      : ""
+                }`}
                 key={card.upgradeId}
               >
                 {cockpit === undefined ? (

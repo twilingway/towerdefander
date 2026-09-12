@@ -943,6 +943,8 @@ export const displayGameSnapshotSchema = z
      */
     shieldBandEffect: z.string(),
     shieldImpactEffect: z.string(),
+    /** What a wreck of this hull plays; empty leaves the display's own. */
+    shipDeathEffect: z.string(),
     turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,

@@ -634,6 +634,20 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     // A preset written before the match clock was a setting keeps the length it
     // was played at, which is the default.
     matchTickLimit: readNumber(arena, "matchTickLimit") ?? defaults.arena.matchTickLimit,
+    /*
+     * The field and the frame the arena was actually played on.
+     *
+     * Both were the campaign's until now, so a preset that has one carries it
+     * across rather than being handed the built-in: whatever the operator set
+     * while the two modes shared a number was set for the match, and this is
+     * the edit that lets the campaign have its own back.
+     */
+    fieldRadius:
+      readNumber(arena, "fieldRadius") ?? readNumber(tuning, "arenaRadius") ?? defaults.arenaRadius,
+    cameraViewWidth:
+      readNumber(arena, "cameraViewWidth") ??
+      readNumber(tuning, "cameraViewWidth") ??
+      defaults.cameraViewWidth,
     // A preset written before the match ship was a setting keeps the hull and
     // the shot it was played with, which is what the built-ins state.
     hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,

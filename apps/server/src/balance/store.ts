@@ -322,6 +322,8 @@ export function createDefaultTuning(): BalanceTuning {
       zoneColumns: ARENA_ZONE_COLUMNS,
       zoneRows: ARENA_ZONE_ROWS,
       matchTickLimit: ARENA_MATCH_TICK_LIMIT,
+      fieldRadius: config.arenaRadius,
+      cameraViewWidth: config.cameraViewWidth,
       hullScaling: ARENA_HULL_SCALING,
       damageScaling: ARENA_DAMAGE_SCALING,
       scanRadiusScreens: ARENA_SCAN_RADIUS_SCREENS,
@@ -435,6 +437,7 @@ export function toSimulationConfig(
     ...(hull.effects?.shieldImpact === undefined
       ? {}
       : { shieldImpactEffect: hull.effects.shieldImpact }),
+    ...(hull.effects?.death === undefined ? {} : { shipDeathEffect: hull.effects.death }),
     moduleTiers: hull.tiers,
     endlessTier: hull.endlessTier
   });
