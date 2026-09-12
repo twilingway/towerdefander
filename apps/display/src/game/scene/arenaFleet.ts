@@ -100,6 +100,8 @@ interface FleetHull {
   /** Shots seen on the wire and not yet flashed; spent one per drawn frame. */
   pendingShots: number;
   readonly muzzleEffect: string;
+  /** Whose flash is whose, so the pool drags this hull's and no other's. */
+  readonly followKey: string;
   /** Blocks already drawn, so a mark plays once per shell the sector stopped. */
   drawnBlocks: number;
 }
@@ -343,8 +345,7 @@ export class ArenaFleet {
       parts.shield.setPosition(x, y).setRotation(angle("shieldAngle"));
 
       const bursts = this.bursts;
-      if (parts.pendingShots > 0 && bursts !== undefined) {
-        parts.pendingShots -= 1;
+      if (bursts !== undefined) {
         // The end of the barrel as it is drawn this frame, the way the crew's
         // own flash is placed: the mount is where the gun is bolted, not where
         // the shell leaves.
@@ -353,7 +354,29 @@ export class ArenaFleet {
           parts.turret.rotation,
           parts.radius
         );
-        bursts.spawn(parts.muzzleEffect, muzzle.x, muzzle.y, parts.radius, parts.turret.rotation);
+        if (parts.pendingShots > 0) {
+          parts.pendingShots -= 1;
+          bursts.spawn(
+            parts.muzzleEffect,
+            muzzle.x,
+            muzzle.y,
+            parts.radius,
+            parts.turret.rotation,
+            parts.followKey
+          );
+        }
+        /*
+         * And the flash still playing is dragged back onto the barrel, exactly
+         * as the crew's own is.
+         *
+         * Left where it was fired it is honest - expelled gas does not travel
+         * with the ship - but a hull covers most of its own length inside the
+         * quarter second a flash lasts, so it reads as the flash sliding off
+         * the gun: under the muzzle when the ship drives forward, out ahead of
+         * it when the ship backs away. Glued to the barrel is what reads as a
+         * gun firing.
+         */
+        bursts.followMuzzle(parts.followKey, muzzle, parts.turret.rotation);
       }
 
       const barY = y - parts.hull.displayHeight * 0.75;
@@ -576,6 +599,7 @@ export class ArenaFleet {
       drawnShots: ship.shotsFired,
       pendingShots: 0,
       muzzleEffect: muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
+      followKey: `arena:${ship.entityId}`,
       drawnBlocks: ship.shieldBlocks,
       hp: ship.hp,
       maxHp: ship.maxHp,
