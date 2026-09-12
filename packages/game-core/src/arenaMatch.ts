@@ -127,6 +127,7 @@ export function createArenaMatch(
       mgHeat: 0,
       mgOverheated: false,
       lastMgFiredTick: null,
+      shotsFired: 0,
       shieldAngle: heading,
       shieldTargetAngle: null,
       shieldAngularVelocity: 0,

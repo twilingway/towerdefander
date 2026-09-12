@@ -16,6 +16,21 @@ import { drawTankArena, drawTankArenaRim, TANK_VOID_COLOR } from "../tankArt.js"
  */
 const ARENA_TEXTURE_SIDE = 2048;
 
+/**
+ * The same drawing, sized to the field it is stretched across.
+ *
+ * The floor is one texture however wide the arena is, so nothing here can meet
+ * a GPU's texture ceiling - what it meets is its own resolution. At a
+ * four-thousand-unit arena a texel is two units and the rim's thin rings read;
+ * on a field ten times wider the same texture puts twenty units in a texel and
+ * they turn to mush. So a large field earns a larger bake, and only a large
+ * field pays for it: four thousand and ninety-six a side is four times the
+ * video memory, which a phone drawing a small arena has no reason to spend.
+ */
+function arenaTextureSide(diameter: number): number {
+  return diameter > 12_000 ? 4096 : ARENA_TEXTURE_SIDE;
+}
+
 const OUTSIDE_SPACE_COLOR = 0x02070d;
 const ARENA_SPACE_COLOR = 0x07171f;
 /** The elastic rim band: visible enough to read as ground, not as an object. */
@@ -65,25 +80,18 @@ export function drawArena(
   const centerY = snapshot.worldHeight / 2;
   const radius = snapshot.arenaRadius;
   const diameter = radius * 2;
-  const scale = ARENA_TEXTURE_SIDE / diameter;
+  const side = arenaTextureSide(diameter);
+  const scale = side / diameter;
 
   if (tankLook) {
     scene.cameras.main.setBackgroundColor(TANK_VOID_COLOR);
-    const floor = bake(
-      `tankArena:floor:${String(Math.round(radius))}`,
-      ARENA_TEXTURE_SIDE / 2,
-      (graphics) => {
-        drawTankArena(graphics, radius * scale, scale);
-      }
-    );
+    const floor = bake(`tankArena:floor:${String(Math.round(radius))}`, side / 2, (graphics) => {
+      drawTankArena(graphics, radius * scale, scale);
+    });
     scene.add.image(centerX, centerY, floor).setDisplaySize(diameter, diameter).setDepth(0);
-    const rim = bake(
-      `tankArena:rim:${String(Math.round(radius))}`,
-      ARENA_TEXTURE_SIDE / 2,
-      (graphics) => {
-        drawTankArenaRim(graphics, radius * scale, scale);
-      }
-    );
+    const rim = bake(`tankArena:rim:${String(Math.round(radius))}`, side / 2, (graphics) => {
+      drawTankArenaRim(graphics, radius * scale, scale);
+    });
     scene.add.image(centerX, centerY, rim).setDisplaySize(diameter, diameter).setDepth(3);
     return;
   }
@@ -94,7 +102,7 @@ export function drawArena(
 
   const floorKey = bake(
     `arena:floor:${String(Math.round(radius))}:${String(Math.round(snapshot.rimBandWidth))}`,
-    ARENA_TEXTURE_SIDE / 2,
+    side / 2,
     (graphics) => {
       graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
       graphics.fillCircle(0, 0, radius * scale);
@@ -125,14 +133,10 @@ export function drawArena(
 
   // Its own image rather than part of the floor: the rim has to stay above
   // the obstacles, and they sit between the two.
-  const borderKey = bake(
-    `arena:border:${String(Math.round(radius))}`,
-    ARENA_TEXTURE_SIDE / 2,
-    (graphics) => {
-      graphics.lineStyle(8 * scale, 0x3d6874, 1);
-      graphics.strokeCircle(0, 0, radius * scale);
-    }
-  );
+  const borderKey = bake(`arena:border:${String(Math.round(radius))}`, side / 2, (graphics) => {
+    graphics.lineStyle(8 * scale, 0x3d6874, 1);
+    graphics.strokeCircle(0, 0, radius * scale);
+  });
   scene.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
 }
 
@@ -232,12 +236,13 @@ export function drawArenaZones(
   const centerY = snapshot.worldHeight / 2;
   const radius = snapshot.arenaRadius;
   const diameter = radius * 2;
-  const scale = ARENA_TEXTURE_SIDE / diameter;
+  const side = arenaTextureSide(diameter);
+  const scale = side / diameter;
   const signature = arenaZoneSignature(snapshot);
 
   const key = bake(
     `arena:zones:${String(Math.round(radius))}:${signature}`,
-    ARENA_TEXTURE_SIDE / 2,
+    side / 2,
     (graphics) => {
       for (const zone of zones) {
         if (zone.state === "safe") continue;

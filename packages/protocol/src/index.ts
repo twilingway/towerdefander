@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 59 as const;
+export const PROTOCOL_VERSION = 60 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -492,6 +492,16 @@ export const publicArenaShipViewSchema = z
   .strict();
 export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;
 
+/**
+ * Rectangles the wire will carry for one sheet.
+ *
+ * Sized from the largest grid the balance schema allows: a square grid covers
+ * about π/4 of its cells with disc, so twenty-four a side is 484. Above the cap
+ * the view is refused and the screen freezes on its last good snapshot, so the
+ * two numbers move together or not at all.
+ */
+export const MAX_ARENA_ZONES = 512;
+
 export const ARENA_ZONE_STATES = ["safe", "warning", "closed"] as const;
 export const arenaZoneStateSchema = z.enum(ARENA_ZONE_STATES);
 export type ArenaZoneStateName = z.infer<typeof arenaZoneStateSchema>;
@@ -943,7 +953,7 @@ export const displayGameSnapshotSchema = z
      * a few times a match rather than every tick, so the whole sheet travels
      * rather than a diff of it.
      */
-    arenaZones: z.array(publicArenaZoneViewSchema).max(144),
+    arenaZones: z.array(publicArenaZoneViewSchema).max(MAX_ARENA_ZONES),
     /** Every hull in a match; empty in the campaign, which has exactly one. */
     arenaShips: z.array(publicArenaShipViewSchema).max(16),
     /**

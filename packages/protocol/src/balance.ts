@@ -52,7 +52,15 @@ export const cameraViewWidthSchema = z
  * derived from it, so the circle cannot drift out of the square it is drawn in.
  */
 export const ARENA_RADIUS_MIN = 1100;
-export const ARENA_RADIUS_MAX = 8800;
+/**
+ * Nothing in the engine sets this: the floor and the zone sheet are baked into
+ * one texture and stretched, so no drawing grows with the field, and positions
+ * ride the wire as `float32`, which is exact on whole numbers four hundred
+ * times past this. What the number costs is travel - a hull crosses a field
+ * this wide in about a minute - and sight, because the camera is capped far
+ * below it and the dial becomes the only way to know where anyone is.
+ */
+export const ARENA_RADIUS_MAX = 19_400;
 export const arenaRadiusSchema = z.number().min(ARENA_RADIUS_MIN).max(ARENA_RADIUS_MAX);
 
 /**
@@ -942,7 +950,14 @@ export type ArenaSpawnMark = z.infer<typeof arenaSpawnMarkSchema>;
 export const ARENA_SPAWN_MARKS = 16;
 
 export const ARENA_ZONE_GRID_MIN = 2;
-export const ARENA_ZONE_GRID_MAX = 20;
+/**
+ * A square grid over the arena square covers about π/4 of its cells with disc,
+ * so a sheet of this many a side is 484 rectangles - and the wire carries at
+ * most `MAX_ARENA_ZONES` of them. The two numbers have to be read together: a
+ * sheet larger than the contract allows is refused, and a refused view is a
+ * frozen screen.
+ */
+export const ARENA_ZONE_GRID_MAX = 24;
 
 export const arenaTuningSchema = z
   .object({

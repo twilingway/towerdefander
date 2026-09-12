@@ -820,6 +820,9 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         view.shieldCapacity = ship.stats.shieldCapacity;
         view.revealed = fresh && this.revealed.has(ship.id);
         view.alive = ship.alive;
+        // Narrowed to the wire's counter, which wraps; the display compares
+        // against what it last drew, so a wrap costs one missed flash.
+        view.shotsFired = ship.shotsFired % 65_536;
       }
     );
 

@@ -52,6 +52,14 @@ export interface ArenaShipState {
   readonly mgHeat: number;
   readonly mgOverheated: boolean;
   readonly lastMgFiredTick: number | null;
+  /**
+   * Shots this hull has fired, ever.
+   *
+   * A counter rather than a flag, because the display samples it: a muzzle
+   * flash has to be played for every shot that happened between two patches,
+   * and a boolean would lose the second of a pair fired in the same frame.
+   */
+  readonly shotsFired: number;
 
   readonly shieldAngle: number;
   readonly shieldTargetAngle: number | null;

@@ -14,7 +14,12 @@ import {
 import type { LiveEntity } from "../../model/shipPrediction.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
 import { drawSpaceshipHull } from "../entityArt.js";
-import { deathEffectFor, type BurstLayer } from "./bursts.js";
+import {
+  DEFAULT_ENEMY_DEATH_EFFECT,
+  OWN_MUZZLE_EFFECTS,
+  deathEffectFor,
+  type BurstLayer
+} from "./bursts.js";
 import type { ScenePrediction } from "./entities.js";
 
 /** Where the scene has actually drawn the player's own hull this frame. */
@@ -76,6 +81,13 @@ interface FleetHull {
   flashLeftMs: number;
   /** True once this hull has been drawn dying; a wreck is played once. */
   wrecked: boolean;
+  /**
+   * What was last drawn of this hull's shooting and its barrier, so the next
+   * patch can be read as events rather than as numbers: a shot fired, a shell
+   * that got through, a shell the sector stopped.
+   */
+  drawnShots: number;
+  drawnShield: number;
 }
 
 const RIVAL_TINT = 0xff9f8a;
@@ -85,6 +97,8 @@ const HEALTH_HIGH = 0x74e39b;
 const HEALTH_LOW = 0xff6b5e;
 const FLASH_COLOR = 0xffe6a0;
 const FLASH_MS = 140;
+/** What a sector plays where it stopped a shell; the crew's own hull plays it too. */
+const SHIELD_IMPACT_EFFECT = "shield-impact";
 /** Bar geometry, in hull radii, so it scales with whatever ship is flown. */
 const BAR_WIDTH = 2.2;
 const BAR_HEIGHT = 0.26;
@@ -132,10 +146,42 @@ export class ArenaFleet {
       // as long as it lives, which is the enemy layer's own rule.
       parts.live ??= prediction?.bind(ship.entityId, "arenaShip");
 
-      // Losing health is the only hit signal the arena has on the wire, and it
-      // is enough: a flash where the shell landed is what makes a firefight
-      // legible from across the room.
-      if (ship.hp < parts.hp - 0.01) parts.flashLeftMs = FLASH_MS;
+      /*
+       * Three events, all read out of numbers rather than sent as events.
+       *
+       * The arena publishes no shots and no hits, only what each hull has and
+       * how much of it - so the display asks what changed since the last patch.
+       * A counter that moved is a barrel that fired; health that fell is a
+       * shell that got through; a battery that fell while the health did not is
+       * a shell the sector stopped. All three are exactly what a pilot needs to
+       * see, and none of them costs a byte more on the wire.
+       */
+      const fired = ship.shotsFired - parts.drawnShots;
+      if (fired > 0 && parts.drawnShots > 0 && !parts.isSelf) {
+        bursts?.spawn(
+          OWN_MUZZLE_EFFECTS.cannon,
+          parts.turret.x,
+          parts.turret.y,
+          ship.radius,
+          parts.turret.rotation
+        );
+      }
+      parts.drawnShots = ship.shotsFired;
+
+      if (ship.hp < parts.hp - 0.01) {
+        parts.flashLeftMs = FLASH_MS;
+        bursts?.spawn(DEFAULT_ENEMY_DEATH_EFFECT, parts.hull.x, parts.hull.y, ship.radius * 0.6);
+      } else if (ship.shieldActive && ship.shieldEnergy < parts.drawnShield - 0.01) {
+        // On the barrier rather than on the hull: the sector is what stopped it.
+        bursts?.spawn(
+          SHIELD_IMPACT_EFFECT,
+          parts.hull.x + Math.cos(ship.shieldAngle) * ship.shieldRadius,
+          parts.hull.y + Math.sin(ship.shieldAngle) * ship.shieldRadius,
+          ship.radius,
+          ship.shieldAngle
+        );
+      }
+      parts.drawnShield = ship.shieldEnergy;
       parts.hp = ship.hp;
       parts.maxHp = ship.maxHp;
       if (snap) {
@@ -371,6 +417,8 @@ export class ArenaFleet {
       turretAngle: createAngleTrack(ship.turretAngle, toTick),
       shieldAngle: createAngleTrack(ship.shieldAngle, toTick),
       wrecked: false,
+      drawnShots: ship.shotsFired,
+      drawnShield: ship.shieldEnergy,
       hp: ship.hp,
       maxHp: ship.maxHp,
       flashLeftMs: 0

@@ -131,6 +131,8 @@ export function fireArenaWeapons(
   return {
     ship: {
       ...ship,
+      // Everything born this tick, counted for the display's muzzle flash.
+      shotsFired: ship.shotsFired + projectiles.length + beams.length,
       cannonHeat: cannonShot.heat,
       cannonOverheated: cannonShot.overheated,
       lastFiredTick: cannonShot.triggered ? tick : ship.lastFiredTick,
