@@ -113,6 +113,9 @@ export function toDisplayRoomView(
             arenaLoot: [...display.arenaLoot.values()].map((drop) => ({
               entityId: drop.entityId,
               kind: drop.kind as "ammo" | "gear" | "cargo",
+              revealed: drop.revealed,
+              captureRadius: drop.captureRadius,
+              captureShare: drop.captureShare,
               x: drop.x,
               y: drop.y
             })),

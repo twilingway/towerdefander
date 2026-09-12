@@ -188,6 +188,9 @@ export interface ArenaMatchConfig {
   /** Per common kind, and across everything on the field at once. */
   readonly lootCapPerKind: number;
   readonly lootSceneCap: number;
+  /** How long a hull must stand in the circle, and how wide the circle is. */
+  readonly lootCaptureTicks: number;
+  readonly lootCaptureRadiusHulls: number;
   readonly zoneWarningTicks: number;
   /**
    * The zone bites on a beat rather than continuously: every

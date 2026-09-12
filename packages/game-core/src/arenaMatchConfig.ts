@@ -34,6 +34,15 @@ export const ARENA_LOOT_INTERVAL_TICKS = 3_600;
 export const ARENA_LOOT_CARGO_INTERVAL_TICKS = 7_200;
 export const ARENA_LOOT_CAP_PER_KIND = 16;
 export const ARENA_LOOT_SCENE_CAP = 32;
+/**
+ * The hold: five seconds of standing still, in a circle two hulls wide.
+ *
+ * Long enough that a crate is a commitment rather than a detour, and wide
+ * enough that holding it is a position rather than a pixel - a hull parked in
+ * the middle can still turn to face whoever comes for it.
+ */
+export const ARENA_LOOT_CAPTURE_TICKS = 300;
+export const ARENA_LOOT_CAPTURE_RADIUS_HULLS = 2;
 
 /**
  * The radar sweep, as Steel Hunter plays it: a pilot presses for a look around,
@@ -109,6 +118,8 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   lootCargoIntervalTicks: ARENA_LOOT_CARGO_INTERVAL_TICKS,
   lootCapPerKind: ARENA_LOOT_CAP_PER_KIND,
   lootSceneCap: ARENA_LOOT_SCENE_CAP,
+  lootCaptureTicks: ARENA_LOOT_CAPTURE_TICKS,
+  lootCaptureRadiusHulls: ARENA_LOOT_CAPTURE_RADIUS_HULLS,
   zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
   zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
   zoneDamageShareOfMaxHp: ARENA_ZONE_DAMAGE_SHARE,

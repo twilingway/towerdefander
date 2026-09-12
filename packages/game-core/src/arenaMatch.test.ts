@@ -343,6 +343,86 @@ describe("the field's supply run", () => {
     expect(state.loot).toHaveLength(0);
   });
 
+  it("hands a drop over only after the hold is served", () => {
+    /*
+     * A crate is taken by standing, not by touching. Five seconds parked in the
+     * circle is a commitment somebody can shoot you out of, which is the whole
+     * point of putting them on the field.
+     */
+    const config = supplyConfig({ lootCaptureTicks: 10 });
+    let state = match(config);
+    state = advanceArenaMatch(state, new Map(), config);
+    const drop = state.loot[0];
+    if (drop === undefined) throw new Error("expected a drop");
+
+    // Park a hull in the middle of the circle and leave it there.
+    const parked = (state: ArenaMatchState): ArenaMatchState => ({
+      ...state,
+      ships: state.ships.map((ship, index) =>
+        index === 0
+          ? {
+              ...ship,
+              spaceship: {
+                ...ship.spaceship,
+                x: drop.x,
+                y: drop.y,
+                previousX: drop.x,
+                previousY: drop.y
+              }
+            }
+          : ship
+      )
+    });
+
+    state = parked(state);
+    for (let tick = 0; tick < 8; tick += 1) {
+      state = parked(advanceArenaMatch(state, new Map(), config));
+    }
+    const holding = state.loot.find((candidate) => candidate.id === drop.id);
+    expect(holding?.captureShipId).toBe(state.ships[0]?.id);
+    expect(holding?.captureTicks).toBeGreaterThan(3);
+
+    for (let tick = 0; tick < 4; tick += 1) {
+      state = parked(advanceArenaMatch(state, new Map(), config));
+    }
+    expect(state.loot.some((candidate) => candidate.id === drop.id)).toBe(false);
+  });
+
+  it("drops the hold when the hull leaves the circle", () => {
+    const config = supplyConfig({ lootCaptureTicks: 60 });
+    let state = match(config);
+    state = advanceArenaMatch(state, new Map(), config);
+    const drop = state.loot[0];
+    if (drop === undefined) throw new Error("expected a drop");
+
+    const place = (state: ArenaMatchState, x: number, y: number): ArenaMatchState => ({
+      ...state,
+      ships: state.ships.map((ship, index) =>
+        index === 0
+          ? { ...ship, spaceship: { ...ship.spaceship, x, y, previousX: x, previousY: y } }
+          : ship
+      )
+    });
+
+    state = place(state, drop.x, drop.y);
+    for (let tick = 0; tick < 5; tick += 1) {
+      state = place(advanceArenaMatch(state, new Map(), config), drop.x, drop.y);
+    }
+    expect(state.loot.find((candidate) => candidate.id === drop.id)?.captureTicks).toBeGreaterThan(
+      1
+    );
+
+    // Two hulls away is outside a circle two hulls wide.
+    const away = drop.x + config.ship.spaceshipRadius * 8;
+    state = place(advanceArenaMatch(place(state, away, drop.y), new Map(), config), away, drop.y);
+    // The hold is this hull's and it is gone. Whether the circle is empty is a
+    // different question - sixteen hulls are scattered over the field and one of
+    // them may well be standing there, which is the mechanic working.
+    const dropped = state.loot.find((candidate) => candidate.id === drop.id);
+    expect(dropped?.captureShipId).not.toBe(state.ships[0]?.id);
+    expect(dropped?.captureTicks ?? 0).toBeLessThanOrEqual(1);
+  });
+
   it("replays the same supply run from the same seed", () => {
     const config = supplyConfig();
     const run = (): ArenaMatchState => {

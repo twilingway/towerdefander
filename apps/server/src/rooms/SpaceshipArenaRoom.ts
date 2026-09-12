@@ -588,6 +588,18 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       );
       if (distance <= radius) this.revealed.add(ship.id);
     }
+    /*
+     * And what the field has put out within the same reach.
+     *
+     * A sweep answers one question - what is around me - and a crate is as much
+     * a part of that answer as a hull: the route a pilot picks after a sweep is
+     * usually toward a drop rather than toward a fight. Same set, because both
+     * fade on the same clock.
+     */
+    for (const drop of match.loot) {
+      const distance = Math.hypot(drop.x - player.spaceship.x, drop.y - player.spaceship.y);
+      if (distance <= radius) this.revealed.add(drop.id);
+    }
     this.scanReadyTick = match.clock.tick + tuning.cooldownTicks;
     this.scanRevealedUntilTick = match.clock.tick + tuning.revealTicks;
   }
@@ -873,6 +885,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       (view, drop) => {
         view.x = drop.x;
         view.y = drop.y;
+        view.revealed = fresh && this.revealed.has(drop.id);
+        // The circle and how much of the hold is served: the display draws a
+        // ring from the pair, and neither is worth computing twice.
+        view.captureRadius = this.config.ship.spaceshipRadius * this.config.lootCaptureRadiusHulls;
+        view.captureShare = Math.max(
+          0,
+          Math.min(1, drop.captureTicks / Math.max(1, this.config.lootCaptureTicks))
+        );
       }
     );
 

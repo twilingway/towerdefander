@@ -29,6 +29,10 @@ const PULSE_MS = 1_400;
 interface Drop {
   readonly glow: Phaser.GameObjects.Image;
   readonly core: Phaser.GameObjects.Image;
+  /** The ring that fills while a hull stands in the circle. */
+  readonly hold: Phaser.GameObjects.Graphics;
+  readonly radius: number;
+  share: number;
 }
 
 /**
@@ -47,19 +51,21 @@ export class ArenaLootLayer {
     const seen = new Set<string>();
     for (const drop of snapshot.arenaLoot) {
       seen.add(drop.entityId);
-      const existing = this.drops.get(drop.entityId);
-      if (existing !== undefined) {
-        existing.glow.setPosition(drop.x, drop.y);
-        existing.core.setPosition(drop.x, drop.y);
-        continue;
+      const existing = this.drops.get(drop.entityId) ?? this.create(scene, drop, bake);
+      this.drops.set(drop.entityId, existing);
+      existing.glow.setPosition(drop.x, drop.y);
+      existing.core.setPosition(drop.x, drop.y);
+      if (existing.share !== drop.captureShare) {
+        existing.share = drop.captureShare;
+        drawHold(existing, drop.x, drop.y);
       }
-      this.drops.set(drop.entityId, this.create(scene, drop, bake));
     }
 
     for (const [id, drop] of this.drops) {
       if (seen.has(id)) continue;
       drop.glow.destroy();
       drop.core.destroy();
+      drop.hold.destroy();
       this.drops.delete(id);
     }
   }
@@ -80,6 +86,7 @@ export class ArenaLootLayer {
     for (const drop of this.drops.values()) {
       drop.glow.destroy();
       drop.core.destroy();
+      drop.hold.destroy();
     }
     this.drops.clear();
   }
@@ -103,7 +110,33 @@ export class ArenaLootLayer {
     return {
       // Under everything that flies and over the floor: a drop is ground.
       glow: scene.add.image(drop.x, drop.y, glowKey).setDepth(2),
-      core: scene.add.image(drop.x, drop.y, coreKey).setDepth(3)
+      core: scene.add.image(drop.x, drop.y, coreKey).setDepth(3),
+      /*
+       * The one drawing on this field, and it earns the exception: a ring that
+       * fills is an arc whose length is different every time it changes, which
+       * is the one shape a texture cannot be baked for. It is redrawn only when
+       * the share moves - a few times a second while somebody is standing in
+       * the circle, and never at all when nobody is.
+       */
+      hold: scene.add.graphics().setDepth(4),
+      radius: drop.captureRadius,
+      share: -1
     };
   }
+}
+
+/** Red while the circle is empty, green while somebody is serving the hold. */
+function drawHold(drop: Drop, x: number, y: number): void {
+  drop.hold.clear();
+  drop.hold.lineStyle(4, drop.share > 0 ? 0x74e39b : 0xff6b5e, 0.85);
+  drop.hold.beginPath();
+  drop.hold.arc(
+    x,
+    y,
+    drop.radius,
+    -Math.PI / 2,
+    -Math.PI / 2 + Math.max(0.001, drop.share) * Math.PI * 2,
+    false
+  );
+  drop.hold.strokePath();
 }

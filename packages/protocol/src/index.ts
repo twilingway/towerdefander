@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 63 as const;
+export const PROTOCOL_VERSION = 65 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -514,7 +514,19 @@ export const publicArenaLootViewSchema = z
     entityId: z.string().min(1).max(24),
     kind: arenaLootKindSchema,
     x: finite,
-    y: finite
+    y: finite,
+    /**
+     * Whether the last sweep found this drop and the mark has not faded.
+     *
+     * The dial shows what a sweep found and nothing else, drops included: a
+     * crate does not hide, but knowing where every crate on the field is
+     * without paying for the look would make the sweep worth nothing.
+     */
+    revealed: z.boolean(),
+    /** How wide the circle a hull must stand in is, in world units. */
+    captureRadius: finite,
+    /** How much of the hold is served, from nothing to one. */
+    captureShare: z.number().min(0).max(1)
   })
   .strict();
 export type PublicArenaLootView = z.infer<typeof publicArenaLootViewSchema>;

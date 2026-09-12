@@ -209,16 +209,6 @@ export function advanceArenaMatch(
   const clock = advanceClock(state.clock, config.ship.fixedStepMs);
   const tick = clock.tick;
   const sheet = advanceArenaZones(state.zones, state.ships, state.ticksUntilNextClosure, config);
-  const supply = advanceArenaLoot(
-    state.loot,
-    sheet.zones,
-    clock,
-    state.ticksUntilLoot,
-    state.ticksUntilCargo,
-    state.nextLootSequence,
-    state.lootRngState,
-    config
-  );
 
   let projectileSequence = state.nextProjectileSequence;
   const ships: ArenaShipState[] = [];
@@ -259,6 +249,29 @@ export function advanceArenaMatch(
   const biting = state.ticksUntilZoneDamage <= 1;
   const burned = biting ? applyZoneDamage(resolved.ships, sheet.zones, config) : resolved.ships;
   const settled = settleEliminations(burned, tick);
+  /*
+   * The supply line runs on the settled field, not on the one this tick began
+   * with: a hold is decided by where a hull ended up and by whether anything
+   * landed on it, and both of those are only known now.
+   */
+  const before = new Map(state.ships.map((ship) => [ship.id, ship.hp] as const));
+  const hurt = new Set(
+    settled
+      .filter((ship) => ship.hp < (before.get(ship.id) ?? ship.hp) - 1e-6)
+      .map((ship) => ship.id)
+  );
+  const supply = advanceArenaLoot(
+    state.loot,
+    sheet.zones,
+    settled,
+    hurt,
+    clock,
+    state.ticksUntilLoot,
+    state.ticksUntilCargo,
+    state.nextLootSequence,
+    state.lootRngState,
+    config
+  );
   const verdict = matchVerdict(settled, tick, config);
 
   return {

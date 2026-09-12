@@ -60,6 +60,9 @@ export interface NetworkArenaShipState {
 /** One drop on the arena's field; empty in the campaign. */
 export interface NetworkArenaLootState {
   entityId: string;
+  revealed: boolean;
+  captureRadius: number;
+  captureShare: number;
   kind: string;
   x: number;
   y: number;

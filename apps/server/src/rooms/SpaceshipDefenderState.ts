@@ -215,6 +215,9 @@ export class ArenaShipView extends Schema {
 /** One drop on the field: where it is and what it is worth. */
 export class ArenaLootView extends Schema {
   @type("string") entityId = "";
+  @type("boolean") revealed = false;
+  @type("float32") captureRadius = 0;
+  @type("float32") captureShare = 0;
   @type("string") kind: "ammo" | "gear" | "cargo" = "ammo";
   @type("float32") x = 0;
   @type("float32") y = 0;
