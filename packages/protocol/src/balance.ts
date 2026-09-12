@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 50 as const;
+export const BALANCE_FILE_VERSION = 51 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -1019,6 +1019,17 @@ export const arenaTuningSchema = z
      * bursts and lets shells through.
      */
     shieldHitCostShare: positiveFinite,
+    /**
+     * How near a rival has to be for the autopilot to hold the sector.
+     *
+     * The campaign's field of the same name answers this from the enemy
+     * catalogue when it is left at zero - "as far as that enemy can shoot
+     * from". A match has no catalogue: every rival is a copy of our own hull,
+     * so zero here means "as far as our own gun reaches", and the number moves
+     * with the cannon instead of having to be retuned after it. One name, two
+     * fights, two meanings - which is why it is two settings.
+     */
+    shieldAutopilotRaiseRange: nonNegativeFinite,
     /**
      * The sweep, in screens.
      *

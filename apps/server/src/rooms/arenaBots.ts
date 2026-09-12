@@ -34,17 +34,16 @@ export class ArenaBots {
       /*
        * A rival in gun range is a reason to hold the sector.
        *
-       * The operator's number when they have set one, and otherwise our own
-       * reach - which is the arena's answer to the question the campaign
+       * The arena's own number from the console, and at its zero our own
+       * reach - which is this mode's answer to the question the campaign
        * answers from the enemy catalogue. There is no catalogue here: every
        * rival is a copy of our own hull, so "close enough to be shooting at
        * us" is exactly "inside the range we ourselves shoot from".
        *
-       * Left at the console's default of zero the policy found no reason at
-       * all, and the sector only came up for a shot already inside the lead
-       * window - which reads, in a match, as a shield that stops machine-gun
-       * streams and lets single shells through, because a stream keeps it up
-       * and a lone shell arrives while it is still rising.
+       * With no reason at all the sector only came up for a shot already
+       * inside the lead window - which reads, in a match, as a shield that
+       * stops machine-gun streams and lets single shells through, because a
+       * stream keeps it up and a lone shell arrives while it is still rising.
        */
       shieldRaiseRange:
         config.ship.shieldAutopilotRaiseRange > 0

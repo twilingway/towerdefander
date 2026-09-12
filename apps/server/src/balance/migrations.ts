@@ -653,6 +653,17 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
     shieldHitCostShare:
       readNumber(arena, "shieldHitCostShare") ?? defaults.arena.shieldHitCostShare,
+    /*
+     * The number the match was played on, whichever field held it.
+     *
+     * Until now the two modes shared the campaign's one, so an operator who set
+     * a range set it for both: carrying it across keeps the match playing the
+     * way it did, and the campaign keeps its own copy either way.
+     */
+    shieldAutopilotRaiseRange:
+      readNumber(arena, "shieldAutopilotRaiseRange") ??
+      readNumber(tuning, "shieldAutopilotRaiseRange") ??
+      defaults.arena.shieldAutopilotRaiseRange,
     damageScaling: readNumber(arena, "damageScaling") ?? defaults.arena.damageScaling,
     zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
     /*

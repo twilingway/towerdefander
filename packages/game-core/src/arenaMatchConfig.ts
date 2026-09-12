@@ -43,6 +43,15 @@ export const ARENA_LOOT_SCENE_CAP = 32;
  */
 /** Half of what the shell carries, which is the ratio the campaign's own guns use. */
 export const ARENA_SHIELD_HIT_COST_SHARE = 0.5;
+/**
+ * Zero, meaning "as far as our own gun reaches".
+ *
+ * The campaign's field of the same name reads zero as the enemy archetype's own
+ * weapon range; a match has no archetypes, so the equivalent is the hull every
+ * rival is a copy of. Stating it as zero rather than as a distance is what
+ * keeps the sector's reason to come up tied to the cannon after it is retuned.
+ */
+export const ARENA_SHIELD_RAISE_RANGE = 0;
 
 export const ARENA_LOOT_CAPTURE_TICKS = 300;
 export const ARENA_LOOT_CAPTURE_RADIUS_HULLS = 2;

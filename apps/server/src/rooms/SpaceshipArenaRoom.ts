@@ -201,7 +201,15 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
        * still plainly on screen, because the policy had already been told the
        * rival was out of sight.
        */
-      cameraViewWidth: Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth)
+      cameraViewWidth: Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth),
+      /*
+       * And the sector's reason to come up is the match's own number.
+       *
+       * The campaign's answer to "is anything armed in reach" is the enemy
+       * archetype's weapon range, and a match has no archetypes to ask - so
+       * the two modes read the same zero differently and needed two settings.
+       */
+      shieldAutopilotRaiseRange: tuning.arena.shieldAutopilotRaiseRange
     };
     this.state.shipArchetypeId = tuning.defaultShipArchetypeId;
     this.config = {

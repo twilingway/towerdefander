@@ -179,6 +179,22 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
         Math.max(0.0001, tuning.friendlyProjectileDamage * tuning.arena.damageScaling)
     )
   );
+  /*
+   * How far the match's gun carries, read off the hull the match is flown in.
+   *
+   * The flat block is only what a hull that overrides nothing inherits, and
+   * this one number is worth resolving properly: it is what the arena's zero
+   * means, so a readout taken from the base would quietly promise a reach the
+   * default hull does not have.
+   */
+  const matchHull = tuning.shipArchetypes[tuning.defaultShipArchetypeId];
+  const matchStats = matchHull?.overrides.stats;
+  const cannonReach =
+    (matchHull?.overrides.cannonWeaponKind ?? tuning.cannonWeaponKind) === "laser"
+      ? (matchStats?.cannonLaserRange ?? tuning.cannonLaserRange)
+      : ((matchStats?.projectileSpeedPerSecond ?? tuning.projectileSpeedPerSecond) *
+          (matchStats?.projectileLifetimeMs ?? tuning.projectileLifetimeMs)) /
+        1_000;
   // What a raised sector is actually worth, in the only unit that matters: how
   // many shells it eats before it drops and locks out.
   const shellsHeld = Math.max(
@@ -355,6 +371,22 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ shieldHitCostShare: Math.max(0.05, shieldHitCostShare) });
             }}
           />
+          <NumberField
+            caption="Дальность подъёма щита"
+            min={0}
+            step={50}
+            value={tuning.arena.shieldAutopilotRaiseRange}
+            onChange={(shieldAutopilotRaiseRange) => {
+              patchArena({ shieldAutopilotRaiseRange: Math.max(0, shieldAutopilotRaiseRange) });
+            }}
+          />
+          <p className="hint" data-testid="arena-shield-raise">
+            Сектор в матче ведёт автопилот — и у игрока тоже, в кокпите нет рычага на щит. Поднимает
+            он его, когда соперник ближе этой дистанции. Ноль значит «на дальность своей же пушки»,
+            сейчас это <strong>{String(Math.round(cannonReach))}</strong> единиц: в арене все воюют
+            одним кораблём, так что чужая дальность и своя — одно число. В кампании такое же поле
+            читает ноль иначе, по дальности оружия самого врага, — потому настройки и разные.
+          </p>
           <p className="hint" data-testid="arena-ship-scaling">
             Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
             <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}

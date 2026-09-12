@@ -7,6 +7,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 
 import { SpaceshipArenaRoom } from "./SpaceshipArenaRoom.js";
+import { getBalanceStore } from "../balance/index.js";
 
 /**
  * What the matchmaker does between constructing a room and calling `onCreate`:
@@ -197,5 +198,41 @@ describe("the arena's published encounter", () => {
     internals.publish();
     const ended = publicEncounterViewSchema.safeParse(read());
     expect(ended.error?.issues ?? []).toEqual([]);
+  });
+
+  /**
+   * The match's frame and the match's sector range are the arena's own.
+   *
+   * Both used to be read off the campaign's ship, which made the bot's slice a
+   * different frame from the one the screen draws and gave the sector a reason
+   * to come up that meant something else in this mode. The room builds its hull
+   * from the arena section, and this is what says so.
+   */
+  it("builds the hull on the arena's own numbers, not the campaign's", () => {
+    const tuning = getBalanceStore().getActiveTuning() as unknown as {
+      cameraViewWidth: number;
+      shieldAutopilotRaiseRange: number;
+      arena: { cameraViewWidth: number; shieldAutopilotRaiseRange: number };
+    };
+    const before = {
+      cameraViewWidth: tuning.cameraViewWidth,
+      raiseRange: tuning.shieldAutopilotRaiseRange,
+      arenaCameraViewWidth: tuning.arena.cameraViewWidth,
+      arenaRaiseRange: tuning.arena.shieldAutopilotRaiseRange
+    };
+    tuning.cameraViewWidth = 1_600;
+    tuning.shieldAutopilotRaiseRange = 111;
+    tuning.arena.cameraViewWidth = 3_000;
+    tuning.arena.shieldAutopilotRaiseRange = 777;
+    try {
+      const { internals } = arenaRoom();
+      expect(internals.config.ship.cameraViewWidth).toBe(3_000);
+      expect(internals.config.ship.shieldAutopilotRaiseRange).toBe(777);
+    } finally {
+      tuning.cameraViewWidth = before.cameraViewWidth;
+      tuning.shieldAutopilotRaiseRange = before.raiseRange;
+      tuning.arena.cameraViewWidth = before.arenaCameraViewWidth;
+      tuning.arena.shieldAutopilotRaiseRange = before.arenaRaiseRange;
+    }
   });
 });

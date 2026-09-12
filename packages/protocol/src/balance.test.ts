@@ -319,6 +319,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       cameraViewWidth: 2500,
       hullScaling: 2.5,
       shieldHitCostShare: 0.5,
+      shieldAutopilotRaiseRange: 0,
       damageScaling: 0.7,
       scanRadiusScreens: 2.5,
       scanCooldownTicks: 1800,
