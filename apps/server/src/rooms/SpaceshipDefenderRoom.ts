@@ -1416,7 +1416,10 @@ export class SpaceshipDefenderRoom extends Room<{
     }
     return {
       statsId: this.statsId,
+      mode: "campaign",
       status: this.status,
+      // Sockets, not seats: a crew of three on a shared screen is four.
+      connections: this.clients.length,
       connectedPlayers,
       reservedPlayers,
       capacity: PLAYER_CAPACITY,

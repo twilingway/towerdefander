@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { Room, type Client } from "colyseus";
 import { StateView, type MapSchema } from "@colyseus/schema";
 import {
@@ -36,6 +38,7 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { getBalanceStore } from "../balance/index.js";
+import type { RoomStatsStatus } from "../stats/types.js";
 import { ArenaBots } from "./arenaBots.js";
 import { createRunSeed } from "./runSeed.js";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
@@ -110,6 +113,17 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private started = false;
   /** Seats taken by bots so far, while the fill animation runs. */
   private botsSeated = 0;
+  /**
+   * What the room dashboard is told about this match.
+   *
+   * A match published nothing at all until now, so a person flying one did not
+   * appear on the dashboard in any column: the page counted campaign rooms and
+   * called the number "players online".
+   */
+  private statsId = "";
+  private readonly createdAtMs = Date.now();
+  private statsStatus: RoomStatsStatus = "lobby";
+  private statusChangedAtMs = Date.now();
   /** The last sheet published, as a string; see `publishZones`. */
   private zoneSignature = "";
   /**
@@ -386,11 +400,24 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       Math.round(1000 / ship.fixedStepMs)
     );
 
+    this.statsId = randomUUID();
     // One tick a second for the waiting room, which is what its display shows.
     this.clock.setInterval(() => {
       this.countDown();
     }, 1_000);
+    /*
+     * And one for the dashboard, at the same rate.
+     *
+     * A match changes what it is worth reporting - who is connected, whether it
+     * has started - on events that are already busy, so this is a heartbeat
+     * rather than a call at every one of them: the page polls every few seconds
+     * and a second of lag in a count of people is not a number anybody reads.
+     */
+    this.clock.setInterval(() => {
+      void this.publishStats();
+    }, 1_000);
     this.broadcastLobby();
+    void this.publishStats();
   }
 
   /**
@@ -554,6 +581,42 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       started: this.started
     };
     this.broadcast(serverMessage.arenaLobby, payload);
+  }
+
+  /** What the dashboard calls this match right now. */
+  private publishStats(): Promise<void> {
+    if (this.statsId.length === 0) return Promise.resolve();
+    const match = this.match;
+    const status: RoomStatsStatus = !this.started
+      ? "lobby"
+      : match?.phase === "result"
+        ? "result"
+        : "combat";
+    if (status !== this.statsStatus) {
+      this.statsStatus = status;
+      this.statusChangedAtMs = Date.now();
+    }
+    return this.setMetadata({
+      statsId: this.statsId,
+      mode: "arena",
+      status,
+      // One socket is one person here: an arena client is its own screen and
+      // its own seat, unlike a campaign crew on a shared display.
+      connections: this.clients.length,
+      connectedPlayers: this.state.players.size,
+      // Nobody is held for a reconnect in a match: a seat whose pilot left is
+      // taken over by the autopilot rather than kept warm.
+      reservedPlayers: 0,
+      capacity: this.config.shipCount,
+      displayConnected: this.clients.length > 0,
+      createdAtMs: this.createdAtMs,
+      statusChangedAtMs: this.statusChangedAtMs,
+      // A match ends when it is decided, not on a clock the dashboard could
+      // count down to.
+      expiresAtMs: null
+    }).catch(() => {
+      // Statistics are operational diagnostics and never affect a match.
+    });
   }
 
   private step(): void {

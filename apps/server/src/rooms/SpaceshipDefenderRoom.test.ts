@@ -2190,9 +2190,14 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
     expect(Object.keys(metadata ?? {}).sort()).toEqual([
       "capacity",
       "connectedPlayers",
+      // Sockets rather than seats, and which game this room is running: the
+      // dashboard counts people across both, and a crew of three on a shared
+      // screen is four connections.
+      "connections",
       "createdAtMs",
       "displayConnected",
       "expiresAtMs",
+      "mode",
       "reservedPlayers",
       "statsId",
       "status",

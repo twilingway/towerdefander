@@ -1,6 +1,6 @@
 import { defineServer, matchMaker } from "colyseus";
 import type { Request, Response } from "express";
-import { PROTOCOL_VERSION, ROOM_TYPE } from "@spaceship-defender/protocol";
+import { ARENA_ROOM_TYPE, PROTOCOL_VERSION, ROOM_TYPE } from "@spaceship-defender/protocol";
 
 import { getBalanceStore, registerBalanceRoutes } from "./balance/index.js";
 import { getBatchRunner, getBatchStore, registerBalanceStatsRoutes } from "./balanceStats/index.js";
@@ -43,7 +43,19 @@ const gameServer = defineServer({
     });
     registerRoomStatsRoutes(app, {
       password: statsPassword,
-      queryRooms: () => matchMaker.query({ name: ROOM_TYPE })
+      /*
+       * Both games, named rather than "everything the matchmaker has".
+       *
+       * This asked for campaign rooms only, so a match of sixteen hulls with a
+       * person in one of them did not exist to the dashboard at all - no row,
+       * and nothing in the count of players online. Naming the two keeps a room
+       * type added later from appearing here before somebody decides how it
+       * should be counted.
+       */
+      queryRooms: async () => [
+        ...(await matchMaker.query({ name: ROOM_TYPE })),
+        ...(await matchMaker.query({ name: ARENA_ROOM_TYPE }))
+      ]
     });
     registerBalanceRoutes(app, { password: balancePassword, store: balanceStore });
     registerMaintenanceRoutes(app, {

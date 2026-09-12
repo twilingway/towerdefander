@@ -4,7 +4,7 @@ import {
   type ArenaMatchConfig,
   type ArenaMatchState
 } from "@spaceship-defender/game-core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SpaceshipArenaRoom } from "./SpaceshipArenaRoom.js";
 import { getBalanceStore } from "../balance/index.js";
@@ -23,6 +23,7 @@ function initRoom<T extends object>(room: T): T {
 
 /** The private surface this file reaches into, named rather than cast inline. */
 interface ArenaInternals {
+  publishStats: () => Promise<void>;
   match: ArenaMatchState | undefined;
   playerSessionId: string | undefined;
   config: ArenaMatchConfig;
@@ -198,6 +199,31 @@ describe("the arena's published encounter", () => {
     internals.publish();
     const ended = publicEncounterViewSchema.safeParse(read());
     expect(ended.error?.issues ?? []).toEqual([]);
+  });
+
+  /**
+   * A match appears on the room dashboard at all.
+   *
+   * It published nothing until now, so the page counted campaign rooms and
+   * called the number "players online" - a person flying a match was, to that
+   * page, not on the server.
+   */
+  it("reports itself to the dashboard as an arena room", async () => {
+    const { room, internals } = arenaRoom();
+    const setMetadata = vi.spyOn(room, "setMetadata").mockResolvedValue(undefined);
+
+    await internals.publishStats();
+    expect(setMetadata).toHaveBeenCalledTimes(1);
+    expect(setMetadata.mock.calls.at(-1)?.[0]).toMatchObject({
+      mode: "arena",
+      status: "lobby",
+      capacity: internals.config.shipCount
+    });
+
+    // And a started match is a fight rather than a queue.
+    internals.started = true;
+    await internals.publishStats();
+    expect(setMetadata.mock.calls.at(-1)?.[0]).toMatchObject({ mode: "arena", status: "combat" });
   });
 
   /**
