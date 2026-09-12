@@ -307,6 +307,7 @@ function tuning(): BalanceTuning {
       matchTickLimit: 9000,
       hullScaling: 2.5,
       damageScaling: 0.7,
+      zonesPerClosure: 10,
       zoneIntervalTicks: 900,
       zoneWarningTicks: 900,
       zoneDamageIntervalTicks: 300,

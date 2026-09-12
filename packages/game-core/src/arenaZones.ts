@@ -102,22 +102,35 @@ export function advanceArenaZones(
   const countdown = ticksUntilNextClosure - 1;
   if (countdown > 0) return { zones: advanced, ticksUntilNextClosure: countdown };
 
-  const safe = advanced.filter((zone) => zone.state === "safe");
-  // One safe zone left is the end of the sheet's work: everything after that is
-  // the closing phase, which kills whatever is still alive wherever it stands.
-  if (safe.length <= 1) {
-    return { zones: advanced, ticksUntilNextClosure: config.zoneIntervalTicks };
-  }
-
-  const doomed = pickZoneToClose(safe, advanced, ships, config);
-  return {
-    zones: advanced.map((zone) =>
+  /*
+   * A beat takes a band, not a rectangle.
+   *
+   * One closure per interval is a squeeze nobody can feel: a ten by ten sheet
+   * is eighty-eight rectangles, and at one apiece a match ends with most of the
+   * field still open. Taking a handful at a time is what turns the sheet into a
+   * wall that visibly moves inward.
+   *
+   * Picked one after another rather than all at once, because each pick changes
+   * where the frontier is: a zone that was interior a moment ago is on the edge
+   * once its neighbour is taken, and choosing the whole batch against the old
+   * sheet would punch holes in the safe ground.
+   */
+  let taken = advanced;
+  const wanted = Math.max(1, Math.round(config.zonesPerClosure));
+  for (let pick = 0; pick < wanted; pick += 1) {
+    const safe = taken.filter((zone) => zone.state === "safe");
+    // One safe zone left is the end of the sheet's work: everything after that
+    // is the closing phase, which kills whatever is alive wherever it stands.
+    if (safe.length <= 1) break;
+    const doomed = pickZoneToClose(safe, taken, ships, config);
+    taken = taken.map((zone) =>
       zone.id === doomed.id
         ? { ...zone, state: "warning" as const, ticksRemaining: config.zoneWarningTicks }
         : zone
-    ),
-    ticksUntilNextClosure: config.zoneIntervalTicks
-  };
+    );
+  }
+
+  return { zones: taken, ticksUntilNextClosure: config.zoneIntervalTicks };
 }
 
 /**

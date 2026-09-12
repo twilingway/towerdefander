@@ -21,6 +21,7 @@ import {
   ARENA_HULL_SCALING,
   ARENA_MATCH_TICK_LIMIT,
   ARENA_ZONE_COLUMNS,
+  ARENA_ZONES_PER_CLOSURE,
   ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
   ARENA_ZONE_DAMAGE_SHARE,
   ARENA_ZONE_INTERVAL_TICKS,
@@ -321,6 +322,7 @@ export function createDefaultTuning(): BalanceTuning {
       hullScaling: ARENA_HULL_SCALING,
       damageScaling: ARENA_DAMAGE_SCALING,
       zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
+      zonesPerClosure: ARENA_ZONES_PER_CLOSURE,
       zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
       zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
       zoneBitesToKill: Math.round(1 / ARENA_ZONE_DAMAGE_SHARE)

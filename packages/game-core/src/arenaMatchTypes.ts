@@ -157,6 +157,8 @@ export interface ArenaMatchConfig {
   readonly zoneRows: number;
   /** How often the next zone is picked, and how long its warning lasts. */
   readonly zoneIntervalTicks: number;
+  /** Rectangles taken on each beat; the sheet moves as a band, not a tile. */
+  readonly zonesPerClosure: number;
   readonly zoneWarningTicks: number;
   /**
    * The zone bites on a beat rather than continuously: every

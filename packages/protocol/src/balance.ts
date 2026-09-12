@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 44 as const;
+export const BALANCE_FILE_VERSION = 45 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -976,8 +976,21 @@ export const arenaTuningSchema = z
      */
     hullScaling: positiveFinite,
     damageScaling: positiveFinite,
-    /** How often the next zone is picked and turns amber. */
+    /** How often the next batch of zones is picked and turns amber. */
     zoneIntervalTicks: positiveInteger,
+    /**
+     * Rectangles taken on each beat.
+     *
+     * One at a time is a squeeze nobody feels: a ten by ten sheet is
+     * eighty-eight rectangles, and at one apiece a match ends with most of the
+     * field still open. A handful at a time is what turns the sheet into a wall
+     * that visibly moves inward.
+     */
+    zonesPerClosure: z
+      .number()
+      .int()
+      .min(1)
+      .max(ARENA_ZONE_GRID_MAX * ARENA_ZONE_GRID_MAX),
     /** How long amber lasts before that zone starts killing. */
     zoneWarningTicks: positiveInteger,
     /** The beat a closed zone bites on. */

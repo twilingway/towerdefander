@@ -161,6 +161,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // the operator owns rather than by constants nobody can reach.
       shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
       zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
+      zonesPerClosure: tuning.arena.zonesPerClosure,
       zoneWarningTicks: tuning.arena.zoneWarningTicks,
       zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
       // The operator decides how many beats a full hull takes; the simulation

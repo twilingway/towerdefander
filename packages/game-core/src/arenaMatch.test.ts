@@ -378,7 +378,10 @@ describe("the sheet of zones", () => {
     );
 
     // One tick left on the clock, so this step is the one that picks.
-    const stepped = advanceArenaZones(zones, gathered, 1, defaultArenaMatchConfig);
+    // One rectangle a beat, because what is under test is which one - the batch
+    // has its own test below.
+    const single: ArenaMatchConfig = { ...defaultArenaMatchConfig, zonesPerClosure: 1 };
+    const stepped = advanceArenaZones(zones, gathered, 1, single);
     const warned = stepped.zones.filter((candidate) => candidate.state === "warning");
 
     expect(warned.map((candidate) => candidate.id)).toEqual([crowded.id]);
@@ -388,7 +391,8 @@ describe("the sheet of zones", () => {
     const config: ArenaMatchConfig = {
       ...defaultArenaMatchConfig,
       zoneWarningTicks: 3,
-      zoneIntervalTicks: 1
+      zoneIntervalTicks: 1,
+      zonesPerClosure: 1
     };
     let zones = createArenaZones(config);
     const ships = match().ships;
@@ -415,7 +419,8 @@ describe("the sheet of zones", () => {
     const config: ArenaMatchConfig = {
       ...defaultArenaMatchConfig,
       zoneIntervalTicks: 2,
-      zoneWarningTicks: 9
+      zoneWarningTicks: 9,
+      zonesPerClosure: 1
     };
     let zones = createArenaZones(config);
     let countdown = config.zoneIntervalTicks;
@@ -430,6 +435,39 @@ describe("the sheet of zones", () => {
     // Four beats of two ticks, none of them red yet: the amber lasts nine.
     expect(zones.filter((candidate) => candidate.state === "warning")).toHaveLength(4);
     expect(zones.filter((candidate) => candidate.state === "closed")).toHaveLength(0);
+  });
+
+  it("takes a band of rectangles on every beat, not a tile", () => {
+    /*
+     * One a beat is a squeeze nobody feels: eighty-eight rectangles at one
+     * apiece outlasts any match worth playing. A batch is what turns the sheet
+     * into a wall that moves, and it has to be picked one after another - each
+     * pick moves the frontier, and choosing the whole band against the old
+     * sheet would punch holes in safe ground.
+     */
+    const config: ArenaMatchConfig = {
+      ...defaultArenaMatchConfig,
+      zoneIntervalTicks: 1,
+      zoneWarningTicks: 50,
+      zonesPerClosure: 10
+    };
+    const zones = createArenaZones(config);
+    const stepped = advanceArenaZones(zones, match().ships, 1, config);
+
+    expect(stepped.zones.filter((zone) => zone.state === "warning")).toHaveLength(10);
+    // Still one connected field: every rectangle that is still safe sits on the
+    // frontier or behind it, never in a hole of its own.
+    for (const zone of stepped.zones.filter((candidate) => candidate.state === "safe")) {
+      const neighbours = [
+        [zone.column - 1, zone.row],
+        [zone.column + 1, zone.row],
+        [zone.column, zone.row - 1],
+        [zone.column, zone.row + 1]
+      ].map(([column, row]) =>
+        stepped.zones.find((other) => other.column === column && other.row === row)
+      );
+      expect(neighbours.some((neighbour) => neighbour?.state === "safe")).toBe(true);
+    }
   });
 
   it("never takes the last safe zone", () => {

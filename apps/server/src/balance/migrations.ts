@@ -639,6 +639,15 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
     damageScaling: readNumber(arena, "damageScaling") ?? defaults.arena.damageScaling,
     zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
+    /*
+     * The built-in rather than one, deliberately.
+     *
+     * A migration normally preserves what the file played with, and here there
+     * is nothing to preserve: no preset ever carried this field, and the
+     * behaviour it replaces - a single rectangle a beat - is the thing it was
+     * added to fix. Keeping one would carry the complaint forward.
+     */
+    zonesPerClosure: readNumber(arena, "zonesPerClosure") ?? defaults.arena.zonesPerClosure,
     zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
     zoneDamageIntervalTicks:
       readNumber(arena, "zoneDamageIntervalTicks") ?? defaults.arena.zoneDamageIntervalTicks,

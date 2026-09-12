@@ -11,6 +11,7 @@ const ARENA: ArenaTuning = {
   matchTickLimit: 9_000,
   hullScaling: 2.5,
   damageScaling: 0.7,
+  zonesPerClosure: 1,
   zoneIntervalTicks: 900,
   zoneWarningTicks: 900,
   zoneDamageIntervalTicks: 300,

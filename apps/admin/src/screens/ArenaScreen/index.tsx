@@ -54,6 +54,21 @@ function liveZoneCount(columns: number, rows: number): number {
   return count;
 }
 
+function beatWord(count: number): string {
+  const tail = count % 100;
+  if (tail >= 11 && tail <= 14) return "отрезков";
+  switch (count % 10) {
+    case 1:
+      return "отрезок";
+    case 2:
+    case 3:
+    case 4:
+      return "отрезка";
+    default:
+      return "отрезков";
+  }
+}
+
 function zoneWord(count: number): string {
   const tail = count % 100;
   if (tail >= 11 && tail <= 14) return "зон";
@@ -129,9 +144,9 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
   /*
    * What the sheet and the clock add up to.
    *
-   * The field takes one rectangle per interval and never takes the last safe
-   * one, so a full collapse costs (zones - 1) intervals plus the amber the last
-   * one still has to sit through. A match shorter than that simply ends with
+   * The field takes a band of rectangles per interval and never takes the last
+   * safe one, so a full collapse costs as many beats as there are bands, plus
+   * the amber the last of them still has to sit through. A match shorter than that simply ends with
    * ground still green, and the operator should be able to see that before the
    * first hull spawns rather than after the first match.
    */
@@ -140,7 +155,11 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
   const interval = tuning.arena.zoneIntervalTicks;
   const warning = tuning.arena.zoneWarningTicks;
   const limit = tuning.arena.matchTickLimit;
-  const fullRedTicks = closures * interval + warning;
+  // A beat takes a band of rectangles, so the sheet costs as many beats as it
+  // has bands - not as many as it has rectangles.
+  const perClosure = Math.max(1, tuning.arena.zonesPerClosure);
+  const beats = Math.ceil(closures / perClosure);
+  const fullRedTicks = beats * interval + warning;
   // What the two multipliers add up to in the only unit that matters at the
   // table: how long a hull stands in front of a gun.
   const shotsToKill = Math.max(
@@ -150,7 +169,10 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
         Math.max(0.0001, tuning.friendlyProjectileDamage * tuning.arena.damageScaling)
     )
   );
-  const redByEnd = Math.max(0, Math.min(closures, Math.floor((limit - warning) / interval)));
+  const redByEnd = Math.max(
+    0,
+    Math.min(closures, Math.floor((limit - warning) / interval) * perClosure)
+  );
 
   const patchArena = (values: Partial<BalanceTuning["arena"]>) => {
     onChange({ ...tuning, arena: { ...tuning.arena, ...values } });
@@ -316,6 +338,14 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ zoneIntervalTicks });
             }}
           />
+          <NumberField
+            caption="Зон за раз"
+            min={1}
+            value={tuning.arena.zonesPerClosure}
+            onChange={(zonesPerClosure) => {
+              patchArena({ zonesPerClosure: Math.max(1, Math.round(zonesPerClosure)) });
+            }}
+          />
           <SecondsField
             caption="Жёлтая держится"
             ticks={tuning.arena.zoneWarningTicks}
@@ -350,12 +380,12 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
           </p>
           <p className="hint" data-testid="arena-closure-budget">
             Сетка {String(columns)}×{String(rows)} — это {String(zoneCount)} {zoneWord(zoneCount)}{" "}
-            на диске, закрывается {String(closures)}. Всё поле краснеет за{" "}
-            <strong>{formatTicks(fullRedTicks)}</strong>. За матч в {formatTicks(limit)} успеет
-            покраснеть {String(redByEnd)} из {String(closures)}
+            на диске, закрывается {String(closures)} за {String(beats)} {beatWord(beats)}. Всё поле
+            краснеет за <strong>{formatTicks(fullRedTicks)}</strong>. За матч в {formatTicks(limit)}{" "}
+            успеет покраснеть {String(redByEnd)} из {String(closures)}
             {redByEnd < closures
-              ? ` — чтобы поле закрылось целиком, новая зона нужна раз в ${formatTicks(
-                  Math.max(1, Math.floor((limit - warning) / Math.max(1, closures)))
+              ? ` — чтобы поле закрылось целиком, отрезок нужен раз в ${formatTicks(
+                  Math.max(1, Math.floor((limit - warning) / Math.max(1, beats)))
                 )}.`
               : "."}
           </p>

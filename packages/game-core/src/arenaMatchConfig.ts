@@ -14,6 +14,11 @@ export const ARENA_SHIP_COUNT = 16;
 export const ARENA_ZONE_COLUMNS = 10;
 export const ARENA_ZONE_ROWS = 10;
 export const ARENA_ZONE_INTERVAL_TICKS = 900;
+/**
+ * How many rectangles a beat takes. Ten of eighty-eight is about a ring of the
+ * sheet, which is a wall a pilot can watch move; one was a tile nobody noticed.
+ */
+export const ARENA_ZONES_PER_CLOSURE = 10;
 export const ARENA_ZONE_WARNING_TICKS = 900;
 /**
  * The beat, and the bite.
@@ -73,6 +78,7 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   zoneColumns: ARENA_ZONE_COLUMNS,
   zoneRows: ARENA_ZONE_ROWS,
   zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
+  zonesPerClosure: ARENA_ZONES_PER_CLOSURE,
   zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
   zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
   zoneDamageShareOfMaxHp: ARENA_ZONE_DAMAGE_SHARE,
