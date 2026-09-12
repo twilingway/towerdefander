@@ -189,6 +189,17 @@ export interface ArenaMatchConfig {
   readonly lootCapPerKind: number;
   readonly lootSceneCap: number;
   /** How long a hull must stand in the circle, and how wide the circle is. */
+  /**
+   * What a blocked shell costs the battery, as a share of its damage.
+   *
+   * A match is the first place our own guns hit our own sector, and the co-op
+   * numbers have no answer for it: an enemy bullet carries its own hit cost, a
+   * friendly shell carries none. Charging the whole of a shell's damage emptied
+   * a full battery in four cannon hits, dropped the sector and locked it out
+   * until it recharged - which reads exactly like "the shield stops bursts and
+   * lets shells through".
+   */
+  readonly shieldHitCostShare: number;
   readonly lootCaptureTicks: number;
   readonly lootCaptureRadiusHulls: number;
   readonly zoneWarningTicks: number;

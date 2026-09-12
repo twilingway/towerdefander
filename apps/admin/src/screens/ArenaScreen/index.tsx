@@ -179,6 +179,20 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
         Math.max(0.0001, tuning.friendlyProjectileDamage * tuning.arena.damageScaling)
     )
   );
+  // What a raised sector is actually worth, in the only unit that matters: how
+  // many shells it eats before it drops and locks out.
+  const shellsHeld = Math.max(
+    1,
+    Math.floor(
+      tuning.shieldCapacity /
+        Math.max(
+          0.0001,
+          tuning.friendlyProjectileDamage *
+            tuning.arena.damageScaling *
+            tuning.arena.shieldHitCostShare
+        )
+    )
+  );
   const redByEnd = Math.max(
     0,
     Math.min(closures, Math.floor((limit - warning) / interval) * perClosure)
@@ -332,6 +346,15 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ damageScaling: Math.max(0.1, damageScaling) });
             }}
           />
+          <NumberField
+            caption="Щит тратит × урона"
+            min={0.05}
+            step={0.05}
+            value={tuning.arena.shieldHitCostShare}
+            onChange={(shieldHitCostShare) => {
+              patchArena({ shieldHitCostShare: Math.max(0.05, shieldHitCostShare) });
+            }}
+          />
           <p className="hint" data-testid="arena-ship-scaling">
             Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
             <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}
@@ -342,7 +365,16 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
             , пулемёт {String(round2(tuning.mgDamage))} →{" "}
             <strong>{String(round2(tuning.mgDamage * tuning.arena.damageScaling))}</strong>. Это{" "}
             <strong>{String(shotsToKill)}</strong> {shotWord(shotsToKill)} из пушки, чтобы снять
-            целый корпус.
+            целый корпус. Полный сектор держит <strong>{String(shellsHeld)}</strong>{" "}
+            {shotWord(shellsHeld)} из пушки: блок снимает с батареи{" "}
+            {String(
+              round2(
+                tuning.friendlyProjectileDamage *
+                  tuning.arena.damageScaling *
+                  tuning.arena.shieldHitCostShare
+              )
+            )}{" "}
+            из {String(Math.round(tuning.shieldCapacity))}.
           </p>
         </div>
       </section>

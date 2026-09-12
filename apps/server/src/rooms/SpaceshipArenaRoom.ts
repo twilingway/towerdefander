@@ -213,6 +213,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // The campaign's ship, stretched for a sixteen-way fight by two numbers
       // the operator owns rather than by constants nobody can reach.
       shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
+      shieldHitCostShare: tuning.arena.shieldHitCostShare,
       zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
       zonesPerClosure: tuning.arena.zonesPerClosure,
       // The supply run's clocks are the operator's; its caps are the code's.

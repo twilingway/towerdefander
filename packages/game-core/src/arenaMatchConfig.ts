@@ -41,6 +41,9 @@ export const ARENA_LOOT_SCENE_CAP = 32;
  * enough that holding it is a position rather than a pixel - a hull parked in
  * the middle can still turn to face whoever comes for it.
  */
+/** Half of what the shell carries, which is the ratio the campaign's own guns use. */
+export const ARENA_SHIELD_HIT_COST_SHARE = 0.5;
+
 export const ARENA_LOOT_CAPTURE_TICKS = 300;
 export const ARENA_LOOT_CAPTURE_RADIUS_HULLS = 2;
 
@@ -118,6 +121,7 @@ export const defaultArenaMatchConfig: ArenaMatchConfig = {
   lootCargoIntervalTicks: ARENA_LOOT_CARGO_INTERVAL_TICKS,
   lootCapPerKind: ARENA_LOOT_CAP_PER_KIND,
   lootSceneCap: ARENA_LOOT_SCENE_CAP,
+  shieldHitCostShare: ARENA_SHIELD_HIT_COST_SHARE,
   lootCaptureTicks: ARENA_LOOT_CAPTURE_TICKS,
   lootCaptureRadiusHulls: ARENA_LOOT_CAPTURE_RADIUS_HULLS,
   zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,

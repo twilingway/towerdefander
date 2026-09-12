@@ -214,6 +214,51 @@ describe("advanceArenaMatch", () => {
 });
 
 describe("resolveArenaHits", () => {
+  it("stops a shell whatever barrel it came out of", () => {
+    /*
+     * A sector is a wall, not a filter. The reported symptom was a shield that
+     * held machine-gun bursts and let cannon shells through, which would mean
+     * the block depends on the weapon - it must depend only on where the shot
+     * crossed the arc.
+     */
+    const state = match();
+    const target = shipAt(state, 1);
+    const guarded = {
+      ...target,
+      shieldActive: true,
+      // Facing the shot, which comes in from the left.
+      shieldAngle: Math.PI,
+      shieldEnergy: target.stats.shieldCapacity
+    };
+    const ships = state.ships.map((ship, index) => (index === 1 ? guarded : ship));
+
+    for (const [source, radius, damage] of [
+      ["cannon", 6, 40],
+      ["machineGun", 3, 8]
+    ] as const) {
+      const shot: ArenaProjectileState = {
+        ...shotAt(
+          "ship-1",
+          { x: target.spaceship.x - 220, y: target.spaceship.y },
+          target.spaceship,
+          damage
+        ),
+        source,
+        radius
+      };
+      const resolved = resolveArenaHits(ships, [shot], defaultArenaMatchConfig);
+      const hit = resolved.ships[1];
+      expect(hit?.hp, `${source} went through the sector`).toBe(guarded.hp);
+      expect(hit?.shieldEnergy).toBeLessThan(guarded.shieldEnergy);
+      // Half the shell, not the whole of it: charged in full, a battery is gone
+      // in four cannon hits and the sector locks out, which is what "the shield
+      // holds bursts and lets shells through" actually was.
+      expect(guarded.shieldEnergy - (hit?.shieldEnergy ?? 0)).toBeCloseTo(
+        damage * defaultArenaMatchConfig.shieldHitCostShare
+      );
+    }
+  });
+
   it("does not let a hull shoot itself", () => {
     const state = match();
     const shooter = shipAt(state, 0);
@@ -251,7 +296,11 @@ describe("resolveArenaHits", () => {
     const after = pick(resolved.ships, 0);
 
     expect(after.hp).toBe(guarded.hp);
-    expect(after.shieldEnergy).toBe(guarded.shieldEnergy - 50);
+    // Half the shell, not the whole of it: a sector charged the full damage of
+    // everything it stopped emptied in four cannon hits and locked out.
+    expect(after.shieldEnergy).toBe(
+      guarded.shieldEnergy - 50 * defaultArenaMatchConfig.shieldHitCostShare
+    );
     expect(resolved.projectiles).toHaveLength(0);
   });
 

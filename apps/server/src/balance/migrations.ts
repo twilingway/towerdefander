@@ -651,6 +651,8 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     // A preset written before the match ship was a setting keeps the hull and
     // the shot it was played with, which is what the built-ins state.
     hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
+    shieldHitCostShare:
+      readNumber(arena, "shieldHitCostShare") ?? defaults.arena.shieldHitCostShare,
     damageScaling: readNumber(arena, "damageScaling") ?? defaults.arena.damageScaling,
     zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
     /*

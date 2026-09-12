@@ -12,6 +12,7 @@ const ARENA: ArenaTuning = {
   fieldRadius: 2200,
   cameraViewWidth: 2500,
   hullScaling: 2.5,
+  shieldHitCostShare: 0.5,
   damageScaling: 0.7,
   zonesPerClosure: 1,
   scanRadiusScreens: 2.5,

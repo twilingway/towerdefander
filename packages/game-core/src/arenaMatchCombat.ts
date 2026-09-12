@@ -272,7 +272,11 @@ export function resolveArenaHits(
     spent.add(projectile.id);
 
     if (blockedByShield(projectile, bestTime, bestShip)) {
-      shieldSpend.set(bestShip.id, (shieldSpend.get(bestShip.id) ?? 0) + projectile.damage);
+      // A share of the shell rather than the whole of it; see the config.
+      shieldSpend.set(
+        bestShip.id,
+        (shieldSpend.get(bestShip.id) ?? 0) + projectile.damage * config.shieldHitCostShare
+      );
       shieldBlocks.set(bestShip.id, (shieldBlocks.get(bestShip.id) ?? 0) + 1);
       continue;
     }
