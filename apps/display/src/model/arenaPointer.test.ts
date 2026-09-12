@@ -31,3 +31,15 @@ describe("isArenaTarget", () => {
     expect(isArenaTarget({})).toBe(false);
   });
 });
+
+describe("the arena host", () => {
+  /**
+   * It named the readable twin of the world for a long time - a sibling of the
+   * canvas, not its parent - so no pointer event was ever judged to be on the
+   * battlefield: the turret did not follow the mouse and the left button did
+   * not fire, while the keyboard worked perfectly.
+   */
+  it("is the element the world is drawn in", () => {
+    expect(ARENA_HOST_SELECTOR).toBe(".battlefield-canvas");
+  });
+});

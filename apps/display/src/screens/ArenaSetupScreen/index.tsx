@@ -45,11 +45,14 @@ export function ArenaSetupScreen({
    *
    * Pressing "В бой" replaces the lower half of a card that is taller than a
    * phone, so the new part opens below the fold and the page is still showing
-   * the top: it reads as the button having done nothing. "nearest" rather than
-   * "center", so a screen that already shows it does not jump.
+   * the top: it reads as the button having done nothing.
+   *
+   * "end" rather than "nearest": the queue is the last thing on the card, and
+   * the minimum scroll that "nearest" performs brought its first line into view
+   * and left the rest - the fleet, the countdown - still below the fold.
    */
   useEffect(() => {
-    queue.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    queue.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [lobby === undefined]);
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   const [pilotName, setPilotName] = useState("Пилот");

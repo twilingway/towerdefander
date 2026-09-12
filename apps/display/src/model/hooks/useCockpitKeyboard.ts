@@ -41,6 +41,8 @@ const HELM_KEYS: Record<string, { readonly turn: number; readonly thrust: number
 };
 const MG_KEY = "Space";
 const CANNON_KEY = "Enter";
+/** The one place on a fighting screen that still answers a right click. */
+const CLOCK_SELECTOR = ".wave-countdown";
 
 /**
  * Keyboard and mouse for the solo cockpit.
@@ -162,18 +164,52 @@ export function useCockpitKeyboard({
       targets.current.onAim({ x: dx / length, y: dy / length }, 1);
     }
 
+    /*
+     * Left is the cannon, right is the nose gun.
+     *
+     * The pairing everyone arrives with from every other game, and the one the
+     * cockpit already has under two thumbs: the stick that aims fires the
+     * cannon, the button beside it the nose gun.
+     */
     function onPointerDown(event: PointerEvent): void {
-      if (event.pointerType !== "mouse" || event.button !== 0) return;
+      if (event.pointerType !== "mouse") return;
+      if (event.button !== 0 && event.button !== 2) return;
       if (!isArenaPointer(event)) return;
+      if (event.button === 2) {
+        event.preventDefault();
+        targets.current.onMachineGunHold(true);
+        return;
+      }
       targets.current.onCannonFromTrigger(true);
     }
 
     function onPointerUp(event: PointerEvent): void {
-      if (event.pointerType !== "mouse" || event.button !== 0) return;
+      if (event.pointerType !== "mouse") return;
       // Deliberately not asked where this happened. A shot that started on the
       // arena has to stop wherever the button is let go, or releasing over the
-      // HUD leaves the cannon held down.
+      // HUD leaves the gun held down.
+      if (event.button === 2) {
+        targets.current.onMachineGunHold(false);
+        return;
+      }
+      if (event.button !== 0) return;
       targets.current.onCannonFromTrigger(false);
+    }
+
+    /*
+     * The browser's own menu, kept off the battlefield.
+     *
+     * Right-clicking is firing now, and a menu on top of a fight is both a
+     * surprise and a gun that keeps shooting behind it - the button is released
+     * into the menu rather than into the page. It is left alone everywhere
+     * else, and the match clock is deliberately one of those places: a way to
+     * reach "inspect" without leaving the fight, in every build.
+     */
+    function onContextMenu(event: MouseEvent): void {
+      const target = event.target as { closest?: (selector: string) => unknown } | null;
+      if (target?.closest?.(CLOCK_SELECTOR) != null) return;
+      if (!isArenaTarget(target)) return;
+      event.preventDefault();
     }
 
     function release(): void {
@@ -196,6 +232,7 @@ export function useCockpitKeyboard({
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("contextmenu", onContextMenu);
     window.addEventListener("blur", release);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
@@ -204,6 +241,7 @@ export function useCockpitKeyboard({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("blur", release);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       release();
