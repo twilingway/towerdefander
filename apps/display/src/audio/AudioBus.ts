@@ -47,6 +47,37 @@ const MIN_GAP_MS = 25;
 const PITCH_JITTER = 0.03;
 
 /**
+ * The one place a theme may be playing from, for the whole page.
+ *
+ * On the page rather than in this module on purpose. A hot reload re-evaluates
+ * the module and builds a second bus while the first one's element is still
+ * playing, and the two themes then run over each other - which is exactly what
+ * "the music doubles when the scene reloads" is. A slot on `globalThis`
+ * survives the re-evaluation, so the new bus can stop what the old one left.
+ */
+const MUSIC_SLOT = "__spaceshipDefenderMusic";
+
+interface MusicSlot {
+  [MUSIC_SLOT]?: HTMLAudioElement | undefined;
+}
+
+/** Stops and empties whatever theme the page is playing, whoever started it. */
+function stopPageMusic(): void {
+  if (typeof globalThis === "undefined") return;
+  const slot = globalThis as MusicSlot;
+  const playing = slot[MUSIC_SLOT];
+  if (playing !== undefined) {
+    playing.pause();
+    // Emptied as well as paused: a paused element with a source is one
+    // `resume` away from singing again, and nothing here will own it.
+    playing.removeAttribute("src");
+    playing.replaceChildren();
+    playing.load();
+  }
+  slot[MUSIC_SLOT] = undefined;
+}
+
+/**
  * The one speaker in the room.
  *
  * Two different mechanisms, because the two kinds of sound have opposite needs.
@@ -183,9 +214,9 @@ export class AudioBus {
 
   /** Switches the theme, or stops it when handed nothing. One plays at a time. */
   playMusic(track: MusicTrackId | undefined): void {
-    if (track === this.musicTrack) return;
+    if (track === this.musicTrack && this.music !== undefined) return;
     this.musicTrack = track;
-    this.music?.pause();
+    stopPageMusic();
     if (track === undefined) {
       this.music = undefined;
       return;
@@ -201,6 +232,7 @@ export class AudioBus {
     element.preload = "auto";
     element.volume = busGain(this.settings, "music");
     this.music = element;
+    (globalThis as MusicSlot)[MUSIC_SLOT] = element;
     // Rejected before the first gesture; `resume` starts it then.
     void element.play().catch(() => undefined);
   }
@@ -208,7 +240,7 @@ export class AudioBus {
   destroy(): void {
     this.stopListening?.();
     this.stopListening = undefined;
-    this.music?.pause();
+    stopPageMusic();
     this.music = undefined;
     this.musicTrack = undefined;
     void this.context?.close();

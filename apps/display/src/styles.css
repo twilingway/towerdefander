@@ -2471,6 +2471,15 @@ p {
   aspect-ratio: 16 / 5;
   height: auto;
   min-height: 5.5rem;
+  /*
+   * And never wider than the column it stands in.
+   *
+   * A ratio plus an explicit height sizes the box from the ratio, not from the
+   * grid: a landscape phone gave the tile a height and a second rule gave it a
+   * ratio, and the pair made it sixty pixels wider than its own column - the
+   * second tile hung off the right edge of the screen.
+   */
+  max-width: 100%;
   /* ...up to a point. On a wide desktop the same ratio makes a letterbox two
      hundred pixels tall with the art squeezed into a strip; four hundred is
      where the scene behind it reads as a scene. Phones keep the ratio, which
@@ -2588,10 +2597,25 @@ p {
   padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
 }
 
+/*
+ * The card scrolls; the page does not, and the action never leaves the screen.
+ *
+ * A setup card is a ship list, a crew picker and a name field - genuinely
+ * taller than a laptop window, let alone a phone lying down. It used to push
+ * the page taller than the viewport, which put "В бой" below the fold on
+ * everything from a 640-wide phone to a 1366 laptop: measurable, and measured
+ * at between forty and two hundred pixels under the edge.
+ *
+ * So the card keeps its own height and scrolls inside, and the button that
+ * ends the screen is stuck to its bottom edge - whatever is being scrolled
+ * past, the way out of the screen is on it.
+ */
 .setup-card {
   display: grid;
   gap: 0.35rem;
   width: min(58rem, 100%);
+  max-height: calc(100dvh - 1.5rem);
+  overflow-y: auto;
   padding: clamp(1rem, 3vw, 2rem);
   border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 1.25rem;
@@ -2762,6 +2786,8 @@ p {
 }
 
 .setup-go {
+  position: sticky;
+  bottom: 0;
   width: 100%;
   min-height: 3rem;
   margin-top: clamp(0.6rem, 1.6vh, 1.25rem);
@@ -3022,6 +3048,9 @@ p {
   }
 
   .mode-tile {
+    /* Stated together, always: see `max-width` above for what happens when a
+       height and a ratio are both left standing. */
+    aspect-ratio: auto;
     height: clamp(6rem, 52vh, 14rem);
   }
 }
@@ -3574,5 +3603,27 @@ p {
   .mode-tile {
     aspect-ratio: auto;
     height: clamp(16rem, 38vh, 29rem);
+  }
+}
+
+/*
+ * A phone held upright: everything up at the top, and the tiles worth looking
+ * at.
+ *
+ * Centred, the column sat in the middle of a very tall window with an empty
+ * band above and below it, and "Выберите режим" landed in the optical centre -
+ * the eye went to the smallest text on the screen instead of to the two things
+ * it is there to choose between. Pulled to the top, the tiles are the first
+ * thing under the title, and the room that freed goes into their height: a
+ * 16:5 strip on a narrow screen is a letterbox two fingers tall.
+ */
+@media (orientation: portrait) and (width < 45rem) {
+  .display-shell--start {
+    align-content: start;
+    padding-top: clamp(1rem, 4vh, 2.5rem);
+  }
+
+  .mode-tile {
+    aspect-ratio: 16 / 9;
   }
 }
