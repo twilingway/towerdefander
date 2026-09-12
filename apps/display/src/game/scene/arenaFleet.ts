@@ -22,6 +22,7 @@ import {
   type BurstLayer
 } from "./bursts.js";
 import type { ScenePrediction } from "./entities.js";
+import { ShieldBand } from "./shield.js";
 
 /** Where the scene has actually drawn the player's own hull this frame. */
 export interface DrawnOwnPose {
@@ -82,6 +83,11 @@ interface FleetHull {
   flashLeftMs: number;
   /** True once this hull has been drawn dying; a wreck is played once. */
   wrecked: boolean;
+  /** What the sector is doing, read by the barrier pool each frame. */
+  shieldUp: boolean;
+  shieldCharge: number;
+  readonly shieldRadius: number;
+  readonly shieldHalfAngle: number;
   /** Hull radius and the gun's mount, both fixed for the match. */
   readonly radius: number;
   readonly turretMount: { readonly mountX: number; readonly mountY: number } | null;
@@ -123,8 +129,20 @@ const BAR_HEIGHT = 0.26;
  * gave, or they would stand still twenty times a second and look like statues
  * shooting at each other.
  */
+/**
+ * How many animated barriers a match may have on screen at once.
+ *
+ * A rope is geometry, and geometry for a crowd is what this display does not
+ * do - so the barriers are lent from a pool rather than owned one per hull.
+ * Four is generous: a sector drains at twice the rate it charges, so a measured
+ * minute of sixteen bots had one or two raised at any moment, and only the ones
+ * the camera can actually see are ever handed one.
+ */
+const BANDS = 4;
+
 export class ArenaFleet {
   private readonly hulls = new Map<string, FleetHull>();
+  private readonly bands: ShieldBand[] = [];
 
   /** Takes the newest patch: a sample on every track, health, and a hit flash. */
   sync(
@@ -244,6 +262,10 @@ export class ArenaFleet {
         parts.shieldFill.setVisible(false);
       }
       if (parts.wrecked) continue;
+      parts.shieldUp = ship.shieldActive;
+      parts.shieldCharge =
+        ship.shieldCapacity <= 0 ? 1 : clamp01(ship.shieldEnergy / ship.shieldCapacity);
+      // The baked arc stands in until the pool decides who gets a rope.
       parts.shield.setVisible(!parts.isSelf && ship.shieldActive);
       this.drawBars(parts, ship);
     }
@@ -269,7 +291,18 @@ export class ArenaFleet {
     playbackTick: number,
     deltaMs: number,
     own: DrawnOwnPose | undefined,
-    prediction: ScenePrediction | undefined
+    prediction: ScenePrediction | undefined,
+    /** The camera's world rectangle and the hull's chosen barrier effect. */
+    barriers?: {
+      readonly scene: Phaser.Scene;
+      readonly view: {
+        readonly x: number;
+        readonly y: number;
+        readonly right: number;
+        readonly bottom: number;
+      };
+      readonly effect: string;
+    }
   ): void {
     for (const parts of this.hulls.values()) {
       // A wreck is a sprite that has already been hidden; nothing left to move.
@@ -320,11 +353,72 @@ export class ArenaFleet {
         .setVisible(true)
         .setAlpha(Math.max(0, parts.flashLeftMs / FLASH_MS));
     }
+
+    if (barriers !== undefined) this.lendBands(barriers.scene, barriers.view, barriers.effect);
   }
 
   destroy(): void {
     for (const parts of this.hulls.values()) destroyHull(parts);
     this.hulls.clear();
+    for (const band of this.bands) band.destroy();
+    this.bands.length = 0;
+  }
+
+  /**
+   * The animated barriers, lent to the hulls that have earned one this frame.
+   *
+   * Earned means two things at once: the sector is up, and the hull is on
+   * screen. A barrier drawn for a ship the player cannot see is a rope rebuilt
+   * for nobody, which is exactly the cost this pool exists to bound. Nearest
+   * first, so when there are more raised sectors than ropes the ones in the
+   * fight get them.
+   */
+  private lendBands(
+    scene: Phaser.Scene,
+    view: {
+      readonly x: number;
+      readonly y: number;
+      readonly right: number;
+      readonly bottom: number;
+    },
+    bandEffect: string
+  ): void {
+    const shown: { parts: FleetHull; distance: number }[] = [];
+    const centreX = (view.x + view.right) / 2;
+    const centreY = (view.y + view.bottom) / 2;
+    for (const parts of this.hulls.values()) {
+      if (parts.wrecked || parts.isSelf || !parts.shieldUp) continue;
+      const x = parts.hull.x;
+      const y = parts.hull.y;
+      // The sector reaches past the hull, so a ship just off the edge still has
+      // a barrier worth drawing; its own radius is the margin.
+      const margin = parts.shieldRadius;
+      if (x < view.x - margin || x > view.right + margin) continue;
+      if (y < view.y - margin || y > view.bottom + margin) continue;
+      shown.push({ parts, distance: Math.hypot(x - centreX, y - centreY) });
+    }
+    shown.sort((left, right) => left.distance - right.distance);
+
+    for (let index = 0; index < BANDS; index += 1) {
+      const taken = shown[index];
+      if (taken === undefined) {
+        this.bands[index]?.hide();
+        continue;
+      }
+      const band = (this.bands[index] ??= new ShieldBand(scene, bandEffect));
+      band.draw(
+        { x: taken.parts.hull.x, y: taken.parts.hull.y },
+        taken.parts.shield.rotation,
+        taken.parts.shieldRadius,
+        taken.parts.shieldHalfAngle,
+        taken.parts.shieldCharge,
+        true
+      );
+      // The baked arc is what a barrier looks like before the atlas arrives and
+      // for every hull the pool could not reach; where a rope is drawn it would
+      // only double the edge.
+      taken.parts.shield.setVisible(!band.ready);
+    }
   }
 
   /**
@@ -451,6 +545,10 @@ export class ArenaFleet {
       turretAngle: createAngleTrack(ship.turretAngle, toTick),
       shieldAngle: createAngleTrack(ship.shieldAngle, toTick),
       wrecked: false,
+      shieldUp: ship.shieldActive,
+      shieldCharge: ship.shieldCapacity <= 0 ? 1 : clamp01(ship.shieldEnergy / ship.shieldCapacity),
+      shieldRadius: ship.shieldRadius,
+      shieldHalfAngle: ship.shieldArcHalfAngle,
       radius,
       turretMount:
         turretVisual === null ? null : { mountX: turretVisual.mountX, mountY: turretVisual.mountY },

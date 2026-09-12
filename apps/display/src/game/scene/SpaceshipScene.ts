@@ -289,7 +289,14 @@ export class SpaceshipScene extends Phaser.Scene {
         turretAngle: this.turret.rotation,
         shieldAngle: this.visualShieldAngle
       },
-      this.prediction
+      this.prediction,
+      {
+        scene: this,
+        // Only what the camera can actually show: a barrier drawn for a ship
+        // off screen is a rope rebuilt for nobody.
+        view: this.cameras.main.worldView,
+        effect: this.snapshot.shieldBandEffect
+      }
     );
     if (this.vectorsEnabled) {
       this.drawShield();
