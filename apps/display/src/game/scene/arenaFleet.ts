@@ -13,7 +13,8 @@ import {
 } from "../playback.js";
 import type { LiveEntity } from "../../model/shipPrediction.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
-import { drawSpaceshipHull } from "../entityArt.js";
+import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
+import { getMuzzlePoint } from "../spaceshipViewModel.js";
 import {
   DEFAULT_ENEMY_DEATH_EFFECT,
   deathEffectFor,
@@ -81,6 +82,9 @@ interface FleetHull {
   flashLeftMs: number;
   /** True once this hull has been drawn dying; a wreck is played once. */
   wrecked: boolean;
+  /** Hull radius and the gun's mount, both fixed for the match. */
+  readonly radius: number;
+  readonly turretMount: { readonly mountX: number; readonly mountY: number } | null;
   /**
    * What was last drawn of this hull's shooting and its barrier, so the next
    * patch can be read as events rather than as numbers: a shot fired, a shell
@@ -158,10 +162,17 @@ export class ArenaFleet {
        */
       const fired = ship.shotsFired - parts.drawnShots;
       if (fired > 0 && parts.drawnShots > 0 && !parts.isSelf) {
+        // On the end of the barrel, the way the crew's own flash is placed:
+        // the mount is where the gun is bolted, not where the shell leaves.
+        const muzzle = getMuzzlePoint(
+          { x: parts.turret.x, y: parts.turret.y },
+          parts.turret.rotation,
+          ship.radius
+        );
         bursts?.spawn(
           muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
-          parts.turret.x,
-          parts.turret.y,
+          muzzle.x,
+          muzzle.y,
           ship.radius,
           parts.turret.rotation
         );
@@ -266,8 +277,16 @@ export class ArenaFleet {
         }
         return sampleAngleTrack(parts[field], playbackTick);
       };
-      parts.hull.setPosition(x, y).setRotation(angle("heading"));
-      parts.turret.setPosition(x, y).setRotation(angle("turretAngle"));
+      const heading = angle("heading");
+      parts.hull.setPosition(x, y).setRotation(heading);
+      /*
+       * The gun where the console bolted it, exactly as the scene places the
+       * crew's own: a turret drawn on the hull's centre is a gun firing from
+       * under the ship, and the shells - which now leave the mount - would come
+       * out of a barrel that is not there.
+       */
+      const mount = turretMountPoint({ x, y, radius: parts.radius }, heading, parts.turretMount);
+      parts.turret.setPosition(mount.x, mount.y).setRotation(angle("turretAngle"));
       parts.shield.setPosition(x, y).setRotation(angle("shieldAngle"));
 
       const barY = y - parts.hull.displayHeight * 0.75;
@@ -419,6 +438,9 @@ export class ArenaFleet {
       turretAngle: createAngleTrack(ship.turretAngle, toTick),
       shieldAngle: createAngleTrack(ship.shieldAngle, toTick),
       wrecked: false,
+      radius,
+      turretMount:
+        turretVisual === null ? null : { mountX: turretVisual.mountX, mountY: turretVisual.mountY },
       drawnShots: ship.shotsFired,
       drawnShield: ship.shieldEnergy,
       hp: ship.hp,

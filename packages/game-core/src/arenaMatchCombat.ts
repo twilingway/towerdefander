@@ -8,6 +8,7 @@ import {
 import { LASER_BEAM_TICKS } from "./collisions.ts";
 import { relativeSweptCircleTime, type MovingEntity } from "./spatialGrid.ts";
 import { shortestAngleDelta } from "./simulationMath.ts";
+import { convergedAngle, turretMount } from "./spaceshipSimulation.ts";
 import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
 
 export interface ArenaFireResult {
@@ -38,6 +39,23 @@ export function fireArenaWeapons(
   const stats = ship.stats;
   const secondsPerStep = config.ship.fixedStepMs / 1000;
   const origin = { x: ship.spaceship.x, y: ship.spaceship.y };
+  /*
+   * The barrel a player sees is the barrel that fires - the campaign's own
+   * rule, and now this one's.
+   *
+   * The turret is bolted where the console put it, so a match that fired from
+   * the hull's centre sent its shells out from under the ship rather than from
+   * the gun, and the flash the display drew on the mount had nothing to do with
+   * where the shell appeared. The angle is converged on the aim point for the
+   * same reason it is in the campaign: fired parallel from an offset mount, a
+   * shot crosses the barrel by about three degrees at half its reach, which is
+   * wider than the aim tolerance.
+   */
+  const mount = turretMount(origin, ship.heading, stats, config.ship.turretVisual);
+  const cannonReach =
+    ship.cannonKind === "laser"
+      ? stats.cannonLaserRange
+      : (stats.projectileSpeedPerSecond * config.ship.projectileLifetimeMs) / 1_000;
   const projectiles: ArenaProjectileState[] = [];
   const beams: ArenaBeamState[] = [];
   let sequence = projectileSequence;
@@ -55,8 +73,8 @@ export function fireArenaWeapons(
     homing: null,
     eligible: cannonEligible,
     canSpawn: roomForProjectile,
-    origin,
-    angle: ship.turretAngle,
+    origin: mount,
+    angle: convergedAngle(origin, mount, ship.turretAngle, cannonReach),
     muzzleOffset: stats.spaceshipRadius + stats.projectileRadius,
     speed: stats.projectileSpeedPerSecond,
     damage: stats.friendlyProjectileDamage,

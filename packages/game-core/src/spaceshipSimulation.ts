@@ -345,7 +345,7 @@ export function normalizeVector(vector: Vector2): Vector2 {
  * display places the sprite - one rule, so the barrel a crew sees is the barrel
  * that fires.
  */
-function turretMount(
+export function turretMount(
   origin: Vector2,
   heading: number,
   ship: ShipStats,
@@ -373,7 +373,12 @@ function turretMount(
  * shot. So the shot is aimed at the point the turret designates from the hull,
  * and leaves the barrel toward it.
  */
-function convergedAngle(hull: Vector2, mount: Vector2, angle: number, convergence: number): number {
+export function convergedAngle(
+  hull: Vector2,
+  mount: Vector2,
+  angle: number,
+  convergence: number
+): number {
   const targetX = hull.x + Math.cos(angle) * convergence;
   const targetY = hull.y + Math.sin(angle) * convergence;
   return Math.atan2(targetY - mount.y, targetX - mount.x);
