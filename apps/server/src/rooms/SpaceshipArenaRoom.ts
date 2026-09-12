@@ -962,7 +962,17 @@ function mirrorProjectiles(
        * match came out as the display's own fallback dot rather than the
        * sprite the operator chose on the player screen.
        */
-      entity.source = shot.source;
+      /*
+       * Whose barrel this came out of, and only when it is ours.
+       *
+       * The display reads this field to place the crew's own muzzle flash: a
+       * shell that arrives naming a barrel is a shell this ship just fired. A
+       * match publishes fifteen other hulls' shots as well, and naming their
+       * barrels too drew a flash on the player's own gun for every shot anyone
+       * on the field took - which is a muzzle that never stops firing. The
+       * campaign's own mirror has always emptied it for hostile shells.
+       */
+      entity.source = kind === "friendly" ? shot.source : "";
       const visual = shot.source === "machineGun" ? look.machineGun : look.cannon;
       entity.visualShape = visual?.shape ?? "";
       entity.visualScale = visual?.modelScale ?? 1;
