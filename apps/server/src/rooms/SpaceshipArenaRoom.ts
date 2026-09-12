@@ -190,7 +190,18 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       ...hull,
       arenaRadius: fieldRadius,
       worldWidth: fieldRadius * 2,
-      worldHeight: fieldRadius * 2
+      worldHeight: fieldRadius * 2,
+      /*
+       * The frame is the arena's too, because it is what a seat can see.
+       *
+       * `buildArenaWorld` cuts every hull's slice of the match to this width,
+       * and the screen is drawn at `tuning.arena.cameraViewWidth`. Leaving the
+       * campaign's number here made those two different frames: the sector the
+       * autopilot holds for a seated player stopped tracking a rival that was
+       * still plainly on screen, because the policy had already been told the
+       * rival was out of sight.
+       */
+      cameraViewWidth: Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth)
     };
     this.state.shipArchetypeId = tuning.defaultShipArchetypeId;
     this.config = {
