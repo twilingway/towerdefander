@@ -97,6 +97,9 @@ interface FleetHull {
    * that got through, a shell the sector stopped.
    */
   drawnShots: number;
+  /** Shots seen on the wire and not yet flashed; spent one per drawn frame. */
+  pendingShots: number;
+  readonly muzzleEffect: string;
   /** Blocks already drawn, so a mark plays once per shell the sector stopped. */
   drawnBlocks: number;
 }
@@ -108,6 +111,8 @@ const HEALTH_HIGH = 0x74e39b;
 const HEALTH_LOW = 0xff6b5e;
 const FLASH_COLOR = 0xffe6a0;
 const FLASH_MS = 140;
+/** Flashes a hull may owe at once; see where they are banked. */
+const SHOT_BACKLOG = 3;
 /** What a sector plays where it stopped a shell; the crew's own hull plays it too. */
 const SHIELD_IMPACT_EFFECT = "shield-impact";
 /** Bar geometry, in hull radii, so it scales with whatever ship is flown. */
@@ -143,6 +148,8 @@ const BANDS = 4;
 export class ArenaFleet {
   private readonly hulls = new Map<string, FleetHull>();
   private readonly bands: ShieldBand[] = [];
+  /** Kept from the last patch so a drawn frame can spend a banked shot. */
+  private bursts: BurstLayer | undefined;
 
   /** Takes the newest patch: a sample on every track, health, and a hit flash. */
   sync(
@@ -156,6 +163,7 @@ export class ArenaFleet {
     // Every hull, the player's own included: the scene draws that one's art, but
     // its health and its sector are the same question a rival's bars answer, and
     // the answer belongs over the ship rather than only in a panel.
+    this.bursts = bursts;
     const seen = new Set<string>();
     const toTick = snapshot.tick;
     // The hull's own choice from the console, with the display's baked mark
@@ -183,22 +191,21 @@ export class ArenaFleet {
        * a shell the sector stopped. All three are exactly what a pilot needs to
        * see, and none of them costs a byte more on the wire.
        */
+      /*
+       * Counted here, played on the frame that draws the ship.
+       *
+       * A patch says a barrel fired; the hull it belongs to is drawn on the
+       * playback clock, which runs deliberately behind. Flashing on arrival put
+       * the muzzle a tenth of a second ahead of the ship it belongs to and on
+       * the barrel's old bearing - a gun that fires before it is aimed, which
+       * is what reads as jerky shooting. So the shots are banked and spent by
+       * `update`, where the turret's drawn position is already known.
+       */
       const fired = ship.shotsFired - parts.drawnShots;
       if (fired > 0 && parts.drawnShots > 0 && !parts.isSelf) {
-        // On the end of the barrel, the way the crew's own flash is placed:
-        // the mount is where the gun is bolted, not where the shell leaves.
-        const muzzle = getMuzzlePoint(
-          { x: parts.turret.x, y: parts.turret.y },
-          parts.turret.rotation,
-          ship.radius
-        );
-        bursts?.spawn(
-          muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
-          muzzle.x,
-          muzzle.y,
-          ship.radius,
-          parts.turret.rotation
-        );
+        // Capped: a hull that was off screen for a second must not empty a
+        // magazine's worth of flashes into one frame when it comes back.
+        parts.pendingShots = Math.min(SHOT_BACKLOG, parts.pendingShots + fired);
       }
       parts.drawnShots = ship.shotsFired;
 
@@ -334,6 +341,20 @@ export class ArenaFleet {
       const mount = turretMountPoint({ x, y, radius: parts.radius }, heading, parts.turretMount);
       parts.turret.setPosition(mount.x, mount.y).setRotation(angle("turretAngle"));
       parts.shield.setPosition(x, y).setRotation(angle("shieldAngle"));
+
+      const bursts = this.bursts;
+      if (parts.pendingShots > 0 && bursts !== undefined) {
+        parts.pendingShots -= 1;
+        // The end of the barrel as it is drawn this frame, the way the crew's
+        // own flash is placed: the mount is where the gun is bolted, not where
+        // the shell leaves.
+        const muzzle = getMuzzlePoint(
+          { x: parts.turret.x, y: parts.turret.y },
+          parts.turret.rotation,
+          parts.radius
+        );
+        bursts.spawn(parts.muzzleEffect, muzzle.x, muzzle.y, parts.radius, parts.turret.rotation);
+      }
 
       const barY = y - parts.hull.displayHeight * 0.75;
       const left = x - parts.healthBack.displayWidth / 2;
@@ -553,6 +574,8 @@ export class ArenaFleet {
       turretMount:
         turretVisual === null ? null : { mountX: turretVisual.mountX, mountY: turretVisual.mountY },
       drawnShots: ship.shotsFired,
+      pendingShots: 0,
+      muzzleEffect: muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
       drawnBlocks: ship.shieldBlocks,
       hp: ship.hp,
       maxHp: ship.maxHp,
