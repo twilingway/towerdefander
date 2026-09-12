@@ -405,7 +405,8 @@ export class SpaceshipScene extends Phaser.Scene {
       snapshot,
       (key, half, draw) => this.bake(key, half, draw),
       shouldSnap,
-      this.prediction
+      this.prediction,
+      this.bursts
     );
     // The sheet is ground: redrawn when a zone changes state and at no other
     // time, which on a sixty-hertz patch stream is a handful of times a match.

@@ -155,6 +155,8 @@ function sameArenaHeader(left: Game | null, right: Game | null): boolean {
   const [held, next] = both;
   return (
     held.arenaShips.length === next.arenaShips.length &&
+    held.arenaShips.filter((ship) => ship.alive).length ===
+      next.arenaShips.filter((ship) => ship.alive).length &&
     held.encounter.score === next.encounter.score &&
     held.spaceship.hp === next.spaceship.hp &&
     held.spaceship.maxHp === next.spaceship.maxHp &&
@@ -185,8 +187,10 @@ export function ArenaHudPanel({ onScan }: { readonly onScan: () => void }) {
    */
   const place = useRef(ARENA_SHIP_COUNT);
   if (game === null) return null;
-  const alive = game.arenaShips.length;
-  const seated = game.arenaShips.some((ship) => ship.isSelf);
+  // Wrecks stay on the wire long enough to be seen dying, so "alive" has to
+  // count the ones still flying rather than the ones still published.
+  const alive = game.arenaShips.filter((ship) => ship.alive).length;
+  const seated = game.arenaShips.some((ship) => ship.isSelf && ship.alive);
   if (seated) place.current = alive;
   return (
     <ArenaHud

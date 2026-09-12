@@ -357,40 +357,40 @@ function intermissionController(): ControllerRoomView {
 }
 
 describe("protocol v33 handshake and messages", () => {
-  it("publishes the fixed crew and v58", () => {
-    expect(PROTOCOL_VERSION).toBe(58);
+  it("publishes the fixed crew and v59", () => {
+    expect(PROTOCOL_VERSION).toBe(59);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v58 create/join and rejects v56 and unknown fields", () => {
+  it("accepts v59 create/join and rejects v58 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 58, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 59, crewSize: 3 })
         .success
     ).toBe(true);
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 56, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 58, crewSize: 3 })
         .success
     ).toBe(false);
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 58,
+        protocolVersion: 59,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
     expect(
       controllerJoinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 56,
+        protocolVersion: 58,
         playerName: "Ada"
       }).success
     ).toBe(false);
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 58,
+        protocolVersion: 59,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -400,20 +400,20 @@ describe("protocol v33 handshake and messages", () => {
   it("takes a solo connection that is display and crew seat at once", () => {
     const parsed = soloJoinOptionsSchema.parse({
       role: "solo",
-      protocolVersion: 58,
+      protocolVersion: 59,
       playerName: "  Ada  "
     });
     // It names a player like a controller does, trimming included.
     expect(parsed.playerName).toBe("Ada");
     // And it reaches the union, so the room can branch on it at the boundary.
     expect(
-      joinOptionsSchema.safeParse({ role: "solo", protocolVersion: 58, playerName: "Ada" }).success
+      joinOptionsSchema.safeParse({ role: "solo", protocolVersion: 59, playerName: "Ada" }).success
     ).toBe(true);
     // A seat count may be stated, but only the one that solo means.
     expect(
       soloJoinOptionsSchema.safeParse({
         role: "solo",
-        protocolVersion: 58,
+        protocolVersion: 59,
         playerName: "Ada",
         crewSize: 1
       }).success
@@ -421,17 +421,17 @@ describe("protocol v33 handshake and messages", () => {
     expect(
       soloJoinOptionsSchema.safeParse({
         role: "solo",
-        protocolVersion: 58,
+        protocolVersion: 59,
         playerName: "Ada",
         crewSize: 2
       }).success
     ).toBe(false);
     // A player is not optional: the roster has a seat to label.
-    expect(soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 58 }).success).toBe(
+    expect(soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 59 }).success).toBe(
       false
     );
     expect(
-      soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 56, playerName: "Ada" })
+      soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 58, playerName: "Ada" })
         .success
     ).toBe(false);
   });
@@ -461,9 +461,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("keeps continuous role messages strict on v56 and the active run", () => {
+  it("keeps continuous role messages strict on v58 and the active run", () => {
     const envelope = {
-      protocolVersion: 58,
+      protocolVersion: 59,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -539,7 +539,7 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
     expect(
       pilotInputCommandSchema.safeParse({
-        protocolVersion: 56,
+        protocolVersion: 58,
         roomId: ROOM_ID,
         playerId: PLAYER_ID,
         sequence: 1,
@@ -549,9 +549,9 @@ describe("protocol v33 handshake and messages", () => {
     ).toBe(false);
   });
 
-  it("requires the machine gun trigger on v56 pilot input", () => {
+  it("requires the machine gun trigger on v58 pilot input", () => {
     const envelope = {
-      protocolVersion: 58,
+      protocolVersion: 59,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -568,7 +568,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("carries an optional turn intent on pilot input", () => {
     const envelope = {
-      protocolVersion: 58,
+      protocolVersion: 59,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -590,11 +590,11 @@ describe("protocol v33 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 58, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 59, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
-      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 56, runNumber: 0 }).success
+      readyCommandSchema.safeParse({ ...envelope, protocolVersion: 58, runNumber: 0 }).success
     ).toBe(false);
     for (const runNumber of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
       expect(readyCommandSchema.safeParse({ ...envelope, runNumber }).success).toBe(false);
@@ -639,7 +639,7 @@ describe("protocol v33 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 58,
+    protocolVersion: 59,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -1153,18 +1153,18 @@ describe("strict v33 room projections", () => {
 describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 58, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 59, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 58,
+        protocolVersion: 59,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 58,
+        protocolVersion: 59,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10
@@ -1172,13 +1172,13 @@ describe("v33 latency diagnostics", () => {
     ).toBe(false);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 56,
+        protocolVersion: 58,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(false);
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 56, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 58, probeId: "probe-1" }).success
     ).toBe(false);
   });
 

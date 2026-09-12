@@ -14,6 +14,7 @@ import {
 import type { LiveEntity } from "../../model/shipPrediction.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
 import { drawSpaceshipHull } from "../entityArt.js";
+import { deathEffectFor, type BurstLayer } from "./bursts.js";
 import type { ScenePrediction } from "./entities.js";
 
 /** Where the scene has actually drawn the player's own hull this frame. */
@@ -73,6 +74,8 @@ interface FleetHull {
   hp: number;
   maxHp: number;
   flashLeftMs: number;
+  /** True once this hull has been drawn dying; a wreck is played once. */
+  wrecked: boolean;
 }
 
 const RIVAL_TINT = 0xff9f8a;
@@ -110,7 +113,8 @@ export class ArenaFleet {
     snapshot: DisplayGameSnapshot,
     bake: BakeShape,
     snap = false,
-    prediction?: ScenePrediction
+    prediction?: ScenePrediction,
+    bursts?: BurstLayer
   ): void {
     // Every hull, the player's own included: the scene draws that one's art, but
     // its health and its sector are the same question a rival's bars answer, and
@@ -147,6 +151,27 @@ export class ArenaFleet {
         parts.turretAngle = extendAngleTrack(parts.turretAngle, ship.turretAngle, toTick);
         parts.shieldAngle = extendAngleTrack(parts.shieldAngle, ship.shieldAngle, toTick);
       }
+      /*
+       * The wreck, played once and then left alone.
+       *
+       * A hull used to leave the collection on the tick it died, so its health
+       * bar never reached zero and the ship blinked out - the last rival of a
+       * match simply stopped existing. It now arrives dead first, which is the
+       * frame the explosion belongs on.
+       */
+      if (!ship.alive && !parts.wrecked) {
+        parts.wrecked = true;
+        const effect = deathEffectFor("enemy", false, undefined);
+        if (effect !== undefined) bursts?.spawn(effect, parts.hull.x, parts.hull.y, ship.radius);
+        parts.hull.setVisible(false);
+        parts.turret.setVisible(false);
+        parts.shield.setVisible(false);
+        parts.healthBack.setVisible(false);
+        parts.healthFill.setVisible(false);
+        parts.shieldBack.setVisible(false);
+        parts.shieldFill.setVisible(false);
+      }
+      if (parts.wrecked) continue;
       parts.shield.setVisible(!parts.isSelf && ship.shieldActive);
       this.drawBars(parts, ship);
     }
@@ -175,6 +200,8 @@ export class ArenaFleet {
     prediction: ScenePrediction | undefined
   ): void {
     for (const parts of this.hulls.values()) {
+      // A wreck is a sprite that has already been hidden; nothing left to move.
+      if (parts.wrecked) continue;
       const mine = parts.isSelf && own !== undefined ? own : undefined;
       // Bound first, the scene's own tracks second: the tracks are the fallback
       // for a page with no prediction running, exactly as they are for enemies.
@@ -343,6 +370,7 @@ export class ArenaFleet {
       heading: createAngleTrack(ship.heading, toTick),
       turretAngle: createAngleTrack(ship.turretAngle, toTick),
       shieldAngle: createAngleTrack(ship.shieldAngle, toTick),
+      wrecked: false,
       hp: ship.hp,
       maxHp: ship.maxHp,
       flashLeftMs: 0

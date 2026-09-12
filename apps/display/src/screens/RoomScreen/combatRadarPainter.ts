@@ -347,7 +347,7 @@ export function drawCombatRadar(
   context.lineWidth = 1.2;
   context.beginPath();
   for (const rival of game.arenaShips) {
-    if (rival.isSelf || !rival.revealed) continue;
+    if (rival.isSelf || !rival.revealed || !rival.alive) continue;
     const point = projectWorldToRadar(
       rival.x,
       rival.y,

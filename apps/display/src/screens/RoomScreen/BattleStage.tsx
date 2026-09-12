@@ -200,7 +200,7 @@ export function BattleStage({
           view.game.arenaShips.length > 0 && (
             <ArenaResultOverlay
               outcome={view.game.encounter.outcome}
-              survivors={view.game.arenaShips.filter((ship) => !ship.isSelf).length}
+              survivors={view.game.arenaShips.filter((ship) => !ship.isSelf && ship.alive).length}
               fieldSize={ARENA_SHIP_COUNT}
               leaving={closingRoom}
               onLeave={onLeaveRoom}

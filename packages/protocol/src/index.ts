@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 58 as const;
+export const PROTOCOL_VERSION = 59 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -477,6 +477,15 @@ export const publicArenaShipViewSchema = z
      * mostly blind, and the sweep is how a pilot buys a look.
      */
     revealed: z.boolean(),
+    /**
+     * Whether this hull is still flying.
+     *
+     * A wreck stays on the wire for the patch that killed it rather than
+     * vanishing from the collection: a bar that never reaches zero and a ship
+     * that blinks out are the same bug, and both are what "I never saw him
+     * die" is. The display plays the wreck and then drops it.
+     */
+    alive: z.boolean(),
     /** Shots fired, narrowed to the wire, so the display can flash a muzzle. */
     shotsFired: z.number().int().min(0).max(65_535)
   })

@@ -50,6 +50,15 @@ import {
 } from "./SpaceshipDefenderState.js";
 import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
 
+/**
+ * How long a wreck stays published after it stops flying.
+ *
+ * Long enough for the display to notice, play the explosion and let the health
+ * bar be seen reaching zero; short enough that a match's collection is the
+ * living field plus whatever just stopped being part of it.
+ */
+const WRECK_HOLD_TICKS = 120;
+
 /** The slot the human takes. It flies on autopilot until a cockpit claims it. */
 const PLAYER_SLOT = 0;
 
@@ -765,7 +774,25 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
      * included, flown by the same autopilot, and the display has to be able to
      * draw them that way.
      */
-    const fleet = new Map(match.ships.filter((ship) => ship.alive).map((ship) => [ship.id, ship]));
+    /*
+     * Wrecks travel too, for a while.
+     *
+     * Dropping a hull the instant it died meant its health bar never reached
+     * zero and the ship blinked out instead of dying - the last rival of a
+     * match simply ceased to exist, which is no way to learn that you won. It
+     * stays on the wire with `alive` false until the display has played the
+     * wreck, and the room lets go of it a couple of seconds later.
+     */
+    const fleet = new Map(
+      match.ships
+        .filter(
+          (ship) =>
+            ship.alive ||
+            ship.eliminatedAtTick === null ||
+            match.clock.tick - ship.eliminatedAtTick <= WRECK_HOLD_TICKS
+        )
+        .map((ship) => [ship.id, ship])
+    );
     reconcile(
       game.display.arenaShips,
       fleet,
@@ -792,6 +819,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         view.shieldEnergy = ship.shieldEnergy;
         view.shieldCapacity = ship.stats.shieldCapacity;
         view.revealed = fresh && this.revealed.has(ship.id);
+        view.alive = ship.alive;
       }
     );
 

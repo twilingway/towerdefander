@@ -206,6 +206,8 @@ export class ArenaShipView extends Schema {
   @type("float32") shieldCapacity = 0;
   /** Found by the last sweep and not yet faded; see the arena room's scan. */
   @type("boolean") revealed = false;
+  /** False for a wreck; it stays published long enough to be seen dying. */
+  @type("boolean") alive = true;
   @type("uint16") shotsFired = 0;
 }
 

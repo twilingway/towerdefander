@@ -52,6 +52,7 @@ export interface NetworkArenaShipState {
   shieldEnergy: number;
   shieldCapacity: number;
   revealed: boolean;
+  alive: boolean;
   shotsFired: number;
 }
 
