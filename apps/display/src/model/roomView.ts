@@ -101,6 +101,37 @@ export function toDisplayRoomView(
             },
             credits: game.credits,
             teamUpgrade: toTeamUpgradeView(game.teamUpgrade),
+            arenaZones: [...display.arenaZones.values()].map((zone) => ({
+              zoneId: zone.zoneId,
+              x: zone.x,
+              y: zone.y,
+              width: zone.width,
+              height: zone.height,
+              state: zone.state as "safe" | "warning" | "closed",
+              secondsRemaining: zone.secondsRemaining
+            })),
+            arenaShips: [...display.arenaShips.values()].map((ship) => ({
+              entityId: ship.entityId,
+              isSelf: ship.isSelf,
+              x: ship.x,
+              y: ship.y,
+              velocityX: ship.velocityX,
+              velocityY: ship.velocityY,
+              radius: ship.radius,
+              heading: ship.heading,
+              turretAngle: ship.turretAngle,
+              hp: ship.hp,
+              maxHp: ship.maxHp,
+              shieldAngle: ship.shieldAngle,
+              shieldActive: ship.shieldActive,
+              shieldRadius: ship.shieldRadius,
+              shieldArcHalfAngle: ship.shieldArcHalfAngle,
+              shieldEnergy: ship.shieldEnergy,
+              shieldCapacity: ship.shieldCapacity,
+              revealed: ship.revealed,
+              alive: ship.alive,
+              shotsFired: ship.shotsFired
+            })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"
                 ? {
@@ -122,6 +153,8 @@ export function toDisplayRoomView(
             cameraViewWidth: display.cameraViewWidth,
             serverStepMs: display.serverStepMs ?? 0,
             appliedInputSeq: display.appliedInputSeq ?? 0,
+            scanReadySeconds: display.scanReadySeconds ?? 0,
+            scanRevealSecondsRemaining: display.scanRevealSecondsRemaining ?? 0,
             drive: { ...ZERO_DRIVE, ...display.drive },
             pose: toPoseView(display.pose),
             background: {
@@ -140,6 +173,8 @@ export function toDisplayRoomView(
             ),
             shieldBandEffect: display.shieldBandEffect ?? "",
             shieldImpactEffect: display.shieldImpactEffect ?? "",
+            shipDeathEffect: display.shipDeathEffect ?? "",
+            shipMuzzleEffect: display.shipMuzzleEffect ?? "",
             turretVisual:
               display.turretVisualShape === undefined || display.turretVisualShape.length === 0
                 ? null

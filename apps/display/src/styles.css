@@ -2286,3 +2286,918 @@ p {
 .display-shell[data-panels="opaque"] .machine-gun-hud {
   background: #08181f;
 }
+
+/*
+ * The front door: a grid of modes, then a setup screen behind each one.
+ *
+ * Big-Picture tiles rather than squares: wide, short, and sized off the
+ * viewport height, so both modes and the title fit one phone screen without a
+ * scroll. Each tile carries its own key art with a dark gradient over it, so
+ * the text stays readable whatever the illustration does. The art lives in
+ * `public/art/`; without the files the gradient alone still reads as a tile
+ * rather than as a broken image.
+ */
+.display-shell--start {
+  align-content: center;
+  justify-items: center;
+  gap: clamp(0.75rem, 2vh, 1.5rem);
+  padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
+  text-align: center;
+  /* Deep space without an image: two nebulae, a cold rim light and a scatter of
+     stars, all painted. It has to hold the screen on its own, because the key
+     art may not be in `public/art/` on a given checkout. */
+  background:
+    radial-gradient(2px 2px at 18% 22%, rgb(255 255 255 / 55%), transparent 60%),
+    radial-gradient(1.5px 1.5px at 72% 16%, rgb(255 255 255 / 45%), transparent 60%),
+    radial-gradient(1.5px 1.5px at 38% 72%, rgb(255 255 255 / 40%), transparent 60%),
+    radial-gradient(2px 2px at 84% 64%, rgb(255 255 255 / 35%), transparent 60%),
+    radial-gradient(1.5px 1.5px at 56% 40%, rgb(255 255 255 / 30%), transparent 60%),
+    radial-gradient(circle at 15% 12%, rgb(43 123 150 / 35%), transparent 45%),
+    radial-gradient(circle at 88% 82%, rgb(120 70 190 / 30%), transparent 45%), #050c12;
+}
+
+/* The rule above the title, the way the key art draws it: a hairline that opens
+   out of nothing, a diamond in the middle, and nothing else. */
+.start-rule {
+  display: grid;
+  align-items: center;
+  gap: 0.6rem;
+  grid-template-columns: clamp(2rem, 12vw, 7rem) auto clamp(2rem, 12vw, 7rem);
+  color: #e6b85c;
+}
+
+.start-rule::before,
+.start-rule::after {
+  content: "";
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e6b85c);
+}
+
+.start-rule::after {
+  background: linear-gradient(90deg, #e6b85c, transparent);
+}
+
+.start-rule span {
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+}
+
+.start-header {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: center;
+}
+
+.start-title {
+  margin: 0;
+  font-size: clamp(1.35rem, 4vw, 4rem);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #ffffff 35%, #9fb6c4 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 2.5rem rgb(120 190 255 / 25%);
+}
+
+.start-lede {
+  margin: 0;
+  color: #b9d3ce;
+  font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+}
+
+.mode-grid {
+  display: grid;
+  width: min(96rem, 94vw);
+  gap: clamp(0.6rem, 1.6vh, 1.25rem);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 56rem) {
+  .mode-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.mode-tile {
+  position: relative;
+  min-height: 0;
+  /* The tile is exactly as wide-to-tall as the crop behind it - 16:5 - so cover
+     has nothing left to cut and the whole scene survives at every size. Height
+     follows width, and the grid below caps the width on a television. */
+  aspect-ratio: 16 / 5;
+  height: auto;
+  min-height: 5.5rem;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 1rem;
+  background-color: #0a1f22;
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 45%);
+  overflow: hidden;
+  /* Cut corners, like the frames in the key art. */
+  clip-path: polygon(
+    0 0,
+    calc(100% - 1.1rem) 0,
+    100% 1.1rem,
+    100% 100%,
+    1.1rem 100%,
+    0 calc(100% - 1.1rem)
+  );
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.mode-tile:hover,
+.mode-tile:focus-visible {
+  border-color: #e6b85c;
+  box-shadow:
+    0 1rem 2.5rem rgb(0 0 0 / 45%),
+    0 0 0 1px rgb(230 184 92 / 60%),
+    0 0 2rem rgb(230 184 92 / 25%);
+  transform: translateY(-0.2rem);
+}
+
+.mode-tile--campaign {
+  background-image:
+    linear-gradient(100deg, rgb(4 12 22 / 88%) 0%, rgb(4 12 22 / 35%) 65%), url("/art/campaign.jpg");
+}
+
+.mode-tile--arena {
+  background-image:
+    linear-gradient(100deg, rgb(12 6 22 / 88%) 0%, rgb(12 6 22 / 35%) 65%), url("/art/arena.jpg");
+}
+
+.mode-tile__frame {
+  display: grid;
+  height: 100%;
+  padding: clamp(0.75rem, 2vw, 2.5rem);
+  gap: 0.15rem;
+  align-content: center;
+  justify-items: start;
+  text-align: left;
+  color: #f6f4e8;
+}
+
+.mode-tile__eyebrow {
+  color: #e6b85c;
+  font-size: clamp(0.6rem, 0.9vw, 0.85rem);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.mode-tile__title {
+  font-size: clamp(1.05rem, 2.8vw, 2.75rem);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.mode-tile__subtitle {
+  color: #cfe3df;
+  font-size: clamp(0.75rem, 1.3vw, 1.2rem);
+  font-weight: 700;
+}
+
+/* The pitch is the first thing to go on a phone: two tiles, a title and a
+   badge have to share one screen, and the sentence is the only part of that a
+   player can do without. */
+.mode-tile__pitch {
+  display: none;
+  margin-top: 0.3rem;
+  color: #b9d3ce;
+  font-size: clamp(0.8rem, 1vw, 1.05rem);
+  font-weight: 500;
+  max-width: 34rem;
+}
+
+@media (min-width: 40rem) {
+  .mode-tile__pitch {
+    display: block;
+  }
+}
+
+.mode-tile__crew {
+  margin-top: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+  border: 1px solid rgb(230 184 92 / 45%);
+  border-radius: 999px;
+  color: #e6b85c;
+  font-size: clamp(0.62rem, 0.9vw, 0.9rem);
+  font-weight: 800;
+}
+
+.display-shell--setup {
+  justify-items: center;
+  align-content: start;
+  gap: 0.75rem;
+  padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
+}
+
+.setup-card {
+  display: grid;
+  gap: 0.35rem;
+  width: min(58rem, 100%);
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 1.25rem;
+  background: rgb(6 20 20 / 93%);
+  box-shadow:
+    0 1.5rem 4rem rgb(0 0 0 / 60%),
+    0 0 0 1px rgb(0 0 0 / 40%);
+  text-align: left;
+}
+
+.setup-head h1 {
+  margin: 0.1rem 0 0.3rem;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+}
+
+.setup-lede {
+  margin: 0;
+  color: #b9d3ce;
+  font-size: clamp(0.8rem, 1.3vw, 1rem);
+}
+
+.setup-step {
+  margin: clamp(0.6rem, 1.6vh, 1.1rem) 0 0.4rem;
+  color: #8fb2ac;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.link-button {
+  min-height: 0;
+  padding: 0;
+  color: #8fb2ac;
+  background: none;
+  font-size: 0.85rem;
+  font-weight: 700;
+  justify-self: start;
+}
+
+.link-button:hover {
+  color: #e6b85c;
+}
+
+.crew-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.crew-tile {
+  display: grid;
+  gap: 0.1rem;
+  align-content: center;
+  min-height: 0;
+  padding: 0.6rem 0.4rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.75rem;
+  color: #f6f4e8;
+  background: rgb(19 45 42 / 85%);
+  text-align: center;
+}
+
+.crew-tile.is-selected {
+  border-color: #e6b85c;
+  color: #172015;
+  background: #e6b85c;
+}
+
+.crew-tile__count {
+  font-size: clamp(0.95rem, 2.2vw, 1.3rem);
+  font-weight: 900;
+}
+
+.crew-tile__caption {
+  font-size: 0.65rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.ship-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ship-tile {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  align-content: start;
+  justify-items: center;
+  min-height: 0;
+  padding: 0.6rem 0.5rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.9rem;
+  color: #f6f4e8;
+  background: rgb(19 45 42 / 85%);
+  text-align: center;
+}
+
+.ship-tile.is-selected {
+  border-color: #e6b85c;
+  box-shadow: inset 0 0 0 1px #e6b85c;
+}
+
+.ship-tile.is-locked {
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.ship-tile__art {
+  display: block;
+  width: clamp(2.75rem, 9vh, 4.5rem);
+  border-radius: 0.6rem;
+  background: radial-gradient(circle at 50% 45%, rgb(43 123 97 / 35%), transparent 70%);
+}
+
+.ship-tile__art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ship-tile__name {
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  font-weight: 800;
+}
+
+/* The pitch is the first thing to go on a phone: the name and the silhouette
+   already say which hull this is, and three tiles have to share one row. */
+.ship-tile__pitch {
+  display: none;
+  color: #b9d3ce;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+@media (min-width: 40rem) {
+  .ship-tile__pitch {
+    display: block;
+  }
+}
+
+.ship-tile__lock {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: rgb(8 19 19 / 85%);
+  color: #e6b85c;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.setup-go {
+  width: 100%;
+  min-height: 3rem;
+  margin-top: clamp(0.6rem, 1.6vh, 1.25rem);
+}
+
+/*
+ * A television has no pointer: whatever the remote is on has to be obvious
+ * across a room. `:focus-visible` alone is not enough here, because the focus
+ * is moved programmatically by the arrow keys - so plain `:focus` carries it.
+ */
+.mode-tile:focus,
+.crew-tile:focus,
+.ship-tile:focus,
+.setup-go:focus,
+.link-button:focus {
+  outline: 2px solid #e6b85c;
+  outline-offset: 3px;
+}
+
+/* Phones get the half-size art: same picture, a quarter of the bytes. */
+@media (max-width: 40rem) {
+  .mode-tile--campaign {
+    background-image:
+      linear-gradient(100deg, rgb(4 12 22 / 90%) 0%, rgb(4 12 22 / 30%) 62%, transparent 100%),
+      url("/art/campaign@sm.jpg"),
+      radial-gradient(circle at 78% 30%, rgb(70 140 200 / 55%), transparent 58%),
+      linear-gradient(140deg, #0b2030, #071119);
+  }
+
+  .mode-tile--arena {
+    background-image:
+      linear-gradient(100deg, rgb(12 6 22 / 90%) 0%, rgb(12 6 22 / 30%) 62%, transparent 100%),
+      url("/art/arena@sm.jpg"),
+      radial-gradient(circle at 78% 30%, rgb(150 80 210 / 55%), transparent 58%),
+      linear-gradient(140deg, #1a0f2b, #0a0714);
+  }
+}
+
+/*
+ * A phone held sideways is 375 tall, and that is the screen the setup has to
+ * fit: the mode, the crew, a hull and the button, with nothing scrolled out of
+ * reach. So the copy goes first, then the padding, then the size of the art -
+ * in that order, because a sentence explains what the tiles already show.
+ */
+@media (max-height: 34rem) {
+  .display-shell--setup {
+    padding-block: 0.5rem;
+  }
+
+  .setup-card {
+    gap: 0.2rem;
+    padding: 0.75rem;
+    border-radius: 0.9rem;
+  }
+
+  .setup-lede {
+    display: none;
+  }
+
+  .setup-head h1 {
+    margin: 0 0 0.2rem;
+    font-size: 1.05rem;
+  }
+
+  .setup-step {
+    margin: 0.45rem 0 0.3rem;
+    font-size: 0.65rem;
+  }
+
+  .crew-tile {
+    padding: 0.35rem 0.25rem;
+  }
+
+  .crew-tile__count {
+    font-size: 0.95rem;
+  }
+
+  .crew-tile__caption {
+    font-size: 0.6rem;
+  }
+
+  .ship-tile {
+    padding: 0.4rem 0.3rem;
+  }
+
+  .ship-tile__art {
+    width: clamp(1.75rem, 7vh, 2.75rem);
+  }
+
+  .ship-tile__name {
+    font-size: 0.8rem;
+  }
+
+  .setup-go {
+    min-height: 2.5rem;
+    margin-top: 0.5rem;
+  }
+
+  /* The name sits on one line with its caption instead of above it. */
+  .setup-card .field {
+    display: grid;
+    gap: 0.4rem;
+    align-items: center;
+    grid-template-columns: auto 1fr;
+    margin: 0;
+  }
+
+  .setup-card .field__caption {
+    font-size: 0.65rem;
+  }
+
+  .setup-card .field__input {
+    min-height: 2.25rem;
+  }
+
+  .hint {
+    font-size: 0.7rem;
+  }
+}
+
+/*
+ * The setup screens stand on their own key art, darkened until the card on top
+ * of it is the thing being read. The full illustration goes here rather than
+ * the tile crop: its own title belongs on the screen the mode is being set up
+ * on, and there is room for it behind a card.
+ */
+.display-shell--setup.is-campaign,
+.display-shell--setup.is-arena {
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+.display-shell--setup.is-campaign {
+  background-image:
+    linear-gradient(180deg, rgb(4 12 22 / 82%), rgb(4 12 22 / 94%)), url("/art/campaign-full.jpg");
+}
+
+.display-shell--setup.is-arena {
+  background-image:
+    linear-gradient(180deg, rgb(12 6 22 / 82%), rgb(12 6 22 / 94%)), url("/art/arena-full.jpg");
+}
+
+/*
+ * Where you play is a different question from how many of you there are, so it
+ * gets its own row of two wide tiles with a sentence each. The crew sizes below
+ * it only appear once the answer is "the big screen and phones".
+ */
+.place-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 36rem) {
+  .place-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.place-tile {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  min-height: 0;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 0.9rem;
+  color: #f6f4e8;
+  background: rgb(19 45 42 / 85%);
+  text-align: left;
+}
+
+.place-tile.is-selected {
+  border-color: #e6b85c;
+  box-shadow: inset 0 0 0 1px #e6b85c;
+}
+
+.place-tile__title {
+  font-size: clamp(0.9rem, 1.5vw, 1.15rem);
+  font-weight: 800;
+}
+
+.place-tile__caption {
+  color: #b9d3ce;
+  font-size: clamp(0.72rem, 1vw, 0.85rem);
+  font-weight: 500;
+}
+
+@media (max-height: 34rem) {
+  .place-tile {
+    padding: 0.45rem 0.6rem;
+  }
+
+  .place-tile__caption {
+    font-size: 0.68rem;
+  }
+}
+
+/*
+ * A phone on its side is 375 tall: two 16:5 tiles plus a title would not fit,
+ * so there the ratio gives way to a height and cover crops the sides again.
+ * The whole scene is a luxury of tall screens.
+ */
+@media (max-height: 34rem) {
+  .mode-tile {
+    aspect-ratio: auto;
+    /* A third of the screen each: two tiles and a title, and nothing above
+       them going to waste. */
+    height: clamp(5rem, 34vh, 11rem);
+  }
+
+  /* Wide enough for the sentence, too short to spend the room on it: the
+     width query alone let it through on a phone lying down, and it spilled. */
+  .mode-tile__pitch {
+    display: none;
+  }
+
+  .mode-tile__frame {
+    padding: 0.55rem 0.85rem;
+  }
+
+  .start-title {
+    font-size: clamp(1.1rem, 3.4vw, 2rem);
+  }
+
+  .start-header {
+    gap: 0.05rem;
+  }
+
+  .start-rule span {
+    font-size: 0.55rem;
+  }
+
+  .display-shell--start {
+    gap: 0.45rem;
+    padding-block: 0.4rem;
+  }
+}
+
+/*
+ * A phone lying down is wide and short - the one shape where two tiles side by
+ * side beat two stacked. Each then gets half the width and half again the
+ * height, which is what the empty band above them was costing.
+ */
+@media (max-height: 34rem) and (min-width: 34rem) {
+  .mode-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mode-tile {
+    height: clamp(6rem, 52vh, 14rem);
+  }
+}
+
+/* The arena's waiting room: how many are in, and how long it still waits. */
+.queue {
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* Sixteen seats as sixteen hulls: lit means somebody is in it. */
+.queue__fleet {
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.queue__hull {
+  display: block;
+  padding: 0.2rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.5rem;
+  background: rgb(6 20 20 / 70%);
+  opacity: 0.35;
+  filter: grayscale(1);
+  transition:
+    opacity 200ms ease,
+    filter 200ms ease;
+}
+
+.queue__hull.is-taken {
+  border-color: rgb(230 184 92 / 55%);
+  background: rgb(19 45 42 / 85%);
+  opacity: 1;
+  filter: none;
+}
+
+/* A seat a bot took: lit, but cooler than a person's, so the two are one
+   glance apart. */
+.queue__hull.is-bot {
+  border-color: rgb(80 170 200 / 45%);
+  background: rgb(14 34 44 / 85%);
+  opacity: 0.9;
+  filter: grayscale(0.35) hue-rotate(150deg);
+  animation: queue-seat-in 260ms ease-out;
+}
+
+@keyframes queue-seat-in {
+  from {
+    opacity: 0.2;
+    transform: scale(0.82);
+  }
+
+  to {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
+.queue__hull svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.queue__caption {
+  margin: 0;
+  color: #8fb2ac;
+  font-size: 0.85rem;
+}
+
+.queue__caption strong {
+  color: #e6b85c;
+  font-size: 1.1rem;
+}
+
+/*
+ * The arena's dial: the same place as the campaign's, and bigger.
+ *
+ * A match has no hull ring and no shield ring on it, so the circle is all map -
+ * and the map is the one panel that decides where you drive next, which is why
+ * it earns the extra width.
+ */
+.combat-radar--arena {
+  width: clamp(13rem, 22vw, 20rem);
+}
+
+/*
+ * The match head-up display: counts on the left, the ship on the right.
+ *
+ * Two groups pinned to the top corners rather than a row of cards across the
+ * middle, because the middle of the top edge is the match clock and the middle
+ * of the screen is the fight.
+ */
+/*
+ * The match panel lives on the top edge, over the world.
+ *
+ * It has to lift itself out of the flow and say so: every other battle panel is
+ * absolutely placed above the canvas at this depth, and a header left in normal
+ * flow is drawn at the top of the shell and then covered by the battlefield -
+ * rendered, correct, and invisible, which is exactly what it did.
+ */
+.arena-hud {
+  position: absolute;
+  z-index: 25;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  left: max(0.75rem, env(safe-area-inset-left));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  pointer-events: none;
+}
+
+/*
+ * A match keeps one control in the room header - the way out - and it belongs
+ * in the corner rather than in the corner's place: with the room code gone the
+ * row had nothing on its left, so the button slid across and sat on the counts.
+ */
+.room-header--match {
+  justify-content: flex-end;
+}
+
+/* ...and the gauges drop below it, because both want the same corner. */
+.arena-hud__ship {
+  margin-top: 2.8rem;
+}
+
+/* Both groups carry the same glass the rest of the battle panels are drawn on,
+   so they read against a nebula as well as against empty space. */
+.arena-hud__counts,
+.arena-hud__ship {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgb(71 224 233 / 28%);
+  border-radius: 0.75rem;
+  background: rgb(3 20 29 / 62%);
+  box-shadow: 0 0.5rem 1.8rem rgb(0 0 0 / 28%);
+}
+
+.arena-hud__counts {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.arena-hud__counts div {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 9rem;
+}
+
+.arena-hud__counts span {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7fd8e8;
+}
+
+.arena-hud__counts strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  color: #ffd98a;
+}
+
+.arena-hud__counts small {
+  font-size: 0.8rem;
+  color: #6ea7b8;
+}
+
+.arena-hud__ship {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: end;
+}
+
+.arena-gauge {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.arena-gauge__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7fd8e8;
+  min-width: 4.5rem;
+  text-align: right;
+}
+
+.arena-gauge__cells {
+  display: flex;
+  gap: 2px;
+}
+
+/* One cell of a gauge. Lit cells carry the gauge's colour; the rest stay as the
+   empty track, so the bar reads as a bar even when it is nearly out. */
+.arena-gauge__cells i {
+  width: 0.8rem;
+  height: 0.62rem;
+  border-radius: 1px;
+  background: rgb(125 200 220 / 18%);
+}
+
+.arena-gauge--hull .arena-gauge__cells i.is-lit {
+  background: #74e39b;
+}
+
+.arena-gauge--shield .arena-gauge__cells i.is-lit {
+  background: #63d8ff;
+}
+
+.arena-gauge--shield-down .arena-gauge__cells i.is-lit {
+  background: rgb(99 216 255 / 45%);
+}
+
+.arena-gauge--heat .arena-gauge__cells i.is-lit {
+  background: #ffd36f;
+}
+
+.arena-gauge--danger .arena-gauge__cells i.is-lit {
+  background: #ff6b5e;
+}
+
+@media (width <= 700px) {
+  .arena-gauge__label {
+    display: none;
+  }
+
+  .arena-gauge__cells i {
+    width: 0.5rem;
+  }
+
+  .arena-hud__counts div {
+    min-width: 7rem;
+  }
+}
+
+/*
+ * The sweep button, under the gauges it is read with.
+ *
+ * It takes pointer events back from the panel around it - the header is
+ * transparent to the thumb so it never eats a stick drag, and this is the one
+ * thing on it a thumb is meant to find.
+ */
+.arena-scan {
+  display: grid;
+  gap: 0.1rem;
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgb(255 211 111 / 55%);
+  border-radius: 0.6rem;
+  color: #ffd36f;
+  background: rgb(40 30 6 / 70%);
+  font: inherit;
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.arena-scan__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.arena-scan__clock {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-scan.is-cooling {
+  border-color: rgb(125 200 220 / 35%);
+  color: #7fd8e8;
+  background: rgb(3 20 29 / 70%);
+  cursor: default;
+}
+
+/* The card the room will take if the intermission runs out with no vote. */
+.intermission-card--default {
+  border-color: rgb(255 211 111 / 45%);
+  box-shadow: inset 0 0 0 1px rgb(255 211 111 / 18%);
+}

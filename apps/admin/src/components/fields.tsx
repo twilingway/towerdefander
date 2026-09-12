@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import {
   FRIENDLY_WEAPON_KINDS,
   SPAWN_SECTORS,
@@ -89,7 +91,18 @@ export const FRIENDLY_WEAPON_KIND_LABELS: Record<FriendlyWeaponKind, string> = {
  * and the value in the file are two different numbers with the same name.
  */
 function tickHint(ticks: number): string {
-  return `· ${String(Math.round(ticks))} ${tickWord(Math.round(ticks))}`;
+  const whole = Math.round(ticks);
+  // Both units, because the field is edited in one and stored in the other: a
+  // caption that names only ticks leaves the number in the box unexplained.
+  return `· ${formatSeconds(ticksToSeconds(whole))} (${String(whole)} ${tickWord(whole)})`;
+}
+
+/** Seconds for reading rather than for editing: minutes once it is worth it. */
+function formatSeconds(seconds: number): string {
+  if (seconds < 60) return `${String(Number(seconds.toFixed(2)))} с`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds - minutes * 60);
+  return rest === 0 ? `${String(minutes)} мин` : `${String(minutes)} мин ${String(rest)} с`;
 }
 
 function tickWord(ticks: number): string {
@@ -124,6 +137,7 @@ export function NumberField({
   disabled = false,
   onChange
 }: NumberFieldProps) {
+  const [draft, setDraft] = useState<string | undefined>(undefined);
   return (
     <label className={disabled ? "field field--off" : "field"}>
       <span className="field__caption">{caption}</span>
@@ -133,10 +147,24 @@ export function NumberField({
         step={step}
         min={min}
         disabled={disabled}
-        value={value}
+        /*
+         * What was typed wins until the field is left.
+         *
+         * Every caller clamps what it stores, and a clamp applied between two
+         * keystrokes makes a field impossible to type into: the first digit of
+         * nineteen thousand is a one, which becomes the minimum, which replaces
+         * what is on screen. Keeping the draft lets the number be finished; the
+         * stored value is still clamped on every keystroke, so the arrows and
+         * anything watching the preset behave exactly as before.
+         */
+        value={draft ?? String(value)}
         onChange={(event) => {
+          setDraft(event.target.value);
           const next = Number(event.target.value);
-          if (Number.isFinite(next)) onChange(next);
+          if (Number.isFinite(next) && event.target.value.trim().length > 0) onChange(next);
+        }}
+        onBlur={() => {
+          setDraft(undefined);
         }}
       />
     </label>
@@ -151,6 +179,10 @@ interface SecondsFieldProps {
 
 /** The simulation counts 50 ms ticks; operators think in seconds. */
 export function SecondsField({ caption, ticks, onChange }: SecondsFieldProps) {
+  // The same draft as `NumberField`, and for the same reason: seconds are
+  // rounded to whole ticks on the way in, so a half-typed number is rewritten
+  // under the cursor.
+  const [draft, setDraft] = useState<string | undefined>(undefined);
   return (
     <label className="field">
       <span className="field__caption">
@@ -161,10 +193,14 @@ export function SecondsField({ caption, ticks, onChange }: SecondsFieldProps) {
         type="number"
         step={TICK_SECONDS}
         min={TICK_SECONDS}
-        value={ticksToSeconds(ticks)}
+        value={draft ?? String(ticksToSeconds(ticks))}
         onChange={(event) => {
+          setDraft(event.target.value);
           const next = Number(event.target.value);
           if (Number.isFinite(next) && next > 0) onChange(secondsToTicks(next));
+        }}
+        onBlur={() => {
+          setDraft(undefined);
         }}
       />
     </label>

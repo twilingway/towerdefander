@@ -29,6 +29,12 @@ function readRecord(source: LegacyRecord, key: string): LegacyRecord {
   return isRecord(value) ? value : {};
 }
 
+/** A number from a legacy record, or undefined when it is anything else. */
+function readNumber(source: LegacyRecord, key: string): number | undefined {
+  const value = source[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function readArray(source: LegacyRecord, key: string): readonly unknown[] {
   const value = source[key];
   return Array.isArray(value) ? value : [];
@@ -433,19 +439,31 @@ function migrateShipArchetypes(tuning: LegacyRecord, defaults: BalanceTuning): L
 }
 
 /**
- * The drive numbers an operator no longer owns.
+ * The drive numbers an operator did not own, once.
  *
- * Normally a migration adds knobs and leaves tuned ones alone. This one takes
- * six back, because the helm was changed on purpose and from the outside: the
+ * Normally a migration adds knobs and leaves tuned ones alone. This one took
+ * seven back, because the helm was changed on purpose and from the outside: the
  * reference prototype's arcade profile replaced a hull that accelerated in a
  * second and turned with inertia, and a preset that kept the old numbers would
  * quietly keep the old feel while every other copy of the game had the new one.
- * Whatever was in the file for these fields is replaced by the built-in value.
+ *
+ * It is a one-time takeover and has to stay one. Left unconditional it fired
+ * again on every later version bump, so an operator who tuned the helm after
+ * the arcade landed lost it to the built-ins the next time any unrelated field
+ * was added - which is exactly what "the ship flies differently now and I
+ * changed nothing" is.
  *
  * The hull only. The turret is not on this list: the prototype points its
  * barrel instantly, and taking that as well would delete the gunner's traverse
  * along with everything built on it.
  */
+/**
+ * The version the arcade drive landed on. A preset written at or after it has
+ * already been through the takeover once, so its helm is the operator's again
+ * and no later migration may touch it.
+ */
+const FIRST_ARCADE_HELM_VERSION = 38;
+
 const ARCADE_HELM_FIELDS = [
   "spaceshipSpeedPerSecond",
   "spaceshipAccelerationPerSecondSquared",
@@ -456,13 +474,16 @@ const ARCADE_HELM_FIELDS = [
   "headingAngularBrakingPerSecondSquared"
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
-function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
+function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm: boolean): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
   const campaign = readRecord(tuning, "waveCampaign");
-  const arcade = Object.fromEntries(
-    ARCADE_HELM_FIELDS.map((field) => [field, defaults[field]])
-  ) as Pick<BalanceTuning, (typeof ARCADE_HELM_FIELDS)[number]>;
+  const arcade = takeArcadeHelm
+    ? (Object.fromEntries(ARCADE_HELM_FIELDS.map((field) => [field, defaults[field]])) as Pick<
+        BalanceTuning,
+        (typeof ARCADE_HELM_FIELDS)[number]
+      >)
+    : {};
   return {
     ...preset,
     tuning: {
@@ -482,6 +503,9 @@ function migratePreset(preset: unknown, defaults: BalanceTuning): unknown {
       // existed must gain it, not fail the strict schema and take the
       // operator's waves down with it.
       helm: migrateHelm(tuning, defaults),
+      // A preset written before the arena existed gains the spiral the code
+      // used to compute, so nothing about an older file changes how it plays.
+      arena: migrateArena(tuning, defaults),
       asteroidVisual: tuning.asteroidVisual ?? null,
       // Field by field, like the helm: a preset saved before salvage existed
       // must gain every knob, not fail the strict schema and take the
@@ -573,6 +597,9 @@ export function migrateBalanceDocument(raw: unknown): unknown {
     typeof version === "number" && version >= FIRST_60_HZ_BALANCE_VERSION
       ? 1
       : SIMULATION_TICK_RATE / TICK_RATE_BEFORE_60_HZ;
+  // Only a file older than the arcade drive has its helm taken; see
+  // `ARCADE_HELM_FIELDS`.
+  const takeArcadeHelm = !(typeof version === "number" && version >= FIRST_ARCADE_HELM_VERSION);
   return {
     ...raw,
     version: BALANCE_FILE_VERSION,
@@ -580,8 +607,70 @@ export function migrateBalanceDocument(raw: unknown): unknown {
     // already written at the new rate, and scaling them a second time would
     // triple every knob the operator never touched.
     presets: readArray(raw, "presets").map((preset) =>
-      migratePreset(scaleTickFields(preset, tickScale), defaults)
+      migratePreset(scaleTickFields(preset, tickScale), defaults, takeArcadeHelm)
     )
+  };
+}
+
+/**
+ * The arena's spawn marks, or the defaults when a preset has none.
+ *
+ * All or nothing rather than field by field: a partial set of marks is not a
+ * layout, and the schema wants exactly sixteen of them.
+ */
+function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTuning["arena"] {
+  const arena = tuning.arena;
+  if (!isRecord(arena)) return defaults.arena;
+  const marks = arena.spawnMarks;
+  if (!Array.isArray(marks) || marks.length !== defaults.arena.spawnMarks.length) {
+    return defaults.arena;
+  }
+  return {
+    spawnMarks: marks as BalanceTuning["arena"]["spawnMarks"],
+    // A preset written before the grid was editable keeps the layout it played
+    // on, which is the default sheet.
+    zoneColumns: readNumber(arena, "zoneColumns") ?? defaults.arena.zoneColumns,
+    zoneRows: readNumber(arena, "zoneRows") ?? defaults.arena.zoneRows,
+    // A preset written before the match clock was a setting keeps the length it
+    // was played at, which is the default.
+    matchTickLimit: readNumber(arena, "matchTickLimit") ?? defaults.arena.matchTickLimit,
+    /*
+     * The field and the frame the arena was actually played on.
+     *
+     * Both were the campaign's until now, so a preset that has one carries it
+     * across rather than being handed the built-in: whatever the operator set
+     * while the two modes shared a number was set for the match, and this is
+     * the edit that lets the campaign have its own back.
+     */
+    fieldRadius:
+      readNumber(arena, "fieldRadius") ?? readNumber(tuning, "arenaRadius") ?? defaults.arenaRadius,
+    cameraViewWidth:
+      readNumber(arena, "cameraViewWidth") ??
+      readNumber(tuning, "cameraViewWidth") ??
+      defaults.cameraViewWidth,
+    // A preset written before the match ship was a setting keeps the hull and
+    // the shot it was played with, which is what the built-ins state.
+    hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
+    damageScaling: readNumber(arena, "damageScaling") ?? defaults.arena.damageScaling,
+    zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
+    /*
+     * The built-in rather than one, deliberately.
+     *
+     * A migration normally preserves what the file played with, and here there
+     * is nothing to preserve: no preset ever carried this field, and the
+     * behaviour it replaces - a single rectangle a beat - is the thing it was
+     * added to fix. Keeping one would carry the complaint forward.
+     */
+    zonesPerClosure: readNumber(arena, "zonesPerClosure") ?? defaults.arena.zonesPerClosure,
+    // The sweep is new ground too: a preset that predates it gains the
+    // built-in rather than a number that means "no scan at all".
+    scanRadiusScreens: readNumber(arena, "scanRadiusScreens") ?? defaults.arena.scanRadiusScreens,
+    scanCooldownTicks: readNumber(arena, "scanCooldownTicks") ?? defaults.arena.scanCooldownTicks,
+    scanRevealTicks: readNumber(arena, "scanRevealTicks") ?? defaults.arena.scanRevealTicks,
+    zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
+    zoneDamageIntervalTicks:
+      readNumber(arena, "zoneDamageIntervalTicks") ?? defaults.arena.zoneDamageIntervalTicks,
+    zoneBitesToKill: readNumber(arena, "zoneBitesToKill") ?? defaults.arena.zoneBitesToKill
   };
 }
 

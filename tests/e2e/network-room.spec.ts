@@ -7,6 +7,8 @@ import {
   type Page
 } from "@playwright/test";
 
+import { openCampaign } from "./openCampaign.js";
+
 const testHost = process.env.E2E_HOST?.trim() ?? "127.0.0.1";
 const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
 const controllerUrl = process.env.E2E_CONTROLLER_URL ?? `http://${testHost}:5174`;
@@ -31,7 +33,7 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     contexts.push(displayContext);
     const display = await displayContext.newPage();
     await display.goto(displayUrl);
-    await display.getByRole("button", { name: "Создать комнату" }).click();
+    await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");
 
@@ -274,7 +276,7 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     contexts.push(displayContext);
     const display = await displayContext.newPage();
     await display.goto(displayUrl);
-    await display.getByRole("button", { name: "Создать комнату" }).click();
+    await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");
 
@@ -366,7 +368,7 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
 
     display.once("dialog", async (dialog) => dialog.accept());
     await display.getByRole("button", { name: "Закрыть комнату" }).click();
-    await expect(display.getByRole("button", { name: "Создать комнату" })).toBeVisible();
+    await expect(display.getByRole("button", { name: "Кампания I: Завеса" })).toBeVisible();
     await Promise.all(
       [pilot, shield].map(async (page) => {
         await expect(page.getByRole("button", { name: "Подключиться" })).toBeVisible();
@@ -401,7 +403,7 @@ test.skip("crew votes one shared upgrade and pays for it once", async ({ browser
     contexts.push(displayContext);
     const display = await displayContext.newPage();
     await display.goto(`${displayUrl}/?demo=1`);
-    await display.getByRole("button", { name: "Создать комнату" }).click();
+    await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");
 

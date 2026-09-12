@@ -6,7 +6,16 @@ import {
   type WaveSpawnEntry
 } from "@spaceship-defender/protocol";
 
-const FIXED_STEP_MS = 50;
+/**
+ * One simulation step, in milliseconds.
+ *
+ * It has to be the rate the simulation actually runs at - sixty hertz, as
+ * `SIMULATION_TICK_RATE` in the core states and validates. Stated here rather
+ * than imported because the console depends on the protocol and not on the
+ * core; if the two ever disagree every duration in this console is wrong by
+ * the ratio, which is exactly what a stale twenty hertz did to it.
+ */
+const FIXED_STEP_MS = 1000 / 60;
 /** One simulation step. Operators edit seconds; the preset stores ticks. */
 export const TICK_SECONDS = FIXED_STEP_MS / 1000;
 

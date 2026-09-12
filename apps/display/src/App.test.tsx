@@ -13,8 +13,10 @@ describe("DisplayApp", () => {
     );
 
     expect(markup).toContain("SpaceShip Defender");
-    expect(markup).toContain("Создать комнату");
-    expect(markup).toContain("движение, орудия и щит");
+    // The front door is the mode grid now: the campaign lives one screen in.
+    expect(markup).toContain("Завеса");
+    expect(markup).toContain("Талос");
+    expect(markup).toContain("Шестнадцать кораблей");
     expect(markup).not.toContain('data-testid="visible-demo-overlay"');
   });
 });
@@ -36,7 +38,7 @@ describe("layout preview", () => {
     expect(markup).toContain('data-testid="preview-controls"');
     expect(markup).toContain("PREVIEW");
     expect(markup).toContain('data-testid="spaceship-world"');
-    expect(markup).not.toContain("Создать комнату");
+    expect(markup).not.toContain("Завеса");
   });
 
   it("counts only the rocks that pay credits next to the score", () => {
@@ -64,7 +66,7 @@ describe("layout preview", () => {
       </MemoryRouter>
     );
 
-    expect(markup).toContain("Создать комнату");
+    expect(markup).toContain("Завеса");
     expect(markup).not.toContain('data-testid="preview-controls"');
   });
 });

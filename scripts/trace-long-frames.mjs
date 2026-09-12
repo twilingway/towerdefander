@@ -36,12 +36,12 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const browser = await chromium.launch({ channel: "chrome", headless: false });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 await page.goto(url, { waitUntil: "load" });
-await page.getByRole("button", { name: "1 игрок" }).click();
-await page.getByText("Играть с этого же устройства").click();
+await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
+await page.getByRole("button", { name: "Соло" }).click();
 if (startWave > 1) {
   await page.getByLabel("Начать с волны (для тестов)").fill(String(startWave));
 }
-await page.getByRole("button", { name: "Создать комнату" }).click();
+await page.getByRole("button", { name: "В бой" }).click();
 const ready = page.getByTestId("cockpit-ready");
 await ready.waitFor({ timeout: 60_000 });
 for (let attempt = 0; attempt < 120; attempt++) {

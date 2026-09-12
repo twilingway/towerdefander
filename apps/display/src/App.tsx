@@ -7,9 +7,11 @@ import { useRoomSession } from "./model/hooks/useRoomSession.js";
 import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
 import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
+import { ArenaSetupScreen } from "./screens/ArenaSetupScreen/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { PreviewRoomRoute } from "./screens/RoomScreen/PreviewRoomRoute.js";
 import { RoomScreen } from "./screens/RoomScreen/index.js";
+import { StartScreen } from "./screens/StartScreen/index.js";
 
 export function DisplayApp() {
   // The query is the whole configuration surface, and it keeps one reader: half
@@ -36,6 +38,55 @@ export function DisplayApp() {
     (session.status === "connected" || session.status === "reconnecting") &&
     session.view !== undefined;
 
+  // The mode grid is the front door, and the campaign setup is a screen of its
+  // own behind it: two games, not one game with a switch on it.
+  const startRoute = seated ? (
+    <Navigate
+      replace
+      to={{ pathname: `/room/${session.view.roomId}`, search: readDisplaySearch() }}
+    />
+  ) : (
+    <StartScreen
+      maintenance={maintenance}
+      onPick={(mode) => {
+        void navigate({
+          pathname: mode === "arena" ? "/arena" : "/campaign",
+          search: readDisplaySearch()
+        });
+      }}
+    />
+  );
+
+  // The queue holds this screen until the server says the match began.
+  const arenaRoute =
+    seated && session.arenaLobby?.started === true ? (
+      <Navigate
+        replace
+        to={{ pathname: `/room/${session.view.roomId}`, search: readDisplaySearch() }}
+      />
+    ) : (
+      <ArenaSetupScreen
+        ships={shipCatalogue?.ships ?? []}
+        defaultShipId={flags.shipArchetypeId ?? shipCatalogue?.defaultShipId}
+        status={session.status}
+        error={session.error}
+        lobby={session.arenaLobby}
+        onBack={() => {
+          void navigate({ pathname: "/", search: readDisplaySearch() });
+        }}
+        onStart={(cockpitPlayerName) => {
+          // The room opens as a waiting room, so the screen stays put: the match
+          // page is for a match, and this is a queue people are still joining.
+          //
+          // The name has to travel: it is what makes the connection a cockpit
+          // rather than a spectator, and dropping it here was the whole of "a
+          // bot flies my ship" - the room seated nobody and the sticks never
+          // armed, because neither side had been told anyone was flying.
+          void session.createArenaMatch(cockpitPlayerName);
+        }}
+      />
+    );
+
   const createRoute = seated ? (
     <Navigate
       replace
@@ -44,6 +95,9 @@ export function DisplayApp() {
   ) : (
     <CreateRoomScreen
       maintenance={maintenance}
+      onBack={() => {
+        void navigate({ pathname: "/", search: readDisplaySearch() });
+      }}
       status={session.status}
       error={session.error}
       visibleDemo={flags.visibleDemo}
@@ -93,6 +147,14 @@ export function DisplayApp() {
       session={session}
       preview={undefined}
       onCloseRoom={() => void session.closeRoom()}
+      onLeaveRoom={() => {
+        // Back to the queue rather than to the front door: somebody who has
+        // just been shot down wants the next match, not the mode grid.
+        void session.leaveRoom().then(() => {
+          void navigate({ pathname: "/arena", search: readDisplaySearch() }, { replace: true });
+        });
+      }}
+      onScan={session.sendArenaScan}
       onReady={session.sendCockpitReady}
       onVote={session.sendCockpitVote}
     />
@@ -102,7 +164,9 @@ export function DisplayApp() {
 
   return (
     <Routes>
-      <Route path="/" element={flags.preview ? previewRoute : createRoute} />
+      <Route path="/" element={flags.preview ? previewRoute : startRoute} />
+      <Route path="/campaign" element={flags.preview ? previewRoute : createRoute} />
+      <Route path="/arena" element={flags.preview ? previewRoute : arenaRoute} />
       <Route path="/preview" element={flags.preview ? previewRoute : createRoute} />
       <Route path="/room/:code" element={roomRoute} />
       <Route

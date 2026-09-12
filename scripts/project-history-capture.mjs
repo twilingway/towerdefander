@@ -253,8 +253,12 @@ async function photograph(date, recipe, captures, status) {
   const display = await context.newPage();
   try {
     await display.goto(`http://127.0.0.1:${String(PORTS.display)}/`, { waitUntil: "load" });
+    await enterMode(display, recipe, status);
     await chooseCrew(display, recipe, status);
-    await display.getByRole("button", { name: "Создать комнату" }).first().click();
+    await display
+      .getByRole("button", { name: recipe.start ?? "Создать комнату" })
+      .first()
+      .click();
     await display.waitForSelector(ROOM_CODE, { timeout: 45_000 });
     const code = (await display.locator(ROOM_CODE).first().innerText()).trim();
     await shoot(display, captures, "lobby", "Общий экран: комната собрана", shots);
@@ -280,6 +284,21 @@ async function photograph(date, recipe, captures, status) {
     if (video !== undefined) await keepVideo(video, captures, shots, status);
   }
   return shots;
+}
+
+/** Versions from 2026-09-11 open on a grid of modes; older ones have no door. */
+async function enterMode(display, recipe, status) {
+  if (recipe.mode === undefined) return;
+  try {
+    const tile = display.getByRole("button", { name: recipe.mode });
+    if ((await tile.count()) > 0) await tile.first().click();
+    if (recipe.place !== undefined) {
+      const place = display.getByRole("button", { name: recipe.place });
+      if ((await place.count()) > 0) await place.first().click();
+    }
+  } catch (error) {
+    status.push(`Режим не выбран: ${firstLine(error)}`);
+  }
 }
 
 async function chooseCrew(display, recipe, status) {

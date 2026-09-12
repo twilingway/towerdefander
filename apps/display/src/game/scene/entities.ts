@@ -542,6 +542,15 @@ export interface ScenePrediction {
   drive(): PredictedShipPose | undefined;
   bind(entityId: string, kind: LiveEntityKind): LiveEntity | undefined;
   read(entity: LiveEntity): LivePlacement | undefined;
+  /**
+   * One interpolated bearing off a bound entity, by field name.
+   *
+   * `read` hands back the single rotation a sprite needs, which is all an enemy
+   * ship has. An arena hull carries three - the nose, the gun and the sector -
+   * and each has to come off the same clock as its position or it twitches
+   * against the ship it is drawn on.
+   */
+  angleOf(entity: LiveEntity, field: string): number;
 }
 
 /**

@@ -1,5 +1,10 @@
 import type { DisplayRoomView } from "@spaceship-defender/protocol";
 
+import { useRef } from "react";
+
+import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
+
+import { ArenaHud } from "./ArenaHud.js";
 import { BossHealth } from "./BossHealth.js";
 import { CrewLatency } from "../../components/CrewLatency/index.js";
 import { getCurrentWaveUpgrade, selectBoss } from "../../model/combatHudViewModel.js";
@@ -133,6 +138,77 @@ export function BattleHudPanel() {
       </div>
       <WeaponHeatPanel />
     </header>
+  );
+}
+
+/**
+ * Everything the match head-up display reads, and nothing else.
+ *
+ * The rule this file states at the top, kept: a panel wakes on the fields it
+ * draws. A match moves all of these constantly, so this one wakes on nearly
+ * every patch - which is what it is for.
+ */
+function sameArenaHeader(left: Game | null, right: Game | null): boolean {
+  if (left === right) return true;
+  const both = pair(left, right);
+  if (both === undefined) return false;
+  const [held, next] = both;
+  return (
+    held.arenaShips.length === next.arenaShips.length &&
+    held.arenaShips.filter((ship) => ship.alive).length ===
+      next.arenaShips.filter((ship) => ship.alive).length &&
+    held.encounter.score === next.encounter.score &&
+    held.spaceship.hp === next.spaceship.hp &&
+    held.spaceship.maxHp === next.spaceship.maxHp &&
+    held.shield.energy === next.shield.energy &&
+    held.shield.capacity === next.shield.capacity &&
+    held.shield.active === next.shield.active &&
+    held.cannon.heat === next.cannon.heat &&
+    held.cannon.capacity === next.cannon.capacity &&
+    held.cannon.overheated === next.cannon.overheated &&
+    held.machineGun.heat === next.machineGun.heat &&
+    held.machineGun.capacity === next.machineGun.capacity &&
+    held.machineGun.overheated === next.machineGun.overheated &&
+    held.scanReadySeconds === next.scanReadySeconds &&
+    held.scanRevealSecondsRemaining === next.scanRevealSecondsRemaining
+  );
+}
+
+export function ArenaHudPanel({ onScan }: { readonly onScan: () => void }) {
+  const game = useWorldSlice(gameOf, sameArenaHeader);
+  /*
+   * The place stops moving when this hull does.
+   *
+   * While a pilot is flying, the place they would take by falling now is simply
+   * how many ships are up - and the moment theirs is gone the room stops
+   * publishing it, so the last number held is the place they actually took.
+   * Kept rather than recomputed for the same reason: after the wreck there is
+   * nothing left to compute it from.
+   */
+  const place = useRef(ARENA_SHIP_COUNT);
+  if (game === null) return null;
+  // Wrecks stay on the wire long enough to be seen dying, so "alive" has to
+  // count the ones still flying rather than the ones still published.
+  const alive = game.arenaShips.filter((ship) => ship.alive).length;
+  const seated = game.arenaShips.some((ship) => ship.isSelf && ship.alive);
+  if (seated) place.current = alive;
+  return (
+    <ArenaHud
+      alive={alive}
+      fieldSize={ARENA_SHIP_COUNT}
+      kills={game.encounter.score}
+      place={place.current}
+      hp={game.spaceship.hp}
+      maxHp={game.spaceship.maxHp}
+      shield={game.shield.energy}
+      shieldCapacity={game.shield.capacity}
+      shieldActive={game.shield.active}
+      cannon={game.cannon}
+      machineGun={game.machineGun}
+      scanReadySeconds={game.scanReadySeconds}
+      scanRevealSecondsRemaining={game.scanRevealSecondsRemaining}
+      onScan={onScan}
+    />
   );
 }
 

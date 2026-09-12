@@ -1,5 +1,5 @@
 {
-  "version": 38,
+  "version": 48,
   "activePresetId": "default",
   "presets": [
     {
@@ -35,7 +35,11 @@
             "visual": {
               "shape": "ship-dart",
               "modelScale": 0.9,
-              "showHealthBar": true
+              "showHealthBar": true,
+              "effects": {
+                "death": "explosion",
+                "shot": "muzzle-flash"
+              }
             },
             "label": "Перехватчик",
             "spawnPolicy": "standard",
@@ -73,7 +77,11 @@
             "visual": {
               "shape": "ship-needle",
               "modelScale": 0.85,
-              "showHealthBar": true
+              "showHealthBar": true,
+              "effects": {
+                "death": "debris-burst",
+                "shot": "muzzle-flash"
+              }
             },
             "label": "Оса",
             "spawnPolicy": "standard",
@@ -111,7 +119,11 @@
             "visual": {
               "shape": "ship-arrowhead",
               "modelScale": 1,
-              "showHealthBar": true
+              "showHealthBar": true,
+              "effects": {
+                "death": "explosion",
+                "shot": "muzzle-flash"
+              }
             },
             "label": "Застрельщик",
             "spawnPolicy": "standard",
@@ -149,7 +161,11 @@
             "visual": {
               "shape": "ship-spear",
               "modelScale": 1,
-              "showHealthBar": true
+              "showHealthBar": true,
+              "effects": {
+                "death": "explosion",
+                "shot": "muzzle-flash"
+              }
             },
             "label": "Копейщик",
             "spawnPolicy": "standard",
@@ -225,7 +241,11 @@
             "visual": {
               "shape": "ship-delta",
               "modelScale": 1,
-              "showHealthBar": true
+              "showHealthBar": true,
+              "effects": {
+                "death": "debris-burst",
+                "shot": "muzzle-flash"
+              }
             },
             "label": "Ганшип",
             "spawnPolicy": "standard",
@@ -339,7 +359,11 @@
             "visual": {
               "shape": "ship-needle",
               "modelScale": 1.1,
-              "showHealthBar": true
+              "showHealthBar": true,
+              "effects": {
+                "death": "explosion",
+                "shot": "muzzle-flash"
+              }
             },
             "label": "Снайпер",
             "spawnPolicy": "standard",
@@ -3075,6 +3099,7 @@
         "asteroidLifetimeTicks": 1500,
         "asteroidDamage": 40,
         "asteroidShieldHitCost": 20,
+        "shieldAutopilotRaiseRange": 0,
         "asteroidSpawnCost": 1,
         "asteroidScoreReward": 10,
         "asteroidCreditReward": 1,
@@ -3334,11 +3359,100 @@
           "headingFilterSeconds": 0,
           "turretLeadRadians": 0.45
         },
+        "arena": {
+          "spawnMarks": [
+            {
+              "x": 3401,
+              "y": 0
+            },
+            {
+              "x": -4344,
+              "y": 3979
+            },
+            {
+              "x": 665,
+              "y": -7576
+            },
+            {
+              "x": 5475,
+              "y": 7141
+            },
+            {
+              "x": -10048,
+              "y": -1777
+            },
+            {
+              "x": 9518,
+              "y": -6055
+            },
+            {
+              "x": -3184,
+              "y": 11843
+            },
+            {
+              "x": -6071,
+              "y": -11690
+            },
+            {
+              "x": 13173,
+              "y": 4811
+            },
+            {
+              "x": -13704,
+              "y": 5657
+            },
+            {
+              "x": 6606,
+              "y": -14117
+            },
+            {
+              "x": 4882,
+              "y": 15564
+            },
+            {
+              "x": -14714,
+              "y": -8527
+            },
+            {
+              "x": 17261,
+              "y": -3795
+            },
+            {
+              "x": -10534,
+              "y": 14984
+            },
+            {
+              "x": -2434,
+              "y": -18780
+            }
+          ],
+          "zoneColumns": 10,
+          "zoneRows": 10,
+          "matchTickLimit": 19800,
+          "fieldRadius": 19400,
+          "cameraViewWidth": 2500,
+          "hullScaling": 2.5,
+          "damageScaling": 0.7,
+          "scanRadiusScreens": 2.5,
+          "scanCooldownTicks": 1800,
+          "scanRevealTicks": 900,
+          "zoneIntervalTicks": 1800,
+          "zonesPerClosure": 10,
+          "zoneWarningTicks": 1800,
+          "zoneDamageIntervalTicks": 300,
+          "zoneBitesToKill": 6
+        },
         "shipArchetypes": {
           "guardian": {
             "label": "Страж",
             "description": "Кинетическая турель и носовой пулемёт. Ни в чём не лучший и ни в чём не худший — корпус, по которому меряют остальные.",
             "visual": null,
+            "effects": {
+              "shieldBand": "shield-band",
+              "shieldImpact": "shield-impact",
+              "death": "explosion",
+              "muzzle": "muzzle-flash"
+            },
             "unlockedAtWave": 1,
             "overrides": {
               "stats": {},
@@ -3767,6 +3881,12 @@
             "label": "Клинок",
             "description": "Лазер в обоих стволах: не мажет, но не достаёт далеко. Быстрый и хрупкий — награждает того, кто подошёл и не стоит на месте.",
             "visual": null,
+            "effects": {
+              "shieldBand": "shield-band",
+              "shieldImpact": "shield-impact",
+              "death": "explosion",
+              "muzzle": "muzzle-flash"
+            },
             "unlockedAtWave": 15,
             "overrides": {
               "stats": {
@@ -4216,6 +4336,11 @@
             "label": "Бастион",
             "description": "Ракеты догоняют сами, поэтому корпусу не нужно спешить. Медленный, но толстый, с широким щитом — держит там, где остальные отходят.",
             "visual": null,
+            "effects": {
+              "shieldBand": "shield-band",
+              "shieldImpact": "shield-impact",
+              "death": "explosion"
+            },
             "unlockedAtWave": 20,
             "overrides": {
               "stats": {
@@ -7791,6 +7916,7 @@
         "asteroidLifetimeTicks": 1500,
         "asteroidDamage": 40,
         "asteroidShieldHitCost": 20,
+        "shieldAutopilotRaiseRange": 0,
         "asteroidSpawnCost": 1,
         "asteroidScoreReward": 10,
         "asteroidCreditReward": 1,
@@ -8049,6 +8175,89 @@
           "headingDeadbandRadians": 0,
           "headingFilterSeconds": 0,
           "turretLeadRadians": 0.45
+        },
+        "arena": {
+          "spawnMarks": [
+            {
+              "x": 750,
+              "y": 0
+            },
+            {
+              "x": -957,
+              "y": 877
+            },
+            {
+              "x": 147,
+              "y": -1670
+            },
+            {
+              "x": 1207,
+              "y": 1574
+            },
+            {
+              "x": -2214,
+              "y": -392
+            },
+            {
+              "x": 2098,
+              "y": -1334
+            },
+            {
+              "x": -702,
+              "y": 2610
+            },
+            {
+              "x": -1338,
+              "y": -2576
+            },
+            {
+              "x": 2903,
+              "y": 1060
+            },
+            {
+              "x": -3020,
+              "y": 1247
+            },
+            {
+              "x": 1456,
+              "y": -3111
+            },
+            {
+              "x": 1076,
+              "y": 3430
+            },
+            {
+              "x": -3243,
+              "y": -1879
+            },
+            {
+              "x": 3804,
+              "y": -836
+            },
+            {
+              "x": -2321,
+              "y": 3302
+            },
+            {
+              "x": -536,
+              "y": -4139
+            }
+          ],
+          "zoneColumns": 10,
+          "zoneRows": 10,
+          "matchTickLimit": 36000,
+          "fieldRadius": 4400,
+          "cameraViewWidth": 2500,
+          "hullScaling": 2.5,
+          "damageScaling": 0.7,
+          "scanRadiusScreens": 2.5,
+          "scanCooldownTicks": 1800,
+          "scanRevealTicks": 1800,
+          "zoneIntervalTicks": 300,
+          "zonesPerClosure": 10,
+          "zoneWarningTicks": 300,
+          "zoneDamageIntervalTicks": 300,
+          "zoneBitesToKill": 6
         },
         "shipArchetypes": {
           "guardian": {

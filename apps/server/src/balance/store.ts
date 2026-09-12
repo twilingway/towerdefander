@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import {
+  ARENA_SPAWN_MARKS,
   BALANCE_FILE_VERSION,
   balancePresetsFileSchema,
   balanceTuningSchema,
@@ -16,6 +17,20 @@ import {
   type ShipArchetype
 } from "@spaceship-defender/protocol";
 import {
+  ARENA_DAMAGE_SCALING,
+  ARENA_HULL_SCALING,
+  ARENA_MATCH_TICK_LIMIT,
+  ARENA_SCAN_COOLDOWN_TICKS,
+  ARENA_SCAN_RADIUS_SCREENS,
+  ARENA_SCAN_REVEAL_TICKS,
+  ARENA_ZONE_COLUMNS,
+  ARENA_ZONES_PER_CLOSURE,
+  ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
+  ARENA_ZONE_DAMAGE_SHARE,
+  ARENA_ZONE_INTERVAL_TICKS,
+  ARENA_ZONE_ROWS,
+  ARENA_ZONE_WARNING_TICKS,
+  arenaSpawnMarks,
   createSpaceshipSimulationConfig,
   validateSpaceshipSimulationConfig,
   type SpaceshipSimulationConfig
@@ -295,6 +310,31 @@ export function createDefaultTuning(): BalanceTuning {
     autopilot: DEFAULT_AUTOPILOT,
     enemySkill: config.enemySkill,
     helm: DEFAULT_HELM,
+    // The spiral the arena used to compute, written down: the operator can now
+    // drag a mark, and a preset that never touches this plays as it always did.
+    arena: {
+      spawnMarks: arenaSpawnMarks(ARENA_SPAWN_MARKS, config.arenaRadius - 160).map(
+        (mark: { readonly x: number; readonly y: number }) => ({
+          x: Math.round(mark.x),
+          y: Math.round(mark.y)
+        })
+      ),
+      zoneColumns: ARENA_ZONE_COLUMNS,
+      zoneRows: ARENA_ZONE_ROWS,
+      matchTickLimit: ARENA_MATCH_TICK_LIMIT,
+      fieldRadius: config.arenaRadius,
+      cameraViewWidth: config.cameraViewWidth,
+      hullScaling: ARENA_HULL_SCALING,
+      damageScaling: ARENA_DAMAGE_SCALING,
+      scanRadiusScreens: ARENA_SCAN_RADIUS_SCREENS,
+      scanCooldownTicks: ARENA_SCAN_COOLDOWN_TICKS,
+      scanRevealTicks: ARENA_SCAN_REVEAL_TICKS,
+      zoneIntervalTicks: ARENA_ZONE_INTERVAL_TICKS,
+      zonesPerClosure: ARENA_ZONES_PER_CLOSURE,
+      zoneWarningTicks: ARENA_ZONE_WARNING_TICKS,
+      zoneDamageIntervalTicks: ARENA_ZONE_DAMAGE_INTERVAL_TICKS,
+      zoneBitesToKill: Math.round(1 / ARENA_ZONE_DAMAGE_SHARE)
+    },
     shipArchetypes: DEFAULT_SHIP_ARCHETYPES,
     defaultShipArchetypeId: DEFAULT_SHIP_ARCHETYPE_ID,
     spaceshipVisual: config.spaceshipVisual,
@@ -397,6 +437,8 @@ export function toSimulationConfig(
     ...(hull.effects?.shieldImpact === undefined
       ? {}
       : { shieldImpactEffect: hull.effects.shieldImpact }),
+    ...(hull.effects?.death === undefined ? {} : { shipDeathEffect: hull.effects.death }),
+    ...(hull.effects?.muzzle === undefined ? {} : { shipMuzzleEffect: hull.effects.muzzle }),
     moduleTiers: hull.tiers,
     endlessTier: hull.endlessTier
   });

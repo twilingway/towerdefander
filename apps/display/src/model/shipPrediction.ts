@@ -186,7 +186,7 @@ export const PREDICTED_POSE_FIELDS = [
  * interpolated on the shortest arc, while a shell has none and its bearing is
  * simply where it is going.
  */
-export type LiveEntityKind = "enemy" | "asteroid" | "loot" | "projectile" | "missile";
+export type LiveEntityKind = "enemy" | "asteroid" | "loot" | "projectile" | "missile" | "arenaShip";
 
 /** A live entity, bound once when its sprite is made rather than looked up per frame. */
 export interface LiveEntity {
@@ -216,4 +216,12 @@ export interface PredictionDriver {
   /** The live entity behind an id, or undefined if the room does not have it. */
   bind(entityId: string, kind: LiveEntityKind): LiveEntity | undefined;
   read(entity: LiveEntity): LivePlacement;
+  /**
+   * One interpolated angle off a bound entity.
+   *
+   * `read` hands back the one bearing a sprite needs; an arena hull carries
+   * three - the nose, the gun and the sector - and all three have to come off
+   * the same clock as its position or they twitch against it.
+   */
+  angleOf(entity: LiveEntity, field: string): number;
 }

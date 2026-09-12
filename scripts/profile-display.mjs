@@ -37,8 +37,8 @@ const browser = await chromium.launch({ channel: "chrome", headless: false });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(url, { waitUntil: "load" });
 
-await page.getByRole("button", { name: "1 игрок" }).click();
-await page.getByText("Играть с этого же устройства").click();
+await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
+await page.getByRole("button", { name: "Соло" }).click();
 if (startWave > 1) {
   const field = page.getByLabel("Начать с волны (для тестов)");
   if ((await field.count()) === 0) {
@@ -46,7 +46,7 @@ if (startWave > 1) {
   }
   await field.fill(String(startWave));
 }
-await page.getByRole("button", { name: "Создать комнату" }).click();
+await page.getByRole("button", { name: "В бой" }).click();
 const ready = page.getByTestId("cockpit-ready");
 await ready.waitFor({ timeout: 60_000 });
 for (let attempt = 0; attempt < 120; attempt++) {

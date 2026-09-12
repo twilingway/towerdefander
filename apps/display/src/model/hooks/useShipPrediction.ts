@@ -267,6 +267,23 @@ export function useShipPrediction<
           mode: "lerp",
           fields: ["x", "y"]
         }),
+        /*
+         * The other fifteen hulls of a match, on the same terms as an enemy
+         * ship: they are steered by the same autopilot, so nothing about their
+         * next move can be reckoned, and they are interpolated instead. Three
+         * bearings rather than one - the nose, the gun and the sector - because
+         * a match draws all three and each has to ride the same clock as the
+         * position or it twitches against it.
+         */
+        predict.attachAll(collections, "arenaShips", {
+          mode: "lerp",
+          fields: ["x", "y"]
+        }),
+        predict.attachAll(collections, "arenaShips", {
+          mode: "lerp",
+          fields: ["heading", "turretAngle", "shieldAngle"],
+          angle: true
+        }),
         predict.attachAll(collections, "homingMissiles", {
           mode: "lerp",
           fields: ["heading"],
@@ -419,6 +436,20 @@ export function useShipPrediction<
          */
         if (!predicting) return undefined;
         /*
+         * And not once the seat has stopped flying.
+         *
+         * Prediction is a bet that this page knows what the room is about to
+         * do. The moment the encounter ends that bet is void: the cockpit stops
+         * sending, so nothing corrects the local step, while the library keeps
+         * stepping it forward on the last order it was given - and the room,
+         * still publishing for whoever is left alive, keeps pulling it back.
+         * Forward at the frame rate, back at the patch rate, is a shake, and it
+         * is why a wrecked hull sat there reading three hundred and sixty units
+         * a second. With no bet to make the scene draws the room's own pose,
+         * which for a wreck is a wreck standing still.
+         */
+        if (!on) return undefined;
+        /*
          * Position through `value()`, bearings straight from the state.
          *
          * The step runs twenty times a second; read raw it draws twenty positions
@@ -439,7 +470,9 @@ export function useShipPrediction<
         drawnPose.velocityY = state.velocityY;
         return drawnPose;
       };
-      latest.current.onDriver({ drive, bind, read });
+      const angleOf = (entity: LiveEntity, field: string): number =>
+        predict.value(entity.ref as DecodedHull, field as "heading");
+      latest.current.onDriver({ drive, bind, read, angleOf });
 
       /*
        * A driver of last resort, for the seconds before there is a scene.

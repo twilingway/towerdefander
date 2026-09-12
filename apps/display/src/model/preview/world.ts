@@ -145,8 +145,13 @@ export const PREVIEW_WORLD = {
   spaceshipVisual: PREVIEW_SPACESHIP_VISUAL,
   shieldBandEffect: "",
   shieldImpactEffect: "",
+  shipDeathEffect: "",
+  shipMuzzleEffect: "",
   turretVisual: PREVIEW_TURRET_VISUAL,
   shieldRadius: 104,
+  // The campaign has no zone sheet; the arena fills this in.
+  arenaZones: [],
+  arenaShips: [],
   obstacles: []
 };
 

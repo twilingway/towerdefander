@@ -17,6 +17,8 @@ const baseGame: DisplayGameSnapshot = {
   cameraViewWidth: 1600,
   serverStepMs: 0.14,
   appliedInputSeq: 0,
+  scanReadySeconds: 0,
+  scanRevealSecondsRemaining: 0,
   drive: {
     revision: 0,
     speedPerSecond: 320,
@@ -127,8 +129,12 @@ const baseGame: DisplayGameSnapshot = {
   spaceshipVisual: null,
   shieldBandEffect: "",
   shieldImpactEffect: "",
+  shipDeathEffect: "",
+  shipMuzzleEffect: "",
   turretVisual: null,
   shieldRadius: 104,
+  arenaZones: [],
+  arenaShips: [],
   obstacles: [],
   enemyShips: [
     {
@@ -214,6 +220,7 @@ function recorder(): { context: RadarContext; ops: Op[] } {
     stroke: record("stroke"),
     clip: record("clip"),
     clearRect: record("clearRect"),
+    fillRect: record("fillRect"),
     fillText: (text: string, x: number, y: number) => {
       ops.push({
         call: "fillText",

@@ -163,6 +163,54 @@ export class TeamUpgradeState extends Schema {
   @type("boolean") hasSelection = false;
 }
 
+/**
+ * One rectangle of the arena's sheet. Narrow on purpose: the whole sheet is
+ * sixteen of these and it moves a few times a match, so it costs nothing next
+ * to the entities that move every tick.
+ */
+export class ArenaZoneView extends Schema {
+  @type("uint8") zoneId = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") width = 0;
+  @type("float32") height = 0;
+  /** "safe" | "warning" | "closed"; a string because it changes twice a zone. */
+  @type("string") state = "safe";
+  @type("uint16") secondsRemaining = 0;
+}
+
+/**
+ * One hull in a match: the crew ship's own shape, sixteen times over.
+ *
+ * Float32 throughout, like every other combat quantity - the arena is 8800
+ * units across at most and a unit is well under a pixel on any screen this
+ * runs on.
+ */
+export class ArenaShipView extends Schema {
+  @type("string") entityId = "";
+  @type("boolean") isSelf = false;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") velocityX = 0;
+  @type("float32") velocityY = 0;
+  @type("float32") radius = 0;
+  @type("float32") heading = 0;
+  @type("float32") turretAngle = 0;
+  @type("float32") hp = 0;
+  @type("float32") maxHp = 0;
+  @type("float32") shieldAngle = 0;
+  @type("boolean") shieldActive = false;
+  @type("float32") shieldRadius = 0;
+  @type("float32") shieldArcHalfAngle = 0;
+  @type("float32") shieldEnergy = 0;
+  @type("float32") shieldCapacity = 0;
+  /** Found by the last sweep and not yet faded; see the arena room's scan. */
+  @type("boolean") revealed = false;
+  /** False for a wreck; it stays published long enough to be seen dying. */
+  @type("boolean") alive = true;
+  @type("uint16") shotsFired = 0;
+}
+
 export class ObstacleState extends Schema {
   @type("string") obstacleId = "";
   @type("string") kind: "rectangle" | "circle" = "rectangle";
@@ -370,6 +418,9 @@ export class SpaceshipDisplayState extends Schema {
   @type("float32") serverStepMs = 0;
   /** The last solo input frame the room applied; the cockpit replays past it. */
   @type("uint32") appliedInputSeq = 0;
+  /** The radar sweep: when it may be asked for again, and how long it lasts. */
+  @type("uint16") scanReadySeconds = 0;
+  @type("uint16") scanRevealSecondsRemaining = 0;
   /** The run's live drive numbers and the pose the client replays from. */
   @type(ShipDriveState) drive = new ShipDriveState();
   @type(ShipPoseState) pose = new ShipPoseState();
@@ -386,6 +437,8 @@ export class SpaceshipDisplayState extends Schema {
   /** Empty means the display keeps its own baked effect for the shield. */
   @type("string") shieldBandEffect = "";
   @type("string") shieldImpactEffect = "";
+  @type("string") shipDeathEffect = "";
+  @type("string") shipMuzzleEffect = "";
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;
@@ -407,6 +460,8 @@ export class SpaceshipDisplayState extends Schema {
    */
   @type("string") shieldPhase: ShieldPhase = "down";
   @type({ map: EnemyVisualState }) enemyCatalogue = new MapSchema<EnemyVisualState>();
+  @type([ArenaZoneView]) arenaZones = new ArraySchema<ArenaZoneView>();
+  @type({ map: ArenaShipView }) arenaShips = new MapSchema<ArenaShipView>();
   @type([ObstacleState]) obstacles = new ArraySchema<ObstacleState>();
   @type({ map: EnemyState }) enemyShips = new MapSchema<EnemyState>();
   @type({ map: AsteroidState }) asteroids = new MapSchema<AsteroidState>();

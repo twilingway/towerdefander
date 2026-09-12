@@ -4,7 +4,8 @@ import Phaser from "phaser";
 import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
-import { drawArena, drawDecorations } from "./arena.js";
+import { arenaZoneSignature, drawArena, drawArenaZones, drawDecorations } from "./arena.js";
+import { ArenaFleet } from "./arenaFleet.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
@@ -122,6 +123,9 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
+    this.zoneLayer = drawArenaZones(this, this.snapshot, (key, half, draw) =>
+      this.bake(key, half, draw)
+    );
     drawDecorations(this, this.snapshot, this.bake);
 
     /*
@@ -264,9 +268,29 @@ export class SpaceshipScene extends Phaser.Scene {
       hull: spaceshipPosition,
       heading: spaceshipHeading,
       turretRotation: this.turret.rotation,
-      hullRadius: this.snapshot.spaceship.radius
+      hullRadius: this.snapshot.spaceship.radius,
+      turretMuzzleEffect: this.snapshot.shipMuzzleEffect
     });
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
+    /*
+     * The rest of a match, on the clock the rest of the world is drawn on, and
+     * the player's own hull on the pose just drawn above. Here rather than at
+     * the top of the frame because that pose is what its bars hang from, and
+     * before it existed they hung from the last patch and twitched against the
+     * ship they belong to.
+     */
+    this.fleet.update(
+      playbackTick,
+      deltaMs,
+      {
+        x: spaceshipPosition.x,
+        y: spaceshipPosition.y,
+        heading: spaceshipHeading,
+        turretAngle: this.turret.rotation,
+        shieldAngle: this.visualShieldAngle
+      },
+      this.prediction
+    );
     if (this.vectorsEnabled) {
       this.drawShield();
       // From the mount, which is where the simulation fires from too: the barrel
@@ -363,12 +387,36 @@ export class SpaceshipScene extends Phaser.Scene {
     return this.frames;
   }
 
+  /** The baked zone sheet, replaced whenever a zone changes state. */
+  private zoneLayer: Phaser.GameObjects.Image | undefined;
+  /** The other hulls of a match; empty in the campaign, which has one ship. */
+  private readonly fleet = new ArenaFleet();
+
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
     const previousTick = this.snapshot.tick;
+    const zoneSignature = arenaZoneSignature(this.snapshot);
     this.snapshot = snapshot;
     const shouldSnap = this.snapshotReset.consumeForSnapshot();
     if (!this.sys.isActive()) return;
+    // Sixteen hulls, moved rather than rebuilt: the textures are shared and a
+    // frame costs a position and two rotations each.
+    this.fleet.sync(
+      this,
+      snapshot,
+      (key, half, draw) => this.bake(key, half, draw),
+      shouldSnap,
+      this.prediction,
+      this.bursts
+    );
+    // The sheet is ground: redrawn when a zone changes state and at no other
+    // time, which on a sixty-hertz patch stream is a handful of times a match.
+    if (arenaZoneSignature(snapshot) !== zoneSignature) {
+      this.zoneLayer?.destroy();
+      this.zoneLayer = drawArenaZones(this, snapshot, (key, half, draw) =>
+        this.bake(key, half, draw)
+      );
+    }
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.
     if (snapshot.cameraViewWidth !== framedWidth) {

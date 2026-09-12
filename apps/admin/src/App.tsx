@@ -10,7 +10,15 @@ import {
   validateBalance
 } from "./balanceClient.js";
 import { activePresetOf, withTuning } from "./model/tuning.js";
-import { SCREENS, TABS, TAB_LABELS, TAB_PATHS } from "./screens/registry.js";
+import {
+  SCREENS,
+  TABS,
+  TAB_GROUPS,
+  TAB_GROUP_LABELS,
+  TAB_GROUP_OF,
+  TAB_LABELS,
+  TAB_PATHS
+} from "./screens/registry.js";
 
 export function AdminApp() {
   const [balanceDocument, setBalanceDocument] = useState<BalancePresetsFile | null>(null);
@@ -170,21 +178,30 @@ export function AdminApp() {
       {status !== null ? <p className="banner banner--ok">{status}</p> : null}
       {dirty ? <p className="banner banner--warn">Есть несохранённые изменения.</p> : null}
 
+      {/*
+       * Grouped by mode rather than listed flat: with two games in one console
+       * a row of twelve tabs says nothing about which game a tab belongs to.
+       */}
       <nav className="tabs" aria-label="Разделы баланса" role="tablist">
-        {TABS.map((candidate) => (
-          <button
-            className={`tabs__tab${candidate === activeTab ? " tabs__tab--active" : ""}`}
-            data-testid={`admin-tab-${candidate}`}
-            key={candidate}
-            role="tab"
-            aria-selected={candidate === activeTab}
-            type="button"
-            onClick={() => {
-              void navigate(`/${TAB_PATHS[candidate]}`);
-            }}
-          >
-            {TAB_LABELS[candidate]}
-          </button>
+        {TAB_GROUPS.map((group) => (
+          <span className="tabs__group" key={group}>
+            <span className="tabs__group-label">{TAB_GROUP_LABELS[group]}</span>
+            {TABS.filter((candidate) => TAB_GROUP_OF[candidate] === group).map((candidate) => (
+              <button
+                className={`tabs__tab${candidate === activeTab ? " tabs__tab--active" : ""}`}
+                data-testid={`admin-tab-${candidate}`}
+                key={candidate}
+                role="tab"
+                aria-selected={candidate === activeTab}
+                type="button"
+                onClick={() => {
+                  void navigate(`/${TAB_PATHS[candidate]}`);
+                }}
+              >
+                {TAB_LABELS[candidate]}
+              </button>
+            ))}
+          </span>
         ))}
       </nav>
 

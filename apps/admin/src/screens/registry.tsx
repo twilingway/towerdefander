@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import type { BalancePresetsFile, BalanceTuning } from "@spaceship-defender/protocol";
 
+import { ArenaScreen } from "./ArenaScreen/index.js";
 import { AutopilotScreen } from "./AutopilotScreen/index.js";
 import { DirectorScreen } from "./DirectorScreen/index.js";
 import { EffectsScreen } from "./EffectsScreen/index.js";
@@ -23,6 +24,7 @@ export const TABS = [
   "helm",
   "autopilot",
   "director",
+  "arena",
   "stats",
   "presets"
 ] as const;
@@ -38,8 +40,41 @@ export const TAB_LABELS: Record<Tab, string> = {
   helm: "Управление",
   autopilot: "Автопилот",
   director: "Директор",
+  arena: "Арена",
   stats: "Статистика",
   presets: "Пресеты"
+};
+
+/**
+ * Which game a tab belongs to.
+ *
+ * Two modes share one console, and most of what is tuned here is shared with
+ * them - the hulls, the effects, the helm, the presets. What is not shared is
+ * worth separating, because "waves" means nothing in the arena and "zones"
+ * means nothing in the campaign.
+ */
+export const TAB_GROUPS = ["campaign", "arena", "common"] as const;
+export type TabGroup = (typeof TAB_GROUPS)[number];
+
+export const TAB_GROUP_LABELS: Record<TabGroup, string> = {
+  campaign: "Кампания",
+  arena: "Арена",
+  common: "Общее"
+};
+
+export const TAB_GROUP_OF: Record<Tab, TabGroup> = {
+  waves: "campaign",
+  enemies: "campaign",
+  enemySkill: "campaign",
+  director: "campaign",
+  arena: "arena",
+  player: "common",
+  ships: "common",
+  effects: "common",
+  helm: "common",
+  autopilot: "common",
+  stats: "common",
+  presets: "common"
 };
 
 /**
@@ -57,6 +92,7 @@ export const TAB_PATHS: Record<Tab, string> = {
   helm: "helm",
   autopilot: "autopilot",
   director: "director",
+  arena: "arena",
   stats: "statistics",
   presets: "presets"
 };
@@ -98,6 +134,7 @@ export const SCREENS: Record<Tab, (context: ScreenContext) => ReactElement> = {
   director: ({ tuning, onTuningChange }) => (
     <DirectorScreen tuning={tuning} onChange={onTuningChange} />
   ),
+  arena: ({ tuning, onTuningChange }) => <ArenaScreen tuning={tuning} onChange={onTuningChange} />,
   stats: ({ document, password }) => <StatsScreen document={document} password={password} />,
   presets: ({ document, onDocumentChange, onImportError }) => (
     <PresetsScreen document={document} onChange={onDocumentChange} onImportError={onImportError} />

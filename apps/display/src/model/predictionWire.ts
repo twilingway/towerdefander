@@ -34,6 +34,7 @@ export interface DecodedCollection {
 export interface DecodedDisplay {
   readonly pose?: DecodedPose;
   readonly enemyShips: DecodedCollection;
+  readonly arenaShips: DecodedCollection;
   readonly asteroids: DecodedCollection;
   readonly lootDrops: DecodedCollection;
   readonly friendlyProjectiles: DecodedCollection;
@@ -47,10 +48,11 @@ export const LIVE_COLLECTIONS: Record<LiveEntityKind, readonly (keyof DecodedDis
   asteroid: ["asteroids"],
   loot: ["lootDrops"],
   projectile: ["friendlyProjectiles", "hostileProjectiles"],
-  missile: ["homingMissiles"]
+  missile: ["homingMissiles"],
+  arenaShip: ["arenaShips"]
 };
 
 /** The kinds whose bearing is published and therefore interpolated as an angle. */
-export const LIVE_KINDS_WITH_HEADING = new Set<LiveEntityKind>(["enemy", "missile"]);
+export const LIVE_KINDS_WITH_HEADING = new Set<LiveEntityKind>(["enemy", "missile", "arenaShip"]);
 
 export type PredictHandle = ReturnType<typeof Predict.get>;

@@ -1,6 +1,6 @@
 import { getVisualAsset, type BalanceTuning } from "@spaceship-defender/protocol";
 
-import { CatalogAssetShape } from "./catalogSvg.js";
+import { CatalogAssetShape } from "@spaceship-defender/client-shared";
 import { DEFAULT_SPACESHIP_HULL_ASSET_ID, modelWorldRadius } from "./enemyShapes.js";
 
 const BOX = 148;

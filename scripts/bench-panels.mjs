@@ -145,11 +145,11 @@ const stand = useLab
         process.env.BENCH_URL ??
         (plain ? "http://127.0.0.1:5173/" : "http://127.0.0.1:5173/?diag=1"),
       async enter() {
-        await page.getByRole("button", { name: "1 игрок" }).click();
+        await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
         // Solo from this same device is the path under test: without the tick
         // the page opens a room and waits for a phone, and the cockpit - which
         // is the whole subject of the measurement - never mounts.
-        await page.getByText("Играть с этого же устройства").click();
+        await page.getByRole("button", { name: "Соло" }).click();
         if (startWave > 1) {
           const field = page.getByLabel("Начать с волны (для тестов)");
           if ((await field.count()) === 0) {
@@ -157,7 +157,7 @@ const stand = useLab
           }
           await field.fill(String(startWave));
         }
-        await page.getByRole("button", { name: "Создать комнату" }).click();
+        await page.getByRole("button", { name: "В бой" }).click();
         const ready = page.getByTestId("cockpit-ready");
         // The world gate: the button stays disabled until the textures are
         // baked, and clicking through it would measure a loading screen.

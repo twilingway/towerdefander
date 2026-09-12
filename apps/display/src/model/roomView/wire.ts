@@ -32,6 +32,41 @@ export interface NetworkPlayerState {
   latencyMs: number;
 }
 
+/** One whole hull in a match; empty in the campaign. */
+export interface NetworkArenaShipState {
+  entityId: string;
+  isSelf: boolean;
+  x: number;
+  y: number;
+  velocityX: number;
+  velocityY: number;
+  radius: number;
+  heading: number;
+  turretAngle: number;
+  hp: number;
+  maxHp: number;
+  shieldAngle: number;
+  shieldActive: boolean;
+  shieldRadius: number;
+  shieldArcHalfAngle: number;
+  shieldEnergy: number;
+  shieldCapacity: number;
+  revealed: boolean;
+  alive: boolean;
+  shotsFired: number;
+}
+
+/** One rectangle of the arena's sheet; empty in the campaign. */
+export interface NetworkArenaZoneState {
+  zoneId: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  state: string;
+  secondsRemaining: number;
+}
+
 export interface NetworkObstacleState {
   obstacleId: string;
   kind: "rectangle" | "circle";
@@ -206,6 +241,8 @@ export interface NetworkGameState {
     cameraViewWidth: number;
     serverStepMs?: number;
     appliedInputSeq?: number;
+    scanReadySeconds?: number;
+    scanRevealSecondsRemaining?: number;
     drive?: {
       revision: number;
       speedPerSecond: number;
@@ -243,6 +280,8 @@ export interface NetworkGameState {
     spaceshipVisualShape?: string;
     shieldBandEffect?: string;
     shieldImpactEffect?: string;
+    shipDeathEffect?: string;
+    shipMuzzleEffect?: string;
     spaceshipVisualScale?: number;
     turretVisualShape?: string;
     turretVisualScale?: number;
@@ -253,6 +292,8 @@ export interface NetworkGameState {
     shieldRadius?: number;
     shieldPhase?: ShieldPhase;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
+    arenaZones: ValueCollection<NetworkArenaZoneState>;
+    arenaShips: ValueCollection<NetworkArenaShipState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;

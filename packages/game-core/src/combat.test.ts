@@ -1498,30 +1498,63 @@ describe("team upgrades", () => {
     expect(tied.teamUpgradeSelection?.upgradeId).toBe(pilot.upgradeId);
     expect(tied.credits).toBe(0);
 
-    for (const credits of [4, 5]) {
-      const votes =
-        credits === 4
-          ? {
-              pilot: { role: "pilot" as const, upgradeId: pilot.upgradeId, revision: 1 },
-              gunner: null,
-              shield: null
-            }
-          : { pilot: null, gunner: null, shield: null };
+    // A chosen card nobody can pay for is still not bought, and neither is a
+    // default: what is missing is the credits, not the choice.
+    for (const votes of [
+      {
+        pilot: { role: "pilot" as const, upgradeId: pilot.upgradeId, revision: 1 },
+        gunner: null,
+        shield: null
+      },
+      { pilot: null, gunner: null, shield: null }
+    ]) {
       const skipped = advanceSpaceshipSimulation(
         {
           ...initial,
           encounterPhase: "intermission",
           encounterTick: config.intermissionTicks - 1,
-          credits,
+          credits: 4,
           teamUpgradeOffer: offer,
           teamUpgradeVotes: votes
         },
         config
       );
-      expect(skipped.credits).toBe(credits);
+      expect(skipped.credits).toBe(4);
       expect(skipped.teamUpgradeSelection).toBeNull();
       expect(skipped.ship).toEqual(initial.ship);
     }
+  });
+
+  it("takes the first affordable card when the intermission ends with no vote", () => {
+    /*
+     * A solo pilot has one pair of hands and they are busy flying, so an offer
+     * nobody answered used to be a wave's worth of value thrown away. The
+     * default is the first card the crew can pay for - first rather than best,
+     * because the offer is dealt from the run's seed and a replay has to
+     * replay.
+     */
+    const config = createSpaceshipSimulationConfig();
+    const initial = createSpaceshipSimulationState(config, 31);
+    const offer = createTeamUpgradeOffer(config.moduleTiers, config.endlessTier, 5, 1);
+    if (offer === null) throw new Error("expected an offer");
+    const first = offer.cards[0];
+    if (first === undefined) throw new Error("expected a card");
+
+    const bought = advanceSpaceshipSimulation(
+      {
+        ...initial,
+        encounterPhase: "intermission",
+        encounterTick: config.intermissionTicks - 1,
+        credits: 5,
+        teamUpgradeOffer: offer,
+        teamUpgradeVotes: { pilot: null, gunner: null, shield: null }
+      },
+      config
+    );
+
+    expect(bought.teamUpgradeSelection?.upgradeId).toBe(first.upgradeId);
+    expect(bought.credits).toBe(0);
+    expect(bought.ship).not.toEqual(initial.ship);
   });
 });
 

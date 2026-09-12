@@ -149,18 +149,28 @@ export function PolledCombatRadar({
     };
   }, [read]);
 
+  /*
+   * The arena widens the dial and drops its rings.
+   *
+   * Told apart by the zone sheet rather than by a flag: only a match has one,
+   * and the dial already reads the snapshot every frame. In a match the map is
+   * the panel that matters - where the field is closing, and who is in it - so
+   * it goes bigger and over the right stick, where a thumb is not.
+   */
+  const arena = (read()?.arenaZones.length ?? 0) > 0;
+
   return (
     <aside
       ref={host}
-      className="combat-radar"
+      className={arena ? "combat-radar combat-radar--arena" : "combat-radar"}
       data-testid="combat-radar"
-      aria-label="Мини-карта арены по центру снизу"
+      aria-label={arena ? "Карта матча по центру снизу" : "Мини-карта арены по центру снизу"}
     >
       <canvas ref={canvas} data-testid="combat-radar-canvas" />
       <span className="sr-only">
-        Внутреннее кольцо — прочность корпуса, внешнее — энергия щита; оба пустеют к шести часам.
-        Число под кругом — скорость корабля. Астероиды показаны точками: светлые дают кредиты,
-        тёмные — только очки. Ракеты и снаряды на мини-карте не отображаются.
+        {arena
+          ? "Карта матча: красным показаны закрытые зоны, жёлтым — закрывающиеся. Свои и чужие корабли показаны метками."
+          : "Внутреннее кольцо — прочность корпуса, внешнее — энергия щита; оба пустеют к шести часам. Число под кругом — скорость корабля. Астероиды показаны точками: светлые дают кредиты, тёмные — только очки. Ракеты и снаряды на мини-карте не отображаются."}
       </span>
     </aside>
   );

@@ -2,7 +2,7 @@ import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   CREW_SIZES,
   MAX_START_WAVE,
@@ -10,7 +10,10 @@ import {
   type PublicShip
 } from "@spaceship-defender/protocol";
 
+import { ShipTile } from "../../components/ShipTile/index.js";
+import { useRemoteNavigation } from "../../model/hooks/useRemoteNavigation.js";
 import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
+import { defaultUnlockedShipId, isShipUnlocked } from "../../model/shipAccess.js";
 
 interface CreateRoomScreenProps {
   readonly status: "idle" | "connecting" | "connected" | "reconnecting" | "error";
@@ -33,6 +36,8 @@ interface CreateRoomScreenProps {
    */
   readonly ships: readonly PublicShip[];
   readonly defaultShipId: string | undefined;
+  /** Back to the mode grid: the campaign is one of two games, not the only one. */
+  readonly onBack: () => void;
   readonly onCreate: (
     crewSize: CrewSize,
     shipArchetypeId: string | undefined,
@@ -56,18 +61,23 @@ export function CreateRoomScreen({
   initialStartWave,
   ships,
   defaultShipId,
+  onBack,
   onCreate
 }: CreateRoomScreenProps) {
-  const [crewSize, setCrewSize] = useState<CrewSize>(3);
-  const [cockpit, setCockpit] = useState(false);
+  // Solo on this very screen is the default, because it is the shortest path
+  // from opening the page to flying: no phone, no second person, no waiting.
+  const [crewSize, setCrewSize] = useState<CrewSize>(1);
+  const [cockpit, setCockpit] = useState(true);
   // Named rather than blank: the field is the only thing between a player and
   // the button, and a room needs a roster label more than it needs a choice.
   const [cockpitName, setCockpitName] = useState("Пилот");
   const [startWave, setStartWave] = useState(initialStartWave);
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
+  const shell = useRef<HTMLElement | null>(null);
+  useRemoteNavigation(shell, { onBack });
   // The catalogue arrives after the first render, so the choice falls back to
-  // whatever the server calls its default until someone picks otherwise.
-  const shipId = pickedShipId ?? defaultShipId;
+  // the first hull this build actually flies until someone picks otherwise.
+  const shipId = pickedShipId ?? defaultUnlockedShipId(ships, defaultShipId);
   const ship = ships.find((candidate) => candidate.id === shipId);
   // The cockpit needs a name for the roster, so an empty one is not a cockpit
   // yet — the button stays disabled rather than opening a room nobody is in.
@@ -81,7 +91,7 @@ export function CreateRoomScreen({
     return (
       <main className="display-shell display-shell--centered">
         <section className="hero-card">
-          <p className="eyebrow">Общий экран</p>
+          <p className="eyebrow">Кампания I: Завеса</p>
           <h1>SpaceShip Defender</h1>
           <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
         </section>
@@ -89,76 +99,110 @@ export function CreateRoomScreen({
     );
   }
   return (
-    <main className="display-shell display-shell--centered">
-      <section className="hero-card">
-        <p className="eyebrow">Общий экран</p>
-        <h1>SpaceShip Defender</h1>
-        <p>{crewPitch(crewSize)}</p>
-        <div className="crew-size-picker" role="group" aria-label="Размер экипажа">
-          {CREW_SIZES.map((size) => (
-            <button
-              type="button"
-              key={size}
-              className={size === crewSize ? "is-selected" : ""}
-              aria-pressed={size === crewSize}
-              onClick={() => {
-                setCrewSize(size);
-              }}
-            >
-              {crewSizeLabel(size)}
-            </button>
-          ))}
+    <main className="display-shell display-shell--setup is-campaign" ref={shell}>
+      <section className="setup-card">
+        <header className="setup-head">
+          <button type="button" className="link-button" onClick={onBack}>
+            ← Режимы
+          </button>
+          <p className="eyebrow">Кампания I: Завеса</p>
+          <h1>Оборона Периметра-7</h1>
+          <p className="setup-lede">{crewPitch(cockpit ? 0 : crewSize)}</p>
+        </header>
+
+        {/*
+         * Two questions, not one list. "Solo" and "1" sat side by side and read
+         * as the same choice, when they are different games: one is this device
+         * being the whole thing, the other is this screen plus a phone.
+         */}
+        <h2 className="setup-step">Где играете</h2>
+        <div className="place-grid" role="group" aria-label="Где играете">
+          <button
+            type="button"
+            className={`place-tile${cockpit ? " is-selected" : ""}`}
+            aria-label="Соло"
+            aria-pressed={cockpit}
+            onClick={() => {
+              setCockpit(true);
+              setCrewSize(1);
+            }}
+          >
+            <span className="place-tile__title">На этом устройстве</span>
+            <span className="place-tile__caption">
+              Экран становится кокпитом: арена снизу, стики поверх неё. Телефон не нужен.
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`place-tile${cockpit ? "" : " is-selected"}`}
+            aria-label="Общий экран"
+            aria-pressed={!cockpit}
+            onClick={() => {
+              setCockpit(false);
+            }}
+          >
+            <span className="place-tile__title">Общий экран и телефоны</span>
+            <span className="place-tile__caption">
+              Этот экран показывает бой, игроки подключаются по QR-коду со своих телефонов.
+            </span>
+          </button>
         </div>
-        {crewSize === 1 && (
-          <div className="cockpit-picker">
-            <label className="field field--inline">
-              <input
-                type="checkbox"
-                checked={cockpit}
-                onChange={(event) => {
-                  setCockpit(event.target.checked);
-                }}
-              />
-              <span className="field__caption">Играть с этого же устройства</span>
-            </label>
-            {cockpit && (
-              <label className="field">
-                <span className="field__caption">Имя пилота</span>
-                <input
-                  className="field__input"
-                  type="text"
-                  maxLength={24}
-                  value={cockpitName}
-                  onChange={(event) => {
-                    setCockpitName(event.target.value);
+
+        {!cockpit && (
+          <>
+            <h2 className="setup-step">Сколько телефонов</h2>
+            <div className="crew-grid" role="group" aria-label="Состав">
+              {CREW_SIZES.map((size) => (
+                <button
+                  type="button"
+                  key={size}
+                  className={`crew-tile${size === crewSize ? " is-selected" : ""}`}
+                  aria-label={crewSizeLabel(size)}
+                  aria-pressed={size === crewSize}
+                  onClick={() => {
+                    setCrewSize(size);
+                  }}
+                >
+                  <span className="crew-tile__count">{String(size)}</span>
+                  <span className="crew-tile__caption">{crewRoles(size)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {cockpit && (
+          <label className="field">
+            <span className="field__caption">Имя пилота</span>
+            <input
+              className="field__input"
+              type="text"
+              maxLength={24}
+              value={cockpitName}
+              onChange={(event) => {
+                setCockpitName(event.target.value);
+              }}
+            />
+          </label>
+        )}
+
+        {ships.length > 0 && (
+          <>
+            <h2 className="setup-step">Корабль</h2>
+            <div className="ship-grid" role="group" aria-label="Корабль">
+              {ships.map((candidate) => (
+                <ShipTile
+                  key={candidate.id}
+                  ship={candidate}
+                  selected={candidate.id === shipId}
+                  locked={!isShipUnlocked(candidate)}
+                  onSelect={() => {
+                    setPickedShipId(candidate.id);
                   }}
                 />
-              </label>
-            )}
-            <p className="hint">
-              Экран станет кокпитом: мир снизу, стики и спуски поверх него. Отдельный телефон не
-              нужен.
-            </p>
-          </div>
+              ))}
+            </div>
+          </>
         )}
-        {ships.length > 1 && (
-          <div className="ship-picker" role="group" aria-label="Корабль">
-            {ships.map((candidate) => (
-              <button
-                type="button"
-                key={candidate.id}
-                className={candidate.id === shipId ? "is-selected" : ""}
-                aria-pressed={candidate.id === shipId}
-                onClick={() => {
-                  setPickedShipId(candidate.id);
-                }}
-              >
-                {candidate.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {ship !== undefined && <p className="ship-pitch">{ship.description}</p>}
         {allowStartWave && (
           <label className="field">
             <span className="field__caption">Начать с волны (для тестов)</span>
@@ -177,15 +221,17 @@ export function CreateRoomScreen({
             />
           </label>
         )}
+        {ship !== undefined && <p className="ship-pitch">{ship.description}</p>}
         {error.length > 0 && <p className="error-message">{error}</p>}
         <button
           type="button"
+          className="setup-go"
           onClick={() => {
             onCreate(crewSize, shipId, startWave, soloName);
           }}
           disabled={status === "connecting" || (cockpit && soloName === undefined)}
         >
-          {status === "connecting" ? "Создаём комнату…" : "Создать комнату"}
+          {status === "connecting" ? "Создаём комнату…" : "В бой"}
         </button>
       </section>
       {visibleDemo ? (
@@ -204,10 +250,22 @@ function crewSizeLabel(crewSize: CrewSize): string {
   return crewSize === 1 ? "1 игрок" : `${String(crewSize)} игрока`;
 }
 
-function crewPitch(crewSize: CrewSize): string {
+/** What each phone actually does, which is the part a size alone never says. */
+function crewRoles(crewSize: CrewSize): string {
   return crewSize === 1
-    ? "Один игрок ведёт корабль и турель, щит держит автопилот."
+    ? "корабль и турель"
     : crewSize === 2
-      ? "Двое делят движение и орудие, щит держит автопилот."
-      : "Три игрока управляют одним космическим кораблём: движение, орудия и щит.";
+      ? "корабль + орудие"
+      : "корабль, орудие, щит";
+}
+
+/** Zero is the cockpit: one player on this very screen, no phone in the room. */
+function crewPitch(crewSize: CrewSize | 0): string {
+  return crewSize === 0
+    ? "Экран станет кокпитом: мир снизу, стики и спуски поверх него. Телефон не нужен."
+    : crewSize === 1
+      ? "Один игрок ведёт корабль и турель с телефона, щит держит автопилот."
+      : crewSize === 2
+        ? "Двое делят движение и орудие, щит держит автопилот."
+        : "Три игрока управляют одним космическим кораблём: движение, орудия и щит.";
 }

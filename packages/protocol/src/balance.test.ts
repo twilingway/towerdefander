@@ -305,6 +305,29 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       turretLeadRadians: 0.45
     },
     autopilot: autopilotTuning(),
+    // Sixteen marks, because that is what the schema asks for; where they are
+    // is the operator's business and never the schema's.
+    arena: {
+      spawnMarks: Array.from({ length: 16 }, (_unused, index) => ({
+        x: index * 100 - 800,
+        y: index * 50 - 400
+      })),
+      zoneColumns: 10,
+      zoneRows: 10,
+      matchTickLimit: 9000,
+      fieldRadius: 2200,
+      cameraViewWidth: 2500,
+      hullScaling: 2.5,
+      damageScaling: 0.7,
+      scanRadiusScreens: 2.5,
+      scanCooldownTicks: 1800,
+      scanRevealTicks: 1800,
+      zonesPerClosure: 10,
+      zoneIntervalTicks: 900,
+      zoneWarningTicks: 900,
+      zoneDamageIntervalTicks: 300,
+      zoneBitesToKill: 6
+    },
     enemySkill: {
       offset: 0,
       profiles: {

@@ -6,32 +6,13 @@ TBD - created by archiving change flying-castle-core. Update Purpose after archi
 
 ## Requirements
 
-### Requirement: Комната имеет три стабильные роли
-
-Server SHALL назначать controller roles в порядке `pilot`, `gunner`, `shield` при входе и SHALL
-сохранять role при reconnect. Player view SHALL публиковать role. Active replacement после expiry
-SHALL получить именно освобождённую role.
-
-#### Scenario: Три игрока входят по очереди
-
-- **WHEN** три controller входят в новую room
-- **THEN** они получают соответственно pilot, gunner и shield
-
-#### Scenario: Pilot восстанавливается
-
-- **WHEN** pilot reconnect выполняется в grace period
-- **THEN** identity и role pilot сохраняются, а duplicate player не создаётся
-
-#### Scenario: Истёкший gunner заменён
-
-- **WHEN** gunner не восстановился за 30 секунд и новый controller входит в active room
-- **THEN** replacement получает role gunner и текущий snapshot
-
 ### Requirement: Role ограничивает допустимые intents
 
 Pilot SHALL отправлять только `pilot:input` и собственный `upgrade:choose`, gunner — `gunner:input`
-и собственный `upgrade:choose`, shield — `shield:input` и собственный `upgrade:choose`. Server SHALL
-сверять connection identity/role до mutation; ни одна role SHALL NOT выбирать offer другой role.
+и собственный `upgrade:choose`, shield — `shield:input` и собственный `upgrade:choose`. При размере
+экипажа 1 игрок с role `pilot` SHALL дополнительно владеть `gunner:input`, потому что турель занята
+им же. Server SHALL сверять connection identity и владение вводом до mutation; ни одна role SHALL
+NOT выбирать offer другой role.
 
 #### Scenario: Shield пытается двигать spaceship
 
@@ -47,6 +28,16 @@ Pilot SHALL отправлять только `pilot:input` и собствен�
 
 - **WHEN** display отправляет известный gameplay или upgrade message
 - **THEN** server возвращает `not_controller` и не меняет мир
+
+#### Scenario: Соло-игрок направляет турель
+
+- **WHEN** единственный игрок комнаты с размером экипажа 1 отправляет strict `gunner:input`
+- **THEN** server применяет ввод к турели
+
+#### Scenario: Пилот полного экипажа направляет турель
+
+- **WHEN** pilot в комнате с размером экипажа 3 отправляет strict `gunner:input`
+- **THEN** server возвращает `role_mismatch` и турель не меняет target
 
 ### Requirement: Continuous intents упорядочены
 
@@ -178,25 +169,27 @@ authoritative cooldown tick и SHALL быть consumed одним projectile д�
 Controller SHALL отправлять leading vector немедленно, если после прошлого send прошло не менее 50
 ms; более частые changes SHALL coalesce latest value к следующему 50 ms slot. Heartbeat SHALL
 отправляться через 100 ms только если после прошлого send не было нового packet, поэтому continuous
-поток не превышает 20 messages/s. Pilot SHALL преобразовывать WASD/arrow keys и captured virtual
-stick в одинаковый movement vector. Pilot SHALL иметь второй hold-контрол спуска носового пулемёта:
-pointerdown внутри правой fire-зоны либо non-repeat keydown Space SHALL установить `mgFiring=true`,
-а pointerup/pointercancel/lost capture либо keyup Space SHALL отправить `mgFiring=false`; на панели
-пилота Space является hold-спуском, а не toggle. Gunner и shield SHALL менять aim только после
-pointerdown внутри собственного virtual stick и во время drag; captured stick или keyboard direction
-SHALL задавать absolute target bearing, а magnitude SHALL NOT масштабировать angular speed. Touch
-tap внутри stick SHALL отправить ненулевой bearing до neutral, после чего core SHALL завершить
-latched traverse. Обычный mousemove над panel SHALL ничего не менять. Keyboard arrows SHALL
-оставаться desktop fallback. Gunner Fire SHALL быть hold-кнопкой. Shield button и Space на панели
-shield SHALL переключать absolute active один раз на non-repeat click/keydown; pointerup SHALL NOT
-выключать shield. Blur/visibilitychange SHALL нейтрализовать pilot movement, pilot mgFiring и gunner
-fire, но SHALL NOT подменять ручное shield ON/OFF состояние. Controller SHALL NOT locally ease или
-predict trusted angle.
+поток не превышает 20 messages/s. Pilot SHALL вести корабль с клавиатуры как танк: клавиша газа даёт
+тягу вдоль носа, а клавиши доворота вращают корпус независимо от газа. Captured virtual stick SHALL
+по-прежнему задавать movement vector напрямую. Pilot SHALL иметь второй hold-контрол спуска носового
+пулемёта: pointerdown внутри правой fire-зоны либо non-repeat keydown Space SHALL установить
+`mgFiring=true`, а pointerup/pointercancel/lost capture либо keyup Space SHALL отправить
+`mgFiring=false`; на панели пилота Space является hold-спуском, а не toggle. Gunner и shield SHALL
+менять aim только после pointerdown внутри собственного virtual stick и во время drag; captured
+stick или keyboard direction SHALL задавать absolute target bearing, а magnitude SHALL NOT
+масштабировать angular speed. Touch tap внутри stick SHALL отправить ненулевой bearing до neutral,
+после чего core SHALL завершить latched traverse. Обычный mousemove над panel SHALL ничего не
+менять. Keyboard arrows SHALL оставаться desktop fallback. Gunner Fire SHALL быть hold-кнопкой.
+Shield button и Space на панели shield SHALL переключать absolute active один раз на non-repeat
+click/keydown; pointerup SHALL NOT выключать shield. Blur/visibilitychange SHALL нейтрализовать
+pilot movement, pilot mgFiring и gunner fire, но SHALL NOT подменять ручное shield ON/OFF состояние.
+Controller SHALL NOT locally ease или predict trusted angle.
 
-#### Scenario: Pilot нажимает W и D
+#### Scenario: Pilot держит газ и доворот
 
-- **WHEN** pilot удерживает W и D
-- **THEN** controller отправляет нормализованный target вверх-вправо с новым sequence
+- **WHEN** pilot удерживает газ и клавишу доворота
+- **THEN** controller отправляет вектор полной длины по новому курсу, а корпус продолжает
+  разворачиваться, пока клавиша нажата
 
 #### Scenario: Pilot двигает touch stick
 
@@ -366,3 +359,193 @@ display. Terminal panel SHALL различать `spaceship_destroyed` и `wave_
 
 - **WHEN** controller получает result с `defeatReason=wave_timeout`
 - **THEN** panel сообщает об истечении времени и позволяет отправить обычный rematch ready один раз
+
+### Requirement: Две touch-зоны работают независимо и соответствуют роли
+
+Левый joystick SHALL отправлять pilot movement, gunner aim либо shield aim. Правая круглая
+action-zone SHALL отправлять pilot machine-gun hold, gunner cannon hold либо один shield ON/OFF
+toggle за завершённое нажатие. Зоны SHALL одновременно владеть разными pointerId; событие одной зоны
+SHALL NOT отменять intent другой. Pointer cancel/lost capture, blur, visibility loss, disconnect и
+выход из combat SHALL безопасно прекращать movement/fire; shield toggle SHALL оставаться устойчивым
+и выключаться server disconnect neutralization, а не отпусканием пальца.
+
+#### Scenario: Pilot движется и стреляет двумя пальцами
+
+- **WHEN** pilot удерживает левый joystick вправо pointerId 1 и правую action-zone pointerId 2
+- **THEN** outgoing latest intent одновременно содержит movement вправо и `mgFiring=true`
+
+#### Scenario: Gunner наводится и стреляет двумя пальцами
+
+- **WHEN** gunner удерживает aim вверх слева и fire справа
+- **THEN** turret target обновляется вверх, а `firing=true` не отменяет aim pointer
+
+#### Scenario: Shield переключён правой зоной
+
+- **WHEN** shield operator завершает одно нажатие правой action-zone при достаточной energy
+- **THEN** desired active меняется один раз и отпускание не создаёт обратный toggle
+
+#### Scenario: Второй touch больше не отбрасывается
+
+- **WHEN** левый touch уже является primary, а правый получает `isPrimary=false` с другим pointerId
+- **THEN** правая action-zone всё равно принимает свой pointer и выполняет role action
+
+#### Scenario: Fire pointer отменён системой
+
+- **WHEN** browser отправляет pointercancel либо lostpointercapture для удерживаемого правого action
+- **THEN** fire становится false, а левый joystick продолжает принадлежать своему pointerId
+
+### Requirement: Клавиатурный танковый руль просит доворот, а не курс
+
+В танковой схеме панель пилота SHALL отправлять намерение доворота и тягу вдоль носа, а не
+абсолютный курс: клавиши доворота задают знак доворота, клавиша хода вперёд — положительную тягу,
+клавиша хода назад — отрицательную. Отпущенная клавиша доворота SHALL отправлять нулевой доворот, и
+гашение вращения SHALL оставаться за симуляцией. Панель SHALL NOT предсказывать точку остановки и
+SHALL NOT вычислять запрашиваемый угол от авторитетного носа. Стик и схема `absolute` SHALL
+продолжать отправлять вектор без намерения доворота.
+
+Это требование заменяет предсказание точки остановки, добавленное изменением `helm-tuning`:
+опережение курса и демпфирование остановки перестают влиять на танковую схему, потому что курс в ней
+больше не запрашивается.
+
+#### Scenario: Быстрый тап по клавише доворота
+
+- **WHEN** пилот коротко нажимает и отпускает клавишу доворота, стоя на месте
+- **THEN** корпус доворачивает в сторону нажатия и останавливается там, не возвращаясь в
+  противоположную сторону, при любой задержке доставки
+
+#### Scenario: Ход вперёд без доворота
+
+- **WHEN** пилот удерживает только клавишу хода вперёд, ни разу не довернув с начала прогона
+- **THEN** корабль идёт вдоль текущего носа, а нос SHALL NOT разворачиваться к какому-либо мировому
+  направлению
+
+#### Scenario: Ход назад
+
+- **WHEN** пилот удерживает клавишу хода назад
+- **THEN** корабль идёт вдоль носа в обратную сторону, а нос сохраняет своё направление
+
+#### Scenario: Стик остаётся прежним
+
+- **WHEN** пилот ведёт захваченный виртуальный стик
+- **THEN** панель отправляет прежний вектор без намерения доворота, и корпус ведёт себя как раньше
+
+### Requirement: Controller показывает authoritative feedback голосования
+
+Все controllers SHALL показывать одинаковые три cards, credits и публичные role votes. Card actor
+SHALL иметь pending state только до authoritative vote с ожидаемым revision либо actor-only error.
+Accepted vote SHALL подсвечиваться и оставаться изменяемым до deadline; rejection SHALL снимать
+pending и оставлять controls доступными для исправленного command.
+
+#### Scenario: Server отклонил поздний vote
+
+- **WHEN** controller получает `invalid_phase`, `action_not_available` либо `stale_action` для
+  pending action
+- **THEN** pending снимается, показывается понятная ошибка и следующий доступный vote не блокируется
+
+#### Scenario: Другой игрок изменил голос
+
+- **WHEN** shared projection меняет vote другой role
+- **THEN** controller обновляет счётчики/маркеры без изменения собственного pending action
+
+### Requirement: Роли раздаются в пределах размера экипажа
+
+Server SHALL назначать controller roles в порядке `pilot`, `gunner`, `shield`, ограничившись первыми
+местами по размеру экипажа комнаты, и SHALL сохранять role при reconnect. Player view SHALL
+публиковать role, а обе проекции SHALL публиковать размер экипажа. Active replacement после expiry
+SHALL получить именно освобождённую role. Незанятые системы SHALL вестись сервером, а не оставаться
+без управления.
+
+#### Scenario: Соло-игрок получает роль пилота
+
+- **WHEN** единственный controller входит в комнату с размером экипажа 1
+- **THEN** он получает role `pilot`, а щит ведётся сервером
+
+#### Scenario: Двое входят по очереди
+
+- **WHEN** два controller входят в комнату с размером экипажа 2
+- **THEN** они получают соответственно `pilot` и `gunner`, а щит ведётся сервером
+
+#### Scenario: Трое входят по очереди
+
+- **WHEN** три controller входят в комнату с размером экипажа 3
+- **THEN** они получают соответственно `pilot`, `gunner` и `shield`
+
+#### Scenario: Истёкший gunner заменён
+
+- **WHEN** gunner не восстановился за grace period и новый controller входит в active комнату с
+  размером экипажа 3
+- **THEN** replacement получает role `gunner` и текущий snapshot
+
+### Requirement: Соло-панель ведёт корабль и турель
+
+При размере экипажа 1 controller SHALL показывать соло-панель с двумя независимыми virtual stick —
+курса и турели — и двумя hold-спусками: носового пулемёта и орудия наводчика. Стики SHALL работать
+одновременно с разных касаний. Панель SHALL отправлять два независимых потока — `pilot:input` и
+`gunner:input` — каждый со своей монотонной последовательностью. Панель SHALL предлагать две
+раскладки: спуски над своими стиками и спуски широкими зонами по верхнему краю. Выбор раскладки
+SHALL сохраняться между заходами на этом устройстве и SHALL NOT влиять на отправляемый ввод.
+
+#### Scenario: Оба стика заняты одновременно
+
+- **WHEN** соло-игрок держит один палец на стике курса, а второй на стике турели
+- **THEN** корабль идёт по вектору курса, а турель доворачивает к своему bearing
+
+#### Scenario: Два потока не глушат друг друга
+
+- **WHEN** соло-панель отправляет `pilot:input` и `gunner:input` вперемешку
+- **THEN** server применяет оба, потому что последовательность считается отдельно для каждого типа
+  ввода
+
+#### Scenario: Раскладка пережила перезаход
+
+- **WHEN** соло-игрок выбрал раскладку с триггерами по верхнему краю и вернулся в комнату позже
+- **THEN** панель открывается в выбранной раскладке
+
+### Requirement: Клавиатура пилота водит корабль как танк
+
+Клавиатура пилота SHALL вести корабль как танк, а не как абсолютное направление, при любом размере
+экипажа: удержание газа SHALL отправлять вектор полной длины по текущему желаемому курсу, а клавиши
+доворота SHALL вращать корпус непрерывно и независимо от газа. Вращение без газа SHALL идти с той же
+угловой скоростью и SHALL NOT разгонять корабль заметно. Когда не нажата ни одна клавиша управления
+курсом, панель SHALL отправлять нулевой вектор, поэтому корабль тормозит и сохраняет курс.
+Отпускание клавиши доворота SHALL немедленно прекращать вращение: панель SHALL послать курс, равный
+текущему носу, потому что нулевой вектор сохраняет прежнюю цель и корпус доворачивал бы до неё.
+Space SHALL держать спуск носового пулемёта. При размере экипажа 1 стрелки SHALL задавать bearing
+турели, а собственная клавиша SHALL держать её спуск; в остальных экипажах стрелки SHALL дублировать
+руль, чтобы клавиатура не была строго худшим устройством. Ни одна клавиша SHALL NOT управлять двумя
+системами сразу.
+
+#### Scenario: Газ с доворотом
+
+- **WHEN** соло-игрок удерживает газ и клавишу доворота вправо
+- **THEN** нос непрерывно уходит вправо, а корабль идёт по новому курсу
+
+#### Scenario: Доворот без газа
+
+- **WHEN** соло-игрок удерживает только клавишу доворота
+- **THEN** корпус продолжает вращаться, а корабль остаётся практически на месте
+
+#### Scenario: Клавиша доворота отпущена
+
+- **WHEN** игрок отпускает клавишу доворота на полном вращении
+- **THEN** корпус останавливается почти сразу, а не доворачивает до прежней цели
+
+#### Scenario: Газ отпущен
+
+- **WHEN** соло-игрок отпускает газ и клавиши доворота
+- **THEN** отправляется нулевой вектор, а желаемый курс сохраняется для следующего разгона
+
+#### Scenario: Space в соло-панели
+
+- **WHEN** соло-игрок удерживает Space на клавиатуре
+- **THEN** огонь ведёт только носовой пулемёт, турель молчит
+
+#### Scenario: Стрелки в соло-панели
+
+- **WHEN** соло-игрок удерживает стрелку
+- **THEN** турель доворачивает к её направлению, а корабль курс не меняет
+
+#### Scenario: Стрелки у пилота полного экипажа
+
+- **WHEN** pilot в комнате на двоих или троих удерживает стрелку вверх или вбок
+- **THEN** она работает как газ или доворот, потому что турель ведёт другой игрок

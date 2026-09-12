@@ -11,14 +11,15 @@ const base = {
   initialStartWave: 1,
   ships: [],
   defaultShipId: undefined,
+  onBack: () => undefined,
   onCreate: () => undefined
 };
 
 describe("CreateRoomScreen", () => {
   it("offers the controls when the server is taking rooms", () => {
     const markup = renderToStaticMarkup(<CreateRoomScreen {...base} maintenance={undefined} />);
-    expect(markup).toContain("Создать комнату");
-    expect(markup).toContain("Размер экипажа");
+    expect(markup).toContain("В бой");
+    expect(markup).toContain("Где играете");
     expect(markup).not.toContain("maintenance-notice");
   });
 
@@ -29,8 +30,8 @@ describe("CreateRoomScreen", () => {
     const markup = renderToStaticMarkup(
       <CreateRoomScreen {...base} maintenance={{ active: true, secondsRemaining: 900 }} />
     );
-    expect(markup).not.toContain("Создать комнату");
-    expect(markup).not.toContain("Размер экипажа");
+    expect(markup).not.toContain("В бой");
+    expect(markup).not.toContain("Где играете");
     expect(markup).toContain("Технические работы через 15 мин");
     expect(markup).toContain("maintenance-notice--prominent");
     // The game still says what it is; only the promises are gone.

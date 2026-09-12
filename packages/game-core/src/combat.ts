@@ -316,6 +316,16 @@ function resolveTeamUpgrade<TState extends CombatStepState>(
       winningVotes = count;
     }
   }
+  /*
+   * Nobody chose, so the offer chooses.
+   *
+   * An intermission that ends with no vote used to throw a wave's worth of
+   * value away, which a solo pilot hit every time: there is one pair of hands,
+   * and they are busy flying. The first affordable card is the default - first
+   * rather than best, because the offer is dealt from the run's seed and a
+   * replay has to replay.
+   */
+  winner ??= offer.cards.find((card) => state.credits >= card.price);
   if (winner === undefined || state.credits < winner.price) return state;
   return applyUpgrade(
     state,

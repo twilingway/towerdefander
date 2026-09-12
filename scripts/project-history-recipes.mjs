@@ -43,6 +43,20 @@ export const RECIPES = [
     crew: { kind: "button", value: "1 игрок" },
     controllers: 1,
     world: '[data-testid="spaceship-world"]'
+  },
+  {
+    id: "mode-grid",
+    title: "Два режима",
+    since: "2026-09-11",
+    /* A front door appears: the campaign is one tile of two, and the setup
+       behind it opens on solo, so a phone-seated crew has to be asked for. */
+    mode: "Кампания I: Завеса",
+    /* Where before how many: the setup asks that first from this day on. */
+    place: "Общий экран",
+    crew: { kind: "button", value: "1 игрок" },
+    start: "В бой",
+    controllers: 1,
+    world: '[data-testid="spaceship-world"]'
   }
 ];
 

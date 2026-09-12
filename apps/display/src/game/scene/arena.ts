@@ -16,6 +16,21 @@ import { drawTankArena, drawTankArenaRim, TANK_VOID_COLOR } from "../tankArt.js"
  */
 const ARENA_TEXTURE_SIDE = 2048;
 
+/**
+ * The same drawing, sized to the field it is stretched across.
+ *
+ * The floor is one texture however wide the arena is, so nothing here can meet
+ * a GPU's texture ceiling - what it meets is its own resolution. At a
+ * four-thousand-unit arena a texel is two units and the rim's thin rings read;
+ * on a field ten times wider the same texture puts twenty units in a texel and
+ * they turn to mush. So a large field earns a larger bake, and only a large
+ * field pays for it: four thousand and ninety-six a side is four times the
+ * video memory, which a phone drawing a small arena has no reason to spend.
+ */
+function arenaTextureSide(diameter: number): number {
+  return diameter > 12_000 ? 4096 : ARENA_TEXTURE_SIDE;
+}
+
 const OUTSIDE_SPACE_COLOR = 0x02070d;
 const ARENA_SPACE_COLOR = 0x07171f;
 /** The elastic rim band: visible enough to read as ground, not as an object. */
@@ -65,25 +80,18 @@ export function drawArena(
   const centerY = snapshot.worldHeight / 2;
   const radius = snapshot.arenaRadius;
   const diameter = radius * 2;
-  const scale = ARENA_TEXTURE_SIDE / diameter;
+  const side = arenaTextureSide(diameter);
+  const scale = side / diameter;
 
   if (tankLook) {
     scene.cameras.main.setBackgroundColor(TANK_VOID_COLOR);
-    const floor = bake(
-      `tankArena:floor:${String(Math.round(radius))}`,
-      ARENA_TEXTURE_SIDE / 2,
-      (graphics) => {
-        drawTankArena(graphics, radius * scale, scale);
-      }
-    );
+    const floor = bake(`tankArena:floor:${String(Math.round(radius))}`, side / 2, (graphics) => {
+      drawTankArena(graphics, radius * scale, scale);
+    });
     scene.add.image(centerX, centerY, floor).setDisplaySize(diameter, diameter).setDepth(0);
-    const rim = bake(
-      `tankArena:rim:${String(Math.round(radius))}`,
-      ARENA_TEXTURE_SIDE / 2,
-      (graphics) => {
-        drawTankArenaRim(graphics, radius * scale, scale);
-      }
-    );
+    const rim = bake(`tankArena:rim:${String(Math.round(radius))}`, side / 2, (graphics) => {
+      drawTankArenaRim(graphics, radius * scale, scale);
+    });
     scene.add.image(centerX, centerY, rim).setDisplaySize(diameter, diameter).setDepth(3);
     return;
   }
@@ -94,7 +102,7 @@ export function drawArena(
 
   const floorKey = bake(
     `arena:floor:${String(Math.round(radius))}:${String(Math.round(snapshot.rimBandWidth))}`,
-    ARENA_TEXTURE_SIDE / 2,
+    side / 2,
     (graphics) => {
       graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
       graphics.fillCircle(0, 0, radius * scale);
@@ -125,14 +133,10 @@ export function drawArena(
 
   // Its own image rather than part of the floor: the rim has to stay above
   // the obstacles, and they sit between the two.
-  const borderKey = bake(
-    `arena:border:${String(Math.round(radius))}`,
-    ARENA_TEXTURE_SIDE / 2,
-    (graphics) => {
-      graphics.lineStyle(8 * scale, 0x3d6874, 1);
-      graphics.strokeCircle(0, 0, radius * scale);
-    }
-  );
+  const borderKey = bake(`arena:border:${String(Math.round(radius))}`, side / 2, (graphics) => {
+    graphics.lineStyle(8 * scale, 0x3d6874, 1);
+    graphics.strokeCircle(0, 0, radius * scale);
+  });
   scene.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
 }
 
@@ -188,4 +192,82 @@ export function drawDecorations(
       )
       .setDepth(2);
   }
+}
+
+/** Faint red for ground that is already killing, amber for ground about to. */
+const ZONE_CLOSED_COLOR = 0xb03a3a;
+const ZONE_CLOSED_ALPHA = 0.16;
+const ZONE_WARNING_COLOR = 0xe6b85c;
+/*
+ * Brighter than the ground that is already killing, not fainter.
+ *
+ * The warning is the one a player has to act on - the red is a fact, the amber
+ * is a deadline - and at a tenth it was the harder of the two to notice, which
+ * is what "no new amber zones appear" looked like from the cockpit.
+ */
+const ZONE_WARNING_ALPHA = 0.24;
+
+/**
+ * The arena's sheet of zones, drawn once per change.
+ *
+ * Baked rather than drawn, like everything else on this floor: the sheet moves
+ * a handful of times in a match, and a `Graphics` would be re-walked on every
+ * one of the sixty frames between. The texture key carries the states, so the
+ * bake is reused until a zone actually changes - which is the same reason the
+ * server only republishes the sheet when its signature moves.
+ *
+ * Deliberately faint. On the shared screen the fight has to stay readable
+ * through it; the console draws the same sheet at full strength, because there
+ * the sheet *is* the subject.
+ */
+export function arenaZoneSignature(snapshot: DisplayGameSnapshot): string {
+  return snapshot.arenaZones.map((zone) => zone.state.charAt(0)).join("");
+}
+
+export function drawArenaZones(
+  scene: Phaser.Scene,
+  snapshot: DisplayGameSnapshot,
+  bake: BakeShape
+): Phaser.GameObjects.Image | undefined {
+  const zones = snapshot.arenaZones;
+  if (zones.length === 0) return undefined;
+
+  const centerX = snapshot.worldWidth / 2;
+  const centerY = snapshot.worldHeight / 2;
+  const radius = snapshot.arenaRadius;
+  const diameter = radius * 2;
+  const side = arenaTextureSide(diameter);
+  const scale = side / diameter;
+  const signature = arenaZoneSignature(snapshot);
+
+  const key = bake(
+    `arena:zones:${String(Math.round(radius))}:${signature}`,
+    side / 2,
+    (graphics) => {
+      for (const zone of zones) {
+        if (zone.state === "safe") continue;
+        const closed = zone.state === "closed";
+        graphics.fillStyle(
+          closed ? ZONE_CLOSED_COLOR : ZONE_WARNING_COLOR,
+          closed ? ZONE_CLOSED_ALPHA : ZONE_WARNING_ALPHA
+        );
+        graphics.fillRect(
+          (zone.x - centerX) * scale,
+          (zone.y - centerY) * scale,
+          zone.width * scale,
+          zone.height * scale
+        );
+        graphics.lineStyle(2, closed ? ZONE_CLOSED_COLOR : ZONE_WARNING_COLOR, closed ? 0.5 : 0.7);
+        graphics.strokeRect(
+          (zone.x - centerX) * scale,
+          (zone.y - centerY) * scale,
+          zone.width * scale,
+          zone.height * scale
+        );
+      }
+    }
+  );
+
+  // Over the floor, under everything that moves: it is ground, not an entity.
+  return scene.add.image(centerX, centerY, key).setDisplaySize(diameter, diameter).setDepth(1);
 }

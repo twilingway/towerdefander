@@ -28,8 +28,14 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 54 as const;
+export const PROTOCOL_VERSION = 61 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
+/**
+ * The arena's own room type. A second type rather than a flag on the first:
+ * the two run different simulations, and a room that could be either would
+ * have to answer every message for both.
+ */
+export const ARENA_ROOM_TYPE = "spaceship_arena" as const;
 /**
  * How often the room broadcasts, in milliseconds.
  *
@@ -430,6 +436,90 @@ const circleObstacle = z
     radius: finite.positive()
   })
   .strict();
+/**
+ * One hull in a match, published whole.
+ *
+ * The arena's ships are not enemies: every one of them is a copy of the crew's
+ * own ship - the same hull, the same turret, the same shield - and the enemy
+ * entity the campaign publishes has room for none of that. So the arena gets
+ * its own collection, and the display draws all sixteen the way it draws the
+ * one in the campaign.
+ */
+export const publicArenaShipViewSchema = z
+  .object({
+    /**
+     * Named like every other live entity on the wire, because that is what it
+     * is: the client's interpolation binds a sprite to a decoded reference by
+     * this key, and a hull with a key of its own could not be bound at all.
+     */
+    entityId: z.string().min(1).max(24),
+    /** True for the hull this client is seated in, if it is seated at all. */
+    isSelf: z.boolean(),
+    x: finite,
+    y: finite,
+    velocityX: finite,
+    velocityY: finite,
+    radius: finite,
+    heading: finite,
+    turretAngle: finite,
+    hp: finite,
+    maxHp: finite,
+    shieldAngle: finite,
+    shieldActive: z.boolean(),
+    shieldRadius: finite,
+    shieldArcHalfAngle: finite,
+    /** What the sector has left and what it holds: a bar over the hull needs both. */
+    shieldEnergy: finite,
+    shieldCapacity: finite,
+    /**
+     * Whether the last sweep found this hull and the mark has not faded yet.
+     * The dial draws the marked ones and nothing else - a match is fought
+     * mostly blind, and the sweep is how a pilot buys a look.
+     */
+    revealed: z.boolean(),
+    /**
+     * Whether this hull is still flying.
+     *
+     * A wreck stays on the wire for the patch that killed it rather than
+     * vanishing from the collection: a bar that never reaches zero and a ship
+     * that blinks out are the same bug, and both are what "I never saw him
+     * die" is. The display plays the wreck and then drops it.
+     */
+    alive: z.boolean(),
+    /** Shots fired, narrowed to the wire, so the display can flash a muzzle. */
+    shotsFired: z.number().int().min(0).max(65_535)
+  })
+  .strict();
+export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;
+
+/**
+ * Rectangles the wire will carry for one sheet.
+ *
+ * Sized from the largest grid the balance schema allows: a square grid covers
+ * about π/4 of its cells with disc, so twenty-four a side is 484. Above the cap
+ * the view is refused and the screen freezes on its last good snapshot, so the
+ * two numbers move together or not at all.
+ */
+export const MAX_ARENA_ZONES = 512;
+
+export const ARENA_ZONE_STATES = ["safe", "warning", "closed"] as const;
+export const arenaZoneStateSchema = z.enum(ARENA_ZONE_STATES);
+export type ArenaZoneStateName = z.infer<typeof arenaZoneStateSchema>;
+
+export const publicArenaZoneViewSchema = z
+  .object({
+    zoneId: z.number().int().min(0),
+    x: finite,
+    y: finite,
+    width: finite,
+    height: finite,
+    state: arenaZoneStateSchema,
+    /** Seconds left on a warning, so a display can count it down. */
+    secondsRemaining: z.number().int().min(0)
+  })
+  .strict();
+export type PublicArenaZoneView = z.infer<typeof publicArenaZoneViewSchema>;
+
 export const publicObstacleViewSchema = z.discriminatedUnion("kind", [
   rectangleObstacle,
   circleObstacle
@@ -853,9 +943,30 @@ export const displayGameSnapshotSchema = z
      */
     shieldBandEffect: z.string(),
     shieldImpactEffect: z.string(),
+    /** What a wreck of this hull plays; empty leaves the display's own. */
+    shipDeathEffect: z.string(),
+    /** What its turret flashes; empty leaves the display's own. */
+    shipMuzzleEffect: z.string(),
     turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,
+    /**
+     * The arena's sheet of zones, empty in the campaign.
+     *
+     * Published on the display branch because it is world, not panel: it moves
+     * a few times a match rather than every tick, so the whole sheet travels
+     * rather than a diff of it.
+     */
+    arenaZones: z.array(publicArenaZoneViewSchema).max(MAX_ARENA_ZONES),
+    /** Every hull in a match; empty in the campaign, which has exactly one. */
+    arenaShips: z.array(publicArenaShipViewSchema).max(16),
+    /**
+     * The sweep: seconds until it may be asked for again, and seconds the last
+     * one still has left on the dial. Zero on the first means the button is
+     * live; zero on the second means the dial is blind.
+     */
+    scanReadySeconds: z.number().int().min(0).max(3_600),
+    scanRevealSecondsRemaining: z.number().int().min(0).max(3_600),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
@@ -1063,6 +1174,15 @@ export const shieldInputCommandSchema = continuousInputEnvelopeSchema
   .extend({ aim: vector2Schema, active: z.boolean() })
   .strict();
 export type ShieldInputCommand = z.infer<typeof shieldInputCommandSchema>;
+/**
+ * A sweep of the dial. No payload beyond the envelope: what it finds is the
+ * room's to decide, and when it may be asked for again is the room's too.
+ */
+export const arenaScanCommandSchema = commandEnvelopeSchema
+  .extend({ runNumber: activeRunNumberSchema })
+  .strict();
+export type ArenaScanCommand = z.infer<typeof arenaScanCommandSchema>;
+
 export const upgradeVoteCommandSchema = commandEnvelopeSchema
   .extend({
     runNumber: activeRunNumberSchema,
@@ -1142,13 +1262,67 @@ export const clientMessage = {
   gunnerInput: "gunner:input",
   shieldInput: "shield:input",
   upgradeVote: "upgrade:vote",
+  /** One radar sweep, asked for by the pilot; the room decides if it is due. */
+  arenaScan: "arena:scan",
   latencyPong: "client:latency-pong"
 } as const;
 export const serverMessage = {
   error: "server:error",
   latencyProbe: "server:latency-probe",
-  roomClosing: "room:closing"
+  roomClosing: "room:closing",
+  /** The arena's waiting room: who is in it, and how long it still waits. */
+  arenaLobby: "arena:lobby"
 } as const;
+
+/**
+ * How long an arena match waits for people before the server fills the rest of
+ * the field with bots.
+ *
+ * Ten seconds while the mode is being tested, because a tester opening the
+ * screen wants a fight, not a wait. The production number is three minutes -
+ * long enough for a room code to travel to a friend - and the two live here
+ * together so the short one is visibly temporary.
+ */
+export const ARENA_LOBBY_WAIT_SECONDS = 10;
+export const ARENA_LOBBY_WAIT_SECONDS_PRODUCTION = 180;
+
+/**
+ * How long the bots take to fill the empty seats once the wait is over.
+ *
+ * They could all appear at once - the server has nothing to wait for - but a
+ * queue that jumps from one to sixteen in a single frame reads as a glitch,
+ * and one that fills seat by seat reads as players arriving. Two and a half
+ * seconds is long enough to watch and short enough not to be a second wait.
+ */
+export const ARENA_BOT_FILL_MS = 2_500;
+
+/**
+ * How long a finished match stays open before the room lets go.
+ *
+ * A match outlives the player who lost it: fifteen hulls are still fighting
+ * when one is shot down, and a room that closed with its first casualty would
+ * end the fight for everyone still in it. So the room stops holding on to its
+ * clients and starts holding on to its match - it lives until the match is
+ * decided, whether or not anyone is still watching, and only then gives anyone
+ * left this long to read the result.
+ */
+export const ARENA_RESULT_HOLD_MS = 15_000;
+
+export const arenaLobbySchema = z
+  .object({
+    protocolVersion: z.literal(PROTOCOL_VERSION),
+    /** People in the waiting room right now; it falls when somebody leaves. */
+    players: z.number().int().min(0),
+    /** Seats already taken by server-driven hulls, once the wait is over. */
+    bots: z.number().int().min(0),
+    /** Seats in the match, so a display can draw "3 of 16". */
+    capacity: z.number().int().min(1),
+    secondsRemaining: z.number().int().min(0),
+    /** True once the wait is over and the match has started. */
+    started: z.boolean()
+  })
+  .strict();
+export type ArenaLobby = z.infer<typeof arenaLobbySchema>;
 export const serverErrorCodeSchema = z.enum([
   "invalid_message",
   "protocol_mismatch",

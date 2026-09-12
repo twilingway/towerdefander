@@ -65,6 +65,7 @@ export interface RadarContext {
   fillText(text: string, x: number, y: number): void;
   strokeText(text: string, x: number, y: number): void;
   clearRect(x: number, y: number, width: number, height: number): void;
+  fillRect(x: number, y: number, width: number, height: number): void;
   /*
    * Wider than this file writes, because the browser's own context declares
    * them so: a real canvas accepts a gradient or a pattern here, and a
@@ -230,6 +231,34 @@ export function drawCombatRadar(
   context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
   context.clip();
 
+  /*
+   * The arena's sheet, under every blip.
+   *
+   * The dial is the only place a pilot can see the whole field, so on the arena
+   * it has to answer "where is it still safe" before it answers anything else.
+   * Empty in the campaign, which has no sheet, and the block costs nothing
+   * there.
+   */
+  for (const zone of game.arenaZones) {
+    if (zone.state === "safe") continue;
+    const topLeft = projectWorldToRadar(
+      zone.x,
+      zone.y,
+      game.worldWidth,
+      game.worldHeight,
+      projection
+    );
+    const bottomRight = projectWorldToRadar(
+      zone.x + zone.width,
+      zone.y + zone.height,
+      game.worldWidth,
+      game.worldHeight,
+      projection
+    );
+    context.fillStyle = zone.state === "closed" ? "rgb(190 60 60 / 45%)" : "rgb(230 184 92 / 30%)";
+    context.fillRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+  }
+
   context.strokeStyle = "rgb(72 212 221 / 18%)";
   context.lineWidth = 1;
   context.beginPath();
@@ -304,6 +333,34 @@ export function drawCombatRadar(
   context.fill();
   context.stroke();
 
+  /*
+   * The other hulls of a match, and only the ones a sweep found.
+   *
+   * A match is fought several screens wide, so the dial is the only way to know
+   * where anyone is - and knowing where everyone is, always, would leave
+   * nothing to find. What the sweep marked is drawn where it was marked, and it
+   * fades on the room's clock: the mark is a photograph, not a tracker, which
+   * is what makes a sweep worth timing.
+   */
+  context.fillStyle = "#ffb454";
+  context.strokeStyle = "#ffe6bd";
+  context.lineWidth = 1.2;
+  context.beginPath();
+  for (const rival of game.arenaShips) {
+    if (rival.isSelf || !rival.revealed || !rival.alive) continue;
+    const point = projectWorldToRadar(
+      rival.x,
+      rival.y,
+      game.worldWidth,
+      game.worldHeight,
+      projection
+    );
+    context.moveTo(point.x + 3.6, point.y);
+    context.arc(point.x, point.y, 3.6, 0, Math.PI * 2);
+  }
+  context.fill();
+  context.stroke();
+
   const ship = projectWorldToRadar(
     game.spaceship.x,
     game.spaceship.y,
@@ -344,37 +401,46 @@ export function drawCombatRadar(
   context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
   context.stroke();
 
-  drawRing(context, HULL_RING_RADIUS, hull, hullStroke(hull), 5);
-  drawRing(context, SHIELD_RING_RADIUS, shield, SHIELD_STROKE, 3);
+  /*
+   * Hull, shield and their labels belong to the campaign dial.
+   *
+   * The arena draws the same map without them: a match has its own panels for
+   * a hull, and the ring of numbers around a dial this size competes with the
+   * one thing the sheet has to say.
+   */
+  if (game.arenaZones.length === 0) {
+    drawRing(context, HULL_RING_RADIUS, hull, hullStroke(hull), 5);
+    drawRing(context, SHIELD_RING_RADIUS, shield, SHIELD_STROKE, 3);
 
-  context.font = `800 9px ${FONT_STACK}`;
-  context.fillStyle = "#bdfaff";
-  scaleLabel(context, HULL_LABEL_RADIUS, ARC_START, "0");
-  scaleLabel(
-    context,
-    HULL_LABEL_RADIUS,
-    ARC_START + ARC_SWEEP,
-    `${String(Math.ceil(game.spaceship.hp))} / ${String(Math.round(game.spaceship.maxHp))}`
-  );
-  context.fillStyle = SHIELD_STROKE;
-  scaleLabel(context, SHIELD_LABEL_RADIUS, ARC_START, "0");
-  scaleLabel(
-    context,
-    SHIELD_LABEL_RADIUS,
-    ARC_START + ARC_SWEEP,
-    `${String(Math.round(game.shield.energy))} / ${String(Math.round(game.shield.capacity))}`
-  );
+    context.font = `800 9px ${FONT_STACK}`;
+    context.fillStyle = "#bdfaff";
+    scaleLabel(context, HULL_LABEL_RADIUS, ARC_START, "0");
+    scaleLabel(
+      context,
+      HULL_LABEL_RADIUS,
+      ARC_START + ARC_SWEEP,
+      `${String(Math.ceil(game.spaceship.hp))} / ${String(Math.round(game.spaceship.maxHp))}`
+    );
+    context.fillStyle = SHIELD_STROKE;
+    scaleLabel(context, SHIELD_LABEL_RADIUS, ARC_START, "0");
+    scaleLabel(
+      context,
+      SHIELD_LABEL_RADIUS,
+      ARC_START + ARC_SWEEP,
+      `${String(Math.round(game.shield.energy))} / ${String(Math.round(game.shield.capacity))}`
+    );
 
-  context.font = `800 9px ${FONT_STACK}`;
-  context.fillStyle = game.shieldPhase === "up" ? "#75d8ff" : "#9ad7ff";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  plateText(
-    context,
-    getShieldStatusLabel(game.shieldPhase, game.shield.rearmRequired, game.shield.energy),
-    CENTRE,
-    CENTRE + MAP_RADIUS * 0.62
-  );
+    context.font = `800 9px ${FONT_STACK}`;
+    context.fillStyle = game.shieldPhase === "up" ? "#75d8ff" : "#9ad7ff";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    plateText(
+      context,
+      getShieldStatusLabel(game.shieldPhase, game.shield.rearmRequired, game.shield.energy),
+      CENTRE,
+      CENTRE + MAP_RADIUS * 0.62
+    );
+  }
 
   // Speed sits in the opening at the bottom of the dial, on its own plate,
   // where a fitting screen keeps it.

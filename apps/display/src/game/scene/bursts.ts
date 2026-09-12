@@ -125,6 +125,21 @@ export interface OwnShot {
  * turret turned back it ended up stretched far off the barrel. The cannon takes
  * the turret's drawn bearing and its mount, the nose gun the hull's.
  */
+/**
+ * Which flash a barrel plays: the hull's own choice for the turret, the
+ * display's pair of defaults otherwise. The nose gun is deliberately not
+ * overridable - the two barrels reading as one weapon firing twice is what the
+ * warm second flash exists to prevent.
+ */
+export function muzzleEffectFor(
+  source: "cannon" | "machineGun",
+  chosen: string | undefined
+): string {
+  return source === "cannon" && chosen !== undefined && chosen.length > 0
+    ? chosen
+    : OWN_MUZZLE_EFFECTS[source];
+}
+
 export function placeOwnShots(
   // Structural rather than the class, so the arithmetic can be tested against a
   // recorder without a scene.
@@ -136,6 +151,8 @@ export function placeOwnShots(
     readonly heading: number;
     readonly turretRotation: number;
     readonly hullRadius: number;
+    /** The hull's own choice for its turret; empty leaves the display's. */
+    readonly turretMuzzleEffect?: string;
   }
 ): void {
   const muzzle = (source: OwnShot["source"], shellRadius: number) => {
@@ -147,7 +164,7 @@ export function placeOwnShots(
   for (const shot of shots) {
     const { point, bearing } = muzzle(shot.source, shot.shellRadius);
     bursts?.spawn(
-      OWN_MUZZLE_EFFECTS[shot.source],
+      muzzleEffectFor(shot.source, pose.turretMuzzleEffect),
       point.x,
       point.y,
       pose.hullRadius,

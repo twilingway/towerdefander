@@ -1,6 +1,6 @@
 import { getVisualAsset, type EnemyArchetype } from "@spaceship-defender/protocol";
 
-import { CatalogAssetShape } from "./catalogSvg.js";
+import { CatalogAssetShape } from "@spaceship-defender/client-shared";
 import { SPACESHIP_WORLD_RADIUS, modelWorldRadius, previewScale } from "./enemyShapes.js";
 
 const BOX = 148;

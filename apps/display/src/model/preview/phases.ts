@@ -19,6 +19,8 @@ export function createPreviewGame(
       cameraViewWidth,
       serverStepMs: 0,
       appliedInputSeq: 0,
+      scanReadySeconds: 0,
+      scanRevealSecondsRemaining: 0,
       drive: {
         revision: 0,
         speedPerSecond: 320,
@@ -217,6 +219,8 @@ export function createPreviewGame(
       cameraViewWidth,
       serverStepMs: 0,
       appliedInputSeq: 0,
+      scanReadySeconds: 0,
+      scanRevealSecondsRemaining: 0,
       drive: {
         revision: 0,
         speedPerSecond: 320,
@@ -327,6 +331,8 @@ export function createPreviewGame(
     cameraViewWidth,
     serverStepMs: 0,
     appliedInputSeq: 0,
+    scanReadySeconds: 0,
+    scanRevealSecondsRemaining: 0,
     drive: {
       revision: 0,
       speedPerSecond: 320,

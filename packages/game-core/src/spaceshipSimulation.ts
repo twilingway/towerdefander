@@ -79,6 +79,10 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    */
   readonly shieldBandEffect: string;
   readonly shieldImpactEffect: string;
+  /** What this hull's wreck plays; empty leaves the display's own choice. */
+  readonly shipDeathEffect: string;
+  /** What this hull's turret flashes; empty leaves the display's own. */
+  readonly shipMuzzleEffect: string;
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;

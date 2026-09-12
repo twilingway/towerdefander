@@ -7,6 +7,8 @@ import {
   type Page
 } from "@playwright/test";
 
+import { openCampaign } from "./openCampaign.js";
+
 const testHost = process.env.E2E_HOST?.trim() ?? "127.0.0.1";
 const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
 const controllerUrl = process.env.E2E_CONTROLLER_URL ?? `http://${testHost}:5174`;
@@ -25,8 +27,7 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
     contexts.push(displayContext);
     const display = await displayContext.newPage();
     await display.goto(displayUrl);
-    await display.getByRole("button", { name: "1 игрок" }).click();
-    await display.getByRole("button", { name: "Создать комнату" }).click();
+    await openCampaign(display, 1);
     await expect(display.getByRole("heading", { name: "Подключите контроллер" })).toBeVisible();
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");

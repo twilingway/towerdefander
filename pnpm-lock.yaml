@@ -41,6 +41,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@spaceship-defender/client-shared':
+        specifier: workspace:*
+        version: link:../../packages/client-shared
       '@spaceship-defender/fx-assets':
         specifier: workspace:*
         version: link:../../packages/fx-assets

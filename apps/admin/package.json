@@ -11,6 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@spaceship-defender/client-shared": "workspace:*",
     "@spaceship-defender/fx-assets": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",
     "react": "19.2.8",

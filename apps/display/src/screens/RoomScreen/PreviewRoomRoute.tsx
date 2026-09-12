@@ -58,6 +58,8 @@ export function PreviewRoomRoute({
         onCameraViewWidthChange: setCameraViewWidth
       }}
       onCloseRoom={() => undefined}
+      onLeaveRoom={() => undefined}
+      onScan={() => undefined}
       onReady={() => undefined}
       onVote={() => undefined}
     />

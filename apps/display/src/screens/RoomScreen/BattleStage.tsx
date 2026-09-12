@@ -11,11 +11,15 @@ import type { ModuleTree } from "../../model/moduleTree.js";
 import { saveAimAssistToDevice } from "../../model/aimAssistPreference.js";
 import type { SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
+import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
+
+import { ArenaResultOverlay } from "./ArenaResultOverlay.js";
 import { PolledCombatRadar } from "./CombatRadar.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
 import {
+  ArenaHudPanel,
   BattleHudPanel,
   BossPanel,
   CockpitPanel,
@@ -49,6 +53,10 @@ interface BattleStageProps {
   readonly cockpit: BattleCockpit;
   readonly closingRoom: boolean;
   readonly onCloseRoom: () => void;
+  /** Leaving without closing: what a downed arena pilot does instead. */
+  readonly onLeaveRoom: () => void;
+  /** One radar sweep, asked for from the match panel. */
+  readonly onScan: () => void;
   readonly aimAssist: boolean;
   readonly onAimAssistChange: (aimAssist: boolean) => void;
 }
@@ -71,6 +79,8 @@ export function BattleStage({
   cockpit,
   closingRoom,
   onCloseRoom,
+  onLeaveRoom,
+  onScan,
   aimAssist,
   onAimAssistChange
 }: BattleStageProps) {
@@ -132,7 +142,14 @@ export function BattleStage({
           )}
         </MeteredPanel>
         <MeteredPanel id="шапка" measuring={diagnostics}>
-          {switches.interfaceEnabled && <BattleHudPanel />}
+          {/* A match reads itself: how many are left, how many I took, where I
+            stand. The campaign's wave, score and credits mean nothing here. */}
+          {switches.interfaceEnabled &&
+            (view.game.arenaShips.length > 0 ? (
+              <ArenaHudPanel onScan={onScan} />
+            ) : (
+              <BattleHudPanel />
+            ))}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>
@@ -172,36 +189,57 @@ export function BattleStage({
               : { cockpit: { role: cockpit.seat.role, onVote: cockpit.onVote } })}
           />
         )}
-        {view.game.encounter.phase === "result" && view.game.encounter.outcome !== null && (
-          <RunResultOverlay
-            outcome={view.game.encounter.outcome}
-            defeatReason={view.game.encounter.defeatReason}
-            waveNumber={view.game.encounter.waveNumber}
-            score={view.game.encounter.score}
-            readyCount={view.players.filter(({ ready }) => ready).length}
-            crewSize={view.crewSize}
-            closing={closingRoom}
-            onClose={onCloseRoom}
-            {...(!cockpit.seated
-              ? {}
-              : {
-                  cockpit: {
-                    ready: cockpit.seat?.ready === true,
-                    onReady: cockpit.onReady
-                  }
-                })}
-          />
-        )}
+        {/*
+         * A match reports itself, a run reports itself, and they are not the
+         * same report: the arena has no wave to name, no score to total and no
+         * crew to agree on a rematch. The field is what tells them apart -
+         * sixteen published hulls is a match and nothing else has them.
+         */}
+        {view.game.encounter.phase === "result" &&
+          view.game.encounter.outcome !== null &&
+          view.game.arenaShips.length > 0 && (
+            <ArenaResultOverlay
+              outcome={view.game.encounter.outcome}
+              survivors={view.game.arenaShips.filter((ship) => !ship.isSelf && ship.alive).length}
+              fieldSize={ARENA_SHIP_COUNT}
+              leaving={closingRoom}
+              onLeave={onLeaveRoom}
+            />
+          )}
+        {view.game.encounter.phase === "result" &&
+          view.game.encounter.outcome !== null &&
+          view.game.arenaShips.length === 0 && (
+            <RunResultOverlay
+              outcome={view.game.encounter.outcome}
+              defeatReason={view.game.encounter.defeatReason}
+              waveNumber={view.game.encounter.waveNumber}
+              score={view.game.encounter.score}
+              readyCount={view.players.filter(({ ready }) => ready).length}
+              crewSize={view.crewSize}
+              closing={closingRoom}
+              onClose={onCloseRoom}
+              {...(!cockpit.seated
+                ? {}
+                : {
+                    cockpit: {
+                      ready: cockpit.seat?.ready === true,
+                      onReady: cockpit.onReady
+                    }
+                  })}
+            />
+          )}
         {/* The run's own hull, straight from the catalogue; the fixture is
           the preview's stand-in when no server answered. */}
         <MeteredPanel id="модули" measuring={diagnostics}>
-          {moduleTree !== undefined && switches.interfaceEnabled && (
-            <ModuleWindowPanel
-              tiers={moduleTree.tiers}
-              endlessTier={moduleTree.endlessTier}
-              initiallyShown={preview}
-            />
-          )}
+          {moduleTree !== undefined &&
+            switches.interfaceEnabled &&
+            view.game.arenaShips.length === 0 && (
+              <ModuleWindowPanel
+                tiers={moduleTree.tiers}
+                endlessTier={moduleTree.endlessTier}
+                initiallyShown={preview}
+              />
+            )}
         </MeteredPanel>
         {/*
         Stacked directly under the instrument panel and answering the same
@@ -210,7 +248,9 @@ export function BattleStage({
         flag goes away.
       */}
         <MeteredPanel id="экипаж" measuring={diagnostics}>
-          {!diagnostics && <CrewLatencyPanel />}
+          {/* A crew roster over a match is four dashes and a line about
+            purchases: there is no crew, and nothing to buy. */}
+          {!diagnostics && view.game.arenaShips.length === 0 && <CrewLatencyPanel />}
         </MeteredPanel>
       </section>
     </MeasuredWhenAsked>

@@ -73,6 +73,8 @@ try {
   browser = await chromium.launch({ channel: "chrome", headless: false });
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.goto(`http://127.0.0.1:${String(DISPLAY_PORT)}/`, { waitUntil: "load" });
+  await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
+  await page.getByRole("button", { name: "Общий экран" }).click();
   await page
     .getByRole("button", { name: `${String(crew)} игрок`, exact: false })
     .first()
@@ -86,7 +88,7 @@ try {
       );
     await field.fill(String(startWave));
   }
-  await page.getByRole("button", { name: "Создать комнату" }).click();
+  await page.getByRole("button", { name: "В бой" }).click();
   await page.waitForSelector(".room-code", { timeout: 30_000 });
   console.log(`Room ${String(await page.locator(".room-code").first().innerText())} is open.`);
 

@@ -9,11 +9,11 @@ import {
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 41 as const;
+export const BALANCE_FILE_VERSION = 48 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -52,7 +52,15 @@ export const cameraViewWidthSchema = z
  * derived from it, so the circle cannot drift out of the square it is drawn in.
  */
 export const ARENA_RADIUS_MIN = 1100;
-export const ARENA_RADIUS_MAX = 8800;
+/**
+ * Nothing in the engine sets this: the floor and the zone sheet are baked into
+ * one texture and stretched, so no drawing grows with the field, and positions
+ * ride the wire as `float32`, which is exact on whole numbers four hundred
+ * times past this. What the number costs is travel - a hull crosses a field
+ * this wide in about a minute - and sight, because the camera is capped far
+ * below it and the dial becomes the only way to know where anyone is.
+ */
+export const ARENA_RADIUS_MAX = 19_400;
 export const arenaRadiusSchema = z.number().min(ARENA_RADIUS_MIN).max(ARENA_RADIUS_MAX);
 
 /**
@@ -118,7 +126,15 @@ export type EnemyEventEffects = z.infer<typeof enemyEventEffectsSchema>;
 export const shipEffectsSchema = z
   .object({
     shieldBand: fxLoopEffectIdSchema.optional(),
-    shieldImpact: fxEventEffectIdSchema.optional()
+    shieldImpact: fxEventEffectIdSchema.optional(),
+    /** What a wreck of this hull plays. Empty leaves the display's own. */
+    death: fxEventEffectIdSchema.optional(),
+    /**
+     * What this hull's turret flashes when it fires. The nose gun keeps its own
+     * warm flash: the two barrels reading as one weapon firing twice is exactly
+     * what the display's pair of defaults exists to prevent.
+     */
+    muzzle: fxEventEffectIdSchema.optional()
   })
   .strict();
 export type ShipEffects = z.infer<typeof shipEffectsSchema>;
@@ -929,6 +945,115 @@ export const shipArchetypeTableSchema = z
     }
   });
 
+/**
+ * One spawn mark, in arena coordinates: the centre of the disc is the origin,
+ * which is the frame the arena simulation itself is written in.
+ *
+ * The operator moves these, so they are data rather than a formula. The seed
+ * still decides who stands where; this decides where the marks are.
+ */
+export const arenaSpawnMarkSchema = z.object({ x: z.number(), y: z.number() }).strict();
+export type ArenaSpawnMark = z.infer<typeof arenaSpawnMarkSchema>;
+
+export const ARENA_SPAWN_MARKS = 16;
+
+export const ARENA_ZONE_GRID_MIN = 2;
+/**
+ * A square grid over the arena square covers about π/4 of its cells with disc,
+ * so a sheet of this many a side is 484 rectangles - and the wire carries at
+ * most `MAX_ARENA_ZONES` of them. The two numbers have to be read together: a
+ * sheet larger than the contract allows is refused, and a refused view is a
+ * frozen screen.
+ */
+export const ARENA_ZONE_GRID_MAX = 24;
+
+export const arenaTuningSchema = z
+  .object({
+    /** Exactly one mark per seat: sixteen hulls, sixteen places to put them. */
+    spawnMarks: z.array(arenaSpawnMarkSchema).length(ARENA_SPAWN_MARKS).readonly(),
+    /**
+     * The sheet the field closes in, as a grid over the arena square. The
+     * rectangles are sized from the radius, so widening the arena widens them
+     * rather than adding more of them - the number of closures a match takes is
+     * what this decides.
+     */
+    zoneColumns: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
+    zoneRows: z.number().int().min(ARENA_ZONE_GRID_MIN).max(ARENA_ZONE_GRID_MAX),
+    /**
+     * How long a match may run before it is called.
+     *
+     * It has to be read against the sheet rather than on its own: the field
+     * takes one closure per interval, so a match shorter than the sheet needs
+     * simply ends with most of the ground still safe. The console does that
+     * arithmetic beside the field.
+     */
+    matchTickLimit: positiveInteger,
+    /**
+     * The match's own field, and its own frame.
+     *
+     * Both used to be the campaign's: one radius and one camera width served
+     * both modes, so widening the arena to something a sixteen-way fight needs
+     * dragged the campaign onto a field ten times too big for it. Two games,
+     * two fields.
+     */
+    fieldRadius: arenaRadiusSchema,
+    cameraViewWidth: cameraViewWidthSchema,
+    /**
+     * What a match does to the ship the campaign is balanced around.
+     *
+     * Sixteen guns on one field is a density the campaign never has: at
+     * campaign numbers a match was over in twenty seconds, before the field had
+     * closed once. So the hull is multiplied and the shot is divided rather
+     * than the arena forking its own ship - one ship, two fights, and the
+     * difference between them stated as two numbers the operator can move.
+     */
+    hullScaling: positiveFinite,
+    damageScaling: positiveFinite,
+    /**
+     * The sweep, in screens.
+     *
+     * A match is fought on a field far wider than the camera, so a pilot who
+     * cannot look past their own screen is flying blind between fights. The
+     * sweep is stated as a multiple of the framed width rather than in world
+     * units, so widening the camera does not quietly change what a scan finds.
+     */
+    scanRadiusScreens: positiveFinite,
+    /** How long a pilot waits between sweeps. */
+    scanCooldownTicks: positiveInteger,
+    /** How long a hull the sweep found stays on the dial. */
+    scanRevealTicks: positiveInteger,
+    /** How often the next batch of zones is picked and turns amber. */
+    zoneIntervalTicks: positiveInteger,
+    /**
+     * Rectangles taken on each beat.
+     *
+     * One at a time is a squeeze nobody feels: a ten by ten sheet is
+     * eighty-eight rectangles, and at one apiece a match ends with most of the
+     * field still open. A handful at a time is what turns the sheet into a wall
+     * that visibly moves inward.
+     */
+    zonesPerClosure: z
+      .number()
+      .int()
+      .min(1)
+      .max(ARENA_ZONE_GRID_MAX * ARENA_ZONE_GRID_MAX),
+    /** How long amber lasts before that zone starts killing. */
+    zoneWarningTicks: positiveInteger,
+    /** The beat a closed zone bites on. */
+    zoneDamageIntervalTicks: positiveInteger,
+    /**
+     * Beats a full hull survives in a closed zone.
+     *
+     * Stated as a count rather than as a share because that is the thing being
+     * decided - "six bites and you are gone" - and the share the simulation
+     * takes each beat is one over it, of the hull's maximum. A ship that
+     * repairs between beats therefore lives longer, which is the point.
+     */
+    zoneBitesToKill: z.number().int().min(1).max(60)
+  })
+  .strict();
+export type ArenaTuning = z.infer<typeof arenaTuningSchema>;
+
 export const balanceTuningSchema = z
   .object({
     enemyArchetypes: enemyArchetypeTableSchema,
@@ -992,6 +1117,8 @@ export const balanceTuningSchema = z
     enemySkill: enemySkillTuningSchema,
     /** Keyboard helm feel; the simulation never reads this section either. */
     helm: helmTuningSchema,
+    /** Where an arena match puts its sixteen hulls. Only the arena reads it. */
+    arena: arenaTuningSchema,
 
     // --- Ship archetypes: which hull a run is played on ---
     /** Hulls a room may be created with, each with its own ten-tier tree. */
