@@ -381,8 +381,10 @@ export function drawCombatRadar(
     context.fill();
   }
 
-  context.fillStyle = "#ffb454";
-  context.strokeStyle = "#ffe6bd";
+  // The same red the campaign marks an enemy with: on a dial, a hostile hull is
+  // a hostile hull, and a match teaching a second colour for it teaches nothing.
+  context.fillStyle = "#ff625e";
+  context.strokeStyle = "#ffd0ca";
   context.lineWidth = 1.2;
   context.beginPath();
   for (const rival of game.arenaShips) {
