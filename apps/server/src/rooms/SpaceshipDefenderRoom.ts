@@ -965,6 +965,7 @@ export class SpaceshipDefenderRoom extends Room<{
     display.shieldBandEffect = this.gameConfig.shieldBandEffect;
     display.shieldImpactEffect = this.gameConfig.shieldImpactEffect;
     display.shipDeathEffect = this.gameConfig.shipDeathEffect;
+    display.shipMuzzleEffect = this.gameConfig.shipMuzzleEffect;
     display.spaceshipVisualScale = this.gameConfig.spaceshipVisual?.modelScale ?? 1;
     display.turretVisualShape = this.gameConfig.turretVisual?.shape ?? "";
     display.turretVisualScale = this.gameConfig.turretVisual?.modelScale ?? 1;

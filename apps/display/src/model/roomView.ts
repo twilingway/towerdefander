@@ -174,6 +174,7 @@ export function toDisplayRoomView(
             shieldBandEffect: display.shieldBandEffect ?? "",
             shieldImpactEffect: display.shieldImpactEffect ?? "",
             shipDeathEffect: display.shipDeathEffect ?? "",
+            shipMuzzleEffect: display.shipMuzzleEffect ?? "",
             turretVisual:
               display.turretVisualShape === undefined || display.turretVisualShape.length === 0
                 ? null

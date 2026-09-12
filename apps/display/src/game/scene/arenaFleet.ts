@@ -16,8 +16,8 @@ import { drawCatalogAssetById } from "../catalogRenderer.js";
 import { drawSpaceshipHull } from "../entityArt.js";
 import {
   DEFAULT_ENEMY_DEATH_EFFECT,
-  OWN_MUZZLE_EFFECTS,
   deathEffectFor,
+  muzzleEffectFor,
   type BurstLayer
 } from "./bursts.js";
 import type { ScenePrediction } from "./entities.js";
@@ -159,7 +159,7 @@ export class ArenaFleet {
       const fired = ship.shotsFired - parts.drawnShots;
       if (fired > 0 && parts.drawnShots > 0 && !parts.isSelf) {
         bursts?.spawn(
-          OWN_MUZZLE_EFFECTS.cannon,
+          muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
           parts.turret.x,
           parts.turret.y,
           ship.radius,

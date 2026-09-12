@@ -230,6 +230,7 @@ const testGame = {
   shieldBandEffect: "",
   shieldImpactEffect: "",
   shipDeathEffect: "",
+  shipMuzzleEffect: "",
   turretVisual: null,
   shieldRadius: 104,
   arenaZones: [],

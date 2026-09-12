@@ -293,6 +293,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     display.shieldBandEffect = ship.shieldBandEffect;
     display.shieldImpactEffect = ship.shieldImpactEffect;
     display.shipDeathEffect = ship.shipDeathEffect;
+    display.shipMuzzleEffect = ship.shipMuzzleEffect;
     display.shieldRadius = ship.shieldRadius;
     // The drive block is what a predicting client replays from; the arena does
     // not predict yet, but the contract asks for real numbers and they exist.

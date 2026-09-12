@@ -268,7 +268,8 @@ export class SpaceshipScene extends Phaser.Scene {
       hull: spaceshipPosition,
       heading: spaceshipHeading,
       turretRotation: this.turret.rotation,
-      hullRadius: this.snapshot.spaceship.radius
+      hullRadius: this.snapshot.spaceship.radius,
+      turretMuzzleEffect: this.snapshot.shipMuzzleEffect
     });
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     /*

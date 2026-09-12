@@ -438,6 +438,7 @@ export function toSimulationConfig(
       ? {}
       : { shieldImpactEffect: hull.effects.shieldImpact }),
     ...(hull.effects?.death === undefined ? {} : { shipDeathEffect: hull.effects.death }),
+    ...(hull.effects?.muzzle === undefined ? {} : { shipMuzzleEffect: hull.effects.muzzle }),
     moduleTiers: hull.tiers,
     endlessTier: hull.endlessTier
   });

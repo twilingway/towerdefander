@@ -438,6 +438,7 @@ export class SpaceshipDisplayState extends Schema {
   @type("string") shieldBandEffect = "";
   @type("string") shieldImpactEffect = "";
   @type("string") shipDeathEffect = "";
+  @type("string") shipMuzzleEffect = "";
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;
