@@ -307,6 +307,39 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
               patchArena({ damageScaling: Math.max(0.1, damageScaling) });
             }}
           />
+          <NumberField
+            caption="Радиус скана (экранов)"
+            min={0.5}
+            step={0.5}
+            value={tuning.arena.scanRadiusScreens}
+            onChange={(scanRadiusScreens) => {
+              patchArena({ scanRadiusScreens: Math.max(0.5, scanRadiusScreens) });
+            }}
+          />
+          <SecondsField
+            caption="Скан раз в"
+            ticks={tuning.arena.scanCooldownTicks}
+            onChange={(scanCooldownTicks) => {
+              patchArena({ scanCooldownTicks });
+            }}
+          />
+          <SecondsField
+            caption="Метки держатся"
+            ticks={tuning.arena.scanRevealTicks}
+            onChange={(scanRevealTicks) => {
+              patchArena({ scanRevealTicks });
+            }}
+          />
+          <p className="hint" data-testid="arena-scan-reach">
+            Скан находит всех в{" "}
+            <strong>
+              {String(Math.round(tuning.cameraViewWidth * tuning.arena.scanRadiusScreens))}
+            </strong>{" "}
+            единицах — это {String(round2(tuning.arena.scanRadiusScreens))} экрана при кадре в{" "}
+            {String(Math.round(tuning.cameraViewWidth))}. Найденные держатся на радаре{" "}
+            {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
+            {formatTicks(tuning.arena.scanCooldownTicks)}.
+          </p>
           <p className="hint" data-testid="arena-ship-scaling">
             Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
             <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}

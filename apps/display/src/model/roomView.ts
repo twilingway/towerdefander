@@ -128,6 +128,7 @@ export function toDisplayRoomView(
               shieldArcHalfAngle: ship.shieldArcHalfAngle,
               shieldEnergy: ship.shieldEnergy,
               shieldCapacity: ship.shieldCapacity,
+              revealed: ship.revealed,
               shotsFired: ship.shotsFired
             })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
@@ -151,6 +152,8 @@ export function toDisplayRoomView(
             cameraViewWidth: display.cameraViewWidth,
             serverStepMs: display.serverStepMs ?? 0,
             appliedInputSeq: display.appliedInputSeq ?? 0,
+            scanReadySeconds: display.scanReadySeconds ?? 0,
+            scanRevealSecondsRemaining: display.scanRevealSecondsRemaining ?? 0,
             drive: { ...ZERO_DRIVE, ...display.drive },
             pose: toPoseView(display.pose),
             background: {

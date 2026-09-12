@@ -117,6 +117,8 @@ const testGame = {
   cameraViewWidth: 1600,
   serverStepMs: 0.14,
   appliedInputSeq: 0,
+  scanReadySeconds: 0,
+  scanRevealSecondsRemaining: 0,
   drive: {
     revision: 0,
     speedPerSecond: 320,

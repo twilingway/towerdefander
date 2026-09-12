@@ -648,6 +648,11 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
      * added to fix. Keeping one would carry the complaint forward.
      */
     zonesPerClosure: readNumber(arena, "zonesPerClosure") ?? defaults.arena.zonesPerClosure,
+    // The sweep is new ground too: a preset that predates it gains the
+    // built-in rather than a number that means "no scan at all".
+    scanRadiusScreens: readNumber(arena, "scanRadiusScreens") ?? defaults.arena.scanRadiusScreens,
+    scanCooldownTicks: readNumber(arena, "scanCooldownTicks") ?? defaults.arena.scanCooldownTicks,
+    scanRevealTicks: readNumber(arena, "scanRevealTicks") ?? defaults.arena.scanRevealTicks,
     zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
     zoneDamageIntervalTicks:
       readNumber(arena, "zoneDamageIntervalTicks") ?? defaults.arena.zoneDamageIntervalTicks,

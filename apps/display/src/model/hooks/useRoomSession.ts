@@ -66,6 +66,8 @@ export interface RoomSession {
   /** Leaves without ending the room, and without the shared screen's question. */
   readonly leaveRoom: () => Promise<void>;
   readonly sendCockpitReady: () => void;
+  /** One radar sweep. The room decides whether one is due. */
+  readonly sendArenaScan: () => void;
   readonly sendCockpitVote: (upgradeId: UpgradeId) => void;
   /** The socket the byte counter hooks, read fresh on every reconnect. */
   readonly readSocket: () => unknown;
@@ -169,6 +171,17 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
     // Fullscreen is not asked for here: the card already carries the button,
     // and this screen's helper toggles rather than requests, so a player who
     // went fullscreen first would be thrown back out by pressing Готов.
+  }
+
+  function sendArenaScan(): void {
+    const room = roomReference.current;
+    if (room === undefined || networkView === undefined || cockpitSeat === undefined) return;
+    room.send(clientMessage.arenaScan, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: networkView.roomId,
+      playerId: cockpitSeat.playerId,
+      runNumber: networkView.runNumber
+    });
   }
 
   /**
@@ -465,6 +478,7 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
     closeRoom: handleCloseRoom,
     leaveRoom: handleLeaveRoom,
     sendCockpitReady,
+    sendArenaScan,
     sendCockpitVote,
     readSocket: () => {
       // The socket itself, not the SDK transport around it: the transport has

@@ -24,6 +24,11 @@ interface ArenaHudProps {
   readonly shieldActive: boolean;
   readonly cannon: GunHeat;
   readonly machineGun: GunHeat;
+  /** Seconds until the sweep may be asked for again; zero means it is live. */
+  readonly scanReadySeconds: number;
+  /** Seconds the last sweep still has on the dial; zero means the dial is blind. */
+  readonly scanRevealSecondsRemaining: number;
+  readonly onScan: () => void;
 }
 
 /**
@@ -49,7 +54,10 @@ export function ArenaHud({
   shieldCapacity,
   shieldActive,
   cannon,
-  machineGun
+  machineGun,
+  scanReadySeconds,
+  scanRevealSecondsRemaining,
+  onScan
 }: ArenaHudProps) {
   return (
     <header className="battle-header arena-hud">
@@ -99,6 +107,30 @@ export function ArenaHud({
           capacity={machineGun.capacity}
           tone={machineGun.overheated ? "danger" : "heat"}
         />
+        {/*
+         * The sweep, under the gauges it is read with.
+         *
+         * A button that says what it costs: while it is cooling it shows the
+         * wait rather than going dead, because the number is the decision - a
+         * pilot times the next sweep against the zone closing, not against a
+         * greyed-out control.
+         */}
+        <button
+          type="button"
+          className={`arena-scan${scanReadySeconds > 0 ? " is-cooling" : ""}`}
+          data-testid="arena-scan"
+          onClick={onScan}
+          disabled={scanReadySeconds > 0}
+        >
+          <span className="arena-scan__label">Скан</span>
+          <span className="arena-scan__clock">
+            {scanReadySeconds > 0
+              ? `${String(scanReadySeconds)} с`
+              : scanRevealSecondsRemaining > 0
+                ? `метки ${String(scanRevealSecondsRemaining)} с`
+                : "готов"}
+          </span>
+        </button>
       </div>
     </header>
   );

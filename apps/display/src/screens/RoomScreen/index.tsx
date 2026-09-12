@@ -50,6 +50,8 @@ interface RoomScreenProps {
   readonly onCloseRoom: () => void;
   /** Leaving a match that is over for you, without ending it for the bots. */
   readonly onLeaveRoom: () => void;
+  /** One radar sweep; the room decides whether one is due. */
+  readonly onScan: () => void;
   readonly onReady: () => void;
   readonly onVote: RoomSession["sendCockpitVote"];
 }
@@ -74,6 +76,7 @@ export function RoomScreen({
   preview,
   onCloseRoom,
   onLeaveRoom,
+  onScan,
   onReady,
   onVote
 }: RoomScreenProps) {
@@ -381,6 +384,7 @@ export function RoomScreen({
           closingRoom={session?.closingRoom === true}
           onCloseRoom={onCloseRoom}
           onLeaveRoom={onLeaveRoom}
+          onScan={onScan}
           aimAssist={aimAssist}
           onAimAssistChange={setAimAssist}
         />

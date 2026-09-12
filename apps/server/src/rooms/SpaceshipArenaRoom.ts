@@ -3,6 +3,9 @@ import { StateView, type MapSchema } from "@colyseus/schema";
 import {
   ARENA_SHIP_COUNT,
   IDLE_ARENA_INTENT,
+  ARENA_SCAN_COOLDOWN_TICKS,
+  ARENA_SCAN_RADIUS_SCREENS,
+  ARENA_SCAN_REVEAL_TICKS,
   advanceArenaMatch,
   canonicalizeAngle,
   createArenaMatch,
@@ -23,6 +26,7 @@ import {
   SOLO_INPUT_BUFFER_SIZE,
   SOLO_INPUT_RANGES,
   SoloInput,
+  arenaScanCommandSchema,
   clientMessage,
   gunnerInputCommandSchema,
   pilotInputCommandSchema,
@@ -125,6 +129,27 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private playerHeadingTarget: number | null = null;
   /** The same, for the gun: a released aim stick keeps the bearing it had. */
   private playerTurretTarget: number | null = null;
+  /**
+   * The sweep.
+   *
+   * A match is fought on a field several screens wide, so a pilot with no way
+   * to look past their own camera is guessing. The sweep is Steel Hunter's
+   * answer: press for a look, wait out a cooldown, and what it found stays on
+   * the dial a while after it has moved.
+   *
+   * Held by the room rather than by the simulation because exactly one seat is
+   * human in this prototype. The moment a match seats sixteen people this has
+   * to move into `ArenaShipState` and be published per client - what is
+   * revealed is one pilot's knowledge, not the field's.
+   */
+  private scan = {
+    radiusScreens: ARENA_SCAN_RADIUS_SCREENS,
+    cooldownTicks: ARENA_SCAN_COOLDOWN_TICKS,
+    revealTicks: ARENA_SCAN_REVEAL_TICKS
+  };
+  private scanReadyTick = 0;
+  private scanRevealedUntilTick = 0;
+  private readonly revealed = new Set<string>();
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -167,6 +192,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // The operator decides how many beats a full hull takes; the simulation
       // takes one over that, of the maximum, on each of them.
       zoneDamageShareOfMaxHp: 1 / tuning.arena.zoneBitesToKill
+    };
+
+    // The sweep is the operator's too, and it is read once for the match like
+    // everything else: a console edit lands on the next one.
+    this.scan = {
+      radiusScreens: tuning.arena.scanRadiusScreens,
+      cooldownTicks: tuning.arena.scanCooldownTicks,
+      revealTicks: tuning.arena.scanRevealTicks
     };
 
     const seats: readonly ArenaShipSeat[] = Array.from(
@@ -327,6 +360,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         turretTargetAngle: bearingOf(parsed.data.aim),
         firing: parsed.data.firing
       };
+    },
+    [clientMessage.arenaScan]: (client: Client, payload: unknown) => {
+      if (client.sessionId !== this.playerSessionId) return;
+      if (!arenaScanCommandSchema.safeParse(payload).success) return;
+      this.sweep();
     },
     [clientMessage.shieldInput]: (_client: Client, payload: unknown) => {
       const parsed = shieldInputCommandSchema.safeParse(payload);
@@ -489,6 +527,35 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.holdForResult(this.match);
     this.state.game.display.serverStepMs = performance.now() - started;
     this.publish();
+  }
+
+  /**
+   * One sweep of the dial, if one is due.
+   *
+   * Everything inside the radius is marked at once and the marks fade together:
+   * a sweep is a photograph rather than a tracker, which is what makes it worth
+   * spending and worth timing. A hull that has moved since is drawn where it
+   * was found, and that is the point of the mechanic.
+   */
+  private sweep(): void {
+    const match = this.match;
+    const player = match?.ships[PLAYER_SLOT];
+    if (match === undefined || player === undefined) return;
+    if (match.clock.tick < this.scanReadyTick) return;
+
+    const tuning = this.scan;
+    const radius = this.state.game.display.cameraViewWidth * tuning.radiusScreens;
+    this.revealed.clear();
+    for (const ship of match.ships) {
+      if (!ship.alive || ship.slot === PLAYER_SLOT) continue;
+      const distance = Math.hypot(
+        ship.spaceship.x - player.spaceship.x,
+        ship.spaceship.y - player.spaceship.y
+      );
+      if (distance <= radius) this.revealed.add(ship.id);
+    }
+    this.scanReadyTick = match.clock.tick + tuning.cooldownTicks;
+    this.scanRevealedUntilTick = match.clock.tick + tuning.revealTicks;
   }
 
   /**
@@ -671,6 +738,20 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       game.encounter.defeatReason = "wave_timeout";
     }
 
+    /*
+     * The sweep's two clocks, in seconds because that is what a button shows.
+     * The marks are cleared rather than left to rot: a stale reveal would put a
+     * hull on the dial in a place it left a minute ago.
+     */
+    const fresh = match.clock.tick < this.scanRevealedUntilTick;
+    if (!fresh && this.revealed.size > 0) this.revealed.clear();
+    const secondsOf = (ticks: number): number =>
+      Math.max(0, Math.ceil((ticks * this.config.ship.fixedStepMs) / 1_000));
+    game.display.scanReadySeconds = secondsOf(this.scanReadyTick - match.clock.tick);
+    game.display.scanRevealSecondsRemaining = secondsOf(
+      this.scanRevealedUntilTick - match.clock.tick
+    );
+
     this.publishZones(match);
 
     if (player !== undefined) mirrorPlayerShip(player, game);
@@ -710,6 +791,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         view.shieldArcHalfAngle = ship.stats.shieldArcRadians / 2;
         view.shieldEnergy = ship.shieldEnergy;
         view.shieldCapacity = ship.stats.shieldCapacity;
+        view.revealed = fresh && this.revealed.has(ship.id);
       }
     );
 

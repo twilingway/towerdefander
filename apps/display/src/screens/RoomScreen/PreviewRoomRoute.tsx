@@ -59,6 +59,7 @@ export function PreviewRoomRoute({
       }}
       onCloseRoom={() => undefined}
       onLeaveRoom={() => undefined}
+      onScan={() => undefined}
       onReady={() => undefined}
       onVote={() => undefined}
     />

@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 57 as const;
+export const PROTOCOL_VERSION = 58 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -471,6 +471,12 @@ export const publicArenaShipViewSchema = z
     /** What the sector has left and what it holds: a bar over the hull needs both. */
     shieldEnergy: finite,
     shieldCapacity: finite,
+    /**
+     * Whether the last sweep found this hull and the mark has not faded yet.
+     * The dial draws the marked ones and nothing else - a match is fought
+     * mostly blind, and the sweep is how a pilot buys a look.
+     */
+    revealed: z.boolean(),
     /** Shots fired, narrowed to the wire, so the display can flash a muzzle. */
     shotsFired: z.number().int().min(0).max(65_535)
   })
@@ -931,6 +937,13 @@ export const displayGameSnapshotSchema = z
     arenaZones: z.array(publicArenaZoneViewSchema).max(144),
     /** Every hull in a match; empty in the campaign, which has exactly one. */
     arenaShips: z.array(publicArenaShipViewSchema).max(16),
+    /**
+     * The sweep: seconds until it may be asked for again, and seconds the last
+     * one still has left on the dial. Zero on the first means the button is
+     * live; zero on the second means the dial is blind.
+     */
+    scanReadySeconds: z.number().int().min(0).max(3_600),
+    scanRevealSecondsRemaining: z.number().int().min(0).max(3_600),
     obstacles: z.array(publicObstacleViewSchema),
     enemyShips: z.array(publicEnemyViewSchema).max(COMBAT_ENTITY_CAPS.enemyShips),
     asteroids: z.array(publicAsteroidViewSchema).max(COMBAT_ENTITY_CAPS.asteroids),
@@ -1138,6 +1151,15 @@ export const shieldInputCommandSchema = continuousInputEnvelopeSchema
   .extend({ aim: vector2Schema, active: z.boolean() })
   .strict();
 export type ShieldInputCommand = z.infer<typeof shieldInputCommandSchema>;
+/**
+ * A sweep of the dial. No payload beyond the envelope: what it finds is the
+ * room's to decide, and when it may be asked for again is the room's too.
+ */
+export const arenaScanCommandSchema = commandEnvelopeSchema
+  .extend({ runNumber: activeRunNumberSchema })
+  .strict();
+export type ArenaScanCommand = z.infer<typeof arenaScanCommandSchema>;
+
 export const upgradeVoteCommandSchema = commandEnvelopeSchema
   .extend({
     runNumber: activeRunNumberSchema,
@@ -1217,6 +1239,8 @@ export const clientMessage = {
   gunnerInput: "gunner:input",
   shieldInput: "shield:input",
   upgradeVote: "upgrade:vote",
+  /** One radar sweep, asked for by the pilot; the room decides if it is due. */
+  arenaScan: "arena:scan",
   latencyPong: "client:latency-pong"
 } as const;
 export const serverMessage = {

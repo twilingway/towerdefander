@@ -182,6 +182,8 @@ function displayRoom(): DisplayRoomView {
       cameraViewWidth: 1600,
       serverStepMs: 0.14,
       appliedInputSeq: 0,
+      scanReadySeconds: 0,
+      scanRevealSecondsRemaining: 0,
       drive: {
         revision: 0,
         speedPerSecond: 320,
@@ -355,16 +357,16 @@ function intermissionController(): ControllerRoomView {
 }
 
 describe("protocol v33 handshake and messages", () => {
-  it("publishes the fixed crew and v57", () => {
-    expect(PROTOCOL_VERSION).toBe(57);
+  it("publishes the fixed crew and v58", () => {
+    expect(PROTOCOL_VERSION).toBe(58);
     expect(ROOM_TYPE).toBe("spaceship_defender");
     expect(PLAYER_CAPACITY).toBe(3);
     expect(CREW_ROLES).toEqual(["pilot", "gunner", "shield"]);
   });
 
-  it("accepts v57 create/join and rejects v56 and unknown fields", () => {
+  it("accepts v58 create/join and rejects v56 and unknown fields", () => {
     expect(
-      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 57, crewSize: 3 })
+      displayCreateOptionsSchema.safeParse({ role: "display", protocolVersion: 58, crewSize: 3 })
         .success
     ).toBe(true);
     expect(
@@ -374,7 +376,7 @@ describe("protocol v33 handshake and messages", () => {
     expect(
       controllerJoinOptionsSchema.parse({
         role: "controller",
-        protocolVersion: 57,
+        protocolVersion: 58,
         playerName: "  Ada  "
       }).playerName
     ).toBe("Ada");
@@ -388,7 +390,7 @@ describe("protocol v33 handshake and messages", () => {
     expect(
       joinOptionsSchema.safeParse({
         role: "controller",
-        protocolVersion: 57,
+        protocolVersion: 58,
         playerName: "Ada",
         requestedRole: "pilot"
       }).success
@@ -398,20 +400,20 @@ describe("protocol v33 handshake and messages", () => {
   it("takes a solo connection that is display and crew seat at once", () => {
     const parsed = soloJoinOptionsSchema.parse({
       role: "solo",
-      protocolVersion: 57,
+      protocolVersion: 58,
       playerName: "  Ada  "
     });
     // It names a player like a controller does, trimming included.
     expect(parsed.playerName).toBe("Ada");
     // And it reaches the union, so the room can branch on it at the boundary.
     expect(
-      joinOptionsSchema.safeParse({ role: "solo", protocolVersion: 57, playerName: "Ada" }).success
+      joinOptionsSchema.safeParse({ role: "solo", protocolVersion: 58, playerName: "Ada" }).success
     ).toBe(true);
     // A seat count may be stated, but only the one that solo means.
     expect(
       soloJoinOptionsSchema.safeParse({
         role: "solo",
-        protocolVersion: 57,
+        protocolVersion: 58,
         playerName: "Ada",
         crewSize: 1
       }).success
@@ -419,13 +421,13 @@ describe("protocol v33 handshake and messages", () => {
     expect(
       soloJoinOptionsSchema.safeParse({
         role: "solo",
-        protocolVersion: 57,
+        protocolVersion: 58,
         playerName: "Ada",
         crewSize: 2
       }).success
     ).toBe(false);
     // A player is not optional: the roster has a seat to label.
-    expect(soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 57 }).success).toBe(
+    expect(soloJoinOptionsSchema.safeParse({ role: "solo", protocolVersion: 58 }).success).toBe(
       false
     );
     expect(
@@ -461,7 +463,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("keeps continuous role messages strict on v56 and the active run", () => {
     const envelope = {
-      protocolVersion: 57,
+      protocolVersion: 58,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2
@@ -549,7 +551,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("requires the machine gun trigger on v56 pilot input", () => {
     const envelope = {
-      protocolVersion: 57,
+      protocolVersion: 58,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -566,7 +568,7 @@ describe("protocol v33 handshake and messages", () => {
 
   it("carries an optional turn intent on pilot input", () => {
     const envelope = {
-      protocolVersion: 57,
+      protocolVersion: 58,
       roomId: ROOM_ID,
       playerId: PLAYER_ID,
       runNumber: 2,
@@ -588,7 +590,7 @@ describe("protocol v33 handshake and messages", () => {
   });
 
   it("allows ready for lobby run zero and positive terminal runs", () => {
-    const envelope = { protocolVersion: 57, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
+    const envelope = { protocolVersion: 58, roomId: ROOM_ID, playerId: PLAYER_ID } as const;
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 0 }).success).toBe(true);
     expect(readyCommandSchema.safeParse({ ...envelope, runNumber: 3 }).success).toBe(true);
     expect(
@@ -606,6 +608,7 @@ describe("protocol v33 handshake and messages", () => {
       gunnerInput: "gunner:input",
       shieldInput: "shield:input",
       upgradeVote: "upgrade:vote",
+      arenaScan: "arena:scan",
       latencyPong: "client:latency-pong"
     });
     expect(serverMessage).toEqual({
@@ -636,7 +639,7 @@ describe("protocol v33 handshake and messages", () => {
 
 describe("upgrade:vote", () => {
   const command = {
-    protocolVersion: 57,
+    protocolVersion: 58,
     roomId: ROOM_ID,
     playerId: PLAYER_ID,
     runNumber: 1,
@@ -1150,18 +1153,18 @@ describe("strict v33 room projections", () => {
 describe("v33 latency diagnostics", () => {
   it("retains strict server probes and client pongs without client telemetry", () => {
     expect(
-      serverLatencyProbeSchema.safeParse({ protocolVersion: 57, probeId: "probe-1" }).success
+      serverLatencyProbeSchema.safeParse({ protocolVersion: 58, probeId: "probe-1" }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 57,
+        protocolVersion: 58,
         roomId: ROOM_ID,
         probeId: "probe-1"
       }).success
     ).toBe(true);
     expect(
       clientLatencyPongSchema.safeParse({
-        protocolVersion: 57,
+        protocolVersion: 58,
         roomId: ROOM_ID,
         probeId: "probe-1",
         latencyMs: 10

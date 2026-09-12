@@ -166,11 +166,13 @@ function sameArenaHeader(left: Game | null, right: Game | null): boolean {
     held.cannon.overheated === next.cannon.overheated &&
     held.machineGun.heat === next.machineGun.heat &&
     held.machineGun.capacity === next.machineGun.capacity &&
-    held.machineGun.overheated === next.machineGun.overheated
+    held.machineGun.overheated === next.machineGun.overheated &&
+    held.scanReadySeconds === next.scanReadySeconds &&
+    held.scanRevealSecondsRemaining === next.scanRevealSecondsRemaining
   );
 }
 
-export function ArenaHudPanel() {
+export function ArenaHudPanel({ onScan }: { readonly onScan: () => void }) {
   const game = useWorldSlice(gameOf, sameArenaHeader);
   /*
    * The place stops moving when this hull does.
@@ -199,6 +201,9 @@ export function ArenaHudPanel() {
       shieldActive={game.shield.active}
       cannon={game.cannon}
       machineGun={game.machineGun}
+      scanReadySeconds={game.scanReadySeconds}
+      scanRevealSecondsRemaining={game.scanRevealSecondsRemaining}
+      onScan={onScan}
     />
   );
 }

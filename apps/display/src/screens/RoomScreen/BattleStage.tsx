@@ -55,6 +55,8 @@ interface BattleStageProps {
   readonly onCloseRoom: () => void;
   /** Leaving without closing: what a downed arena pilot does instead. */
   readonly onLeaveRoom: () => void;
+  /** One radar sweep, asked for from the match panel. */
+  readonly onScan: () => void;
   readonly aimAssist: boolean;
   readonly onAimAssistChange: (aimAssist: boolean) => void;
 }
@@ -78,6 +80,7 @@ export function BattleStage({
   closingRoom,
   onCloseRoom,
   onLeaveRoom,
+  onScan,
   aimAssist,
   onAimAssistChange
 }: BattleStageProps) {
@@ -142,7 +145,11 @@ export function BattleStage({
           {/* A match reads itself: how many are left, how many I took, where I
             stand. The campaign's wave, score and credits mean nothing here. */}
           {switches.interfaceEnabled &&
-            (view.game.arenaShips.length > 0 ? <ArenaHudPanel /> : <BattleHudPanel />)}
+            (view.game.arenaShips.length > 0 ? (
+              <ArenaHudPanel onScan={onScan} />
+            ) : (
+              <BattleHudPanel />
+            ))}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>

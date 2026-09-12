@@ -204,6 +204,8 @@ export class ArenaShipView extends Schema {
   @type("float32") shieldArcHalfAngle = 0;
   @type("float32") shieldEnergy = 0;
   @type("float32") shieldCapacity = 0;
+  /** Found by the last sweep and not yet faded; see the arena room's scan. */
+  @type("boolean") revealed = false;
   @type("uint16") shotsFired = 0;
 }
 
@@ -414,6 +416,9 @@ export class SpaceshipDisplayState extends Schema {
   @type("float32") serverStepMs = 0;
   /** The last solo input frame the room applied; the cockpit replays past it. */
   @type("uint32") appliedInputSeq = 0;
+  /** The radar sweep: when it may be asked for again, and how long it lasts. */
+  @type("uint16") scanReadySeconds = 0;
+  @type("uint16") scanRevealSecondsRemaining = 0;
   /** The run's live drive numbers and the pose the client replays from. */
   @type(ShipDriveState) drive = new ShipDriveState();
   @type(ShipPoseState) pose = new ShipPoseState();

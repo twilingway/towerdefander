@@ -19,12 +19,23 @@ function hud(overrides: Partial<Parameters<typeof ArenaHud>[0]> = {}) {
       shieldActive
       cannon={GUN}
       machineGun={GUN}
+      scanReadySeconds={0}
+      scanRevealSecondsRemaining={0}
+      onScan={() => undefined}
       {...overrides}
     />
   );
 }
 
 describe("ArenaHud", () => {
+  it("shows the sweep as a wait rather than a dead button", () => {
+    // The number is the decision: a pilot times the next sweep against the zone
+    // closing, so a greyed-out control that says nothing is worse than useless.
+    expect(hud({ scanReadySeconds: 18 })).toContain("18 с");
+    expect(hud({ scanRevealSecondsRemaining: 24 })).toContain("метки 24 с");
+    expect(hud()).toContain("готов");
+  });
+
   it("counts the field, the kills and the standing", () => {
     const markup = hud();
 

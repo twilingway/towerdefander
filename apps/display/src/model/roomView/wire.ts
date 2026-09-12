@@ -51,6 +51,7 @@ export interface NetworkArenaShipState {
   shieldArcHalfAngle: number;
   shieldEnergy: number;
   shieldCapacity: number;
+  revealed: boolean;
   shotsFired: number;
 }
 
@@ -239,6 +240,8 @@ export interface NetworkGameState {
     cameraViewWidth: number;
     serverStepMs?: number;
     appliedInputSeq?: number;
+    scanReadySeconds?: number;
+    scanRevealSecondsRemaining?: number;
     drive?: {
       revision: number;
       speedPerSecond: number;

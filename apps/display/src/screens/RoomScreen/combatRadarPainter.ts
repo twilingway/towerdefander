@@ -333,6 +333,34 @@ export function drawCombatRadar(
   context.fill();
   context.stroke();
 
+  /*
+   * The other hulls of a match, and only the ones a sweep found.
+   *
+   * A match is fought several screens wide, so the dial is the only way to know
+   * where anyone is - and knowing where everyone is, always, would leave
+   * nothing to find. What the sweep marked is drawn where it was marked, and it
+   * fades on the room's clock: the mark is a photograph, not a tracker, which
+   * is what makes a sweep worth timing.
+   */
+  context.fillStyle = "#ffb454";
+  context.strokeStyle = "#ffe6bd";
+  context.lineWidth = 1.2;
+  context.beginPath();
+  for (const rival of game.arenaShips) {
+    if (rival.isSelf || !rival.revealed) continue;
+    const point = projectWorldToRadar(
+      rival.x,
+      rival.y,
+      game.worldWidth,
+      game.worldHeight,
+      projection
+    );
+    context.moveTo(point.x + 3.6, point.y);
+    context.arc(point.x, point.y, 3.6, 0, Math.PI * 2);
+  }
+  context.fill();
+  context.stroke();
+
   const ship = projectWorldToRadar(
     game.spaceship.x,
     game.spaceship.y,

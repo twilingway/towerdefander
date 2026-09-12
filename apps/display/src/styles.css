@@ -3155,3 +3155,43 @@ p {
     min-width: 7rem;
   }
 }
+
+/*
+ * The sweep button, under the gauges it is read with.
+ *
+ * It takes pointer events back from the panel around it - the header is
+ * transparent to the thumb so it never eats a stick drag, and this is the one
+ * thing on it a thumb is meant to find.
+ */
+.arena-scan {
+  display: grid;
+  gap: 0.1rem;
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgb(255 211 111 / 55%);
+  border-radius: 0.6rem;
+  color: #ffd36f;
+  background: rgb(40 30 6 / 70%);
+  font: inherit;
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.arena-scan__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.arena-scan__clock {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-scan.is-cooling {
+  border-color: rgb(125 200 220 / 35%);
+  color: #7fd8e8;
+  background: rgb(3 20 29 / 70%);
+  cursor: default;
+}

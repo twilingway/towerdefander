@@ -154,6 +154,7 @@ export function DisplayApp() {
           void navigate({ pathname: "/arena", search: readDisplaySearch() }, { replace: true });
         });
       }}
+      onScan={session.sendArenaScan}
       onReady={session.sendCockpitReady}
       onVote={session.sendCockpitVote}
     />
