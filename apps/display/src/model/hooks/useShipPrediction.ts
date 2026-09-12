@@ -436,6 +436,20 @@ export function useShipPrediction<
          */
         if (!predicting) return undefined;
         /*
+         * And not once the seat has stopped flying.
+         *
+         * Prediction is a bet that this page knows what the room is about to
+         * do. The moment the encounter ends that bet is void: the cockpit stops
+         * sending, so nothing corrects the local step, while the library keeps
+         * stepping it forward on the last order it was given - and the room,
+         * still publishing for whoever is left alive, keeps pulling it back.
+         * Forward at the frame rate, back at the patch rate, is a shake, and it
+         * is why a wrecked hull sat there reading three hundred and sixty units
+         * a second. With no bet to make the scene draws the room's own pose,
+         * which for a wreck is a wreck standing still.
+         */
+        if (!on) return undefined;
+        /*
          * Position through `value()`, bearings straight from the state.
          *
          * The step runs twenty times a second; read raw it draws twenty positions
