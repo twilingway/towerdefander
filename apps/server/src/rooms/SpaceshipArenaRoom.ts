@@ -623,14 +623,25 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       player === undefined
         ? 0
         : match.ships.filter((ship) => !ship.alive && ship.eliminatedBy === player.id).length;
-    // The contract wants a positive countdown during combat, and a match has
-    // exactly one: what is left of its own clock.
-    game.encounter.waveSecondsRemaining = Math.max(
-      1,
-      Math.ceil(
-        ((this.config.matchTickLimit - match.clock.tick) * this.config.ship.fixedStepMs) / 1_000
-      )
-    );
+    /*
+     * The clock, and only while there is one.
+     *
+     * The contract wants a positive countdown during combat and none outside
+     * it - "only combat may publish a wave countdown" - and a match kept
+     * publishing its own after the fight was decided. That is a refusal, not a
+     * warning: the view stops parsing and the screen holds its last good
+     * snapshot, which is a frozen picture at the exact moment of winning.
+     */
+    game.encounter.waveSecondsRemaining =
+      game.encounter.phase === "combat"
+        ? Math.max(
+            1,
+            Math.ceil(
+              ((this.config.matchTickLimit - match.clock.tick) * this.config.ship.fixedStepMs) /
+                1_000
+            )
+          )
+        : 0;
     // The room stays "active": a finished match is an encounter outcome, and
     // the room phase only knows lobby and active.
     if (eliminated) {
@@ -639,18 +650,24 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       game.encounter.hasDefeatReason = true;
       game.encounter.defeatReason = "spaceship_destroyed";
     } else if (match.phase === "result") {
-      game.encounter.hasOutcome = true;
       // Somebody winning is not the same as this somebody winning: with a
       // player in the field the outcome is theirs, and only an unmanned screen
       // reports the match's own.
-      game.encounter.outcome =
+      const won =
         this.playerSessionId === undefined
-          ? match.winnerShipId === null
-            ? "defeat"
-            : "victory"
-          : match.winnerShipId === player?.id
-            ? "victory"
-            : "defeat";
+          ? match.winnerShipId !== null
+          : match.winnerShipId === player?.id;
+      game.encounter.hasOutcome = true;
+      game.encounter.outcome = won ? "victory" : "defeat";
+      /*
+       * A defeat has to say why, and the contract enforces it both ways: a
+       * reason without a defeat is refused as loudly as a defeat without one,
+       * and a refusal freezes the screen on its last good snapshot. Reaching
+       * this branch alive means the clock ran out - being shot down is the
+       * branch above.
+       */
+      game.encounter.hasDefeatReason = !won;
+      game.encounter.defeatReason = "wave_timeout";
     }
 
     this.publishZones(match);
