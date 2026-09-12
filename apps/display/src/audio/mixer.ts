@@ -8,7 +8,15 @@
 export interface AudioSettings {
   readonly sounds: number;
   readonly music: number;
-  readonly muted: boolean;
+  /**
+   * Silence per bus rather than one master switch.
+   *
+   * The two are asked for separately - "turn the music off" is a different
+   * sentence from "quiet, somebody is on the phone" - and a mute that sits
+   * against the slider it silences needs no label to explain which is which.
+   */
+  readonly soundsMuted: boolean;
+  readonly musicMuted: boolean;
   /**
    * Whether the rest of the field is heard, split the way it is complained
    * about: the chatter of fifteen other guns is a different nuisance from the
@@ -30,7 +38,8 @@ export interface AudioSettings {
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   sounds: 0.5,
   music: 0.5,
-  muted: false,
+  soundsMuted: false,
+  musicMuted: false,
   enemyShots: true,
   enemyDeaths: true
 };
@@ -52,8 +61,8 @@ export function channelAllowed(settings: AudioSettings, channel: SoundChannel): 
 
 /** What a bus is actually worth once the Mute has had its say. */
 export function busGain(settings: AudioSettings, bus: "sounds" | "music"): number {
-  if (settings.muted) return 0;
-  return clamp01(bus === "sounds" ? settings.sounds : settings.music);
+  if (bus === "sounds") return settings.soundsMuted ? 0 : clamp01(settings.sounds);
+  return settings.musicMuted ? 0 : clamp01(settings.music);
 }
 
 export function clamp01(value: number): number {

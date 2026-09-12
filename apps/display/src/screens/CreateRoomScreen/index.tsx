@@ -105,7 +105,7 @@ export function CreateRoomScreen({
     <main className="display-shell display-shell--setup is-campaign" ref={shell}>
       <section className="setup-card">
         <header className="setup-head">
-          <button type="button" className="link-button" onClick={onBack}>
+          <button type="button" className="link-button" data-remote-skip onClick={onBack}>
             ← Режимы
           </button>
           <p className="eyebrow">Кампания I: Завеса</p>

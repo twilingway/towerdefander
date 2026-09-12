@@ -43,10 +43,19 @@ export function useRemoteNavigation(
     if (root === null) return;
 
     if (autoFocus) {
-      const first = root.querySelector<HTMLElement>(FOCUSABLE);
+      /*
+       * The first control worth starting on, which is not always the first one
+       * in the document. A back link is first on every setup screen and is the
+       * one thing nobody arrived to press - landing there put a ring around
+       * "back" on every page load. Marking it is explicit; guessing by class
+       * from in here would be this hook knowing about screens.
+       */
+      const candidates = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      const first =
+        candidates.find((element) => !element.hasAttribute("data-remote-skip")) ?? candidates[0];
       // Only when nothing inside is focused yet: re-grabbing it on every render
       // would fight the person pressing the buttons.
-      if (first !== null && !root.contains(document.activeElement)) first.focus();
+      if (first !== undefined && !root.contains(document.activeElement)) first.focus();
     }
 
     const handler = (event: KeyboardEvent) => {

@@ -62,6 +62,17 @@ import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
  * living field plus whatever just stopped being part of it.
  */
 const WRECK_HOLD_TICKS = 120;
+/**
+ * How long a started match is kept after the last person leaves.
+ *
+ * Long enough to be a dropped connection rather than a decision: a phone that
+ * loses the network for a few seconds comes back to its own fight, into the
+ * seat the autopilot was holding. Past that it is an empty room stepping
+ * sixteen hulls sixty times a second for nobody - measured at about four and a
+ * half megabytes and a share of a core each, and four of them were found
+ * sitting on a stand.
+ */
+const EMPTY_MATCH_HOLD_MS = 30_000;
 
 /** The slot the human takes. It flies on autopilot until a cockpit claims it. */
 const PLAYER_SLOT = 0;
@@ -121,6 +132,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    * called the number "players online".
    */
   private statsId = "";
+  /** When the last client left a started match; see `EMPTY_MATCH_HOLD_MS`. */
+  private emptySince: number | undefined;
   private readonly createdAtMs = Date.now();
   private statsStatus: RoomStatsStatus = "lobby";
   private statusChangedAtMs = Date.now();
@@ -468,6 +481,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   };
 
   override onJoin(client: Client, unsafeOptions?: unknown): void {
+    // Somebody is here again, so the empty-room countdown is off.
+    this.emptySince = undefined;
     // Everyone watching gets the world branch: the arena has no controller
     // panels of its own yet, so there is nothing to gate off anybody.
     const view = (client.view ??= new StateView());
@@ -518,7 +533,10 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       void this.disconnect();
       return;
     }
-    if (this.clients.length === 0) this.state.displayConnected = false;
+    if (this.clients.length === 0) {
+      this.state.displayConnected = false;
+      this.holdEmptyMatch();
+    }
     // Somebody closing their tab has to leave the queue they were counted in.
     this.broadcastLobby();
   }
@@ -581,6 +599,26 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       started: this.started
     };
     this.broadcast(serverMessage.arenaLobby, payload);
+  }
+
+  /**
+   * Closes a started match that nobody came back to.
+   *
+   * On the room's own clock rather than a timer of its own: the clock is
+   * cleared with the room, and a stray timer firing into a disposed room is the
+   * shape of bug this file has had before.
+   */
+  private holdEmptyMatch(): void {
+    if (this.emptySince !== undefined) return;
+    this.emptySince = Date.now();
+    this.clock.setTimeout(() => {
+      if (this.emptySince === undefined) return;
+      if (this.clients.length > 0) {
+        this.emptySince = undefined;
+        return;
+      }
+      void this.disconnect();
+    }, EMPTY_MATCH_HOLD_MS);
   }
 
   /** What the dashboard calls this match right now. */

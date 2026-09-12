@@ -12,26 +12,35 @@ import {
 const LOUD: AudioSettings = {
   sounds: 0.8,
   music: 0.4,
-  muted: false,
+  soundsMuted: false,
+  musicMuted: false,
   enemyShots: true,
   enemyDeaths: true
 };
 
 describe("the mixer", () => {
-  it("silences both buses on mute without losing either number", () => {
-    const muted: AudioSettings = { ...LOUD, muted: true };
-    expect(busGain(muted, "sounds")).toBe(0);
-    expect(busGain(muted, "music")).toBe(0);
-    // The numbers are still there, which is what un-muting returns to.
-    expect(busGain({ ...muted, muted: false }, "sounds")).toBe(0.8);
-    expect(busGain({ ...muted, muted: false }, "music")).toBe(0.4);
+  /**
+   * One switch per bus, because the two are asked for separately: "turn the
+   * music off" is a different sentence from "quiet, somebody is on the phone".
+   * Neither loses the number it silences, which is what un-muting returns to.
+   */
+  it("silences one bus without touching the other or its number", () => {
+    const quiet: AudioSettings = { ...LOUD, soundsMuted: true };
+    expect(busGain(quiet, "sounds")).toBe(0);
+    expect(busGain(quiet, "music")).toBe(0.4);
+    expect(busGain({ ...quiet, soundsMuted: false }, "sounds")).toBe(0.8);
+
+    const noMusic: AudioSettings = { ...LOUD, musicMuted: true };
+    expect(busGain(noMusic, "music")).toBe(0);
+    expect(busGain(noMusic, "sounds")).toBe(0.8);
   });
 
-  it("starts in the middle of both sliders, unmuted, with the field audible", () => {
+  it("starts in the middle of both sliders, audible, with the field audible", () => {
     expect(DEFAULT_AUDIO_SETTINGS).toEqual({
       sounds: 0.5,
       music: 0.5,
-      muted: false,
+      soundsMuted: false,
+      musicMuted: false,
       enemyShots: true,
       enemyDeaths: true
     });

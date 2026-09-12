@@ -23,7 +23,8 @@ export function setAudioSettings(next: Partial<AudioSettings>): AudioSettings {
   current = {
     sounds: clamp01(next.sounds ?? current.sounds),
     music: clamp01(next.music ?? current.music),
-    muted: next.muted ?? current.muted,
+    soundsMuted: next.soundsMuted ?? current.soundsMuted,
+    musicMuted: next.musicMuted ?? current.musicMuted,
     enemyShots: next.enemyShots ?? current.enemyShots,
     enemyDeaths: next.enemyDeaths ?? current.enemyDeaths
   };
@@ -68,12 +69,19 @@ function read(): AudioSettings {
     if (raw === null || raw === undefined) return DEFAULT_AUDIO_SETTINGS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return DEFAULT_AUDIO_SETTINGS;
-    const value = parsed as Partial<Record<keyof AudioSettings, unknown>>;
+    // `muted` is not a field any more; it is what the old build wrote, and this
+    // is the only place that still has to know the word.
+    const value = parsed as Partial<Record<keyof AudioSettings | "muted", unknown>>;
     return {
       sounds:
         typeof value.sounds === "number" ? clamp01(value.sounds) : DEFAULT_AUDIO_SETTINGS.sounds,
       music: typeof value.music === "number" ? clamp01(value.music) : DEFAULT_AUDIO_SETTINGS.music,
-      muted: value.muted === true,
+      /*
+       * One switch became two. A document written by the old build carries
+       * `muted`, which silenced both, so that is what it still means here.
+       */
+      soundsMuted: value.soundsMuted === true || value.muted === true,
+      musicMuted: value.musicMuted === true || value.muted === true,
       // Absent means on: a stored document written before these existed must
       // not silence half the field on the next page load.
       enemyShots: value.enemyShots !== false,

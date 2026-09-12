@@ -202,6 +202,37 @@ describe("the arena's published encounter", () => {
   });
 
   /**
+   * An emptied match is kept for half a minute, then let go.
+   *
+   * Kept, because a phone that loses the network for a few seconds has to come
+   * back to its own fight rather than to a lobby. Let go, because an empty room
+   * still steps sixteen hulls sixty times a second - about four and a half
+   * megabytes and a share of a core each, and four of them were found sitting
+   * on a stand with nobody in any of them.
+   */
+  it("holds an emptied match for half a minute before closing it", () => {
+    const { room, internals } = arenaRoom();
+    const hold = vi.spyOn(room.clock, "setTimeout");
+    const close = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    internals.started = true;
+    room.onLeave();
+
+    expect(close).not.toHaveBeenCalled();
+    expect(hold.mock.calls.at(-1)?.[1]).toBe(30_000);
+  });
+
+  /** A queue nobody is in is over at once: there is no fight to come back to. */
+  it("closes a waiting room the moment the last person leaves", () => {
+    const { room } = arenaRoom();
+    const close = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    room.onLeave();
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  /**
    * A match appears on the room dashboard at all.
    *
    * It published nothing until now, so the page counted campaign rooms and

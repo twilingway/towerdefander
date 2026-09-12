@@ -292,10 +292,15 @@ export function RoomScreen({
           </div>
         )}
         <div className="room-network">
-          {!match && (
-            <div className={`phase-badge phase-badge--${view.phase}`}>
-              {view.phase === "active" ? "Корабль в бою" : "Собираем экипаж"}
-            </div>
+          {/*
+           * Only while the crew is still gathering.
+           *
+           * In a fight the badge said "Корабль в бою" to somebody who is
+           * flying it: the one state it could report that the screen was not
+           * already reporting is the other one.
+           */}
+          {!match && view.phase !== "active" && (
+            <div className={`phase-badge phase-badge--${view.phase}`}>Собираем экипаж</div>
           )}
           {/*
             The instrument panel says both of these, and says them better. While
@@ -331,6 +336,7 @@ export function RoomScreen({
                   : match
                     ? "Выйти из боя"
                     : "Закрыть комнату",
+              confirmLabel: match ? "Точно выйти?" : "Закрыть для всех?",
               disabled: session?.closingRoom === true,
               onClick: () => {
                 if (match) onLeaveRoom();

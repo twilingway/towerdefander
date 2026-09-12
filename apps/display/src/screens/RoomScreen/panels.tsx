@@ -388,8 +388,6 @@ export function CockpitPanel({
       aimDeadzoneShare={game.helm.aimDeadzoneShare}
       machineGunHeat={game.machineGun.heat / game.machineGun.capacity}
       machineGunOverheated={game.machineGun.overheated}
-      cannonHeat={game.cannon.heat / game.cannon.capacity}
-      cannonOverheated={game.cannon.overheated}
       aimAssist={aimAssist}
       onAimAssistChange={onAimAssistChange}
       {...controls}

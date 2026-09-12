@@ -14,11 +14,8 @@ function props(overrides: Partial<SoloCockpitProps> = {}): SoloCockpitProps {
     onAimRelease: () => undefined,
     onMachineGunHold: () => undefined,
     onCannonFromStick: () => undefined,
-    onCannonFromTrigger: () => undefined,
     machineGunHeat: 0,
     machineGunOverheated: false,
-    cannonHeat: 0,
-    cannonOverheated: false,
     aimAssist: true,
     onAimAssistChange: () => undefined,
     ...overrides
@@ -26,13 +23,19 @@ function props(overrides: Partial<SoloCockpitProps> = {}): SoloCockpitProps {
 }
 
 describe("SoloCockpit", () => {
-  it("draws two sticks and two triggers", () => {
+  it("draws two sticks and the one trigger left", () => {
     const markup = renderToStaticMarkup(<SoloCockpit {...props()} />);
 
     expect(markup).toContain('data-testid="cockpit-stick-left"');
     expect(markup).toContain('data-testid="cockpit-stick-right"');
     expect(markup).toContain('data-testid="cockpit-trigger-mg"');
-    expect(markup).toContain('data-testid="cockpit-trigger-cannon"');
+    /*
+     * And not a second one. The cannon fires from the right stick, so a button
+     * beside it was a second place to look for one gun - and on a phone it was
+     * a second place for a thumb to be, which is the half of the screen the
+     * player is trying to see through.
+     */
+    expect(markup).not.toContain('data-testid="cockpit-trigger-cannon"');
     // Both sticks are labelled, because a stick nobody can name is a stick a
     // screen reader cannot offer.
     expect(markup).toContain('aria-label="Курс корабля"');
@@ -45,15 +48,16 @@ describe("SoloCockpit", () => {
     expect(markup).toContain('aria-hidden="true"');
     // Every control says so on its own, not just the container: the zones are
     // what a thumb lands on, and the CSS turns pointer events off from there.
-    expect(markup.match(/aria-disabled="true"/g)).toHaveLength(4);
+    // Three of them: two sticks and the nose gun.
+    expect(markup.match(/aria-disabled="true"/g)).toHaveLength(3);
   });
 
   it("shows an overheated barrel as overheated", () => {
-    const markup = renderToStaticMarkup(<SoloCockpit {...props({ cannonOverheated: true })} />);
+    const hot = renderToStaticMarkup(<SoloCockpit {...props({ machineGunOverheated: true })} />);
+    const cool = renderToStaticMarkup(<SoloCockpit {...props()} />);
 
-    expect(markup).toContain('data-overheated="true"');
-    // ...and the other barrel is not dragged along with it.
-    expect(markup.match(/data-overheated="false"/g)).toHaveLength(1);
+    expect(hot).toContain('data-overheated="true"');
+    expect(cool).toContain('data-overheated="false"');
   });
 
   it("says whether the assist is on, and offers the other state", () => {
@@ -66,17 +70,16 @@ describe("SoloCockpit", () => {
   });
 
   it("draws the heat bar as a share of the barrel's capacity", () => {
-    const markup = renderToStaticMarkup(<SoloCockpit {...props({ cannonHeat: 0.5 })} />);
+    const markup = renderToStaticMarkup(<SoloCockpit {...props({ machineGunHeat: 0.5 })} />);
 
     expect(markup).toContain("scaleY(0.5)");
   });
 
   it("clamps a heat reading that arrived out of range", () => {
-    const markup = renderToStaticMarkup(
-      <SoloCockpit {...props({ cannonHeat: 4, machineGunHeat: -1 })} />
-    );
+    const tooHot = renderToStaticMarkup(<SoloCockpit {...props({ machineGunHeat: 4 })} />);
+    const belowZero = renderToStaticMarkup(<SoloCockpit {...props({ machineGunHeat: -1 })} />);
 
-    expect(markup).toContain("scaleY(1)");
-    expect(markup).toContain("scaleY(0)");
+    expect(tooHot).toContain("scaleY(1)");
+    expect(belowZero).toContain("scaleY(0)");
   });
 });
