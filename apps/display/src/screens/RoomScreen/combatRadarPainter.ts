@@ -29,6 +29,15 @@ export const RADAR_UNITS = 200;
 const CENTRE = RADAR_UNITS / 2;
 /** The map itself; everything else is a ring or a label outside it. */
 const MAP_RADIUS = 62;
+/**
+ * The map on a dial that carries nothing else.
+ *
+ * A match draws no hull ring and no shield ring - both moved onto the head-up
+ * display - so the band those two and their labels reserved is free, and the
+ * one thing this dial is for gets it. The frame keeps a couple of units so the
+ * rim still reads as a rim.
+ */
+const ARENA_MAP_RADIUS = 88;
 const HULL_RING_RADIUS = 71;
 const SHIELD_RING_RADIUS = 80;
 /** The hull's numbers read inside its ring, the shield's outside its own. */
@@ -214,21 +223,24 @@ export function drawCombatRadar(
     shield: ringFraction(game.shield.energy, game.shield.capacity)
   }
 ): void {
-  const projection = createRadarProjection(game.arenaRadius, RADAR_UNITS, CENTRE - MAP_RADIUS);
+  // Sixteen published hulls is a match and nothing else has them; a match's
+  // dial is all map, so it uses all of the circle.
+  const mapRadius = game.arenaZones.length > 0 ? ARENA_MAP_RADIUS : MAP_RADIUS;
+  const projection = createRadarProjection(game.arenaRadius, RADAR_UNITS, CENTRE - mapRadius);
   const { hull, shield } = rings;
 
   context.clearRect(0, 0, RADAR_UNITS, RADAR_UNITS);
 
   context.fillStyle = "rgb(3 25 34 / 70%)";
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
+  context.arc(CENTRE, CENTRE, mapRadius, 0, Math.PI * 2);
   context.fill();
 
   context.save();
   // Everything on the map is clipped to it, the way the SVG clip path did it:
   // a ship at the rim must not draw over the rings that surround the dial.
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
+  context.arc(CENTRE, CENTRE, mapRadius, 0, Math.PI * 2);
   context.clip();
 
   /*
@@ -262,11 +274,11 @@ export function drawCombatRadar(
   context.strokeStyle = "rgb(72 212 221 / 18%)";
   context.lineWidth = 1;
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS * 0.5, 0, Math.PI * 2);
-  context.moveTo(CENTRE - MAP_RADIUS, CENTRE);
-  context.lineTo(CENTRE + MAP_RADIUS, CENTRE);
-  context.moveTo(CENTRE, CENTRE - MAP_RADIUS);
-  context.lineTo(CENTRE, CENTRE + MAP_RADIUS);
+  context.arc(CENTRE, CENTRE, mapRadius * 0.5, 0, Math.PI * 2);
+  context.moveTo(CENTRE - mapRadius, CENTRE);
+  context.lineTo(CENTRE + mapRadius, CENTRE);
+  context.moveTo(CENTRE, CENTRE - mapRadius);
+  context.lineTo(CENTRE, CENTRE + mapRadius);
   context.stroke();
 
   /*
@@ -398,7 +410,7 @@ export function drawCombatRadar(
   context.strokeStyle = "rgb(71 224 233 / 45%)";
   context.lineWidth = 1.5;
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
+  context.arc(CENTRE, CENTRE, mapRadius, 0, Math.PI * 2);
   context.stroke();
 
   /*

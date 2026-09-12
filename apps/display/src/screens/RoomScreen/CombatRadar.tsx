@@ -164,7 +164,7 @@ export function PolledCombatRadar({
       ref={host}
       className={arena ? "combat-radar combat-radar--arena" : "combat-radar"}
       data-testid="combat-radar"
-      aria-label={arena ? "Карта матча по центру снизу" : "Мини-карта арены по центру снизу"}
+      aria-label={arena ? "Карта матча справа" : "Мини-карта арены по центру снизу"}
     >
       <canvas ref={canvas} data-testid="combat-radar-canvas" />
       <span className="sr-only">

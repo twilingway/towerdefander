@@ -2993,14 +2993,23 @@ p {
 }
 
 /*
- * The arena's dial: the same place as the campaign's, and bigger.
+ * The arena's dial: against the right edge, halfway down, and bigger.
  *
- * A match has no hull ring and no shield ring on it, so the circle is all map -
- * and the map is the one panel that decides where you drive next, which is why
- * it earns the extra width.
+ * The middle of the bottom edge is where the fight is - a match is played
+ * around your own hull, and a dial parked under it covers the thing you are
+ * flying. The right edge is the one side a cockpit does not use: the sticks own
+ * the corners and the readouts own the top.
+ *
+ * A match has no hull ring and no shield ring on it, so the circle is all map,
+ * which is also why it earns the extra width.
  */
 .combat-radar--arena {
+  top: 50%;
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
   width: clamp(13rem, 22vw, 20rem);
+  transform: translateY(-50%);
 }
 
 /*

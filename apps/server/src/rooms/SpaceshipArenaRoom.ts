@@ -843,6 +843,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         // Narrowed to the wire's counter, which wraps; the display compares
         // against what it last drew, so a wrap costs one missed flash.
         view.shotsFired = ship.shotsFired % 65_536;
+        view.shieldBlocks = ship.shieldBlocks % 65_536;
       }
     );
 

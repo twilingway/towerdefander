@@ -91,7 +91,8 @@ interface FleetHull {
    * that got through, a shell the sector stopped.
    */
   drawnShots: number;
-  drawnShield: number;
+  /** Blocks already drawn, so a mark plays once per shell the sector stopped. */
+  drawnBlocks: number;
 }
 
 const RIVAL_TINT = 0xff9f8a;
@@ -139,6 +140,10 @@ export class ArenaFleet {
     // the answer belongs over the ship rather than only in a panel.
     const seen = new Set<string>();
     const toTick = snapshot.tick;
+    // The hull's own choice from the console, with the display's baked mark
+    // behind it - the same fallback the crew's own sector gets.
+    const impactEffect =
+      snapshot.shieldImpactEffect.length > 0 ? snapshot.shieldImpactEffect : SHIELD_IMPACT_EFFECT;
 
     for (const ship of snapshot.arenaShips) {
       seen.add(ship.entityId);
@@ -182,17 +187,25 @@ export class ArenaFleet {
       if (ship.hp < parts.hp - 0.01) {
         parts.flashLeftMs = FLASH_MS;
         bursts?.spawn(DEFAULT_ENEMY_DEATH_EFFECT, parts.hull.x, parts.hull.y, ship.radius * 0.6);
-      } else if (ship.shieldActive && ship.shieldEnergy < parts.drawnShield - 0.01) {
-        // On the barrier rather than on the hull: the sector is what stopped it.
+      }
+      /*
+       * A block is its own event, counted by the room.
+       *
+       * The battery was the signal here and it was the wrong one: a raised
+       * sector drains whether or not anything hits it, so the mark played on
+       * every patch the shield was up and on none of the shots it actually
+       * stopped. The counter only moves when a shell died on the barrier.
+       */
+      if (ship.shieldBlocks > parts.drawnBlocks && parts.drawnBlocks >= 0) {
         bursts?.spawn(
-          SHIELD_IMPACT_EFFECT,
+          impactEffect,
           parts.hull.x + Math.cos(ship.shieldAngle) * ship.shieldRadius,
           parts.hull.y + Math.sin(ship.shieldAngle) * ship.shieldRadius,
           ship.radius,
           ship.shieldAngle
         );
       }
-      parts.drawnShield = ship.shieldEnergy;
+      parts.drawnBlocks = ship.shieldBlocks;
       parts.hp = ship.hp;
       parts.maxHp = ship.maxHp;
       if (snap) {
@@ -442,7 +455,7 @@ export class ArenaFleet {
       turretMount:
         turretVisual === null ? null : { mountX: turretVisual.mountX, mountY: turretVisual.mountY },
       drawnShots: ship.shotsFired,
-      drawnShield: ship.shieldEnergy,
+      drawnBlocks: ship.shieldBlocks,
       hp: ship.hp,
       maxHp: ship.maxHp,
       flashLeftMs: 0

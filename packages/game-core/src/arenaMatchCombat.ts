@@ -246,6 +246,8 @@ export function resolveArenaHits(
 ): ArenaHitResolution {
   const damage = new Map<string, number>();
   const shieldSpend = new Map<string, number>();
+  /** Shells the sector stopped, counted apart from what they cost it. */
+  const shieldBlocks = new Map<string, number>();
   const killedBy = new Map<string, string>();
   const spent = new Set<string>();
 
@@ -271,6 +273,7 @@ export function resolveArenaHits(
 
     if (blockedByShield(projectile, bestTime, bestShip)) {
       shieldSpend.set(bestShip.id, (shieldSpend.get(bestShip.id) ?? 0) + projectile.damage);
+      shieldBlocks.set(bestShip.id, (shieldBlocks.get(bestShip.id) ?? 0) + 1);
       continue;
     }
 
@@ -286,10 +289,12 @@ export function resolveArenaHits(
   const nextShips = ships.map((ship) => {
     const taken = damage.get(ship.id) ?? 0;
     const drained = shieldSpend.get(ship.id) ?? 0;
+    const blocked = shieldBlocks.get(ship.id) ?? 0;
     if (taken === 0 && drained === 0) return ship;
     const hp = Math.max(0, ship.hp - taken);
     return {
       ...ship,
+      shieldBlocks: ship.shieldBlocks + blocked,
       hp,
       shieldEnergy: Math.max(0, ship.shieldEnergy - drained),
       alive: hp > 0,

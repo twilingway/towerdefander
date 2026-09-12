@@ -130,7 +130,8 @@ export function toDisplayRoomView(
               shieldCapacity: ship.shieldCapacity,
               revealed: ship.revealed,
               alive: ship.alive,
-              shotsFired: ship.shotsFired
+              shotsFired: ship.shotsFired,
+              shieldBlocks: ship.shieldBlocks
             })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"

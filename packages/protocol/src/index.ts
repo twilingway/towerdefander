@@ -28,7 +28,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 61 as const;
+export const PROTOCOL_VERSION = 62 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -487,7 +487,9 @@ export const publicArenaShipViewSchema = z
      */
     alive: z.boolean(),
     /** Shots fired, narrowed to the wire, so the display can flash a muzzle. */
-    shotsFired: z.number().int().min(0).max(65_535)
+    shotsFired: z.number().int().min(0).max(65_535),
+    /** Shells this sector stopped, so the display can mark where they landed. */
+    shieldBlocks: z.number().int().min(0).max(65_535)
   })
   .strict();
 export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;

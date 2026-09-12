@@ -54,6 +54,7 @@ export interface NetworkArenaShipState {
   revealed: boolean;
   alive: boolean;
   shotsFired: number;
+  shieldBlocks: number;
 }
 
 /** One rectangle of the arena's sheet; empty in the campaign. */

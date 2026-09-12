@@ -209,6 +209,7 @@ export class ArenaShipView extends Schema {
   /** False for a wreck; it stays published long enough to be seen dying. */
   @type("boolean") alive = true;
   @type("uint16") shotsFired = 0;
+  @type("uint16") shieldBlocks = 0;
 }
 
 export class ObstacleState extends Schema {

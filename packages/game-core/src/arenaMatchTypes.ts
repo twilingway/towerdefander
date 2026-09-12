@@ -60,6 +60,16 @@ export interface ArenaShipState {
    * and a boolean would lose the second of a pair fired in the same frame.
    */
   readonly shotsFired: number;
+  /**
+   * Shells this hull's sector has stopped, ever.
+   *
+   * A counter for the same reason the shots are one: the display samples it,
+   * and a block is an event that has to be drawn where it happened. Energy
+   * cannot stand in for it - a raised sector drains whether or not anything
+   * hits it, so a falling battery says "the shield is up", not "something
+   * landed".
+   */
+  readonly shieldBlocks: number;
 
   readonly shieldAngle: number;
   readonly shieldTargetAngle: number | null;
