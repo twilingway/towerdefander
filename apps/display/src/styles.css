@@ -4027,39 +4027,65 @@ p {
 }
 
 @media (height <= 520px) {
+  /*
+   * On every phone the dial is its ring alone: the box is cut to the ring, 808
+   * texels square out of the 1444 by 807 picture starting at x 318, so the wings
+   * are gone and the ring itself stands flush with the right edge.
+   */
   .display-shell--battle[data-hud-skin="frame"] {
     --frame-radar-window: clamp(4.5rem, 22vh, 5.5rem);
+    --frame-radar-width: calc(var(--frame-radar-window) / 0.8168);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] .combat-radar {
+    background-position: calc(var(--frame-radar-width) * -0.3936) center;
+    background-size: 178.71% 100%;
+    aspect-ratio: 808 / 807;
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] .combat-radar canvas {
+    left: 9.16%;
+    width: 81.68%;
+  }
+
+  .frame-scan {
+    bottom: calc(var(--frame-radar-bottom) + var(--frame-radar-width) * 0.5);
   }
 
   /*
-   * A phone held sideways, with the cockpit. The dial stands over the nose trigger
-   * with its ring about as large as the aim stick's, which takes nearly all the
-   * height above the gun hand. The status frame keeps to the top right beside the
-   * dial's ring, under the connection readouts; the gear takes the very corner.
+   * A phone held sideways, with the cockpit. The dial, its ring about as large as
+   * the aim stick's picture, stands straight over the aim stick; the nose trigger
+   * moves to the stick's left, level with its middle, to give the dial that
+   * height. The status frame takes the top right corner with the gear in its
+   * cut-out, and the connection readouts stand in a column beside the timer.
    */
   .display-shell--cockpit[data-hud-skin="frame"] {
     --frame-info-width: clamp(12rem, 24vw, 13rem);
-    --frame-status-width: clamp(8.5rem, 21vw, 9rem);
+    --frame-status-width: clamp(8rem, 20vw, 8.5rem);
     --frame-radar-window: calc(var(--cockpit-aim-ring) * 1.2);
     --frame-radar-bottom: calc(
-      clamp(0.5rem, 2vw, 1.25rem) + var(--frame-stick-inset) + var(--cockpit-aim-ring) + 12px +
-        44px + 0.25rem
+      clamp(0.5rem, 2vw, 1.25rem) + var(--frame-stick-inset) + var(--cockpit-aim-ring) * 1.25 +
+        0.25rem
     );
   }
 
-  /* Left of the dial's ring, which is the right seven tenths of its box. */
   .display-shell--cockpit[data-hud-skin="frame"] .status-frame {
-    top: max(1.6rem, calc(env(safe-area-inset-top) + 1.2rem));
-    right: calc(var(--frame-radar-right) + var(--frame-radar-width) * 0.702 + 0.3rem);
+    top: max(0.4rem, env(safe-area-inset-top));
+    right: max(0.4rem, env(safe-area-inset-right));
   }
 
-  /* At the dial's lower edge rather than its middle, clear of the status frame. */
+  /* At the dial's lower edge rather than its middle. */
   .display-shell--cockpit[data-hud-skin="frame"] .frame-scan {
     bottom: calc(var(--frame-radar-bottom) + 0.3rem);
     transform: none;
   }
 
-  /* The connection readouts along the top edge: the ping after the timer, the counter before the gear. */
+  /* Left of the aim stick's ring picture, level with the ring's middle. */
+  .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit__triggers {
+    right: calc(var(--cockpit-aim-ring) * 1.25 + 0.4rem);
+    bottom: calc((var(--cockpit-aim-ring) - var(--cockpit-nose-button)) / 2);
+  }
+
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .room-network {
     position: static;
   }
@@ -4067,26 +4093,27 @@ p {
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator,
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
     position: absolute;
-    top: 0;
-  }
-
-  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator {
     left: calc(50% + var(--frame-timer-width) / 2 + 0.4rem);
   }
 
-  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
-    right: 2.4rem;
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator {
+    top: 0;
   }
 
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
+    top: 1.1rem;
+  }
+
+  /* Centred in the status frame's cut-out, which on a phone is a little smaller than the gear. */
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
+    right: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings__toggle {
-    width: 2rem;
-    height: 2rem;
+    width: 1.6rem;
+    height: 1.6rem;
   }
 
   /* A frame this narrow leaves a caption forty pixels: smaller type, no tracking, whole words. */
