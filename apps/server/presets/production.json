@@ -1,5 +1,5 @@
 {
-  "version": 48,
+  "version": 56,
   "activePresetId": "default",
   "presets": [
     {
@@ -3113,16 +3113,18 @@
         "lootDriftDampingPerSecond": 1.6,
         "lootWindowTicks": 900,
         "lootBossWindowTicks": 1800,
-        "asteroidVisual": null,
+        "asteroidVisual": {
+          "shape": "sprite-asteroids",
+          "modelScale": 1
+        },
         "missileInterceptScoreReward": 5,
         "arenaRadius": 4400,
         "cameraViewWidth": 2500,
         "background": {
-          "parallaxStrength": 1,
-          "driftSpeed": 0.5,
-          "nebulaAlpha": 0.7,
-          "nebulaPreset": "blue"
+          "image": "deep-nebula",
+          "parallaxStrength": 1
         },
+        "hudSkin": "frame",
         "autopilot": {
           "level": "ace",
           "profiles": {
@@ -3433,9 +3435,14 @@
           "cameraViewWidth": 2500,
           "hullScaling": 2.5,
           "damageScaling": 0.7,
+          "shieldHitCostShare": 0.5,
+          "shieldAutopilotRaiseRange": 0,
           "scanRadiusScreens": 2.5,
           "scanCooldownTicks": 1800,
           "scanRevealTicks": 900,
+          "lootFirstSpawnTicks": 900,
+          "lootIntervalTicks": 3600,
+          "lootCargoIntervalTicks": 5400,
           "zoneIntervalTicks": 1800,
           "zonesPerClosure": 10,
           "zoneWarningTicks": 1800,
@@ -3446,12 +3453,20 @@
           "guardian": {
             "label": "Страж",
             "description": "Кинетическая турель и носовой пулемёт. Ни в чём не лучший и ни в чём не худший — корпус, по которому меряют остальные.",
-            "visual": null,
+            "visual": {
+              "shape": "sprite-player",
+              "modelScale": 1
+            },
             "effects": {
               "shieldBand": "shield-band",
               "shieldImpact": "shield-impact",
               "death": "explosion",
               "muzzle": "muzzle-flash"
+            },
+            "sounds": {
+              "cannonShot": "cannon",
+              "mgShot": "machine-gun",
+              "death": "explosion"
             },
             "unlockedAtWave": 1,
             "overrides": {
@@ -3880,12 +3895,20 @@
           "blade": {
             "label": "Клинок",
             "description": "Лазер в обоих стволах: не мажет, но не достаёт далеко. Быстрый и хрупкий — награждает того, кто подошёл и не стоит на месте.",
-            "visual": null,
+            "visual": {
+              "shape": "ship-needle",
+              "modelScale": 1
+            },
             "effects": {
               "shieldBand": "shield-band",
               "shieldImpact": "shield-impact",
               "death": "explosion",
               "muzzle": "muzzle-flash"
+            },
+            "sounds": {
+              "cannonShot": "cannon",
+              "mgShot": "machine-gun",
+              "death": "explosion"
             },
             "unlockedAtWave": 15,
             "overrides": {
@@ -4335,10 +4358,19 @@
           "bastion": {
             "label": "Бастион",
             "description": "Ракеты догоняют сами, поэтому корпусу не нужно спешить. Медленный, но толстый, с широким щитом — держит там, где остальные отходят.",
-            "visual": null,
+            "visual": {
+              "shape": "ship-hammer",
+              "modelScale": 1
+            },
             "effects": {
               "shieldBand": "shield-band",
               "shieldImpact": "shield-impact",
+              "death": "explosion",
+              "muzzle": "muzzle-flash"
+            },
+            "sounds": {
+              "cannonShot": "cannon",
+              "mgShot": "machine-gun",
               "death": "explosion"
             },
             "unlockedAtWave": 20,
@@ -4773,7 +4805,7 @@
         },
         "defaultShipArchetypeId": "guardian",
         "spaceshipVisual": {
-          "shape": "ship-dart",
+          "shape": "sprite-player",
           "modelScale": 1
         },
         "spaceshipMaxHp": 620,
@@ -4786,7 +4818,7 @@
         "headingAngularAccelerationPerSecondSquared": 400,
         "headingAngularBrakingPerSecondSquared": 400,
         "friendlyProjectileDamage": 14,
-        "fireCooldownTicks": 9,
+        "fireCooldownTicks": 30,
         "projectileSpeedPerSecond": 1000,
         "projectileRadius": 14,
         "projectileLifetimeMs": 680,
@@ -4804,6 +4836,14 @@
           "mountX": 0.2,
           "mountY": 0.55,
           "pivotX": 0.2,
+          "pivotY": 0
+        },
+        "machineGunVisual": {
+          "shape": "weapon-gatling",
+          "modelScale": 0.3,
+          "mountX": 1,
+          "mountY": 0,
+          "pivotX": 0,
           "pivotY": 0
         },
         "cannonHeatCapacity": 100,
@@ -7935,11 +7975,10 @@
         "arenaRadius": 4400,
         "cameraViewWidth": 2500,
         "background": {
-          "parallaxStrength": 1,
-          "driftSpeed": 0.5,
-          "nebulaAlpha": 0.7,
-          "nebulaPreset": "blue"
+          "image": "deep-nebula",
+          "parallaxStrength": 1
         },
+        "hudSkin": "classic",
         "autopilot": {
           "level": "ace",
           "profiles": {
@@ -8250,9 +8289,14 @@
           "cameraViewWidth": 2500,
           "hullScaling": 2.5,
           "damageScaling": 0.7,
+          "shieldHitCostShare": 0.5,
+          "shieldAutopilotRaiseRange": 0,
           "scanRadiusScreens": 2.5,
           "scanCooldownTicks": 1800,
           "scanRevealTicks": 1800,
+          "lootFirstSpawnTicks": 900,
+          "lootIntervalTicks": 3600,
+          "lootCargoIntervalTicks": 7200,
           "zoneIntervalTicks": 300,
           "zonesPerClosure": 10,
           "zoneWarningTicks": 300,
@@ -9606,6 +9650,7 @@
           "pivotX": 0.2,
           "pivotY": 0
         },
+        "machineGunVisual": null,
         "cannonHeatCapacity": 100,
         "cannonHeatPerShot": 5,
         "cannonCoolingPerSecond": 20,
