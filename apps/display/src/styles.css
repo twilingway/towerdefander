@@ -1929,6 +1929,16 @@ p {
   opacity: 0.6;
 }
 
+/* Two buttons side by side in the cockpit's lobby card, and they had no gap between them. */
+.join-card--cockpit .cockpit-ready + .fullscreen-button {
+  margin-left: 0.6rem;
+}
+
+/* On its own line above the room code, which a phone shows without the eyebrow between them. */
+.room-leave {
+  display: block;
+}
+
 /*
  * A phone standing in for the shared screen, before the fight starts.
  *

@@ -303,6 +303,20 @@ export function RoomScreen({
           comes back through its own session rather than by the code. */}
         {!match && view.game === null && (
           <div>
+            {/*
+             * The way back out of a lobby. A phone hides the header's readouts,
+             * the gear and its "close the room" among them, so a room opened by
+             * mistake had no exit short of reloading the page.
+             */}
+            <button
+              type="button"
+              className="link-button room-leave"
+              data-testid="lobby-leave"
+              disabled={session?.closingRoom === true}
+              onClick={onCloseRoom}
+            >
+              {session?.closingRoom === true ? "Закрываем…" : "← Выйти из комнаты"}
+            </button>
             <p className="eyebrow">Комната</p>
             <strong className="room-code">{view.roomId}</strong>
           </div>
