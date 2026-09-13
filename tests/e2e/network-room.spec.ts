@@ -65,7 +65,10 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
       "4400"
     );
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
-    await expect(display.getByTestId("machine-gun-heat")).toBeVisible();
+    // The bar is a positioned cluster of cells inside the status frame with no box
+    // of its own, so the frame is what is visible and the bar is what carries heat.
+    await expect(display.getByTestId("status-frame")).toBeVisible();
+    await expect(display.getByTestId("machine-gun-heat")).toBeAttached();
     // The countdown is display-only now: controllers keep just their controls.
     await expect(display.getByRole("timer", { name: /До конца волны/ })).toBeVisible();
     await expect(display.getByTestId("combat-radar")).toBeVisible();
