@@ -40,7 +40,7 @@
 
 ## 5. e2e и документы
 
-- [ ] 5.1 `network-room.spec.ts`, `arena-cockpit.spec.ts`, `scripts/layout-sweep.mjs` проверяют
+- [x] 5.1 `network-room.spec.ts`, `arena-cockpit.spec.ts`, `scripts/layout-sweep.mjs` проверяют
       рамки
 - [x] 5.2 `docs/GAME_DESIGN_DOCUMENT.md` описывает HUD в рамках; в `hud-skin-choice` задача 6.2
       отмечена отменённой
@@ -49,7 +49,7 @@
 
 ## 6. Приёмка
 
-- [ ] 6.1 `pnpm check` с перехватом кода возврата; `pnpm spec:validate`
+- [x] 6.1 `pnpm check` с перехватом кода возврата; `pnpm spec:validate`
 - [x] 6.2 Снимки боя кампании и матча на 1920×1080 и 844×390: рамки на месте, классических элементов
       нет
 - [x] 6.3 Поиск `classic` и «классик» по репозиторию: остаются только архив OpenSpec, миграция и
