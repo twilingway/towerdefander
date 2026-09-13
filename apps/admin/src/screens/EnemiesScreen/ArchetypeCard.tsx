@@ -10,6 +10,7 @@ import {
 
 import { AssetPicker } from "../../AssetPicker.js";
 import { EffectSlots } from "./EffectSlots.js";
+import { SoundSlots } from "./SoundSlots.js";
 import { EnemyPreview } from "../../EnemyPreview.js";
 import { DegreesField, NumberField, PercentField } from "../../components/fields.js";
 import { ENEMY_SKILL_LEVEL_LABELS } from "../../model/enemySkillLabels.js";
@@ -218,6 +219,14 @@ export function ArchetypeCard({ kind, archetype, tuning, onChange }: ArchetypeCa
         effects={archetype.visual.effects}
         onChange={(effects) => {
           patchVisual(kind, { effects });
+        }}
+      />
+
+      <h4 className="card__subtitle">Звуки событий</h4>
+      <SoundSlots
+        sounds={archetype.visual.sounds}
+        onChange={(sounds) => {
+          patchVisual(kind, { sounds });
         }}
       />
 

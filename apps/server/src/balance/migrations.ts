@@ -651,6 +651,19 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     // A preset written before the match ship was a setting keeps the hull and
     // the shot it was played with, which is what the built-ins state.
     hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
+    shieldHitCostShare:
+      readNumber(arena, "shieldHitCostShare") ?? defaults.arena.shieldHitCostShare,
+    /*
+     * The number the match was played on, whichever field held it.
+     *
+     * Until now the two modes shared the campaign's one, so an operator who set
+     * a range set it for both: carrying it across keeps the match playing the
+     * way it did, and the campaign keeps its own copy either way.
+     */
+    shieldAutopilotRaiseRange:
+      readNumber(arena, "shieldAutopilotRaiseRange") ??
+      readNumber(tuning, "shieldAutopilotRaiseRange") ??
+      defaults.arena.shieldAutopilotRaiseRange,
     damageScaling: readNumber(arena, "damageScaling") ?? defaults.arena.damageScaling,
     zoneIntervalTicks: readNumber(arena, "zoneIntervalTicks") ?? defaults.arena.zoneIntervalTicks,
     /*
@@ -667,6 +680,13 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     scanRadiusScreens: readNumber(arena, "scanRadiusScreens") ?? defaults.arena.scanRadiusScreens,
     scanCooldownTicks: readNumber(arena, "scanCooldownTicks") ?? defaults.arena.scanCooldownTicks,
     scanRevealTicks: readNumber(arena, "scanRevealTicks") ?? defaults.arena.scanRevealTicks,
+    // A preset from before the supply run gains it: a field with no drops at
+    // all is not a balance anybody chose.
+    lootFirstSpawnTicks:
+      readNumber(arena, "lootFirstSpawnTicks") ?? defaults.arena.lootFirstSpawnTicks,
+    lootIntervalTicks: readNumber(arena, "lootIntervalTicks") ?? defaults.arena.lootIntervalTicks,
+    lootCargoIntervalTicks:
+      readNumber(arena, "lootCargoIntervalTicks") ?? defaults.arena.lootCargoIntervalTicks,
     zoneWarningTicks: readNumber(arena, "zoneWarningTicks") ?? defaults.arena.zoneWarningTicks,
     zoneDamageIntervalTicks:
       readNumber(arena, "zoneDamageIntervalTicks") ?? defaults.arena.zoneDamageIntervalTicks,

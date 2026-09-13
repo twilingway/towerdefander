@@ -209,6 +209,18 @@ export class ArenaShipView extends Schema {
   /** False for a wreck; it stays published long enough to be seen dying. */
   @type("boolean") alive = true;
   @type("uint16") shotsFired = 0;
+  @type("uint16") shieldBlocks = 0;
+}
+
+/** One drop on the field: where it is and what it is worth. */
+export class ArenaLootView extends Schema {
+  @type("string") entityId = "";
+  @type("boolean") revealed = false;
+  @type("float32") captureRadius = 0;
+  @type("float32") captureShare = 0;
+  @type("string") kind: "ammo" | "gear" | "cargo" = "ammo";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
 }
 
 export class ObstacleState extends Schema {
@@ -327,6 +339,10 @@ export class EnemyVisualState extends Schema {
   @type("string") effectDeath = "";
   @type("string") effectHit = "";
   @type("string") effectShot = "";
+  /** And what it is heard doing, on the same terms. */
+  @type("string") soundDeath = "";
+  @type("string") soundHit = "";
+  @type("string") soundShot = "";
 }
 
 /**
@@ -419,6 +435,7 @@ export class SpaceshipDisplayState extends Schema {
   /** The last solo input frame the room applied; the cockpit replays past it. */
   @type("uint32") appliedInputSeq = 0;
   /** The radar sweep: when it may be asked for again, and how long it lasts. */
+  @type({ map: ArenaLootView }) arenaLoot = new MapSchema<ArenaLootView>();
   @type("uint16") scanReadySeconds = 0;
   @type("uint16") scanRevealSecondsRemaining = 0;
   /** The run's live drive numbers and the pose the client replays from. */
@@ -439,6 +456,16 @@ export class SpaceshipDisplayState extends Schema {
   @type("string") shieldImpactEffect = "";
   @type("string") shipDeathEffect = "";
   @type("string") shipMuzzleEffect = "";
+  /**
+   * What this hull is heard doing; an empty string is an unset slot, which
+   * leaves the display's own rule. Strings on the display branch are
+   * affordable for the same reason the effects above are: chosen once for the
+   * room rather than sampled every tick.
+   */
+  @type("string") shipCannonSound = "";
+  @type("string") shipMgSound = "";
+  @type("string") shipHitSound = "";
+  @type("string") shipDeathSound = "";
   @type("float32") spaceshipVisualScale = 1;
   @type("string") turretVisualShape = "";
   @type("float32") turretVisualScale = 1;

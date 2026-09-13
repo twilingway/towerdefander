@@ -13,7 +13,8 @@ import {
 } from "../playback.js";
 import type { LiveEntity } from "../../model/shipPrediction.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
-import { drawSpaceshipHull } from "../entityArt.js";
+import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
+import { getMuzzlePoint } from "../spaceshipViewModel.js";
 import {
   DEFAULT_ENEMY_DEATH_EFFECT,
   deathEffectFor,
@@ -21,6 +22,8 @@ import {
   type BurstLayer
 } from "./bursts.js";
 import type { ScenePrediction } from "./entities.js";
+import type { SceneAudio } from "./sceneAudio.js";
+import { ShieldBand } from "./shield.js";
 
 /** Where the scene has actually drawn the player's own hull this frame. */
 export interface DrawnOwnPose {
@@ -81,13 +84,27 @@ interface FleetHull {
   flashLeftMs: number;
   /** True once this hull has been drawn dying; a wreck is played once. */
   wrecked: boolean;
+  /** What the sector is doing, read by the barrier pool each frame. */
+  shieldUp: boolean;
+  shieldCharge: number;
+  readonly shieldRadius: number;
+  readonly shieldHalfAngle: number;
+  /** Hull radius and the gun's mount, both fixed for the match. */
+  readonly radius: number;
+  readonly turretMount: { readonly mountX: number; readonly mountY: number } | null;
   /**
    * What was last drawn of this hull's shooting and its barrier, so the next
    * patch can be read as events rather than as numbers: a shot fired, a shell
    * that got through, a shell the sector stopped.
    */
   drawnShots: number;
-  drawnShield: number;
+  /** Shots seen on the wire and not yet flashed; spent one per drawn frame. */
+  pendingShots: number;
+  readonly muzzleEffect: string;
+  /** Whose flash is whose, so the pool drags this hull's and no other's. */
+  readonly followKey: string;
+  /** Blocks already drawn, so a mark plays once per shell the sector stopped. */
+  drawnBlocks: number;
 }
 
 const RIVAL_TINT = 0xff9f8a;
@@ -97,6 +114,8 @@ const HEALTH_HIGH = 0x74e39b;
 const HEALTH_LOW = 0xff6b5e;
 const FLASH_COLOR = 0xffe6a0;
 const FLASH_MS = 140;
+/** Flashes a hull may owe at once; see where they are banked. */
+const SHOT_BACKLOG = 3;
 /** What a sector plays where it stopped a shell; the crew's own hull plays it too. */
 const SHIELD_IMPACT_EFFECT = "shield-impact";
 /** Bar geometry, in hull radii, so it scales with whatever ship is flown. */
@@ -118,8 +137,26 @@ const BAR_HEIGHT = 0.26;
  * gave, or they would stand still twenty times a second and look like statues
  * shooting at each other.
  */
+/**
+ * How many animated barriers a match may have on screen at once.
+ *
+ * A rope is geometry, and geometry for a crowd is what this display does not
+ * do - so the barriers are lent from a pool rather than owned one per hull.
+ * Four is generous: a sector drains at twice the rate it charges, so a measured
+ * minute of sixteen bots had one or two raised at any moment, and only the ones
+ * the camera can actually see are ever handed one.
+ */
+const BANDS = 4;
+
 export class ArenaFleet {
   private readonly hulls = new Map<string, FleetHull>();
+  private readonly bands: ShieldBand[] = [];
+  /** Kept from the last patch so a drawn frame can spend a banked shot. */
+  private bursts: BurstLayer | undefined;
+  /** And the same for the shot being heard, which is spent on the same frame. */
+  private sounds: SceneAudio | undefined;
+  /** The hull's gun, kept for the same reason: a flash is spent on a drawn frame. */
+  private cannonSound = "";
 
   /** Takes the newest patch: a sample on every track, health, and a hit flash. */
   sync(
@@ -128,13 +165,21 @@ export class ArenaFleet {
     bake: BakeShape,
     snap = false,
     prediction?: ScenePrediction,
-    bursts?: BurstLayer
+    bursts?: BurstLayer,
+    sounds?: SceneAudio
   ): void {
     // Every hull, the player's own included: the scene draws that one's art, but
     // its health and its sector are the same question a rival's bars answer, and
     // the answer belongs over the ship rather than only in a panel.
+    this.bursts = bursts;
+    this.sounds = sounds;
+    this.cannonSound = snapshot.shipCannonSound;
     const seen = new Set<string>();
     const toTick = snapshot.tick;
+    // The hull's own choice from the console, with the display's baked mark
+    // behind it - the same fallback the crew's own sector gets.
+    const impactEffect =
+      snapshot.shieldImpactEffect.length > 0 ? snapshot.shieldImpactEffect : SHIELD_IMPACT_EFFECT;
 
     for (const ship of snapshot.arenaShips) {
       seen.add(ship.entityId);
@@ -156,32 +201,52 @@ export class ArenaFleet {
        * a shell the sector stopped. All three are exactly what a pilot needs to
        * see, and none of them costs a byte more on the wire.
        */
+      /*
+       * Counted here, played on the frame that draws the ship.
+       *
+       * A patch says a barrel fired; the hull it belongs to is drawn on the
+       * playback clock, which runs deliberately behind. Flashing on arrival put
+       * the muzzle a tenth of a second ahead of the ship it belongs to and on
+       * the barrel's old bearing - a gun that fires before it is aimed, which
+       * is what reads as jerky shooting. So the shots are banked and spent by
+       * `update`, where the turret's drawn position is already known.
+       */
       const fired = ship.shotsFired - parts.drawnShots;
       if (fired > 0 && parts.drawnShots > 0 && !parts.isSelf) {
-        bursts?.spawn(
-          muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
-          parts.turret.x,
-          parts.turret.y,
-          ship.radius,
-          parts.turret.rotation
-        );
+        // Capped: a hull that was off screen for a second must not empty a
+        // magazine's worth of flashes into one frame when it comes back.
+        parts.pendingShots = Math.min(SHOT_BACKLOG, parts.pendingShots + fired);
       }
       parts.drawnShots = ship.shotsFired;
 
       if (ship.hp < parts.hp - 0.01) {
         parts.flashLeftMs = FLASH_MS;
         bursts?.spawn(DEFAULT_ENEMY_DEATH_EFFECT, parts.hull.x, parts.hull.y, ship.radius * 0.6);
-      } else if (ship.shieldActive && ship.shieldEnergy < parts.drawnShield - 0.01) {
-        // On the barrier rather than on the hull: the sector is what stopped it.
+        sounds?.play(
+          snapshot.shipHitSound,
+          parts.hull.x,
+          parts.hull.y,
+          parts.isSelf ? "own" : "enemyShot"
+        );
+      }
+      /*
+       * A block is its own event, counted by the room.
+       *
+       * The battery was the signal here and it was the wrong one: a raised
+       * sector drains whether or not anything hits it, so the mark played on
+       * every patch the shield was up and on none of the shots it actually
+       * stopped. The counter only moves when a shell died on the barrier.
+       */
+      if (ship.shieldBlocks > parts.drawnBlocks && parts.drawnBlocks >= 0) {
         bursts?.spawn(
-          SHIELD_IMPACT_EFFECT,
+          impactEffect,
           parts.hull.x + Math.cos(ship.shieldAngle) * ship.shieldRadius,
           parts.hull.y + Math.sin(ship.shieldAngle) * ship.shieldRadius,
           ship.radius,
           ship.shieldAngle
         );
       }
-      parts.drawnShield = ship.shieldEnergy;
+      parts.drawnBlocks = ship.shieldBlocks;
       parts.hp = ship.hp;
       parts.maxHp = ship.maxHp;
       if (snap) {
@@ -211,6 +276,15 @@ export class ArenaFleet {
         // behind it: a preset that names nothing plays what it always played.
         const effect = deathEffectFor("enemy", false, snapshot.shipDeathEffect);
         if (effect !== undefined) bursts?.spawn(effect, parts.hull.x, parts.hull.y, ship.radius);
+        // Every hull in a match is the same hull, so one wreck sounds like any
+        // other - including the player's own, which is the one they most need.
+        sounds?.play(
+          snapshot.shipDeathSound.length > 0 ? snapshot.shipDeathSound : "explosion",
+          parts.hull.x,
+          parts.hull.y,
+          // A player's own wreck is theirs to hear whatever they switched off.
+          parts.isSelf ? "own" : "enemyDeath"
+        );
         parts.hull.setVisible(false);
         parts.turret.setVisible(false);
         parts.shield.setVisible(false);
@@ -220,6 +294,10 @@ export class ArenaFleet {
         parts.shieldFill.setVisible(false);
       }
       if (parts.wrecked) continue;
+      parts.shieldUp = ship.shieldActive;
+      parts.shieldCharge =
+        ship.shieldCapacity <= 0 ? 1 : clamp01(ship.shieldEnergy / ship.shieldCapacity);
+      // The baked arc stands in until the pool decides who gets a rope.
       parts.shield.setVisible(!parts.isSelf && ship.shieldActive);
       this.drawBars(parts, ship);
     }
@@ -245,7 +323,18 @@ export class ArenaFleet {
     playbackTick: number,
     deltaMs: number,
     own: DrawnOwnPose | undefined,
-    prediction: ScenePrediction | undefined
+    prediction: ScenePrediction | undefined,
+    /** The camera's world rectangle and the hull's chosen barrier effect. */
+    barriers?: {
+      readonly scene: Phaser.Scene;
+      readonly view: {
+        readonly x: number;
+        readonly y: number;
+        readonly right: number;
+        readonly bottom: number;
+      };
+      readonly effect: string;
+    }
   ): void {
     for (const parts of this.hulls.values()) {
       // A wreck is a sprite that has already been hidden; nothing left to move.
@@ -266,9 +355,53 @@ export class ArenaFleet {
         }
         return sampleAngleTrack(parts[field], playbackTick);
       };
-      parts.hull.setPosition(x, y).setRotation(angle("heading"));
-      parts.turret.setPosition(x, y).setRotation(angle("turretAngle"));
+      const heading = angle("heading");
+      parts.hull.setPosition(x, y).setRotation(heading);
+      /*
+       * The gun where the console bolted it, exactly as the scene places the
+       * crew's own: a turret drawn on the hull's centre is a gun firing from
+       * under the ship, and the shells - which now leave the mount - would come
+       * out of a barrel that is not there.
+       */
+      const mount = turretMountPoint({ x, y, radius: parts.radius }, heading, parts.turretMount);
+      parts.turret.setPosition(mount.x, mount.y).setRotation(angle("turretAngle"));
       parts.shield.setPosition(x, y).setRotation(angle("shieldAngle"));
+
+      const bursts = this.bursts;
+      if (bursts !== undefined) {
+        // The end of the barrel as it is drawn this frame, the way the crew's
+        // own flash is placed: the mount is where the gun is bolted, not where
+        // the shell leaves.
+        const muzzle = getMuzzlePoint(
+          { x: parts.turret.x, y: parts.turret.y },
+          parts.turret.rotation,
+          parts.radius
+        );
+        if (parts.pendingShots > 0) {
+          parts.pendingShots -= 1;
+          bursts.spawn(
+            parts.muzzleEffect,
+            muzzle.x,
+            muzzle.y,
+            parts.radius,
+            parts.turret.rotation,
+            parts.followKey
+          );
+          this.sounds?.weapon(this.cannonSound, muzzle.x, muzzle.y, "enemyShot");
+        }
+        /*
+         * And the flash still playing is dragged back onto the barrel, exactly
+         * as the crew's own is.
+         *
+         * Left where it was fired it is honest - expelled gas does not travel
+         * with the ship - but a hull covers most of its own length inside the
+         * quarter second a flash lasts, so it reads as the flash sliding off
+         * the gun: under the muzzle when the ship drives forward, out ahead of
+         * it when the ship backs away. Glued to the barrel is what reads as a
+         * gun firing.
+         */
+        bursts.followMuzzle(parts.followKey, muzzle, parts.turret.rotation);
+      }
 
       const barY = y - parts.hull.displayHeight * 0.75;
       const left = x - parts.healthBack.displayWidth / 2;
@@ -288,11 +421,72 @@ export class ArenaFleet {
         .setVisible(true)
         .setAlpha(Math.max(0, parts.flashLeftMs / FLASH_MS));
     }
+
+    if (barriers !== undefined) this.lendBands(barriers.scene, barriers.view, barriers.effect);
   }
 
   destroy(): void {
     for (const parts of this.hulls.values()) destroyHull(parts);
     this.hulls.clear();
+    for (const band of this.bands) band.destroy();
+    this.bands.length = 0;
+  }
+
+  /**
+   * The animated barriers, lent to the hulls that have earned one this frame.
+   *
+   * Earned means two things at once: the sector is up, and the hull is on
+   * screen. A barrier drawn for a ship the player cannot see is a rope rebuilt
+   * for nobody, which is exactly the cost this pool exists to bound. Nearest
+   * first, so when there are more raised sectors than ropes the ones in the
+   * fight get them.
+   */
+  private lendBands(
+    scene: Phaser.Scene,
+    view: {
+      readonly x: number;
+      readonly y: number;
+      readonly right: number;
+      readonly bottom: number;
+    },
+    bandEffect: string
+  ): void {
+    const shown: { parts: FleetHull; distance: number }[] = [];
+    const centreX = (view.x + view.right) / 2;
+    const centreY = (view.y + view.bottom) / 2;
+    for (const parts of this.hulls.values()) {
+      if (parts.wrecked || parts.isSelf || !parts.shieldUp) continue;
+      const x = parts.hull.x;
+      const y = parts.hull.y;
+      // The sector reaches past the hull, so a ship just off the edge still has
+      // a barrier worth drawing; its own radius is the margin.
+      const margin = parts.shieldRadius;
+      if (x < view.x - margin || x > view.right + margin) continue;
+      if (y < view.y - margin || y > view.bottom + margin) continue;
+      shown.push({ parts, distance: Math.hypot(x - centreX, y - centreY) });
+    }
+    shown.sort((left, right) => left.distance - right.distance);
+
+    for (let index = 0; index < BANDS; index += 1) {
+      const taken = shown[index];
+      if (taken === undefined) {
+        this.bands[index]?.hide();
+        continue;
+      }
+      const band = (this.bands[index] ??= new ShieldBand(scene, bandEffect));
+      band.draw(
+        { x: taken.parts.hull.x, y: taken.parts.hull.y },
+        taken.parts.shield.rotation,
+        taken.parts.shieldRadius,
+        taken.parts.shieldHalfAngle,
+        taken.parts.shieldCharge,
+        true
+      );
+      // The baked arc is what a barrier looks like before the atlas arrives and
+      // for every hull the pool could not reach; where a rope is drawn it would
+      // only double the edge.
+      taken.parts.shield.setVisible(!band.ready);
+    }
   }
 
   /**
@@ -419,8 +613,18 @@ export class ArenaFleet {
       turretAngle: createAngleTrack(ship.turretAngle, toTick),
       shieldAngle: createAngleTrack(ship.shieldAngle, toTick),
       wrecked: false,
+      shieldUp: ship.shieldActive,
+      shieldCharge: ship.shieldCapacity <= 0 ? 1 : clamp01(ship.shieldEnergy / ship.shieldCapacity),
+      shieldRadius: ship.shieldRadius,
+      shieldHalfAngle: ship.shieldArcHalfAngle,
+      radius,
+      turretMount:
+        turretVisual === null ? null : { mountX: turretVisual.mountX, mountY: turretVisual.mountY },
       drawnShots: ship.shotsFired,
-      drawnShield: ship.shieldEnergy,
+      pendingShots: 0,
+      muzzleEffect: muzzleEffectFor("cannon", snapshot.shipMuzzleEffect),
+      followKey: `arena:${ship.entityId}`,
+      drawnBlocks: ship.shieldBlocks,
       hp: ship.hp,
       maxHp: ship.maxHp,
       flashLeftMs: 0

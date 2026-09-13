@@ -153,7 +153,11 @@ export function placeOwnShots(
     readonly hullRadius: number;
     /** The hull's own choice for its turret; empty leaves the display's. */
     readonly turretMuzzleEffect?: string;
-  }
+    /** And what each barrel is heard as; empty is a barrel nobody hears. */
+    readonly cannonSound?: string;
+    readonly mgSound?: string;
+  },
+  sounds?: { weapon: (id: string | undefined, x: number, y: number) => void }
 ): void {
   const muzzle = (source: OwnShot["source"], shellRadius: number) => {
     const fromCannon = source === "cannon";
@@ -171,6 +175,8 @@ export function placeOwnShots(
       bearing,
       shot.source
     );
+    // On the barrel, like the flash: the shot is heard where it left the ship.
+    sounds?.weapon(shot.source === "cannon" ? pose.cannonSound : pose.mgSound, point.x, point.y);
   }
   shots.length = 0;
   /*

@@ -45,7 +45,12 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     await expect(shield.locator(".role-badge")).toHaveText("Оператор щита");
     await markCrewReady([pilot, gunner, shield]);
 
-    await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
+    /*
+     * The badge that used to say this is gone: in a fight it told somebody who
+     * is flying the ship that the ship is in a fight. The world being on screen
+     * is the same fact, said by the thing itself.
+     */
+    await expect(display.locator(".phase-badge")).toHaveCount(0);
     await expect(display.getByTestId("spaceship-world")).toBeVisible();
     await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
       "data-arena-radius",
@@ -89,12 +94,6 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     await expect(pilot.locator(".latency-indicator")).toHaveText(/\d+ мс/, {
       timeout: 5_000
     });
-    await expect(display.locator(".crew-latency-overlay .latency-row")).toHaveText([
-      /Экран → сервер \d+ мс/,
-      /Пилот \d+ мс/,
-      /Наводчик \d+ мс/,
-      /Щит \d+ мс/
-    ]);
     await assertResponsiveBattlefield(display);
 
     const startX = Number(
@@ -300,7 +299,12 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     await markCrewReady([pilot, gunner, shield]);
 
     const world = display.getByTestId("spaceship-world");
-    await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
+    /*
+     * The badge that used to say this is gone: in a fight it told somebody who
+     * is flying the ship that the ship is in a fight. The world being on screen
+     * is the same fact, said by the thing itself.
+     */
+    await expect(display.locator(".phase-badge")).toHaveCount(0);
     await assertFullscreenHud(display);
 
     const xBeforeTouch = Number(await world.getAttribute("data-spaceship-x"));
@@ -366,8 +370,19 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     await gunner.getByRole("button", { name: "Выйти из комнаты" }).click();
     await expect(gunner.getByRole("button", { name: "Подключиться" })).toBeVisible();
 
-    display.once("dialog", async (dialog) => dialog.accept());
-    await display.getByRole("button", { name: "Закрыть комнату" }).click();
+    /*
+     * The way out lives behind the gear, and asks twice.
+     *
+     * A red button beside the readouts is the brightest thing on a fighting
+     * screen and the one nobody wants to hit, so it moved into the settings
+     * window with the volume - and it arms itself on the first press rather
+     * than raising the browser's own dialog, which on a phone drops the page
+     * out of full screen to show itself.
+     */
+    await display.getByTestId("settings-toggle").click();
+    await display.getByTestId("settings-leave").click();
+    await expect(display.getByTestId("settings-leave")).toHaveAttribute("data-armed", "true");
+    await display.getByTestId("settings-leave").click();
     await expect(display.getByRole("button", { name: "Кампания I: Завеса" })).toBeVisible();
     await Promise.all(
       [pilot, shield].map(async (page) => {
@@ -420,7 +435,12 @@ test.skip("crew votes one shared upgrade and pays for it once", async ({ browser
     await markCrewReady([pilot, gunner, shield]);
 
     const world = display.getByTestId("spaceship-world");
-    await expect(display.locator(".phase-badge")).toHaveText("Корабль в бою");
+    /*
+     * The badge that used to say this is gone: in a fight it told somebody who
+     * is flying the ship that the ship is in a fight. The world being on screen
+     * is the same fact, said by the thing itself.
+     */
+    await expect(display.locator(".phase-badge")).toHaveCount(0);
     await expect(world).toHaveAttribute("data-demo-target-id", /.+/, { timeout: 30_000 });
     // The pilot holds a landscape phone here, so this is the run that exercises
     // the dual-zone layout with two live pointers.

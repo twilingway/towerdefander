@@ -72,7 +72,9 @@ async function invoke(handler: RequestHandler, input: Request, output: Response)
 function metadata(overrides: Partial<RoomStatsMetadata> = {}): RoomStatsMetadata {
   return {
     statsId: "stats-only-1",
+    mode: "campaign",
     status: "combat",
+    connections: 4,
     connectedPlayers: 3,
     reservedPlayers: 0,
     capacity: 3,
@@ -83,6 +85,62 @@ function metadata(overrides: Partial<RoomStatsMetadata> = {}): RoomStatsMetadata
     ...overrides
   };
 }
+
+describe("the room snapshot", () => {
+  /**
+   * The two games are counted apart, and the people are counted once.
+   *
+   * Seats cannot answer "how many people are on the server": a campaign crew of
+   * three shares a screen, so it is four connections and three seats, while an
+   * arena player is one connection holding both a seat and a screen. Only the
+   * sockets add up.
+   */
+  it("splits campaign from arena and counts people once", () => {
+    const snapshot = createRoomStatsSnapshot(
+      [
+        {
+          metadata: metadata({
+            statsId: "a",
+            mode: "campaign",
+            connections: 4,
+            connectedPlayers: 3
+          })
+        },
+        {
+          metadata: metadata({
+            statsId: "b",
+            mode: "arena",
+            status: "combat",
+            connections: 1,
+            connectedPlayers: 1,
+            capacity: 16
+          })
+        }
+      ],
+      10_000
+    );
+
+    expect(snapshot.totals.people).toBe(5);
+    expect(snapshot.totals.rooms).toBe(2);
+    expect(snapshot.byMode.campaign).toMatchObject({ rooms: 1, people: 4, connectedPlayers: 3 });
+    expect(snapshot.byMode.arena).toMatchObject({ rooms: 1, people: 1, connectedPlayers: 1 });
+    expect(snapshot.rooms.map((room) => room.mode)).toEqual(["campaign", "arena"]);
+  });
+
+  /** A room from an older build named no game; it is a campaign room. */
+  it("puts a room that names no game in the campaign column", () => {
+    const legacy = metadata();
+    const withoutMode = { ...legacy } as Partial<typeof legacy>;
+    delete withoutMode.mode;
+    delete withoutMode.connections;
+
+    const snapshot = createRoomStatsSnapshot([{ metadata: withoutMode }], 10_000);
+    expect(snapshot.byMode.campaign.rooms).toBe(1);
+    expect(snapshot.byMode.arena.rooms).toBe(0);
+    // With nothing better to go on, the seats it filled are what it knows.
+    expect(snapshot.totals.people).toBe(3);
+  });
+});
 
 describe("statistics access", () => {
   it.each(["127.0.0.1", "127.255.1.9", "::1", "::ffff:127.0.0.1"])(

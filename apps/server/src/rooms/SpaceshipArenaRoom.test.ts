@@ -4,9 +4,10 @@ import {
   type ArenaMatchConfig,
   type ArenaMatchState
 } from "@spaceship-defender/game-core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SpaceshipArenaRoom } from "./SpaceshipArenaRoom.js";
+import { getBalanceStore } from "../balance/index.js";
 
 /**
  * What the matchmaker does between constructing a room and calling `onCreate`:
@@ -22,6 +23,7 @@ function initRoom<T extends object>(room: T): T {
 
 /** The private surface this file reaches into, named rather than cast inline. */
 interface ArenaInternals {
+  publishStats: () => Promise<void>;
   match: ArenaMatchState | undefined;
   playerSessionId: string | undefined;
   config: ArenaMatchConfig;
@@ -197,5 +199,97 @@ describe("the arena's published encounter", () => {
     internals.publish();
     const ended = publicEncounterViewSchema.safeParse(read());
     expect(ended.error?.issues ?? []).toEqual([]);
+  });
+
+  /**
+   * An emptied match is kept for half a minute, then let go.
+   *
+   * Kept, because a phone that loses the network for a few seconds has to come
+   * back to its own fight rather than to a lobby. Let go, because an empty room
+   * still steps sixteen hulls sixty times a second - about four and a half
+   * megabytes and a share of a core each, and four of them were found sitting
+   * on a stand with nobody in any of them.
+   */
+  it("holds an emptied match for half a minute before closing it", () => {
+    const { room, internals } = arenaRoom();
+    const hold = vi.spyOn(room.clock, "setTimeout");
+    const close = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    internals.started = true;
+    room.onLeave();
+
+    expect(close).not.toHaveBeenCalled();
+    expect(hold.mock.calls.at(-1)?.[1]).toBe(30_000);
+  });
+
+  /** A queue nobody is in is over at once: there is no fight to come back to. */
+  it("closes a waiting room the moment the last person leaves", () => {
+    const { room } = arenaRoom();
+    const close = vi.spyOn(room, "disconnect").mockResolvedValue(undefined);
+
+    room.onLeave();
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A match appears on the room dashboard at all.
+   *
+   * It published nothing until now, so the page counted campaign rooms and
+   * called the number "players online" - a person flying a match was, to that
+   * page, not on the server.
+   */
+  it("reports itself to the dashboard as an arena room", async () => {
+    const { room, internals } = arenaRoom();
+    const setMetadata = vi.spyOn(room, "setMetadata").mockResolvedValue(undefined);
+
+    await internals.publishStats();
+    expect(setMetadata).toHaveBeenCalledTimes(1);
+    expect(setMetadata.mock.calls.at(-1)?.[0]).toMatchObject({
+      mode: "arena",
+      status: "lobby",
+      capacity: internals.config.shipCount
+    });
+
+    // And a started match is a fight rather than a queue.
+    internals.started = true;
+    await internals.publishStats();
+    expect(setMetadata.mock.calls.at(-1)?.[0]).toMatchObject({ mode: "arena", status: "combat" });
+  });
+
+  /**
+   * The match's frame and the match's sector range are the arena's own.
+   *
+   * Both used to be read off the campaign's ship, which made the bot's slice a
+   * different frame from the one the screen draws and gave the sector a reason
+   * to come up that meant something else in this mode. The room builds its hull
+   * from the arena section, and this is what says so.
+   */
+  it("builds the hull on the arena's own numbers, not the campaign's", () => {
+    const tuning = getBalanceStore().getActiveTuning() as unknown as {
+      cameraViewWidth: number;
+      shieldAutopilotRaiseRange: number;
+      arena: { cameraViewWidth: number; shieldAutopilotRaiseRange: number };
+    };
+    const before = {
+      cameraViewWidth: tuning.cameraViewWidth,
+      raiseRange: tuning.shieldAutopilotRaiseRange,
+      arenaCameraViewWidth: tuning.arena.cameraViewWidth,
+      arenaRaiseRange: tuning.arena.shieldAutopilotRaiseRange
+    };
+    tuning.cameraViewWidth = 1_600;
+    tuning.shieldAutopilotRaiseRange = 111;
+    tuning.arena.cameraViewWidth = 3_000;
+    tuning.arena.shieldAutopilotRaiseRange = 777;
+    try {
+      const { internals } = arenaRoom();
+      expect(internals.config.ship.cameraViewWidth).toBe(3_000);
+      expect(internals.config.ship.shieldAutopilotRaiseRange).toBe(777);
+    } finally {
+      tuning.cameraViewWidth = before.cameraViewWidth;
+      tuning.shieldAutopilotRaiseRange = before.raiseRange;
+      tuning.arena.cameraViewWidth = before.arenaCameraViewWidth;
+      tuning.arena.shieldAutopilotRaiseRange = before.arenaRaiseRange;
+    }
   });
 });

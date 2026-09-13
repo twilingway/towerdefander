@@ -74,19 +74,63 @@ try {
       void stopAll(1);
     });
   }
-  console.log(
-    [
-      `server     http://localhost:${String(SERVER_PORT)}`,
-      "display    http://localhost:5173",
-      "controller http://localhost:5174",
-      "admin      http://localhost:5175",
-      "",
-      "Ctrl+C stops all four, including whatever they spawned."
-    ].join("\n")
-  );
+  console.log(banner(SERVER_PORT));
 } catch (error) {
   console.error(String(error instanceof Error ? error.message : error));
   await stopAll(1);
+}
+
+/**
+ * Everything this stand answers on, printed where it is needed.
+ *
+ * Four ports is the easy half. What is hard to remember is the pages behind
+ * them: a console of a dozen tabs, and a display whose debug switches are
+ * deliberately query flags rather than routes, so nothing on the page links to
+ * them and nothing but a note like this says they exist.
+ */
+function banner(serverPort) {
+  const server = `http://localhost:${String(serverPort)}`;
+  const tabs = adminTabs();
+  return [
+    "",
+    "  Дисплей       http://localhost:5173",
+    "                /campaign · /arena · /room/<код>",
+    "                ?diag приборы · ?tanks танковый руль · ?dpr=<n> плотность пикселей",
+    "                ?preview=1 кадр камеры без комнаты · ?wave=<n> старт с волны · ?ship=<id>",
+    "  Контроллер    http://localhost:5174        (телефон открывает /room/<код>)",
+    "  Консоль       http://localhost:5175",
+    ...(tabs.length === 0 ? [] : [`                ${tabs.join(" · ")}`]),
+    `  Сервер        ${server}`,
+    `                ${server}/health · ${server}/stats/rooms · ${server}/admin/balance`,
+    "",
+    "  Пароли к /stats и /admin локально не нужны: с петлевого адреса пускают без них.",
+    "  На проде это ROOM_STATS_PASSWORD и ADMIN_BALANCE_PASSWORD из .env.production.",
+    "",
+    "  Поверх стенда, своими портами: pnpm fx:edit (:35179) · pnpm watch:bots · pnpm demo:visible",
+    "",
+    "  Ctrl+C останавливает все четыре вместе со всем, что они породили.",
+    ""
+  ].join("\n");
+}
+
+/**
+ * The console's tabs, read off the file that declares them.
+ *
+ * A second copy of this list would be wrong the first time somebody adds a tab.
+ * If the shape of the registry ever changes this prints nothing rather than
+ * something untrue.
+ */
+function adminTabs() {
+  try {
+    const source = readFileSync(
+      new URL("../apps/admin/src/screens/registry.tsx", import.meta.url),
+      "utf8"
+    );
+    const paths = /export const TAB_PATHS[^{]*\{([^}]*)\}/.exec(source)?.[1] ?? "";
+    return [...paths.matchAll(/^\s*\w+:\s*"([^"]+)"/gm)].map((found) => `/${found[1]}`);
+  } catch {
+    return [];
+  }
 }
 
 function viteArgs(app, port) {

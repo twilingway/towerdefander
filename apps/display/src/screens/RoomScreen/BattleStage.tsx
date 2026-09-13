@@ -1,5 +1,5 @@
 import type { DisplayRoomView, UpgradeId } from "@spaceship-defender/protocol";
-import { Profiler, type ReactNode } from "react";
+import { Profiler, useEffect, type ReactNode } from "react";
 
 import { DiagnosticsHud } from "../../components/DiagnosticsHud/index.js";
 import { RotateNotice } from "../../components/RotateNotice/index.js";
@@ -13,6 +13,9 @@ import type { SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
 import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
 
+import { enterFullscreenIfWanted } from "../../model/fullscreen.js";
+import { BATTLE_THEME } from "../../audio/themes.js";
+import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { ArenaResultOverlay } from "./ArenaResultOverlay.js";
 import { PolledCombatRadar } from "./CombatRadar.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
@@ -24,7 +27,6 @@ import {
   BossPanel,
   CockpitPanel,
   CountdownPanel,
-  CrewLatencyPanel,
   ModuleWindowPanel
 } from "./panels.js";
 
@@ -84,6 +86,17 @@ export function BattleStage({
   aimAssist,
   onAimAssistChange
 }: BattleStageProps) {
+  useMusicTrack(BATTLE_THEME);
+  /*
+   * And the second chance at the whole screen.
+   *
+   * The first is the first touch of the session; this one is the fight itself,
+   * because the press that started it is a gesture a browser still counts.
+   * Only ever tried once, and never against somebody who left on purpose.
+   */
+  useEffect(() => {
+    void enterFullscreenIfWanted();
+  }, []);
   return (
     <MeasuredWhenAsked
       measuring={diagnostics}
@@ -247,11 +260,6 @@ export function BattleStage({
         the screen. The panel wins; the crew rows come back the moment the
         flag goes away.
       */}
-        <MeteredPanel id="экипаж" measuring={diagnostics}>
-          {/* A crew roster over a match is four dashes and a line about
-            purchases: there is no crew, and nothing to buy. */}
-          {!diagnostics && view.game.arenaShips.length === 0 && <CrewLatencyPanel />}
-        </MeteredPanel>
       </section>
     </MeasuredWhenAsked>
   );

@@ -214,6 +214,51 @@ describe("advanceArenaMatch", () => {
 });
 
 describe("resolveArenaHits", () => {
+  it("stops a shell whatever barrel it came out of", () => {
+    /*
+     * A sector is a wall, not a filter. The reported symptom was a shield that
+     * held machine-gun bursts and let cannon shells through, which would mean
+     * the block depends on the weapon - it must depend only on where the shot
+     * crossed the arc.
+     */
+    const state = match();
+    const target = shipAt(state, 1);
+    const guarded = {
+      ...target,
+      shieldActive: true,
+      // Facing the shot, which comes in from the left.
+      shieldAngle: Math.PI,
+      shieldEnergy: target.stats.shieldCapacity
+    };
+    const ships = state.ships.map((ship, index) => (index === 1 ? guarded : ship));
+
+    for (const [source, radius, damage] of [
+      ["cannon", 6, 40],
+      ["machineGun", 3, 8]
+    ] as const) {
+      const shot: ArenaProjectileState = {
+        ...shotAt(
+          "ship-1",
+          { x: target.spaceship.x - 220, y: target.spaceship.y },
+          target.spaceship,
+          damage
+        ),
+        source,
+        radius
+      };
+      const resolved = resolveArenaHits(ships, [shot], defaultArenaMatchConfig);
+      const hit = resolved.ships[1];
+      expect(hit?.hp, `${source} went through the sector`).toBe(guarded.hp);
+      expect(hit?.shieldEnergy).toBeLessThan(guarded.shieldEnergy);
+      // Half the shell, not the whole of it: charged in full, a battery is gone
+      // in four cannon hits and the sector locks out, which is what "the shield
+      // holds bursts and lets shells through" actually was.
+      expect(guarded.shieldEnergy - (hit?.shieldEnergy ?? 0)).toBeCloseTo(
+        damage * defaultArenaMatchConfig.shieldHitCostShare
+      );
+    }
+  });
+
   it("does not let a hull shoot itself", () => {
     const state = match();
     const shooter = shipAt(state, 0);
@@ -251,7 +296,44 @@ describe("resolveArenaHits", () => {
     const after = pick(resolved.ships, 0);
 
     expect(after.hp).toBe(guarded.hp);
-    expect(after.shieldEnergy).toBe(guarded.shieldEnergy - 50);
+    // Half the shell, not the whole of it: a sector charged the full damage of
+    // everything it stopped emptied in four cannon hits and locked out.
+    expect(after.shieldEnergy).toBe(
+      guarded.shieldEnergy - 50 * defaultArenaMatchConfig.shieldHitCostShare
+    );
+    expect(resolved.projectiles).toHaveLength(0);
+  });
+
+  it("stops a shell at the barrier rather than at the hull", () => {
+    /*
+     * A sector stands off the hull by its own radius, and a shell it stopped has
+     * to die there: swept against the hull alone, a blocked shell crossed the
+     * whole barrier on screen before vanishing, and one that clipped the arc but
+     * would have missed the hull was never stopped at all.
+     */
+    const state = match();
+    const target = shipAt(state, 1);
+    const guarded = {
+      ...target,
+      shieldActive: true,
+      shieldAngle: Math.PI,
+      shieldEnergy: target.stats.shieldCapacity
+    };
+
+    // Just past the hull's own edge and well inside the barrier, so the only
+    // thing that can stop it is the sector standing off the ship.
+    const offset = target.stats.spaceshipRadius + 4;
+    const shot = shotAt(
+      "ship-1",
+      { x: target.spaceship.x - 400, y: target.spaceship.y - offset },
+      { x: target.spaceship.x + 400, y: target.spaceship.y - offset },
+      40
+    );
+
+    const resolved = resolveArenaHits([guarded], [shot], defaultArenaMatchConfig);
+    const after = pick(resolved.ships, 0);
+    expect(after.hp).toBe(guarded.hp);
+    expect(after.shieldEnergy).toBeLessThan(guarded.shieldEnergy);
     expect(resolved.projectiles).toHaveLength(0);
   });
 
@@ -276,6 +358,242 @@ describe("resolveArenaHits", () => {
 
     expect(after.hp).toBe(guarded.hp - 50);
     expect(after.shieldEnergy).toBe(guarded.shieldEnergy);
+  });
+});
+
+describe("the field's supply run", () => {
+  /** A sheet with one rectangle closed, so the rule about red ground can bite. */
+  function supplyConfig(overrides: Partial<ArenaMatchConfig> = {}): ArenaMatchConfig {
+    return {
+      ...defaultArenaMatchConfig,
+      lootFirstSpawnTicks: 0,
+      lootIntervalTicks: 1,
+      lootCargoIntervalTicks: 10_000,
+      ...overrides
+    };
+  }
+
+  it("puts a drop in a rectangle, and never a second one in the same", () => {
+    const config = supplyConfig();
+    let state = match(config);
+    for (let tick = 0; tick < 40; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+
+    expect(state.loot.length).toBeGreaterThan(4);
+    const zones = state.loot.map((drop) => drop.zoneId);
+    expect(new Set(zones).size).toBe(zones.length);
+    // One of each common kind a beat, so the two fill the board together.
+    expect(state.loot.filter((drop) => drop.kind === "ammo").length).toBeGreaterThan(0);
+    expect(state.loot.filter((drop) => drop.kind === "gear").length).toBeGreaterThan(0);
+  });
+
+  it("never lands in ground that is already killing", () => {
+    const config = supplyConfig({ zoneIntervalTicks: 1, zoneWarningTicks: 1, zonesPerClosure: 4 });
+    let state = match(config);
+    const seen = new Set(state.loot.map((drop) => drop.id));
+    for (let tick = 0; tick < 120; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+      for (const drop of state.loot) {
+        // Only where a drop *appeared*: ground that closes over one already
+        // lying is a different question, answered by the test below.
+        if (seen.has(drop.id)) continue;
+        seen.add(drop.id);
+        const zone = state.zones.find((candidate) => candidate.id === drop.zoneId);
+        expect(zone?.state).not.toBe("closed");
+      }
+    }
+  });
+
+  /*
+   * A drop the field closed over is taken away by the next supply beat, not by
+   * the tick the ground turned.
+   *
+   * The gap between the two is deliberate: a crate visibly inside the zone for
+   * a while is a decision - worth some hull to whoever thinks the trip is worth
+   * it - and the supply run tidying up after itself is what ends the offer.
+   */
+  it("keeps a swallowed drop until the next beat, then takes it", () => {
+    const beat = 20;
+    const config = supplyConfig({
+      lootIntervalTicks: beat,
+      zoneIntervalTicks: 10_000,
+      zoneWarningTicks: 10_000
+    });
+    let state = advanceArenaMatch(match(config), new Map(), config);
+    const drop = state.loot[0];
+    expect(drop).toBeDefined();
+    if (drop === undefined) return;
+
+    state = {
+      ...state,
+      zones: state.zones.map((zone) =>
+        zone.id === drop.zoneId ? { ...zone, state: "closed" as const } : zone
+      )
+    };
+    for (let tick = 0; tick < beat - 2; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+      expect(state.loot.map((held) => held.id)).toContain(drop.id);
+    }
+    for (let tick = 0; tick < 3; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+    expect(state.loot.map((held) => held.id)).not.toContain(drop.id);
+  });
+
+  it("holds the caps however long the field goes uncollected", () => {
+    const config = supplyConfig();
+    let state = match(config);
+    for (let tick = 0; tick < 400; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+
+    expect(state.loot.filter((drop) => drop.kind === "ammo").length).toBeLessThanOrEqual(
+      config.lootCapPerKind
+    );
+    expect(state.loot.filter((drop) => drop.kind === "gear").length).toBeLessThanOrEqual(
+      config.lootCapPerKind
+    );
+    // The cap is the common two; the heavy drop is the rare exception beside
+    // it, and a board that refused it would never put one out at all.
+    expect(state.loot.filter((drop) => drop.kind !== "cargo").length).toBeLessThanOrEqual(
+      config.lootSceneCap
+    );
+  });
+
+  it("waits out the opening and then drops, not an interval later", () => {
+    /*
+     * The field's numbers have to mean what they say: "first loot after thirty
+     * ticks, then one every hundred" put nothing out for a hundred and thirty,
+     * because the opening quiet was a gate in front of the countdown rather
+     * than the countdown itself.
+     */
+    const config = supplyConfig({ lootFirstSpawnTicks: 30, lootIntervalTicks: 100 });
+    let state = match(config);
+    for (let tick = 0; tick < 29; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+    expect(state.loot).toHaveLength(0);
+
+    state = advanceArenaMatch(state, new Map(), config);
+    expect(state.loot.length).toBeGreaterThan(0);
+  });
+
+  it("hands a drop over only after the hold is served", () => {
+    /*
+     * A crate is taken by standing, not by touching. Five seconds parked in the
+     * circle is a commitment somebody can shoot you out of, which is the whole
+     * point of putting them on the field.
+     */
+    const config = supplyConfig({ lootCaptureTicks: 10 });
+    let state = match(config);
+    state = advanceArenaMatch(state, new Map(), config);
+    const drop = state.loot[0];
+    if (drop === undefined) throw new Error("expected a drop");
+
+    // Park a hull in the middle of the circle and leave it there.
+    const parked = (state: ArenaMatchState): ArenaMatchState => ({
+      ...state,
+      ships: state.ships.map((ship, index) =>
+        index === 0
+          ? {
+              ...ship,
+              spaceship: {
+                ...ship.spaceship,
+                x: drop.x,
+                y: drop.y,
+                previousX: drop.x,
+                previousY: drop.y
+              }
+            }
+          : ship
+      )
+    });
+
+    state = parked(state);
+    for (let tick = 0; tick < 8; tick += 1) {
+      state = parked(advanceArenaMatch(state, new Map(), config));
+    }
+    const holding = state.loot.find((candidate) => candidate.id === drop.id);
+    expect(holding?.captureShipId).toBe(state.ships[0]?.id);
+    expect(holding?.captureTicks).toBeGreaterThan(3);
+
+    for (let tick = 0; tick < 4; tick += 1) {
+      state = parked(advanceArenaMatch(state, new Map(), config));
+    }
+    expect(state.loot.some((candidate) => candidate.id === drop.id)).toBe(false);
+  });
+
+  it("drops the hold when the hull leaves the circle", () => {
+    const config = supplyConfig({ lootCaptureTicks: 60 });
+    let state = match(config);
+    state = advanceArenaMatch(state, new Map(), config);
+    const drop = state.loot[0];
+    if (drop === undefined) throw new Error("expected a drop");
+
+    const place = (state: ArenaMatchState, x: number, y: number): ArenaMatchState => ({
+      ...state,
+      ships: state.ships.map((ship, index) =>
+        index === 0
+          ? { ...ship, spaceship: { ...ship.spaceship, x, y, previousX: x, previousY: y } }
+          : ship
+      )
+    });
+
+    state = place(state, drop.x, drop.y);
+    for (let tick = 0; tick < 5; tick += 1) {
+      state = place(advanceArenaMatch(state, new Map(), config), drop.x, drop.y);
+    }
+    expect(state.loot.find((candidate) => candidate.id === drop.id)?.captureTicks).toBeGreaterThan(
+      1
+    );
+
+    // Two hulls away is outside a circle two hulls wide.
+    const away = drop.x + config.ship.spaceshipRadius * 8;
+    state = place(advanceArenaMatch(place(state, away, drop.y), new Map(), config), away, drop.y);
+    // The hold is this hull's and it is gone. Whether the circle is empty is a
+    // different question - sixteen hulls are scattered over the field and one of
+    // them may well be standing there, which is the mechanic working.
+    const dropped = state.loot.find((candidate) => candidate.id === drop.id);
+    expect(dropped?.captureShipId).not.toBe(state.ships[0]?.id);
+    expect(dropped?.captureTicks ?? 0).toBeLessThanOrEqual(1);
+  });
+
+  it("puts the heavy drop on settled ground, nearer the middle", () => {
+    /*
+     * The cargo is what everybody wants, so where it lands decides where the
+     * fight is. Never on ground that has started to close - a prize must not
+     * expire while somebody is crossing to it - and drawn from the half nearest
+     * the centre, which is where the closing field is herding them anyway.
+     */
+    const config = supplyConfig({ lootCargoIntervalTicks: 1, lootIntervalTicks: 10_000 });
+    let state = match(config);
+    const centreX = config.ship.worldWidth / 2;
+    const centreY = config.ship.worldHeight / 2;
+    const rim = Math.hypot(config.arenaRadius, config.arenaRadius);
+
+    for (let tick = 0; tick < 10; tick += 1) {
+      state = advanceArenaMatch(state, new Map(), config);
+    }
+    const cargo = state.loot.filter((drop) => drop.kind === "cargo");
+    expect(cargo.length).toBeGreaterThan(0);
+    for (const drop of cargo) {
+      const zone = state.zones.find((candidate) => candidate.id === drop.zoneId);
+      expect(zone?.state).toBe("safe");
+      expect(Math.hypot(drop.x - centreX, drop.y - centreY)).toBeLessThan(rim * 0.75);
+    }
+  });
+
+  it("replays the same supply run from the same seed", () => {
+    const config = supplyConfig();
+    const run = (): ArenaMatchState => {
+      let state = createArenaMatch(config, 4242, botSeats);
+      for (let tick = 0; tick < 60; tick += 1) {
+        state = advanceArenaMatch(state, new Map(), config);
+      }
+      return state;
+    };
+    expect(run().loot).toEqual(run().loot);
   });
 });
 

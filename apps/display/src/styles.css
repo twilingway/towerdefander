@@ -72,7 +72,16 @@ button:disabled {
   width: 100vw;
   height: 100dvh;
   min-height: 0;
-  overflow: hidden;
+  /*
+   * Scrollable rather than clipped.
+   *
+   * The field is exactly one screen tall, so on a screen with room there is
+   * nothing to scroll and this changes nothing. On a small phone the overlays
+   * that stand on top of it - the result card, the module tree - are taller
+   * than the window, and clipping them put their buttons somewhere no finger
+   * could reach.
+   */
+  overflow: auto;
   padding: 0;
 }
 
@@ -667,6 +676,18 @@ p {
   --radar-size: clamp(11rem, 17vw, 16rem);
 }
 
+/*
+ * A match gets a smaller dial than a shared screen does.
+ *
+ * The campaign's is sized for a television across a room, with the crew reading
+ * it from the sofa. A match is one person holding the screen they are also
+ * flying from, and at wall size the dial covered the gauges, the assist and the
+ * nose gun all at once.
+ */
+.display-shell--battle:has(.arena-hud) {
+  --radar-size: clamp(6.5rem, 11vw, 9rem);
+}
+
 .combat-radar {
   position: absolute;
   z-index: 25;
@@ -713,8 +734,17 @@ p {
   left: 50%;
   display: grid;
   width: min(34rem, calc(100% - 2rem));
+  /*
+   * Never taller than the window it is centred in.
+   *
+   * Centred on a short screen, a card that is taller than the viewport hangs
+   * off both ends at once - and the button it was asking about goes with the
+   * bottom one. Scrolling inside it is the only way that button comes back.
+   */
+  max-height: calc(100dvh - 1.5rem);
+  overflow-y: auto;
   gap: 0.7rem;
-  padding: clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(0.9rem, 4vw, 3rem);
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 1.5rem;
   text-align: center;
@@ -944,7 +974,13 @@ p {
   background: #9e3f3a;
 }
 
-.display-shell--battle > .room-header .room-close-button {
+/*
+ * The battle header lets clicks through to the field; its own controls do not.
+ *
+ * There is one of them now - the gear, which the way out moved behind - and it
+ * has to take a press where the header itself deliberately does not.
+ */
+.display-shell--battle > .room-header .settings {
   pointer-events: auto;
 }
 
@@ -1588,6 +1624,10 @@ p {
 .solo-cockpit {
   --cockpit-drive-ring: 7.25rem;
   --cockpit-aim-ring: 5.75rem;
+  /* The nose gun's button: round, so one number is its whole size. */
+  --cockpit-nose-button: 44px;
+  /* And how far its bottom edge clears the top of the ring below it. */
+  --cockpit-nose-lift: 12px;
   --cockpit-band: calc(var(--cockpit-drive-ring) + 1.25rem);
   position: absolute;
   /* Above the HUD cards and the radar, which own the same band and carry
@@ -1673,6 +1713,7 @@ p {
 
 /* The gun hand: what it presses sits directly above the stick it holds. */
 .solo-cockpit__right {
+  position: relative;
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -1680,13 +1721,47 @@ p {
   gap: 0.5rem;
 }
 
+/*
+ * One trigger, sitting just above the ring it shares a thumb with.
+ *
+ * Measured against the ring rather than stacked above the stick: the stick's
+ * grab zone is deliberately larger than what is drawn, and the aim ring is the
+ * smaller of the two, so stacking left the button floating most of a thumb
+ * above anything visible. Taken out of the column and hung off the corner, the
+ * distance is the one in the picture.
+ */
 .solo-cockpit__triggers {
+  position: absolute;
+  right: calc((var(--cockpit-aim-ring) - var(--cockpit-nose-button)) / 2);
+  bottom: calc(var(--cockpit-aim-ring) + var(--cockpit-nose-lift));
   pointer-events: none;
   display: flex;
   flex-direction: row;
   gap: 0.6rem;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: flex-end;
+}
+
+/*
+ * Round, because it is a button for a thumb rather than a label to read.
+ *
+ * `min-height` has to be said as well as `height`: the shell gives every button
+ * a thumb-sized minimum, a minimum outranks a height, and the circle came out
+ * as an egg standing on end.
+ */
+.solo-cockpit__triggers .cockpit-trigger {
+  width: var(--cockpit-nose-button);
+  height: var(--cockpit-nose-button);
+  min-height: 0;
+  border-radius: 50%;
+  font-size: 0.7rem;
+}
+
+.cockpit-trigger {
+  width: min(16vw, 4.5rem);
+  height: min(16vw, 4.5rem);
+  border-radius: 50%;
+  font-size: 0.7rem;
 }
 
 .cockpit-trigger {
@@ -1884,12 +1959,19 @@ p {
     min-height: 100dvh;
   }
 
+  /*
+   * A short screen gets the page scrolled, not cropped.
+   *
+   * Everything below is sized to fit a 520px-tall window, and it does on a
+   * phone held sideways. What it does not fit is a phone with a browser bar at
+   * each end and a crew list of four - and a fixed height with `overflow:
+   * hidden` answers that by hiding the bottom of the lobby, buttons included.
+   */
   .display-shell:not(.display-shell--battle) {
-    height: 100dvh;
-    min-height: 0;
+    min-height: 100dvh;
     gap: 0.4rem;
     padding: 0.5rem;
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .display-shell--centered {
@@ -2389,6 +2471,19 @@ p {
   aspect-ratio: 16 / 5;
   height: auto;
   min-height: 5.5rem;
+  /*
+   * And never wider than the column it stands in.
+   *
+   * A ratio plus an explicit height sizes the box from the ratio, not from the
+   * grid: a landscape phone gave the tile a height and a second rule gave it a
+   * ratio, and the pair made it sixty pixels wider than its own column - the
+   * second tile hung off the right edge of the screen.
+   */
+  max-width: 100%;
+  /* ...up to a point. On a wide desktop the same ratio makes a letterbox two
+     hundred pixels tall with the art squeezed into a strip; four hundred is
+     where the scene behind it reads as a scene. Phones keep the ratio, which
+     is what fits two tiles on a screen held sideways. */
   padding: 0;
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 1rem;
@@ -2396,16 +2491,17 @@ p {
   background-position: center;
   background-size: cover;
   box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 45%);
+  /*
+   * Rounded, and nothing else.
+   *
+   * The corners used to be chamfered by a `clip-path`, after the frames in the
+   * key art. A polygon clip does not know about `border-radius`, so the two
+   * fought: the art came to a square point where the border had already curved
+   * away, and the focus ring was cut off by the polygon at two corners out of
+   * four. One shape, stated once, is what `overflow: hidden` and a radius do
+   * between them.
+   */
   overflow: hidden;
-  /* Cut corners, like the frames in the key art. */
-  clip-path: polygon(
-    0 0,
-    calc(100% - 1.1rem) 0,
-    100% 1.1rem,
-    100% 100%,
-    1.1rem 100%,
-    0 calc(100% - 1.1rem)
-  );
   transition:
     transform 120ms ease,
     border-color 120ms ease,
@@ -2496,15 +2592,37 @@ p {
 
 .display-shell--setup {
   justify-items: center;
-  align-content: start;
+  /*
+   * Centred, and `safe` so a card taller than the window still starts at the
+   * top instead of having its head cut off. On a wide screen the card is a
+   * fraction of the height and pinning it to the top left the rest of the
+   * screen empty under it; on a 16:9 monitor it looked centred by accident,
+   * because the card nearly filled the window.
+   */
+  align-content: safe center;
   gap: 0.75rem;
   padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
 }
 
+/*
+ * The card scrolls; the page does not, and the action never leaves the screen.
+ *
+ * A setup card is a ship list, a crew picker and a name field - genuinely
+ * taller than a laptop window, let alone a phone lying down. It used to push
+ * the page taller than the viewport, which put "В бой" below the fold on
+ * everything from a 640-wide phone to a 1366 laptop: measurable, and measured
+ * at between forty and two hundred pixels under the edge.
+ *
+ * So the card keeps its own height and scrolls inside, and the button that
+ * ends the screen is stuck to its bottom edge - whatever is being scrolled
+ * past, the way out of the screen is on it.
+ */
 .setup-card {
   display: grid;
   gap: 0.35rem;
   width: min(58rem, 100%);
+  max-height: calc(100dvh - 1.5rem);
+  overflow-y: auto;
   padding: clamp(1rem, 3vw, 2rem);
   border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 1.25rem;
@@ -2535,11 +2653,21 @@ p {
   text-transform: uppercase;
 }
 
+/*
+ * Room to breathe, and room for its own ring.
+ *
+ * With no padding the focus outline sat on the letters, which is what made it
+ * read as damage rather than as a control. The negative margin gives the
+ * padding back to the layout, so the link still lines up with the text under
+ * it.
+ */
 .link-button {
   min-height: 0;
-  padding: 0;
+  padding: 0.3rem 0.6rem;
+  margin: -0.3rem -0.6rem 0.5rem;
   color: #8fb2ac;
   background: none;
+  border-radius: 0.45rem;
   font-size: 0.85rem;
   font-weight: 700;
   justify-self: start;
@@ -2665,6 +2793,8 @@ p {
 }
 
 .setup-go {
+  position: sticky;
+  bottom: 0;
   width: 100%;
   min-height: 3rem;
   margin-top: clamp(0.6rem, 1.6vh, 1.25rem);
@@ -2680,8 +2810,17 @@ p {
 .ship-tile:focus,
 .setup-go:focus,
 .link-button:focus {
-  outline: 2px solid #e6b85c;
-  outline-offset: 3px;
+  /*
+   * Inside the tile, not around it.
+   *
+   * Outside, the ring is the first thing to be cut: by the rounded corner it
+   * is tracing, by whatever clips the grid, and by the edge of the screen for
+   * the tile against it. Drawn inside it follows the same radius and is never
+   * anywhere it can be trimmed - and it can be thick enough to read across a
+   * room, which outside it never could be.
+   */
+  outline: 3px solid #e6b85c;
+  outline-offset: -3px;
 }
 
 /* Phones get the half-size art: same picture, a quarter of the bytes. */
@@ -2916,6 +3055,9 @@ p {
   }
 
   .mode-tile {
+    /* Stated together, always: see `max-width` above for what happens when a
+       height and a ratio are both left standing. */
+    aspect-ratio: auto;
     height: clamp(6rem, 52vh, 14rem);
   }
 }
@@ -2993,14 +3135,23 @@ p {
 }
 
 /*
- * The arena's dial: the same place as the campaign's, and bigger.
+ * The arena's dial: against the right edge, halfway down, and bigger.
  *
- * A match has no hull ring and no shield ring on it, so the circle is all map -
- * and the map is the one panel that decides where you drive next, which is why
- * it earns the extra width.
+ * The middle of the bottom edge is where the fight is - a match is played
+ * around your own hull, and a dial parked under it covers the thing you are
+ * flying. The right edge is the one side a cockpit does not use: the sticks own
+ * the corners and the readouts own the top.
+ *
+ * A match has no hull ring and no shield ring on it, so the circle is all map,
+ * which is also why it earns the extra width.
  */
 .combat-radar--arena {
+  top: 50%;
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
   width: clamp(13rem, 22vw, 20rem);
+  transform: translateY(-50%);
 }
 
 /*
@@ -3041,8 +3192,10 @@ p {
 }
 
 /* ...and the gauges drop below it, because both want the same corner. */
+/* Clear of the gear in the corner above it, which is what the header row is
+   now: one square button rather than a row of readouts. */
 .arena-hud__ship {
-  margin-top: 2.8rem;
+  margin-top: 3.4rem;
 }
 
 /* Both groups carry the same glass the rest of the battle panels are drawn on,
@@ -3063,27 +3216,27 @@ p {
 
 .arena-hud__counts div {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: baseline;
   justify-content: space-between;
-  min-width: 9rem;
+  min-width: 6.5rem;
 }
 
 .arena-hud__counts span {
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #7fd8e8;
 }
 
 .arena-hud__counts strong {
-  font-size: 1.35rem;
+  font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
   color: #ffd98a;
 }
 
 .arena-hud__counts small {
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   color: #6ea7b8;
 }
 
@@ -3200,4 +3353,284 @@ p {
 .intermission-card--default {
   border-color: rgb(255 211 111 / 45%);
   box-shadow: inset 0 0 0 1px rgb(255 211 111 / 18%);
+}
+
+/*
+ * Everything that is not the fight, behind one gear.
+ *
+ * Closed it is one button in the corner of the header - the field is what the
+ * screen is for. Open it is a small window hanging under that button, which is
+ * where the volume and the way out both live.
+ */
+.settings {
+  position: relative;
+  display: inline-block;
+}
+
+.settings__toggle {
+  /*
+   * A square, which takes saying twice: the shell gives every button a
+   * `min-height` for the thumb, and a minimum beats a height - so the gear came
+   * out as tall as a touch target and as wide as an icon.
+   */
+  width: 2.4rem;
+  height: 2.4rem;
+  min-height: 0;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: rgb(226 240 255 / 88%);
+  cursor: pointer;
+  background: rgb(6 14 26 / 62%);
+  border: 1px solid rgb(120 190 255 / 28%);
+  border-radius: 0.6rem;
+}
+
+.settings__toggle:hover {
+  border-color: rgb(120 190 255 / 55%);
+}
+
+.settings__window {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: max-content;
+  min-width: 13rem;
+  max-width: min(88vw, 20rem);
+  padding: 0.55rem 0.65rem;
+  background: rgb(6 14 26 / 92%);
+  border: 1px solid rgb(120 190 255 / 24%);
+  border-radius: 0.6rem;
+}
+
+.settings__row {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr auto;
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: rgb(198 220 244 / 82%);
+}
+
+.settings__row input[type="range"] {
+  width: 100%;
+  min-width: 4rem;
+}
+
+.settings__check {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: rgb(198 220 244 / 82%);
+  cursor: pointer;
+}
+
+/*
+ * Every button in this window says its own size.
+ *
+ * The shell gives a button a 3.5rem minimum height and a 800-weight face,
+ * which is right for a control a thumb hunts for on a moving field and absurd
+ * for a row in a menu: four of them filled a phone screen on their own.
+ */
+.settings__quiet,
+.settings__action,
+.settings__leave {
+  min-height: 0;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  color: rgb(226 240 255 / 88%);
+  cursor: pointer;
+  background: rgb(14 28 46 / 78%);
+  border: 1px solid rgb(120 190 255 / 28%);
+  border-radius: 0.45rem;
+}
+
+/* On the end of the slider it silences, and no wider than its glyph. */
+.settings__quiet {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.85rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+.settings__quiet[aria-pressed="true"] {
+  color: rgb(255 214 130 / 95%);
+}
+
+/* The way out is the one destructive thing in the window, and reads like it. */
+.settings__leave {
+  margin-top: 0.2rem;
+  color: rgb(255 208 208 / 95%);
+  background: rgb(74 20 26 / 85%);
+  border-color: rgb(226 92 92 / 45%);
+}
+
+.settings__leave:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* The start screen has no header to hang it in, so it gets the corner. */
+.start-settings {
+  position: absolute;
+  z-index: 40;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+}
+
+/*
+ * A phone gets the result card as a card, not as a poster.
+ *
+ * Every size in it is fluid against the viewport, which on a 400px-wide screen
+ * still leaves three lines of heading and a button taller than a thumb. The
+ * card is the one thing on the screen at that moment; it does not also have to
+ * be the biggest thing that ever was.
+ */
+@media (max-width: 40rem), (height <= 520px) {
+  .encounter-overlay {
+    gap: 0.4rem;
+    border-radius: 1rem;
+  }
+
+  .encounter-overlay > strong {
+    font-size: clamp(1.1rem, 5vw, 1.6rem);
+  }
+
+  .encounter-overlay h2 {
+    font-size: 1.05rem;
+  }
+
+  .encounter-overlay p {
+    font-size: 0.8rem;
+  }
+
+  .encounter-overlay .cockpit-ready,
+  .encounter-overlay .room-close-button {
+    min-height: 2.4rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+  }
+
+  /* The counters read at arm's length on a television and at a hand's length
+     on a phone; the phone is the one holding it. */
+  .arena-hud__counts div {
+    min-width: 5.6rem;
+  }
+
+  .arena-hud__counts strong {
+    font-size: 0.85rem;
+  }
+}
+
+/*
+ * Wave, score and credits move to the top left corner.
+ *
+ * They were part of the bottom strip, which is where the sticks and the dial
+ * are: on a phone that row is the one place a thumb is always covering, and
+ * three readouts nobody touches were taking a third of it. The corner under the
+ * ship tree is empty, and these three are read rather than pressed.
+ */
+/*
+ * Both classes, deliberately: the strip this panel used to belong to is placed
+ * by `[data-bars="side"] .spaceship-hud`, and an attribute selector outweighs
+ * two classes. Named with its own class as well, this ties that weight and wins
+ * on order - which is the difference between the corner and the bottom edge.
+ */
+.display-shell--battle .spaceship-hud.battle-header {
+  top: max(3.2rem, calc(env(safe-area-inset-top) + 2.6rem));
+  right: auto;
+  bottom: auto;
+  left: max(0.75rem, env(safe-area-inset-left));
+  display: grid;
+  grid-template-columns: none;
+  grid-template-rows: none;
+  align-content: start;
+  gap: 0.3rem;
+  width: max-content;
+  max-width: min(42vw, 16rem);
+}
+
+.display-shell--battle .spaceship-hud.battle-header > div {
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.5rem;
+}
+
+.display-shell--battle .spaceship-hud.battle-header span {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.display-shell--battle .spaceship-hud.battle-header strong {
+  font-size: 0.95rem;
+}
+
+.display-shell--battle .spaceship-hud.battle-header small {
+  font-size: 0.6rem;
+}
+
+@media (height <= 520px) {
+  /* Clear of the ship-tree chip, which a short screen pulls up into this same
+     corner. */
+  .display-shell--battle .spaceship-hud.battle-header {
+    top: max(5.2rem, calc(env(safe-area-inset-top) + 4.8rem));
+    left: max(0.4rem, env(safe-area-inset-left));
+    gap: 0.25rem;
+  }
+
+  .display-shell--battle .spaceship-hud.battle-header strong {
+    font-size: 0.85rem;
+  }
+}
+
+/*
+ * Three shapes, because a tile is three different things.
+ *
+ * On a phone held sideways it is a strip: the 16:5 crop above, which is what
+ * lets two of them stand on a screen four hundred pixels tall without either
+ * being a sliver. On a tablet it can afford to be squarer. On a desktop it is a
+ * picture - a fixed four hundred pixels read best on the monitor this was tuned
+ * on, and the clamp is that number made proportional so a laptop does not get a
+ * tile taller than its own window and a television does not get a stamp.
+ */
+@media (width >= 45rem) and (width < 60rem) {
+  .mode-tile {
+    aspect-ratio: 16 / 7;
+  }
+}
+
+@media (width >= 60rem) and (height >= 40rem) {
+  .mode-tile {
+    aspect-ratio: auto;
+    height: clamp(16rem, 38vh, 29rem);
+  }
+}
+
+/*
+ * A phone held upright: everything up at the top, and the tiles worth looking
+ * at.
+ *
+ * Centred, the column sat in the middle of a very tall window with an empty
+ * band above and below it, and "Выберите режим" landed in the optical centre -
+ * the eye went to the smallest text on the screen instead of to the two things
+ * it is there to choose between. Pulled to the top, the tiles are the first
+ * thing under the title, and the room that freed goes into their height: a
+ * 16:5 strip on a narrow screen is a letterbox two fingers tall.
+ */
+@media (orientation: portrait) and (width < 45rem) {
+  .display-shell--start {
+    align-content: start;
+    padding-top: clamp(1rem, 4vh, 2.5rem);
+  }
+
+  .mode-tile {
+    aspect-ratio: 16 / 9;
+  }
 }

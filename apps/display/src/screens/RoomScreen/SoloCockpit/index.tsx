@@ -13,11 +13,8 @@ export interface SoloCockpitProps {
   readonly onAimRelease: () => void;
   readonly onMachineGunHold: (held: boolean) => void;
   readonly onCannonFromStick: (held: boolean) => void;
-  readonly onCannonFromTrigger: (held: boolean) => void;
   readonly machineGunHeat: number;
   readonly machineGunOverheated: boolean;
-  readonly cannonHeat: number;
-  readonly cannonOverheated: boolean;
   readonly aimAssist: boolean;
   readonly onAimAssistChange: (enabled: boolean) => void;
 }
@@ -40,11 +37,8 @@ export function SoloCockpit({
   onAimRelease,
   onMachineGunHold,
   onCannonFromStick,
-  onCannonFromTrigger,
   machineGunHeat,
   machineGunOverheated,
-  cannonHeat,
-  cannonOverheated,
   aimAssist,
   onAimAssistChange
 }: SoloCockpitProps) {
@@ -70,6 +64,15 @@ export function SoloCockpit({
         >
           Помощь {aimAssist ? "вкл" : "выкл"}
         </button>
+        {/*
+          One trigger, right above the stick that aims.
+          
+          The cannon lost its button because the stick already fires it - two
+          controls for one gun is two places to look, and the one under the
+          thumb wins. What is left is the nose gun, which has no other way to be
+          fired, and it sits where the thumb already is rather than in a row of
+          its own across the top.
+        */}
         <div className="solo-cockpit__triggers">
           <CockpitTrigger
             testId="cockpit-trigger-mg"
@@ -78,14 +81,6 @@ export function SoloCockpit({
             heat={machineGunHeat}
             overheated={machineGunOverheated}
             onHoldChange={onMachineGunHold}
-          />
-          <CockpitTrigger
-            testId="cockpit-trigger-cannon"
-            label="Орудие"
-            enabled={enabled}
-            heat={cannonHeat}
-            overheated={cannonOverheated}
-            onHoldChange={onCannonFromTrigger}
           />
         </div>
         <CockpitStick

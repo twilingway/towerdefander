@@ -122,6 +122,14 @@ interface ArenaScreenProps {
 const BOX = 520;
 
 /**
+ * The caps the simulation holds the field to. Stated here rather than imported
+ * because this console depends on the protocol and not on the core; they are
+ * code's numbers either way, and the line below only reads them out.
+ */
+const LOOT_CAP_PER_KIND = 16;
+const LOOT_SCENE_CAP = 32;
+
+/**
  * Where a match puts its sixteen hulls.
  *
  * The map is the editor: a mark is dragged where it belongs and the numbers
@@ -169,6 +177,36 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
     Math.ceil(
       (tuning.spaceshipMaxHp * tuning.arena.hullScaling) /
         Math.max(0.0001, tuning.friendlyProjectileDamage * tuning.arena.damageScaling)
+    )
+  );
+  /*
+   * How far the match's gun carries, read off the hull the match is flown in.
+   *
+   * The flat block is only what a hull that overrides nothing inherits, and
+   * this one number is worth resolving properly: it is what the arena's zero
+   * means, so a readout taken from the base would quietly promise a reach the
+   * default hull does not have.
+   */
+  const matchHull = tuning.shipArchetypes[tuning.defaultShipArchetypeId];
+  const matchStats = matchHull?.overrides.stats;
+  const cannonReach =
+    (matchHull?.overrides.cannonWeaponKind ?? tuning.cannonWeaponKind) === "laser"
+      ? (matchStats?.cannonLaserRange ?? tuning.cannonLaserRange)
+      : ((matchStats?.projectileSpeedPerSecond ?? tuning.projectileSpeedPerSecond) *
+          (matchStats?.projectileLifetimeMs ?? tuning.projectileLifetimeMs)) /
+        1_000;
+  // What a raised sector is actually worth, in the only unit that matters: how
+  // many shells it eats before it drops and locks out.
+  const shellsHeld = Math.max(
+    1,
+    Math.floor(
+      tuning.shieldCapacity /
+        Math.max(
+          0.0001,
+          tuning.friendlyProjectileDamage *
+            tuning.arena.damageScaling *
+            tuning.arena.shieldHitCostShare
+        )
     )
   );
   const redByEnd = Math.max(
@@ -325,6 +363,63 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
             }}
           />
           <NumberField
+            caption="Щит тратит × урона"
+            min={0.05}
+            step={0.05}
+            value={tuning.arena.shieldHitCostShare}
+            onChange={(shieldHitCostShare) => {
+              patchArena({ shieldHitCostShare: Math.max(0.05, shieldHitCostShare) });
+            }}
+          />
+          <NumberField
+            caption="Дальность подъёма щита"
+            min={0}
+            step={50}
+            value={tuning.arena.shieldAutopilotRaiseRange}
+            onChange={(shieldAutopilotRaiseRange) => {
+              patchArena({ shieldAutopilotRaiseRange: Math.max(0, shieldAutopilotRaiseRange) });
+            }}
+          />
+          <p className="hint" data-testid="arena-shield-raise">
+            Сектор в матче ведёт автопилот — и у игрока тоже, в кокпите нет рычага на щит. Поднимает
+            он его, когда соперник ближе этой дистанции. Ноль значит «на дальность своей же пушки»,
+            сейчас это <strong>{String(Math.round(cannonReach))}</strong> единиц: в арене все воюют
+            одним кораблём, так что чужая дальность и своя — одно число. В кампании такое же поле
+            читает ноль иначе, по дальности оружия самого врага, — потому настройки и разные.
+          </p>
+          <p className="hint" data-testid="arena-ship-scaling">
+            Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
+            <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}
+            HP, снаряд {String(round2(tuning.friendlyProjectileDamage))} →{" "}
+            <strong>
+              {String(round2(tuning.friendlyProjectileDamage * tuning.arena.damageScaling))}
+            </strong>
+            , пулемёт {String(round2(tuning.mgDamage))} →{" "}
+            <strong>{String(round2(tuning.mgDamage * tuning.arena.damageScaling))}</strong>. Это{" "}
+            <strong>{String(shotsToKill)}</strong> {shotWord(shotsToKill)} из пушки, чтобы снять
+            целый корпус. Полный сектор держит <strong>{String(shellsHeld)}</strong>{" "}
+            {shotWord(shellsHeld)} из пушки: блок снимает с батареи{" "}
+            {String(
+              round2(
+                tuning.friendlyProjectileDamage *
+                  tuning.arena.damageScaling *
+                  tuning.arena.shieldHitCostShare
+              )
+            )}{" "}
+            из {String(Math.round(tuning.shieldCapacity))}.
+          </p>
+        </div>
+      </section>
+
+      <section className="card">
+        <h4 className="card__subtitle">Разведка</h4>
+        <p className="screen__hint">
+          Поле шире кадра в несколько раз, поэтому радар показывает только то, что нашла развёртка.
+          Радиус задан в экранах, а не в единицах: расширение кадра не должно молча менять дальность
+          скана. Груз виден всем и без скана — он того стоит.
+        </p>
+        <div className="arena-controls">
+          <NumberField
             caption="Радиус скана (экранов)"
             min={0.5}
             step={0.5}
@@ -357,17 +452,65 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
             {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
             {formatTicks(tuning.arena.scanCooldownTicks)}.
           </p>
-          <p className="hint" data-testid="arena-ship-scaling">
-            Корпус {String(Math.round(tuning.spaceshipMaxHp))} →{" "}
-            <strong>{String(Math.round(tuning.spaceshipMaxHp * tuning.arena.hullScaling))}</strong>{" "}
-            HP, снаряд {String(round2(tuning.friendlyProjectileDamage))} →{" "}
+        </div>
+      </section>
+
+      <section className="card">
+        <h4 className="card__subtitle">Снабжение</h4>
+        <p className="screen__hint">
+          Точки падают по таймеру в свободные квадраты и исчезают вместе с квадратом, когда тот
+          краснеет. Забирается точка стоянием: корабль держится в круге, и захват сбивается, если он
+          вышел или в него попали. Что даёт точка — пока ничего: награда ждёт дерева развития боя.
+        </p>
+        <div className="arena-controls">
+          <SecondsField
+            caption="Первый лут через"
+            ticks={tuning.arena.lootFirstSpawnTicks}
+            onChange={(lootFirstSpawnTicks) => {
+              patchArena({ lootFirstSpawnTicks });
+            }}
+          />
+          <SecondsField
+            caption="Лут каждые"
+            ticks={tuning.arena.lootIntervalTicks}
+            onChange={(lootIntervalTicks) => {
+              patchArena({ lootIntervalTicks });
+            }}
+          />
+          <SecondsField
+            caption="Груз каждые"
+            ticks={tuning.arena.lootCargoIntervalTicks}
+            onChange={(lootCargoIntervalTicks) => {
+              patchArena({ lootCargoIntervalTicks });
+            }}
+          />
+          <p className="hint" data-testid="arena-loot-budget">
+            За каждый отрезок падает по одной жёлтой и одной зелёной точке, каждая — в свободный
+            квадрат, никогда в красный. Больше {String(LOOT_CAP_PER_KIND)} каждого вида и{" "}
+            {String(LOOT_SCENE_CAP)} точек на поле одновременно не бывает. За матч в{" "}
+            {formatTicks(limit)} успеет выпасть{" "}
             <strong>
-              {String(round2(tuning.friendlyProjectileDamage * tuning.arena.damageScaling))}
-            </strong>
-            , пулемёт {String(round2(tuning.mgDamage))} →{" "}
-            <strong>{String(round2(tuning.mgDamage * tuning.arena.damageScaling))}</strong>. Это{" "}
-            <strong>{String(shotsToKill)}</strong> {shotWord(shotsToKill)} из пушки, чтобы снять
-            целый корпус.
+              {String(
+                Math.max(
+                  0,
+                  Math.floor(
+                    (limit - tuning.arena.lootFirstSpawnTicks) / tuning.arena.lootIntervalTicks
+                  )
+                )
+              )}
+            </strong>{" "}
+            пар и{" "}
+            <strong>
+              {String(
+                Math.max(
+                  0,
+                  Math.floor(
+                    (limit - tuning.arena.lootFirstSpawnTicks) / tuning.arena.lootCargoIntervalTicks
+                  )
+                )
+              )}
+            </strong>{" "}
+            грузов.
           </p>
         </div>
       </section>

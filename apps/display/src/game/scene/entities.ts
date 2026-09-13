@@ -10,6 +10,7 @@ import type {
 
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
 import { deathEffectFor, mayPlayHitEffect, type BurstLayer, type OwnShot } from "./bursts.js";
+import { deathSoundFor, shotSoundFor, type SceneAudio } from "./sceneAudio.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
 import { resolveShieldImpact, SHIELD_BLOCK_EFFECT, type ShieldPose } from "./shieldImpact.js";
 import {
@@ -272,6 +273,10 @@ export interface CombatVisual {
   readonly blockEffect: string | undefined;
   readonly hitEffect: string | undefined;
   readonly shotEffect: string | undefined;
+  /** And what it is heard as, resolved at creation the same way. */
+  readonly deathSound: string | undefined;
+  readonly hitSound: string | undefined;
+  readonly shotSound: string | undefined;
   /** Last known hull radius, which is what a burst is sized against. */
   readonly radius: number;
   /** Shot count this visual has already reacted to; see `drawnHealth`. */
@@ -327,6 +332,8 @@ interface ReconcileRequest {
   readonly ownShots: OwnShot[];
   /** The shield as the scene drew it, for placing a splash on the barrier. */
   readonly shieldPose: ShieldPose | undefined;
+  /** Where events go to be heard; absent is a scene that plays nothing. */
+  readonly sounds: SceneAudio | undefined;
 }
 
 export function reconcileCombatVisuals({
@@ -340,7 +347,8 @@ export function reconcileCombatVisuals({
   snap,
   bursts,
   ownShots,
-  shieldPose
+  shieldPose,
+  sounds
 }: ReconcileRequest): void {
   const incoming = collectCombatEntities(snapshot);
   const incomingById = new Map(incoming.map((entity) => [entity.entityId, entity]));
@@ -351,6 +359,11 @@ export function reconcileCombatVisuals({
     // bursting here would carpet the screen on every reconnect.
     if (!snap && leaving?.deathEffect !== undefined) {
       bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
+    }
+    // The same event, heard: a wreck off the side of the screen is the one
+    // thing a pilot has no other way of learning about.
+    if (!snap && leaving !== undefined) {
+      sounds?.play(leaving.deathSound, leaving.object.x, leaving.object.y, "enemyDeath");
     }
     if (!snap && leaving?.blockEffect !== undefined && leaving.velocity !== undefined) {
       /*
@@ -423,6 +436,17 @@ export function reconcileCombatVisuals({
             : undefined,
         hitEffect: archetype?.effects?.hit,
         shotEffect: archetype?.effects?.shot,
+        deathSound: deathSoundFor(
+          entity.visualKind,
+          archetype?.isBoss === true,
+          archetype?.sounds?.death
+        ),
+        hitSound: archetype?.sounds?.hit,
+        shotSound: shotSoundFor(
+          entity.visualKind,
+          archetype?.isBoss === true,
+          archetype?.sounds?.shot
+        ),
         radius: entity.radius,
         drawnShots: entity.visualKind === "enemy" ? entity.shotsFired : 0,
         hitEffectTick: undefined
@@ -471,13 +495,15 @@ export function reconcileCombatVisuals({
         const tookHit = entity.hp < visual.drawnHealth;
         visual.drawnHealth = entity.hp;
         if (visual.healthBar !== undefined) setEnemyHealthBar(visual.healthBar, entity);
-        if (
-          tookHit &&
-          visual.hitEffect !== undefined &&
-          mayPlayHitEffect(toTick, visual.hitEffectTick)
-        ) {
+        // The throttle is on the event, not on the effect: a hull with a hit
+        // sound and no hit effect still has to be heard being hit, and a beam
+        // must not strobe either of them.
+        if (tookHit && mayPlayHitEffect(toTick, visual.hitEffectTick)) {
           visual.hitEffectTick = toTick;
-          bursts?.spawn(visual.hitEffect, visual.object.x, visual.object.y, visual.radius);
+          if (visual.hitEffect !== undefined) {
+            bursts?.spawn(visual.hitEffect, visual.object.x, visual.object.y, visual.radius);
+          }
+          sounds?.play(visual.hitSound, visual.object.x, visual.object.y, "enemyShot");
         }
       }
       if (entity.visualKind === "enemy" && visual.drawnShots !== entity.shotsFired) {
@@ -498,6 +524,7 @@ export function reconcileCombatVisuals({
             bearing
           );
         }
+        sounds?.weapon(visual.shotSound, visual.object.x, visual.object.y, "enemyShot");
       }
     }
   }

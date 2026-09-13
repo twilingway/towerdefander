@@ -29,6 +29,15 @@ export const RADAR_UNITS = 200;
 const CENTRE = RADAR_UNITS / 2;
 /** The map itself; everything else is a ring or a label outside it. */
 const MAP_RADIUS = 62;
+/**
+ * The map on a dial that carries nothing else.
+ *
+ * A match draws no hull ring and no shield ring - both moved onto the head-up
+ * display - so the band those two and their labels reserved is free, and the
+ * one thing this dial is for gets it. The frame keeps a couple of units so the
+ * rim still reads as a rim.
+ */
+const ARENA_MAP_RADIUS = 88;
 const HULL_RING_RADIUS = 71;
 const SHIELD_RING_RADIUS = 80;
 /** The hull's numbers read inside its ring, the shield's outside its own. */
@@ -214,21 +223,24 @@ export function drawCombatRadar(
     shield: ringFraction(game.shield.energy, game.shield.capacity)
   }
 ): void {
-  const projection = createRadarProjection(game.arenaRadius, RADAR_UNITS, CENTRE - MAP_RADIUS);
+  // Sixteen published hulls is a match and nothing else has them; a match's
+  // dial is all map, so it uses all of the circle.
+  const mapRadius = game.arenaZones.length > 0 ? ARENA_MAP_RADIUS : MAP_RADIUS;
+  const projection = createRadarProjection(game.arenaRadius, RADAR_UNITS, CENTRE - mapRadius);
   const { hull, shield } = rings;
 
   context.clearRect(0, 0, RADAR_UNITS, RADAR_UNITS);
 
   context.fillStyle = "rgb(3 25 34 / 70%)";
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
+  context.arc(CENTRE, CENTRE, mapRadius, 0, Math.PI * 2);
   context.fill();
 
   context.save();
   // Everything on the map is clipped to it, the way the SVG clip path did it:
   // a ship at the rim must not draw over the rings that surround the dial.
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
+  context.arc(CENTRE, CENTRE, mapRadius, 0, Math.PI * 2);
   context.clip();
 
   /*
@@ -262,11 +274,11 @@ export function drawCombatRadar(
   context.strokeStyle = "rgb(72 212 221 / 18%)";
   context.lineWidth = 1;
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS * 0.5, 0, Math.PI * 2);
-  context.moveTo(CENTRE - MAP_RADIUS, CENTRE);
-  context.lineTo(CENTRE + MAP_RADIUS, CENTRE);
-  context.moveTo(CENTRE, CENTRE - MAP_RADIUS);
-  context.lineTo(CENTRE, CENTRE + MAP_RADIUS);
+  context.arc(CENTRE, CENTRE, mapRadius * 0.5, 0, Math.PI * 2);
+  context.moveTo(CENTRE - mapRadius, CENTRE);
+  context.lineTo(CENTRE + mapRadius, CENTRE);
+  context.moveTo(CENTRE, CENTRE - mapRadius);
+  context.lineTo(CENTRE, CENTRE + mapRadius);
   context.stroke();
 
   /*
@@ -342,8 +354,37 @@ export function drawCombatRadar(
    * fades on the room's clock: the mark is a photograph, not a tracker, which
    * is what makes a sweep worth timing.
    */
-  context.fillStyle = "#ffb454";
-  context.strokeStyle = "#ffe6bd";
+  /*
+   * The field's drops, on the one panel that can show the whole field.
+   *
+   * What the sweep found, on the same terms as the hulls it found: the route a
+   * pilot picks after a sweep is usually toward a drop rather than toward a
+   * fight, and knowing where every crate on the field is without paying for the
+   * look would make the sweep worth nothing. The heavy one is the exception the
+   * room makes - it is worth crossing the field for, which only works if
+   * everybody knows it is there. Colour says which kind without a legend - the
+   * same three the world draws them in.
+   */
+  for (const drop of game.arenaLoot) {
+    if (!drop.revealed) continue;
+    const point = projectWorldToRadar(
+      drop.x,
+      drop.y,
+      game.worldWidth,
+      game.worldHeight,
+      projection
+    );
+    context.fillStyle =
+      drop.kind === "cargo" ? "#63b8ff" : drop.kind === "gear" ? "#74e39b" : "#ffc65c";
+    context.beginPath();
+    context.arc(point.x, point.y, 2.6, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  // The same red the campaign marks an enemy with: on a dial, a hostile hull is
+  // a hostile hull, and a match teaching a second colour for it teaches nothing.
+  context.fillStyle = "#ff625e";
+  context.strokeStyle = "#ffd0ca";
   context.lineWidth = 1.2;
   context.beginPath();
   for (const rival of game.arenaShips) {
@@ -398,7 +439,7 @@ export function drawCombatRadar(
   context.strokeStyle = "rgb(71 224 233 / 45%)";
   context.lineWidth = 1.5;
   context.beginPath();
-  context.arc(CENTRE, CENTRE, MAP_RADIUS, 0, Math.PI * 2);
+  context.arc(CENTRE, CENTRE, mapRadius, 0, Math.PI * 2);
   context.stroke();
 
   /*

@@ -83,6 +83,15 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
   readonly shipDeathEffect: string;
   /** What this hull's turret flashes; empty leaves the display's own. */
   readonly shipMuzzleEffect: string;
+  /**
+   * What this hull is heard doing; empty is silence the display may fill with
+   * its own default. Presentation, like the effects above it: the simulation
+   * carries the choice without ever reading it, so one hull travels whole.
+   */
+  readonly shipCannonSound: string;
+  readonly shipMgSound: string;
+  readonly shipHitSound: string;
+  readonly shipDeathSound: string;
   readonly spaceshipSpeedPerSecond: number;
   readonly spaceshipAccelerationPerSecondSquared: number;
   readonly spaceshipBrakingPerSecondSquared: number;
@@ -345,7 +354,7 @@ export function normalizeVector(vector: Vector2): Vector2 {
  * display places the sprite - one rule, so the barrel a crew sees is the barrel
  * that fires.
  */
-function turretMount(
+export function turretMount(
   origin: Vector2,
   heading: number,
   ship: ShipStats,
@@ -373,7 +382,12 @@ function turretMount(
  * shot. So the shot is aimed at the point the turret designates from the hull,
  * and leaves the barrel toward it.
  */
-function convergedAngle(hull: Vector2, mount: Vector2, angle: number, convergence: number): number {
+export function convergedAngle(
+  hull: Vector2,
+  mount: Vector2,
+  angle: number,
+  convergence: number
+): number {
   const targetX = hull.x + Math.cos(angle) * convergence;
   const targetY = hull.y + Math.sin(angle) * convergence;
   return Math.atan2(targetY - mount.y, targetX - mount.x);

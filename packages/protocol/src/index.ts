@@ -5,6 +5,7 @@ export * from "./soloInput.ts";
 export * from "./enemyKinds.ts";
 export * from "./visualCatalog.ts";
 export * from "./effectCatalogue.ts";
+export * from "./audioCatalogue.ts";
 import { CREW_ROLES, crewRoleSchema, type CrewRole } from "./crewRoles.ts";
 import {
   ENEMY_ARCHETYPE_ID_PATTERN,
@@ -18,6 +19,7 @@ import {
   backgroundTuningSchema,
   cameraViewWidthSchema,
   enemyEventEffectsSchema,
+  enemySoundsSchema,
   entityVisualSchema,
   friendlyWeaponKindSchema,
   helmSchemeSchema,
@@ -28,7 +30,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 61 as const;
+export const PROTOCOL_VERSION = 66 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -487,7 +489,9 @@ export const publicArenaShipViewSchema = z
      */
     alive: z.boolean(),
     /** Shots fired, narrowed to the wire, so the display can flash a muzzle. */
-    shotsFired: z.number().int().min(0).max(65_535)
+    shotsFired: z.number().int().min(0).max(65_535),
+    /** Shells this sector stopped, so the display can mark where they landed. */
+    shieldBlocks: z.number().int().min(0).max(65_535)
   })
   .strict();
 export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;
@@ -501,6 +505,36 @@ export type PublicArenaShipView = z.infer<typeof publicArenaShipViewSchema>;
  * two numbers move together or not at all.
  */
 export const MAX_ARENA_ZONES = 512;
+
+/** What the field puts out on a timer; a wreck's spoils are not among them. */
+export const ARENA_LOOT_KINDS = ["ammo", "gear", "cargo"] as const;
+export const arenaLootKindSchema = z.enum(ARENA_LOOT_KINDS);
+export type ArenaLootKindName = z.infer<typeof arenaLootKindSchema>;
+
+export const publicArenaLootViewSchema = z
+  .object({
+    entityId: z.string().min(1).max(24),
+    kind: arenaLootKindSchema,
+    x: finite,
+    y: finite,
+    /**
+     * Whether the last sweep found this drop and the mark has not faded.
+     *
+     * The dial shows what a sweep found and nothing else, drops included: a
+     * crate does not hide, but knowing where every crate on the field is
+     * without paying for the look would make the sweep worth nothing.
+     */
+    revealed: z.boolean(),
+    /** How wide the circle a hull must stand in is, in world units. */
+    captureRadius: finite,
+    /** How much of the hold is served, from nothing to one. */
+    captureShare: z.number().min(0).max(1)
+  })
+  .strict();
+export type PublicArenaLootView = z.infer<typeof publicArenaLootViewSchema>;
+
+/** Two kinds capped at sixteen each, and the field capped at thirty-two. */
+export const MAX_ARENA_LOOT = 64;
 
 export const ARENA_ZONE_STATES = ["safe", "warning", "closed"] as const;
 export const arenaZoneStateSchema = z.enum(ARENA_ZONE_STATES);
@@ -853,7 +887,9 @@ export const publicEnemyCatalogueEntrySchema = z
      * What this archetype plays on each of its events. Sent once per run with
      * the rest of its look; absent leaves the display's own rule.
      */
-    effects: enemyEventEffectsSchema.optional()
+    effects: enemyEventEffectsSchema.optional(),
+    /** And what it is heard doing, on the same terms. */
+    sounds: enemySoundsSchema.optional()
   })
   .strict();
 export type PublicEnemyCatalogueEntry = z.infer<typeof publicEnemyCatalogueEntrySchema>;
@@ -947,6 +983,11 @@ export const displayGameSnapshotSchema = z
     shipDeathEffect: z.string(),
     /** What its turret flashes; empty leaves the display's own. */
     shipMuzzleEffect: z.string(),
+    /** What this hull is heard doing; empty leaves the display's own. */
+    shipCannonSound: z.string(),
+    shipMgSound: z.string(),
+    shipHitSound: z.string(),
+    shipDeathSound: z.string(),
     turretVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,
@@ -960,6 +1001,8 @@ export const displayGameSnapshotSchema = z
     arenaZones: z.array(publicArenaZoneViewSchema).max(MAX_ARENA_ZONES),
     /** Every hull in a match; empty in the campaign, which has exactly one. */
     arenaShips: z.array(publicArenaShipViewSchema).max(16),
+    /** What the field has put out and nobody has taken. */
+    arenaLoot: z.array(publicArenaLootViewSchema).max(MAX_ARENA_LOOT),
     /**
      * The sweep: seconds until it may be asked for again, and seconds the last
      * one still has left on the dial. Zero on the first means the button is

@@ -16,6 +16,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/display/package.json apps/display/
 COPY apps/controller/package.json apps/controller/
 COPY apps/admin/package.json apps/admin/
+COPY packages/audio-assets/package.json packages/audio-assets/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/game-core/package.json packages/game-core/
 COPY packages/client-shared/package.json packages/client-shared/

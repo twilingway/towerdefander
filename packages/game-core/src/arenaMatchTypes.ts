@@ -1,3 +1,4 @@
+import { type ArenaLootState } from "./arenaLoot.ts";
 import { type ArenaZone } from "./arenaZones.ts";
 import { type SimulationClock } from "./primitives.ts";
 import { type ShipStats } from "./shipStats.ts";
@@ -60,6 +61,16 @@ export interface ArenaShipState {
    * and a boolean would lose the second of a pair fired in the same frame.
    */
   readonly shotsFired: number;
+  /**
+   * Shells this hull's sector has stopped, ever.
+   *
+   * A counter for the same reason the shots are one: the display samples it,
+   * and a block is an event that has to be drawn where it happened. Energy
+   * cannot stand in for it - a raised sector drains whether or not anything
+   * hits it, so a falling battery says "the shield is up", not "something
+   * landed".
+   */
+  readonly shieldBlocks: number;
 
   readonly shieldAngle: number;
   readonly shieldTargetAngle: number | null;
@@ -167,6 +178,30 @@ export interface ArenaMatchConfig {
   readonly zoneIntervalTicks: number;
   /** Rectangles taken on each beat; the sheet moves as a band, not a tile. */
   readonly zonesPerClosure: number;
+  /**
+   * The field's supply run: when it starts, how often it drops, how often the
+   * heavy one comes, and how much may lie about at once.
+   */
+  readonly lootFirstSpawnTicks: number;
+  readonly lootIntervalTicks: number;
+  readonly lootCargoIntervalTicks: number;
+  /** Per common kind, and across everything on the field at once. */
+  readonly lootCapPerKind: number;
+  readonly lootSceneCap: number;
+  /** How long a hull must stand in the circle, and how wide the circle is. */
+  /**
+   * What a blocked shell costs the battery, as a share of its damage.
+   *
+   * A match is the first place our own guns hit our own sector, and the co-op
+   * numbers have no answer for it: an enemy bullet carries its own hit cost, a
+   * friendly shell carries none. Charging the whole of a shell's damage emptied
+   * a full battery in four cannon hits, dropped the sector and locked it out
+   * until it recharged - which reads exactly like "the shield stops bursts and
+   * lets shells through".
+   */
+  readonly shieldHitCostShare: number;
+  readonly lootCaptureTicks: number;
+  readonly lootCaptureRadiusHulls: number;
   readonly zoneWarningTicks: number;
   /**
    * The zone bites on a beat rather than continuously: every
@@ -205,4 +240,11 @@ export interface ArenaMatchState {
   readonly projectiles: readonly ArenaProjectileState[];
   readonly beams: readonly ArenaBeamState[];
   readonly nextProjectileSequence: number;
+
+  /** What the field has put out and not had taken. */
+  readonly loot: readonly ArenaLootState[];
+  readonly ticksUntilLoot: number;
+  readonly ticksUntilCargo: number;
+  readonly nextLootSequence: number;
+  readonly lootRngState: number;
 }

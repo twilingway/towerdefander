@@ -146,6 +146,134 @@ export function drawShield(
  * with it, so the scale is chosen from the thickness wanted and the points are
  * built at the radius that lands on the arc once scaled.
  */
+/**
+ * One animated barrier: the atlas, the rope and the arc it is bent along.
+ *
+ * Lifted out of `ShieldLayer` so a hull that is not the crew's own can have one
+ * too. It is deliberately driven by numbers rather than by a snapshot - a match
+ * has sixteen sectors and only one of them is in the snapshot's `shield` block.
+ *
+ * A rope is geometry, and geometry for a crowd is the one thing this display
+ * does not do: the points are rebuilt only when the sector's shape changes, and
+ * the arena hands these out from a small pool to the few hulls whose sector is
+ * both up and on screen.
+ */
+export class ShieldBand {
+  private readonly scene: Phaser.Scene;
+  private readonly textureKey: string;
+  private readonly animationKey: string;
+  private readonly effect: FxEffect | undefined;
+  private readonly scale: number;
+  private rope: Phaser.GameObjects.Rope | undefined;
+  /** The geometry the points were built for; a change rebuilds them. */
+  private shape = "";
+  private disposed = false;
+
+  constructor(scene: Phaser.Scene, hullEffect: string) {
+    const effectId = hullEffect.length > 0 ? hullEffect : DEFAULT_SHIELD_BAND_EFFECT;
+    this.scene = scene;
+    this.textureKey = `fx:${effectId}`;
+    this.animationKey = `fx:${effectId}:loop`;
+    this.effect = getFxEffect(effectId);
+    this.scale =
+      this.effect === undefined ? 1 : BAND_THICKNESS_UNITS / this.effect.meta.frameHeight;
+    if (this.effect === undefined) return;
+    if (scene.textures.exists(this.textureKey)) {
+      this.attach();
+      return;
+    }
+    scene.load.spritesheet(this.textureKey, this.effect.url, {
+      frameWidth: this.effect.meta.frameWidth,
+      frameHeight: this.effect.meta.frameHeight,
+      endFrame: this.effect.meta.frames - 1
+    });
+    scene.load.once("complete", () => {
+      this.attach();
+    });
+    scene.load.start();
+    scene.events.once("shutdown", () => {
+      this.destroy();
+    });
+    scene.events.once("destroy", () => {
+      this.destroy();
+    });
+  }
+
+  /** Whether the rope exists yet; the atlas may still be in flight. */
+  get ready(): boolean {
+    return this.rope !== undefined;
+  }
+
+  /**
+   * Places the barrier, or hides it. Every number is the sector's own, so this
+   * serves the crew's hull and a rival's alike.
+   */
+  draw(
+    centre: { readonly x: number; readonly y: number },
+    bearing: number,
+    radius: number,
+    halfAngle: number,
+    charge: number,
+    visible: boolean
+  ): void {
+    const rope = this.rope;
+    if (rope === undefined) return;
+    if (!visible) {
+      rope.setVisible(false);
+      return;
+    }
+    const shape = `${String(Math.round(radius))}:${halfAngle.toFixed(3)}`;
+    if (shape !== this.shape) {
+      const points = getShieldBandPoints(radius / this.scale, halfAngle);
+      rope.setPoints(
+        points.map((point: Point) => ({ x: point.x, y: point.y })),
+        undefined,
+        bandAlphas(points.length)
+      );
+      this.shape = shape;
+    }
+    rope.setVisible(true).setPosition(centre.x, centre.y).setRotation(bearing).setAlpha(charge);
+  }
+
+  hide(): void {
+    this.rope?.setVisible(false);
+  }
+
+  destroy(): void {
+    this.disposed = true;
+    this.rope?.destroy();
+    this.rope = undefined;
+  }
+
+  private attach(): void {
+    const effect = this.effect;
+    if (this.disposed || effect === undefined || !this.scene.textures.exists(this.textureKey))
+      return;
+    if (!this.scene.anims.exists(this.animationKey)) {
+      this.scene.anims.create({
+        key: this.animationKey,
+        frames: this.scene.anims.generateFrameNumbers(this.textureKey, {
+          start: 0,
+          end: effect.meta.frames - 1
+        }),
+        frameRate: effect.meta.fps,
+        repeat: -1
+      });
+    }
+    // Added through the factory so Phaser registers it for `preUpdate` and the
+    // loop advances itself.
+    this.rope = this.scene.add
+      .rope(0, 0, this.textureKey, 0, [...getShieldBandPoints(1, 1)], true)
+      .setDepth(BAND_DEPTH)
+      .setScale(this.scale)
+      // The art is additive - a dark gradient tail is dark pixels with alpha,
+      // and composited normally it would draw a box around the barrier.
+      .setBlendMode("ADD")
+      .setVisible(false);
+    this.rope.play(this.animationKey);
+  }
+}
+
 export class ShieldLayer {
   private readonly scene: Phaser.Scene;
   private readonly bake: BakeShape;

@@ -17,11 +17,7 @@ import {
 } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  closeDisplayRoom,
-  confirmDisplayRoomClose,
-  roomClosingMessage
-} from "../displayRoomLifecycle.js";
+import { closeDisplayRoom, roomClosingMessage } from "../displayRoomLifecycle.js";
 import { toDisplayRoomView, type NetworkRoomState } from "../roomView.js";
 import { createActionId, nextVoteRevision } from "@spaceship-defender/client-shared";
 import { buildVisibleDemoWorld, publishVisibleDemoWorld } from "../visibleDemo.js";
@@ -448,9 +444,13 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
 
   async function handleCloseRoom(): Promise<void> {
     const room = roomReference.current;
-    if (room === undefined || !confirmDisplayRoomClose((message) => window.confirm(message))) {
-      return;
-    }
+    /*
+     * No dialog here any more: the buttons that call this ask first, in the
+     * game, by arming themselves. A system `confirm` pins the page, is dressed
+     * by the operating system rather than by us, and on a phone drops the page
+     * out of full screen to show itself.
+     */
+    if (room === undefined) return;
 
     setClosingRoom(true);
     roomReference.current = undefined;

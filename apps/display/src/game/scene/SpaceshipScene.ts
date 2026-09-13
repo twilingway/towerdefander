@@ -4,11 +4,13 @@ import Phaser from "phaser";
 import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
-import { arenaZoneSignature, drawArena, drawArenaZones, drawDecorations } from "./arena.js";
+import { ArenaZoneLayer, arenaZoneSignature, drawArena, drawDecorations } from "./arena.js";
 import { ArenaFleet } from "./arenaFleet.js";
+import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
 import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
+import { sceneAudioFor, type SceneAudio } from "./sceneAudio.js";
 import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
@@ -40,6 +42,11 @@ export class SpaceshipScene extends Phaser.Scene {
   private shield: ShieldLayer | undefined;
   private exhaust: ExhaustLayer | undefined;
   private bursts: BurstLayer | undefined;
+  /**
+   * Where events go to be heard. The listener is the camera, so the sink reads
+   * the newest snapshot rather than holding a copy of one.
+   */
+  private readonly sounds: SceneAudio = sceneAudioFor(() => this.snapshot);
   /** Shots the crew fired since the last frame, placed from the drawn pose. */
   private readonly ownShots: OwnShot[] = [];
   private visualShieldAngle: number;
@@ -123,9 +130,7 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
-    this.zoneLayer = drawArenaZones(this, this.snapshot, (key, half, draw) =>
-      this.bake(key, half, draw)
-    );
+    this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
 
     /*
@@ -221,6 +226,10 @@ export class SpaceshipScene extends Phaser.Scene {
   private updateScene(time: number, deltaMs: number): void {
     this.frames.recordFrame(time, this.game.loop.rawDelta);
     this.playback = advancePlayback(this.playback, deltaMs);
+    this.loot.update(deltaMs);
+    // A trigger let go has to be heard being let go: a burst sample keeps
+    // playing until somebody notices no more shots are arriving.
+    this.sounds.settle(time);
     if (this.spaceshipBody === undefined || this.turret === undefined || this.shield === undefined)
       return;
     const playbackTick = this.playback.tick;
@@ -263,14 +272,21 @@ export class SpaceshipScene extends Phaser.Scene {
         : predicted.turretAngle;
     // From the numbers just drawn, not from the snapshot: that is what keeps the
     // flash on the visible barrel however fast the hull is moving.
-    placeOwnShots(this.bursts, this.ownShots, {
-      mount,
-      hull: spaceshipPosition,
-      heading: spaceshipHeading,
-      turretRotation: this.turret.rotation,
-      hullRadius: this.snapshot.spaceship.radius,
-      turretMuzzleEffect: this.snapshot.shipMuzzleEffect
-    });
+    placeOwnShots(
+      this.bursts,
+      this.ownShots,
+      {
+        mount,
+        hull: spaceshipPosition,
+        heading: spaceshipHeading,
+        turretRotation: this.turret.rotation,
+        hullRadius: this.snapshot.spaceship.radius,
+        turretMuzzleEffect: this.snapshot.shipMuzzleEffect,
+        cannonSound: this.snapshot.shipCannonSound,
+        mgSound: this.snapshot.shipMgSound
+      },
+      this.sounds
+    );
     this.visualShieldAngle = sampleAngleTrack(this.shieldTrack, playbackTick);
     /*
      * The rest of a match, on the clock the rest of the world is drawn on, and
@@ -289,7 +305,14 @@ export class SpaceshipScene extends Phaser.Scene {
         turretAngle: this.turret.rotation,
         shieldAngle: this.visualShieldAngle
       },
-      this.prediction
+      this.prediction,
+      {
+        scene: this,
+        // Only what the camera can actually show: a barrier drawn for a ship
+        // off screen is a rope rebuilt for nobody.
+        view: this.cameras.main.worldView,
+        effect: this.snapshot.shieldBandEffect
+      }
     );
     if (this.vectorsEnabled) {
       this.drawShield();
@@ -388,9 +411,10 @@ export class SpaceshipScene extends Phaser.Scene {
   }
 
   /** The baked zone sheet, replaced whenever a zone changes state. */
-  private zoneLayer: Phaser.GameObjects.Image | undefined;
+  private readonly zones = new ArenaZoneLayer();
   /** The other hulls of a match; empty in the campaign, which has one ship. */
   private readonly fleet = new ArenaFleet();
+  private readonly loot = new ArenaLootLayer();
 
   applySnapshot(snapshot: DisplayGameSnapshot): void {
     const framedWidth = this.snapshot.cameraViewWidth;
@@ -401,21 +425,21 @@ export class SpaceshipScene extends Phaser.Scene {
     if (!this.sys.isActive()) return;
     // Sixteen hulls, moved rather than rebuilt: the textures are shared and a
     // frame costs a position and two rotations each.
+    this.loot.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw));
     this.fleet.sync(
       this,
       snapshot,
       (key, half, draw) => this.bake(key, half, draw),
       shouldSnap,
       this.prediction,
-      this.bursts
+      this.bursts,
+      this.sounds
     );
-    // The sheet is ground: redrawn when a zone changes state and at no other
-    // time, which on a sixty-hertz patch stream is a handful of times a match.
+    // The sheet is ground, and a rectangle changing state is one image being
+    // given a different texture - so this runs on a signature change and costs
+    // nothing when it does.
     if (arenaZoneSignature(snapshot) !== zoneSignature) {
-      this.zoneLayer?.destroy();
-      this.zoneLayer = drawArenaZones(this, snapshot, (key, half, draw) =>
-        this.bake(key, half, draw)
-      );
+      this.zones.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw));
     }
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.
@@ -548,7 +572,8 @@ export class SpaceshipScene extends Phaser.Scene {
       snap,
       bursts: this.bursts,
       ownShots: this.ownShots,
-      shieldPose: this.shield?.pose()
+      shieldPose: this.shield?.pose(),
+      sounds: this.sounds
     });
   }
 }

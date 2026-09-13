@@ -224,50 +224,77 @@ export function arenaZoneSignature(snapshot: DisplayGameSnapshot): string {
   return snapshot.arenaZones.map((zone) => zone.state.charAt(0)).join("");
 }
 
-export function drawArenaZones(
-  scene: Phaser.Scene,
-  snapshot: DisplayGameSnapshot,
-  bake: BakeShape
-): Phaser.GameObjects.Image | undefined {
-  const zones = snapshot.arenaZones;
-  if (zones.length === 0) return undefined;
+/** How many pixels one cell of the sheet is baked at, before it is scaled. */
+const ZONE_CELL_SIDE = 128;
 
-  const centerX = snapshot.worldWidth / 2;
-  const centerY = snapshot.worldHeight / 2;
-  const radius = snapshot.arenaRadius;
-  const diameter = radius * 2;
-  const side = arenaTextureSide(diameter);
-  const scale = side / diameter;
-  const signature = arenaZoneSignature(snapshot);
+/**
+ * The closing field, as one image per rectangle.
+ *
+ * It used to be a single texture of the whole sheet, rebaked every time any
+ * rectangle changed state: on a field of nineteen thousand units that is a
+ * four-thousand-pixel square canvas, eighty-eight rectangles drawn into it and
+ * an upload to the GPU - half a second of frozen game, every closure, in the
+ * exact moment the player most needs to see where the wall is.
+ *
+ * The grid is uniform, so two small textures - one amber cell, one red - cover
+ * every rectangle there will ever be. A state change is then swapping a texture
+ * on one image, which costs nothing, and the frame that used to freeze draws
+ * eighty-eight static images like any other ground.
+ */
+export class ArenaZoneLayer {
+  private readonly cells = new Map<number, Phaser.GameObjects.Image>();
 
-  const key = bake(
-    `arena:zones:${String(Math.round(radius))}:${signature}`,
-    side / 2,
-    (graphics) => {
-      for (const zone of zones) {
-        if (zone.state === "safe") continue;
-        const closed = zone.state === "closed";
-        graphics.fillStyle(
-          closed ? ZONE_CLOSED_COLOR : ZONE_WARNING_COLOR,
-          closed ? ZONE_CLOSED_ALPHA : ZONE_WARNING_ALPHA
+  sync(scene: Phaser.Scene, snapshot: DisplayGameSnapshot, bake: BakeShape): void {
+    const warning = bake(`arena:zone:warning`, ZONE_CELL_SIDE / 2, (graphics) => {
+      drawCell(graphics, ZONE_WARNING_COLOR, ZONE_WARNING_ALPHA, 0.7);
+    });
+    const closed = bake(`arena:zone:closed`, ZONE_CELL_SIDE / 2, (graphics) => {
+      drawCell(graphics, ZONE_CLOSED_COLOR, ZONE_CLOSED_ALPHA, 0.5);
+    });
+
+    const seen = new Set<number>();
+    for (const zone of snapshot.arenaZones) {
+      if (zone.state === "safe") continue;
+      seen.add(zone.zoneId);
+      const key = zone.state === "closed" ? closed : warning;
+      const middleX = zone.x + zone.width / 2;
+      const middleY = zone.y + zone.height / 2;
+      const existing = this.cells.get(zone.zoneId);
+      if (existing === undefined) {
+        // Over the floor, under everything that moves: it is ground.
+        this.cells.set(
+          zone.zoneId,
+          scene.add.image(middleX, middleY, key).setDisplaySize(zone.width, zone.height).setDepth(1)
         );
-        graphics.fillRect(
-          (zone.x - centerX) * scale,
-          (zone.y - centerY) * scale,
-          zone.width * scale,
-          zone.height * scale
-        );
-        graphics.lineStyle(2, closed ? ZONE_CLOSED_COLOR : ZONE_WARNING_COLOR, closed ? 0.5 : 0.7);
-        graphics.strokeRect(
-          (zone.x - centerX) * scale,
-          (zone.y - centerY) * scale,
-          zone.width * scale,
-          zone.height * scale
-        );
+        continue;
       }
+      if (existing.texture.key !== key)
+        existing.setTexture(key).setDisplaySize(zone.width, zone.height);
     }
-  );
 
-  // Over the floor, under everything that moves: it is ground, not an entity.
-  return scene.add.image(centerX, centerY, key).setDisplaySize(diameter, diameter).setDepth(1);
+    for (const [id, cell] of this.cells) {
+      if (seen.has(id)) continue;
+      cell.destroy();
+      this.cells.delete(id);
+    }
+  }
+
+  destroy(): void {
+    for (const cell of this.cells.values()) cell.destroy();
+    this.cells.clear();
+  }
+}
+
+/** One cell of the sheet, drawn once at its own size and scaled to every zone. */
+function drawCell(
+  graphics: Phaser.GameObjects.Graphics,
+  colour: number,
+  alpha: number,
+  edgeAlpha: number
+): void {
+  const half = ZONE_CELL_SIDE / 2;
+  graphics.fillStyle(colour, alpha);
+  graphics.fillRect(-half, -half, ZONE_CELL_SIDE, ZONE_CELL_SIDE);
+  graphics.lineStyle(2, colour, edgeAlpha);
+  graphics.strokeRect(-half + 1, -half + 1, ZONE_CELL_SIDE - 2, ZONE_CELL_SIDE - 2);
 }

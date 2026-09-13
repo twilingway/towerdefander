@@ -184,3 +184,19 @@ export function toEnemyEffects(entry: {
   };
   return Object.keys(chosen).length === 0 ? undefined : chosen;
 }
+
+/** The same fold for what the archetype is heard doing. */
+export function toEnemySounds(entry: {
+  readonly soundDeath?: string;
+  readonly soundHit?: string;
+  readonly soundShot?: string;
+}): { death?: string; hit?: string; shot?: string } | undefined {
+  const chosen = {
+    ...(entry.soundDeath === undefined || entry.soundDeath === ""
+      ? {}
+      : { death: entry.soundDeath }),
+    ...(entry.soundHit === undefined || entry.soundHit === "" ? {} : { hit: entry.soundHit }),
+    ...(entry.soundShot === undefined || entry.soundShot === "" ? {} : { shot: entry.soundShot })
+  };
+  return Object.keys(chosen).length === 0 ? undefined : chosen;
+}

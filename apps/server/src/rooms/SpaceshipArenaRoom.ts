@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { Room, type Client } from "colyseus";
 import { StateView, type MapSchema } from "@colyseus/schema";
 import {
@@ -36,11 +38,13 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { getBalanceStore } from "../balance/index.js";
+import type { RoomStatsStatus } from "../stats/types.js";
 import { ArenaBots } from "./arenaBots.js";
 import { createRunSeed } from "./runSeed.js";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
 import {
+  ArenaLootView,
   ArenaShipView,
   ArenaZoneView,
   DISPLAY_VIEW_TAG,
@@ -58,6 +62,17 @@ import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
  * living field plus whatever just stopped being part of it.
  */
 const WRECK_HOLD_TICKS = 120;
+/**
+ * How long a started match is kept after the last person leaves.
+ *
+ * Long enough to be a dropped connection rather than a decision: a phone that
+ * loses the network for a few seconds comes back to its own fight, into the
+ * seat the autopilot was holding. Past that it is an empty room stepping
+ * sixteen hulls sixty times a second for nobody - measured at about four and a
+ * half megabytes and a share of a core each, and four of them were found
+ * sitting on a stand.
+ */
+const EMPTY_MATCH_HOLD_MS = 30_000;
 
 /** The slot the human takes. It flies on autopilot until a cockpit claims it. */
 const PLAYER_SLOT = 0;
@@ -109,6 +124,19 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private started = false;
   /** Seats taken by bots so far, while the fill animation runs. */
   private botsSeated = 0;
+  /**
+   * What the room dashboard is told about this match.
+   *
+   * A match published nothing at all until now, so a person flying one did not
+   * appear on the dashboard in any column: the page counted campaign rooms and
+   * called the number "players online".
+   */
+  private statsId = "";
+  /** When the last client left a started match; see `EMPTY_MATCH_HOLD_MS`. */
+  private emptySince: number | undefined;
+  private readonly createdAtMs = Date.now();
+  private statsStatus: RoomStatsStatus = "lobby";
+  private statusChangedAtMs = Date.now();
   /** The last sheet published, as a string; see `publishZones`. */
   private zoneSignature = "";
   /**
@@ -189,7 +217,26 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       ...hull,
       arenaRadius: fieldRadius,
       worldWidth: fieldRadius * 2,
-      worldHeight: fieldRadius * 2
+      worldHeight: fieldRadius * 2,
+      /*
+       * The frame is the arena's too, because it is what a seat can see.
+       *
+       * `buildArenaWorld` cuts every hull's slice of the match to this width,
+       * and the screen is drawn at `tuning.arena.cameraViewWidth`. Leaving the
+       * campaign's number here made those two different frames: the sector the
+       * autopilot holds for a seated player stopped tracking a rival that was
+       * still plainly on screen, because the policy had already been told the
+       * rival was out of sight.
+       */
+      cameraViewWidth: Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth),
+      /*
+       * And the sector's reason to come up is the match's own number.
+       *
+       * The campaign's answer to "is anything armed in reach" is the enemy
+       * archetype's weapon range, and a match has no archetypes to ask - so
+       * the two modes read the same zero differently and needed two settings.
+       */
+      shieldAutopilotRaiseRange: tuning.arena.shieldAutopilotRaiseRange
     };
     this.state.shipArchetypeId = tuning.defaultShipArchetypeId;
     this.config = {
@@ -212,8 +259,13 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // The campaign's ship, stretched for a sixteen-way fight by two numbers
       // the operator owns rather than by constants nobody can reach.
       shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
+      shieldHitCostShare: tuning.arena.shieldHitCostShare,
       zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
       zonesPerClosure: tuning.arena.zonesPerClosure,
+      // The supply run's clocks are the operator's; its caps are the code's.
+      lootFirstSpawnTicks: tuning.arena.lootFirstSpawnTicks,
+      lootIntervalTicks: tuning.arena.lootIntervalTicks,
+      lootCargoIntervalTicks: tuning.arena.lootCargoIntervalTicks,
       zoneWarningTicks: tuning.arena.zoneWarningTicks,
       zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
       // The operator decides how many beats a full hull takes; the simulation
@@ -294,6 +346,15 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     display.shieldImpactEffect = ship.shieldImpactEffect;
     display.shipDeathEffect = ship.shipDeathEffect;
     display.shipMuzzleEffect = ship.shipMuzzleEffect;
+    /*
+     * Every hull in a match is this hull, so one set of sounds covers the
+     * field: what the player is heard firing is what fifteen rivals are heard
+     * firing, which is also what a kill of any of them sounds like.
+     */
+    display.shipCannonSound = ship.shipCannonSound;
+    display.shipMgSound = ship.shipMgSound;
+    display.shipHitSound = ship.shipHitSound;
+    display.shipDeathSound = ship.shipDeathSound;
     display.shieldRadius = ship.shieldRadius;
     // The drive block is what a predicting client replays from; the arena does
     // not predict yet, but the contract asks for real numbers and they exist.
@@ -352,11 +413,24 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       Math.round(1000 / ship.fixedStepMs)
     );
 
+    this.statsId = randomUUID();
     // One tick a second for the waiting room, which is what its display shows.
     this.clock.setInterval(() => {
       this.countDown();
     }, 1_000);
+    /*
+     * And one for the dashboard, at the same rate.
+     *
+     * A match changes what it is worth reporting - who is connected, whether it
+     * has started - on events that are already busy, so this is a heartbeat
+     * rather than a call at every one of them: the page polls every few seconds
+     * and a second of lag in a count of people is not a number anybody reads.
+     */
+    this.clock.setInterval(() => {
+      void this.publishStats();
+    }, 1_000);
     this.broadcastLobby();
+    void this.publishStats();
   }
 
   /**
@@ -407,6 +481,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   };
 
   override onJoin(client: Client, unsafeOptions?: unknown): void {
+    // Somebody is here again, so the empty-room countdown is off.
+    this.emptySince = undefined;
     // Everyone watching gets the world branch: the arena has no controller
     // panels of its own yet, so there is nothing to gate off anybody.
     const view = (client.view ??= new StateView());
@@ -457,7 +533,10 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       void this.disconnect();
       return;
     }
-    if (this.clients.length === 0) this.state.displayConnected = false;
+    if (this.clients.length === 0) {
+      this.state.displayConnected = false;
+      this.holdEmptyMatch();
+    }
     // Somebody closing their tab has to leave the queue they were counted in.
     this.broadcastLobby();
   }
@@ -522,6 +601,62 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.broadcast(serverMessage.arenaLobby, payload);
   }
 
+  /**
+   * Closes a started match that nobody came back to.
+   *
+   * On the room's own clock rather than a timer of its own: the clock is
+   * cleared with the room, and a stray timer firing into a disposed room is the
+   * shape of bug this file has had before.
+   */
+  private holdEmptyMatch(): void {
+    if (this.emptySince !== undefined) return;
+    this.emptySince = Date.now();
+    this.clock.setTimeout(() => {
+      if (this.emptySince === undefined) return;
+      if (this.clients.length > 0) {
+        this.emptySince = undefined;
+        return;
+      }
+      void this.disconnect();
+    }, EMPTY_MATCH_HOLD_MS);
+  }
+
+  /** What the dashboard calls this match right now. */
+  private publishStats(): Promise<void> {
+    if (this.statsId.length === 0) return Promise.resolve();
+    const match = this.match;
+    const status: RoomStatsStatus = !this.started
+      ? "lobby"
+      : match?.phase === "result"
+        ? "result"
+        : "combat";
+    if (status !== this.statsStatus) {
+      this.statsStatus = status;
+      this.statusChangedAtMs = Date.now();
+    }
+    return this.setMetadata({
+      statsId: this.statsId,
+      mode: "arena",
+      status,
+      // One socket is one person here: an arena client is its own screen and
+      // its own seat, unlike a campaign crew on a shared display.
+      connections: this.clients.length,
+      connectedPlayers: this.state.players.size,
+      // Nobody is held for a reconnect in a match: a seat whose pilot left is
+      // taken over by the autopilot rather than kept warm.
+      reservedPlayers: 0,
+      capacity: this.config.shipCount,
+      displayConnected: this.clients.length > 0,
+      createdAtMs: this.createdAtMs,
+      statusChangedAtMs: this.statusChangedAtMs,
+      // A match ends when it is decided, not on a clock the dashboard could
+      // count down to.
+      expiresAtMs: null
+    }).catch(() => {
+      // Statistics are operational diagnostics and never affect a match.
+    });
+  }
+
   private step(): void {
     // Nothing moves until the waiting room closes: a match that ran while
     // people were still arriving would be decided before they sat down.
@@ -582,6 +717,18 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         ship.spaceship.y - player.spaceship.y
       );
       if (distance <= radius) this.revealed.add(ship.id);
+    }
+    /*
+     * And what the field has put out within the same reach.
+     *
+     * A sweep answers one question - what is around me - and a crate is as much
+     * a part of that answer as a hull: the route a pilot picks after a sweep is
+     * usually toward a drop rather than toward a fight. Same set, because both
+     * fade on the same clock.
+     */
+    for (const drop of match.loot) {
+      const distance = Math.hypot(drop.x - player.spaceship.x, drop.y - player.spaceship.y);
+      if (distance <= radius) this.revealed.add(drop.id);
     }
     this.scanReadyTick = match.clock.tick + tuning.cooldownTicks;
     this.scanRevealedUntilTick = match.clock.tick + tuning.revealTicks;
@@ -843,6 +990,48 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         // Narrowed to the wire's counter, which wraps; the display compares
         // against what it last drew, so a wrap costs one missed flash.
         view.shotsFired = ship.shotsFired % 65_536;
+        view.shieldBlocks = ship.shieldBlocks % 65_536;
+      }
+    );
+
+    /*
+     * The field's drops, reconciled by id like everything else.
+     *
+     * Position never changes once a drop is put down, so this is a create and a
+     * delete and nothing in between - the update writes the same numbers back
+     * and Colyseus sends none of them.
+     */
+    reconcile(
+      game.display.arenaLoot,
+      new Map(match.loot.map((drop) => [drop.id, drop] as const)),
+      (drop, id) => {
+        const view = new ArenaLootView();
+        view.entityId = id;
+        view.kind = drop.kind;
+        view.x = drop.x;
+        view.y = drop.y;
+        return view;
+      },
+      (view, drop) => {
+        view.x = drop.x;
+        view.y = drop.y;
+        /*
+         * The heavy drop is on every dial from the moment it lands.
+         *
+         * It is worth crossing the field for, which only works if everyone
+         * knows it is there: a cargo nobody can see is a prize one lucky sweep
+         * collects, and a cargo everyone can see is a fight with a time and a
+         * place. The common two stay behind the sweep, which is what the sweep
+         * is for.
+         */
+        view.revealed = drop.kind === "cargo" || (fresh && this.revealed.has(drop.id));
+        // The circle and how much of the hold is served: the display draws a
+        // ring from the pair, and neither is worth computing twice.
+        view.captureRadius = this.config.ship.spaceshipRadius * this.config.lootCaptureRadiusHulls;
+        view.captureShare = Math.max(
+          0,
+          Math.min(1, drop.captureTicks / Math.max(1, this.config.lootCaptureTicks))
+        );
       }
     );
 
@@ -962,7 +1151,17 @@ function mirrorProjectiles(
        * match came out as the display's own fallback dot rather than the
        * sprite the operator chose on the player screen.
        */
-      entity.source = shot.source;
+      /*
+       * Whose barrel this came out of, and only when it is ours.
+       *
+       * The display reads this field to place the crew's own muzzle flash: a
+       * shell that arrives naming a barrel is a shell this ship just fired. A
+       * match publishes fifteen other hulls' shots as well, and naming their
+       * barrels too drew a flash on the player's own gun for every shot anyone
+       * on the field took - which is a muzzle that never stops firing. The
+       * campaign's own mirror has always emptied it for hostile shells.
+       */
+      entity.source = kind === "friendly" ? shot.source : "";
       const visual = shot.source === "machineGun" ? look.machineGun : look.cannon;
       entity.visualShape = visual?.shape ?? "";
       entity.visualScale = visual?.modelScale ?? 1;

@@ -6,6 +6,7 @@ import {
 
 import {
   toEnemyEffects,
+  toEnemySounds,
   toEntityVisual,
   toNebulaPreset,
   toPoseView,
@@ -110,6 +111,15 @@ export function toDisplayRoomView(
               state: zone.state as "safe" | "warning" | "closed",
               secondsRemaining: zone.secondsRemaining
             })),
+            arenaLoot: [...display.arenaLoot.values()].map((drop) => ({
+              entityId: drop.entityId,
+              kind: drop.kind as "ammo" | "gear" | "cargo",
+              revealed: drop.revealed,
+              captureRadius: drop.captureRadius,
+              captureShare: drop.captureShare,
+              x: drop.x,
+              y: drop.y
+            })),
             arenaShips: [...display.arenaShips.values()].map((ship) => ({
               entityId: ship.entityId,
               isSelf: ship.isSelf,
@@ -130,7 +140,8 @@ export function toDisplayRoomView(
               shieldCapacity: ship.shieldCapacity,
               revealed: ship.revealed,
               alive: ship.alive,
-              shotsFired: ship.shotsFired
+              shotsFired: ship.shotsFired,
+              shieldBlocks: ship.shieldBlocks
             })),
             obstacles: [...display.obstacles.values()].map((obstacle) =>
               obstacle.kind === "circle"
@@ -175,6 +186,10 @@ export function toDisplayRoomView(
             shieldImpactEffect: display.shieldImpactEffect ?? "",
             shipDeathEffect: display.shipDeathEffect ?? "",
             shipMuzzleEffect: display.shipMuzzleEffect ?? "",
+            shipCannonSound: display.shipCannonSound ?? "",
+            shipMgSound: display.shipMgSound ?? "",
+            shipHitSound: display.shipHitSound ?? "",
+            shipDeathSound: display.shipDeathSound ?? "",
             turretVisual:
               display.turretVisualShape === undefined || display.turretVisualShape.length === 0
                 ? null
@@ -194,7 +209,8 @@ export function toDisplayRoomView(
               modelScale: entry.modelScale,
               showHealthBar: entry.showHealthBar,
               isBoss: entry.isBoss,
-              effects: toEnemyEffects(entry)
+              effects: toEnemyEffects(entry),
+              sounds: toEnemySounds(entry)
             })),
             enemyShips: toSpawnOrder(display.enemyShips),
             asteroids: toSpawnOrder(display.asteroids),

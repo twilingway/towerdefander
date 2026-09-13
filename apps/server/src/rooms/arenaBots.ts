@@ -31,7 +31,24 @@ export class ArenaBots {
     this.profile = profile;
     this.stepMs = config.ship.fixedStepMs;
     this.options = {
-      shieldRaiseRange: config.ship.shieldAutopilotRaiseRange,
+      /*
+       * A rival in gun range is a reason to hold the sector.
+       *
+       * The arena's own number from the console, and at its zero our own
+       * reach - which is this mode's answer to the question the campaign
+       * answers from the enemy catalogue. There is no catalogue here: every
+       * rival is a copy of our own hull, so "close enough to be shooting at
+       * us" is exactly "inside the range we ourselves shoot from".
+       *
+       * With no reason at all the sector only came up for a shot already
+       * inside the lead window - which reads, in a match, as a shield that
+       * stops machine-gun streams and lets single shells through, because a
+       * stream keeps it up and a lone shell arrives while it is still rising.
+       */
+      shieldRaiseRange:
+        config.ship.shieldAutopilotRaiseRange > 0
+          ? config.ship.shieldAutopilotRaiseRange
+          : cannonReach(config),
       shieldDrain: config.ship.shieldDrainPerSecond,
       cannonSpeed: config.ship.projectileSpeedPerSecond,
       mgSpeed: config.ship.mgProjectileSpeedPerSecond,
@@ -105,6 +122,14 @@ export class ArenaBots {
       shieldActive: shield.active
     };
   }
+}
+
+/** How far this hull's own gun carries: a laser's range, or a shell's flight. */
+function cannonReach(config: ArenaMatchConfig): number {
+  const ship = config.ship;
+  return ship.cannonWeaponKind === "laser"
+    ? ship.cannonLaserRange
+    : (ship.projectileSpeedPerSecond * ship.projectileLifetimeMs) / 1_000;
 }
 
 /** A stick reading is a direction; the simulation wants the bearing of it. */

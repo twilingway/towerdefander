@@ -131,10 +131,15 @@ const baseGame: DisplayGameSnapshot = {
   shieldImpactEffect: "",
   shipDeathEffect: "",
   shipMuzzleEffect: "",
+  shipCannonSound: "",
+  shipMgSound: "",
+  shipHitSound: "",
+  shipDeathSound: "",
   turretVisual: null,
   shieldRadius: 104,
   arenaZones: [],
   arenaShips: [],
+  arenaLoot: [],
   obstacles: [],
   enemyShips: [
     {

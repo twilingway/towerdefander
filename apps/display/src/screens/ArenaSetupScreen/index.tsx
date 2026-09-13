@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ArenaLobby, PublicShip } from "@spaceship-defender/protocol";
 
 import { CatalogAssetShape } from "@spaceship-defender/client-shared";
+import { MENU_THEME } from "../../audio/themes.js";
+import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { getVisualAsset } from "@spaceship-defender/protocol";
 
 import { ShipTile } from "../../components/ShipTile/index.js";
@@ -36,6 +38,22 @@ export function ArenaSetupScreen({
   onBack,
   onStart
 }: ArenaSetupScreenProps) {
+  useMusicTrack(MENU_THEME);
+  const queue = useRef<HTMLDivElement | null>(null);
+  /*
+   * Bring the queue into view when it appears.
+   *
+   * Pressing "В бой" replaces the lower half of a card that is taller than a
+   * phone, so the new part opens below the fold and the page is still showing
+   * the top: it reads as the button having done nothing.
+   *
+   * "end" rather than "nearest": the queue is the last thing on the card, and
+   * the minimum scroll that "nearest" performs brought its first line into view
+   * and left the rest - the fleet, the countdown - still below the fold.
+   */
+  useEffect(() => {
+    queue.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [lobby === undefined]);
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   const [pilotName, setPilotName] = useState("Пилот");
   // Solo on this screen by default, like the campaign: it is the shortest path
@@ -50,7 +68,7 @@ export function ArenaSetupScreen({
     <main className="display-shell display-shell--setup is-arena" ref={shell}>
       <section className="setup-card">
         <header className="setup-head">
-          <button type="button" className="link-button" onClick={onBack}>
+          <button type="button" className="link-button" data-remote-skip onClick={onBack}>
             ← Режимы
           </button>
           <p className="eyebrow">Арена</p>
@@ -146,7 +164,7 @@ export function ArenaSetupScreen({
             </button>
           </>
         ) : (
-          <div className="queue">
+          <div className="queue" ref={queue}>
             <h2 className="setup-step">Сбор на матч</h2>
             {/*
              * Sixteen hulls rather than a number and a bar: the question a

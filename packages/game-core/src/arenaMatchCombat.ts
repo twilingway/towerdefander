@@ -8,6 +8,7 @@ import {
 import { LASER_BEAM_TICKS } from "./collisions.ts";
 import { relativeSweptCircleTime, type MovingEntity } from "./spatialGrid.ts";
 import { shortestAngleDelta } from "./simulationMath.ts";
+import { convergedAngle, turretMount } from "./spaceshipSimulation.ts";
 import { advanceFriendlyWeapon } from "./simulationWeapons.ts";
 
 export interface ArenaFireResult {
@@ -38,6 +39,23 @@ export function fireArenaWeapons(
   const stats = ship.stats;
   const secondsPerStep = config.ship.fixedStepMs / 1000;
   const origin = { x: ship.spaceship.x, y: ship.spaceship.y };
+  /*
+   * The barrel a player sees is the barrel that fires - the campaign's own
+   * rule, and now this one's.
+   *
+   * The turret is bolted where the console put it, so a match that fired from
+   * the hull's centre sent its shells out from under the ship rather than from
+   * the gun, and the flash the display drew on the mount had nothing to do with
+   * where the shell appeared. The angle is converged on the aim point for the
+   * same reason it is in the campaign: fired parallel from an offset mount, a
+   * shot crosses the barrel by about three degrees at half its reach, which is
+   * wider than the aim tolerance.
+   */
+  const mount = turretMount(origin, ship.heading, stats, config.ship.turretVisual);
+  const cannonReach =
+    ship.cannonKind === "laser"
+      ? stats.cannonLaserRange
+      : (stats.projectileSpeedPerSecond * config.ship.projectileLifetimeMs) / 1_000;
   const projectiles: ArenaProjectileState[] = [];
   const beams: ArenaBeamState[] = [];
   let sequence = projectileSequence;
@@ -55,8 +73,8 @@ export function fireArenaWeapons(
     homing: null,
     eligible: cannonEligible,
     canSpawn: roomForProjectile,
-    origin,
-    angle: ship.turretAngle,
+    origin: mount,
+    angle: convergedAngle(origin, mount, ship.turretAngle, cannonReach),
     muzzleOffset: stats.spaceshipRadius + stats.projectileRadius,
     speed: stats.projectileSpeedPerSecond,
     damage: stats.friendlyProjectileDamage,
@@ -228,15 +246,42 @@ export function resolveArenaHits(
 ): ArenaHitResolution {
   const damage = new Map<string, number>();
   const shieldSpend = new Map<string, number>();
+  /** Shells the sector stopped, counted apart from what they cost it. */
+  const shieldBlocks = new Map<string, number>();
   const killedBy = new Map<string, string>();
   const spent = new Set<string>();
 
   for (const projectile of projectiles) {
     let bestTime: number | null = null;
     let bestShip: ArenaShipState | null = null;
+    let bestOnShield = false;
 
     for (const ship of ships) {
       if (!ship.alive || ship.id === projectile.ownerShipId) continue;
+      /*
+       * Two circles, earliest wins - the campaign's own rule.
+       *
+       * A sector stands off the hull, so a shell it stops must die where it
+       * met the barrier and not a hull's width further in. Swept against the
+       * hull alone, a blocked shell flew visibly through the shield before
+       * vanishing, and a shell that clipped the barrier but would have missed
+       * the hull was never stopped at all.
+       */
+      if (ship.shieldActive) {
+        const shieldTime = relativeSweptCircleTime(
+          projectileEntity(projectile),
+          shipEntity(ship, config.ship.spaceshipRadius, ship.stats.shieldRadius)
+        );
+        if (
+          shieldTime !== null &&
+          insideShieldArc(projectile, shieldTime, ship) &&
+          (bestTime === null || shieldTime < bestTime)
+        ) {
+          bestTime = shieldTime;
+          bestShip = ship;
+          bestOnShield = true;
+        }
+      }
       const time = relativeSweptCircleTime(
         projectileEntity(projectile),
         shipEntity(ship, config.ship.spaceshipRadius)
@@ -245,14 +290,20 @@ export function resolveArenaHits(
       if (bestTime === null || time < bestTime) {
         bestTime = time;
         bestShip = ship;
+        bestOnShield = false;
       }
     }
 
     if (bestShip === null || bestTime === null) continue;
     spent.add(projectile.id);
 
-    if (blockedByShield(projectile, bestTime, bestShip)) {
-      shieldSpend.set(bestShip.id, (shieldSpend.get(bestShip.id) ?? 0) + projectile.damage);
+    if (bestOnShield) {
+      // A share of the shell rather than the whole of it; see the config.
+      shieldSpend.set(
+        bestShip.id,
+        (shieldSpend.get(bestShip.id) ?? 0) + projectile.damage * config.shieldHitCostShare
+      );
+      shieldBlocks.set(bestShip.id, (shieldBlocks.get(bestShip.id) ?? 0) + 1);
       continue;
     }
 
@@ -268,10 +319,12 @@ export function resolveArenaHits(
   const nextShips = ships.map((ship) => {
     const taken = damage.get(ship.id) ?? 0;
     const drained = shieldSpend.get(ship.id) ?? 0;
+    const blocked = shieldBlocks.get(ship.id) ?? 0;
     if (taken === 0 && drained === 0) return ship;
     const hp = Math.max(0, ship.hp - taken);
     return {
       ...ship,
+      shieldBlocks: ship.shieldBlocks + blocked,
       hp,
       shieldEnergy: Math.max(0, ship.shieldEnergy - drained),
       alive: hp > 0,
@@ -285,7 +338,8 @@ export function resolveArenaHits(
   };
 }
 
-function blockedByShield(
+/** Whether the shell crossed the barrier inside the sector it covers. */
+function insideShieldArc(
   projectile: ArenaProjectileState,
   timeOfImpact: number,
   ship: ArenaShipState
@@ -311,7 +365,12 @@ function projectileEntity(projectile: ArenaProjectileState): MovingEntity {
   };
 }
 
-function shipEntity(ship: ArenaShipState, fallbackRadius: number): MovingEntity {
+function shipEntity(
+  ship: ArenaShipState,
+  fallbackRadius: number,
+  /** The circle to sweep against; the hull's own unless the sector is asked for. */
+  radius?: number
+): MovingEntity {
   return {
     id: ship.id,
     spawnSequence: ship.slot,
@@ -320,7 +379,7 @@ function shipEntity(ship: ArenaShipState, fallbackRadius: number): MovingEntity 
     x: ship.spaceship.x,
     y: ship.spaceship.y,
     velocity: ship.spaceship.velocity,
-    radius: ship.stats.spaceshipRadius || fallbackRadius,
+    radius: radius ?? (ship.stats.spaceshipRadius || fallbackRadius),
     spawnedTick: 0
   };
 }

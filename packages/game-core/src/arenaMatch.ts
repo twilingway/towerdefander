@@ -11,6 +11,7 @@ import {
   type ArenaShipIntent,
   type ArenaShipState
 } from "./arenaMatchTypes.ts";
+import { advanceArenaLoot } from "./arenaLoot.ts";
 import { type ArenaZone } from "./arenaZones.ts";
 import {
   advanceArenaZones,
@@ -128,6 +129,7 @@ export function createArenaMatch(
       mgOverheated: false,
       lastMgFiredTick: null,
       shotsFired: 0,
+      shieldBlocks: 0,
       shieldAngle: heading,
       shieldTargetAngle: null,
       shieldAngularVelocity: 0,
@@ -154,6 +156,14 @@ export function createArenaMatch(
     outcome: null,
     winnerShipId: null,
     zones: createArenaZones(config),
+    loot: [],
+    // Both start on the opening quiet; after that each keeps its own interval.
+    ticksUntilLoot: config.lootFirstSpawnTicks,
+    ticksUntilCargo: config.lootFirstSpawnTicks,
+    nextLootSequence: 1,
+    // A stream of its own, so a change to how the field drops cannot move where
+    // the hulls spawned or what the bots decided.
+    lootRngState: (matchSeed ^ 0x5f37_59df) >>> 0 || 0x6d2b_79f5,
     ticksUntilNextClosure: config.zoneIntervalTicks,
     ticksUntilZoneDamage: config.zoneDamageIntervalTicks,
     ships,
@@ -240,6 +250,29 @@ export function advanceArenaMatch(
   const biting = state.ticksUntilZoneDamage <= 1;
   const burned = biting ? applyZoneDamage(resolved.ships, sheet.zones, config) : resolved.ships;
   const settled = settleEliminations(burned, tick);
+  /*
+   * The supply line runs on the settled field, not on the one this tick began
+   * with: a hold is decided by where a hull ended up and by whether anything
+   * landed on it, and both of those are only known now.
+   */
+  const before = new Map(state.ships.map((ship) => [ship.id, ship.hp] as const));
+  const hurt = new Set(
+    settled
+      .filter((ship) => ship.hp < (before.get(ship.id) ?? ship.hp) - 1e-6)
+      .map((ship) => ship.id)
+  );
+  const supply = advanceArenaLoot(
+    state.loot,
+    sheet.zones,
+    settled,
+    hurt,
+    clock,
+    state.ticksUntilLoot,
+    state.ticksUntilCargo,
+    state.nextLootSequence,
+    state.lootRngState,
+    config
+  );
   const verdict = matchVerdict(settled, tick, config);
 
   return {
@@ -249,6 +282,11 @@ export function advanceArenaMatch(
     outcome: verdict.outcome,
     winnerShipId: verdict.winnerShipId,
     zones: sheet.zones,
+    loot: supply.loot,
+    ticksUntilLoot: supply.ticksUntilLoot,
+    ticksUntilCargo: supply.ticksUntilCargo,
+    nextLootSequence: supply.nextLootSequence,
+    lootRngState: supply.rngState,
     ticksUntilNextClosure: sheet.ticksUntilNextClosure,
     ticksUntilZoneDamage: biting ? config.zoneDamageIntervalTicks : state.ticksUntilZoneDamage - 1,
     ships: settled,

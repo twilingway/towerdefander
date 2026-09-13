@@ -54,6 +54,18 @@ export interface NetworkArenaShipState {
   revealed: boolean;
   alive: boolean;
   shotsFired: number;
+  shieldBlocks: number;
+}
+
+/** One drop on the arena's field; empty in the campaign. */
+export interface NetworkArenaLootState {
+  entityId: string;
+  revealed: boolean;
+  captureRadius: number;
+  captureShare: number;
+  kind: string;
+  x: number;
+  y: number;
 }
 
 /** One rectangle of the arena's sheet; empty in the campaign. */
@@ -282,6 +294,10 @@ export interface NetworkGameState {
     shieldImpactEffect?: string;
     shipDeathEffect?: string;
     shipMuzzleEffect?: string;
+    shipCannonSound?: string;
+    shipMgSound?: string;
+    shipHitSound?: string;
+    shipDeathSound?: string;
     spaceshipVisualScale?: number;
     turretVisualShape?: string;
     turretVisualScale?: number;
@@ -294,6 +310,7 @@ export interface NetworkGameState {
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;
     arenaZones: ValueCollection<NetworkArenaZoneState>;
     arenaShips: ValueCollection<NetworkArenaShipState>;
+    arenaLoot: ValueCollection<NetworkArenaLootState>;
     obstacles: ValueCollection<NetworkObstacleState>;
     enemyShips: ValueCollection<NetworkEnemyState>;
     asteroids: ValueCollection<NetworkAsteroidState>;
@@ -317,6 +334,10 @@ export interface NetworkEnemyVisualState {
   effectDeath: string;
   effectHit: string;
   effectShot: string;
+  /** And what it is heard doing, on the same terms. */
+  soundDeath: string;
+  soundHit: string;
+  soundShot: string;
 }
 
 export interface NetworkRoomState {

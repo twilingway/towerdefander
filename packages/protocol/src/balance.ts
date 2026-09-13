@@ -7,13 +7,14 @@ import {
   MAX_ENEMY_ARCHETYPE_ID_LENGTH
 } from "./enemyKinds.ts";
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
+import { SOUND_IDS } from "./audioCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 48 as const;
+export const BALANCE_FILE_VERSION = 52 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -138,6 +139,39 @@ export const shipEffectsSchema = z
   })
   .strict();
 export type ShipEffects = z.infer<typeof shipEffectsSchema>;
+
+/** A sound from the shared catalogue; the file itself lives in the display. */
+export const soundIdSchema = z.enum(SOUND_IDS);
+
+/**
+ * What a hull is heard doing. Every slot is optional, and an empty one means
+ * "as it is now" rather than "silence": a preset that names no sound at all
+ * plays exactly as it did before the slots existed.
+ *
+ * Two shot slots rather than one, because the hull carries two weapons and
+ * their being heard as one gun firing twice is exactly what a single slot would
+ * produce - the same reason the display keeps two muzzle flashes.
+ */
+export const shipSoundsSchema = z
+  .object({
+    cannonShot: soundIdSchema.optional(),
+    mgShot: soundIdSchema.optional(),
+    /** A hit landed on this hull, whatever it came from. */
+    hit: soundIdSchema.optional(),
+    death: soundIdSchema.optional()
+  })
+  .strict();
+export type ShipSounds = z.infer<typeof shipSoundsSchema>;
+
+/** The enemy's three, matching its three effect slots one for one. */
+export const enemySoundsSchema = z
+  .object({
+    shot: soundIdSchema.optional(),
+    hit: soundIdSchema.optional(),
+    death: soundIdSchema.optional()
+  })
+  .strict();
+export type EnemySounds = z.infer<typeof enemySoundsSchema>;
 export const MODEL_SCALE_MIN = 0.2;
 export const MODEL_SCALE_MAX = 4;
 const modelScaleSchema = z.number().min(MODEL_SCALE_MIN).max(MODEL_SCALE_MAX);
@@ -148,7 +182,9 @@ export const enemyVisualSchema = z
     modelScale: modelScaleSchema,
     showHealthBar: z.boolean(),
     /** Absent leaves the display's own rule; see `enemyEventEffectsSchema`. */
-    effects: enemyEventEffectsSchema.optional()
+    effects: enemyEventEffectsSchema.optional(),
+    /** What this archetype is heard doing; absent is the display's own rule. */
+    sounds: enemySoundsSchema.optional()
   })
   .strict();
 export type EnemyVisual = z.infer<typeof enemyVisualSchema>;
@@ -852,6 +888,8 @@ export const shipArchetypeSchema = z
     visual: entityVisualSchema,
     /** Barrier and impact effects for this hull's shield; empty means as it is. */
     effects: shipEffectsSchema.optional(),
+    /** What this hull is heard doing; empty means the display's own rule. */
+    sounds: shipSoundsSchema.optional(),
     /**
      * Informational until runs remember anything between themselves: shown
      * beside the hull so a locked ship does not appear out of nowhere later.
@@ -1010,6 +1048,27 @@ export const arenaTuningSchema = z
     hullScaling: positiveFinite,
     damageScaling: positiveFinite,
     /**
+     * What a blocked shell costs the sector, as a share of its damage.
+     *
+     * The one number a match needs that the campaign has no equivalent for:
+     * there, an enemy weapon carries its own hit cost and a friendly shell
+     * never meets a friendly sector. At one, a full battery is gone in four
+     * cannon hits and the sector locks out - which reads as a shield that stops
+     * bursts and lets shells through.
+     */
+    shieldHitCostShare: positiveFinite,
+    /**
+     * How near a rival has to be for the autopilot to hold the sector.
+     *
+     * The campaign's field of the same name answers this from the enemy
+     * catalogue when it is left at zero - "as far as that enemy can shoot
+     * from". A match has no catalogue: every rival is a copy of our own hull,
+     * so zero here means "as far as our own gun reaches", and the number moves
+     * with the cannon instead of having to be retuned after it. One name, two
+     * fights, two meanings - which is why it is two settings.
+     */
+    shieldAutopilotRaiseRange: nonNegativeFinite,
+    /**
      * The sweep, in screens.
      *
      * A match is fought on a field far wider than the camera, so a pilot who
@@ -1022,6 +1081,15 @@ export const arenaTuningSchema = z
     scanCooldownTicks: positiveInteger,
     /** How long a hull the sweep found stays on the dial. */
     scanRevealTicks: positiveInteger,
+    /**
+     * The field's supply run: how long it holds off at the start, how often the
+     * common drops come, and how often the heavy one does. The caps - sixteen
+     * of each kind and thirty-two on the field - are the code's, because they
+     * are what keeps the board readable rather than a thing to tune.
+     */
+    lootFirstSpawnTicks: positiveInteger,
+    lootIntervalTicks: positiveInteger,
+    lootCargoIntervalTicks: positiveInteger,
     /** How often the next batch of zones is picked and turns amber. */
     zoneIntervalTicks: positiveInteger,
     /**
