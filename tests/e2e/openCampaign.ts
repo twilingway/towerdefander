@@ -6,7 +6,8 @@ import type { Page } from "@playwright/test";
  * The display starts on the two-tile front door now, and the campaign setup
  * behind it defaults to solo on this very screen. A spec that wants a crew with
  * phones therefore has to say so - which is the point of asking for the size
- * here rather than relying on whatever the screen happens to open on.
+ * here rather than relying on whatever the screen happens to open on. That tile
+ * is switched off for players, so the page has to be opened with `?shared`.
  */
 export async function openCampaign(display: Page, crewSize: 1 | 2 | 3): Promise<void> {
   await display.getByRole("button", { name: "Кампания I: Завеса" }).click();

@@ -32,7 +32,7 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
     const displayContext = await browser.newContext();
     contexts.push(displayContext);
     const display = await displayContext.newPage();
-    await display.goto(displayUrl);
+    await display.goto(`${displayUrl}/?shared`);
     await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");
@@ -274,7 +274,7 @@ test("crew reaches defeat, starts a clean rematch and can leave", async ({ brows
     const displayContext = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
     contexts.push(displayContext);
     const display = await displayContext.newPage();
-    await display.goto(displayUrl);
+    await display.goto(`${displayUrl}/?shared`);
     await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");

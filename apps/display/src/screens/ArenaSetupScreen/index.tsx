@@ -18,6 +18,11 @@ interface ArenaSetupScreenProps {
   /** The waiting room, once one is open: who is in it and how long it waits. */
   readonly lobby: ArenaLobby | undefined;
   readonly onBack: () => void;
+  /**
+   * Whether the shared-screen tile works. Players find it switched off while
+   * those crews still fly on autopilots; `?shared` opens it for the stands.
+   */
+  readonly sharedScreen: boolean;
   /** Cockpit means this device flies the match as well as showing it. */
   readonly onStart: (cockpitPlayerName: string | undefined) => void;
 }
@@ -36,6 +41,7 @@ export function ArenaSetupScreen({
   error,
   lobby,
   onBack,
+  sharedScreen,
   onStart
 }: ArenaSetupScreenProps) {
   useMusicTrack(MENU_THEME);
@@ -100,6 +106,7 @@ export function ArenaSetupScreen({
             className={`place-tile${cockpit ? "" : " is-selected"}`}
             aria-label="Общий экран"
             aria-pressed={!cockpit}
+            disabled={!sharedScreen}
             onClick={() => {
               setCockpit(false);
             }}

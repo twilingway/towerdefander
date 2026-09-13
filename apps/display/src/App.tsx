@@ -71,6 +71,7 @@ export function DisplayApp() {
         status={session.status}
         error={session.error}
         lobby={session.arenaLobby}
+        sharedScreen={flags.sharedScreen}
         onBack={() => {
           void navigate({ pathname: "/", search: readDisplaySearch() });
         }}
@@ -101,6 +102,7 @@ export function DisplayApp() {
       status={session.status}
       error={session.error}
       visibleDemo={flags.visibleDemo}
+      sharedScreen={flags.sharedScreen}
       allowStartWave={flags.allowStartWave}
       initialStartWave={flags.initialStartWave}
       ships={shipCatalogue?.ships ?? []}

@@ -13,6 +13,11 @@ export interface DisplayUrlFlags {
   readonly initialStartWave: number;
   /** Lets a demo or a bookmark open the run on a named hull. */
   readonly shipArchetypeId: string | undefined;
+  /**
+   * Opens the shared-screen tiles, which players find switched off while those
+   * crews still fly on autopilots; the stands and e2e ask for it with `?shared`.
+   */
+  readonly sharedScreen: boolean;
 }
 
 export interface DisplayUrlEnvironment {
@@ -44,7 +49,8 @@ export function readDisplayUrlFlags(
     ),
     allowStartWave,
     initialStartWave: allowStartWave ? readStartWave(search, MAX_START_WAVE) : 1,
-    shipArchetypeId: readShipArchetypeId(search)
+    shipArchetypeId: readShipArchetypeId(search),
+    sharedScreen: new URLSearchParams(search).has("shared")
   };
 }
 

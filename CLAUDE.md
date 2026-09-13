@@ -114,9 +114,9 @@ TypeScript source, and only the server is bundled (tsup, `noExternal: game-core`
 
 Every client app routes with `react-router`: `App.tsx` holds the route table and nothing else, and a
 screen never calls a router hook — see `docs/CODE_STYLE.md`, "Адрес: путь называет экран, запрос
-настраивает его". Debug and harness flags (`?diag`, `?tanks`, `?dpr`, `?demo`, `?wave`, `?ship`)
-stay query parameters read from `window.location.search`, never routes and never router state; some
-of them are read outside React, in `SpaceshipCanvas` and in the Phaser scene.
+настраивает его". Debug and harness flags (`?diag`, `?tanks`, `?dpr`, `?demo`, `?wave`, `?ship`,
+`?shared`) stay query parameters read from `window.location.search`, never routes and never router
+state; some of them are read outside React, in `SpaceshipCanvas` and in the Phaser scene.
 
 ### Simulation
 

@@ -33,5 +33,12 @@ describe("readDisplayUrlFlags", () => {
     expect(flags.visibleDemo).toBe(false);
     expect(flags.initialStartWave).toBe(1);
     expect(flags.shipArchetypeId).toBeUndefined();
+    expect(flags.sharedScreen).toBe(false);
+  });
+
+  it("opens the shared screen only when the address asks, in any build", () => {
+    expect(readDisplayUrlFlags("?shared", release).sharedScreen).toBe(true);
+    expect(readDisplayUrlFlags("?demo=1&shared=1", development).sharedScreen).toBe(true);
+    expect(readDisplayUrlFlags("?demo=1", development).sharedScreen).toBe(false);
   });
 });
