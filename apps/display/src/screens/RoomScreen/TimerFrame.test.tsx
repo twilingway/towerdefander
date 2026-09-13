@@ -21,4 +21,19 @@ describe("TimerFrame", () => {
     expect(markup).toContain('class="timer-frame__caption">Сбор трофеев<');
     expect(markup).toContain('class="timer-frame__value">12<');
   });
+
+  it("draws no caption for a clock that has no words", () => {
+    const markup = renderToStaticMarkup(
+      <TimerFrame
+        value="04:30"
+        caption={undefined}
+        ariaLabel="Осталось 04:30"
+        tone="wave"
+        frameUrl="timer.webp"
+      />
+    );
+
+    expect(markup).toContain('class="timer-frame__value">04:30<');
+    expect(markup).not.toContain("timer-frame__caption");
+  });
 });

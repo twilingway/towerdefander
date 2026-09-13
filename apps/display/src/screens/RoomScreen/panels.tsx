@@ -375,7 +375,10 @@ export function ArenaInfoFramePanel() {
   );
 }
 
-/** The frame skin's clock: the wave's deadline, or the loot window once the wave is won. */
+/**
+ * The frame skin's clock: the wave's deadline, or the loot window once the wave
+ * is won. A match has no wave, so there it is the bare time.
+ */
 export function TimerFramePanel() {
   const game = useWorldSlice(gameOf, sameCountdown);
   if (game?.encounter.phase !== "combat") return null;
@@ -395,11 +398,12 @@ export function TimerFramePanel() {
   }
   const remaining = game.encounter.waveSecondsRemaining;
   const clock = formatWaveCountdown(remaining);
+  const match = game.arenaShips.length > 0;
   return (
     <TimerFrame
       value={clock}
-      caption="До конца волны"
-      ariaLabel={`До конца волны ${clock}`}
+      caption={match ? undefined : "До конца волны"}
+      ariaLabel={match ? `Осталось ${clock}` : `До конца волны ${clock}`}
       tone={remaining <= WAVE_WARNING_SECONDS ? "warning" : "wave"}
       frameUrl={frameUrl}
     />
