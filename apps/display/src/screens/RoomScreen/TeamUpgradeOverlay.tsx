@@ -1,4 +1,5 @@
 import { roleLabel } from "@spaceship-defender/client-shared";
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import {
   CREW_ROLES,
   MODULE_TIER_COUNT,
@@ -151,6 +152,12 @@ function TierRibbon({ bought, tier }: { readonly bought: number; readonly tier: 
   );
 }
 
+/**
+ * Whole seconds, rounded up. Tenths redrew the line on every patch and read as
+ * jitter, and a count rounded up reaches 0 exactly when the wave starts. The
+ * room counts at `SIMULATION_TICK_RATE`; this used to divide by 20, the rate it
+ * ran at before, and showed a thirty-second vote as ninety.
+ */
 function formatCountdown(ticks: number): string {
-  return `${(ticks / 20).toFixed(1)} с`;
+  return `${String(Math.ceil(ticks / SIMULATION_TICK_RATE))} с`;
 }
