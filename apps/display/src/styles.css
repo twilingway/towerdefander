@@ -3794,6 +3794,107 @@ p {
   }
 }
 
+/*
+ * The dial in its frame.
+ *
+ * The example's radar picture is the element's background and the canvas lies in
+ * its window, so the box is the picture's own shape and `contain: paint` clips
+ * none of the wings. The canvas is still sized by its width, which the painter
+ * measures for its backing store, and it gets a dark disc of its own so the grid
+ * painted into the picture does not show through the one it draws. Without a
+ * cockpit the frame stands in the bottom right corner; with one it stands over
+ * the gun hand's column, clear of the stick's grab zone, the nose trigger and the
+ * assist toggle.
+ */
+.display-shell--battle[data-hud-skin="frame"] {
+  --frame-radar-window: clamp(8rem, 12vw, 12rem);
+}
+
+.display-shell--battle[data-hud-skin="frame"] .combat-radar {
+  top: auto;
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  left: auto;
+  display: block;
+  width: calc(var(--frame-radar-window) / 0.4571);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--hud-radar-art, none) center / 100% 100% no-repeat;
+  box-shadow: none;
+  aspect-ratio: 1444 / 807;
+  transform: none;
+}
+
+/* The window measured off the source: centre 722, 408 and radius 330 of 1444 by 807. */
+.display-shell--battle[data-hud-skin="frame"] .combat-radar canvas {
+  position: absolute;
+  top: 9.67%;
+  left: 27.15%;
+  width: 45.71%;
+  border-radius: 50%;
+  background: rgb(3 20 29 / 86%);
+}
+
+.display-shell--cockpit[data-hud-skin="frame"] .combat-radar {
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + var(--cockpit-band) + 5.5rem);
+}
+
+/*
+ * The sticks in the example's ring and knobs.
+ *
+ * Only the picture changes: the ring element keeps its size, so the dead zone,
+ * the grab zone and the travel a reading reports are the classic's to the pixel.
+ * The ring picture is drawn half again as large as the element, which puts the
+ * knob's travel on the picture's inner window rather than on the metal around it.
+ */
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick__ring {
+  border: 0;
+  background: none;
+}
+
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick__ring::before {
+  position: absolute;
+  inset: -25%;
+  background: var(--hud-stick-ring-art, none) center / contain no-repeat;
+  content: "";
+  pointer-events: none;
+}
+
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick__knob {
+  width: 45%;
+  height: 45%;
+  background: var(--hud-knob-move-art, none) center / contain no-repeat;
+  box-shadow: none;
+}
+
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick--right .cockpit-stick__knob {
+  background-image: var(--hud-knob-aim-art, none);
+}
+
+@media (height <= 520px) {
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-radar-window: clamp(4.5rem, 22vh, 5.5rem);
+  }
+
+  /*
+   * A phone held sideways has no height for the status frame, the dial and the
+   * stick band in one column. The readouts take the left column under the info
+   * frame, over the drive stick, and the dial keeps its place over the gun hand.
+   */
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame {
+    top: calc(var(--frame-info-top) + var(--frame-info-width) * 0.3164 + 0.4rem);
+    right: auto;
+    left: max(0.4rem, env(safe-area-inset-left));
+    width: clamp(10rem, 20vw, 11.5rem);
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] .module-tree--collapsed {
+    top: var(--frame-info-top);
+    left: calc(max(0.75rem, env(safe-area-inset-left)) + var(--frame-info-width) + 0.4rem);
+  }
+}
+
 .display-shell--battle .spaceship-hud.battle-header > div {
   padding: 0.3rem 0.5rem;
   border-radius: 0.5rem;

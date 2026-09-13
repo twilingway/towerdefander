@@ -14,6 +14,7 @@ import { CONTROLLER_URL } from "../../model/environment.js";
 import { useBareControls } from "../../model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "../../model/hooks/useCockpitKeyboard.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
+import { HUD_FRAME_CSS_VARIABLES } from "../../model/hudFrames.js";
 import { useLetterboxBars } from "../../model/hooks/useLetterboxBars.js";
 import { useLiveHeat } from "../../model/hooks/useLiveHeat.js";
 import { useShipPrediction } from "../../model/hooks/useShipPrediction.js";
@@ -271,7 +272,12 @@ export function RoomScreen({
       data-panels={switches.opaquePanels ? "opaque" : "glass"}
       data-bars={bars.placement}
       data-hud-skin={view.game?.hudSkin ?? "classic"}
-      style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
+      style={
+        {
+          "--bar-thickness": `${String(Math.round(bars.thickness))}px`,
+          ...(view.game?.hudSkin === "frame" ? HUD_FRAME_CSS_VARIABLES : {})
+        } as CSSProperties
+      }
     >
       {preview !== undefined && (
         <PreviewControls
