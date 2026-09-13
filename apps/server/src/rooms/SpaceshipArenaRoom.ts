@@ -29,6 +29,7 @@ import {
   SOLO_INPUT_RANGES,
   SoloInput,
   arenaScanCommandSchema,
+  clientLatencyPongSchema,
   clientMessage,
   gunnerInputCommandSchema,
   pilotInputCommandSchema,
@@ -40,6 +41,7 @@ import {
 import { getBalanceStore } from "../balance/index.js";
 import type { RoomStatsStatus } from "../stats/types.js";
 import { ArenaBots } from "./arenaBots.js";
+import { LatencyTracker } from "./latencyTracker.js";
 import { createRunSeed } from "./runSeed.js";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
@@ -119,6 +121,26 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private config: ArenaMatchConfig = defaultArenaMatchConfig;
   private match: ArenaMatchState | undefined;
   private bots: ArenaBots | undefined;
+  /**
+   * Round trips of every connection, probed the way the campaign probes them.
+   *
+   * The state has one display latency, so it carries the cockpit's while a
+   * player is seated and a watcher's only when nobody is.
+   */
+  private readonly connectionClients = new Map<string, Client>();
+  private readonly latency = new LatencyTracker({
+    sendProbe: (sessionId, probeId) => {
+      this.connectionClients
+        .get(sessionId)
+        ?.send(serverMessage.latencyProbe, { protocolVersion: PROTOCOL_VERSION, probeId });
+    },
+    schedule: (callback, delayMs) => this.clock.setTimeout(callback, delayMs),
+    publish: (sessionId, latencyMs) => {
+      if (this.playerSessionId !== undefined && sessionId !== this.playerSessionId) return;
+      this.state.displayLatencyMs = latencyMs;
+    },
+    now: () => performance.now()
+  });
   /** Seconds left in the waiting room; the match starts when it reaches zero. */
   private waitSecondsRemaining = ARENA_LOBBY_WAIT_SECONDS;
   private started = false;
@@ -482,6 +504,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
         shieldTargetAngle: bearingOf(parsed.data.aim),
         shieldActive: parsed.data.active
       };
+    },
+    [clientMessage.latencyPong]: (client: Client, payload: unknown) => {
+      const parsed = clientLatencyPongSchema.safeParse(payload);
+      if (!parsed.success || parsed.data.roomId !== this.roomId) return;
+      this.latency.acceptPong(client.sessionId, parsed.data.probeId, performance.now());
     }
   };
 
@@ -511,6 +538,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       seat.connected = true;
       this.state.players.set(client.sessionId, seat);
     }
+    this.connectionClients.set(client.sessionId, client);
+    this.latency.register(client.sessionId);
     for (const [name, handler] of Object.entries(this.inputHandlers)) {
       this.onMessage(name, handler);
     }
@@ -518,7 +547,12 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   }
 
   override onLeave(client?: Client): void {
-    if (client !== undefined) this.state.players.delete(client.sessionId);
+    if (client !== undefined) {
+      // Cleared while the seat is still the player's, so the latency reads unknown.
+      this.latency.clear(client.sessionId);
+      this.connectionClients.delete(client.sessionId);
+      this.state.players.delete(client.sessionId);
+    }
     // The seat goes back to the autopilot rather than standing still: a hull
     // nobody is flying is exactly the case the bot layer was written for.
     if (client !== undefined && client.sessionId === this.playerSessionId) {

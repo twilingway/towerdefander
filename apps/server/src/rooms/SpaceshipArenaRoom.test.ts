@@ -1,4 +1,10 @@
-import { publicEncounterViewSchema } from "@spaceship-defender/protocol";
+import {
+  PROTOCOL_VERSION,
+  clientMessage,
+  publicEncounterViewSchema,
+  serverMessage
+} from "@spaceship-defender/protocol";
+import type { Client } from "colyseus";
 import {
   advanceArenaMatch,
   type ArenaMatchConfig,
@@ -291,5 +297,32 @@ describe("the arena's published encounter", () => {
       tuning.arena.cameraViewWidth = before.arenaCameraViewWidth;
       tuning.arena.shieldAutopilotRaiseRange = before.arenaRaiseRange;
     }
+  });
+});
+
+describe("the arena's display latency", () => {
+  it("probes the cockpit and publishes its round trip", () => {
+    const { room } = arenaRoom();
+    room.roomId = "ARENA1";
+    const send = vi.fn();
+    const client = { sessionId: "pilot-1", send, view: undefined } as unknown as Client;
+    room.onJoin(client, { role: "solo", playerName: "Пилот" });
+    expect(room.state.displayLatencyMs).toBe(-1);
+
+    const probe = send.mock.calls.find((call) => call[0] === serverMessage.latencyProbe);
+    const probeId = (probe?.[1] as { probeId: string } | undefined)?.probeId;
+    expect(probeId).toBeDefined();
+    const handlers = (
+      room as unknown as {
+        inputHandlers: Record<string, ((client: Client, payload: unknown) => void) | undefined>;
+      }
+    ).inputHandlers;
+    handlers[clientMessage.latencyPong]?.(client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: "ARENA1",
+      probeId
+    });
+
+    expect(room.state.displayLatencyMs).toBeGreaterThanOrEqual(0);
   });
 });

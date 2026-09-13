@@ -226,6 +226,8 @@ export function RoomScreen({
   const joinUrl = useMemo(() => createControllerJoinUrl(CONTROLLER_URL, view.roomId), [view]);
   /** Sixteen published hulls is a match and nothing else has them. */
   const match = (view.game?.arenaShips.length ?? 0) > 0;
+  // The frame skin stands the readouts beside its timer, clear of the match's panel.
+  const frameSkin = view.game?.hudSkin === "frame";
   const moduleTree = selectModuleTree(ships, view.shipArchetypeId, preview !== undefined);
 
   /**
@@ -321,12 +323,12 @@ export function RoomScreen({
             it is open the header gives the room back rather than printing the
             same numbers twice; without the flag nothing here changes.
           */}
-          {!match && !diagnostics && (
+          {(!match || frameSkin) && !diagnostics && (
             <span className="latency-indicator" aria-live="polite">
               ping {formatLatency(view.displayLatencyMs)}
             </span>
           )}
-          {!match && view.game !== null && !diagnostics && (
+          {(!match || frameSkin) && view.game !== null && !diagnostics && (
             <PolledFpsReadout read={readFrameStats} />
           )}
           {/*
