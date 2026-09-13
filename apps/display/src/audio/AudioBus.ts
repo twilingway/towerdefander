@@ -112,16 +112,26 @@ export class AudioBus {
       this.applySettings();
     });
     /*
-     * The first touch of the session is what a browser waits for before it
-     * lets a page make any sound at all. Anything counts - a button, a key,
-     * the stick - so the cheapest place to catch it is the document, once.
+     * The first gesture a browser accepts is what lets a page make any sound.
+     *
+     * Not every press is one. A finger's pointerdown is not: the HTML standard
+     * counts pointerup and touchend for touch, and a phone's browser keeps a
+     * context resumed on the pointerdown silent. Listening once, to pointerdown,
+     * spent the only chance on a touch that could not start anything, and the
+     * fight stayed quiet until the settings gear's own click resumed it. So the
+     * document hears every gesture a browser may accept, and stops only once
+     * the context is actually running.
      */
     if (typeof document !== "undefined") {
+      const gestures = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
       const unlock = () => {
         this.resume();
+        void this.context?.resume().then(() => {
+          if (this.context?.state !== "running") return;
+          for (const gesture of gestures) document.removeEventListener(gesture, unlock);
+        });
       };
-      document.addEventListener("pointerdown", unlock, { once: true });
-      document.addEventListener("keydown", unlock, { once: true });
+      for (const gesture of gestures) document.addEventListener(gesture, unlock);
     }
   }
 
