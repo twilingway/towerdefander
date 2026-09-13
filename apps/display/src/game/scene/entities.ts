@@ -22,6 +22,7 @@ import {
   type PointTrack
 } from "../playback.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
+import { asteroidSpinFor, bakeCatalogArt } from "../catalogTexture.js";
 import {
   createEnemyHealthBar,
   drawEnemyBody,
@@ -86,9 +87,20 @@ export function createCombatVisual(
         0,
         tankLook
           ? bake("tank:enemy", ENEMY_ART_HALF + 6, drawEnemyTank)
-          : bake(key, entity.radius * visual.modelScale * 1.35 + 4, (graphics) => {
-              drawEnemyBody(graphics, visual, entity.radius);
-            })
+          : bakeCatalogArt(
+              scene,
+              bake,
+              {
+                shape: visual.shape,
+                worldRadius: entity.radius * visual.modelScale,
+                seed: entity.entityId
+              },
+              key,
+              entity.radius * visual.modelScale * 1.35 + 4,
+              (graphics) => {
+                drawEnemyBody(graphics, visual, entity.radius);
+              }
+            )
       )
       .setScale(tankLook ? (entity.radius * visual.modelScale) / ENEMY_ART_HALF : 1);
     container.add(body);
@@ -103,7 +115,10 @@ export function createCombatVisual(
       const rock = scene.add.image(
         0,
         0,
-        bake(
+        bakeCatalogArt(
+          scene,
+          bake,
+          { shape: asteroidVisual.shape, worldRadius: size, seed: entity.entityId },
           `rock:${asteroidVisual.shape}:${String(Math.round(size))}`,
           size * 1.35 + 4,
           (graphics) => {
@@ -170,9 +185,16 @@ export function createCombatVisual(
     const shot = scene.add.image(
       0,
       0,
-      bake(`asset:${visual.shape}:${String(Math.round(size))}`, size * 1.35 + 4, (graphics) => {
-        drawCatalogAssetById(graphics, visual.shape, size);
-      })
+      bakeCatalogArt(
+        scene,
+        bake,
+        { shape: visual.shape, worldRadius: size, seed: entity.entityId },
+        `asset:${visual.shape}:${String(Math.round(size))}`,
+        size * 1.35 + 4,
+        (graphics) => {
+          drawCatalogAssetById(graphics, visual.shape, size);
+        }
+      )
     );
     container.add(shot);
   } else if (entity.visualKind === "missile") {
@@ -245,6 +267,12 @@ export interface CombatVisual {
    * reads exactly as bullets coming out of nowhere.
    */
   velocity: { readonly x: number; readonly y: number } | undefined;
+  /**
+   * How a rock tumbles, from its id; only asteroids carry one. The simulation
+   * never turns a rock, so its heading track would hold it frozen along its
+   * course - and a rock that does not turn reads as a sticker.
+   */
+  spin: { readonly phase: number; readonly rate: number } | undefined;
   /**
    * The room's own entity, bound once when the sprite is made.
    *
@@ -421,6 +449,7 @@ export function reconcileCombatVisuals({
         position: createPointTrack(entity, toTick),
         angle: createAngleTrack(heading, toTick),
         velocity: reckonableVelocity(entity),
+        spin: entity.visualKind === "asteroid" ? asteroidSpinFor(entity.entityId) : undefined,
         deathEffect: deathEffectFor(
           entity.visualKind,
           archetype?.isBoss === true,

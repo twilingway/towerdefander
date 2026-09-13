@@ -41,6 +41,8 @@ export function shapeReach(shape: string): number {
 }
 
 export function assetReach(asset: VisualAsset): number {
+  // A sprite is built so its art fills the cell, so it reaches its own radius.
+  if (asset.kind === "sprite") return asset.radius;
   return Math.max(0, ...asset.layers.map(layerReach));
 }
 

@@ -305,6 +305,12 @@ export interface NetworkGameState {
     turretMountY?: number;
     turretPivotX?: number;
     turretPivotY?: number;
+    machineGunVisualShape?: string;
+    machineGunVisualScale?: number;
+    machineGunMountX?: number;
+    machineGunMountY?: number;
+    machineGunPivotX?: number;
+    machineGunPivotY?: number;
     shieldRadius?: number;
     shieldPhase?: ShieldPhase;
     enemyCatalogue: ValueCollection<NetworkEnemyVisualState>;

@@ -328,6 +328,12 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     display.turretMountY = ship.turretVisual?.mountY ?? 0;
     display.turretPivotX = ship.turretVisual?.pivotX ?? 0;
     display.turretPivotY = ship.turretVisual?.pivotY ?? 0;
+    display.machineGunVisualShape = ship.machineGunVisual?.shape ?? "";
+    display.machineGunVisualScale = ship.machineGunVisual?.modelScale ?? 1;
+    display.machineGunMountX = ship.machineGunVisual?.mountX ?? 0;
+    display.machineGunMountY = ship.machineGunVisual?.mountY ?? 0;
+    display.machineGunPivotX = ship.machineGunVisual?.pivotX ?? 0;
+    display.machineGunPivotY = ship.machineGunVisual?.pivotY ?? 0;
     display.asteroidVisualShape = ship.asteroidVisual?.shape ?? "";
     display.asteroidVisualScale = ship.asteroidVisual?.modelScale ?? 1;
     /*

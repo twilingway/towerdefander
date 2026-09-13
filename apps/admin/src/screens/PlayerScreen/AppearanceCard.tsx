@@ -130,6 +130,90 @@ export function AppearanceCard({ tuning, patch }: AppearanceCardProps) {
               центру. В превью точка показывает крепление.
             </p>
             <AssetPicker
+              label="Носовое оружие"
+              value={tuning.machineGunVisual?.shape ?? null}
+              categories={["weapon", "drone"]}
+              allowNone
+              onChange={(shape) => {
+                patch({
+                  machineGunVisual:
+                    shape === null
+                      ? null
+                      : {
+                          shape,
+                          modelScale: tuning.machineGunVisual?.modelScale ?? 1,
+                          mountX: tuning.machineGunVisual?.mountX ?? 0,
+                          mountY: tuning.machineGunVisual?.mountY ?? 0,
+                          pivotX: tuning.machineGunVisual?.pivotX ?? 0,
+                          pivotY: tuning.machineGunVisual?.pivotY ?? 0
+                        }
+                });
+              }}
+            />
+            <div className="card__grid">
+              <NumberField
+                caption="Масштаб модели"
+                step={0.1}
+                min={0.2}
+                value={tuning.machineGunVisual?.modelScale ?? 1}
+                onChange={(modelScale) => {
+                  const current = tuning.machineGunVisual;
+                  if (current === null) return;
+                  patch({ machineGunVisual: { ...current, modelScale } });
+                }}
+              />
+              <NumberField
+                caption="Крепление X"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.machineGunVisual?.mountX ?? 0}
+                onChange={(mountX) => {
+                  const current = tuning.machineGunVisual;
+                  if (current === null) return;
+                  patch({ machineGunVisual: { ...current, mountX } });
+                }}
+              />
+              <NumberField
+                caption="Крепление Y"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.machineGunVisual?.mountY ?? 0}
+                onChange={(mountY) => {
+                  const current = tuning.machineGunVisual;
+                  if (current === null) return;
+                  patch({ machineGunVisual: { ...current, mountY } });
+                }}
+              />
+              <NumberField
+                caption="Смещение X"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.machineGunVisual?.pivotX ?? 0}
+                onChange={(pivotX) => {
+                  const current = tuning.machineGunVisual;
+                  if (current === null) return;
+                  patch({ machineGunVisual: { ...current, pivotX } });
+                }}
+              />
+              <NumberField
+                caption="Смещение Y"
+                step={0.05}
+                min={-PIVOT_LIMIT}
+                value={tuning.machineGunVisual?.pivotY ?? 0}
+                onChange={(pivotY) => {
+                  const current = tuning.machineGunVisual;
+                  if (current === null) return;
+                  patch({ machineGunVisual: { ...current, pivotY } });
+                }}
+              />
+            </div>
+            <p className="screen__hint">
+              Носовой пулемёт рисуется под корпусом и поворачивается вместе с ним, а не с турелью.
+              Крепление и смещение — в тех же долях радиуса, что у пушки; вперёд по носу — это
+              положительный X. Пули по-прежнему вылетают из носа. Без выбора — жёлтый указатель
+              носа.
+            </p>
+            <AssetPicker
               label="Снаряд пушки"
               value={tuning.projectileVisual?.shape ?? null}
               categories={["missile", "weapon"]}

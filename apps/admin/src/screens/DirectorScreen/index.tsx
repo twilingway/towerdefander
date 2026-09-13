@@ -207,7 +207,7 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
       <AssetPicker
         label="Астероид: внешний вид"
         value={tuning.asteroidVisual?.shape ?? null}
-        categories={["drone", "missile"]}
+        categories={["asteroid", "drone", "missile"]}
         allowNone
         onChange={(shape) => {
           onChange({
@@ -219,7 +219,7 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
       />
       <p className="screen__hint">
         Без выбора астероид рисуется обычным камнем. Силуэт из каталога заменяет его целиком, размер
-        по-прежнему берётся из радиуса астероида.
+        по-прежнему берётся из радиуса астероида. Атлас астероидов даёт каждому камню свой кадр.
       </p>
 
       <h3 className="card__subtitle">Размер арены</h3>

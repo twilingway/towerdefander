@@ -87,6 +87,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   mgProjectileRadius: 5,
   projectileVisual: null,
   turretVisual: null,
+  machineGunVisual: null,
   mgProjectileVisual: null,
   cannonHeatCapacity: 100,
   cannonHeatPerShot: 16,

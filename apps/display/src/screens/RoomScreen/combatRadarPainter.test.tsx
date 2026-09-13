@@ -136,6 +136,7 @@ const baseGame: DisplayGameSnapshot = {
   shipHitSound: "",
   shipDeathSound: "",
   turretVisual: null,
+  machineGunVisual: null,
   shieldRadius: 104,
   arenaZones: [],
   arenaShips: [],

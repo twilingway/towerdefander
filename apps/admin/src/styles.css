@@ -614,7 +614,7 @@ body {
 }
 
 .assets__summary {
-  align-items: baseline;
+  align-items: center;
   cursor: pointer;
   display: flex;
   gap: 8px;
@@ -628,8 +628,23 @@ body {
 }
 
 .assets__current {
+  align-items: center;
   color: var(--ink);
+  display: flex;
   font-size: 12px;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The chosen asset, so a collapsed picker shows the look and not only its name. */
+.assets__current-thumb {
+  display: block;
+  flex: none;
+  height: 32px;
+  width: 32px;
+}
+
+.assets__current-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -11,7 +11,7 @@ import { bakeRect } from "./bake.js";
 import { drawCatalogAsset, drawCatalogAssetById } from "./catalogRenderer.js";
 
 /** The hull a ship falls back to when the preset names none. */
-const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
+export const DEFAULT_SPACESHIP_HULL_ASSET_ID = "ship-dart";
 
 const FALLBACK_ENEMY_VISUAL: PublicEnemyCatalogueEntry = {
   kind: "unknown",

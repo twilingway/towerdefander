@@ -1,4 +1,5 @@
 import {
+  FALLBACK_VISUAL_ASSET_ID,
   VISUAL_PALETTE,
   getVisualAsset,
   type VisualAsset,
@@ -20,6 +21,14 @@ export function drawCatalogAsset(
   asset: VisualAsset,
   worldRadius: number
 ): void {
+  if (asset.kind === "sprite") {
+    // A sprite has no geometry. It reaches a drawing only when its sheet did not
+    // load (see `bakeCatalogArt`), and then the fallback silhouette stands in,
+    // exactly as it does for an id this build does not know.
+    const fallback = getVisualAsset(FALLBACK_VISUAL_ASSET_ID);
+    if (fallback.kind === "vector") drawCatalogAsset(body, fallback, worldRadius);
+    return;
+  }
   const scale = (worldRadius / asset.radius) * asset.scaleHint;
   body.save();
   body.scaleCanvas(scale, scale);

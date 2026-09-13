@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@spaceship-defender/protocol": "workspace:*",
+    "@spaceship-defender/sprite-assets": "workspace:*",
     "react": "19.2.8"
   },
   "devDependencies": {

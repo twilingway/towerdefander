@@ -2,8 +2,10 @@ import {
   VISUAL_PALETTE,
   type VisualAsset,
   type VisualColor,
-  type VisualLayer
+  type VisualLayer,
+  type VisualSpriteAsset
 } from "@spaceship-defender/protocol";
+import { getSpriteArt } from "@spaceship-defender/sprite-assets";
 
 /**
  * SVG mirror of `catalogRenderer.ts` in the display. The geometry is shared, the
@@ -130,9 +132,36 @@ export function CatalogAssetShape({ asset, radius, center }: CatalogAssetShapePr
     <g
       transform={`translate(${String(center)} ${String(center)}) rotate(90) scale(${String(scale)})`}
     >
-      {asset.layers.map((layer, index) => (
-        <LayerShape key={`layer-${String(index)}`} layer={layer} accent={asset.accent} />
-      ))}
+      {asset.kind === "sprite" ? (
+        <SpriteShape asset={asset} />
+      ) : (
+        asset.layers.map((layer, index) => (
+          <LayerShape key={`layer-${String(index)}`} layer={layer} accent={asset.accent} />
+        ))
+      )}
     </g>
+  );
+}
+
+/**
+ * The first cell of a sprite sheet, centred on the origin the way geometry is,
+ * so the same transform turns and scales both. The nested svg is the viewport
+ * that crops a sheet down to one cell: a thumbnail of the asteroid atlas shows a
+ * rock, not a strip of three.
+ */
+function SpriteShape({ asset }: { readonly asset: VisualSpriteAsset }) {
+  const art = getSpriteArt(asset.id);
+  if (art === undefined) return null;
+  return (
+    <svg
+      x={-asset.radius}
+      y={-asset.radius}
+      width={asset.radius * 2}
+      height={asset.radius * 2}
+      viewBox={`0 0 ${String(art.frameWidth)} ${String(art.frameHeight)}`}
+      overflow="hidden"
+    >
+      <image href={art.url} width={art.width} height={art.height} />
+    </svg>
   );
 }

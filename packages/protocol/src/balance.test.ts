@@ -228,6 +228,7 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     lootBossWindowTicks: 600,
     projectileVisual: null,
     turretVisual: null,
+    machineGunVisual: null,
     mgProjectileVisual: null,
     asteroidVisual: null,
     missileInterceptScoreReward: 5,

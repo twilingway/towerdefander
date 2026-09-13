@@ -372,6 +372,7 @@ export function createDefaultTuning(): BalanceTuning {
     mgProjectileRadius: config.mgProjectileRadius,
     projectileVisual: config.projectileVisual,
     turretVisual: config.turretVisual,
+    machineGunVisual: config.machineGunVisual,
     mgProjectileVisual: config.mgProjectileVisual,
     cannonHeatCapacity: config.cannonHeatCapacity,
     cannonHeatPerShot: config.cannonHeatPerShot,
