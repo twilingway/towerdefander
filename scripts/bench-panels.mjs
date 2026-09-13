@@ -43,6 +43,24 @@ const useLab = process.argv.includes("--lab");
  */
 const plain = process.argv.includes("--plain");
 /*
+ * Which prototype of the frame skin's status panel is on the page, if any.
+ *
+ * `--hudspike=dom|phaser` adds `?hudspike=` to the address; without it the page
+ * is the classic HUD. A spike for hud-skin-choice, deleted with its flag.
+ */
+const hudSpike = process.argv.find((argument) => argument.startsWith("--hudspike="))?.slice(11);
+if (hudSpike !== undefined && hudSpike !== "dom" && hudSpike !== "phaser") {
+  throw new Error(`unknown --hudspike: ${hudSpike}`);
+}
+
+/** The stand's address with the prototype named, every other parameter left alone. */
+function withHudSpike(address) {
+  if (hudSpike === undefined) return address;
+  const url = new URL(address);
+  url.searchParams.set("hudspike", hudSpike);
+  return url.href;
+}
+/*
  * Which wave to open the run on, when the server allows it.
  *
  * An empty arena measures an empty arena. The reference stand keeps a hundred
@@ -141,9 +159,10 @@ const stand = useLab
     }
   : {
       name: "spaceship defender",
-      url:
+      url: withHudSpike(
         process.env.BENCH_URL ??
-        (plain ? "http://127.0.0.1:5173/" : "http://127.0.0.1:5173/?diag=1"),
+          (plain ? "http://127.0.0.1:5173/" : "http://127.0.0.1:5173/?diag=1")
+      ),
       async enter() {
         await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
         // Solo from this same device is the path under test: without the tick
@@ -186,8 +205,13 @@ const stand = useLab
         page.evaluate((bare) => {
           const rows = {};
           if (bare) {
-            const readout = document.querySelector('[data-testid="fps-readout"]');
-            rows["Кадр"] = readout?.textContent?.trim() ?? "";
+            // By label, not by position: the worst-frame badge appears only in a
+            // second that stalled, and a positional median would then mix its
+            // milliseconds into the stutter column.
+            const text = document.querySelector('[data-testid="fps-readout"]')?.textContent ?? "";
+            rows["FPS"] = /(\d+)\s*FPS/.exec(text)?.[1] ?? "";
+            rows["рывки, %"] = /рывки\s*(\d+)/.exec(text)?.[1] ?? "";
+            rows["худший кадр, мс"] = /(\d+)\s*мс/.exec(text)?.[1] ?? "";
             return rows;
           }
           for (const pair of document.querySelectorAll('[data-testid="diagnostics-panel"] div')) {
@@ -201,6 +225,18 @@ const stand = useLab
 
 await page.goto(stand.url, { waitUntil: "load" });
 await stand.enter();
+if (hudSpike !== undefined) {
+  // Every transition into the fight has to carry the query. One that drops it
+  // leaves the prototype silently absent, and the run would measure the classic
+  // HUD under the prototype's name.
+  const carried = await page.evaluate(() =>
+    new URLSearchParams(window.location.search).get("hudspike")
+  );
+  if (carried !== hudSpike) throw new Error(`?hudspike=${hudSpike} was lost on the way in`);
+  if (hudSpike === "dom") {
+    await page.waitForSelector('[data-testid="status-frame"]', { timeout: 10_000 });
+  }
+}
 
 for (const name of switchesOff) {
   const control = SWITCHES[name];
@@ -247,7 +283,8 @@ console.log(`стенд: ${stand.name} — ${stand.url}`);
 console.log(
   `${SAMPLES} проб по секунде после ${WARMUP_MS / 1000} с прогрева, медианы` +
     (cpuThrottle > 1 ? ` · процессор замедлен в ${cpuThrottle} раз` : "") +
-    (switchesOff.length > 0 ? ` · выключено: ${switchesOff.join(", ")}` : "")
+    (switchesOff.length > 0 ? ` · выключено: ${switchesOff.join(", ")}` : "") +
+    (hudSpike !== undefined ? ` · рамка состояния: ${hudSpike}` : " · классика")
 );
 
 for (const run of runs) {

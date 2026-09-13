@@ -3557,6 +3557,52 @@ p {
   max-width: min(42vw, 16rem);
 }
 
+/*
+ * Spike for hud-skin-choice (`?hudspike=dom`): the example's status frame in the
+ * page, top right, at half its built width - what it takes on a 1080p screen.
+ */
+.status-frame {
+  position: absolute;
+  z-index: 25;
+  top: max(3.2rem, calc(env(safe-area-inset-top) + 2.6rem));
+  right: max(0.75rem, env(safe-area-inset-right));
+  width: min(20.625rem, 34vw);
+  aspect-ratio: 1154 / 636;
+  pointer-events: none;
+  contain: paint;
+}
+
+.status-frame__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.status-frame__bar > i {
+  position: absolute;
+  visibility: hidden;
+  border-radius: 2px;
+  background: currentColor;
+  outline: 1px solid rgb(188 239 255 / 75%);
+  opacity: 0.95;
+}
+
+.status-frame__bar > i.is-lit {
+  visibility: visible;
+}
+
+.status-frame__label {
+  position: absolute;
+  transform: translateY(-50%);
+  color: #bcefff;
+  font:
+    700 clamp(0.5rem, 0.75vw, 0.72rem) / 1 system-ui,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .display-shell--battle .spaceship-hud.battle-header > div {
   padding: 0.3rem 0.5rem;
   border-radius: 0.5rem;

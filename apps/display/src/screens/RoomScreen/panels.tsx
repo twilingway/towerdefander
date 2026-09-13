@@ -14,6 +14,13 @@ import { ModuleTreeWindow, type ModuleTreeEntry } from "../../components/ModuleT
 import { SoloCockpit, type SoloCockpitProps } from "./SoloCockpit/index.js";
 import { SalvageCountdown } from "./SalvageCountdown.js";
 import { useWorldSlice } from "../../model/worldStore.js";
+import {
+  readStatusLit,
+  sameStatusLit,
+  STATUS_FRAME_URL,
+  type StatusLit
+} from "../../model/statusFrame.js";
+import { StatusFrame } from "./StatusFrame.js";
 import { WaveCountdown } from "./WaveCountdown.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 
@@ -255,6 +262,18 @@ export function BossPanel() {
   const game = useWorldSlice(gameOf, sameBoss);
   if (game?.encounter.phase !== "combat") return null;
   return <BossHealth game={game} />;
+}
+
+const statusLitOf = (view: DisplayRoomView | undefined): StatusLit | null => {
+  const game = view?.game;
+  return game == null ? null : readStatusLit(game);
+};
+
+/** Spike (`?hudspike=dom`): wakes only when a bar gains or loses a lit cell. */
+export function StatusFramePanel() {
+  const lit = useWorldSlice(statusLitOf, sameStatusLit);
+  if (lit === null || STATUS_FRAME_URL === undefined) return null;
+  return <StatusFrame lit={lit} frameUrl={STATUS_FRAME_URL} />;
 }
 
 function samePurchases(left: readonly string[], right: readonly string[]): boolean {

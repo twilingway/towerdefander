@@ -22,6 +22,8 @@ import {
 } from "../entityArt.js";
 import { bakeCatalogArt, preloadSpriteArt } from "../catalogTexture.js";
 import { BackdropLayer, preloadBackdrop } from "./backdrop.js";
+import { preloadStatusFrame, StatusFrameLayer } from "./statusFrameSpike.js";
+import { readHudSpike } from "../../model/statusFrame.js";
 
 import { type Point } from "../spaceshipViewModel.js";
 import {
@@ -111,6 +113,11 @@ export class SpaceshipScene extends Phaser.Scene {
     half: number,
     draw: (graphics: Phaser.GameObjects.Graphics) => void
   ): string => bakeShape(this, key, half, draw);
+  /** Spike for hud-skin-choice: the example's status frame drawn by the scene. */
+  private readonly hudSpike = readHudSpike(
+    (globalThis as { location?: { search?: string } }).location?.search ?? ""
+  );
+  private statusFrame: StatusFrameLayer | undefined;
 
   constructor(snapshot: DisplayGameSnapshot) {
     super("spaceship");
@@ -127,6 +134,7 @@ export class SpaceshipScene extends Phaser.Scene {
   preload(): void {
     preloadSpriteArt(this);
     preloadBackdrop(this, this.snapshot.background.image);
+    if (this.hudSpike === "phaser") preloadStatusFrame(this);
   }
 
   create(): void {
@@ -143,6 +151,7 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     this.backdrop = new BackdropLayer(this, this.snapshot.background.image, this.bake);
+    if (this.hudSpike === "phaser") this.statusFrame = new StatusFrameLayer(this);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
     this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
@@ -366,6 +375,7 @@ export class SpaceshipScene extends Phaser.Scene {
       this.camera.readRendererSize(),
       this.time.now / 1000
     );
+    this.statusFrame?.update(this, this.camera.readRendererSize(), this.snapshot);
 
     /*
      * How far behind the newest snapshot playback is meant to run, in seconds.
