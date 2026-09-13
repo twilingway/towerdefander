@@ -1,6 +1,6 @@
 import type { DisplayRoomView, HudSkin, PublicShip } from "@spaceship-defender/protocol";
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
-import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useMemo, useRef, type CSSProperties } from "react";
 
 import { readLiveGame } from "../../model/liveView.js";
 import { PolledFpsReadout } from "../../components/FpsReadout/index.js";
@@ -8,7 +8,6 @@ import { LobbyLayout } from "../../components/LobbyLayout/index.js";
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
 import { useIsPortrait } from "../../components/RotateNotice/index.js";
 import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
-import { readAimAssistFromDevice } from "../../model/aimAssistPreference.js";
 import { readArenaCentre } from "../../model/arenaPointer.js";
 import { toAimWorld, toPredictionWorld } from "../../model/cockpitWorld.js";
 import { CONTROLLER_URL } from "../../model/environment.js";
@@ -86,10 +85,6 @@ export function RoomScreen({
   onVote
 }: RoomScreenProps) {
   const portrait = useIsPortrait();
-  // Read once: it is a device preference, and re-reading storage every render
-  // would answer the same question a hundred times a second. Nothing on the page
-  // changes it while the aim assist is being reworked.
-  const [aimAssist] = useState(readAimAssistFromDevice);
   const shellReference = useRef<HTMLElement>(null);
   /**
    * The ship this page is flying, as the reconciler currently has it.
@@ -125,7 +120,12 @@ export function RoomScreen({
      * and prediction carried on alone.
      */
     streaming: session?.cockpitPlayer !== undefined,
-    aimAssistEnabled: aimAssist,
+    /*
+     * Off on every device while the assist is reworked. Its toggle left the
+     * cockpit on 2026-09-13, and a device that still had the help on - every
+     * device that never touched the toggle - was left with no way to turn it off.
+     */
+    aimAssistEnabled: false,
     world: toAimWorld(view.game),
     roomId: view.roomId,
     playerId: session?.sessionId ?? "",

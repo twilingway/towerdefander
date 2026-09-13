@@ -26,7 +26,7 @@ export interface SoloCockpitProps {
  * `model/hooks/useSoloCockpit`.
  *
  * There is no assist toggle: the aim assist is being reworked, and until then it
- * keeps whatever this device last chose.
+ * is off on every device.
  */
 export function SoloCockpit({
   enabled,
