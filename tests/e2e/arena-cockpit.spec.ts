@@ -87,7 +87,7 @@ test("the match shows its own readouts, on the top edge", async ({ page }) => {
    * either; what says it is the stacking it was given.
    */
   const stacking = await page.evaluate(() => {
-    const header = document.querySelector(".arena-hud");
+    const header = document.querySelector(".info-frame");
     if (header === null) return null;
     const style = getComputedStyle(header);
     return { position: style.position, zIndex: Number(style.zIndex) };

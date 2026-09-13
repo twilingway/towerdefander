@@ -1,5 +1,15 @@
 export type TimerFrameTone = "wave" | "warning" | "salvage";
 
+/** The last minute of a wave is the one the clock warns about. */
+export const WAVE_WARNING_SECONDS = 60;
+
+export function formatWaveCountdown(secondsRemaining: number): string {
+  const wholeSeconds = Math.max(0, Math.floor(secondsRemaining));
+  const minutes = Math.floor(wholeSeconds / 60);
+  const seconds = wholeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 /**
  * The example's timer frame: the time in its ring and the words under it.
  *

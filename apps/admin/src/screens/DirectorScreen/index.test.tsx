@@ -1,4 +1,4 @@
-import type { BalanceTuning, HudSkin } from "@spaceship-defender/protocol";
+import type { BalanceTuning } from "@spaceship-defender/protocol";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,13 +6,9 @@ import { DirectorScreen } from "./index.js";
 
 /**
  * The screen reads the director, the hazard numbers, the arena and camera sizes,
- * the sky and the HUD skin, and nothing else, so the cast keeps the fixture to
- * those fields.
+ * and the sky, and nothing else, so the cast keeps the fixture to those fields.
  */
-function tuning(
-  background: BalanceTuning["background"],
-  hudSkin: HudSkin = "classic"
-): BalanceTuning {
+function tuning(background: BalanceTuning["background"]): BalanceTuning {
   return {
     waveCampaign: {
       director: {
@@ -38,8 +34,7 @@ function tuning(
     asteroidVisual: null,
     arenaRadius: 2200,
     cameraViewWidth: 2500,
-    background,
-    hudSkin
+    background
   } as unknown as BalanceTuning;
 }
 
@@ -71,27 +66,13 @@ describe("DirectorScreen sky", () => {
   });
 });
 
-describe("DirectorScreen HUD skin", () => {
-  it("offers both skins and says the choice waits for the next fight", () => {
+describe("DirectorScreen HUD", () => {
+  it("offers no HUD skin to choose: the frames are the only HUD", () => {
     const markup = renderToStaticMarkup(
       <DirectorScreen tuning={tuning({ image: "none", parallaxStrength: 1 })} onChange={vi.fn()} />
     );
 
-    expect(markup).toContain("Оформление HUD");
-    expect(markup).toContain(">классика<");
-    expect(markup).toContain(">рамки<");
-    expect(markup).toContain("со следующего боя");
-  });
-
-  it("shows the preset's own skin", () => {
-    const markup = renderToStaticMarkup(
-      <DirectorScreen
-        tuning={tuning({ image: "none", parallaxStrength: 1 }, "frame")}
-        onChange={vi.fn()}
-      />
-    );
-
-    expect(markup).toContain('value="frame" selected=""');
-    expect(markup).not.toContain('value="classic" selected=""');
+    expect(markup).not.toContain("Оформление HUD");
+    expect(markup).not.toContain("классика");
   });
 });

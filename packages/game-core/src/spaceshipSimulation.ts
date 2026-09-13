@@ -58,11 +58,6 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    */
   readonly background: BackgroundTuning;
   /**
-   * Presentation only, like `background`: how the display dresses its HUD for
-   * the run. The simulation never reads it.
-   */
-  readonly hudSkin: "classic" | "frame";
-  /**
    * Presentation only, like `cameraViewWidth`: the silhouette the display draws
    * for the player hull. The simulation never reads it.
    */

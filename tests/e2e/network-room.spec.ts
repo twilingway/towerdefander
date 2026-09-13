@@ -508,25 +508,28 @@ async function assertResponsiveBattlefield(display: Page): Promise<void> {
           : { width: Math.round(bounds.width), height: Math.round(bounds.height) };
       })
       .toEqual(viewport);
-    const hudBounds = await display.locator(".spaceship-hud").boundingBox();
-    if (hudBounds === null) throw new Error("Combat HUD has no bounds.");
+    await expect(display.getByTestId("status-frame")).toBeVisible();
     const radarBounds = await display.getByTestId("combat-radar").boundingBox();
     if (radarBounds === null) throw new Error("Combat radar has no bounds.");
-    expect(Math.abs(radarBounds.width - radarBounds.height)).toBeLessThanOrEqual(1);
+    // The dial is a circle in a winged frame: the frame's box is wider than it is
+    // tall, and the canvas the dial is drawn in is the part that stays square.
+    const dialBounds = await display.locator('[data-testid="combat-radar"] canvas').boundingBox();
+    if (dialBounds === null) throw new Error("Combat radar dial has no bounds.");
+    expect(Math.abs(dialBounds.width - dialBounds.height)).toBeLessThanOrEqual(1);
     expect(radarBounds.x).toBeGreaterThanOrEqual(0);
     expect(radarBounds.y).toBeGreaterThanOrEqual(0);
     expect(radarBounds.x + radarBounds.width).toBeLessThanOrEqual(viewport.width);
-    // The dial owns the middle of the bottom edge and the readouts flank it, so
-    // the invariant is that no card is under it — not that it sits above them.
-    for (const card of await display.locator(".spaceship-hud > div").all()) {
-      const cardBounds = await card.boundingBox();
-      if (cardBounds === null) continue;
+    // The frames hold the top edge and the dial the bottom right, so the
+    // invariant is that no frame is under it — not that it sits above them.
+    for (const testId of ["info-frame", "timer-frame", "status-frame"]) {
+      const frameBounds = await display.getByTestId(testId).boundingBox();
+      if (frameBounds === null) continue;
       const overlaps =
-        cardBounds.x < radarBounds.x + radarBounds.width &&
-        radarBounds.x < cardBounds.x + cardBounds.width &&
-        cardBounds.y < radarBounds.y + radarBounds.height &&
-        radarBounds.y < cardBounds.y + cardBounds.height;
-      expect(overlaps, "the radar must not cover a HUD card").toBe(false);
+        frameBounds.x < radarBounds.x + radarBounds.width &&
+        radarBounds.x < frameBounds.x + frameBounds.width &&
+        frameBounds.y < radarBounds.y + radarBounds.height &&
+        radarBounds.y < frameBounds.y + frameBounds.height;
+      expect(overlaps, `the radar must not cover the ${testId}`).toBe(false);
     }
   }
 
@@ -538,7 +541,7 @@ async function assertFullscreenHud(display: Page): Promise<void> {
   const viewport = display.viewportSize();
   if (viewport === null) throw new Error("Display viewport is unavailable.");
   const worldBounds = await display.getByTestId("spaceship-world").boundingBox();
-  const hudBounds = await display.locator(".spaceship-hud").boundingBox();
+  const hudBounds = await display.getByTestId("status-frame").boundingBox();
   if (worldBounds === null || hudBounds === null) throw new Error("Battlefield HUD has no bounds.");
   expect(Math.round(worldBounds.width)).toBe(viewport.width);
   expect(Math.round(worldBounds.height)).toBe(viewport.height);

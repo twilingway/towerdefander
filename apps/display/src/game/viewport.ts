@@ -164,46 +164,6 @@ export function getBackingStoreSize(input: BackingStoreInput): BackingStoreSize 
   };
 }
 
-/**
- * Thinnest bar worth putting a readout in. Below this a stacked chip is a
- * column of clipped words, and the readouts are better off overlaying the
- * battlefield the way they do on a screen with no bars at all.
- */
-export const USABLE_BAR_THICKNESS_PX = 56;
-
-export interface LetterboxBars {
-  /** Thickness of one bar, in the same pixels the sizes came in. */
-  readonly thickness: number;
-  /** Which pair of bars the frame leaves, and whether they are worth using. */
-  readonly placement: "side" | "top" | "none";
-}
-
-/**
- * Where the letterbox leaves room, and whether there is enough of it to hold
- * anything.
- *
- * The frame is a fixed slice of world, so glass that is not its shape has bars
- * - and on a phone held sideways that is a fifth of the screen sitting empty
- * while the readouts lie on top of the battlefield. This says which side the
- * empty strip is on, so the readouts can be put in it instead.
- */
-export function getLetterboxBars(
-  glassWidth: number,
-  glassHeight: number,
-  frame: { readonly width: number; readonly height: number },
-  minimumThickness = USABLE_BAR_THICKNESS_PX
-): LetterboxBars {
-  const sideBar = (glassWidth - frame.width) / 2;
-  const topBar = (glassHeight - frame.height) / 2;
-  if (sideBar >= topBar && sideBar >= minimumThickness) {
-    return { thickness: sideBar, placement: "side" };
-  }
-  if (topBar > sideBar && topBar >= minimumThickness) {
-    return { thickness: topBar, placement: "top" };
-  }
-  return { thickness: Math.max(0, Math.max(sideBar, topBar)), placement: "none" };
-}
-
 /** Screen pixels of slack kept past every renderer edge, so rounding never bares the void. */
 export const BACKGROUND_COVER_MARGIN_PX = 64;
 

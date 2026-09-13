@@ -41,7 +41,6 @@ import {
   DEVICE_PIXEL_RATIO_CAP,
   getBackgroundCoverRect,
   getBackingStoreSize,
-  getLetterboxBars,
   nextPixelRatioCap,
   PIXEL_RATIO_FALLBACK_SAMPLES,
   getPhaserCameraScroll,
@@ -62,33 +61,6 @@ import {
   SnapshotResetLatch
 } from "./playback.js";
 import type { PlaybackClock } from "./playback.js";
-
-describe("getLetterboxBars", () => {
-  const frameFor = (glassWidth: number, glassHeight: number) => {
-    const viewport = getResponsiveViewport(glassWidth, glassHeight, 2500, 2500 * (9 / 16));
-    return { width: viewport.screen.width, height: viewport.screen.height };
-  };
-
-  it("finds the empty fifth of a phone held sideways", () => {
-    // 844x390 fits the frame by height, so what is left is a bar down each
-    // side - and it is where the readouts belong, not on top of the arena.
-    const bars = getLetterboxBars(844, 390, frameFor(844, 390));
-    expect(bars.placement).toBe("side");
-    expect(bars.thickness).toBeCloseTo((844 - 390 * (16 / 9)) / 2, 6);
-  });
-
-  it("finds the band a squarer screen leaves above and below", () => {
-    const bars = getLetterboxBars(1024, 768, frameFor(1024, 768));
-    expect(bars.placement).toBe("top");
-  });
-
-  it("says so when there is nothing worth using", () => {
-    // Exactly the frame's shape, and a hair off it: a two-pixel strip holds no
-    // readout, so the layout stays as it is on a screen with no bars at all.
-    expect(getLetterboxBars(1920, 1080, frameFor(1920, 1080)).placement).toBe("none");
-    expect(getLetterboxBars(1930, 1080, frameFor(1930, 1080)).placement).toBe("none");
-  });
-});
 
 describe("nextPixelRatioCap", () => {
   const run = (fps: number, samples = PIXEL_RATIO_FALLBACK_SAMPLES) =>

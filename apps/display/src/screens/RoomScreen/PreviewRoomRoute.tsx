@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/preview/world.js";
-import type { HudSkin, PublicShip } from "@spaceship-defender/protocol";
+import type { PublicShip } from "@spaceship-defender/protocol";
 import type { PreviewPhase } from "@spaceship-defender/client-shared";
 
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
@@ -36,12 +36,11 @@ export function PreviewRoomRoute({
 }: PreviewRoomRouteProps) {
   const [phase, setPhase] = useState<PreviewPhase>("combat");
   const [cameraViewWidth, setCameraViewWidth] = useState(PREVIEW_CAMERA_VIEW_WIDTH);
-  const [hudSkin, setHudSkin] = useState<HudSkin>("classic");
   const view = useMemo(() => {
-    const built = createPreviewRoomView(phase, cameraViewWidth, hudSkin);
+    const built = createPreviewRoomView(phase, cameraViewWidth);
     publishWorld(built);
     return built;
-  }, [phase, cameraViewWidth, hudSkin]);
+  }, [phase, cameraViewWidth]);
 
   return (
     <RoomScreen
@@ -56,9 +55,7 @@ export function PreviewRoomRoute({
         phase,
         onPhaseChange: setPhase,
         cameraViewWidth,
-        onCameraViewWidthChange: setCameraViewWidth,
-        hudSkin,
-        onHudSkinChange: setHudSkin
+        onCameraViewWidthChange: setCameraViewWidth
       }}
       onCloseRoom={() => undefined}
       onLeaveRoom={() => undefined}

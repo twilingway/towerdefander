@@ -377,8 +377,6 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
      */
     display.backgroundImage = ship.background.image;
     display.backgroundParallaxStrength = ship.background.parallaxStrength;
-    // The HUD's dressing comes from the same preset: a match wears the frames too.
-    display.hudSkin = ship.hudSkin;
     display.shieldBandEffect = ship.shieldBandEffect;
     display.shieldImpactEffect = ship.shieldImpactEffect;
     display.shipDeathEffect = ship.shipDeathEffect;

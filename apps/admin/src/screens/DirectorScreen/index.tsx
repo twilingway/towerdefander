@@ -6,10 +6,8 @@ import {
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
-  HUD_SKINS,
   type BackdropImage,
-  type BalanceTuning,
-  type HudSkin
+  type BalanceTuning
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
@@ -309,32 +307,6 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
         следующего запуска боя; симуляция эти значения не читает.
       </p>
 
-      <h3 className="card__subtitle">Оформление HUD</h3>
-      <div className="card__grid">
-        <label className="field">
-          <span className="field__caption">Оформление</span>
-          <select
-            className="field__input"
-            value={tuning.hudSkin}
-            onChange={(event) => {
-              onChange({ ...tuning, hudSkin: event.target.value as HudSkin });
-            }}
-          >
-            {HUD_SKINS.map((skin) => (
-              <option key={skin} value={skin}>
-                {HUD_SKIN_LABELS[skin]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <p className="screen__hint">
-        «Классика» — стеклянные карточки и радар снизу по центру. «Рамки» — рамки из примера:
-        сведения, таймер и полосы состояния сверху, радар в рамке справа снизу, над правым стиком,
-        если экран ещё и кокпит. Действует и на матч арены. Применяется со следующего боя: идущий
-        бой остаётся в своём оформлении.
-      </p>
-
       <h3 className="card__subtitle">Лимиты сущностей (только чтение)</h3>
       <ul className="caps">
         {ENTITY_CAPS.map(([caption, value]) => (
@@ -366,9 +338,4 @@ function clampCameraViewWidth(value: number): number {
 const BACKDROP_IMAGE_LABELS: Record<BackdropImage, string> = {
   none: "без фона",
   "deep-nebula": "туманность со звёздами"
-};
-
-const HUD_SKIN_LABELS: Record<HudSkin, string> = {
-  classic: "классика",
-  frame: "рамки"
 };

@@ -146,7 +146,6 @@ const testGame = {
     turretTargetAngle: null
   },
   background: { image: "none", parallaxStrength: 1 },
-  hudSkin: "classic",
   worldHeight: 4400,
   arenaRadius: 2200,
   helm: {

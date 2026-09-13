@@ -1,9 +1,7 @@
 import {
   BACKDROP_IMAGES,
-  HUD_SKINS,
   type BackdropImage,
   type CrewRole,
-  type HudSkin,
   type PublicUpgradeVote
 } from "@spaceship-defender/protocol";
 
@@ -159,14 +157,6 @@ export function toBackdropImage(image: string | undefined): BackdropImage {
     return image as BackdropImage;
   }
   return "none";
-}
-
-/** A skin this build does not know falls back to the classic HUD. */
-export function toHudSkin(skin: string | undefined): HudSkin {
-  if (skin !== undefined && (HUD_SKINS as readonly string[]).includes(skin)) {
-    return skin as HudSkin;
-  }
-  return "classic";
 }
 
 export function toPublicLatency(latencyMs: number | undefined): number | null {

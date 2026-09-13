@@ -277,7 +277,6 @@ function tuning(): BalanceTuning {
     arenaRadius: 2200,
     cameraViewWidth: 1600,
     background: { image: "deep-nebula", parallaxStrength: 1 },
-    hudSkin: "classic",
     helm: {
       scheme: "tank",
       headingLeadRadians: 0.5,

@@ -32,26 +32,17 @@ interface HeatReading {
   readonly overheated: boolean;
 }
 
+/**
+ * The status frame's bar for a barrel: its lit cells are React's, and only the
+ * two attributes a test or a stylesheet reads between renders are written here.
+ */
 function writeRow(row: Element | null, weapon: HeatReading): void {
   if (row === null) return;
-  const share = percent(weapon.heat, weapon.capacity);
   const overheated = String(weapon.overheated);
   if (row.getAttribute("data-overheated") !== overheated) {
     row.setAttribute("data-overheated", overheated);
-    row.classList.toggle("weapon-heat-row--overheated", weapon.overheated);
   }
   row.setAttribute("data-heat", String(weapon.heat));
-  const meter = row.querySelector(".hud-energy");
-  meter?.setAttribute("aria-valuenow", String(weapon.heat));
-  meter?.setAttribute(
-    "aria-valuetext",
-    `${String(Math.round(weapon.heat))} / ${String(Math.round(weapon.capacity))}`
-  );
-  const fill = meter?.querySelector("i");
-  if (fill instanceof HTMLElement) fill.style.transform = `scaleX(${(share / 100).toFixed(4)})`;
-  const label = row.querySelector("small");
-  const text = weapon.overheated ? "ПЕРЕГРЕВ" : `${String(share)}%`;
-  if (label !== null && label.textContent !== text) label.textContent = text;
 }
 
 function writeTrigger(button: Element | null, weapon: HeatReading): void {

@@ -1361,45 +1361,39 @@ describe("version 1 migration", () => {
     });
   });
 
-  it("dresses a preset from before the HUD skins in the classic HUD", async () => {
+  it("drops the HUD skin from presets saved while there were two", async () => {
     const filePath = await temporaryPresetPath();
-    const legacyTuning: Partial<BalanceTuning> = { ...createDefaultTuning() };
-    delete legacyTuning.hudSkin;
+    const saved = tunedPresetsFile(10);
+    const preset = saved.presets[0];
+    if (preset === undefined) throw new Error("fixture must contain a preset");
+    // Version 56 wrote a skin on every preset, and the committed seed's second
+    // preset still says classic. One refused preset takes the whole file down to
+    // defaults, waves included - which is what a warning here would mean.
+    const presets = [
+      {
+        ...preset,
+        id: "classic",
+        name: "Classic",
+        tuning: { ...preset.tuning, hudSkin: "classic" }
+      },
+      { ...preset, id: "frame", name: "Frame", tuning: { ...preset.tuning, hudSkin: "frame" } }
+    ];
     await writeFile(
       filePath,
-      JSON.stringify({
-        version: 55,
-        activePresetId: "operator",
-        presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
-      }),
+      JSON.stringify({ ...saved, version: 56, activePresetId: "classic", presets }),
       "utf8"
     );
     const warn = vi.fn();
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();
 
-    // Missing, the field would fail the strict schema and take the whole preset
-    // down to defaults - which is what a warning here would mean.
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    expect(store.getActiveTuning().hudSkin).toBe("classic");
-    expect(store.getActiveSimulationConfig().hudSkin).toBe("classic");
-  });
-
-  it("keeps the frame skin a preset was saved with", async () => {
-    const filePath = await temporaryPresetPath();
-    const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
-    const file = tunedPresetsFile(10);
-    const preset = file.presets[0];
-    if (preset === undefined) throw new Error("fixture must contain a preset");
-    await store.save({
-      ...file,
-      presets: [{ ...preset, tuning: { ...preset.tuning, hudSkin: "frame" } }]
-    });
-
-    expect(store.getActiveSimulationConfig().hudSkin).toBe("frame");
-    const persisted = JSON.parse(await readFile(filePath, "utf8")) as BalancePresetsFile;
-    expect(persisted.presets[0]?.tuning.hudSkin).toBe("frame");
+    expect(store.getState().presets.map((loaded) => loaded.id)).toEqual(["classic", "frame"]);
+    for (const loaded of store.getState().presets) {
+      expect(loaded.tuning).not.toHaveProperty("hudSkin");
+      expect(loaded.tuning.waveCampaign.waves).toEqual(preset.tuning.waveCampaign.waves);
+    }
   });
 
   it("persists the tuned sky to disk", async () => {
