@@ -9,12 +9,14 @@ describe("readServerConfig", () => {
     const {
       balancePresetPath,
       statsBatchDirectory,
+      statsRecordsPath,
       statsHarnessPath,
       statsProcessGuardUrl,
       ...rest
     } = readServerConfig({});
     expect(balancePresetPath).toContain("balance.json");
     expect(statsBatchDirectory).toContain("stats-batches");
+    expect(statsRecordsPath).toContain("stats-records.json");
     expect(statsHarnessPath).toContain("run-balance-batch.mjs");
     expect(statsProcessGuardUrl).toContain("owned-process-guard.mjs");
     expect(rest).toEqual({
@@ -65,12 +67,14 @@ describe("readServerConfig", () => {
     const {
       balancePresetPath,
       statsBatchDirectory,
+      statsRecordsPath,
       statsHarnessPath,
       statsProcessGuardUrl,
       ...rest
     } = readServerConfig({ HOST: "127.0.0.1", PORT: "3000" });
     expect(balancePresetPath).toContain("balance.json");
     expect(statsBatchDirectory).toContain("stats-batches");
+    expect(statsRecordsPath).toContain("stats-records.json");
     expect(statsHarnessPath).toContain("run-balance-batch.mjs");
     expect(statsProcessGuardUrl).toContain("owned-process-guard.mjs");
     expect(rest).toEqual({
@@ -98,6 +102,16 @@ describe("readServerConfig", () => {
     const { balancePresetPath } = readServerConfig({});
     expect(isAbsolute(balancePresetPath)).toBe(true);
     expect(balancePresetPath.replaceAll("\\", "/")).toMatch(/apps\/server\/data\/balance\.json$/);
+  });
+
+  it("keeps the server records beside the preset unless STATS_RECORDS_PATH says otherwise", () => {
+    const { statsRecordsPath } = readServerConfig({});
+    expect(statsRecordsPath.replaceAll("\\", "/")).toMatch(
+      /apps\/server\/data\/stats-records\.json$/
+    );
+    expect(
+      readServerConfig({ STATS_RECORDS_PATH: "/data/stats-records.json" }).statsRecordsPath
+    ).toBe("/data/stats-records.json");
   });
 
   it("still honours an explicit BALANCE_PRESET_PATH", () => {

@@ -30,6 +30,16 @@ export const ROOM_STATS_HTML = `<!doctype html>
       <div class="card"><div class="muted">Места на reconnect</div><div id="reserved-players" class="value">—</div></div>
       <div class="card"><div class="muted">Общие экраны</div><div id="connected-displays" class="value">—</div></div>
     </section>
+    <h2>Рекорды</h2>
+    <section class="summary" aria-label="Рекорды">
+      <div class="card"><div class="muted">Людей одновременно</div><div id="record-people" class="value">—</div><div id="record-people-at" class="muted">—</div></div>
+      <div class="card"><div class="muted">Комнат одновременно</div><div id="record-rooms" class="value">—</div><div id="record-rooms-at" class="muted">—</div></div>
+    </section>
+    <h2 id="days-heading">Пики по дням</h2>
+    <table>
+      <thead><tr><th>Дата</th><th>Людей</th><th>Комнат</th></tr></thead>
+      <tbody id="days"></tbody>
+    </table>
     <p id="error" class="error" role="status"></p>
     <h2>Кампания</h2>
     <table>
@@ -61,6 +71,33 @@ export const ROOM_STATS_HTML = `<!doctype html>
           setText("arena-rooms", snapshot.byMode.arena.rooms + " комн.");
           setText("reserved-players", snapshot.totals.reservedPlayers);
           setText("connected-displays", snapshot.totals.connectedDisplays);
+          const records = snapshot.records;
+          if (records) {
+            const moment = (record) => (record.atMs > 0 ? new Date(record.atMs).toLocaleString() : "—");
+            setText("record-people", records.allTime.people.value);
+            setText("record-people-at", moment(records.allTime.people));
+            setText("record-rooms", records.allTime.rooms.value);
+            setText("record-rooms-at", moment(records.allTime.rooms));
+            setText("days-heading", "Пики по дням (" + records.timeZone + ")");
+            const days = document.getElementById("days");
+            days.replaceChildren();
+            for (const day of records.days) {
+              const row = document.createElement("tr");
+              appendCell(row, day.date);
+              appendCell(row, day.people);
+              appendCell(row, day.rooms);
+              days.appendChild(row);
+            }
+            if (days.childElementCount === 0) {
+              const row = document.createElement("tr");
+              const cell = document.createElement("td");
+              cell.colSpan = 3;
+              cell.className = "muted";
+              cell.textContent = "Пока пусто";
+              row.appendChild(cell);
+              days.appendChild(row);
+            }
+          }
           setText("updated", new Date(snapshot.generatedAt).toLocaleString());
           setText("error", "");
           const bodies = {

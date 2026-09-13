@@ -319,4 +319,53 @@ describe("statistics routes", () => {
     expect(ROOM_STATS_HTML).toContain("textContent");
     expect(ROOM_STATS_HTML).not.toContain("WebSocket");
   });
+
+  it("sends the server's records beside the live numbers", async () => {
+    const records = {
+      allTime: { people: { value: 7, atMs: 5_000 }, rooms: { value: 3, atMs: 4_000 } },
+      days: [{ date: "1970-01-01", people: 7, rooms: 3 }],
+      timeZone: "UTC"
+    };
+    const output = response();
+    await invoke(
+      createRoomsJsonHandler({
+        password: undefined,
+        queryRooms: () => Promise.resolve([{ metadata: metadata() }]),
+        now: () => 11_000,
+        records: () => records
+      }),
+      request("127.0.0.1"),
+      output.response
+    );
+
+    expect(output.state.body).toMatchObject({ totals: { rooms: 1 }, records });
+  });
+
+  it("tells an unauthorized request nothing about the records", async () => {
+    const records = vi.fn(() => ({
+      allTime: { people: { value: 7, atMs: 5_000 }, rooms: { value: 3, atMs: 4_000 } },
+      days: [],
+      timeZone: "UTC"
+    }));
+    const output = response();
+    await invoke(
+      createRoomsJsonHandler({
+        password: undefined,
+        queryRooms: () => Promise.resolve([]),
+        records
+      }),
+      request("192.168.1.10"),
+      output.response
+    );
+
+    expect(output.state).toMatchObject({ status: 401, body: "Unauthorized" });
+    expect(records).not.toHaveBeenCalled();
+  });
+
+  it("shows the records and the daily peaks on the page", () => {
+    expect(ROOM_STATS_HTML).toContain("Рекорды");
+    expect(ROOM_STATS_HTML).toContain("Пики по дням");
+    expect(ROOM_STATS_HTML).toContain("records.timeZone");
+    expect(ROOM_STATS_HTML).toContain("snapshot.records");
+  });
 });

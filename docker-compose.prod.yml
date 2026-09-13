@@ -25,6 +25,7 @@ services:
       # copy of what an operator saved from the console.
       BALANCE_PRESET_PATH: /data/balance.json
       STATS_BATCH_DIR: /data/stats-batches
+      STATS_RECORDS_PATH: /data/stats-records.json
       # Rooms share one event loop, so the ceiling is set from the cores this
       # host can actually give the tick, well under the packaged default.
       ROOM_MAX_CONCURRENT: ${ROOM_MAX_CONCURRENT:-8}

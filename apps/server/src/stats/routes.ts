@@ -3,12 +3,14 @@ import type { Request, RequestHandler, Response } from "express";
 import { isStatsRequestAuthorized } from "./access.js";
 import { ROOM_STATS_HTML } from "./html.js";
 import { createRoomStatsSnapshot } from "./snapshot.js";
-import type { QueryRoomStatsListings } from "./types.js";
+import type { QueryRoomStatsListings, RoomRecordsView } from "./types.js";
 
 export interface RoomStatsRouteOptions {
   password: string | undefined;
   queryRooms: QueryRoomStatsListings;
   now?: () => number;
+  /** The server's records, sent beside the live numbers. */
+  records?: () => RoomRecordsView;
 }
 
 export interface StatsRouteRegistrar {
@@ -37,7 +39,10 @@ export function createRoomsJsonHandler(options: RoomStatsRouteOptions): RequestH
     applyNoStoreHeaders(response);
     try {
       const listings = await options.queryRooms();
-      response.json(createRoomStatsSnapshot(listings, options.now?.() ?? Date.now()));
+      const snapshot = createRoomStatsSnapshot(listings, options.now?.() ?? Date.now());
+      response.json(
+        options.records === undefined ? snapshot : { ...snapshot, records: options.records() }
+      );
     } catch {
       response.status(503).type("text/plain").send("Statistics temporarily unavailable");
     }
