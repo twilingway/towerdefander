@@ -30,8 +30,11 @@ ARG APP_NAME
 # not turn into the literal string "undefined" in a bundle.
 ARG VITE_GAME_SERVER_URL=""
 ARG VITE_CONTROLLER_URL=""
+# The release's commit, which the start screen prints under the copyright.
+ARG VITE_BUILD_VERSION=""
 ENV VITE_GAME_SERVER_URL=${VITE_GAME_SERVER_URL}
 ENV VITE_CONTROLLER_URL=${VITE_CONTROLLER_URL}
+ENV VITE_BUILD_VERSION=${VITE_BUILD_VERSION}
 COPY tsconfig.base.json tsconfig.json ./
 COPY packages packages
 COPY apps/${APP_NAME} apps/${APP_NAME}

@@ -3486,6 +3486,19 @@ p {
   right: max(0.75rem, env(safe-area-inset-right));
 }
 
+/* The copyright and the build: small, at the bottom of the start screen, out of every tile's way. */
+.start-footer {
+  position: absolute;
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+  left: 50%;
+  color: rgb(201 226 232 / 55%);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 /*
  * A phone gets the result card as a card, not as a poster.
  *

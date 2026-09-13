@@ -70,6 +70,8 @@ services:
         APP_NAME: display
         VITE_GAME_SERVER_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL in .env.production}
         VITE_CONTROLLER_URL: ${PUBLIC_CONTROLLER_URL:?set PUBLIC_CONTROLLER_URL in .env.production}
+        # The release tags its images with the commit; the start screen prints it.
+        VITE_BUILD_VERSION: ${IMAGE_TAG:-local}
     image: spacedef-display:${IMAGE_TAG:-local}
     container_name: space-display
     restart: unless-stopped
