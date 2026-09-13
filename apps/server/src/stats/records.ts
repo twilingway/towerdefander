@@ -146,7 +146,10 @@ export class ServerRecords {
     try {
       raw = await readFile(this.options.filePath, "utf8");
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      // No file yet, or a path with a file where a directory should be: either
+      // way there is nothing to keep, and Linux names the second ENOTDIR.
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") {
         this.loaded = true;
         return;
       }
