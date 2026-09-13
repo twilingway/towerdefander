@@ -79,7 +79,11 @@ export interface RoomSession {
  * routes: unmounting it leaves the room, and a navigation that unmounted it
  * would close the socket it had just opened.
  */
-export function useRoomSession(visibleDemo: boolean): RoomSession {
+export function useRoomSession(
+  visibleDemo: boolean,
+  /** Whether this page has loaded what the fight draws and plays; its room waits for that. */
+  assetsWarm: boolean
+): RoomSession {
   const roomReference = useRef<DisplayRoom | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   /** What was last handed to `setStatus`; see the guard in `applyRoomState`. */
@@ -97,6 +101,21 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
   const [closingRoom, setClosingRoom] = useState(false);
   const [arenaLobby, setArenaLobby] = useState<ArenaLobby | undefined>(undefined);
   const publisher = useViewPublisher(setNetworkView, readLiveView);
+
+  /**
+   * The room this screen has told that its assets are in. Once per room: a
+   * reconnect and a rematch keep the same session, and the room remembers it.
+   */
+  const assetsReportedTo = useRef<DisplayRoom | undefined>(undefined);
+  useEffect(() => {
+    const room = roomReference.current;
+    if (!assetsWarm || room === undefined || assetsReportedTo.current === room) return;
+    assetsReportedTo.current = room;
+    room.send(clientMessage.assetsReady, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId
+    });
+  }, [assetsWarm, status, networkView?.roomId]);
 
   /** A refusal is about the command, not the run: a new phase clears it. */
   const encounterPhase = networkView?.game?.encounter.phase;
@@ -285,7 +304,9 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
         ...(cockpitPlayerName === undefined
           ? { role: "display" as const }
           : { role: "solo" as const, playerName: cockpitPlayerName }),
-        protocolVersion: PROTOCOL_VERSION
+        protocolVersion: PROTOCOL_VERSION,
+        // This page loads what the match draws and plays, and the room waits for it.
+        loadsAssets: true
       });
       roomReference.current = room;
       attachRoom(room);
@@ -319,6 +340,8 @@ export function useRoomSession(visibleDemo: boolean): RoomSession {
           ? { role: "display" as const, crewSize }
           : { role: "solo" as const, playerName: cockpitPlayerName }),
         protocolVersion: PROTOCOL_VERSION,
+        // This page loads what the fight draws and plays, and the room waits for it.
+        loadsAssets: true,
         // Absent means the preset's own hull, so a display that could not reach
         // the catalogue still opens a room.
         ...(shipArchetypeId === undefined ? {} : { shipArchetypeId }),

@@ -212,9 +212,11 @@ export function ArenaSetupScreen({
               <strong>{String(lobby.players + lobby.bots)}</strong> из {String(lobby.capacity)} —{" "}
               {lobby.started
                 ? "поле собрано, матч начинается…"
-                : lobby.bots > 0
-                  ? `игроков ${String(lobby.players)}, остальные места занимают боты…`
-                  : `ждём игроков ещё ${String(lobby.secondsRemaining)} с, остальных доберут боты`}
+                : lobby.awaitingAssets
+                  ? "загружаем ресурсы, отсчёт начнётся после них…"
+                  : lobby.bots > 0
+                    ? `игроков ${String(lobby.players)}, остальные места занимают боты…`
+                    : `ждём игроков ещё ${String(lobby.secondsRemaining)} с, остальных доберут боты`}
             </p>
           </div>
         )}

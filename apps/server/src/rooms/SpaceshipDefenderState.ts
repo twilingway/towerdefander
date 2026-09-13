@@ -546,6 +546,10 @@ export class SpaceshipDefenderState extends Schema {
   @type("uint16") maintenanceSecondsRemaining = 0;
   @type("boolean") displayConnected = false;
   @type("int32") displayLatencyMs = -1;
+  /** The room is holding its start for a screen still loading what the fight draws and plays. */
+  @type("boolean") assetsPending = false;
+  /** Seconds until the room starts without that screen; zero while nothing is waited for. */
+  @type("uint8") assetsWaitSecondsRemaining = 0;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type("boolean") hasGame = false;
   @type(SpaceshipGameState) game = new SpaceshipGameState();

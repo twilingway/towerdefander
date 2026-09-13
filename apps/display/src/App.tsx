@@ -4,6 +4,7 @@ import { GAME_SERVER_URL } from "./model/environment.js";
 import { useDiagnosticsMeters } from "./model/hooks/useDiagnosticsMeters.js";
 import { useDisplaySwitches } from "./model/hooks/useDisplaySwitches.js";
 import { useRoomSession } from "./model/hooks/useRoomSession.js";
+import { useAssetWarmup } from "./model/hooks/useAssetWarmup.js";
 import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
 import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
@@ -22,8 +23,12 @@ export function DisplayApp() {
     visibleDemo: import.meta.env.VITE_VISIBLE_DEMO
   });
   const switches = useDisplaySwitches();
-  const worldReady = useRuntimePreload();
-  const session = useRoomSession(flags.visibleDemo);
+  const runtimeReady = useRuntimePreload();
+  // The pictures and the sounds as well as the renderer's code: a fight that
+  // began on the code alone began with shots nobody could hear.
+  const assetsWarm = useAssetWarmup();
+  const worldReady = runtimeReady && assetsWarm;
+  const session = useRoomSession(flags.visibleDemo, assetsWarm);
   const shipCatalogue = useShipCatalogue(GAME_SERVER_URL);
   const maintenance = useMaintenance(GAME_SERVER_URL, session.status === "connected");
   useDiagnosticsMeters({

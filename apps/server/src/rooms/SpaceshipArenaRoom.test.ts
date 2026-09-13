@@ -1,4 +1,5 @@
 import {
+  ASSET_WAIT_SECONDS,
   PROTOCOL_VERSION,
   clientMessage,
   publicEncounterViewSchema,
@@ -345,5 +346,44 @@ describe("the arena in the server records", () => {
       observe.mockRestore();
       forget.mockRestore();
     }
+  });
+});
+
+describe("the arena queue and a loading player", () => {
+  interface Queue {
+    countDown: () => void;
+    waitSecondsRemaining: number;
+    inputHandlers: Record<string, ((client: Client, payload: unknown) => void) | undefined>;
+  }
+
+  function queueWithLoadingPlayer(): { client: Client; queue: Queue } {
+    const { room } = arenaRoom();
+    room.roomId = "ARENA1";
+    const client = { sessionId: "pilot-1", send: vi.fn(), view: undefined } as unknown as Client;
+    room.onJoin(client, { role: "solo", playerName: "Ada", loadsAssets: true });
+    return { client, queue: room as unknown as Queue };
+  }
+
+  it("holds its count while the player's screen loads, but not past the asset wait", () => {
+    const { queue } = queueWithLoadingPlayer();
+    const before = queue.waitSecondsRemaining;
+
+    for (let second = 0; second < ASSET_WAIT_SECONDS; second += 1) queue.countDown();
+    expect(queue.waitSecondsRemaining).toBe(before);
+
+    queue.countDown();
+    expect(queue.waitSecondsRemaining).toBe(before - 1);
+  });
+
+  it("starts its count as soon as the player's assets are in", () => {
+    const { client, queue } = queueWithLoadingPlayer();
+    queue.inputHandlers[clientMessage.assetsReady]?.(client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: "ARENA1"
+    });
+    const before = queue.waitSecondsRemaining;
+
+    queue.countDown();
+    expect(queue.waitSecondsRemaining).toBe(before - 1);
   });
 });

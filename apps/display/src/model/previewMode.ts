@@ -24,6 +24,8 @@ export function createPreviewRoomView(
     shipArchetypeId: "guardian",
     maintenanceActive: false,
     maintenanceSecondsRemaining: 0,
+    assetsPending: false,
+    assetsWaitSecondsRemaining: 0,
     displayConnected: true,
     displayLatencyMs: 18,
     players: [...PREVIEW_PLAYERS],

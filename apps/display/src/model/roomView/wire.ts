@@ -353,6 +353,8 @@ export interface NetworkRoomState {
   shipArchetypeId?: string;
   maintenanceActive?: boolean;
   maintenanceSecondsRemaining?: number;
+  assetsPending?: boolean;
+  assetsWaitSecondsRemaining?: number;
   displayConnected?: boolean;
   displayLatencyMs?: number;
   players?: ValueCollection<NetworkPlayerState>;

@@ -65,6 +65,8 @@ export function toDisplayRoomView(
     // has not carried these yet, must not fail the whole view.
     maintenanceActive: state.maintenanceActive ?? false,
     maintenanceSecondsRemaining: state.maintenanceSecondsRemaining ?? 0,
+    assetsPending: state.assetsPending ?? false,
+    assetsWaitSecondsRemaining: state.assetsWaitSecondsRemaining ?? 0,
     displayConnected: state.displayConnected,
     displayLatencyMs: toPublicLatency(state.displayLatencyMs),
     players,

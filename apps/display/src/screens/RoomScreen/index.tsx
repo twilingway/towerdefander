@@ -401,9 +401,11 @@ export function RoomScreen({
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
           <span>
-            {session?.cockpitPlayer === undefined
-              ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
-              : "Полёт начнётся, когда вы нажмёте «Готов»"}
+            {view.assetsPending
+              ? `Загружаем ресурсы… ${String(view.assetsWaitSecondsRemaining)} с`
+              : session?.cockpitPlayer === undefined
+                ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
+                : "Полёт начнётся, когда вы нажмёте «Готов»"}
           </span>
         </section>
       ) : (

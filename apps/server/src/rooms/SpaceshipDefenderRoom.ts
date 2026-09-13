@@ -33,6 +33,8 @@ import {
   SOLO_INPUT_RANGES,
   SoloInput,
   clientMessage,
+  ASSET_WAIT_SECONDS,
+  clientAssetsReadySchema,
   clientLatencyPongSchema,
   roomCreateOptionsSchema,
   gunnerInputCommandSchema,
@@ -227,6 +229,11 @@ export class SpaceshipDefenderRoom extends Room<{
   });
   private waveDeadlineTimer: RoomTimer | undefined;
   private maintenanceTimer: RoomTimer | undefined;
+  /** Screens that said they load the fight's assets, and whether each one has. */
+  private readonly assetSessions = new Map<string, boolean>();
+  private assetWaitTimer: RoomTimer | undefined;
+  /** Set when the wait runs out, so the next start check goes ahead without them. */
+  private assetWaitExpired = false;
   private waveDeadlineAtMs: number | undefined;
   private waveDeadlineGeneration = 0;
   private createdAtMs = 0;
@@ -258,6 +265,9 @@ export class SpaceshipDefenderRoom extends Room<{
     },
     [clientMessage.latencyPong]: (client: Client, payload: unknown) => {
       this.handleLatencyPong(client, payload);
+    },
+    [clientMessage.assetsReady]: (client: Client, payload: unknown) => {
+      this.handleAssetsReady(client, payload);
     }
   };
 
@@ -365,6 +375,11 @@ export class SpaceshipDefenderRoom extends Room<{
         ErrorCode.APPLICATION_ERROR,
         this.hasProtocolMismatch(unsafeOptions) ? "protocol_mismatch" : "invalid_message"
       );
+    }
+
+    // A screen that loads the fight's assets is waited for until it says they are in.
+    if (result.data.role !== "controller" && result.data.loadsAssets === true) {
+      this.assetSessions.set(client.sessionId, false);
     }
 
     if (result.data.role === "display") {
@@ -729,6 +744,68 @@ export class SpaceshipDefenderRoom extends Room<{
     this.latency.acceptPong(client.sessionId, result.data.probeId, receivedAt);
   }
 
+  /**
+   * A screen that loads the fight's assets says so once they are in.
+   *
+   * Checked like the latency pong rather than like a player's command: a shared
+   * screen holds no seat, so it has no player id to put in an envelope.
+   */
+  handleAssetsReady(client: Client, unsafePayload: unknown): void {
+    if (this.hasProtocolMismatch(unsafePayload)) {
+      this.sendError(client, "protocol_mismatch", "Protocol version does not match server.");
+      return;
+    }
+    const result = clientAssetsReadySchema.safeParse(unsafePayload);
+    if (!result.success) {
+      this.sendError(client, "invalid_message", "Message does not match the strict schema.");
+      return;
+    }
+    if (!this.connectionClients.has(client.sessionId) || result.data.roomId !== this.roomId) {
+      this.sendError(client, "identity_mismatch", "Room identity does not match connection.");
+      return;
+    }
+    // A connection that never said it loads anything changes nothing by saying it is done.
+    if (!this.assetSessions.has(client.sessionId)) return;
+    this.assetSessions.set(client.sessionId, true);
+    this.tryStartRun();
+  }
+
+  /**
+   * Whether the screens that load the fight's assets have loaded them, or have
+   * had their time. The first call that finds only loading holding the start
+   * begins that time and publishes it, so the lobby can count it down.
+   */
+  private assetsSettled(): boolean {
+    const loading = [...this.assetSessions.values()].some((ready) => !ready);
+    if (!loading || this.assetWaitExpired) {
+      this.stopAssetWait();
+      return true;
+    }
+    if (this.assetWaitTimer === undefined) {
+      this.state.assetsPending = true;
+      this.state.assetsWaitSecondsRemaining = ASSET_WAIT_SECONDS;
+      this.assetWaitTimer = this.clock.setInterval(() => {
+        this.state.assetsWaitSecondsRemaining = Math.max(
+          0,
+          this.state.assetsWaitSecondsRemaining - 1
+        );
+        if (this.state.assetsWaitSecondsRemaining > 0) return;
+        this.assetWaitExpired = true;
+        this.tryStartRun();
+      }, 1_000);
+    }
+    return false;
+  }
+
+  /** Ends a wait for loading screens: the start came, or something else holds it now. */
+  private stopAssetWait(): void {
+    this.assetWaitTimer?.clear();
+    this.assetWaitTimer = undefined;
+    this.assetWaitExpired = false;
+    this.state.assetsPending = false;
+    this.state.assetsWaitSecondsRemaining = 0;
+  }
+
   advanceGameStep(): void {
     if (this.state.phase !== "active" || this.gameState === undefined) {
       return;
@@ -859,16 +936,23 @@ export class SpaceshipDefenderRoom extends Room<{
       ? this.state.players.size <= this.state.crewSize
       : this.state.players.size === this.state.crewSize;
     if (!canStart || !seatsAnswered || this.disposing) {
+      this.stopAssetWait();
       return;
     }
     // One check covers both entrances: a lobby that has not started yet, and a
     // rematch after a result. Neither may begin a run the window is about to
     // interrupt.
     if (getMaintenanceWindow().isActive()) {
+      this.stopAssetWait();
       return;
     }
     const players = [...this.state.players.values()];
     if (!players.every((player) => player.connected && player.ready)) {
+      this.stopAssetWait();
+      return;
+    }
+    // Last, so its twenty seconds count from the moment nothing else holds the start.
+    if (!this.assetsSettled()) {
       return;
     }
     const previousSeed = this.gameState?.runSeed;
@@ -1371,6 +1455,9 @@ export class SpaceshipDefenderRoom extends Room<{
     this.connectionClients.clear();
     this.connectionRoles.clear();
     this.displaySessionId = undefined;
+    this.assetWaitTimer?.clear();
+    this.assetWaitTimer = undefined;
+    this.assetSessions.clear();
   }
 
   private updateStatusFromRoom(): void {
