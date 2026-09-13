@@ -30,7 +30,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 66 as const;
+export const PROTOCOL_VERSION = 67 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -989,6 +989,7 @@ export const displayGameSnapshotSchema = z
     shipHitSound: z.string(),
     shipDeathSound: z.string(),
     turretVisual: turretVisualSchema,
+    machineGunVisual: turretVisualSchema,
     /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
     shieldRadius: finite,
     /**

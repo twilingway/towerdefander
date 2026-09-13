@@ -3,6 +3,7 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 
 import { bakeShape } from "../bake.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
+import { bakeCatalogArt, type BakeShape } from "../catalogTexture.js";
 import { turretMountPoint } from "../entityArt.js";
 import {
   createAngleTrack,
@@ -44,8 +45,10 @@ export function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot)
       0,
       tankLook
         ? bakeShape(scene, "tank:turret", TANK_ART_HALF + 24, drawTankTurret)
-        : bakeShape(
+        : bakeCatalogArt(
             scene,
+            (key, half, draw) => bakeShape(scene, key, half, draw),
+            { shape: visual.shape, worldRadius: snapshot.spaceship.radius * visual.modelScale },
             `turret:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(snapshot.spaceship.radius))}`,
             snapshot.spaceship.radius * visual.modelScale * 1.6 + 6,
             (graphics) => {
@@ -72,10 +75,62 @@ export function createTurret(scene: Phaser.Scene, snapshot: DisplayGameSnapshot)
     .setRotation(snapshot.turretAngle);
 }
 
+/** Under the hull, which sits at 10: only what reaches past the hull's art shows. */
+const NOSE_GUN_DEPTH = 9;
+
+/**
+ * The nose gun, under the hull and turning with it.
+ *
+ * Without a chosen look it is the marker the nose always had. With one it is
+ * that asset at its own mount, nudged about it the way the turret is - but
+ * carried by the hull rather than by the turret, because the machine gun fires
+ * along the nose. Only the look moves: the bore stays where the simulation has it.
+ */
+export function createNoseGun(
+  scene: Phaser.Scene,
+  snapshot: DisplayGameSnapshot,
+  bake: BakeShape
+): TurretObject {
+  const radius = snapshot.spaceship.radius;
+  const visual = snapshot.machineGunVisual;
+  if (visual === null) {
+    return scene.add
+      .image(
+        snapshot.spaceship.x,
+        snapshot.spaceship.y,
+        bake(`nose:${String(Math.round(radius))}`, radius + 16, (graphics) => {
+          graphics.fillStyle(0xffd36f, 1);
+          graphics.fillTriangle(radius - 4, -9, radius + 12, 0, radius - 4, 9);
+        })
+      )
+      .setDepth(NOSE_GUN_DEPTH)
+      .setRotation(snapshot.spaceship.heading);
+  }
+  const gun = scene.add.image(
+    visual.pivotX * radius,
+    visual.pivotY * radius,
+    bakeCatalogArt(
+      scene,
+      bake,
+      { shape: visual.shape, worldRadius: radius * visual.modelScale },
+      `noseGun:${visual.shape}:${String(visual.modelScale)}:${String(Math.round(radius))}`,
+      radius * visual.modelScale * 1.6 + 6,
+      (graphics) => {
+        drawCatalogAssetById(graphics, visual.shape, radius * visual.modelScale);
+      }
+    )
+  );
+  const mount = turretMountPoint(snapshot.spaceship, snapshot.spaceship.heading, visual);
+  return scene.add
+    .container(mount.x, mount.y, [gun])
+    .setDepth(NOSE_GUN_DEPTH)
+    .setRotation(snapshot.spaceship.heading);
+}
+
 /** The three objects that make up the ship on the field. */
 export interface ShipParts {
   readonly body: Phaser.GameObjects.Image;
-  readonly nose: Phaser.GameObjects.Image | undefined;
+  readonly nose: TurretObject | undefined;
   readonly turret: TurretObject;
 }
 
@@ -96,9 +151,12 @@ export function snapShipToSnapshot(
   readonly shield: AngleTrack;
 } {
   parts.body.setPosition(snapshot.spaceship.x, snapshot.spaceship.y);
-  parts.nose
-    ?.setPosition(snapshot.spaceship.x, snapshot.spaceship.y)
-    .setRotation(snapshot.spaceship.heading);
+  const noseMount = turretMountPoint(
+    snapshot.spaceship,
+    snapshot.spaceship.heading,
+    snapshot.machineGunVisual
+  );
+  parts.nose?.setPosition(noseMount.x, noseMount.y).setRotation(snapshot.spaceship.heading);
   const mount = turretMountPoint(
     snapshot.spaceship,
     snapshot.spaceship.heading,

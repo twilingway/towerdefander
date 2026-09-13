@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The manifest resolves file URLs through `new URL(..., import.meta.url)`,
+    // which is DOM: `URL` and `ImportMeta.url` both come from that lib.
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

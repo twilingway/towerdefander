@@ -13,7 +13,12 @@ import {
 } from "../playback.js";
 import type { LiveEntity } from "../../model/shipPrediction.js";
 import { drawCatalogAssetById } from "../catalogRenderer.js";
-import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
+import {
+  DEFAULT_SPACESHIP_HULL_ASSET_ID,
+  drawSpaceshipHull,
+  turretMountPoint
+} from "../entityArt.js";
+import { bakeCatalogArt } from "../catalogTexture.js";
 import { getMuzzlePoint } from "../spaceshipViewModel.js";
 import {
   DEFAULT_ENEMY_DEATH_EFFECT,
@@ -523,7 +528,13 @@ export class ArenaFleet {
   ): FleetHull {
     const radius = ship.radius;
     const hullVisual = snapshot.spaceshipVisual;
-    const hullKey = bake(
+    const hullKey = bakeCatalogArt(
+      scene,
+      bake,
+      {
+        shape: hullVisual?.shape ?? DEFAULT_SPACESHIP_HULL_ASSET_ID,
+        worldRadius: radius * (hullVisual?.modelScale ?? 1)
+      },
       `arenaHull:${hullVisual?.shape ?? "default"}:${String(Math.round(radius))}`,
       radius * (hullVisual?.modelScale ?? 1) * 1.35 + 6,
       (graphics) => {
@@ -535,18 +546,22 @@ export class ArenaFleet {
     );
 
     const turretVisual = snapshot.turretVisual;
-    const turretKey = bake(
-      `arenaTurret:${turretVisual?.shape ?? "none"}:${String(Math.round(radius))}`,
-      radius * (turretVisual?.modelScale ?? 1) * 1.6 + 6,
-      (graphics) => {
-        if (turretVisual === null) {
-          graphics.fillStyle(0xffd36f, 1);
-          graphics.fillRect(-radius * 0.2, -radius * 0.12, radius * 1.5, radius * 0.24);
-          return;
-        }
-        drawCatalogAssetById(graphics, turretVisual.shape, radius * turretVisual.modelScale);
-      }
-    );
+    const turretKey =
+      turretVisual === null
+        ? bake(`arenaTurret:none:${String(Math.round(radius))}`, radius * 1.6 + 6, (graphics) => {
+            graphics.fillStyle(0xffd36f, 1);
+            graphics.fillRect(-radius * 0.2, -radius * 0.12, radius * 1.5, radius * 0.24);
+          })
+        : bakeCatalogArt(
+            scene,
+            bake,
+            { shape: turretVisual.shape, worldRadius: radius * turretVisual.modelScale },
+            `arenaTurret:${turretVisual.shape}:${String(Math.round(radius))}`,
+            radius * turretVisual.modelScale * 1.6 + 6,
+            (graphics) => {
+              drawCatalogAssetById(graphics, turretVisual.shape, radius * turretVisual.modelScale);
+            }
+          );
 
     /*
      * One arc, turned rather than redrawn, and thick enough to survive the

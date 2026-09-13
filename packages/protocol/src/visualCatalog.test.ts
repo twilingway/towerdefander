@@ -25,7 +25,7 @@ describe("visual asset catalogue", () => {
     // the guard that stops it drifting from the geometry it names.
     expect(VISUAL_ASSETS.map((entry) => entry.id)).toEqual([...VISUAL_ASSET_IDS]);
     expect(new Set(VISUAL_ASSET_IDS).size).toBe(VISUAL_ASSET_IDS.length);
-    expect(VISUAL_ASSETS).toHaveLength(70);
+    expect(VISUAL_ASSETS).toHaveLength(75);
   });
 
   it("numbers assets from one without gaps", () => {
@@ -34,16 +34,19 @@ describe("visual asset catalogue", () => {
     );
   });
 
-  it("gives every asset geometry that can be normalised", () => {
+  it("gives every asset art that can be normalised", () => {
     for (const entry of VISUAL_ASSETS) {
       expect(entry.radius, entry.id).toBeGreaterThan(0);
       expect(entry.scaleHint, entry.id).toBeGreaterThan(0);
-      expect(entry.layers.length, entry.id).toBeGreaterThan(0);
+      if (entry.kind === "vector") expect(entry.layers.length, entry.id).toBeGreaterThan(0);
+      else expect(entry.sprite.frames, entry.id).toBeGreaterThan(0);
     }
   });
 
   it("paints only with colours a renderer can resolve", () => {
     for (const entry of VISUAL_ASSETS) {
+      // A sprite's colours are in its pixels; there is nothing here to resolve.
+      if (entry.kind === "sprite") continue;
       for (const layer of entry.layers) {
         for (const color of colorsOf(layer)) {
           if (typeof color === "number") {

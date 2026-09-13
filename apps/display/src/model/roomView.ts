@@ -201,6 +201,18 @@ export function toDisplayRoomView(
                     pivotX: display.turretPivotX ?? 0,
                     pivotY: display.turretPivotY ?? 0
                   },
+            machineGunVisual:
+              display.machineGunVisualShape === undefined ||
+              display.machineGunVisualShape.length === 0
+                ? null
+                : {
+                    shape: display.machineGunVisualShape,
+                    modelScale: display.machineGunVisualScale ?? 1,
+                    mountX: display.machineGunMountX ?? 0,
+                    mountY: display.machineGunMountY ?? 0,
+                    pivotX: display.machineGunPivotX ?? 0,
+                    pivotY: display.machineGunPivotY ?? 0
+                  },
             shieldRadius: display.shieldRadius ?? game.spaceship.radius,
             enemyCatalogue: [...display.enemyCatalogue.values()].map((entry) => ({
               kind: entry.kind,

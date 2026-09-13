@@ -473,6 +473,13 @@ export class SpaceshipDisplayState extends Schema {
   @type("float32") turretMountY = 0;
   @type("float32") turretPivotX = 0;
   @type("float32") turretPivotY = 0;
+  /** The nose gun's look, fixed at run start like the turret's; empty keeps the marker. */
+  @type("string") machineGunVisualShape = "";
+  @type("float32") machineGunVisualScale = 1;
+  @type("float32") machineGunMountX = 0;
+  @type("float32") machineGunMountY = 0;
+  @type("float32") machineGunPivotX = 0;
+  @type("float32") machineGunPivotY = 0;
   /** Authoritative radius the shield intercepts at, so the drawn arc matches it. */
   @type("float32") shieldRadius = 104;
   /**

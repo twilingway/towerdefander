@@ -38,6 +38,18 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
   const mountY = (turret?.mountY ?? 0) * hullRadius;
   const pivotX = mountX + (turret?.pivotX ?? 0) * hullRadius;
   const pivotY = mountY + (turret?.pivotY ?? 0) * hullRadius;
+  // The nose gun takes the same two steps, but sits under the hull, as it does
+  // on the field: only what reaches past the hull's art shows.
+  const noseGun = tuning.machineGunVisual;
+  const noseGunAsset = noseGun === null ? undefined : getVisualAsset(noseGun.shape);
+  const noseGunRadius = hullRadius * (noseGun?.modelScale ?? 1);
+  const nosePivotX = ((noseGun?.mountX ?? 0) + (noseGun?.pivotX ?? 0)) * hullRadius;
+  const nosePivotY = ((noseGun?.mountY ?? 0) + (noseGun?.pivotY ?? 0)) * hullRadius;
+  const label = [
+    `Корпус игрока: ${asset.name}`,
+    ...(turretAsset === undefined ? [] : [`орудие: ${turretAsset.name}`]),
+    ...(noseGunAsset === undefined ? [] : [`носовое оружие: ${noseGunAsset.name}`])
+  ].join(", ");
 
   return (
     <figure className="preview">
@@ -45,12 +57,13 @@ export function PlayerShipPreview({ tuning }: PlayerShipPreviewProps) {
         className="preview__canvas"
         viewBox={`0 0 ${String(BOX)} ${String(BOX)}`}
         role="img"
-        aria-label={
-          turretAsset === undefined
-            ? `Корпус игрока: ${asset.name}`
-            : `Корпус игрока: ${asset.name}, орудие: ${turretAsset.name}`
-        }
+        aria-label={label}
       >
+        {noseGunAsset !== undefined && (
+          <g transform={`translate(${String(nosePivotX)} ${String(nosePivotY)})`}>
+            <CatalogAssetShape asset={noseGunAsset} radius={noseGunRadius} center={CENTER} />
+          </g>
+        )}
         <CatalogAssetShape asset={asset} radius={modelRadius} center={CENTER} />
         {turretAsset !== undefined && (
           <g transform={`translate(${String(pivotX)} ${String(pivotY)})`}>

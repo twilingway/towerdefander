@@ -1,3 +1,4 @@
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import Phaser from "phaser";
 
@@ -8,13 +9,18 @@ import { ArenaZoneLayer, arenaZoneSignature, drawArena, drawDecorations } from "
 import { ArenaFleet } from "./arenaFleet.js";
 import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
-import { createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
+import { createNoseGun, createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
 import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
 import { sceneAudioFor, type SceneAudio } from "./sceneAudio.js";
 import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
-import { drawSpaceshipHull, turretMountPoint } from "../entityArt.js";
+import {
+  DEFAULT_SPACESHIP_HULL_ASSET_ID,
+  drawSpaceshipHull,
+  turretMountPoint
+} from "../entityArt.js";
+import { bakeCatalogArt, preloadSpriteArt } from "../catalogTexture.js";
 
 import { type Point } from "../spaceshipViewModel.js";
 import {
@@ -37,7 +43,7 @@ import { drawTankHull, readTankLook, TANK_ART_HALF } from "../tankArt.js";
 export class SpaceshipScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
   private spaceshipBody: Phaser.GameObjects.Image | undefined;
-  private noseMarker: Phaser.GameObjects.Image | undefined;
+  private noseMarker: TurretObject | undefined;
   private turret: TurretObject | undefined;
   private shield: ShieldLayer | undefined;
   private exhaust: ExhaustLayer | undefined;
@@ -116,6 +122,10 @@ export class SpaceshipScene extends Phaser.Scene {
     this.shieldTrack = createAngleTrack(snapshot.shield.angle, tick);
   }
 
+  preload(): void {
+    preloadSpriteArt(this);
+  }
+
   create(): void {
     this.camera.configure(
       this,
@@ -152,7 +162,13 @@ export class SpaceshipScene extends Phaser.Scene {
         this.snapshot.spaceship.y,
         this.tankLook
           ? this.bake("tank:hull", TANK_ART_HALF + 6, drawTankHull)
-          : this.bake(
+          : bakeCatalogArt(
+              this,
+              this.bake,
+              {
+                shape: hullVisual?.shape ?? DEFAULT_SPACESHIP_HULL_ASSET_ID,
+                worldRadius: shipRadius * (hullVisual?.modelScale ?? 1)
+              },
               `hull:${hullVisual?.shape ?? "default"}:${String(hullVisual?.modelScale ?? 1)}:${String(Math.round(shipRadius))}`,
               shipRadius * (hullVisual?.modelScale ?? 1) * 1.35 + 6,
               (graphics) => {
@@ -164,17 +180,7 @@ export class SpaceshipScene extends Phaser.Scene {
       .setDepth(10)
       .setRotation(this.snapshot.spaceship.heading);
 
-    this.noseMarker = this.add
-      .image(
-        this.snapshot.spaceship.x,
-        this.snapshot.spaceship.y,
-        this.bake(`nose:${String(Math.round(shipRadius))}`, shipRadius + 16, (graphics) => {
-          graphics.fillStyle(0xffd36f, 1);
-          graphics.fillTriangle(shipRadius - 4, -9, shipRadius + 12, 0, shipRadius - 4, 9);
-        })
-      )
-      .setDepth(11)
-      .setRotation(this.snapshot.spaceship.heading);
+    this.noseMarker = createNoseGun(this, this.snapshot, this.bake);
 
     /*
      * An empty texture to start on: every drawing below picks its own the first
@@ -253,9 +259,13 @@ export class SpaceshipScene extends Phaser.Scene {
       .setPosition(spaceshipPosition.x, spaceshipPosition.y)
       .setRotation(spaceshipHeading);
     if (this.noseMarker !== undefined) {
-      this.noseMarker
-        .setPosition(spaceshipPosition.x, spaceshipPosition.y)
-        .setRotation(spaceshipHeading);
+      // The nose gun rides the hull, so its mount turns with the hull's heading.
+      const noseMount = turretMountPoint(
+        { ...spaceshipPosition, radius: this.snapshot.spaceship.radius },
+        spaceshipHeading,
+        this.snapshot.machineGunVisual
+      );
+      this.noseMarker.setPosition(noseMount.x, noseMount.y).setRotation(spaceshipHeading);
     }
     // Behind the hull, from the drawn pose: the plume has to sit on the ship the
     // crew sees, not on the one the last patch described.
@@ -377,11 +387,16 @@ export class SpaceshipScene extends Phaser.Scene {
        * shared display, the preview - the tracks below still do the job they
        * always did.
        */
+      // A rock tumbles on the shared playback clock instead of facing its course.
+      const spinAngle =
+        visual.spin === undefined
+          ? undefined
+          : visual.spin.phase + visual.spin.rate * (playbackTick / SIMULATION_TICK_RATE);
       const live = visual.live === undefined ? undefined : this.prediction?.read(visual.live);
       if (live !== undefined) {
         liveDrawn += 1;
         visual.object.setPosition(live.x, live.y);
-        visual.object.rotation = live.rotation;
+        visual.object.rotation = spinAngle ?? live.rotation;
         if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
         continue;
       }
@@ -394,7 +409,7 @@ export class SpaceshipScene extends Phaser.Scene {
               y: sampled.y + visual.velocity.y * behindSeconds
             };
       visual.object.setPosition(carried.x, carried.y);
-      visual.object.rotation = sampleAngleTrack(visual.angle, playbackTick);
+      visual.object.rotation = spinAngle ?? sampleAngleTrack(visual.angle, playbackTick);
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
     }

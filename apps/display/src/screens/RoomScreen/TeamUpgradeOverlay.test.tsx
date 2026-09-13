@@ -49,7 +49,7 @@ describe("TeamUpgradeOverlay", () => {
         credits={9}
         score={480}
         waveNumber={3}
-        phaseTicksRemaining={600}
+        phaseTicksRemaining={1800}
         purchasedModules={[
           "hullPlating1",
           "thrusters1",
@@ -61,7 +61,8 @@ describe("TeamUpgradeOverlay", () => {
     );
 
     expect(markup).toContain("Волна 3 завершена");
-    expect(markup).toContain("Следующая волна через 30.0 с");
+    // The room counts at 60 Hz: 1800 ticks are the thirty-second vote.
+    expect(markup).toContain("Следующая волна через 30 с");
     expect(markup).toContain("Очки экипажа: 480");
     expect(markup).toContain("кредиты: 9");
     expect(markup).toContain("цена улучшения: 5");

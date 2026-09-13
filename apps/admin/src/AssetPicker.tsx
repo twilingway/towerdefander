@@ -15,16 +15,23 @@ const CATEGORY_LABELS: Record<VisualAssetCategory, string> = {
   drone: "Дроны",
   missile: "Ракеты",
   weapon: "Турели",
-  boss: "Боссы"
+  boss: "Боссы",
+  asteroid: "Астероиды"
 };
 
 const THUMB_BOX = 64;
 
-function AssetThumb({ shape }: { readonly shape: VisualAssetId }) {
+function AssetThumb({
+  shape,
+  className = "asset__thumb"
+}: {
+  readonly shape: VisualAssetId;
+  readonly className?: string;
+}) {
   const asset = getVisualAsset(shape);
   return (
     <svg
-      className="asset__thumb"
+      className={className}
       viewBox={`0 0 ${String(THUMB_BOX)} ${String(THUMB_BOX)}`}
       aria-hidden="true"
     >
@@ -74,7 +81,12 @@ export function AssetPicker({
       <summary className="assets__summary">
         <span className="assets__caption">{label}</span>
         <span className="assets__current">
-          {selected === null ? "по умолчанию" : `${selected.name} · ${selected.id}`}
+          {selected === null ? null : (
+            <AssetThumb shape={selected.id} className="assets__current-thumb" />
+          )}
+          <span className="assets__current-name">
+            {selected === null ? "по умолчанию" : `${selected.name} · ${selected.id}`}
+          </span>
         </span>
       </summary>
 

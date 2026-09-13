@@ -106,17 +106,21 @@ export const VISUAL_ASSET_CATEGORIES = [
   "drone",
   "missile",
   "weapon",
-  "boss"
+  "boss",
+  "asteroid"
 ] as const;
 export type VisualAssetCategory = (typeof VISUAL_ASSET_CATEGORIES)[number];
 
-export interface VisualAsset {
+interface VisualAssetBase {
   readonly id: VisualAssetId;
   readonly name: string;
   readonly category: VisualAssetCategory;
   /** Position in the catalogue, 1-based; also picks the accent colour. */
   readonly index: number;
-  /** Units the geometry was drawn around; the renderer normalises by it. */
+  /**
+   * Units the art was drawn around; the renderer normalises by it. For a sprite
+   * that is half a cell, in texels.
+   */
   readonly radius: number;
   readonly accent: number;
   /** Free-form English tag; the console searches it alongside name and id. */
@@ -125,8 +129,26 @@ export interface VisualAsset {
   readonly spin: number;
   /** Extra multiplier for assets drawn larger than their nominal radius. */
   readonly scaleHint: number;
+}
+
+/** Drawn from layers of geometry, as every asset was before sprites. */
+export interface VisualVectorAsset extends VisualAssetBase {
+  readonly kind: "vector";
   readonly layers: readonly VisualLayer[];
 }
+
+/**
+ * A cell of a raster texture from `@spaceship-defender/sprite-assets`. The
+ * protocol carries only what a preset and a renderer have to agree on - the id
+ * and how many cells there are. Where the file lives, and how big it is, is the
+ * asset package's business: the server never loads a picture.
+ */
+export interface VisualSpriteAsset extends VisualAssetBase {
+  readonly kind: "sprite";
+  readonly sprite: { readonly frames: number };
+}
+
+export type VisualAsset = VisualVectorAsset | VisualSpriteAsset;
 
 const ACCENT_CYCLE = [
   VISUAL_PALETTE.cyan,
@@ -234,7 +256,8 @@ const asset = (
   hardpoints: readonly AssetHardpoint[],
   layers: readonly VisualLayer[],
   meta: AssetMeta = {}
-): VisualAsset => ({
+): VisualVectorAsset => ({
+  kind: "vector",
   id,
   name,
   category,
@@ -245,6 +268,33 @@ const asset = (
   spin: meta.spin ?? 0,
   scaleHint: meta.scaleHint ?? 1,
   layers
+});
+
+/**
+ * Half of the 256 cell every sprite is built into. The build crops each cell to
+ * its art and fits it, so a sprite reaches this radius whatever its source was.
+ */
+const SPRITE_CELL_RADIUS = 128;
+
+const sprite = (
+  id: VisualAssetId,
+  name: string,
+  category: VisualAssetCategory,
+  index: number,
+  frames: number,
+  meta: AssetMeta = {}
+): VisualSpriteAsset => ({
+  kind: "sprite",
+  id,
+  name,
+  category,
+  index,
+  radius: SPRITE_CELL_RADIUS,
+  accent: ACCENT_CYCLE[(index - 1) % ACCENT_CYCLE.length] ?? VISUAL_PALETTE.cyan,
+  role: meta.role ?? "",
+  spin: meta.spin ?? 0,
+  scaleHint: meta.scaleHint ?? 1,
+  sprite: { frames }
 });
 
 /**
@@ -322,7 +372,12 @@ export const VISUAL_ASSET_IDS = [
   "boss-solar",
   "boss-gunflower",
   "boss-splitter",
-  "boss-mothership"
+  "boss-mothership",
+  "sprite-player",
+  "sprite-enemy-fighter",
+  "sprite-enemy-orb",
+  "sprite-enemy-heavy",
+  "sprite-asteroids"
 ] as const;
 export type VisualAssetId = (typeof VISUAL_ASSET_IDS)[number];
 
@@ -715,7 +770,16 @@ export const VISUAL_ASSETS: readonly VisualAsset[] = [
       R(-74,-13,24,26,"dark","accent",2),R(50,-13,24,26,"dark","accent",2),R(-58,31,20,22,"body2"),R(38,31,20,22,"body2"),
       L(-56,-45,56,-45,"trim",2),L(-55,44,55,44,"trim",2),
       R(-39,60,18,10,"engine","engine",1),R(-9,65,18,10,"engine","engine",1),R(21,60,18,10,"engine","engine",1)
-    ],{role:"final mothership",hp:3200,scaleHint:.64})
+    ],{role:"final mothership",hp:3200,scaleHint:.64}),
+
+    // ===== SPRITES 71-75 =====
+    // Raster art from `@spaceship-defender/sprite-assets`. The build fits every
+    // cell to its art, so the hint only matches the silhouettes' own reach.
+    sprite("sprite-player","Авангард (арт)","ship",71,1,{role:"sprite player hull",scaleHint:1.15}),
+    sprite("sprite-enemy-fighter","Истребитель (арт)","ship",72,1,{role:"sprite enemy fighter",scaleHint:1.15}),
+    sprite("sprite-enemy-orb","Око (арт)","drone",73,1,{role:"sprite enemy orb drone",scaleHint:1.1}),
+    sprite("sprite-enemy-heavy","Крейсер (арт)","ship",74,1,{role:"sprite enemy heavy cruiser",scaleHint:1.15}),
+    sprite("sprite-asteroids","Астероиды (арт)","asteroid",75,3,{role:"sprite asteroid rock",scaleHint:1})
 ];
 
 const VISUAL_ASSETS_BY_ID: ReadonlyMap<string, VisualAsset> = new Map(

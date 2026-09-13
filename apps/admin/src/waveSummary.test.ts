@@ -218,6 +218,7 @@ function tuning(): BalanceTuning {
     lootBossWindowTicks: 600,
     projectileVisual: null,
     turretVisual: null,
+    machineGunVisual: null,
     mgProjectileVisual: null,
     asteroidVisual: null,
     spaceshipVisual: null,

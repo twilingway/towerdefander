@@ -160,6 +160,8 @@ export interface SpaceshipSimulationConfig extends CombatConfig {
    */
   readonly projectileVisual: EntityVisual | null;
   readonly turretVisual: TurretVisual;
+  /** Presentation only, like the turret's: the nose gun still fires from the nose. */
+  readonly machineGunVisual: TurretVisual;
   readonly mgProjectileVisual: EntityVisual | null;
   readonly cannonHeatCapacity: number;
   readonly cannonHeatPerShot: number;

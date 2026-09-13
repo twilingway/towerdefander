@@ -977,6 +977,12 @@ export class SpaceshipDefenderRoom extends Room<{
     display.turretMountY = this.gameConfig.turretVisual?.mountY ?? 0;
     display.turretPivotX = this.gameConfig.turretVisual?.pivotX ?? 0;
     display.turretPivotY = this.gameConfig.turretVisual?.pivotY ?? 0;
+    display.machineGunVisualShape = this.gameConfig.machineGunVisual?.shape ?? "";
+    display.machineGunVisualScale = this.gameConfig.machineGunVisual?.modelScale ?? 1;
+    display.machineGunMountX = this.gameConfig.machineGunVisual?.mountX ?? 0;
+    display.machineGunMountY = this.gameConfig.machineGunVisual?.mountY ?? 0;
+    display.machineGunPivotX = this.gameConfig.machineGunVisual?.pivotX ?? 0;
+    display.machineGunPivotY = this.gameConfig.machineGunVisual?.pivotY ?? 0;
     display.shieldRadius = this.gameConfig.shieldRadius;
     const catalogue = display.enemyCatalogue;
     catalogue.clear();

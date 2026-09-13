@@ -152,6 +152,7 @@ export const PREVIEW_WORLD = {
   shipHitSound: "",
   shipDeathSound: "",
   turretVisual: PREVIEW_TURRET_VISUAL,
+  machineGunVisual: null,
   shieldRadius: 104,
   // The campaign has no zone sheet; the arena fills this in.
   arenaZones: [],

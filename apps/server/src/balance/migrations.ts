@@ -232,6 +232,7 @@ const PLAYER_SHIP_FIELDS = [
   "turretAngularBrakingPerSecondSquared",
   "projectileVisual",
   "turretVisual",
+  "machineGunVisual",
   "mgProjectileVisual",
   "cannonHeatCapacity",
   "cannonHeatPerShot",

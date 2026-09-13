@@ -65,6 +65,7 @@ Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core
 | `pnpm fx:bake`                           | Rebakes `packages/fx-assets` sprite atlases from their effect sources              |
 | `pnpm fx:editor`                         | The Arcadia Effects editor UI for hand-tuning an effect (port 5179)                |
 | `pnpm fx:edit`                           | The same editor over **our** sources, port 35179; saves, formats and rebakes       |
+| `pnpm sprites:build`                     | Rebuilds `packages/sprite-assets` WebP sprites and their manifest (needs ffmpeg)   |
 
 Every harness uses its own port block, so they can run while `pnpm dev` is up. `scripts/` spawns
 child processes with `--import ./scripts/owned-process-guard.mjs` so stopping a harness kills only
@@ -105,6 +106,7 @@ packages/client-shared  what display and controller both need: preview shell, la
                         formatting, environment reads, shared control and upgrade pieces
 packages/config         shared TypeScript, ESLint and Prettier configuration
 packages/fx-assets      baked sprite atlases: effect sources, the committed PNGs and a typed manifest
+packages/sprite-assets  raster art of the visual catalogue: source PNGs, built WebP sheets, manifest
 ```
 
 `protocol`, `game-core` and `client-shared` export `./src/index.ts` directly — apps consume
@@ -146,11 +148,11 @@ tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 55) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 67) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
-they carry their own `BALANCE_FILE_VERSION` (currently 41) with migrations in
+they carry their own `BALANCE_FILE_VERSION` (currently 54) with migrations in
 `apps/server/src/balance/migrations.ts`, and a balance-only change bumps that file version instead
 of the protocol. `packages/protocol/src/balanceStats.ts` does the same for the measurement reports
 the statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 3) — but those have **no
@@ -191,9 +193,10 @@ editor, the bake pipeline and the atlas conventions; full text in
 `.agents/skills/arcadia-effects/SKILL.md`), `browser-playwright` (Playwright MCP session, harness
 ports, `tests/e2e` conventions), `react-frontend` (display/controller React rules plus the vendored
 Vercel rule set in `.agents/skills/react-best-practices/`), and `phaser-display` (boundaries; the
-full text stays in `.agents/skills/phaser-display/SKILL.md`, which the other agent runners share).
-`.mcp.json` declares the `playwright` MCP server so a browser session is available without extra
-setup; it drives a browser only and does not start app servers.
+full text stays in `.agents/skills/phaser-display/SKILL.md`, which the other agent runners share),
+and `codex-visual` (Codex CLI as an independent visual consultant and image generator for
+development work). `.mcp.json` declares the `playwright` MCP server so a browser session is
+available without extra setup; it drives a browser only and does not start app servers.
 
 ### How the global rules apply here
 
@@ -217,6 +220,11 @@ project differs:
   covers exactly that: branching for the task at hand. Switching onto someone else's existing
   branch, or pushing to `main` directly, still needs the user's words — `main` is what the host
   releases.
+- **Codex is a visual consultant in development work.** Before a substantial UI change Claude asks
+  it for a concept; afterwards it audits screenshots; it can also generate raster images. Claude
+  makes every decision. Inside that loop, screenshots of the running app are in scope. Codex may
+  read local dev-stand keys but never production credentials. The procedure and command templates
+  are in `.claude/skills/codex-visual/SKILL.md`.
 
 ## Conventions
 

@@ -14,7 +14,8 @@ function tuning(turretVisual: BalanceTuning["turretVisual"]): BalanceTuning {
     shieldRadius: 104,
     shieldArcRadians: Math.PI / 2,
     spaceshipVisual: null,
-    turretVisual
+    turretVisual,
+    machineGunVisual: null
   } as unknown as BalanceTuning;
 }
 
@@ -167,5 +168,38 @@ describe("PlayerShipPreview turret mount", () => {
     );
     expect(onTheWing).not.toContain("translate(0 0)");
     expect(countShapes(onTheWing)).toBe(countShapes(centred));
+  });
+});
+
+describe("PlayerShipPreview nose gun", () => {
+  const noseGun = {
+    shape: "weapon-gatling",
+    modelScale: 1,
+    mountX: 0.8,
+    mountY: 0,
+    pivotX: 0,
+    pivotY: 0
+  } as const;
+
+  it("draws the chosen nose gun and names it beside the hull", () => {
+    const bare = renderToStaticMarkup(<PlayerShipPreview tuning={tuning(null)} />);
+    const armed = renderToStaticMarkup(
+      <PlayerShipPreview tuning={{ ...tuning(null), machineGunVisual: noseGun }} />
+    );
+
+    expect(countShapes(armed)).toBeGreaterThan(countShapes(bare));
+    expect(armed).toContain("носовое оружие:");
+  });
+
+  it("puts the nose gun under the hull, as the battlefield does", () => {
+    const armed = renderToStaticMarkup(
+      <PlayerShipPreview tuning={{ ...tuning(null), machineGunVisual: noseGun }} />
+    );
+
+    // The gun's own offset group opens before the first centred drawing, which
+    // is only true when the gun is drawn first - that is, underneath.
+    const gunGroup = armed.search(/<g transform="translate\((?!74 74\))/u);
+    expect(gunGroup).toBeGreaterThan(-1);
+    expect(gunGroup).toBeLessThan(armed.indexOf("translate(74 74)"));
   });
 });

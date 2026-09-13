@@ -10,11 +10,12 @@ import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { SOUND_IDS } from "./audioCatalogue.ts";
 import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 52 as const;
+export const BALANCE_FILE_VERSION = 54 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
-  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+  28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+  52, 53
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -1227,6 +1228,12 @@ export const balanceTuningSchema = z
     projectileVisual: entityVisualSchema,
     /** The gun itself, drawn over the hull and turning with the turret. */
     turretVisual: turretVisualSchema,
+    /**
+     * The nose gun's look, drawn under the hull and turning with it. The same
+     * shape as the turret's, mount and nudge included; null keeps the nose
+     * marker. Presentation only: the machine gun still fires from the nose.
+     */
+    machineGunVisual: turretVisualSchema,
     /** The cannon runs hot too, so picking targets can beat firing at all of them. */
     cannonHeatCapacity: positiveFinite,
     cannonHeatPerShot: positiveFinite,

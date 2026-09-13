@@ -1446,6 +1446,7 @@ describe("version 1 migration", () => {
     const defaults = createDefaultTuning();
     const dated: Record<string, unknown> = { ...atLegacyTickRate(defaults) };
     delete dated.turretVisual;
+    delete dated.machineGunVisual;
     delete dated.projectileVisual;
     delete dated.mgProjectileVisual;
     await writeFile(
