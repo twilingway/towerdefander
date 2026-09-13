@@ -66,11 +66,35 @@ export interface RoomStatsTotals {
   byStatus: Record<RoomStatsStatus, number>;
 }
 
+/** The largest count seen, and the moment it was first reached; zero and zero before any. */
+export interface RoomRecord {
+  value: number;
+  atMs: number;
+}
+
+/** One calendar day's highest counts of people and rooms at once. */
+export interface RoomDayPeak {
+  /** `YYYY-MM-DD` in the zone the records are kept in. */
+  date: string;
+  people: number;
+  rooms: number;
+}
+
+/** What the page is told about records: the all-time highs and the latest days, newest first. */
+export interface RoomRecordsView {
+  allTime: { people: RoomRecord; rooms: RoomRecord };
+  days: RoomDayPeak[];
+  /** The zone the days are counted in, such as `Europe/Moscow`. */
+  timeZone: string;
+}
+
 export interface RoomStatsSnapshot {
   generatedAt: string;
   totals: RoomStatsTotals;
   byMode: Record<RoomStatsMode, RoomStatsTotals>;
   rooms: RoomStatsRow[];
+  /** Absent where no records are kept, such as a route under test. */
+  records?: RoomRecordsView;
 }
 
 export type QueryRoomStatsListings = () => Promise<readonly RoomStatsListing[]>;

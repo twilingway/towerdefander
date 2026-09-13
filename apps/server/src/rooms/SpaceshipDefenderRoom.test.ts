@@ -23,6 +23,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorstCaseCombatFixture } from "../benchmarks/worstCaseCombat.js";
 import { getBalanceStore } from "../balance/index.js";
 import { getMaintenanceWindow } from "../maintenance/index.js";
+import { getServerRecords } from "../stats/index.js";
 import { SpaceshipDefenderRoom } from "./SpaceshipDefenderRoom.js";
 import { DISPLAY_VIEW_TAG } from "./SpaceshipDefenderState.js";
 
@@ -2206,6 +2207,27 @@ describe("SpaceshipDefenderRoom v15 disposal and operations metadata", () => {
     expect(serialized).not.toContain("SECRET-ROOM-CODE");
     expect(serialized).not.toContain("Player 1");
     expect(serialized).not.toContain("player-1");
+  });
+
+  it("counts itself in the server records as people join, and leaves the count when disposed", () => {
+    const room = initRoom(new SpaceshipDefenderRoom());
+    room.roomId = "ROOM123";
+    vi.spyOn(room, "setMetadata").mockResolvedValue(undefined);
+    const observe = vi.spyOn(getServerRecords(), "observe");
+    const forget = vi.spyOn(getServerRecords(), "forget");
+    try {
+      room.onCreate({ role: "display", protocolVersion: PROTOCOL_VERSION, crewSize: 3 });
+      joinDisplay(room);
+      joinController(room, 0);
+      const reported = observe.mock.calls.at(-1)?.[0];
+      expect(reported).toMatchObject({ mode: "campaign", connectedPlayers: 1 });
+
+      room.onDispose();
+      expect(forget).toHaveBeenCalledWith(reported?.statsId);
+    } finally {
+      observe.mockRestore();
+      forget.mockRestore();
+    }
   });
 
   it("isolates metadata write failures from gameplay", async () => {

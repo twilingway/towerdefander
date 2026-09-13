@@ -39,7 +39,8 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { getBalanceStore } from "../balance/index.js";
-import type { RoomStatsStatus } from "../stats/types.js";
+import { getServerRecords } from "../stats/index.js";
+import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { ArenaBots } from "./arenaBots.js";
 import { LatencyTracker } from "./latencyTracker.js";
 import { createRunSeed } from "./runSeed.js";
@@ -546,6 +547,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.broadcastLobby();
   }
 
+  /** The match leaves the server, and with it the records' count of rooms and people. */
+  override onDispose(): void {
+    getServerRecords().forget(this.statsId);
+  }
+
   override onLeave(client?: Client): void {
     if (client !== undefined) {
       // Cleared while the seat is still the player's, so the latency reads unknown.
@@ -673,7 +679,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       this.statsStatus = status;
       this.statusChangedAtMs = Date.now();
     }
-    return this.setMetadata({
+    const metadata: RoomStatsMetadata = {
       statsId: this.statsId,
       mode: "arena",
       status,
@@ -691,7 +697,10 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       // A match ends when it is decided, not on a clock the dashboard could
       // count down to.
       expiresAtMs: null
-    }).catch(() => {
+    };
+    // The records count the same people the dashboard does, on the same heartbeat.
+    getServerRecords().observe(metadata);
+    return this.setMetadata(metadata).catch(() => {
       // Statistics are operational diagnostics and never affect a match.
     });
   }

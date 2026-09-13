@@ -23,6 +23,8 @@ export interface ServerConfig {
   balancePresetPath: string;
   /** Where finished balance-batch reports are kept. */
   statsBatchDirectory: string;
+  /** The server's all-time and daily peaks of people and rooms, which outlive a restart. */
+  statsRecordsPath: string;
   /** How many reports survive rotation; older ones are deleted after a write. */
   statsBatchKeep: number;
   /** Wall-clock ceiling on one batch, after which the child is stopped. */
@@ -80,6 +82,10 @@ const DEFAULT_BALANCE_PRESET_PATH = fileURLToPath(new URL("../data/balance.json"
 // console and the CLI look in one place whatever the working directory is.
 const DEFAULT_STATS_BATCH_DIRECTORY = fileURLToPath(
   new URL("../data/stats-batches", import.meta.url)
+);
+// And the server's records beside them, for the same reason.
+const DEFAULT_STATS_RECORDS_PATH = fileURLToPath(
+  new URL("../data/stats-records.json", import.meta.url)
 );
 /**
  * Resolved from this module rather than from wherever the caller sits: `src`
@@ -245,6 +251,11 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     configuredBatchDirectory === undefined || configuredBatchDirectory.length === 0
       ? DEFAULT_STATS_BATCH_DIRECTORY
       : configuredBatchDirectory;
+  const configuredRecordsPath = environment.STATS_RECORDS_PATH?.trim();
+  const statsRecordsPath =
+    configuredRecordsPath === undefined || configuredRecordsPath.length === 0
+      ? DEFAULT_STATS_RECORDS_PATH
+      : configuredRecordsPath;
   const statsBatchKeep = readPositiveInteger(
     environment,
     "STATS_BATCH_KEEP",
@@ -312,6 +323,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv = process.env): 
     deployControlToken,
     balancePresetPath,
     statsBatchDirectory,
+    statsRecordsPath,
     statsBatchKeep,
     statsBatchTimeoutSeconds,
     statsHarnessPath: STATS_HARNESS_PATH,

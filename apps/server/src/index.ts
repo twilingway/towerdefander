@@ -7,13 +7,16 @@ import { getBatchRunner, getBatchStore, registerBalanceStatsRoutes } from "./bal
 import { readServerConfig } from "./config.js";
 import { getMaintenanceWindow, registerMaintenanceRoutes } from "./maintenance/index.js";
 import { ROOM_DEFINITIONS } from "./roomRegistry.js";
-import { registerRoomStatsRoutes } from "./stats/index.js";
+import { getServerRecords, registerRoomStatsRoutes } from "./stats/index.js";
 
 const { host, port, gracefullyShutdown, statsPassword, balancePassword, deployControlToken } =
   readServerConfig();
 
 const balanceStore = getBalanceStore();
 await balanceStore.load();
+// Read before any room can open, so the first room of this process is compared with the old records.
+const serverRecords = getServerRecords();
+await serverRecords.load();
 
 const gameServer = defineServer({
   gracefullyShutdown,
@@ -43,6 +46,7 @@ const gameServer = defineServer({
     });
     registerRoomStatsRoutes(app, {
       password: statsPassword,
+      records: () => serverRecords.view(),
       /*
        * Both games, named rather than "everything the matchmaker has".
        *

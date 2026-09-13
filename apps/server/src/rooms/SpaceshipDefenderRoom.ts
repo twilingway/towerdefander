@@ -56,6 +56,7 @@ import { randomUUID } from "node:crypto";
 import { getBalanceStore } from "../balance/index.js";
 import { getMaintenanceWindow } from "../maintenance/index.js";
 import { readServerConfig } from "../config.js";
+import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
 import { holdSparringStand, openSparringStand } from "./sparringStand.js";
@@ -518,6 +519,8 @@ export class SpaceshipDefenderRoom extends Room<{
 
   override onDispose(): void {
     this.disposing = true;
+    // Whichever way the room closed, it leaves the server records' count here.
+    getServerRecords().forget(this.statsId);
     this.cleanupResources();
   }
 
@@ -1391,6 +1394,8 @@ export class SpaceshipDefenderRoom extends Room<{
   private queueMetadataUpdate(): void {
     if (this.statsId.length === 0) return;
     this.pendingMetadata = this.createStatsMetadata();
+    // Every membership and status change passes here, which is when a record can rise.
+    getServerRecords().observe(this.pendingMetadata);
     if (this.metadataWritePromise !== undefined) return;
     const write = this.flushMetadataWrites();
     this.metadataWritePromise = write;

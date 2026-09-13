@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SpaceshipArenaRoom } from "./SpaceshipArenaRoom.js";
 import { getBalanceStore } from "../balance/index.js";
+import { getServerRecords } from "../stats/index.js";
 
 /**
  * What the matchmaker does between constructing a room and calling `onCreate`:
@@ -324,5 +325,25 @@ describe("the arena's display latency", () => {
     });
 
     expect(room.state.displayLatencyMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("the arena in the server records", () => {
+  it("counts itself on its heartbeat and leaves the count when disposed", async () => {
+    const { room, internals } = arenaRoom();
+    vi.spyOn(room, "setMetadata").mockResolvedValue(undefined);
+    const observe = vi.spyOn(getServerRecords(), "observe");
+    const forget = vi.spyOn(getServerRecords(), "forget");
+    try {
+      await internals.publishStats();
+      const reported = observe.mock.calls.at(-1)?.[0];
+      expect(reported).toMatchObject({ mode: "arena", connections: 0 });
+
+      room.onDispose();
+      expect(forget).toHaveBeenCalledWith(reported?.statsId);
+    } finally {
+      observe.mockRestore();
+      forget.mockRestore();
+    }
   });
 });
