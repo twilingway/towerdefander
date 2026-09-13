@@ -237,30 +237,84 @@ export function getBackgroundCoverRect(
 }
 
 /**
- * How far the sky picture is pushed against the camera, as a share of its own margin past the
- * frame on each axis, from -1 to 1.
+ * Share of the camera's travel the nebula follows.
  *
- * The reference shifted its picture by a fixed fraction of the ship's position, which on a field
- * ten thousand units across walks it hundreds of pixels past its margin and bares the void at the
- * rim. Measured in arena radii instead, and clamped, the picture reaches the end of its margin no
- * nearer the centre than the parallax strength allows and never further than the margin itself.
+ * The farthest layer of the sky, so slower than any star in front of it. It used to be measured in
+ * arena radii instead - the picture reached the end of its margin exactly at the rim - which made
+ * its pace a property of the field: under a twentieth of the camera on the preset's arena, under a
+ * hundredth on the largest, and slower than the stars that are meant to lie in front of it.
  */
-export function backdropShiftShare(
+export const NEBULA_PARALLAX = 0.08;
+/** The picture is never drawn smaller than this multiple of the frame: the slack it always had. */
+export const PICTURE_SLACK_MIN = 1.18;
+/** Nor larger than this one: past it the picture is stretched well beyond its own texels. */
+export const PICTURE_SLACK_MAX = 1.6;
+
+/**
+ * How much to scale the sky picture so it covers the frame with room to move.
+ *
+ * The nebula needs `pace × radius` of margin past the frame on each side to keep its pace all the
+ * way to the rim. It gets that, but never less than the old slack and never more than the ceiling;
+ * on a field too large for the ceiling it reaches its margin before the rim and waits there.
+ */
+export function backdropPictureScale(
+  picture: { readonly width: number; readonly height: number },
+  cover: { readonly width: number; readonly height: number },
+  arenaRadius: number,
+  parallaxStrength: number
+): number {
+  const reach = NEBULA_PARALLAX * Math.max(0, parallaxStrength) * Math.max(0, arenaRadius);
+  const fit = (width: number, height: number): number =>
+    Math.max(width / picture.width, height / picture.height);
+  const floor = fit(cover.width * PICTURE_SLACK_MIN, cover.height * PICTURE_SLACK_MIN);
+  const ceiling = fit(cover.width * PICTURE_SLACK_MAX, cover.height * PICTURE_SLACK_MAX);
+  return Math.min(ceiling, Math.max(floor, fit(cover.width + reach * 2, cover.height + reach * 2)));
+}
+
+/**
+ * How far the sky picture is pushed against the camera from the frame's centre: the nebula's pace
+ * times the camera's distance from the arena centre, clamped to the margin the picture has on each
+ * axis, so the void is never bared.
+ */
+export function backdropShift(
   cameraX: number,
   cameraY: number,
   centerX: number,
   centerY: number,
-  arenaRadius: number,
-  parallaxStrength: number
+  parallaxStrength: number,
+  marginX: number,
+  marginY: number
 ): { readonly x: number; readonly y: number } {
-  const radius = arenaRadius > 0 ? arenaRadius : 1;
-  const share = (delta: number): number =>
-    Math.max(-1, Math.min(1, (delta / radius) * parallaxStrength));
-  return { x: share(centerX - cameraX), y: share(centerY - cameraY) };
+  const pace = NEBULA_PARALLAX * parallaxStrength;
+  const shift = (delta: number, margin: number): number =>
+    Math.max(-margin, Math.min(margin, delta * pace));
+  return { x: shift(centerX - cameraX, marginX), y: shift(centerY - cameraY, marginY) };
 }
 
-/** Share of the camera's travel a star at full depth follows; the reference's number. */
-export const STAR_PARALLAX = 0.018;
+/** Share of the camera's travel a star at full depth follows: the nearest stars, a third of it. */
+export const STAR_PARALLAX = 0.36;
+
+/** One layer of stars: how many, how large its baked dot is, and the depths they are drawn from. */
+export interface StarLayer {
+  readonly count: number;
+  /** The dot's radius, in the units the frame rectangle is measured in. */
+  readonly radius: number;
+  readonly depthMin: number;
+  readonly depthMax: number;
+}
+
+/**
+ * The three layers of stars, far to near.
+ *
+ * Depth sets both how fast a star moves and how bright it is, so a nearer layer is faster and
+ * brighter, and its dot is larger. The ranges do not overlap: every star of a nearer layer outruns
+ * every star of the layer behind it.
+ */
+export const STAR_LAYERS: readonly StarLayer[] = [
+  { count: 140, radius: 1.6, depthMin: 0.33, depthMax: 0.5 },
+  { count: 60, radius: 2.4, depthMin: 0.55, depthMax: 0.7 },
+  { count: 22, radius: 3.6, depthMin: 0.85, depthMax: 1 }
+];
 
 /**
  * Where one star sits inside the rectangle the field covers: its home, shifted against the camera

@@ -6,7 +6,9 @@ import { getBackdropArt } from "@spaceship-defender/sprite-assets";
 import type { BakeShape } from "../catalogTexture.js";
 import type { Point } from "../spaceshipViewModel.js";
 import {
-  backdropShiftShare,
+  STAR_LAYERS,
+  backdropPictureScale,
+  backdropShift,
   getBackgroundCoverRect,
   starAlpha,
   starPosition,
@@ -15,11 +17,9 @@ import {
 
 /** Under the arena floor, which sits at depth 0, and everything that stands on it. */
 const PICTURE_DEPTH = -20;
+/** The far stars just over the picture, and each nearer layer a step over the one behind it. */
 const STAR_DEPTH = -19;
-/** The picture is drawn this much larger than the frame; the extra is the room it moves in. */
-const PICTURE_SLACK = 1.18;
-const STAR_COUNT = 170;
-const STAR_TEXTURE = "backdrop:star";
+const STAR_DEPTH_STEP = 0.1;
 /** One fixed seed, so every screen in the room draws the same sky. */
 const STAR_SEED = 20_260_913;
 
@@ -42,18 +42,27 @@ interface Star {
   readonly phase: number;
 }
 
+/** One layer of stars: a blitter of one baked dot, and the stars stamped from it. */
+interface StarField {
+  readonly blitter: Phaser.GameObjects.Blitter;
+  readonly stars: readonly Star[];
+}
+
 /**
- * The sky: one picture and a field of stars, both fixed to the screen and under the arena.
+ * The sky: one picture and three layers of stars, all fixed to the screen and under the arena.
  *
- * Nothing here is drawn per frame. The picture is an image of a loaded texture and the stars are
- * bobs of one baked dot in a single blitter, so a frame only moves them and sets how bright the
- * stars are - the rule every other layer of this scene already follows. The sky it replaces was
- * four tiled layers and cost weak phones their frame rate; this one is two batches.
+ * Nothing here is drawn per frame. The picture is an image of a loaded texture and each layer of
+ * stars is bobs of one baked dot in its own blitter - a bob has no scale of its own, so a layer's
+ * dot size is its texture. A frame only moves them and sets how bright the stars are, the rule
+ * every other layer of this scene already follows. The sky before the picture was four tiled
+ * layers and cost weak phones their frame rate; this one is four batches of fixed textures.
+ *
+ * Depth reads from pace: the nebula follows the camera slowest, and every layer of stars in front
+ * of it faster than the one behind.
  */
 export class BackdropLayer {
   private readonly picture: Phaser.GameObjects.Image | undefined;
-  private readonly field: Phaser.GameObjects.Blitter;
-  private readonly stars: readonly Star[];
+  private readonly fields: readonly StarField[];
   private readonly twinkle: boolean;
   private layoutKey = "";
   private cover: BackgroundCoverRect = { x: 0, y: 0, width: 1, height: 1 };
@@ -67,20 +76,34 @@ export class BackdropLayer {
       key !== undefined && scene.textures.exists(key)
         ? scene.add.image(0, 0, key).setScrollFactor(0).setDepth(PICTURE_DEPTH)
         : undefined;
-    const dot = bake(STAR_TEXTURE, 4, (graphics) => {
-      graphics.fillStyle(0xb8eaff, 1);
-      graphics.fillCircle(0, 0, 2.4);
-    });
-    this.field = scene.add.blitter(0, 0, dot).setScrollFactor(0).setDepth(STAR_DEPTH);
     const random = createSeededRandom(STAR_SEED);
-    this.stars =
+    this.fields =
       image === "none"
         ? []
-        : Array.from({ length: STAR_COUNT }, () => ({
-            bob: this.field.create(0, 0),
-            home: { u: random.next(), v: random.next(), depth: 0.2 + random.next() * 0.8 },
-            phase: random.next() * Math.PI * 2
-          }));
+        : STAR_LAYERS.map((layer, index) => {
+            const dot = bake(
+              `backdrop:star:${String(index)}`,
+              Math.ceil(layer.radius) + 1,
+              (graphics) => {
+                graphics.fillStyle(0xb8eaff, 1);
+                graphics.fillCircle(0, 0, layer.radius);
+              }
+            );
+            const blitter = scene.add
+              .blitter(0, 0, dot)
+              .setScrollFactor(0)
+              .setDepth(STAR_DEPTH + index * STAR_DEPTH_STEP);
+            const stars = Array.from({ length: layer.count }, () => ({
+              bob: blitter.create(0, 0),
+              home: {
+                u: random.next(),
+                v: random.next(),
+                depth: layer.depthMin + random.next() * (layer.depthMax - layer.depthMin)
+              },
+              phase: random.next() * Math.PI * 2
+            }));
+            return { blitter, stars };
+          });
     this.twinkle = !(
       (
         globalThis as { matchMedia?: (query: string) => { readonly matches: boolean } }
@@ -96,55 +119,58 @@ export class BackdropLayer {
     renderer: { readonly width: number; readonly height: number },
     seconds: number
   ): void {
-    if (this.picture === undefined && this.stars.length === 0) return;
+    if (this.picture === undefined && this.fields.length === 0) return;
     const zoom = scene.cameras.main.zoom;
-    const key = `${String(renderer.width)}x${String(renderer.height)}@${String(zoom)}`;
-    if (key !== this.layoutKey) this.layout(key, renderer, zoom);
-
     const strength = snapshot.background.parallaxStrength;
+    // The radius and the strength hold for a whole run, so in practice the window and zoom move it.
+    const key = [renderer.width, renderer.height, zoom, snapshot.arenaRadius, strength].join(":");
+    if (key !== this.layoutKey) this.layout(key, renderer, zoom, snapshot.arenaRadius, strength);
+
     if (this.picture !== undefined) {
-      const share = backdropShiftShare(
+      const shift = backdropShift(
         focus.x,
         focus.y,
         snapshot.worldWidth / 2,
         snapshot.worldHeight / 2,
-        snapshot.arenaRadius,
-        strength
+        strength,
+        this.marginX,
+        this.marginY
       );
       this.picture.setPosition(
-        this.cover.x + this.cover.width / 2 + share.x * this.marginX,
-        this.cover.y + this.cover.height / 2 + share.y * this.marginY
+        this.cover.x + this.cover.width / 2 + shift.x,
+        this.cover.y + this.cover.height / 2 + shift.y
       );
     }
-    for (const star of this.stars) {
-      const at = starPosition(
-        star.home,
-        focus.x,
-        focus.y,
-        this.cover.width,
-        this.cover.height,
-        strength
-      );
-      star.bob.x = at.x;
-      star.bob.y = at.y;
-      star.bob.alpha = starAlpha(star.home.depth, star.phase, seconds, this.twinkle);
+    for (const field of this.fields) {
+      for (const star of field.stars) {
+        const at = starPosition(
+          star.home,
+          focus.x,
+          focus.y,
+          this.cover.width,
+          this.cover.height,
+          strength
+        );
+        star.bob.x = at.x;
+        star.bob.y = at.y;
+        star.bob.alpha = starAlpha(star.home.depth, star.phase, seconds, this.twinkle);
+      }
     }
   }
 
   private layout(
     key: string,
     renderer: { readonly width: number; readonly height: number },
-    zoom: number
+    zoom: number,
+    arenaRadius: number,
+    strength: number
   ): void {
     this.layoutKey = key;
     this.cover = getBackgroundCoverRect(renderer.width, renderer.height, zoom);
-    this.field.setPosition(this.cover.x, this.cover.y);
+    for (const field of this.fields) field.blitter.setPosition(this.cover.x, this.cover.y);
     if (this.picture === undefined) return;
     const { width, height } = this.picture.frame;
-    const scale = Math.max(
-      (this.cover.width * PICTURE_SLACK) / width,
-      (this.cover.height * PICTURE_SLACK) / height
-    );
+    const scale = backdropPictureScale(this.picture.frame, this.cover, arenaRadius, strength);
     this.picture.setDisplaySize(width * scale, height * scale);
     this.marginX = (width * scale - this.cover.width) / 2;
     this.marginY = (height * scale - this.cover.height) / 2;

@@ -29,7 +29,13 @@ import {
   type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 import {
-  backdropShiftShare,
+  backdropPictureScale,
+  backdropShift,
+  NEBULA_PARALLAX,
+  PICTURE_SLACK_MAX,
+  PICTURE_SLACK_MIN,
+  STAR_LAYERS,
+  STAR_PARALLAX,
   starAlpha,
   starPosition,
   DEVICE_PIXEL_RATIO_CAP,
@@ -298,30 +304,49 @@ describe("spaceship view model", () => {
     });
   });
 
-  describe("sky picture shift", () => {
-    it("stays centred while the camera sits on the arena centre", () => {
-      const share = backdropShiftShare(2200, 2200, 2200, 2200, 2200, 1);
-      expect(share.x).toBeCloseTo(0);
-      expect(share.y).toBeCloseTo(0);
+  describe("sky picture", () => {
+    const picture = { width: 1672, height: 941 };
+    // The preset's frame: a view 2500 units wide on a 1440 by 900 display.
+    const cover = getBackgroundCoverRect(1440, 900, 1440 / 2500);
+    const margins = (scale: number) => ({
+      x: (picture.width * scale - cover.width) / 2,
+      y: (picture.height * scale - cover.height) / 2
     });
 
-    it("moves against the camera, a share of its margin per arena radius", () => {
-      const share = backdropShiftShare(2200 + 1100, 2200 - 550, 2200, 2200, 2200, 1);
-      expect(share.x).toBeCloseTo(-0.5);
-      expect(share.y).toBeCloseTo(0.25);
+    it("stays centred while the camera sits on the arena centre", () => {
+      const shift = backdropShift(4400, 4400, 4400, 4400, 1, 300, 300);
+      expect(Math.abs(shift.x)).toBe(0);
+      expect(Math.abs(shift.y)).toBe(0);
+    });
+
+    it("keeps one pace from the centre to the rim of the preset's arena", () => {
+      const margin = margins(backdropPictureScale(picture, cover, 4400, 1));
+      const halfway = backdropShift(4400 + 2200, 4400, 4400, 4400, 1, margin.x, margin.y);
+      const rimAcross = backdropShift(4400 + 4400, 4400, 4400, 4400, 1, margin.x, margin.y);
+      const rimDown = backdropShift(4400, 0, 4400, 4400, 1, margin.x, margin.y);
+      expect(halfway.x).toBeCloseTo(-2200 * NEBULA_PARALLAX);
+      expect(rimAcross.x).toBeCloseTo(-4400 * NEBULA_PARALLAX);
+      expect(rimDown.y).toBeCloseTo(4400 * NEBULA_PARALLAX);
     });
 
     it("never goes past its margin, even at the rim of the largest field", () => {
-      // The reference's fixed fraction would have walked it hundreds of pixels out here.
-      const share = backdropShiftShare(19_400 * 2, 0, 19_400, 19_400, 19_400, 1.6);
-      expect(share.x).toBe(-1);
-      expect(share.y).toBe(1);
+      const margin = margins(backdropPictureScale(picture, cover, 19_400, 1.6));
+      const shift = backdropShift(19_400 * 2, 0, 19_400, 19_400, 1.6, margin.x, margin.y);
+      expect(shift.x).toBeCloseTo(-margin.x);
+      expect(shift.y).toBeCloseTo(margin.y);
+    });
+
+    it("is drawn no smaller than its old slack and no larger than the ceiling", () => {
+      const fit = (slack: number) =>
+        Math.max((cover.width * slack) / picture.width, (cover.height * slack) / picture.height);
+      expect(backdropPictureScale(picture, cover, 4400, 0)).toBeCloseTo(fit(PICTURE_SLACK_MIN));
+      expect(backdropPictureScale(picture, cover, 19_400, 1.6)).toBeCloseTo(fit(PICTURE_SLACK_MAX));
     });
 
     it("stays pinned to the screen at zero strength", () => {
-      const share = backdropShiftShare(4000, 100, 2200, 2200, 2200, 0);
-      expect(Math.abs(share.x)).toBe(0);
-      expect(Math.abs(share.y)).toBe(0);
+      const shift = backdropShift(8000, 100, 4400, 4400, 0, 300, 300);
+      expect(Math.abs(shift.x)).toBe(0);
+      expect(Math.abs(shift.y)).toBe(0);
     });
   });
 
@@ -333,10 +358,24 @@ describe("spaceship view model", () => {
     });
 
     it("shifts nearer stars further against the camera", () => {
-      const near = starPosition(home, 1000, 0, 1000, 500, 1);
-      const far = starPosition({ ...home, depth: 0.2 }, 1000, 0, 1000, 500, 1);
-      expect(250 - near.x).toBeCloseTo(18);
-      expect(250 - far.x).toBeCloseTo(3.6);
+      const near = starPosition(home, 100, 0, 1000, 500, 1);
+      const far = starPosition({ ...home, depth: 0.2 }, 100, 0, 1000, 500, 1);
+      expect(250 - near.x).toBeCloseTo(100 * STAR_PARALLAX);
+      expect(250 - far.x).toBeCloseTo(20 * STAR_PARALLAX);
+    });
+
+    it("orders the sky from the nebula out to the nearest stars", () => {
+      const depths = STAR_LAYERS.flatMap((layer) => [layer.depthMin, layer.depthMax]);
+      expect(depths).toEqual([...depths].sort((a, b) => a - b));
+      expect(new Set(depths).size).toBe(depths.length);
+      expect(NEBULA_PARALLAX).toBeLessThan(Math.min(...depths) * STAR_PARALLAX);
+      const radii = STAR_LAYERS.map((layer) => layer.radius);
+      expect(radii).toEqual([...radii].sort((a, b) => a - b));
+      expect(new Set(radii).size).toBe(radii.length);
+    });
+
+    it("stands still on the screen at zero strength", () => {
+      expect(starPosition(home, 5000, -3000, 1000, 500, 0)).toEqual({ x: 250, y: 250 });
     });
 
     it("wraps a star that leaves the field back into it", () => {
