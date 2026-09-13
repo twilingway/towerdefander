@@ -46,6 +46,13 @@ describe("StatusFrame", () => {
     expect(markup).toContain(">Пулемёт<");
   });
 
+  it("writes a short word beside a long shield state, for the narrowest frame to show", () => {
+    const markup = frame({ shieldState: "выключен" });
+
+    expect(markup).toContain('class="status-frame__word">выключен<');
+    expect(markup).toContain('class="status-frame__word status-frame__word--short">выкл<');
+  });
+
   it("names the heat rows the live writer stamps, and gives it no caption to overwrite", () => {
     const markup = frame();
 

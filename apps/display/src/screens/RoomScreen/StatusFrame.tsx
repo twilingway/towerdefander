@@ -18,6 +18,12 @@ const HEAT_TEST_IDS: Readonly<Partial<Record<StatusBar["key"], string>>> = {
   machineGun: "machine-gun-heat"
 };
 
+/**
+ * Shorter words for the narrowest frame, a phone's, which cut the full ones to
+ * their first letters. Both are written and the stylesheet shows one.
+ */
+const SHORT_CAPTIONS: Readonly<Record<string, string>> = { выключен: "выкл" };
+
 /** A bar's state in words, because a colour alone does not say it; null is the plain bar. */
 function barState(
   bar: StatusBar,
@@ -57,6 +63,7 @@ export function StatusFrame({
       {STATUS_BARS.map((bar, index) => {
         const lights = reading.lit[index] ?? 0;
         const state = barState(bar, reading);
+        const short = state === null ? undefined : SHORT_CAPTIONS[state.caption];
         return (
           <div
             key={bar.key}
@@ -77,7 +84,14 @@ export function StatusFrame({
                 maxWidth: percent(bar.x - bar.labelX - 16, STATUS_FRAME_WIDTH)
               }}
             >
-              {state?.caption ?? bar.label}
+              {short === undefined ? (
+                (state?.caption ?? bar.label)
+              ) : (
+                <>
+                  <span className="status-frame__word">{state?.caption}</span>
+                  <span className="status-frame__word status-frame__word--short">{short}</span>
+                </>
+              )}
             </span>
             {Array.from({ length: bar.cells }, (_unused, cell) => (
               <i

@@ -3812,6 +3812,11 @@ p {
   white-space: nowrap;
 }
 
+/* The short form of a state word waits for the narrowest frame, a phone's. */
+.status-frame__word--short {
+  display: none;
+}
+
 /*
  * A phone held sideways: under 520 pixels of height the frame skin's top row
  * shrinks and climbs, so the status frame ends well above the thumbs and the dial
@@ -4069,6 +4074,18 @@ p {
     --frame-timer-width: min(18.75rem, 45vw);
     --frame-status-width: clamp(8rem, 20vw, 8.5rem);
     --frame-radar-window: calc(var(--cockpit-aim-ring) * 1.2);
+    /*
+     * As large as the aim stick's picture, but never taller than the glass left
+     * between the status frame and the stick: a phone 360 pixels tall has about
+     * 120 pixels there, and the full dial ran over the status frame's last bar.
+     */
+    --frame-radar-width: min(
+      calc(var(--frame-radar-window) / 0.8168),
+      calc(
+        100dvh - max(0.4rem, env(safe-area-inset-top)) - var(--frame-status-width) * 0.5511 -
+          0.25rem - var(--frame-radar-bottom)
+      )
+    );
     /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
     --frame-stick-bottom: calc(0.625rem + var(--cockpit-aim-ring) * 0.25);
     --frame-radar-bottom: calc(var(--frame-stick-bottom) + var(--cockpit-aim-ring) * 1.25 + 0.5rem);
@@ -4093,10 +4110,15 @@ p {
 
   /*
    * Centred on a point at eight o'clock of the dial, far enough out that the
-   * button's corner clears the ring, whose radius is 0.49 of the box.
+   * button's corner clears the ring, whose radius is 0.49 of the box. The nose
+   * trigger's 44 pixels rather than 48: at eight and ten o'clock the two buttons
+   * share the gap between the dial and the stick, and on a phone 360 pixels tall
+   * the larger one sat on the trigger below it.
    */
   .display-shell--cockpit[data-hud-skin="frame"] .frame-scan {
-    --frame-scan-reach: calc(var(--frame-radar-width) * 0.49 + 1.9rem);
+    --frame-scan-reach: calc(var(--frame-radar-width) * 0.49 + 1.7rem);
+    min-width: 2.75rem;
+    min-height: 2.75rem;
     right: calc(
       var(--frame-radar-right) + var(--frame-radar-width) / 2 + var(--frame-scan-reach) * 0.866
     );
@@ -4162,6 +4184,15 @@ p {
   .display-shell--cockpit[data-hud-skin="frame"] .status-frame__label {
     font-size: 0.45rem;
     letter-spacing: 0;
+  }
+
+  /* Even so «ВЫКЛЮЧЕН» was cut to «ВЫКЛЮ…», so the frame shows its short form. */
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__word {
+    display: none;
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__word--short {
+    display: inline;
   }
 }
 
