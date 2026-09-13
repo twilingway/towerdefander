@@ -77,9 +77,9 @@ export const backgroundTuningSchema = z
   .object({
     image: backdropImageSchema,
     /**
-     * How fast the picture moves against the camera across the arena. It never
-     * moves past its own margin, so a larger value only reaches that margin
-     * nearer the centre; zero pins the picture to the screen.
+     * Multiplies how fast every layer of the sky moves against the camera: the
+     * nebula and each layer of stars. The picture still never moves past its
+     * own margin; zero holds the whole sky still on the screen.
      */
     parallaxStrength: z.number().min(0).max(BACKGROUND_PARALLAX_STRENGTH_MAX)
   })
