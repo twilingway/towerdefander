@@ -2499,7 +2499,7 @@ p {
      where the scene behind it reads as a scene. Phones keep the ratio, which
      is what fits two tiles on a screen held sideways. */
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid #68479f;
   border-radius: 1rem;
   background-color: #0a1f22;
   /*
@@ -2747,7 +2747,7 @@ p {
   justify-items: center;
   min-height: 0;
   padding: 0.6rem 0.5rem;
-  border: 1px solid #68479f;
+  border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 0.9rem;
   color: #f6f4e8;
   background: rgb(19 45 42 / 85%);
