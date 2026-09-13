@@ -2592,7 +2592,14 @@ p {
 
 .display-shell--setup {
   justify-items: center;
-  align-content: start;
+  /*
+   * Centred, and `safe` so a card taller than the window still starts at the
+   * top instead of having its head cut off. On a wide screen the card is a
+   * fraction of the height and pinning it to the top left the rest of the
+   * screen empty under it; on a 16:9 monitor it looked centred by accident,
+   * because the card nearly filled the window.
+   */
+  align-content: safe center;
   gap: 0.75rem;
   padding: clamp(0.75rem, 2.5vh, 2rem) clamp(0.75rem, 3vw, 2rem);
 }

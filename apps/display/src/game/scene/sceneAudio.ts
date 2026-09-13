@@ -81,3 +81,26 @@ export function deathSoundFor(
   if (visualKind !== "enemy") return undefined;
   return isBoss ? "boss-explosion" : "explosion";
 }
+
+/**
+ * What an enemy firing is heard as when the preset names nothing.
+ *
+ * Nothing was the answer until now, and it made the whole of "enemy shots" -
+ * the switch in the settings window included - look broken: thirty archetypes
+ * carry no sound, so a crowd shooting at the player was silent while the
+ * player's own guns were not. A shot from off screen is also the one warning a
+ * pilot gets that they are being shot at.
+ *
+ * A boss reports heavier than the rest, because it is the one enemy whose fire
+ * is worth telling apart by ear. Everything else shares one round, and an
+ * archetype that wants its own says so in the console.
+ */
+export function shotSoundFor(
+  visualKind: string,
+  isBoss: boolean,
+  chosen: string | undefined
+): string | undefined {
+  if (chosen !== undefined && chosen !== "") return chosen;
+  if (visualKind !== "enemy") return undefined;
+  return isBoss ? "cannon" : "machine-gun";
+}

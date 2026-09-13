@@ -43,6 +43,9 @@ const MG_KEY = "Space";
 const CANNON_KEY = "Enter";
 /** The one place on a fighting screen that still answers a right click. */
 const CLOCK_SELECTOR = ".wave-countdown";
+/** The mask a pointer event carries, which is the only place two buttons show. */
+const LEFT_BUTTON = 1;
+const RIGHT_BUTTON = 2;
 
 /**
  * Keyboard and mouse for the solo cockpit.
@@ -89,6 +92,8 @@ export function useCockpitKeyboard({
     if (!enabled) return;
     const held = new Set<string>();
     let aiming = false;
+    let mouseCannon = false;
+    let mouseNoseGun = false;
 
     function applyHelm(): void {
       let turn = 0;
@@ -153,6 +158,7 @@ export function useCockpitKeyboard({
       // Off the arena the bearing freezes where it was, which is what a gun
       // does when nobody is commanding it - it does not chase the cursor onto
       // a button.
+      readButtons(event);
       if (!isArenaPointer(event)) return;
       const ship = shipPoint.current();
       if (ship === null) return;
@@ -165,35 +171,39 @@ export function useCockpitKeyboard({
     }
 
     /*
-     * Left is the cannon, right is the nose gun.
+     * Left is the cannon, right is the nose gun, and both at once.
      *
-     * The pairing everyone arrives with from every other game, and the one the
-     * cockpit already has under two thumbs: the stick that aims fires the
-     * cannon, the button beside it the nose gun.
+     * Read from the button mask rather than from `pointerdown`, because a mouse
+     * only gets a `pointerdown` when it goes from no buttons held to one: press
+     * the second and the browser sends a move with a new mask and no press at
+     * all. Listening for presses therefore gave the cannon nothing while the
+     * nose gun was held - measured as seven shells fired with both buttons down
+     * and every one of them from the machine gun.
+     *
+     * A gun starts only when the press is on the battlefield, and stops
+     * wherever the button is let go: a shot that began on the field has to end
+     * when the finger lifts, even if the cursor has wandered onto the HUD.
      */
-    function onPointerDown(event: PointerEvent): void {
+    function readButtons(event: PointerEvent): void {
       if (event.pointerType !== "mouse") return;
-      if (event.button !== 0 && event.button !== 2) return;
-      if (!isArenaPointer(event)) return;
-      if (event.button === 2) {
-        event.preventDefault();
-        targets.current.onMachineGunHold(true);
-        return;
+      const onArena = isArenaPointer(event);
+      const cannon = (event.buttons & LEFT_BUTTON) !== 0 && (mouseCannon || onArena);
+      const mg = (event.buttons & RIGHT_BUTTON) !== 0 && (mouseNoseGun || onArena);
+      if (cannon !== mouseCannon) {
+        mouseCannon = cannon;
+        targets.current.onCannonFromTrigger(cannon);
       }
-      targets.current.onCannonFromTrigger(true);
+      if (mg !== mouseNoseGun) {
+        mouseNoseGun = mg;
+        targets.current.onMachineGunHold(mg);
+      }
     }
 
-    function onPointerUp(event: PointerEvent): void {
-      if (event.pointerType !== "mouse") return;
-      // Deliberately not asked where this happened. A shot that started on the
-      // arena has to stop wherever the button is let go, or releasing over the
-      // HUD leaves the gun held down.
-      if (event.button === 2) {
-        targets.current.onMachineGunHold(false);
-        return;
-      }
-      if (event.button !== 0) return;
-      targets.current.onCannonFromTrigger(false);
+    function onPointerDown(event: PointerEvent): void {
+      // The menu is answered separately; this only keeps the press from being
+      // taken as the start of a text selection or a drag.
+      if (event.pointerType === "mouse" && event.button === 2) event.preventDefault();
+      readButtons(event);
     }
 
     /*
@@ -214,6 +224,8 @@ export function useCockpitKeyboard({
 
     function release(): void {
       held.clear();
+      mouseCannon = false;
+      mouseNoseGun = false;
       targets.current.onHelmRelease();
       targets.current.onMachineGunHold(false);
       targets.current.onCannonFromTrigger(false);
@@ -231,7 +243,7 @@ export function useCockpitKeyboard({
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointerup", readButtons);
     window.addEventListener("contextmenu", onContextMenu);
     window.addEventListener("blur", release);
     document.addEventListener("visibilitychange", onVisibilityChange);
@@ -240,7 +252,7 @@ export function useCockpitKeyboard({
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointerup", readButtons);
       window.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("blur", release);
       document.removeEventListener("visibilitychange", onVisibilityChange);

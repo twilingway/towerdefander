@@ -4,7 +4,7 @@ import Phaser from "phaser";
 import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
-import { arenaZoneSignature, drawArena, drawArenaZones, drawDecorations } from "./arena.js";
+import { ArenaZoneLayer, arenaZoneSignature, drawArena, drawDecorations } from "./arena.js";
 import { ArenaFleet } from "./arenaFleet.js";
 import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
@@ -130,9 +130,7 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
-    this.zoneLayer = drawArenaZones(this, this.snapshot, (key, half, draw) =>
-      this.bake(key, half, draw)
-    );
+    this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
 
     /*
@@ -413,7 +411,7 @@ export class SpaceshipScene extends Phaser.Scene {
   }
 
   /** The baked zone sheet, replaced whenever a zone changes state. */
-  private zoneLayer: Phaser.GameObjects.Image | undefined;
+  private readonly zones = new ArenaZoneLayer();
   /** The other hulls of a match; empty in the campaign, which has one ship. */
   private readonly fleet = new ArenaFleet();
   private readonly loot = new ArenaLootLayer();
@@ -437,13 +435,11 @@ export class SpaceshipScene extends Phaser.Scene {
       this.bursts,
       this.sounds
     );
-    // The sheet is ground: redrawn when a zone changes state and at no other
-    // time, which on a sixty-hertz patch stream is a handful of times a match.
+    // The sheet is ground, and a rectangle changing state is one image being
+    // given a different texture - so this runs on a signature change and costs
+    // nothing when it does.
     if (arenaZoneSignature(snapshot) !== zoneSignature) {
-      this.zoneLayer?.destroy();
-      this.zoneLayer = drawArenaZones(this, snapshot, (key, half, draw) =>
-        this.bake(key, half, draw)
-      );
+      this.zones.sync(this, snapshot, (key, half, draw) => this.bake(key, half, draw));
     }
     // The framed slice comes from the balance preset, so a new run - or a
     // preview slider - can widen it while the scene keeps running.

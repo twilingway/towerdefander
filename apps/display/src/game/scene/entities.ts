@@ -10,7 +10,7 @@ import type {
 
 import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
 import { deathEffectFor, mayPlayHitEffect, type BurstLayer, type OwnShot } from "./bursts.js";
-import { deathSoundFor, type SceneAudio } from "./sceneAudio.js";
+import { deathSoundFor, shotSoundFor, type SceneAudio } from "./sceneAudio.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
 import { resolveShieldImpact, SHIELD_BLOCK_EFFECT, type ShieldPose } from "./shieldImpact.js";
 import {
@@ -442,7 +442,11 @@ export function reconcileCombatVisuals({
           archetype?.sounds?.death
         ),
         hitSound: archetype?.sounds?.hit,
-        shotSound: archetype?.sounds?.shot,
+        shotSound: shotSoundFor(
+          entity.visualKind,
+          archetype?.isBoss === true,
+          archetype?.sounds?.shot
+        ),
         radius: entity.radius,
         drawnShots: entity.visualKind === "enemy" ? entity.shotsFired : 0,
         hitEffectTick: undefined

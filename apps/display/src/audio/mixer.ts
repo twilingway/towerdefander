@@ -73,17 +73,16 @@ export function clamp01(value: number): number {
 /**
  * How loud an event is from where the camera is standing.
  *
- * Full inside the frame and falling to nothing at the edge of a frame's worth
- * of ground beyond it, which is the same rule the scene builds by: what the
- * player cannot see, they mostly should not hear either. Without it a field of
- * sixteen hulls delivers every shot fired anywhere at full volume, and the one
- * being fired at you is indistinguishable from the fifteen that are not.
+ * Generous on purpose, and further than the picture: hearing a fight start
+ * somewhere off screen is information a pilot wants - it is the only warning
+ * that a crowd has found each other, or you. Full inside the frame's own
+ * half-width, fading to nothing a frame beyond it.
+ *
+ * Whether the rest of the field is heard at all is a different question, and
+ * the one the settings window answers: the channel is checked before any of
+ * this, so switching enemies off is silence rather than a quieter rattle.
  */
 export function distanceGain(distance: number, frameWidth: number): number {
-  // A circle of the frame's half-width rather than the frame's own rectangle:
-  // anything on screen is inside it, and so is a band just above and below,
-  // which is the cheap side to err on - a shot from just off the top edge is
-  // about to matter.
   const inside = Math.max(1, frameWidth / 2);
   if (distance <= inside) return 1;
   const reach = inside * 2;

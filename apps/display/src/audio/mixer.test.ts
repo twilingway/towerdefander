@@ -61,10 +61,15 @@ describe("the mixer", () => {
     expect(channelAllowed(noKills, "enemyDeath")).toBe(false);
   });
 
-  it("falls off with distance and goes silent past the reach", () => {
+  /*
+   * Deliberately further than the picture: hearing a fight start off screen is
+   * the only warning a pilot gets that a crowd has found each other, or them.
+   * Switching the field off entirely is the settings window's job, and it is
+   * asked before any of this.
+   */
+  it("carries past the frame and stops a frame beyond it", () => {
     const frame = 2_500;
     expect(distanceGain(0, frame)).toBe(1);
-    // Anything on screen is full volume; the frame is 2500 wide.
     expect(distanceGain(1_200, frame)).toBe(1);
     const near = distanceGain(1_600, frame);
     const far = distanceGain(2_200, frame);

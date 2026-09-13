@@ -12,15 +12,33 @@ const KEY = "spaceship-defender:audio";
 
 type Listener = (settings: AudioSettings) => void;
 
-let current = read();
-const listeners = new Set<Listener>();
+/**
+ * The listener's own numbers, kept on the page rather than in this module.
+ *
+ * For the same reason the bus is: a hot reload gives the module a second copy
+ * of itself, and a settings store per copy means the window changes one while
+ * the sound reads the other - which is a Mute that works every other time.
+ */
+const STORE_SLOT = "__spaceshipDefenderAudioSettings";
+
+interface StoreSlot {
+  [STORE_SLOT]?: { settings: AudioSettings; listeners: Set<Listener> } | undefined;
+}
+
+function store(): { settings: AudioSettings; listeners: Set<Listener> } {
+  const slot = globalThis as StoreSlot;
+  slot[STORE_SLOT] ??= { settings: read(), listeners: new Set<Listener>() };
+  return slot[STORE_SLOT];
+}
 
 export function audioSettings(): AudioSettings {
-  return current;
+  return store().settings;
 }
 
 export function setAudioSettings(next: Partial<AudioSettings>): AudioSettings {
-  current = {
+  const held = store();
+  const current = held.settings;
+  held.settings = {
     sounds: clamp01(next.sounds ?? current.sounds),
     music: clamp01(next.music ?? current.music),
     soundsMuted: next.soundsMuted ?? current.soundsMuted,
@@ -28,15 +46,16 @@ export function setAudioSettings(next: Partial<AudioSettings>): AudioSettings {
     enemyShots: next.enemyShots ?? current.enemyShots,
     enemyDeaths: next.enemyDeaths ?? current.enemyDeaths
   };
-  write(current);
-  for (const listener of listeners) listener(current);
-  return current;
+  write(held.settings);
+  for (const listener of held.listeners) listener(held.settings);
+  return held.settings;
 }
 
 /** For `useSyncExternalStore`, and for the bus, which follows the same store. */
 export function subscribeToAudioSettings(listener: Listener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  const held = store();
+  held.listeners.add(listener);
+  return () => held.listeners.delete(listener);
 }
 
 /*

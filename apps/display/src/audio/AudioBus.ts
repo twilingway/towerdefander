@@ -139,8 +139,15 @@ export class AudioBus {
   /** Plays one event, if it is worth hearing from where the camera is. */
   play(id: SoundId | undefined, placement?: SoundPlacement, rate = 1): void {
     if (id === undefined) return;
-    if (!channelAllowed(this.settings, placement?.channel ?? "own")) return;
-    const bus = busGain(this.settings, "sounds");
+    /*
+     * Read now rather than trusted from the subscription. The gain node already
+     * carries the volume, but a switch that decides whether a sound happens at
+     * all has to be the one the listener last touched, not the one that arrived
+     * through a listener chain.
+     */
+    const settings = audioSettings();
+    if (!channelAllowed(settings, placement?.channel ?? "own")) return;
+    const bus = busGain(settings, "sounds");
     if (bus <= 0) return;
     const distance =
       placement === undefined
@@ -287,10 +294,23 @@ export class AudioBus {
   }
 }
 
-let shared: AudioBus | undefined;
+/**
+ * There is one set of speakers, so there is one bus - on the page, not in the
+ * module.
+ *
+ * A hot reload re-evaluates the module and a module-scoped instance is then two
+ * instances: the settings window writes to one and the scene plays through the
+ * other, so muting worked sometimes and did nothing the rest of the time. The
+ * page outlives the re-evaluation, which is the property this needs.
+ */
+const BUS_SLOT = "__spaceshipDefenderAudioBus";
 
-/** There is one set of speakers, so there is one bus. */
+interface BusSlot {
+  [BUS_SLOT]?: AudioBus | undefined;
+}
+
 export function audioBus(): AudioBus {
-  shared ??= new AudioBus();
-  return shared;
+  const slot = globalThis as BusSlot;
+  slot[BUS_SLOT] ??= new AudioBus();
+  return slot[BUS_SLOT];
 }
