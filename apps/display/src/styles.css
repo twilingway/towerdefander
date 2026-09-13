@@ -3872,6 +3872,66 @@ p {
   background-image: var(--hud-knob-aim-art, none);
 }
 
+/*
+ * The nose trigger over the ring picture. The picture overhangs the aim ring by
+ * a quarter, which reaches past the trigger's lift; the ring comes later in the
+ * markup and would otherwise paint across the button's lower half.
+ */
+.display-shell--battle[data-hud-skin="frame"] .solo-cockpit__triggers {
+  z-index: 1;
+}
+
+/* The frames are glass over a bright nebula; a shadow keeps thin letters off it. */
+.info-frame__label,
+.info-frame__capsule,
+.timer-frame__value,
+.timer-frame__caption,
+.status-frame__label {
+  text-shadow:
+    0 0 0.35em rgb(0 0 0 / 90%),
+    0 1px 1px rgb(0 0 0 / 80%);
+}
+
+/*
+ * A shared screen across a room: the frames and their type grow past the caps a
+ * desktop keeps, because a television is read from the sofa.
+ */
+@media (width >= 1700px) and (height >= 900px) {
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-info-width: clamp(30rem, 30vw, 38rem);
+    --frame-timer-width: clamp(28rem, 26vw, 34rem);
+    --frame-radar-window: clamp(12rem, 11vw, 15rem);
+  }
+
+  .status-frame {
+    width: clamp(22rem, 22vw, 28rem);
+  }
+
+  .info-frame__label {
+    font-size: 0.95rem;
+  }
+
+  .info-frame__capsule strong {
+    font-size: 1.45rem;
+  }
+
+  .info-frame__capsule small {
+    font-size: 0.85rem;
+  }
+
+  .timer-frame__value {
+    font-size: 1.8rem;
+  }
+
+  .timer-frame__caption {
+    font-size: 0.8rem;
+  }
+
+  .status-frame__label {
+    font-size: 0.9rem;
+  }
+}
+
 @media (height <= 520px) {
   .display-shell--battle[data-hud-skin="frame"] {
     --frame-radar-window: clamp(4.5rem, 22vh, 5.5rem);
