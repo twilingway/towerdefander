@@ -444,6 +444,8 @@ export class SpaceshipDisplayState extends Schema {
   /** The sky under the arena for this run; fixed at run start like the silhouettes. */
   @type("string") backgroundImage = "deep-nebula";
   @type("float32") backgroundParallaxStrength = 1;
+  /** How the HUD is dressed for this run; fixed at run start like the sky. */
+  @type("string") hudSkin = "classic";
   /** Empty means the display draws its own rock for the ambient hazard. */
   @type("string") asteroidVisualShape = "";
   @type("float32") asteroidVisualScale = 1;

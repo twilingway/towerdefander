@@ -46,6 +46,7 @@ const baseGame: DisplayGameSnapshot = {
     turretTargetAngle: null
   },
   background: { image: "none", parallaxStrength: 1 },
+  hudSkin: "classic",
   worldHeight: 4_400,
   arenaRadius: 2_200,
   helm: {

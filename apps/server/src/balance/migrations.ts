@@ -507,6 +507,8 @@ function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm:
         tuning.shieldAutopilotRaiseRange ?? defaults.shieldAutopilotRaiseRange,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
+      // A preset from before the skins keeps the HUD it was tuned under.
+      hudSkin: tuning.hudSkin ?? defaults.hudSkin,
       autopilot: migrateAutopilot(tuning, defaults),
       enemySkill: migrateEnemySkill(tuning, defaults),
       // Field by field, like the background: a preset saved before a helm knob

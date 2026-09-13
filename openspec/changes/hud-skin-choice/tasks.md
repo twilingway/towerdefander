@@ -23,11 +23,11 @@
 
 ## 3. Пресет, ядро, сервер, провод
 
-- [ ] 3.1 `HUD_SKINS` и `hudSkin` в `balanceTuningSchema` (и настройках матча, если матч в объёме);
+- [x] 3.1 `HUD_SKINS` и `hudSkin` в `balanceTuningSchema` (и настройках матча, если матч в объёме);
       поле конфига в game-core
-- [ ] 3.2 Миграция `BALANCE_FILE_VERSION` +1 со значением `classic`; тест; seed
-- [ ] 3.3 Поле `hudSkin` в display-only состоянии, проекция в обеих комнатах; `PROTOCOL_VERSION` +1
-- [ ] 3.4 Разбор в `wire.ts` → `roomView.ts` → `parts.ts` с запасным `classic`; фикстуры
+- [x] 3.2 Миграция `BALANCE_FILE_VERSION` +1 со значением `classic`; тест; seed
+- [x] 3.3 Поле `hudSkin` в display-only состоянии, проекция в обеих комнатах; `PROTOCOL_VERSION` +1
+- [x] 3.4 Разбор в `wire.ts` → `roomView.ts` → `parts.ts` с запасным `classic`; фикстуры
 
 Проверка: `pnpm --filter @spaceship-defender/protocol exec vitest run`,
 `pnpm --filter @spaceship-defender/server exec vitest run src/balance`, `pnpm typecheck`.

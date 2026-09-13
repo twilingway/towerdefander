@@ -102,6 +102,7 @@ export const PREVIEW_WORLD = {
     image: "deep-nebula" as const,
     parallaxStrength: 1
   },
+  hudSkin: "classic" as const,
   arenaRadius: 2200,
   helm: {
     scheme: "tank" as const,
