@@ -193,9 +193,10 @@ editor, the bake pipeline and the atlas conventions; full text in
 `.agents/skills/arcadia-effects/SKILL.md`), `browser-playwright` (Playwright MCP session, harness
 ports, `tests/e2e` conventions), `react-frontend` (display/controller React rules plus the vendored
 Vercel rule set in `.agents/skills/react-best-practices/`), and `phaser-display` (boundaries; the
-full text stays in `.agents/skills/phaser-display/SKILL.md`, which the other agent runners share).
-`.mcp.json` declares the `playwright` MCP server so a browser session is available without extra
-setup; it drives a browser only and does not start app servers.
+full text stays in `.agents/skills/phaser-display/SKILL.md`, which the other agent runners share),
+and `codex-visual` (Codex CLI as an independent visual consultant and image generator for
+development work). `.mcp.json` declares the `playwright` MCP server so a browser session is
+available without extra setup; it drives a browser only and does not start app servers.
 
 ### How the global rules apply here
 
@@ -219,6 +220,11 @@ project differs:
   covers exactly that: branching for the task at hand. Switching onto someone else's existing
   branch, or pushing to `main` directly, still needs the user's words — `main` is what the host
   releases.
+- **Codex is a visual consultant in development work.** Before a substantial UI change Claude asks
+  it for a concept; afterwards it audits screenshots; it can also generate raster images. Claude
+  makes every decision. Inside that loop, screenshots of the running app are in scope. Codex may
+  read local dev-stand keys but never production credentials. The procedure and command templates
+  are in `.claude/skills/codex-visual/SKILL.md`.
 
 ## Conventions
 
