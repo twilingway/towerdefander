@@ -3558,8 +3558,9 @@ p {
 }
 
 /*
- * Spike for hud-skin-choice (`?hudspike=dom`): the example's status frame in the
- * page, top right, at half its built width - what it takes on a 1080p screen.
+ * The frame skin's status panel: the example's status frame in the page, top
+ * right, at half its built width - what it takes on a 1080p screen. Where it
+ * finally stands is decided with the rest of the skin's layout.
  */
 .status-frame {
   position: absolute;

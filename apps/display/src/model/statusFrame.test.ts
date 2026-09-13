@@ -5,7 +5,6 @@ import {
   STATUS_FRAME_HEIGHT,
   STATUS_FRAME_WIDTH,
   litSegments,
-  readHudSpike,
   readStatusLit,
   sameStatusLit
 } from "./statusFrame.js";
@@ -59,14 +58,5 @@ describe("status frame cells", () => {
       );
       expect(bar.y + bar.height, bar.key).toBeLessThanOrEqual(STATUS_FRAME_HEIGHT);
     }
-  });
-});
-
-describe("readHudSpike", () => {
-  it("names the two prototypes and nothing else", () => {
-    expect(readHudSpike("?hudspike=dom")).toBe("dom");
-    expect(readHudSpike("?diag=1&hudspike=phaser")).toBe("phaser");
-    expect(readHudSpike("?hudspike=webgl")).toBeUndefined();
-    expect(readHudSpike("")).toBeUndefined();
   });
 });

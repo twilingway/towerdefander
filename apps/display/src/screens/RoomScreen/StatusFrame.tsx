@@ -13,7 +13,7 @@ const cssColor = (color: number): string => `#${color.toString(16).padStart(6, "
  * The example's status frame in the page: its picture and a cell over every
  * slot it paints.
  *
- * Spike (`?hudspike=dom`). A cell is lit or it is not, so a commit here only
+ * A cell is lit or it is not, so a commit here only
  * moves a class on the cells that changed, and only when a bar gains or loses
  * one - not on every patch that moves the heat.
  */

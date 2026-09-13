@@ -269,7 +269,7 @@ const statusLitOf = (view: DisplayRoomView | undefined): StatusLit | null => {
   return game == null ? null : readStatusLit(game);
 };
 
-/** Spike (`?hudspike=dom`): wakes only when a bar gains or loses a lit cell. */
+/** The frame skin's status panel: wakes only when a bar gains or loses a lit cell. */
 export function StatusFramePanel() {
   const lit = useWorldSlice(statusLitOf, sameStatusLit);
   if (lit === null || STATUS_FRAME_URL === undefined) return null;

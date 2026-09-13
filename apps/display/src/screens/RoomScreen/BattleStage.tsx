@@ -27,11 +27,8 @@ import {
   BossPanel,
   CockpitPanel,
   CountdownPanel,
-  ModuleWindowPanel,
-  StatusFramePanel
+  ModuleWindowPanel
 } from "./panels.js";
-import { readHudSpike } from "../../model/statusFrame.js";
-import { readDisplaySearch } from "../../model/urlFlags.js";
 
 /** What the fight needs to know about this page's own seat, if it holds one. */
 export interface BattleCockpit {
@@ -166,13 +163,6 @@ export function BattleStage({
             ) : (
               <BattleHudPanel />
             ))}
-        </MeteredPanel>
-        <MeteredPanel id="статус" measuring={diagnostics}>
-          {/* Spike: the example's status frame on top of the classic HUD, so
-            what gets measured is what the frame adds. `?hudspike=dom` only. */}
-          {switches.interfaceEnabled && readHudSpike(readDisplaySearch()) === "dom" && (
-            <StatusFramePanel />
-          )}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>

@@ -4,10 +4,9 @@ import { HUD_ARTS } from "@spaceship-defender/sprite-assets";
 /**
  * The example's status frame, as the numbers both prototypes of it read.
  *
- * Spike for hud-skin-choice, task 2: the same panel is built once in the page
- * and once in the scene, behind `?hudspike=dom|phaser`, and measured against the
- * classic HUD. The loser is deleted with its flag; the cell table and the
- * segment count stay for the frame skin itself.
+ * The page draws the frame skin's status panel. Measured against a prototype
+ * in the scene, the page version added nothing over the classic HUD and the
+ * scene's did (hud-skin-choice design, decision 3).
  */
 
 type Game = NonNullable<DisplayRoomView["game"]>;
@@ -127,11 +126,3 @@ export function sameStatusLit(left: StatusLit | null, right: StatusLit | null): 
 export const STATUS_FRAME_URL: string | undefined = HUD_ARTS.find(
   (art) => art.id === "ui-status"
 )?.url;
-
-export type HudSpike = "dom" | "phaser";
-
-/** `?hudspike=dom|phaser`; anything else leaves the classic HUD on its own. */
-export function readHudSpike(search: string): HudSpike | undefined {
-  const value = new URLSearchParams(search).get("hudspike");
-  return value === "dom" || value === "phaser" ? value : undefined;
-}
