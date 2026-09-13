@@ -2502,6 +2502,12 @@ p {
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 1rem;
   background-color: #0a1f22;
+  /*
+   * Sized to the border box, not inside it. From the padding box every layer
+   * repeated under the 1px border, and the darkening gradient's transparent end
+   * wrapped round to the left edge: a bright line of bare art down every tile.
+   */
+  background-origin: border-box;
   background-position: center;
   background-size: cover;
   box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 45%);
