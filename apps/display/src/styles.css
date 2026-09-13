@@ -4054,19 +4054,21 @@ p {
 
   /*
    * A phone held sideways, with the cockpit. The dial, its ring about as large as
-   * the aim stick's picture, stands straight over the aim stick; the nose trigger
-   * moves to the stick's left, level with its middle, to give the dial that
-   * height. The status frame takes the top right corner with the gear in its
-   * cut-out, and the connection readouts stand in a column beside the timer.
+   * the aim stick's picture, stands straight over the aim stick, and the stick
+   * moves right until its centre is under the dial's. Both sticks' pictures clear
+   * the bottom of the glass by ten pixels. The nose trigger hangs at ten o'clock
+   * of the aim stick and the sweep at eight o'clock of the dial: the ends of the
+   * hours the operator gave that keep the two buttons apart. The status frame
+   * takes the top right corner with the gear in its cut-out, and the connection
+   * readouts stand in a column beside the timer.
    */
   .display-shell--cockpit[data-hud-skin="frame"] {
     --frame-info-width: clamp(12rem, 24vw, 13rem);
     --frame-status-width: clamp(8rem, 20vw, 8.5rem);
     --frame-radar-window: calc(var(--cockpit-aim-ring) * 1.2);
-    --frame-radar-bottom: calc(
-      clamp(0.5rem, 2vw, 1.25rem) + var(--frame-stick-inset) + var(--cockpit-aim-ring) * 1.25 +
-        0.25rem
-    );
+    /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
+    --frame-stick-bottom: calc(0.625rem + var(--cockpit-aim-ring) * 0.25);
+    --frame-radar-bottom: calc(var(--frame-stick-bottom) + var(--cockpit-aim-ring) * 1.25 + 0.5rem);
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] .status-frame {
@@ -4074,16 +4076,44 @@ p {
     right: max(0.4rem, env(safe-area-inset-right));
   }
 
-  /* At the dial's lower edge rather than its middle. */
-  .display-shell--cockpit[data-hud-skin="frame"] .frame-scan {
-    bottom: calc(var(--frame-radar-bottom) + 0.3rem);
-    transform: none;
+  .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit {
+    padding-right: calc(
+      var(--frame-radar-right) + (var(--frame-radar-width) - var(--cockpit-aim-ring)) / 2
+    );
+    padding-bottom: var(--frame-stick-bottom);
   }
 
-  /* Left of the aim stick's ring picture, level with the ring's middle. */
+  /* The drive ring is the larger, and so is its picture's overhang. */
+  .display-shell--cockpit[data-hud-skin="frame"] .cockpit-stick--left {
+    padding-bottom: calc((var(--cockpit-drive-ring) - var(--cockpit-aim-ring)) / 4);
+  }
+
+  /*
+   * Centred on a point at eight o'clock of the dial, far enough out that the
+   * button's corner clears the ring, whose radius is 0.49 of the box.
+   */
+  .display-shell--cockpit[data-hud-skin="frame"] .frame-scan {
+    --frame-scan-reach: calc(var(--frame-radar-width) * 0.49 + 1.9rem);
+    right: calc(
+      var(--frame-radar-right) + var(--frame-radar-width) / 2 + var(--frame-scan-reach) * 0.866
+    );
+    bottom: calc(
+      var(--frame-radar-bottom) + var(--frame-radar-width) / 2 - var(--frame-scan-reach) * 0.5
+    );
+    transform: translate(50%, 50%);
+  }
+
+  /* Centred at ten o'clock of the aim ring, just outside its picture. */
   .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit__triggers {
-    right: calc(var(--cockpit-aim-ring) * 1.25 + 0.4rem);
-    bottom: calc((var(--cockpit-aim-ring) - var(--cockpit-nose-button)) / 2);
+    --frame-nose-reach: calc(
+      var(--cockpit-aim-ring) * 0.75 + var(--cockpit-nose-button) / 2 + 0.125rem
+    );
+    right: calc(
+      var(--cockpit-aim-ring) / 2 + var(--frame-nose-reach) * 0.866 - var(--cockpit-nose-button) / 2
+    );
+    bottom: calc(
+      var(--cockpit-aim-ring) / 2 + var(--frame-nose-reach) * 0.5 - var(--cockpit-nose-button) / 2
+    );
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .room-network {
