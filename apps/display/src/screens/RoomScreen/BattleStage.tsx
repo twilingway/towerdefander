@@ -13,7 +13,7 @@ import type { PredictionDriver } from "../../model/shipPrediction.js";
 import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
 
 import { enterFullscreenIfWanted } from "../../model/fullscreen.js";
-import { BATTLE_THEME } from "../../audio/themes.js";
+import { BATTLE_THEMES } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { ArenaResultOverlay } from "./ArenaResultOverlay.js";
 import { PolledCombatRadar } from "./CombatRadar.js";
@@ -75,7 +75,7 @@ export function BattleStage({
   onLeaveRoom,
   onScan
 }: BattleStageProps) {
-  useMusicTrack(BATTLE_THEME);
+  useMusicTrack(BATTLE_THEMES);
   /*
    * And the second chance at the whole screen.
    *

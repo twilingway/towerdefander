@@ -11,10 +11,15 @@ import type { MusicTrackId } from "@spaceship-defender/protocol";
 /**
  * Nothing, on purpose: the menu is silent until somebody picks its music.
  *
- * `theme-01` is in the catalogue and ready to be named here; the screens ask
- * for this constant rather than for a track, so choosing one is this line and
- * nothing else. Null also means leaving the fight stops the battle theme,
- * which is what makes the menu quiet rather than the last thing still playing.
+ * The screens ask for this constant rather than for a track, so choosing one is
+ * this line and nothing else. Null also means leaving the fight stops the
+ * battle music, which is what makes the menu quiet rather than the last thing
+ * still playing.
  */
 export const MENU_THEME: MusicTrackId | null = null;
-export const BATTLE_THEME: MusicTrackId = "theme-17";
+
+/**
+ * The fight's music, played in turn: one theme on repeat wore thin over a
+ * session. The next fight picks up after the track the last one played.
+ */
+export const BATTLE_THEMES: readonly MusicTrackId[] = ["theme-17", "theme-01"];
