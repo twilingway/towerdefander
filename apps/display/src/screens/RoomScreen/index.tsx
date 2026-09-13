@@ -1,6 +1,6 @@
-import type { DisplayRoomView, HudSkin, PublicShip } from "@spaceship-defender/protocol";
+import type { DisplayRoomView, PublicShip } from "@spaceship-defender/protocol";
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
-import { useCallback, useMemo, useRef, type CSSProperties } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { readLiveGame } from "../../model/liveView.js";
 import { PolledFpsReadout } from "../../components/FpsReadout/index.js";
@@ -15,7 +15,6 @@ import { useBareControls } from "../../model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "../../model/hooks/useCockpitKeyboard.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
 import { HUD_FRAME_CSS_VARIABLES } from "../../model/hudFrames.js";
-import { useLetterboxBars } from "../../model/hooks/useLetterboxBars.js";
 import { useLiveHeat } from "../../model/hooks/useLiveHeat.js";
 import { useShipPrediction } from "../../model/hooks/useShipPrediction.js";
 import { useSoloCockpit, type SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
@@ -23,7 +22,6 @@ import { useDevCockpitControls } from "../../model/devControls.js";
 import type { RoomSession } from "../../model/hooks/useRoomSession.js";
 import { readFrameStats, writePlaybackDelay, writePredictionLag } from "../../model/instruments.js";
 import { selectModuleTree } from "../../model/moduleTree.js";
-import { PREVIEW_CAMERA_VIEW_WIDTH } from "../../model/preview/world.js";
 import { createControllerJoinUrl } from "../../model/roomView.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
 import { BattleStage } from "./BattleStage.js";
@@ -36,8 +34,6 @@ export interface RoomPreview {
   readonly onPhaseChange: (phase: PreviewPhase) => void;
   readonly cameraViewWidth: number;
   readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
-  readonly hudSkin: HudSkin;
-  readonly onHudSkinChange: (hudSkin: HudSkin) => void;
 }
 
 interface RoomScreenProps {
@@ -212,18 +208,9 @@ export function RoomScreen({
     session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat"
   );
 
-  // The readouts move into the letterbox on glass that leaves enough of one;
-  // the frame is the camera's, so the arithmetic is the camera's too.
-  const bars = useLetterboxBars(
-    shellReference,
-    view.game?.cameraViewWidth ?? PREVIEW_CAMERA_VIEW_WIDTH,
-    view.game != null
-  );
   const joinUrl = useMemo(() => createControllerJoinUrl(CONTROLLER_URL, view.roomId), [view]);
   /** Sixteen published hulls is a match and nothing else has them. */
   const match = (view.game?.arenaShips.length ?? 0) > 0;
-  // The frame skin stands the readouts beside its timer, clear of the match's panel.
-  const frameSkin = view.game?.hudSkin === "frame";
   const moduleTree = selectModuleTree(ships, view.shipArchetypeId, preview !== undefined);
 
   /**
@@ -269,14 +256,13 @@ export function RoomScreen({
       ref={shellReference}
       className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${session?.cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
       data-panels={switches.opaquePanels ? "opaque" : "glass"}
-      data-bars={bars.placement}
-      data-hud-skin={view.game?.hudSkin ?? "classic"}
-      style={
-        {
-          "--bar-thickness": `${String(Math.round(bars.thickness))}px`,
-          ...(view.game?.hudSkin === "frame" ? HUD_FRAME_CSS_VARIABLES : {})
-        } as CSSProperties
-      }
+      /*
+       * A fight is always in the frames. The attribute stays, constant, because
+       * every frame rule is scoped by it and loses to the shared base rules
+       * without it; the lobby has no fight and wears neither, as before.
+       */
+      data-hud-skin={view.game === null ? undefined : "frame"}
+      style={view.game === null ? {} : HUD_FRAME_CSS_VARIABLES}
     >
       {preview !== undefined && (
         <PreviewControls
@@ -284,8 +270,6 @@ export function RoomScreen({
           onPhaseChange={preview.onPhaseChange}
           cameraViewWidth={preview.cameraViewWidth}
           onCameraViewWidthChange={preview.onCameraViewWidthChange}
-          hudSkin={preview.hudSkin}
-          onHudSkinChange={preview.onHudSkinChange}
         />
       )}
       <header className={`room-header${match ? " room-header--match" : ""}`}>
@@ -333,14 +317,12 @@ export function RoomScreen({
             it is open the header gives the room back rather than printing the
             same numbers twice; without the flag nothing here changes.
           */}
-          {(!match || frameSkin) && !diagnostics && (
+          {!diagnostics && (
             <span className="latency-indicator" aria-live="polite">
               ping {formatLatency(view.displayLatencyMs)}
             </span>
           )}
-          {(!match || frameSkin) && view.game !== null && !diagnostics && (
-            <PolledFpsReadout read={readFrameStats} />
-          )}
+          {view.game !== null && !diagnostics && <PolledFpsReadout read={readFrameStats} />}
           {/*
            * The way out lives behind the gear rather than beside the readouts.
            *

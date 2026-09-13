@@ -285,7 +285,6 @@ export interface NetworkGameState {
     };
     backgroundImage?: string;
     backgroundParallaxStrength?: number;
-    hudSkin?: string;
     asteroidVisualShape?: string;
     asteroidVisualScale?: number;
     spaceshipVisualShape?: string;

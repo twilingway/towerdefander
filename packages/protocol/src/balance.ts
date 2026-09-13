@@ -10,12 +10,12 @@ import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { SOUND_IDS } from "./audioCatalogue.ts";
 import { BACKDROP_IMAGES, VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 56 as const;
+export const BALANCE_FILE_VERSION = 57 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53, 54, 55
+  52, 53, 54, 55, 56
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -86,15 +86,6 @@ export const backgroundTuningSchema = z
   .strict();
 export type BackgroundTuning = z.infer<typeof backgroundTuningSchema>;
 
-/**
- * How the fight's HUD is dressed. Presentation only, like the sky: `classic` is
- * the glass cards with the dial at the bottom, `frame` the example's sci-fi
- * frames with the dial above the right stick. Fixed for a run at its start, so a
- * preset saved mid-fight dresses the next one.
- */
-export const HUD_SKINS = ["classic", "frame"] as const;
-export const hudSkinSchema = z.enum(HUD_SKINS);
-export type HudSkin = z.infer<typeof hudSkinSchema>;
 export const enemyArchetypeIdSchema = z
   .string()
   .min(1)
@@ -1187,8 +1178,6 @@ export const balanceTuningSchema = z
     cameraViewWidth: cameraViewWidthSchema,
     /** Parallax space background; the simulation never reads this section. */
     background: backgroundTuningSchema,
-    /** The HUD's dressing for the next run; the simulation never reads it either. */
-    hudSkin: hudSkinSchema,
     /** Bot skill levels; the room reads this section, the simulation does not. */
     autopilot: autopilotTuningSchema,
     /** Enemy skill profiles. Unlike the autopilot, the simulation does read these. */

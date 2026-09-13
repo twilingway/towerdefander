@@ -1,7 +1,15 @@
-import { formatScanClock } from "./ArenaHud.js";
+/**
+ * What the sweep button says under its name: the wait while it cools, then how
+ * long the marks it laid stay on the dial, then that it is ready.
+ */
+export function formatScanClock(readySeconds: number, revealSecondsRemaining: number): string {
+  if (readySeconds > 0) return `${String(readySeconds)} с`;
+  if (revealSecondsRemaining > 0) return `метки ${String(revealSecondsRemaining)} с`;
+  return "готов";
+}
 
 /**
- * The match's sweep under the frame skin: a button of its own beside the dial it
+ * The match's sweep: a button of its own beside the dial it
  * fills with marks, at the dial's height.
  *
  * It says what it costs while it cools rather than going dead, because the wait

@@ -769,11 +769,10 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     ready(room, controllerAt(controllers, 1));
     ready(room, controllerAt(controllers, 2));
 
-    const { background, hudSkin } = internals(room).gameConfig;
+    const { background } = internals(room).gameConfig;
     expect(room.state.game.display).toMatchObject({
       backgroundImage: background.image,
-      backgroundParallaxStrength: background.parallaxStrength,
-      hudSkin
+      backgroundParallaxStrength: background.parallaxStrength
     });
   });
 

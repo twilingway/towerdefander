@@ -42,10 +42,14 @@ interface ShieldMeasurement {
  * The canvas is its own branch now rather than a child of the element that
  * carries the arena's readable state, so both have to be named: the shot is
  * taken of the canvas, and it was being hidden along with the HUD.
+ *
+ * Important, because the status frame lights its cells with a more specific
+ * `visibility: visible` of its own: the shield's blue cells stayed in the shot
+ * and pulled the measured centre of the shield by a tenth of the frame.
  */
 const HIDE_HUD_CSS = `
-  body * { visibility: hidden; }
-  .battlefield-canvas, .battlefield-canvas * { visibility: visible; }
+  body * { visibility: hidden !important; }
+  .battlefield-canvas, .battlefield-canvas * { visibility: visible !important; }
 `;
 
 /**

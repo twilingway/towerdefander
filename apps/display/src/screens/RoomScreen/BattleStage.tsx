@@ -20,8 +20,16 @@ import { PolledCombatRadar } from "./CombatRadar.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
-import { HUD_SKIN_PARTS } from "./hudSkins.js";
-import { BossPanel, CockpitPanel, ModuleWindowPanel } from "./panels.js";
+import {
+  ArenaInfoFramePanel,
+  BossPanel,
+  CockpitPanel,
+  InfoFramePanel,
+  ModuleWindowPanel,
+  ScanFramePanel,
+  StatusFramePanel,
+  TimerFramePanel
+} from "./panels.js";
 
 /** What the fight needs to know about this page's own seat, if it holds one. */
 export interface BattleCockpit {
@@ -86,10 +94,6 @@ export function BattleStage({
   useEffect(() => {
     void enterFullscreenIfWanted();
   }, []);
-  // The run's skin decides which panels stand over the fight. It is fixed at run
-  // start, so the table is read on render rather than watched.
-  const { CampaignHeader, ArenaHeader, Countdown, Status, Scan } =
-    HUD_SKIN_PARTS[view.game.hudSkin];
   return (
     <MeasuredWhenAsked
       measuring={diagnostics}
@@ -144,19 +148,15 @@ export function BattleStage({
           {/* A match reads itself: how many are left, how many I took, where I
             stand. The campaign's wave, score and credits mean nothing here. */}
           {switches.interfaceEnabled &&
-            (view.game.arenaShips.length > 0 ? (
-              <ArenaHeader onScan={onScan} />
-            ) : (
-              <CampaignHeader />
-            ))}
+            (view.game.arenaShips.length > 0 ? <ArenaInfoFramePanel /> : <InfoFramePanel />)}
         </MeteredPanel>
         <MeteredPanel id="статус" measuring={diagnostics}>
-          {switches.interfaceEnabled && Status !== null && <Status />}
-          {switches.interfaceEnabled && Scan !== null && <Scan onScan={onScan} />}
+          {switches.interfaceEnabled && <StatusFramePanel />}
+          {switches.interfaceEnabled && <ScanFramePanel onScan={onScan} />}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>
-          <Countdown />
+          <TimerFramePanel />
         </MeteredPanel>
         <MeteredPanel id="босс" measuring={diagnostics}>
           <BossPanel />

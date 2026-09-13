@@ -29,4 +29,4 @@
       design.md
 - [x] 4.2 `node scripts/bench-panels.mjs --cpu=4 --plain --wave=5` на новом небе против базы из
       design.md
-- [ ] 4.3 `pnpm check` с перехватом кода возврата; `pnpm spec:validate`
+- [x] 4.3 `pnpm check` с перехватом кода возврата; `pnpm spec:validate`

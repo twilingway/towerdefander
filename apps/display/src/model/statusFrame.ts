@@ -4,8 +4,8 @@ import { getShieldStatusLabel } from "./combatHudViewModel.js";
 /**
  * The example's status frame, as the numbers both prototypes of it read.
  *
- * The page draws the frame skin's status panel. Measured against a prototype
- * in the scene, the page version added nothing over the classic HUD and the
+ * The page draws the status panel. Measured against a prototype in the scene,
+ * the page version added no cost over the HUD it was measured against and the
  * scene's did (hud-skin-choice design, decision 3).
  */
 
@@ -130,7 +130,7 @@ export interface StatusReading {
   readonly lit: StatusLit;
   readonly cannonOverheated: boolean;
   readonly machineGunOverheated: boolean;
-  /** What the shield is doing while it is not up, in the classic dial's words; null while it is. */
+  /** What the shield is doing while it is not up, in the shield's status words; null while it is. */
   readonly shieldState: string | null;
   readonly hullLow: boolean;
 }

@@ -289,7 +289,6 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
       image: "deep-nebula",
       parallaxStrength: 1
     },
-    hudSkin: "classic",
     helm: {
       scheme: "tank",
       headingLeadRadians: 0.5,
@@ -398,17 +397,11 @@ describe("balance tuning schema", () => {
     expect(raw({ image: "deep-nebula", parallaxStrength: 1, driftSpeed: 1 })).toBe(false);
   });
 
-  it("knows two HUD skins and refuses any other", () => {
-    const skin = (hudSkin: unknown) =>
-      balanceTuningSchema.safeParse({ ...tuning(), hudSkin }).success;
-
-    expect(skin("classic")).toBe(true);
-    expect(skin("frame")).toBe(true);
-    expect(skin("glass")).toBe(false);
-    // An old preset gains the field in the server's migration, not by a default here.
-    const missing: Record<string, unknown> = { ...tuning() };
-    delete missing.hudSkin;
-    expect(balanceTuningSchema.safeParse(missing).success).toBe(false);
+  it("has no HUD skin left to choose", () => {
+    // The frames are the only HUD. A preset still carrying the old field is the
+    // server migration's to strip; the strict schema refuses it here.
+    expect(balanceTuningSchema.safeParse(tuning()).success).toBe(true);
+    expect(balanceTuningSchema.safeParse({ ...tuning(), hudSkin: "frame" }).success).toBe(false);
   });
 
   it("rejects a non-positive archetype hp", () => {

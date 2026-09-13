@@ -4,7 +4,6 @@ import { useRef } from "react";
 
 import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
 
-import { ArenaHud } from "./ArenaHud.js";
 import { BossHealth } from "./BossHealth.js";
 import { CrewLatency } from "../../components/CrewLatency/index.js";
 import { getCurrentWaveUpgrade, selectBoss } from "../../model/combatHudViewModel.js";
@@ -12,7 +11,6 @@ import { roleLabel } from "@spaceship-defender/client-shared";
 import { encounterLabel } from "../../model/labels.js";
 import { ModuleTreeWindow, type ModuleTreeEntry } from "../../components/ModuleTreeWindow/index.js";
 import { SoloCockpit, type SoloCockpitProps } from "./SoloCockpit/index.js";
-import { SalvageCountdown } from "./SalvageCountdown.js";
 import { useWorldSlice } from "../../model/worldStore.js";
 import { hudFrameUrl } from "../../model/hudFrames.js";
 import {
@@ -26,9 +24,7 @@ import {
 import { InfoFrame } from "./InfoFrame.js";
 import { ScanFrame } from "./ScanFrame.js";
 import { StatusFrame } from "./StatusFrame.js";
-import { TimerFrame } from "./TimerFrame.js";
-import { formatWaveCountdown, WAVE_WARNING_SECONDS, WaveCountdown } from "./WaveCountdown.js";
-import { WeaponHeat } from "./WeaponHeat.js";
+import { formatWaveCountdown, TimerFrame, WAVE_WARNING_SECONDS } from "./TimerFrame.js";
 
 /**
  * The battle panels, each subscribed to the one slice it draws.
@@ -91,118 +87,6 @@ function sameHeader(left: Game | null, right: Game | null): boolean {
   );
 }
 
-/**
- * The two bars, drawn once and moved by hand afterwards.
- *
- * Nothing subscribes here: `useLiveHeat` writes the fill, the label and the
- * attributes straight to these nodes twenty times a second, so a held trigger
- * never re-renders anything. The snapshot below is only what the gauges are
- * built from - the capacity decides the shape of the meter, and it is bought,
- * not fired.
- */
-function WeaponHeatPanel() {
-  const game = useWorldSlice(gameOf, sameCapacities);
-  if (game === null) return null;
-  return <WeaponHeat cannon={game.cannon} machineGun={game.machineGun} />;
-}
-
-/** What a gauge is built from, as opposed to what it shows. */
-function sameCapacities(left: Game | null, right: Game | null): boolean {
-  if (left === right) return true;
-  const both = pair(left, right);
-  if (both === undefined) return false;
-  const [held, next] = both;
-  return (
-    held.cannon.capacity === next.cannon.capacity &&
-    held.machineGun.capacity === next.machineGun.capacity
-  );
-}
-
-export function BattleHudPanel() {
-  const game = useWorldSlice(gameOf, sameHeader);
-  if (game === null) return null;
-  return (
-    <header className="battle-header spaceship-hud">
-      <div>
-        <span>Волна</span>
-        <strong>{game.encounter.waveNumber}</strong>
-        <small>{encounterLabel(game.encounter.phase)}</small>
-      </div>
-      {/* Hull and shield moved onto the radar dial: two rings, their end labels
-        and the shield state word say everything these two cards did, in the
-        place the pilot is already looking. */}
-      <div>
-        <span>Счёт</span>
-        <strong>{game.encounter.score}</strong>
-        <small data-testid="hud-field-counts">{fieldCounts(game)}</small>
-      </div>
-      <div>
-        <span>Кредиты</span>
-        <strong>{game.credits}</strong>
-        <small>{upgradeLine(game)}</small>
-      </div>
-      <WeaponHeatPanel />
-    </header>
-  );
-}
-
-/**
- * Everything the match head-up display reads, and nothing else.
- *
- * The rule this file states at the top, kept: a panel wakes on the fields it
- * draws. A match moves all of these constantly, so this one wakes on nearly
- * every patch - which is what it is for.
- */
-function sameArenaHeader(left: Game | null, right: Game | null): boolean {
-  if (left === right) return true;
-  const both = pair(left, right);
-  if (both === undefined) return false;
-  const [held, next] = both;
-  return (
-    held.arenaShips.length === next.arenaShips.length &&
-    held.arenaShips.filter((ship) => ship.alive).length ===
-      next.arenaShips.filter((ship) => ship.alive).length &&
-    held.encounter.score === next.encounter.score &&
-    held.spaceship.hp === next.spaceship.hp &&
-    held.spaceship.maxHp === next.spaceship.maxHp &&
-    held.shield.energy === next.shield.energy &&
-    held.shield.capacity === next.shield.capacity &&
-    held.shield.active === next.shield.active &&
-    held.cannon.heat === next.cannon.heat &&
-    held.cannon.capacity === next.cannon.capacity &&
-    held.cannon.overheated === next.cannon.overheated &&
-    held.machineGun.heat === next.machineGun.heat &&
-    held.machineGun.capacity === next.machineGun.capacity &&
-    held.machineGun.overheated === next.machineGun.overheated &&
-    held.scanReadySeconds === next.scanReadySeconds &&
-    held.scanRevealSecondsRemaining === next.scanRevealSecondsRemaining
-  );
-}
-
-export function ArenaHudPanel({ onScan }: { readonly onScan: () => void }) {
-  const game = useWorldSlice(gameOf, sameArenaHeader);
-  const { alive, place } = useArenaStanding(game);
-  if (game === null) return null;
-  return (
-    <ArenaHud
-      alive={alive}
-      fieldSize={ARENA_SHIP_COUNT}
-      kills={game.encounter.score}
-      place={place}
-      hp={game.spaceship.hp}
-      maxHp={game.spaceship.maxHp}
-      shield={game.shield.energy}
-      shieldCapacity={game.shield.capacity}
-      shieldActive={game.shield.active}
-      cannon={game.cannon}
-      machineGun={game.machineGun}
-      scanReadySeconds={game.scanReadySeconds}
-      scanRevealSecondsRemaining={game.scanRevealSecondsRemaining}
-      onScan={onScan}
-    />
-  );
-}
-
 function sameCountdown(left: Game | null, right: Game | null): boolean {
   if (left === right) return true;
   const both = pair(left, right);
@@ -212,19 +96,6 @@ function sameCountdown(left: Game | null, right: Game | null): boolean {
     held.encounter.phase === next.encounter.phase &&
     held.encounter.lootWindowSecondsRemaining === next.encounter.lootWindowSecondsRemaining &&
     held.encounter.waveSecondsRemaining === next.encounter.waveSecondsRemaining
-  );
-}
-
-export function CountdownPanel() {
-  const game = useWorldSlice(gameOf, sameCountdown);
-  if (game?.encounter.phase !== "combat") return null;
-  return game.encounter.lootWindowSecondsRemaining > 0 ? (
-    <SalvageCountdown secondsRemaining={game.encounter.lootWindowSecondsRemaining} />
-  ) : (
-    <WaveCountdown
-      className="display-wave-countdown"
-      secondsRemaining={game.encounter.waveSecondsRemaining}
-    />
   );
 }
 
@@ -248,7 +119,7 @@ export function BossPanel() {
   return <BossHealth game={game} />;
 }
 
-/** The field's small line, in both skins' words. */
+/** The field's small line under the score. */
 function fieldCounts(game: Game): string {
   return `Враги ${String(game.enemyShips.length)} · Ракеты ${String(game.homingMissiles.length)} · Камни ${String(waveAsteroidCount(game))}`;
 }
@@ -310,7 +181,7 @@ export function ScanFramePanel({ onScan }: { readonly onScan: () => void }) {
   );
 }
 
-/** The frame skin's campaign header: the classic header's three numbers in the example's frame. */
+/** The campaign header: wave, score and credits in the example's frame. */
 export function InfoFramePanel() {
   const game = useWorldSlice(gameOf, sameHeader);
   if (game === null) return null;

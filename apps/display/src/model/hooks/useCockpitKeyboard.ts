@@ -42,7 +42,7 @@ const HELM_KEYS: Record<string, { readonly turn: number; readonly thrust: number
 const MG_KEY = "Space";
 const CANNON_KEY = "Enter";
 /** The one place on a fighting screen that still answers a right click. */
-const CLOCK_SELECTOR = ".wave-countdown";
+const CLOCK_SELECTOR = ".timer-frame";
 /** The mask a pointer event carries, which is the only place two buttons show. */
 const LEFT_BUTTON = 1;
 const RIGHT_BUTTON = 2;

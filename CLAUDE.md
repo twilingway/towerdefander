@@ -148,11 +148,11 @@ tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 70) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 71) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
-they carry their own `BALANCE_FILE_VERSION` (currently 56) with migrations in
+they carry their own `BALANCE_FILE_VERSION` (currently 57) with migrations in
 `apps/server/src/balance/migrations.ts`, and a balance-only change bumps that file version instead
 of the protocol. `packages/protocol/src/balanceStats.ts` does the same for the measurement reports
 the statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 3) — but those have **no

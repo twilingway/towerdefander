@@ -283,6 +283,9 @@ function migratePlayerShip(tuning: LegacyRecord, defaults: BalanceTuning): Legac
   // Version 31 sized the ordinary repair in hit points too. Same trap: the
   // leftover key fails the strict schema and the waves go with it.
   delete migrated.lootRepairAmount;
+  // Version 56 chose a HUD skin on every preset. The frames are the only HUD
+  // now, and a leftover skin, classic or frame, fails the strict schema the same.
+  delete migrated.hudSkin;
   for (const field of PLAYER_SHIP_FIELDS) {
     migrated[field] = tuning[field] ?? defaults[field];
   }
@@ -507,8 +510,6 @@ function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm:
         tuning.shieldAutopilotRaiseRange ?? defaults.shieldAutopilotRaiseRange,
       cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
-      // A preset from before the skins keeps the HUD it was tuned under.
-      hudSkin: tuning.hudSkin ?? defaults.hudSkin,
       autopilot: migrateAutopilot(tuning, defaults),
       enemySkill: migrateEnemySkill(tuning, defaults),
       // Field by field, like the background: a preset saved before a helm knob

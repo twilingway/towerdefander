@@ -158,7 +158,7 @@ for (const size of SIZES) {
         portrait
           ? [".display-shell--battle"]
           : [
-              ".battle-header",
+              ".info-frame",
               ".combat-radar",
               ".solo-cockpit .cockpit-stick--left",
               ".solo-cockpit .cockpit-stick--right",

@@ -312,7 +312,6 @@ export function createDefaultTuning(): BalanceTuning {
     arenaRadius: config.arenaRadius,
     cameraViewWidth: config.cameraViewWidth,
     background: config.background,
-    hudSkin: config.hudSkin,
     autopilot: DEFAULT_AUTOPILOT,
     enemySkill: config.enemySkill,
     helm: DEFAULT_HELM,

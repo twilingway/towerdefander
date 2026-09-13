@@ -7,7 +7,6 @@ import {
 import {
   toBackdropImage,
   toEnemyEffects,
-  toHudSkin,
   toEnemySounds,
   toEntityVisual,
   toPoseView,
@@ -175,7 +174,6 @@ export function toDisplayRoomView(
               image: toBackdropImage(display.backgroundImage),
               parallaxStrength: display.backgroundParallaxStrength ?? 1
             },
-            hudSkin: toHudSkin(display.hudSkin),
             asteroidVisual: toEntityVisual(
               display.asteroidVisualShape,
               display.asteroidVisualScale

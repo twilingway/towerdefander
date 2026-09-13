@@ -11,8 +11,6 @@ describe("PreviewControls", () => {
         onPhaseChange={() => undefined}
         cameraViewWidth={1600}
         onCameraViewWidthChange={() => undefined}
-        hudSkin="classic"
-        onHudSkinChange={() => undefined}
       />
     );
 
@@ -27,8 +25,6 @@ describe("PreviewControls", () => {
         onPhaseChange={() => undefined}
         cameraViewWidth={1600}
         onCameraViewWidthChange={() => undefined}
-        hudSkin="classic"
-        onHudSkinChange={() => undefined}
       />
     );
 
@@ -37,19 +33,17 @@ describe("PreviewControls", () => {
     expect(markup).not.toContain("preview-controls--collapsed");
   });
 
-  it("offers both HUD skins and shows the one the preview wears", () => {
+  it("offers no HUD skin switch: the frames are the only HUD", () => {
     const markup = renderToStaticMarkup(
       <PreviewControls
         phase="combat"
         onPhaseChange={() => undefined}
         cameraViewWidth={1600}
         onCameraViewWidthChange={() => undefined}
-        hudSkin="frame"
-        onHudSkinChange={() => undefined}
       />
     );
 
-    expect(markup).toContain('value="classic">классика');
-    expect(markup).toContain('value="frame" selected="">рамки');
+    expect(markup).not.toContain("preview-hud-skin");
+    expect(markup).not.toContain("Оформление HUD");
   });
 });
