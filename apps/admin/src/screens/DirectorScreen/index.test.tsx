@@ -1,14 +1,18 @@
-import type { BalanceTuning } from "@spaceship-defender/protocol";
+import type { BalanceTuning, HudSkin } from "@spaceship-defender/protocol";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { DirectorScreen } from "./index.js";
 
 /**
- * The screen reads the director, the hazard numbers, the arena and camera sizes
- * and the sky, and nothing else, so the cast keeps the fixture to those fields.
+ * The screen reads the director, the hazard numbers, the arena and camera sizes,
+ * the sky and the HUD skin, and nothing else, so the cast keeps the fixture to
+ * those fields.
  */
-function tuning(background: BalanceTuning["background"]): BalanceTuning {
+function tuning(
+  background: BalanceTuning["background"],
+  hudSkin: HudSkin = "classic"
+): BalanceTuning {
   return {
     waveCampaign: {
       director: {
@@ -34,7 +38,8 @@ function tuning(background: BalanceTuning["background"]): BalanceTuning {
     asteroidVisual: null,
     arenaRadius: 2200,
     cameraViewWidth: 2500,
-    background
+    background,
+    hudSkin
   } as unknown as BalanceTuning;
 }
 
@@ -63,5 +68,30 @@ describe("DirectorScreen sky", () => {
 
     expect(markup).toContain('value="none" selected=""');
     expect(markup).not.toContain('value="deep-nebula" selected=""');
+  });
+});
+
+describe("DirectorScreen HUD skin", () => {
+  it("offers both skins and says the choice waits for the next fight", () => {
+    const markup = renderToStaticMarkup(
+      <DirectorScreen tuning={tuning({ image: "none", parallaxStrength: 1 })} onChange={vi.fn()} />
+    );
+
+    expect(markup).toContain("Оформление HUD");
+    expect(markup).toContain(">классика<");
+    expect(markup).toContain(">рамки<");
+    expect(markup).toContain("со следующего боя");
+  });
+
+  it("shows the preset's own skin", () => {
+    const markup = renderToStaticMarkup(
+      <DirectorScreen
+        tuning={tuning({ image: "none", parallaxStrength: 1 }, "frame")}
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain('value="frame" selected=""');
+    expect(markup).not.toContain('value="classic" selected=""');
   });
 });
