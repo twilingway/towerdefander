@@ -3,8 +3,11 @@ import type { ReactNode } from "react";
 /** The source picture's own size; every window below is in its pixels. */
 const FRAME_WIDTH = 1767;
 const FRAME_HEIGHT = 559;
-/** Where a row's caption starts, and where its capsule's contents start and stop short. */
-const LABEL_LEFT = 118;
+/**
+ * Where a row's caption starts - clear of the diagonal stripes the top row carries
+ * at its left end - and where its capsule's contents start and stop short.
+ */
+const LABEL_LEFT = 160;
 const CAPSULE_LEFT = 666;
 const CAPSULE_INSET = 24;
 

@@ -436,6 +436,14 @@ describe("the status rings", () => {
     expect(texts(draw({ ...baseGame, shieldPhase: "up" }))).toContain("АКТИВЕН");
   });
 
+  it("leaves the shield's state word to the frame skin's status frame", () => {
+    const written = texts(draw({ ...baseGame, shieldPhase: "up", hudSkin: "frame" }));
+
+    expect(written).not.toContain("АКТИВЕН");
+    // The speed plate is still there, and is the dial's own.
+    expect(written.some((text) => text.endsWith("ед/с"))).toBe(true);
+  });
+
   it("reads the speed off the velocity the room publishes", () => {
     const written = texts(
       draw({

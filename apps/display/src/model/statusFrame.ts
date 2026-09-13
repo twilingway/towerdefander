@@ -133,25 +133,10 @@ export interface StatusReading {
   /** What the shield is doing while it is not up, in the classic dial's words; null while it is. */
   readonly shieldState: string | null;
   readonly hullLow: boolean;
-  /** Only a match carries the sweep, on the button the frame's pause was cut from. */
-  readonly scan: {
-    readonly readySeconds: number;
-    readonly revealSecondsRemaining: number;
-  } | null;
 }
 
 export function readStatusReading(
-  game: Pick<
-    Game,
-    | "cannon"
-    | "spaceship"
-    | "shield"
-    | "shieldPhase"
-    | "machineGun"
-    | "arenaShips"
-    | "scanReadySeconds"
-    | "scanRevealSecondsRemaining"
-  >
+  game: Pick<Game, "cannon" | "spaceship" | "shield" | "shieldPhase" | "machineGun">
 ): StatusReading {
   return {
     lit: readStatusLit(game),
@@ -160,18 +145,11 @@ export function readStatusReading(
     shieldState: game.shield.active
       ? null
       : getShieldStatusLabel(game.shieldPhase, game.shield.rearmRequired, game.shield.energy),
-    hullLow: game.spaceship.maxHp > 0 && game.spaceship.hp / game.spaceship.maxHp <= LOW_HULL_SHARE,
-    scan:
-      game.arenaShips.length > 0
-        ? {
-            readySeconds: game.scanReadySeconds,
-            revealSecondsRemaining: game.scanRevealSecondsRemaining
-          }
-        : null
+    hullLow: game.spaceship.maxHp > 0 && game.spaceship.hp / game.spaceship.maxHp <= LOW_HULL_SHARE
   };
 }
 
-/** A new reading is a new drawing only when a count, a state or the sweep's clock moved. */
+/** A new reading is a new drawing only when a count or a state moved. */
 export function sameStatusReading(
   left: StatusReading | null,
   right: StatusReading | null
@@ -183,8 +161,32 @@ export function sameStatusReading(
     left.cannonOverheated === right.cannonOverheated &&
     left.machineGunOverheated === right.machineGunOverheated &&
     left.shieldState === right.shieldState &&
-    left.hullLow === right.hullLow &&
-    left.scan?.readySeconds === right.scan?.readySeconds &&
-    left.scan?.revealSecondsRemaining === right.scan?.revealSecondsRemaining
+    left.hullLow === right.hullLow
+  );
+}
+
+/** The sweep's two clocks. Only a match has a sweep, so outside one there is nothing to read. */
+export interface ScanReading {
+  readonly readySeconds: number;
+  readonly revealSecondsRemaining: number;
+}
+
+export function readScanReading(
+  game: Pick<Game, "arenaShips" | "scanReadySeconds" | "scanRevealSecondsRemaining">
+): ScanReading | null {
+  return game.arenaShips.length > 0
+    ? {
+        readySeconds: game.scanReadySeconds,
+        revealSecondsRemaining: game.scanRevealSecondsRemaining
+      }
+    : null;
+}
+
+export function sameScanReading(left: ScanReading | null, right: ScanReading | null): boolean {
+  if (left === right) return true;
+  if (left === null || right === null) return false;
+  return (
+    left.readySeconds === right.readySeconds &&
+    left.revealSecondsRemaining === right.revealSecondsRemaining
   );
 }

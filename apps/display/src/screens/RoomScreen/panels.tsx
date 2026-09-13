@@ -16,11 +16,15 @@ import { SalvageCountdown } from "./SalvageCountdown.js";
 import { useWorldSlice } from "../../model/worldStore.js";
 import { hudFrameUrl } from "../../model/hudFrames.js";
 import {
+  readScanReading,
   readStatusReading,
+  sameScanReading,
   sameStatusReading,
+  type ScanReading,
   type StatusReading
 } from "../../model/statusFrame.js";
 import { InfoFrame } from "./InfoFrame.js";
+import { ScanFrame } from "./ScanFrame.js";
 import { StatusFrame } from "./StatusFrame.js";
 import { TimerFrame } from "./TimerFrame.js";
 import { formatWaveCountdown, WAVE_WARNING_SECONDS, WaveCountdown } from "./WaveCountdown.js";
@@ -281,14 +285,29 @@ const statusReadingOf = (view: DisplayRoomView | undefined): StatusReading | nul
   return game == null ? null : readStatusReading(game);
 };
 
-/**
- * The frame skin's status panel: wakes only when a bar gains or loses a lit cell,
- * changes state, or the sweep's clock ticks.
- */
-export function StatusFramePanel({ onScan }: { readonly onScan: () => void }) {
+/** The frame skin's status panel: wakes only when a bar's lit count or state changes. */
+export function StatusFramePanel() {
   const reading = useWorldSlice(statusReadingOf, sameStatusReading);
   if (reading === null) return null;
-  return <StatusFrame reading={reading} frameUrl={hudFrameUrl("ui-status")} onScan={onScan} />;
+  return <StatusFrame reading={reading} frameUrl={hudFrameUrl("ui-status")} />;
+}
+
+const scanReadingOf = (view: DisplayRoomView | undefined): ScanReading | null => {
+  const game = view?.game;
+  return game == null ? null : readScanReading(game);
+};
+
+/** The frame skin's sweep: a match only, waking when either of its clocks ticks. */
+export function ScanFramePanel({ onScan }: { readonly onScan: () => void }) {
+  const scan = useWorldSlice(scanReadingOf, sameScanReading);
+  if (scan === null) return null;
+  return (
+    <ScanFrame
+      readySeconds={scan.readySeconds}
+      revealSecondsRemaining={scan.revealSecondsRemaining}
+      onScan={onScan}
+    />
+  );
 }
 
 /** The frame skin's campaign header: the classic header's three numbers in the example's frame. */
@@ -490,9 +509,7 @@ function sameCockpit(left: Game | null, right: Game | null): boolean {
  * that only moved a rock leaves the sticks alone.
  */
 export function CockpitPanel({
-  controls,
-  aimAssist,
-  onAimAssistChange
+  controls
 }: {
   readonly controls: Omit<
     SoloCockpitProps,
@@ -503,11 +520,7 @@ export function CockpitPanel({
     | "machineGunOverheated"
     | "cannonHeat"
     | "cannonOverheated"
-    | "aimAssist"
-    | "onAimAssistChange"
   >;
-  readonly aimAssist: boolean;
-  readonly onAimAssistChange: (enabled: boolean) => void;
 }) {
   const game = useWorldSlice(gameOf, sameCockpit);
   if (game === null) return null;
@@ -518,8 +531,6 @@ export function CockpitPanel({
       aimDeadzoneShare={game.helm.aimDeadzoneShare}
       machineGunHeat={game.machineGun.heat / game.machineGun.capacity}
       machineGunOverheated={game.machineGun.overheated}
-      aimAssist={aimAssist}
-      onAimAssistChange={onAimAssistChange}
       {...controls}
     />
   );

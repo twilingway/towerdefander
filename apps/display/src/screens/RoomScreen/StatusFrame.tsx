@@ -5,14 +5,9 @@ import {
   type StatusBar,
   type StatusReading
 } from "../../model/statusFrame.js";
-import { formatScanClock } from "./ArenaHud.js";
-
 const percent = (value: number, whole: number): string => `${((value / whole) * 100).toFixed(3)}%`;
 
 const cssColor = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
-
-/** The pause button the frame was drawn with, cleared at build time; the sweep takes its place. */
-const SCAN_SLOT = { x: 930, y: 0, width: 224, height: 224 } as const;
 
 /**
  * The rows the live heat writer finds by id and stamps `data-heat` on. They carry
@@ -41,8 +36,9 @@ function barState(
 }
 
 /**
- * The example's status frame in the page: its picture, a cell over every slot it
- * paints, and in a match the sweep where the pause button was.
+ * The example's status frame in the page: its picture and a cell over every slot
+ * it paints. The pause button's cut-out is left to the gear, and a match's sweep
+ * stands beside the dial.
  *
  * A cell is lit or it is not, so a commit here only moves a class on the cells
  * that changed, and only when a bar gains or loses one or changes state - not on
@@ -50,14 +46,11 @@ function barState(
  */
 export function StatusFrame({
   reading,
-  frameUrl,
-  onScan
+  frameUrl
 }: {
   readonly reading: StatusReading;
   readonly frameUrl: string | undefined;
-  readonly onScan: () => void;
 }) {
-  const { scan } = reading;
   return (
     <div className="status-frame" data-testid="status-frame">
       {frameUrl !== undefined && <img className="status-frame__art" src={frameUrl} alt="" />}
@@ -78,7 +71,10 @@ export function StatusFrame({
               className="status-frame__label"
               style={{
                 left: percent(bar.labelX, STATUS_FRAME_WIDTH),
-                top: percent(bar.labelY, STATUS_FRAME_HEIGHT)
+                top: percent(bar.labelY, STATUS_FRAME_HEIGHT),
+                // Stops short of the first cell, so a long state word on a small
+                // frame is cut rather than written across the bar.
+                maxWidth: percent(bar.x - bar.labelX - 16, STATUS_FRAME_WIDTH)
               }}
             >
               {state?.caption ?? bar.label}
@@ -98,26 +94,6 @@ export function StatusFrame({
           </div>
         );
       })}
-      {scan !== null && (
-        <button
-          type="button"
-          className={`status-frame__scan${scan.readySeconds > 0 ? " is-cooling" : ""}`}
-          data-testid="arena-scan"
-          onClick={onScan}
-          disabled={scan.readySeconds > 0}
-          // Pinned to the corner the slot sits in, so the 48-pixel floor grows the
-          // button into the frame rather than out of it, where it would be clipped.
-          style={{
-            right: percent(STATUS_FRAME_WIDTH - SCAN_SLOT.x - SCAN_SLOT.width, STATUS_FRAME_WIDTH),
-            top: percent(SCAN_SLOT.y, STATUS_FRAME_HEIGHT),
-            width: percent(SCAN_SLOT.width, STATUS_FRAME_WIDTH),
-            height: percent(SCAN_SLOT.height, STATUS_FRAME_HEIGHT)
-          }}
-        >
-          <span>Скан</span>
-          <small>{formatScanClock(scan.readySeconds, scan.revealSecondsRemaining)}</small>
-        </button>
-      )}
     </div>
   );
 }

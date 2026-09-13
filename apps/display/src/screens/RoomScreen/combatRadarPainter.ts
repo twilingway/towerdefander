@@ -471,16 +471,20 @@ export function drawCombatRadar(
       `${String(Math.round(game.shield.energy))} / ${String(Math.round(game.shield.capacity))}`
     );
 
-    context.font = `800 9px ${FONT_STACK}`;
-    context.fillStyle = game.shieldPhase === "up" ? "#75d8ff" : "#9ad7ff";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    plateText(
-      context,
-      getShieldStatusLabel(game.shieldPhase, game.shield.rearmRequired, game.shield.energy),
-      CENTRE,
-      CENTRE + MAP_RADIUS * 0.62
-    );
+    // The frame skin says the shield's state on its status frame, in the bar's
+    // own caption, so the dial leaves the word out rather than saying it twice.
+    if (game.hudSkin !== "frame") {
+      context.font = `800 9px ${FONT_STACK}`;
+      context.fillStyle = game.shieldPhase === "up" ? "#75d8ff" : "#9ad7ff";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      plateText(
+        context,
+        getShieldStatusLabel(game.shieldPhase, game.shield.rearmRequired, game.shield.energy),
+        CENTRE,
+        CENTRE + MAP_RADIUS * 0.62
+      );
+    }
   }
 
   // Speed sits in the opening at the bottom of the dial, on its own plate,
@@ -494,5 +498,10 @@ export function drawCombatRadar(
   context.stroke();
   context.font = `800 11px ${FONT_STACK}`;
   context.fillStyle = "#bdfaff";
+  // Said here rather than inherited: the shield word above set the alignment,
+  // and a dial without that word - a match's, or one under the frame skin -
+  // drew the speed from the plate's middle rightwards.
+  context.textAlign = "center";
+  context.textBaseline = "middle";
   plateText(context, `${String(Math.round(speed))} ед/с`, CENTRE, CENTRE + MAP_RADIUS + 13);
 }

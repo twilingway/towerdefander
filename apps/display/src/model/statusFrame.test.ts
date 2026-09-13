@@ -5,6 +5,7 @@ import {
   STATUS_FRAME_HEIGHT,
   STATUS_FRAME_WIDTH,
   litSegments,
+  readScanReading,
   readStatusLit,
   readStatusReading,
   sameStatusLit,
@@ -63,7 +64,7 @@ describe("status frame cells", () => {
   });
 });
 
-type FullReading = Parameters<typeof readStatusReading>[0];
+type FullReading = Parameters<typeof readStatusReading>[0] & Parameters<typeof readScanReading>[0];
 
 function fight(overrides: Record<string, unknown> = {}): FullReading {
   return {
@@ -93,9 +94,9 @@ describe("status reading", () => {
   });
 
   it("carries the sweep only in a match", () => {
-    expect(readStatusReading(fight()).scan).toBeNull();
+    expect(readScanReading(fight())).toBeNull();
     const match = fight({ arenaShips: [{ alive: true }], scanReadySeconds: 7 });
-    expect(readStatusReading(match).scan).toEqual({ readySeconds: 7, revealSecondsRemaining: 0 });
+    expect(readScanReading(match)).toEqual({ readySeconds: 7, revealSecondsRemaining: 0 });
   });
 
   it("wakes on a state even when no cell changed, and sleeps through heat inside a cell", () => {

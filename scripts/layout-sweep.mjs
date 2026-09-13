@@ -163,7 +163,6 @@ for (const size of SIZES) {
               ".solo-cockpit .cockpit-stick--left",
               ".solo-cockpit .cockpit-stick--right",
               ".cockpit-trigger",
-              ".cockpit-assist",
               ".settings__toggle"
             ]
       )

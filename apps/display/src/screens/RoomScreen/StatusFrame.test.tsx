@@ -9,17 +9,12 @@ const CALM: StatusReading = {
   cannonOverheated: false,
   machineGunOverheated: false,
   shieldState: null,
-  hullLow: false,
-  scan: null
+  hullLow: false
 };
 
 function frame(overrides: Partial<StatusReading> = {}): string {
   return renderToStaticMarkup(
-    <StatusFrame
-      reading={{ ...CALM, ...overrides }}
-      frameUrl="frame.webp"
-      onScan={() => undefined}
-    />
+    <StatusFrame reading={{ ...CALM, ...overrides }} frameUrl="frame.webp" />
   );
 }
 
@@ -59,13 +54,10 @@ describe("StatusFrame", () => {
     expect(markup).not.toContain("<small");
   });
 
-  it("has no pause button, and puts the sweep in its place only in a match", () => {
-    expect(frame()).not.toContain("<button");
+  it("has neither the pause button nor the sweep, which stands beside the dial", () => {
+    const markup = frame();
 
-    const cooling = frame({ scan: { readySeconds: 18, revealSecondsRemaining: 0 } });
-    expect(cooling).toContain('data-testid="arena-scan"');
-    expect(cooling).toContain("disabled");
-    expect(cooling).toContain("18 с");
-    expect(frame({ scan: { readySeconds: 0, revealSecondsRemaining: 0 } })).toContain("готов");
+    expect(markup).not.toContain("<button");
+    expect(markup).not.toContain("arena-scan");
   });
 });

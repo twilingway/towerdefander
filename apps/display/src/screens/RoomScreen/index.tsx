@@ -86,8 +86,9 @@ export function RoomScreen({
 }: RoomScreenProps) {
   const portrait = useIsPortrait();
   // Read once: it is a device preference, and re-reading storage every render
-  // would answer the same question a hundred times a second.
-  const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
+  // would answer the same question a hundred times a second. Nothing on the page
+  // changes it while the aim assist is being reworked.
+  const [aimAssist] = useState(readAimAssistFromDevice);
   const shellReference = useRef<HTMLElement>(null);
   /**
    * The ship this page is flying, as the reconciler currently has it.
@@ -296,7 +297,9 @@ export function RoomScreen({
          * arena does not have. Both sat on top of the readouts a pilot actually
          * uses, which is where they were.
          */}
-        {!match && (
+        {/* Nor does a fight: the crew joined in the lobby, and a dropped phone
+          comes back through its own session rather than by the code. */}
+        {!match && view.game === null && (
           <div>
             <p className="eyebrow">Комната</p>
             <strong className="room-code">{view.roomId}</strong>
@@ -320,7 +323,7 @@ export function RoomScreen({
           */}
           {!match && !diagnostics && (
             <span className="latency-indicator" aria-live="polite">
-              Экран → сервер {formatLatency(view.displayLatencyMs)}
+              ping {formatLatency(view.displayLatencyMs)}
             </span>
           )}
           {!match && view.game !== null && !diagnostics && (
@@ -410,8 +413,6 @@ export function RoomScreen({
           onCloseRoom={onCloseRoom}
           onLeaveRoom={onLeaveRoom}
           onScan={onScan}
-          aimAssist={aimAssist}
-          onAimAssistChange={setAimAssist}
         />
       )}
       {visibleDemo ? (

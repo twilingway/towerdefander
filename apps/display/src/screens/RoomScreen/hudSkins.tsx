@@ -7,6 +7,7 @@ import {
   BattleHudPanel,
   CountdownPanel,
   InfoFramePanel,
+  ScanFramePanel,
   StatusFramePanel,
   TimerFramePanel
 } from "./panels.js";
@@ -21,7 +22,9 @@ export interface HudSkinParts {
   readonly ArenaHeader: ComponentType<ScanProps>;
   readonly Countdown: ComponentType;
   /** A panel of its own for the gauges; the classic HUD keeps them in the header and on the dial. */
-  readonly Status: ComponentType<ScanProps> | null;
+  readonly Status: ComponentType | null;
+  /** The match's sweep as its own button; the classic HUD keeps it in the match header. */
+  readonly Scan: ComponentType<ScanProps> | null;
 }
 
 /**
@@ -33,12 +36,14 @@ export const HUD_SKIN_PARTS: Readonly<Record<HudSkin, HudSkinParts>> = {
     CampaignHeader: BattleHudPanel,
     ArenaHeader: ArenaHudPanel,
     Countdown: CountdownPanel,
-    Status: null
+    Status: null,
+    Scan: null
   },
   frame: {
     CampaignHeader: InfoFramePanel,
     ArenaHeader: ArenaInfoFramePanel,
     Countdown: TimerFramePanel,
-    Status: StatusFramePanel
+    Status: StatusFramePanel,
+    Scan: ScanFramePanel
   }
 };
