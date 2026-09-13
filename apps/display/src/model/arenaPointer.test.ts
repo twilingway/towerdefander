@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ARENA_HOST_SELECTOR, isArenaTarget } from "./arenaPointer.js";
+import { ARENA_HOST_SELECTOR, isArenaTarget, readArenaCentre } from "./arenaPointer.js";
 
 /** Stands in for an element that knows which ancestors it has. */
 function target(...ancestors: string[]) {
@@ -41,5 +41,30 @@ describe("the arena host", () => {
    */
   it("is the element the world is drawn in", () => {
     expect(ARENA_HOST_SELECTOR).toBe(".battlefield-canvas");
+  });
+});
+
+describe("readArenaCentre", () => {
+  /** A document the way a release build renders it: the canvas host, and no readable twin. */
+  function releaseDocument(box: { left: number; top: number; width: number; height: number }) {
+    return {
+      querySelector: (selector: string) =>
+        selector === ".battlefield-canvas" ? { getBoundingClientRect: () => box } : null
+    };
+  }
+
+  /**
+   * The centre was read off `.battlefield-shell`, which only a dev build and the
+   * demo render. In production it came back empty, and the turret ignored the
+   * mouse while both buttons still fired.
+   */
+  it("finds the ship's middle in a release build, which has no readable twin", () => {
+    const centre = readArenaCentre(releaseDocument({ left: 10, top: 20, width: 800, height: 600 }));
+
+    expect(centre).toEqual({ x: 410, y: 320 });
+  });
+
+  it("reads nothing before the arena is on the page", () => {
+    expect(readArenaCentre({ querySelector: () => null })).toBeNull();
   });
 });
