@@ -18,6 +18,22 @@ export const CONTROLLER_URL = readStringEnvironment(
   createDefaultControllerUrl()
 );
 
+/** A commit cut to the seven characters git itself shortens it to; any other tag as it came. */
+export function formatBuildVersion(raw: string): string {
+  return /^[0-9a-f]{8,40}$/.test(raw) ? raw.slice(0, 7) : raw;
+}
+
+/**
+ * The release this bundle was built from, printed under the copyright.
+ *
+ * A release tags its images with the commit and hands that tag to the build, so
+ * a production screen names the commit it runs. Anything built without one, the
+ * stand included, says "dev".
+ */
+export const BUILD_VERSION = formatBuildVersion(
+  readStringEnvironment(import.meta.env.VITE_BUILD_VERSION, "dev")
+);
+
 function createDefaultControllerUrl(): string {
   if (typeof window === "undefined") return "http://localhost:5174";
   return `${window.location.protocol}//${window.location.hostname}:5174`;

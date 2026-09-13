@@ -5,6 +5,7 @@ import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
 import { SettingsPanel } from "../RoomScreen/SettingsPanel.js";
 import { MENU_THEME } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
+import { BUILD_VERSION } from "../../model/environment.js";
 import { useRemoteNavigation } from "../../model/hooks/useRemoteNavigation.js";
 
 export type GameMode = "campaign" | "arena";
@@ -95,6 +96,10 @@ export function StartScreen({ maintenance, onPick }: StartScreenProps) {
           ))}
         </div>
       )}
+      {/* Who made it and which release this is, for a screenshot that has to say both. */}
+      <footer className="start-footer" data-testid="start-footer">
+        © TwilingGame 2026 · сборка {BUILD_VERSION}
+      </footer>
     </main>
   );
 }
