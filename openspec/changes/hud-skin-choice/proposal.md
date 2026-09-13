@@ -38,7 +38,7 @@ HUD — самое дорогое место: на каждом кадре за�
   стики и полосы переоформляются только под «рамками».
 - Рамки примера собираются `pnpm sprites:build` в `@spaceship-defender/sprite-assets` из
   `raster-sprite-art`: WebP, размер не больше двойного экранного, пауза вырезана.
-- **BREAKING**: `PROTOCOL_VERSION` и `BALANCE_FILE_VERSION` +1 (при порядке 1 → 2 → 3 это 69 и 55).
+- **BREAKING**: `PROTOCOL_VERSION` и `BALANCE_FILE_VERSION` +1 (при порядке 1 → 2 → 3 это 69 и 56).
   Миграция ставит старым пресетам `classic`.
 
 ## Material decisions

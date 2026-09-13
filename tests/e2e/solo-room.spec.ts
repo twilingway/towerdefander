@@ -26,7 +26,7 @@ test("one player flies and aims from a single panel", async ({ browser }) => {
     const displayContext = await browser.newContext();
     contexts.push(displayContext);
     const display = await displayContext.newPage();
-    await display.goto(displayUrl);
+    await display.goto(`${displayUrl}/?shared`);
     await openCampaign(display, 1);
     await expect(display.getByRole("heading", { name: "Подключите контроллер" })).toBeVisible();
     const roomCode = (await display.locator(".room-code").textContent())?.trim();

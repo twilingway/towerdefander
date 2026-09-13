@@ -124,16 +124,23 @@ export function ArenaHud({
         >
           <span className="arena-scan__label">Скан</span>
           <span className="arena-scan__clock">
-            {scanReadySeconds > 0
-              ? `${String(scanReadySeconds)} с`
-              : scanRevealSecondsRemaining > 0
-                ? `метки ${String(scanRevealSecondsRemaining)} с`
-                : "готов"}
+            {formatScanClock(scanReadySeconds, scanRevealSecondsRemaining)}
           </span>
         </button>
       </div>
     </header>
   );
+}
+
+/**
+ * What the sweep button says under its name: the wait while it cools, then how
+ * long the marks it laid stay on the dial, then that it is ready. Both skins say
+ * it the same way.
+ */
+export function formatScanClock(readySeconds: number, revealSecondsRemaining: number): string {
+  if (readySeconds > 0) return `${String(readySeconds)} с`;
+  if (revealSecondsRemaining > 0) return `метки ${String(revealSecondsRemaining)} с`;
+  return "готов";
 }
 
 /** Ten cells rather than a smooth bar: a segment is countable at a glance. */

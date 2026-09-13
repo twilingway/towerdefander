@@ -7,6 +7,7 @@ const base = {
   status: "idle" as const,
   error: "",
   visibleDemo: false,
+  sharedScreen: false,
   allowStartWave: false,
   initialStartWave: 1,
   ships: [],
@@ -36,5 +37,15 @@ describe("CreateRoomScreen", () => {
     expect(markup).toContain("maintenance-notice--prominent");
     // The game still says what it is; only the promises are gone.
     expect(markup).toContain("SpaceShip Defender");
+  });
+
+  it("switches the shared screen off unless the address opens it", () => {
+    const tile = /aria-label="Общий экран"[^>]*disabled=""/;
+    const closed = renderToStaticMarkup(<CreateRoomScreen {...base} maintenance={undefined} />);
+    const open = renderToStaticMarkup(
+      <CreateRoomScreen {...base} sharedScreen maintenance={undefined} />
+    );
+    expect(closed).toMatch(tile);
+    expect(open).not.toMatch(tile);
   });
 });

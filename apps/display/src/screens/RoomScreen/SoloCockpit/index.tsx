@@ -15,8 +15,6 @@ export interface SoloCockpitProps {
   readonly onCannonFromStick: (held: boolean) => void;
   readonly machineGunHeat: number;
   readonly machineGunOverheated: boolean;
-  readonly aimAssist: boolean;
-  readonly onAimAssistChange: (enabled: boolean) => void;
 }
 
 /**
@@ -26,6 +24,9 @@ export interface SoloCockpitProps {
  * room, which is what `docs/CODE_STYLE.md` asks for and what lets it be
  * rendered in a test without a provider. Everything that touches the wire is in
  * `model/hooks/useSoloCockpit`.
+ *
+ * There is no assist toggle: the aim assist is being reworked, and until then it
+ * keeps whatever this device last chose.
  */
 export function SoloCockpit({
   enabled,
@@ -38,9 +39,7 @@ export function SoloCockpit({
   onMachineGunHold,
   onCannonFromStick,
   machineGunHeat,
-  machineGunOverheated,
-  aimAssist,
-  onAimAssistChange
+  machineGunOverheated
 }: SoloCockpitProps) {
   return (
     <div className="solo-cockpit" data-testid="solo-cockpit" aria-hidden={!enabled}>
@@ -53,17 +52,6 @@ export function SoloCockpit({
         onRelease={onDriveRelease}
       />
       <div className="solo-cockpit__right">
-        <button
-          type="button"
-          className="cockpit-assist"
-          aria-pressed={aimAssist}
-          data-testid="cockpit-assist"
-          onClick={() => {
-            onAimAssistChange(!aimAssist);
-          }}
-        >
-          Помощь {aimAssist ? "вкл" : "выкл"}
-        </button>
         {/*
           One trigger, right above the stick that aims.
           

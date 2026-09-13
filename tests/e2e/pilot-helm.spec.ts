@@ -13,7 +13,7 @@ test("a seated pilot steers the hull like a tank", async ({ browser }) => {
     const displayContext = await browser.newContext();
     contexts.push(displayContext);
     const display = await displayContext.newPage();
-    await display.goto(displayUrl);
+    await display.goto(`${displayUrl}/?shared`);
     await openCampaign(display, 3);
     const roomCode = (await display.locator(".room-code").textContent())?.trim();
     if (!roomCode) throw new Error("Display did not publish a room code.");

@@ -46,6 +46,7 @@ const baseGame: DisplayGameSnapshot = {
     turretTargetAngle: null
   },
   background: { image: "none", parallaxStrength: 1 },
+  hudSkin: "classic",
   worldHeight: 4_400,
   arenaRadius: 2_200,
   helm: {
@@ -433,6 +434,14 @@ describe("the status rings", () => {
 
   it("carries the shield state word the HUD card used to show", () => {
     expect(texts(draw({ ...baseGame, shieldPhase: "up" }))).toContain("АКТИВЕН");
+  });
+
+  it("leaves the shield's state word to the frame skin's status frame", () => {
+    const written = texts(draw({ ...baseGame, shieldPhase: "up", hudSkin: "frame" }));
+
+    expect(written).not.toContain("АКТИВЕН");
+    // The speed plate is still there, and is the dial's own.
+    expect(written.some((text) => text.endsWith("ед/с"))).toBe(true);
   });
 
   it("reads the speed off the velocity the room publishes", () => {

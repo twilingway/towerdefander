@@ -30,3 +30,16 @@ export interface BackdropArt {
   readonly width: number;
   readonly height: number;
 }
+
+/**
+ * An interface frame: a finished picture laid over the arena, built at twice the
+ * size it takes on a 1080p screen. One image each, with no grid, and never
+ * minified far enough to want mipmaps.
+ */
+export interface HudArt {
+  readonly id: string;
+  readonly bytes: number;
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+}

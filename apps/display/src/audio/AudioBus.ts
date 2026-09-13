@@ -99,7 +99,9 @@ export class AudioBus {
   /** What is sounding right now, per id and in the order it started. */
   private readonly voices = new Map<SoundId, AudioBufferSourceNode[]>();
   private music: HTMLAudioElement | undefined;
-  private musicTrack: MusicTrackId | undefined;
+  /** The music sounding now, as its track ids joined, and where each list goes next. */
+  private musicKey: string | undefined;
+  private readonly playlistNext = new Map<string, number>();
   private settings: AudioSettings = audioSettings();
   private stopListening: (() => void) | undefined;
 
@@ -219,15 +221,28 @@ export class AudioBus {
     }
   }
 
-  /** Switches the theme, or stops it when handed nothing. One plays at a time. */
-  playMusic(track: MusicTrackId | undefined): void {
-    if (track === this.musicTrack && this.music !== undefined) return;
-    this.musicTrack = track;
+  /**
+   * Switches the music, or stops it when handed nothing. One track plays at a
+   * time: a single theme loops, and a list plays its tracks in turn, picking up
+   * after the one it played last when it is asked for again.
+   */
+  playMusic(tracks: MusicTrackId | readonly MusicTrackId[] | undefined): void {
+    const playlist: readonly MusicTrackId[] =
+      tracks === undefined ? [] : typeof tracks === "string" ? [tracks] : tracks;
+    const key = playlist.length === 0 ? undefined : playlist.join(" ");
+    if (key === this.musicKey && this.music !== undefined) return;
+    this.musicKey = key;
     stopPageMusic();
-    if (track === undefined) {
-      this.music = undefined;
-      return;
-    }
+    this.music = undefined;
+    if (key !== undefined) this.startTrack(key, playlist);
+  }
+
+  /** The list's next track, which hands over to the one after it when it ends. */
+  private startTrack(key: string, playlist: readonly MusicTrackId[]): void {
+    const index = (this.playlistNext.get(key) ?? 0) % playlist.length;
+    const track = playlist[index];
+    if (track === undefined) return;
+    this.playlistNext.set(key, index + 1);
     const element = document.createElement("audio");
     for (const source of musicSources(track)) {
       const node = document.createElement("source");
@@ -235,7 +250,13 @@ export class AudioBus {
       node.type = source.type;
       element.append(node);
     }
-    element.loop = true;
+    element.loop = playlist.length === 1;
+    element.addEventListener("ended", () => {
+      // A track that ends after the music was switched belongs to no list any more.
+      if (this.music !== element) return;
+      stopPageMusic();
+      this.startTrack(key, playlist);
+    });
     element.preload = "auto";
     element.volume = busGain(this.settings, "music");
     this.music = element;
@@ -249,7 +270,7 @@ export class AudioBus {
     this.stopListening = undefined;
     stopPageMusic();
     this.music = undefined;
-    this.musicTrack = undefined;
+    this.musicKey = undefined;
     void this.context?.close();
     this.context = undefined;
     this.sfxGain = undefined;

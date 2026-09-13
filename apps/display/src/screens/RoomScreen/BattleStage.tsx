@@ -8,27 +8,20 @@ import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
 import { readDiagnostics, recordCommitWork, writeFrameStats } from "../../model/instruments.js";
 import { readLiveGame } from "../../model/liveView.js";
 import type { ModuleTree } from "../../model/moduleTree.js";
-import { saveAimAssistToDevice } from "../../model/aimAssistPreference.js";
 import type { SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
 import type { PredictionDriver } from "../../model/shipPrediction.js";
 import { ARENA_SHIP_COUNT } from "@spaceship-defender/game-core";
 
 import { enterFullscreenIfWanted } from "../../model/fullscreen.js";
-import { BATTLE_THEME } from "../../audio/themes.js";
+import { BATTLE_THEMES } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { ArenaResultOverlay } from "./ArenaResultOverlay.js";
 import { PolledCombatRadar } from "./CombatRadar.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
-import {
-  ArenaHudPanel,
-  BattleHudPanel,
-  BossPanel,
-  CockpitPanel,
-  CountdownPanel,
-  ModuleWindowPanel
-} from "./panels.js";
+import { HUD_SKIN_PARTS } from "./hudSkins.js";
+import { BossPanel, CockpitPanel, ModuleWindowPanel } from "./panels.js";
 
 /** What the fight needs to know about this page's own seat, if it holds one. */
 export interface BattleCockpit {
@@ -59,8 +52,6 @@ interface BattleStageProps {
   readonly onLeaveRoom: () => void;
   /** One radar sweep, asked for from the match panel. */
   readonly onScan: () => void;
-  readonly aimAssist: boolean;
-  readonly onAimAssistChange: (aimAssist: boolean) => void;
 }
 
 /**
@@ -82,11 +73,9 @@ export function BattleStage({
   closingRoom,
   onCloseRoom,
   onLeaveRoom,
-  onScan,
-  aimAssist,
-  onAimAssistChange
+  onScan
 }: BattleStageProps) {
-  useMusicTrack(BATTLE_THEME);
+  useMusicTrack(BATTLE_THEMES);
   /*
    * And the second chance at the whole screen.
    *
@@ -97,6 +86,10 @@ export function BattleStage({
   useEffect(() => {
     void enterFullscreenIfWanted();
   }, []);
+  // The run's skin decides which panels stand over the fight. It is fixed at run
+  // start, so the table is read on render rather than watched.
+  const { CampaignHeader, ArenaHeader, Countdown, Status, Scan } =
+    HUD_SKIN_PARTS[view.game.hudSkin];
   return (
     <MeasuredWhenAsked
       measuring={diagnostics}
@@ -144,14 +137,7 @@ export function BattleStage({
         </MeteredPanel>
         <MeteredPanel id="кокпит" measuring={diagnostics}>
           {cockpit.seated && !portrait && switches.interfaceEnabled && (
-            <CockpitPanel
-              controls={cockpit.controls}
-              aimAssist={aimAssist}
-              onAimAssistChange={(next) => {
-                onAimAssistChange(next);
-                saveAimAssistToDevice(next);
-              }}
-            />
+            <CockpitPanel controls={cockpit.controls} />
           )}
         </MeteredPanel>
         <MeteredPanel id="шапка" measuring={diagnostics}>
@@ -159,14 +145,18 @@ export function BattleStage({
             stand. The campaign's wave, score and credits mean nothing here. */}
           {switches.interfaceEnabled &&
             (view.game.arenaShips.length > 0 ? (
-              <ArenaHudPanel onScan={onScan} />
+              <ArenaHeader onScan={onScan} />
             ) : (
-              <BattleHudPanel />
+              <CampaignHeader />
             ))}
+        </MeteredPanel>
+        <MeteredPanel id="статус" measuring={diagnostics}>
+          {switches.interfaceEnabled && Status !== null && <Status />}
+          {switches.interfaceEnabled && Scan !== null && <Scan onScan={onScan} />}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>
-          <CountdownPanel />
+          <Countdown />
         </MeteredPanel>
         <MeteredPanel id="босс" measuring={diagnostics}>
           <BossPanel />

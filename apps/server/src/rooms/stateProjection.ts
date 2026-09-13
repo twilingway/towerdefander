@@ -95,6 +95,7 @@ export function projectGameState(
   pose.turretTargetAngle = game.turretTargetAngle ?? 0;
   target.display.backgroundImage = config.background.image;
   target.display.backgroundParallaxStrength = config.background.parallaxStrength;
+  target.display.hudSkin = config.hudSkin;
   target.spaceship.x = game.spaceship.x;
   target.spaceship.y = game.spaceship.y;
   target.spaceship.velocityX = game.spaceship.velocity.x;

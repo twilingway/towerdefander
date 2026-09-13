@@ -984,6 +984,11 @@ p {
   pointer-events: auto;
 }
 
+/* A fight shows no room code, so the readouts would otherwise slide into its corner. */
+.display-shell--battle > .room-header .room-network {
+  margin-left: auto;
+}
+
 /* Too narrow to flank anything: the readouts go back to two columns across the
    bottom and the dial sits above them, as it did before. */
 @media (width <= 900px) {
@@ -1808,28 +1813,15 @@ p {
   position: relative;
 }
 
-/* A setting, not a spur. It rides above the triggers rather than in a corner:
-   the top right belongs to the room header, and the bottom corners to thumbs. */
-.cockpit-assist {
-  pointer-events: auto;
-  /*
-   * None, like the triggers beside it. `manipulation` still leaves the browser
-   * deciding whether a touch is the start of a gesture, and that decision is
-   * paid for in the first taps of a fight.
-   */
-  touch-action: none;
-  padding: 0.35rem 0.6rem;
-  border-radius: 0.6rem;
-  border: 1px solid rgba(126, 214, 255, 0.25);
-  background: rgba(8, 24, 36, 0.5);
-  color: rgba(214, 242, 255, 0.7);
-  font: inherit;
-  font-size: 0.75rem;
-}
-
-.cockpit-assist[aria-pressed="true"] {
-  border-color: rgba(126, 214, 255, 0.6);
-  color: #d6f2ff;
+/*
+ * The nose trigger's word in the middle of its circle. Every button carries the
+ * page's generous side padding, which left a 44-pixel circle four pixels for the
+ * word, so it spilled past the circle's right edge.
+ */
+.solo-cockpit__triggers .cockpit-trigger {
+  display: grid;
+  padding: 0;
+  place-items: center;
 }
 
 /* The bottom band belongs to the thumbs now, so everything that used to live
@@ -1935,6 +1927,16 @@ p {
 
 .cockpit-ready:disabled {
   opacity: 0.6;
+}
+
+/* Two buttons side by side in the cockpit's lobby card, and they had no gap between them. */
+.join-card--cockpit .cockpit-ready + .fullscreen-button {
+  margin-left: 0.6rem;
+}
+
+/* On its own line above the room code, which a phone shows without the eyebrow between them. */
+.room-leave {
+  display: block;
 }
 
 /*
@@ -2361,7 +2363,6 @@ p {
 .display-shell[data-panels="opaque"] .diagnostics-panel,
 .display-shell[data-panels="opaque"] .cockpit-stick__ring,
 .display-shell[data-panels="opaque"] .cockpit-trigger,
-.display-shell[data-panels="opaque"] .cockpit-assist,
 .display-shell[data-panels="opaque"] .module-tree,
 .display-shell[data-panels="opaque"] .module-tree__toggle,
 .display-shell[data-panels="opaque"] .weapon-heat-row,
@@ -3555,6 +3556,644 @@ p {
   gap: 0.3rem;
   width: max-content;
   max-width: min(42vw, 16rem);
+}
+
+/*
+ * The frame skin.
+ *
+ * The example's frames as pictures at no more than their built size, with the
+ * numbers laid over their windows: the info frame top left where the classic
+ * header stands, the timer in the middle of the top edge, and the status frame on
+ * the right under the room's own readouts and the gear. Nothing here touches a
+ * classic rule: every selector is a frame class or scoped to the skin.
+ */
+.display-shell--battle[data-hud-skin="frame"] {
+  --frame-info-top: max(0.75rem, env(safe-area-inset-top));
+  --frame-info-width: clamp(17rem, 32vw, 30rem);
+  --frame-timer-width: clamp(15rem, 28vw, 28rem);
+  --frame-status-width: clamp(17rem, 24vw, 22rem);
+  /*
+   * How far the sticks stand in from the glass's edges beyond the classic's
+   * padding: the ring picture overhangs its ring by a quarter, and a thumb at the
+   * very edge of a screen is a thumb the bezel and the system gestures get first.
+   */
+  --frame-stick-inset: 2rem;
+}
+
+/* The collapsed module tree waits under the info frame instead of on top of it. */
+.display-shell--battle[data-hud-skin="frame"] .module-tree--collapsed {
+  top: calc(var(--frame-info-top) + var(--frame-info-width) * 0.3164 + 0.5rem);
+}
+
+.info-frame,
+.timer-frame,
+.status-frame {
+  position: absolute;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.info-frame__art,
+.timer-frame__art,
+.status-frame__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The top left corner: the fight shows no room code for it to clear. */
+.info-frame {
+  top: var(--frame-info-top, max(0.75rem, env(safe-area-inset-top)));
+  left: max(0.75rem, env(safe-area-inset-left));
+  width: var(--frame-info-width, clamp(17rem, 32vw, 30rem));
+  aspect-ratio: 1767 / 559;
+  contain: paint;
+}
+
+.info-frame__label,
+.info-frame__capsule {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.info-frame__label {
+  color: #8fdcff;
+  font-size: clamp(0.55rem, 0.8vw, 0.8rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.info-frame__capsule {
+  gap: 0.45em;
+  padding-left: 0.4em;
+  color: #e8f8ff;
+}
+
+.info-frame__capsule strong {
+  color: #ffd783;
+  font-size: clamp(0.8rem, 1.2vw, 1.2rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two short lines rather than one cut off: the small line carries what the classic header says. */
+.info-frame__capsule > small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #b6d9e6;
+  font-size: clamp(0.5rem, 0.68vw, 0.7rem);
+  line-height: 1.05;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* A share inside the number, like the match's "/16": the same line, a smaller size. */
+.info-frame__capsule strong small {
+  color: #b6d9e6;
+  font-size: 0.6em;
+}
+
+.timer-frame {
+  top: var(--frame-timer-top, max(0.5rem, env(safe-area-inset-top)));
+  left: 50%;
+  width: var(--frame-timer-width, clamp(15rem, 28vw, 28rem));
+  aspect-ratio: 2036 / 447;
+  transform: translateX(-50%);
+}
+
+/*
+ * Sized off the frame, not the viewport: the ring's window is about 14 percent
+ * of the frame's width, and "00:00" in tabular digits takes about three em.
+ */
+.timer-frame__value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: #ffd783;
+  font-size: calc(var(--frame-timer-width, clamp(15rem, 28vw, 28rem)) * 0.038);
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, -50%);
+}
+
+/* Under the ring rather than in it: the ring holds the time and nothing else. */
+.timer-frame__caption {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  color: #c9f5ff;
+  background: rgb(5 25 33 / 70%);
+  font-size: clamp(0.5rem, 0.7vw, 0.68rem);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.timer-frame--warning .timer-frame__value {
+  color: #ff796e;
+}
+
+.timer-frame--salvage .timer-frame__value,
+.timer-frame--salvage .timer-frame__caption {
+  color: #7effad;
+}
+
+/* Under the timer and its caption, while a boss is alive. */
+.display-shell--battle[data-hud-skin="frame"] .boss-health {
+  top: calc(
+    var(--frame-timer-top, max(0.5rem, env(safe-area-inset-top))) + var(--frame-timer-width) *
+      0.2195 + 1.6rem
+  );
+}
+
+/*
+ * The top right corner, with the gear in the pause button's cut-out; the latency
+ * and the frame counter stand beside the timer.
+ */
+.status-frame {
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  width: var(--frame-status-width, clamp(17rem, 24vw, 22rem));
+  aspect-ratio: 1154 / 636;
+  contain: paint;
+}
+
+/* A state is a word first; the colour and the pulse only help it along. */
+.status-frame__bar[data-state] .status-frame__label {
+  color: #ff9d8f;
+  animation: status-frame-alarm 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes status-frame-alarm {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
+}
+
+/*
+ * The match's sweep, left of the dial and at its height, never under the 48
+ * pixels a thumb needs. Placed by the dial's own numbers, so it follows the dial
+ * into every layout.
+ */
+.frame-scan {
+  position: absolute;
+  z-index: 27;
+  right: calc(var(--frame-radar-right) + var(--frame-radar-width) + 0.4rem);
+  bottom: calc(var(--frame-radar-bottom) + var(--frame-radar-width) * 0.354);
+  display: grid;
+  min-width: 3rem;
+  min-height: 3rem;
+  place-content: center;
+  gap: 0.1rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgb(117 216 255 / 55%);
+  border-radius: 0.6rem;
+  color: #c9f5ff;
+  background: rgb(5 25 33 / 70%);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  transform: translateY(50%);
+  pointer-events: auto;
+}
+
+.frame-scan small {
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.frame-scan.is-cooling {
+  opacity: 0.72;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-frame__bar[data-state] .status-frame__label {
+    animation: none;
+  }
+}
+
+.status-frame__bar > i {
+  position: absolute;
+  visibility: hidden;
+  border-radius: 2px;
+  background: currentColor;
+  outline: 1px solid rgb(188 239 255 / 75%);
+  opacity: 0.95;
+}
+
+.status-frame__bar > i.is-lit {
+  visibility: visible;
+}
+
+.status-frame__label {
+  position: absolute;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  color: #bcefff;
+  font:
+    700 clamp(0.5rem, 0.75vw, 0.72rem) / 1 system-ui,
+    sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The short form of a state word waits for the narrowest frame, a phone's. */
+.status-frame__word--short {
+  display: none;
+}
+
+/*
+ * A phone held sideways: under 520 pixels of height the frame skin's top row
+ * shrinks and climbs, so the status frame ends well above the thumbs and the dial
+ * that stands over the right stick.
+ */
+@media (height <= 520px) {
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-info-top: max(0.4rem, env(safe-area-inset-top));
+    --frame-info-width: clamp(13rem, 28vw, 17rem);
+    /*
+     * The whole timer, whiskers and all, against the top edge. Its whiskers run at
+     * 43 percent of its height, level with the info frame's slanted edge, so the
+     * width stops where the left tip clears that edge.
+     */
+    --frame-timer-top: max(0.125rem, env(safe-area-inset-top));
+    --frame-timer-width: min(18.75rem, 40vw);
+    --frame-status-width: clamp(12rem, 25vw, 15rem);
+    /* Enough to bring the ring pictures wholly onto the glass, with a small margin. */
+    --frame-stick-inset: 1.5rem;
+  }
+
+  /* Under the room's readouts, which keep their row across the top right here. */
+  .status-frame {
+    top: max(2.9rem, calc(env(safe-area-inset-top) + 2.5rem));
+  }
+}
+
+/*
+ * On a screen with height to spare the room's own readouts leave their row. The
+ * latency and the frame counter stand in a column just right of the timer, and
+ * the gear sits in the status frame's cut-out pause button, the very top right
+ * corner. A phone keeps them all in their row: beside a timer that small they
+ * would not fit.
+ */
+@media (height > 520px) {
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .room-network {
+    position: static;
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .latency-indicator,
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .fps-readout {
+    position: absolute;
+    left: calc(50% + var(--frame-timer-width) / 2 + 0.5rem);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .latency-indicator {
+    top: 0;
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .fps-readout {
+    top: 1.75rem;
+  }
+
+  /* Centred in the cut-out, a square about a fifth of the frame's width across. */
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .settings {
+    position: absolute;
+    top: calc((var(--frame-status-width) * 0.1941 - 2.4rem) / 2);
+    right: calc((var(--frame-status-width) * 0.1941 - 2.4rem) / 2);
+  }
+}
+
+/*
+ * The dial in its frame.
+ *
+ * The example's radar picture is the element's background and the canvas lies in
+ * its window. The box stops just past the ring, at 1140 of the picture's 1444
+ * texels, so the right wing is cut and the dial itself reaches the right edge of
+ * the glass. The canvas is still sized by its width, which the painter measures
+ * for its backing store, and it gets a dark disc of its own so the grid painted
+ * into the picture does not show through the one it draws. The dial's place is
+ * three numbers on the shell, so the sweep button can stand beside it in every
+ * layout.
+ */
+.display-shell--battle[data-hud-skin="frame"] {
+  --frame-radar-window: clamp(8rem, 12vw, 12rem);
+  --frame-radar-width: calc(var(--frame-radar-window) / 0.4571 * 0.7895);
+  --frame-radar-right: max(0.25rem, env(safe-area-inset-right));
+  --frame-radar-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+.display-shell--battle[data-hud-skin="frame"] .combat-radar {
+  top: auto;
+  right: var(--frame-radar-right);
+  bottom: var(--frame-radar-bottom);
+  left: auto;
+  display: block;
+  width: var(--frame-radar-width);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--hud-radar-art, none) left center / 126.67% 100% no-repeat;
+  box-shadow: none;
+  aspect-ratio: 1140 / 807;
+  transform: none;
+}
+
+/* The window measured off the source: centre 722, 408 and radius 330 of 1444 by 807. */
+.display-shell--battle[data-hud-skin="frame"] .combat-radar canvas {
+  position: absolute;
+  top: 9.67%;
+  left: 34.39%;
+  width: 57.9%;
+  border-radius: 50%;
+  background: rgb(3 20 29 / 86%);
+}
+
+/*
+ * Over the gun hand: the cockpit's padding, then the aim ring, the nose trigger's
+ * lift and its 44-pixel circle, then a small gap. The nose trigger is the column's
+ * top now that the assist toggle is gone.
+ */
+.display-shell--cockpit[data-hud-skin="frame"] {
+  --frame-radar-bottom: calc(
+    clamp(0.5rem, 2vw, 1.25rem) + var(--frame-stick-inset) + var(--cockpit-aim-ring) + 12px + 44px +
+      0.75rem
+  );
+}
+
+/* The thumbs' corners, moved in off the edges by the ring picture's overhang. */
+.display-shell--battle[data-hud-skin="frame"] .solo-cockpit {
+  padding: calc(clamp(0.5rem, 2vw, 1.25rem) + var(--frame-stick-inset));
+  padding-bottom: max(
+    calc(clamp(0.5rem, 2vw, 1.25rem) + var(--frame-stick-inset)),
+    env(safe-area-inset-bottom, 0)
+  );
+}
+
+/*
+ * The sticks in the example's ring and knobs.
+ *
+ * Only the picture changes: the ring element keeps its size, so the dead zone,
+ * the grab zone and the travel a reading reports are the classic's to the pixel.
+ * The ring picture is drawn half again as large as the element, which puts the
+ * knob's travel on the picture's inner window rather than on the metal around it.
+ */
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick__ring {
+  border: 0;
+  background: none;
+}
+
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick__ring::before {
+  position: absolute;
+  inset: -25%;
+  background: var(--hud-stick-ring-art, none) center / contain no-repeat;
+  content: "";
+  pointer-events: none;
+}
+
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick__knob {
+  width: 45%;
+  height: 45%;
+  background: var(--hud-knob-move-art, none) center / contain no-repeat;
+  box-shadow: none;
+}
+
+.display-shell--battle[data-hud-skin="frame"] .cockpit-stick--right .cockpit-stick__knob {
+  background-image: var(--hud-knob-aim-art, none);
+}
+
+/*
+ * The nose trigger over the ring picture. The picture overhangs the aim ring by
+ * a quarter, which reaches past the trigger's lift; the ring comes later in the
+ * markup and would otherwise paint across the button's lower half.
+ */
+.display-shell--battle[data-hud-skin="frame"] .solo-cockpit__triggers {
+  z-index: 1;
+}
+
+/* The frames are glass over a bright nebula; a shadow keeps thin letters off it. */
+.info-frame__label,
+.info-frame__capsule,
+.timer-frame__value,
+.timer-frame__caption,
+.status-frame__label {
+  text-shadow:
+    0 0 0.35em rgb(0 0 0 / 90%),
+    0 1px 1px rgb(0 0 0 / 80%);
+}
+
+/*
+ * A shared screen across a room: the frames and their type grow past the caps a
+ * desktop keeps, because a television is read from the sofa.
+ */
+@media (width >= 1700px) and (height >= 900px) {
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-info-width: clamp(30rem, 30vw, 38rem);
+    --frame-timer-width: clamp(28rem, 26vw, 34rem);
+    --frame-radar-window: clamp(12rem, 11vw, 15rem);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-status-width: clamp(22rem, 22vw, 28rem);
+  }
+
+  .info-frame__label {
+    font-size: 0.95rem;
+  }
+
+  .info-frame__capsule strong {
+    font-size: 1.45rem;
+  }
+
+  .info-frame__capsule > small {
+    font-size: 0.85rem;
+  }
+
+  .timer-frame__caption {
+    font-size: 0.8rem;
+  }
+
+  .status-frame__label {
+    font-size: 0.9rem;
+  }
+}
+
+@media (height <= 520px) {
+  /*
+   * On every phone the dial is its ring alone: the box is cut to the ring, 808
+   * texels square out of the 1444 by 807 picture starting at x 318, so the wings
+   * are gone and the ring itself stands flush with the right edge.
+   */
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-radar-window: clamp(4.5rem, 22vh, 5.5rem);
+    --frame-radar-width: calc(var(--frame-radar-window) / 0.8168);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] .combat-radar {
+    background-position: calc(var(--frame-radar-width) * -0.3936) center;
+    background-size: 178.71% 100%;
+    aspect-ratio: 808 / 807;
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] .combat-radar canvas {
+    left: 9.16%;
+    width: 81.68%;
+  }
+
+  .frame-scan {
+    bottom: calc(var(--frame-radar-bottom) + var(--frame-radar-width) * 0.5);
+  }
+
+  /*
+   * A phone held sideways, with the cockpit. The dial, its ring about as large as
+   * the aim stick's picture, stands straight over the aim stick, and the stick
+   * moves right until its centre is under the dial's. Both sticks' pictures clear
+   * the bottom of the glass by ten pixels. The nose trigger hangs at ten o'clock
+   * of the aim stick and the sweep at eight o'clock of the dial: the ends of the
+   * hours the operator gave that keep the two buttons apart. The status frame
+   * takes the top right corner with the gear in its cut-out, and the connection
+   * readouts stand in a column beside the timer.
+   */
+  .display-shell--cockpit[data-hud-skin="frame"] {
+    --frame-info-width: clamp(12rem, 24vw, 13rem);
+    /* The info frame is narrower here, so the whole timer can be a little wider. */
+    --frame-timer-width: min(18.75rem, 45vw);
+    --frame-status-width: clamp(8rem, 20vw, 8.5rem);
+    --frame-radar-window: calc(var(--cockpit-aim-ring) * 1.2);
+    /*
+     * As large as the aim stick's picture, but never taller than the glass left
+     * between the status frame and the stick: a phone 360 pixels tall has about
+     * 120 pixels there, and the full dial ran over the status frame's last bar.
+     */
+    --frame-radar-width: min(
+      calc(var(--frame-radar-window) / 0.8168),
+      calc(
+        100dvh - max(0.4rem, env(safe-area-inset-top)) - var(--frame-status-width) * 0.5511 -
+          0.25rem - var(--frame-radar-bottom)
+      )
+    );
+    /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
+    --frame-stick-bottom: calc(0.625rem + var(--cockpit-aim-ring) * 0.25);
+    --frame-radar-bottom: calc(var(--frame-stick-bottom) + var(--cockpit-aim-ring) * 1.25 + 0.5rem);
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame {
+    top: max(0.4rem, env(safe-area-inset-top));
+    right: max(0.4rem, env(safe-area-inset-right));
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit {
+    padding-right: calc(
+      var(--frame-radar-right) + (var(--frame-radar-width) - var(--cockpit-aim-ring)) / 2
+    );
+    padding-bottom: var(--frame-stick-bottom);
+  }
+
+  /* The drive ring is the larger, and so is its picture's overhang. */
+  .display-shell--cockpit[data-hud-skin="frame"] .cockpit-stick--left {
+    padding-bottom: calc((var(--cockpit-drive-ring) - var(--cockpit-aim-ring)) / 4);
+  }
+
+  /*
+   * Centred on a point at eight o'clock of the dial, far enough out that the
+   * button's corner clears the ring, whose radius is 0.49 of the box. The nose
+   * trigger's 44 pixels rather than 48: at eight and ten o'clock the two buttons
+   * share the gap between the dial and the stick, and on a phone 360 pixels tall
+   * the larger one sat on the trigger below it.
+   */
+  .display-shell--cockpit[data-hud-skin="frame"] .frame-scan {
+    --frame-scan-reach: calc(var(--frame-radar-width) * 0.49 + 1.7rem);
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    right: calc(
+      var(--frame-radar-right) + var(--frame-radar-width) / 2 + var(--frame-scan-reach) * 0.866
+    );
+    bottom: calc(
+      var(--frame-radar-bottom) + var(--frame-radar-width) / 2 - var(--frame-scan-reach) * 0.5
+    );
+    transform: translate(50%, 50%);
+  }
+
+  /* Centred at ten o'clock of the aim ring, just outside its picture. */
+  .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit__triggers {
+    --frame-nose-reach: calc(
+      var(--cockpit-aim-ring) * 0.75 + var(--cockpit-nose-button) / 2 + 0.125rem
+    );
+    right: calc(
+      var(--cockpit-aim-ring) / 2 + var(--frame-nose-reach) * 0.866 - var(--cockpit-nose-button) / 2
+    );
+    bottom: calc(
+      var(--cockpit-aim-ring) / 2 + var(--frame-nose-reach) * 0.5 - var(--cockpit-nose-button) / 2
+    );
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .room-network {
+    position: static;
+  }
+
+  /*
+   * One row over the timer's right whisker, between the ring and the status
+   * frame: the latency just past the ring, the frame counter with its stutters
+   * against the status frame. Above a fifth of the timer's height nothing of the
+   * picture reaches past the ring, so small type keeps the row clear of the
+   * bracket and the whisker's line.
+   */
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator,
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
+    position: absolute;
+    top: -0.1rem;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.5rem;
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator {
+    left: calc(50% + var(--frame-timer-width) * 0.15);
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
+    right: calc(var(--frame-status-width) + 0.25rem);
+  }
+
+  /* Centred in the status frame's cut-out, which on a phone is a little smaller than the gear. */
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings {
+    position: absolute;
+    top: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
+    right: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings__toggle {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+
+  /* A frame this narrow leaves a caption forty pixels: smaller type, no tracking, whole words. */
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__label {
+    font-size: 0.45rem;
+    letter-spacing: 0;
+  }
+
+  /* Even so «ВЫКЛЮЧЕН» was cut to «ВЫКЛЮ…», so the frame shows its short form. */
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__word {
+    display: none;
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__word--short {
+    display: inline;
+  }
 }
 
 .display-shell--battle .spaceship-hud.battle-header > div {

@@ -1,4 +1,4 @@
-import type { DisplayRoomView, PublicShip } from "@spaceship-defender/protocol";
+import type { DisplayRoomView, HudSkin, PublicShip } from "@spaceship-defender/protocol";
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
 import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 
@@ -14,6 +14,7 @@ import { CONTROLLER_URL } from "../../model/environment.js";
 import { useBareControls } from "../../model/hooks/useBareControls.js";
 import { useCockpitKeyboard } from "../../model/hooks/useCockpitKeyboard.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
+import { HUD_FRAME_CSS_VARIABLES } from "../../model/hudFrames.js";
 import { useLetterboxBars } from "../../model/hooks/useLetterboxBars.js";
 import { useLiveHeat } from "../../model/hooks/useLiveHeat.js";
 import { useShipPrediction } from "../../model/hooks/useShipPrediction.js";
@@ -35,6 +36,8 @@ export interface RoomPreview {
   readonly onPhaseChange: (phase: PreviewPhase) => void;
   readonly cameraViewWidth: number;
   readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
+  readonly hudSkin: HudSkin;
+  readonly onHudSkinChange: (hudSkin: HudSkin) => void;
 }
 
 interface RoomScreenProps {
@@ -83,8 +86,9 @@ export function RoomScreen({
 }: RoomScreenProps) {
   const portrait = useIsPortrait();
   // Read once: it is a device preference, and re-reading storage every render
-  // would answer the same question a hundred times a second.
-  const [aimAssist, setAimAssist] = useState(readAimAssistFromDevice);
+  // would answer the same question a hundred times a second. Nothing on the page
+  // changes it while the aim assist is being reworked.
+  const [aimAssist] = useState(readAimAssistFromDevice);
   const shellReference = useRef<HTMLElement>(null);
   /**
    * The ship this page is flying, as the reconciler currently has it.
@@ -222,6 +226,8 @@ export function RoomScreen({
   const joinUrl = useMemo(() => createControllerJoinUrl(CONTROLLER_URL, view.roomId), [view]);
   /** Sixteen published hulls is a match and nothing else has them. */
   const match = (view.game?.arenaShips.length ?? 0) > 0;
+  // The frame skin stands the readouts beside its timer, clear of the match's panel.
+  const frameSkin = view.game?.hudSkin === "frame";
   const moduleTree = selectModuleTree(ships, view.shipArchetypeId, preview !== undefined);
 
   /**
@@ -268,7 +274,13 @@ export function RoomScreen({
       className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${session?.cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
       data-panels={switches.opaquePanels ? "opaque" : "glass"}
       data-bars={bars.placement}
-      style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
+      data-hud-skin={view.game?.hudSkin ?? "classic"}
+      style={
+        {
+          "--bar-thickness": `${String(Math.round(bars.thickness))}px`,
+          ...(view.game?.hudSkin === "frame" ? HUD_FRAME_CSS_VARIABLES : {})
+        } as CSSProperties
+      }
     >
       {preview !== undefined && (
         <PreviewControls
@@ -276,6 +288,8 @@ export function RoomScreen({
           onPhaseChange={preview.onPhaseChange}
           cameraViewWidth={preview.cameraViewWidth}
           onCameraViewWidthChange={preview.onCameraViewWidthChange}
+          hudSkin={preview.hudSkin}
+          onHudSkinChange={preview.onHudSkinChange}
         />
       )}
       <header className={`room-header${match ? " room-header--match" : ""}`}>
@@ -285,8 +299,24 @@ export function RoomScreen({
          * arena does not have. Both sat on top of the readouts a pilot actually
          * uses, which is where they were.
          */}
-        {!match && (
+        {/* Nor does a fight: the crew joined in the lobby, and a dropped phone
+          comes back through its own session rather than by the code. */}
+        {!match && view.game === null && (
           <div>
+            {/*
+             * The way back out of a lobby. A phone hides the header's readouts,
+             * the gear and its "close the room" among them, so a room opened by
+             * mistake had no exit short of reloading the page.
+             */}
+            <button
+              type="button"
+              className="link-button room-leave"
+              data-testid="lobby-leave"
+              disabled={session?.closingRoom === true}
+              onClick={onCloseRoom}
+            >
+              {session?.closingRoom === true ? "Закрываем…" : "← Выйти из комнаты"}
+            </button>
             <p className="eyebrow">Комната</p>
             <strong className="room-code">{view.roomId}</strong>
           </div>
@@ -307,12 +337,12 @@ export function RoomScreen({
             it is open the header gives the room back rather than printing the
             same numbers twice; without the flag nothing here changes.
           */}
-          {!match && !diagnostics && (
+          {(!match || frameSkin) && !diagnostics && (
             <span className="latency-indicator" aria-live="polite">
-              Экран → сервер {formatLatency(view.displayLatencyMs)}
+              ping {formatLatency(view.displayLatencyMs)}
             </span>
           )}
-          {!match && view.game !== null && !diagnostics && (
+          {(!match || frameSkin) && view.game !== null && !diagnostics && (
             <PolledFpsReadout read={readFrameStats} />
           )}
           {/*
@@ -399,8 +429,6 @@ export function RoomScreen({
           onCloseRoom={onCloseRoom}
           onLeaveRoom={onLeaveRoom}
           onScan={onScan}
-          aimAssist={aimAssist}
-          onAimAssistChange={setAimAssist}
         />
       )}
       {visibleDemo ? (

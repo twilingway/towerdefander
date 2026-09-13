@@ -14,7 +14,20 @@ import { ModuleTreeWindow, type ModuleTreeEntry } from "../../components/ModuleT
 import { SoloCockpit, type SoloCockpitProps } from "./SoloCockpit/index.js";
 import { SalvageCountdown } from "./SalvageCountdown.js";
 import { useWorldSlice } from "../../model/worldStore.js";
-import { WaveCountdown } from "./WaveCountdown.js";
+import { hudFrameUrl } from "../../model/hudFrames.js";
+import {
+  readScanReading,
+  readStatusReading,
+  sameScanReading,
+  sameStatusReading,
+  type ScanReading,
+  type StatusReading
+} from "../../model/statusFrame.js";
+import { InfoFrame } from "./InfoFrame.js";
+import { ScanFrame } from "./ScanFrame.js";
+import { StatusFrame } from "./StatusFrame.js";
+import { TimerFrame } from "./TimerFrame.js";
+import { formatWaveCountdown, WAVE_WARNING_SECONDS, WaveCountdown } from "./WaveCountdown.js";
 import { WeaponHeat } from "./WeaponHeat.js";
 
 /**
@@ -108,7 +121,6 @@ function sameCapacities(left: Game | null, right: Game | null): boolean {
 export function BattleHudPanel() {
   const game = useWorldSlice(gameOf, sameHeader);
   if (game === null) return null;
-  const upgrade = getCurrentWaveUpgrade(game.teamUpgrade.selection, game.encounter.waveNumber);
   return (
     <header className="battle-header spaceship-hud">
       <div>
@@ -122,19 +134,12 @@ export function BattleHudPanel() {
       <div>
         <span>Счёт</span>
         <strong>{game.encounter.score}</strong>
-        <small data-testid="hud-field-counts">
-          Враги {game.enemyShips.length} · Ракеты {game.homingMissiles.length} · Камни{" "}
-          {waveAsteroidCount(game)}
-        </small>
+        <small data-testid="hud-field-counts">{fieldCounts(game)}</small>
       </div>
       <div>
         <span>Кредиты</span>
         <strong>{game.credits}</strong>
-        <small>
-          {upgrade === null
-            ? "в этой волне улучшений нет"
-            : `улучшение волны: ${roleLabel(upgrade.role)}`}
-        </small>
+        <small>{upgradeLine(game)}</small>
       </div>
       <WeaponHeatPanel />
     </header>
@@ -176,28 +181,14 @@ function sameArenaHeader(left: Game | null, right: Game | null): boolean {
 
 export function ArenaHudPanel({ onScan }: { readonly onScan: () => void }) {
   const game = useWorldSlice(gameOf, sameArenaHeader);
-  /*
-   * The place stops moving when this hull does.
-   *
-   * While a pilot is flying, the place they would take by falling now is simply
-   * how many ships are up - and the moment theirs is gone the room stops
-   * publishing it, so the last number held is the place they actually took.
-   * Kept rather than recomputed for the same reason: after the wreck there is
-   * nothing left to compute it from.
-   */
-  const place = useRef(ARENA_SHIP_COUNT);
+  const { alive, place } = useArenaStanding(game);
   if (game === null) return null;
-  // Wrecks stay on the wire long enough to be seen dying, so "alive" has to
-  // count the ones still flying rather than the ones still published.
-  const alive = game.arenaShips.filter((ship) => ship.alive).length;
-  const seated = game.arenaShips.some((ship) => ship.isSelf && ship.alive);
-  if (seated) place.current = alive;
   return (
     <ArenaHud
       alive={alive}
       fieldSize={ARENA_SHIP_COUNT}
       kills={game.encounter.score}
-      place={place.current}
+      place={place}
       hp={game.spaceship.hp}
       maxHp={game.spaceship.maxHp}
       shield={game.shield.energy}
@@ -255,6 +246,168 @@ export function BossPanel() {
   const game = useWorldSlice(gameOf, sameBoss);
   if (game?.encounter.phase !== "combat") return null;
   return <BossHealth game={game} />;
+}
+
+/** The field's small line, in both skins' words. */
+function fieldCounts(game: Game): string {
+  return `Враги ${String(game.enemyShips.length)} · Ракеты ${String(game.homingMissiles.length)} · Камни ${String(waveAsteroidCount(game))}`;
+}
+
+/** What this wave's team upgrade is, if the crew paid for one. */
+function upgradeLine(game: Game): string {
+  const upgrade = getCurrentWaveUpgrade(game.teamUpgrade.selection, game.encounter.waveNumber);
+  return upgrade === null
+    ? "в этой волне улучшений нет"
+    : `улучшение волны: ${roleLabel(upgrade.role)}`;
+}
+
+/**
+ * How many are still up, and where this pilot stands.
+ *
+ * The place stops moving when this hull does. While a pilot is flying, the place
+ * they would take by falling now is simply how many ships are up - and the moment
+ * theirs is gone the room stops publishing it, so the last number held is the
+ * place they actually took. Kept rather than recomputed for the same reason:
+ * after the wreck there is nothing left to compute it from.
+ */
+function useArenaStanding(game: Game | null): { readonly alive: number; readonly place: number } {
+  const place = useRef(ARENA_SHIP_COUNT);
+  if (game === null) return { alive: 0, place: place.current };
+  // Wrecks stay on the wire long enough to be seen dying, so "alive" has to
+  // count the ones still flying rather than the ones still published.
+  const alive = game.arenaShips.filter((ship) => ship.alive).length;
+  if (game.arenaShips.some((ship) => ship.isSelf && ship.alive)) place.current = alive;
+  return { alive, place: place.current };
+}
+
+const statusReadingOf = (view: DisplayRoomView | undefined): StatusReading | null => {
+  const game = view?.game;
+  return game == null ? null : readStatusReading(game);
+};
+
+/** The frame skin's status panel: wakes only when a bar's lit count or state changes. */
+export function StatusFramePanel() {
+  const reading = useWorldSlice(statusReadingOf, sameStatusReading);
+  if (reading === null) return null;
+  return <StatusFrame reading={reading} frameUrl={hudFrameUrl("ui-status")} />;
+}
+
+const scanReadingOf = (view: DisplayRoomView | undefined): ScanReading | null => {
+  const game = view?.game;
+  return game == null ? null : readScanReading(game);
+};
+
+/** The frame skin's sweep: a match only, waking when either of its clocks ticks. */
+export function ScanFramePanel({ onScan }: { readonly onScan: () => void }) {
+  const scan = useWorldSlice(scanReadingOf, sameScanReading);
+  if (scan === null) return null;
+  return (
+    <ScanFrame
+      readySeconds={scan.readySeconds}
+      revealSecondsRemaining={scan.revealSecondsRemaining}
+      onScan={onScan}
+    />
+  );
+}
+
+/** The frame skin's campaign header: the classic header's three numbers in the example's frame. */
+export function InfoFramePanel() {
+  const game = useWorldSlice(gameOf, sameHeader);
+  if (game === null) return null;
+  return (
+    <InfoFrame
+      frameUrl={hudFrameUrl("ui-info")}
+      rows={[
+        {
+          label: "Волна",
+          value: game.encounter.waveNumber,
+          detail: encounterLabel(game.encounter.phase)
+        },
+        {
+          label: "Счёт",
+          value: game.encounter.score,
+          detail: fieldCounts(game),
+          detailTestId: "hud-field-counts"
+        },
+        { label: "Кредиты", value: game.credits, detail: upgradeLine(game) }
+      ]}
+    />
+  );
+}
+
+function sameArenaStanding(left: Game | null, right: Game | null): boolean {
+  if (left === right) return true;
+  const both = pair(left, right);
+  if (both === undefined) return false;
+  const [held, next] = both;
+  const flying = (game: Game) => game.arenaShips.some((ship) => ship.isSelf && ship.alive);
+  return (
+    held.arenaShips.length === next.arenaShips.length &&
+    held.arenaShips.filter((ship) => ship.alive).length ===
+      next.arenaShips.filter((ship) => ship.alive).length &&
+    flying(held) === flying(next) &&
+    held.encounter.score === next.encounter.score
+  );
+}
+
+/** The frame skin's match header: who is left, who fell to this pilot, where they stand. */
+export function ArenaInfoFramePanel() {
+  const game = useWorldSlice(gameOf, sameArenaStanding);
+  const { alive, place } = useArenaStanding(game);
+  if (game === null) return null;
+  return (
+    <InfoFrame
+      frameUrl={hudFrameUrl("ui-info")}
+      rows={[
+        {
+          label: "Живых",
+          value: (
+            <>
+              {alive}
+              <small>/{ARENA_SHIP_COUNT}</small>
+            </>
+          )
+        },
+        { label: "Сбитые", value: game.encounter.score, valueTestId: "arena-hud-kills" },
+        { label: "Место", value: place, valueTestId: "arena-hud-place" }
+      ]}
+    />
+  );
+}
+
+/**
+ * The frame skin's clock: the wave's deadline, or the loot window once the wave
+ * is won. A match has no wave, so there it is the bare time.
+ */
+export function TimerFramePanel() {
+  const game = useWorldSlice(gameOf, sameCountdown);
+  if (game?.encounter.phase !== "combat") return null;
+  const frameUrl = hudFrameUrl("ui-timer");
+  const salvage = game.encounter.lootWindowSecondsRemaining;
+  if (salvage > 0) {
+    const seconds = String(Math.max(0, Math.ceil(salvage)));
+    return (
+      <TimerFrame
+        value={seconds}
+        caption="Сбор трофеев"
+        ariaLabel={`Сбор трофеев ${seconds} с`}
+        tone="salvage"
+        frameUrl={frameUrl}
+      />
+    );
+  }
+  const remaining = game.encounter.waveSecondsRemaining;
+  const clock = formatWaveCountdown(remaining);
+  const match = game.arenaShips.length > 0;
+  return (
+    <TimerFrame
+      value={clock}
+      caption={match ? undefined : "До конца волны"}
+      ariaLabel={match ? `Осталось ${clock}` : `До конца волны ${clock}`}
+      tone={remaining <= WAVE_WARNING_SECONDS ? "warning" : "wave"}
+      frameUrl={frameUrl}
+    />
+  );
 }
 
 function samePurchases(left: readonly string[], right: readonly string[]): boolean {
@@ -360,9 +513,7 @@ function sameCockpit(left: Game | null, right: Game | null): boolean {
  * that only moved a rock leaves the sticks alone.
  */
 export function CockpitPanel({
-  controls,
-  aimAssist,
-  onAimAssistChange
+  controls
 }: {
   readonly controls: Omit<
     SoloCockpitProps,
@@ -373,11 +524,7 @@ export function CockpitPanel({
     | "machineGunOverheated"
     | "cannonHeat"
     | "cannonOverheated"
-    | "aimAssist"
-    | "onAimAssistChange"
   >;
-  readonly aimAssist: boolean;
-  readonly onAimAssistChange: (enabled: boolean) => void;
 }) {
   const game = useWorldSlice(gameOf, sameCockpit);
   if (game === null) return null;
@@ -388,8 +535,6 @@ export function CockpitPanel({
       aimDeadzoneShare={game.helm.aimDeadzoneShare}
       machineGunHeat={game.machineGun.heat / game.machineGun.capacity}
       machineGunOverheated={game.machineGun.overheated}
-      aimAssist={aimAssist}
-      onAimAssistChange={onAimAssistChange}
       {...controls}
     />
   );

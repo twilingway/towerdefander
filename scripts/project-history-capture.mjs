@@ -252,7 +252,7 @@ async function photograph(date, recipe, captures, status) {
   });
   const display = await context.newPage();
   try {
-    await display.goto(`http://127.0.0.1:${String(PORTS.display)}/`, { waitUntil: "load" });
+    await display.goto(`http://127.0.0.1:${String(PORTS.display)}/?shared`, { waitUntil: "load" });
     await enterMode(display, recipe, status);
     await chooseCrew(display, recipe, status);
     await display

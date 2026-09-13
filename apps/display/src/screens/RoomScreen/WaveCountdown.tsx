@@ -3,8 +3,11 @@ interface WaveCountdownProps {
   readonly className?: string;
 }
 
+/** The last minute of a wave is the one the clock warns about, in either skin. */
+export const WAVE_WARNING_SECONDS = 60;
+
 export function WaveCountdown({ secondsRemaining, className }: WaveCountdownProps) {
-  const warning = secondsRemaining <= 60;
+  const warning = secondsRemaining <= WAVE_WARNING_SECONDS;
   return (
     <div
       className={`wave-countdown${warning ? " wave-countdown--warning" : ""}${className === undefined ? "" : ` ${className}`}`}

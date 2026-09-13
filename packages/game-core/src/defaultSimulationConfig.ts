@@ -16,6 +16,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   // catalogue counts health in reaches 680.
   cameraViewWidth: 2500,
   background: { image: "deep-nebula", parallaxStrength: 1 },
+  hudSkin: "classic",
   spaceshipVisual: null,
   shieldBandEffect: "",
   shieldImpactEffect: "",

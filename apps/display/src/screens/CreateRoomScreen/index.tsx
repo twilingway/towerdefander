@@ -24,6 +24,11 @@ interface CreateRoomScreenProps {
   readonly maintenance: MaintenanceState | undefined;
   readonly visibleDemo: boolean;
   /**
+   * Whether the shared-screen tile works. Players find it switched off while
+   * those crews still fly on autopilots; `?shared` opens it for the stands.
+   */
+  readonly sharedScreen: boolean;
+  /**
    * Whether to offer the wave picker. A development build only: the server
    * refuses the wave unless it was started with `ALLOW_START_WAVE=true`, so
    * showing the control anywhere else would only promise what it cannot do.
@@ -59,6 +64,7 @@ export function CreateRoomScreen({
   error,
   maintenance,
   visibleDemo,
+  sharedScreen,
   allowStartWave,
   initialStartWave,
   ships,
@@ -140,6 +146,7 @@ export function CreateRoomScreen({
             className={`place-tile${cockpit ? "" : " is-selected"}`}
             aria-label="Общий экран"
             aria-pressed={!cockpit}
+            disabled={!sharedScreen}
             onClick={() => {
               setCockpit(false);
             }}

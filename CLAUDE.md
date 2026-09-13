@@ -114,9 +114,9 @@ TypeScript source, and only the server is bundled (tsup, `noExternal: game-core`
 
 Every client app routes with `react-router`: `App.tsx` holds the route table and nothing else, and a
 screen never calls a router hook — see `docs/CODE_STYLE.md`, "Адрес: путь называет экран, запрос
-настраивает его". Debug and harness flags (`?diag`, `?tanks`, `?dpr`, `?demo`, `?wave`, `?ship`)
-stay query parameters read from `window.location.search`, never routes and never router state; some
-of them are read outside React, in `SpaceshipCanvas` and in the Phaser scene.
+настраивает его". Debug and harness flags (`?diag`, `?tanks`, `?dpr`, `?demo`, `?wave`, `?ship`,
+`?shared`) stay query parameters read from `window.location.search`, never routes and never router
+state; some of them are read outside React, in `SpaceshipCanvas` and in the Phaser scene.
 
 ### Simulation
 
@@ -148,11 +148,11 @@ tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 68) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 69) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;
-they carry their own `BALANCE_FILE_VERSION` (currently 55) with migrations in
+they carry their own `BALANCE_FILE_VERSION` (currently 56) with migrations in
 `apps/server/src/balance/migrations.ts`, and a balance-only change bumps that file version instead
 of the protocol. `packages/protocol/src/balanceStats.ts` does the same for the measurement reports
 the statistics tab reads (`BALANCE_STATS_FILE_VERSION`, currently 3) — but those have **no

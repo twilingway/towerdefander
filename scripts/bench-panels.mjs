@@ -186,8 +186,13 @@ const stand = useLab
         page.evaluate((bare) => {
           const rows = {};
           if (bare) {
-            const readout = document.querySelector('[data-testid="fps-readout"]');
-            rows["Кадр"] = readout?.textContent?.trim() ?? "";
+            // By label, not by position: the worst-frame badge appears only in a
+            // second that stalled, and a positional median would then mix its
+            // milliseconds into the stutter column.
+            const text = document.querySelector('[data-testid="fps-readout"]')?.textContent ?? "";
+            rows["FPS"] = /(\d+)\s*FPS/.exec(text)?.[1] ?? "";
+            rows["рывки, %"] = /рывки\s*(\d+)/.exec(text)?.[1] ?? "";
+            rows["худший кадр, мс"] = /(\d+)\s*мс/.exec(text)?.[1] ?? "";
             return rows;
           }
           for (const pair of document.querySelectorAll('[data-testid="diagnostics-panel"] div')) {

@@ -25,10 +25,15 @@ const sourceIds = readdirSync(SOURCES)
   .map((entry) => basename(entry, ".png"))
   .sort();
 const manifestText = readFileSync(join(PACKAGE, "src", "manifest.ts"), "utf8");
-// Two arrays in one generated file: sprites first, then the sky pictures.
+// Three arrays in one generated file: sprites, the sky pictures, then the HUD frames.
 const backdropStart = manifestText.indexOf("export const BACKDROP_ARTS");
+const hudStart = manifestText.indexOf("export const HUD_ARTS");
 const manifest = backdropStart === -1 ? manifestText : manifestText.slice(0, backdropStart);
-const backdropManifest = backdropStart === -1 ? "" : manifestText.slice(backdropStart);
+const backdropManifest =
+  backdropStart === -1
+    ? ""
+    : manifestText.slice(backdropStart, hudStart === -1 ? undefined : hudStart);
+const hudManifest = hudStart === -1 ? "" : manifestText.slice(hudStart);
 
 /** The generated manifest is TypeScript, so read the fields out of its text. */
 const manifestEntries = [...manifest.matchAll(/^ {4}id: "([^"]+)",$/gm)].map((match) => {
@@ -153,4 +158,46 @@ test("each sky picture matches the file it points at", () => {
 test("the protocol names exactly the sky pictures that were built", () => {
   // `none` is the empty sky and has no file; every other picture must have one.
   assert.deepEqual(BACKDROP_IMAGES.filter((image) => image !== "none").sort(), backdropSourceIds);
+});
+
+const HUD = join(PACKAGE, "hud");
+const HUD_SOURCES = join(PACKAGE, "sources", "hud");
+/** Every frame is fetched before the first fight, so each one stays small. */
+const MAX_HUD_BYTES = 160 * 1024;
+
+const hudSourceIds = readdirSync(HUD_SOURCES)
+  .filter((entry) => entry.endsWith(".png"))
+  .map((entry) => basename(entry, ".png"))
+  .sort();
+const hudEntries = [...hudManifest.matchAll(/^ {4}id: "([^"]+)",$/gm)].map((match) => {
+  const block = hudManifest.slice(match.index, hudManifest.indexOf("\n  }", match.index));
+  const field = (name) => {
+    const found = new RegExp(`${name}: (\\d+)`).exec(block);
+    return found === null ? undefined : Number(found[1]);
+  };
+  return { id: match[1], bytes: field("bytes"), width: field("width"), height: field("height") };
+});
+
+test("the manifest covers exactly the HUD frames", () => {
+  assert.ok(hudSourceIds.length > 0, "no HUD frame sources found");
+  assert.deepEqual(
+    hudEntries.map((entry) => entry.id).sort(),
+    hudSourceIds,
+    "run `pnpm sprites:build` - the HUD frames and their sources have drifted apart"
+  );
+});
+
+test("each HUD frame matches the file it points at", () => {
+  for (const entry of hudEntries) {
+    const path = join(HUD, `${entry.id}.webp`);
+    const stats = statSync(path);
+    assert.equal(stats.size, entry.bytes, `${entry.id}.webp is ${String(stats.size)} bytes`);
+    assert.ok(
+      stats.size <= MAX_HUD_BYTES,
+      `${entry.id}.webp is ${String(Math.round(stats.size / 1024))} KiB, over the ceiling`
+    );
+    const size = webpSize(readFileSync(path));
+    assert.equal(size.width, entry.width, `${entry.id}: width differs from the file`);
+    assert.equal(size.height, entry.height, `${entry.id}: height differs from the file`);
+  }
 });

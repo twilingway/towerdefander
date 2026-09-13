@@ -1361,6 +1361,47 @@ describe("version 1 migration", () => {
     });
   });
 
+  it("dresses a preset from before the HUD skins in the classic HUD", async () => {
+    const filePath = await temporaryPresetPath();
+    const legacyTuning: Partial<BalanceTuning> = { ...createDefaultTuning() };
+    delete legacyTuning.hudSkin;
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 55,
+        activePresetId: "operator",
+        presets: [{ id: "operator", name: "Operator", tuning: legacyTuning }]
+      }),
+      "utf8"
+    );
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    // Missing, the field would fail the strict schema and take the whole preset
+    // down to defaults - which is what a warning here would mean.
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
+    expect(store.getActiveTuning().hudSkin).toBe("classic");
+    expect(store.getActiveSimulationConfig().hudSkin).toBe("classic");
+  });
+
+  it("keeps the frame skin a preset was saved with", async () => {
+    const filePath = await temporaryPresetPath();
+    const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
+    const file = tunedPresetsFile(10);
+    const preset = file.presets[0];
+    if (preset === undefined) throw new Error("fixture must contain a preset");
+    await store.save({
+      ...file,
+      presets: [{ ...preset, tuning: { ...preset.tuning, hudSkin: "frame" } }]
+    });
+
+    expect(store.getActiveSimulationConfig().hudSkin).toBe("frame");
+    const persisted = JSON.parse(await readFile(filePath, "utf8")) as BalancePresetsFile;
+    expect(persisted.presets[0]?.tuning.hudSkin).toBe("frame");
+  });
+
   it("persists the tuned sky to disk", async () => {
     const filePath = await temporaryPresetPath();
     const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });

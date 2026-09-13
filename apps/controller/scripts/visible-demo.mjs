@@ -46,9 +46,10 @@ function withQuery(base, key, value) {
 
 // `DEMO_SHIP=blade` opens the run on a named hull, which is the only way to
 // watch one of the other two play rather than read its numbers.
+// `shared` opens the shared-screen tile, which players find switched off.
 const displayUrl = withQuery(
   withQuery(
-    process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1",
+    withQuery(process.env.DEMO_DISPLAY_URL ?? "http://127.0.0.1:36173/?demo=1", "shared", "1"),
     "wave",
     process.env.DEMO_START_WAVE
   ),

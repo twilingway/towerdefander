@@ -119,6 +119,7 @@ describe("display room view", () => {
           laserBeams: [],
           backgroundImage: "deep-nebula",
           backgroundParallaxStrength: 0.8,
+          hudSkin: "frame",
           spaceshipVisualShape: "ship-lancer",
           shieldBandEffect: "plasma-exhaust",
           shieldImpactEffect: "debris-burst",
@@ -248,6 +249,7 @@ describe("display room view", () => {
       image: "deep-nebula",
       parallaxStrength: 0.8
     });
+    expect(view?.game?.hudSkin).toBe("frame");
     expect(view?.game?.arenaRadius).toBe(2200);
     expect(view?.game?.spaceship.hp).toBe(850);
     expect(view?.game?.shield.energy).toBe(75);
