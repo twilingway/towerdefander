@@ -21,14 +21,8 @@ import { PolledCombatRadar } from "./CombatRadar.js";
 import { RunResultOverlay } from "./RunResultOverlay.js";
 import { SpaceshipCanvas } from "./SpaceshipCanvas.js";
 import { TeamUpgradeOverlay } from "./TeamUpgradeOverlay.js";
-import {
-  ArenaHudPanel,
-  BattleHudPanel,
-  BossPanel,
-  CockpitPanel,
-  CountdownPanel,
-  ModuleWindowPanel
-} from "./panels.js";
+import { HUD_SKIN_PARTS } from "./hudSkins.js";
+import { BossPanel, CockpitPanel, ModuleWindowPanel } from "./panels.js";
 
 /** What the fight needs to know about this page's own seat, if it holds one. */
 export interface BattleCockpit {
@@ -97,6 +91,9 @@ export function BattleStage({
   useEffect(() => {
     void enterFullscreenIfWanted();
   }, []);
+  // The run's skin decides which panels stand over the fight. It is fixed at run
+  // start, so the table is read on render rather than watched.
+  const { CampaignHeader, ArenaHeader, Countdown, Status } = HUD_SKIN_PARTS[view.game.hudSkin];
   return (
     <MeasuredWhenAsked
       measuring={diagnostics}
@@ -159,14 +156,17 @@ export function BattleStage({
             stand. The campaign's wave, score and credits mean nothing here. */}
           {switches.interfaceEnabled &&
             (view.game.arenaShips.length > 0 ? (
-              <ArenaHudPanel onScan={onScan} />
+              <ArenaHeader onScan={onScan} />
             ) : (
-              <BattleHudPanel />
+              <CampaignHeader />
             ))}
+        </MeteredPanel>
+        <MeteredPanel id="статус" measuring={diagnostics}>
+          {switches.interfaceEnabled && Status !== null && <Status onScan={onScan} />}
         </MeteredPanel>
 
         <MeteredPanel id="часы" measuring={diagnostics}>
-          <CountdownPanel />
+          <Countdown />
         </MeteredPanel>
         <MeteredPanel id="босс" measuring={diagnostics}>
           <BossPanel />

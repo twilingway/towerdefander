@@ -1,5 +1,5 @@
 import type { DisplayRoomView } from "@spaceship-defender/protocol";
-import { HUD_ARTS } from "@spaceship-defender/sprite-assets";
+import { getShieldStatusLabel } from "./combatHudViewModel.js";
 
 /**
  * The example's status frame, as the numbers both prototypes of it read.
@@ -122,7 +122,69 @@ export function sameStatusLit(left: StatusLit | null, right: StatusLit | null): 
   );
 }
 
-/** Address of the built frame; undefined only in a build that ships without it. */
-export const STATUS_FRAME_URL: string | undefined = HUD_ARTS.find(
-  (art) => art.id === "ui-status"
-)?.url;
+/** At or under this share of its hull the ship reads as in danger, as the match gauges say. */
+export const LOW_HULL_SHARE = 0.35;
+
+/** Everything the status frame draws, and so everything it compares. */
+export interface StatusReading {
+  readonly lit: StatusLit;
+  readonly cannonOverheated: boolean;
+  readonly machineGunOverheated: boolean;
+  /** What the shield is doing while it is not up, in the classic dial's words; null while it is. */
+  readonly shieldState: string | null;
+  readonly hullLow: boolean;
+  /** Only a match carries the sweep, on the button the frame's pause was cut from. */
+  readonly scan: {
+    readonly readySeconds: number;
+    readonly revealSecondsRemaining: number;
+  } | null;
+}
+
+export function readStatusReading(
+  game: Pick<
+    Game,
+    | "cannon"
+    | "spaceship"
+    | "shield"
+    | "shieldPhase"
+    | "machineGun"
+    | "arenaShips"
+    | "scanReadySeconds"
+    | "scanRevealSecondsRemaining"
+  >
+): StatusReading {
+  return {
+    lit: readStatusLit(game),
+    cannonOverheated: game.cannon.overheated,
+    machineGunOverheated: game.machineGun.overheated,
+    shieldState: game.shield.active
+      ? null
+      : getShieldStatusLabel(game.shieldPhase, game.shield.rearmRequired, game.shield.energy),
+    hullLow: game.spaceship.maxHp > 0 && game.spaceship.hp / game.spaceship.maxHp <= LOW_HULL_SHARE,
+    scan:
+      game.arenaShips.length > 0
+        ? {
+            readySeconds: game.scanReadySeconds,
+            revealSecondsRemaining: game.scanRevealSecondsRemaining
+          }
+        : null
+  };
+}
+
+/** A new reading is a new drawing only when a count, a state or the sweep's clock moved. */
+export function sameStatusReading(
+  left: StatusReading | null,
+  right: StatusReading | null
+): boolean {
+  if (left === right) return true;
+  if (left === null || right === null) return false;
+  return (
+    sameStatusLit(left.lit, right.lit) &&
+    left.cannonOverheated === right.cannonOverheated &&
+    left.machineGunOverheated === right.machineGunOverheated &&
+    left.shieldState === right.shieldState &&
+    left.hullLow === right.hullLow &&
+    left.scan?.readySeconds === right.scan?.readySeconds &&
+    left.scan?.revealSecondsRemaining === right.scan?.revealSecondsRemaining
+  );
+}

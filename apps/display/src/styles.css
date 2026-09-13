@@ -3558,26 +3558,197 @@ p {
 }
 
 /*
- * The frame skin's status panel: the example's status frame in the page, top
- * right, at half its built width - what it takes on a 1080p screen. Where it
- * finally stands is decided with the rest of the skin's layout.
+ * The frame skin.
+ *
+ * The example's frames as pictures at no more than their built size, with the
+ * numbers laid over their windows: the info frame top left where the classic
+ * header stands, the timer in the middle of the top edge, and the status frame on
+ * the right under the room's own readouts and the gear. Nothing here touches a
+ * classic rule: every selector is a frame class or scoped to the skin.
  */
+.display-shell--battle[data-hud-skin="frame"] {
+  --frame-info-top: max(4.2rem, calc(env(safe-area-inset-top) + 3.6rem));
+  --frame-info-width: clamp(17rem, 32vw, 30rem);
+  --frame-timer-width: clamp(15rem, 28vw, 28rem);
+}
+
+/* The collapsed module tree waits under the info frame instead of on top of it. */
+.display-shell--battle[data-hud-skin="frame"] .module-tree--collapsed {
+  top: calc(var(--frame-info-top) + var(--frame-info-width) * 0.3164 + 0.5rem);
+}
+
+.info-frame,
+.timer-frame,
 .status-frame {
   position: absolute;
   z-index: 25;
-  top: max(3.2rem, calc(env(safe-area-inset-top) + 2.6rem));
-  right: max(0.75rem, env(safe-area-inset-right));
-  width: min(20.625rem, 34vw);
-  aspect-ratio: 1154 / 636;
   pointer-events: none;
-  contain: paint;
 }
 
+.info-frame__art,
+.timer-frame__art,
 .status-frame__art {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+/* Dropped under the room code, which is set large enough to reach the classic header too. */
+.info-frame {
+  top: var(--frame-info-top, max(4.2rem, calc(env(safe-area-inset-top) + 3.6rem)));
+  left: max(0.75rem, env(safe-area-inset-left));
+  width: var(--frame-info-width, clamp(17rem, 32vw, 30rem));
+  aspect-ratio: 1767 / 559;
+  contain: paint;
+}
+
+.info-frame__label,
+.info-frame__capsule {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.info-frame__label {
+  color: #8fdcff;
+  font-size: clamp(0.55rem, 0.8vw, 0.8rem);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.info-frame__capsule {
+  gap: 0.45em;
+  padding-left: 0.4em;
+  color: #e8f8ff;
+}
+
+.info-frame__capsule strong {
+  color: #ffd783;
+  font-size: clamp(0.8rem, 1.2vw, 1.2rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two short lines rather than one cut off: the small line carries what the classic header says. */
+.info-frame__capsule small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #b6d9e6;
+  font-size: clamp(0.5rem, 0.68vw, 0.7rem);
+  line-height: 1.05;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.timer-frame {
+  top: max(0.5rem, env(safe-area-inset-top));
+  left: 50%;
+  width: var(--frame-timer-width, clamp(15rem, 28vw, 28rem));
+  aspect-ratio: 2036 / 447;
+  transform: translateX(-50%);
+}
+
+.timer-frame__value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: #ffd783;
+  font-size: clamp(0.9rem, 1.5vw, 1.5rem);
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, -50%);
+}
+
+/* Under the ring rather than in it: the ring holds the time and nothing else. */
+.timer-frame__caption {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  color: #c9f5ff;
+  background: rgb(5 25 33 / 70%);
+  font-size: clamp(0.5rem, 0.7vw, 0.68rem);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.timer-frame--warning .timer-frame__value {
+  color: #ff796e;
+}
+
+.timer-frame--salvage .timer-frame__value,
+.timer-frame--salvage .timer-frame__caption {
+  color: #7effad;
+}
+
+/* Under the timer and its caption, while a boss is alive. */
+.display-shell--battle[data-hud-skin="frame"] .boss-health {
+  top: calc(max(0.5rem, env(safe-area-inset-top)) + var(--frame-timer-width) * 0.2195 + 1.6rem);
+}
+
+.status-frame {
+  top: max(7.2rem, calc(env(safe-area-inset-top) + 6.6rem));
+  right: max(0.75rem, env(safe-area-inset-right));
+  width: clamp(17rem, 24vw, 22rem);
+  aspect-ratio: 1154 / 636;
+  contain: paint;
+}
+
+/* A state is a word first; the colour and the pulse only help it along. */
+.status-frame__bar[data-state] .status-frame__label {
+  color: #ff9d8f;
+  animation: status-frame-alarm 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes status-frame-alarm {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.45;
+  }
+}
+
+/* On the pause button's place; never under the 48 pixels a thumb needs. */
+.status-frame__scan {
+  position: absolute;
+  display: grid;
+  min-width: 3rem;
+  min-height: 3rem;
+  place-content: center;
+  gap: 0.1rem;
+  border: 1px solid rgb(117 216 255 / 55%);
+  border-radius: 0.6rem;
+  color: #c9f5ff;
+  background: rgb(5 25 33 / 70%);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+
+.status-frame__scan small {
+  font-size: 0.55rem;
+  font-weight: 600;
+  text-transform: none;
+}
+
+.status-frame__scan.is-cooling {
+  opacity: 0.72;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-frame__bar[data-state] .status-frame__label {
+    animation: none;
+  }
 }
 
 .status-frame__bar > i {
@@ -3602,6 +3773,25 @@ p {
     sans-serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/*
+ * A phone held sideways: under 520 pixels of height the frame skin's top row
+ * shrinks and climbs, so the status frame ends well above the thumbs and the dial
+ * that stands over the right stick.
+ */
+@media (height <= 520px) {
+  .display-shell--battle[data-hud-skin="frame"] {
+    --frame-info-top: max(2.6rem, calc(env(safe-area-inset-top) + 2.2rem));
+    --frame-info-width: clamp(13rem, 28vw, 17rem);
+    --frame-timer-width: clamp(11rem, 26vw, 16rem);
+  }
+
+  .status-frame {
+    top: max(2.9rem, calc(env(safe-area-inset-top) + 2.5rem));
+    width: clamp(12rem, 25vw, 15rem);
+  }
 }
 
 .display-shell--battle .spaceship-hud.battle-header > div {

@@ -1,4 +1,4 @@
-import type { DisplayRoomView, PublicShip } from "@spaceship-defender/protocol";
+import type { DisplayRoomView, HudSkin, PublicShip } from "@spaceship-defender/protocol";
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
 import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 
@@ -35,6 +35,8 @@ export interface RoomPreview {
   readonly onPhaseChange: (phase: PreviewPhase) => void;
   readonly cameraViewWidth: number;
   readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
+  readonly hudSkin: HudSkin;
+  readonly onHudSkinChange: (hudSkin: HudSkin) => void;
 }
 
 interface RoomScreenProps {
@@ -268,6 +270,7 @@ export function RoomScreen({
       className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${session?.cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
       data-panels={switches.opaquePanels ? "opaque" : "glass"}
       data-bars={bars.placement}
+      data-hud-skin={view.game?.hudSkin ?? "classic"}
       style={{ "--bar-thickness": `${String(Math.round(bars.thickness))}px` } as CSSProperties}
     >
       {preview !== undefined && (
@@ -276,6 +279,8 @@ export function RoomScreen({
           onPhaseChange={preview.onPhaseChange}
           cameraViewWidth={preview.cameraViewWidth}
           onCameraViewWidthChange={preview.onCameraViewWidthChange}
+          hudSkin={preview.hudSkin}
+          onHudSkinChange={preview.onHudSkinChange}
         />
       )}
       <header className={`room-header${match ? " room-header--match" : ""}`}>

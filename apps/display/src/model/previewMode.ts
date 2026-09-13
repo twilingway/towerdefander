@@ -1,5 +1,5 @@
 import type { PreviewPhase } from "@spaceship-defender/client-shared";
-import type { DisplayRoomView } from "@spaceship-defender/protocol";
+import type { DisplayRoomView, HudSkin } from "@spaceship-defender/protocol";
 
 import { createPreviewGame } from "./preview/phases.js";
 import { PREVIEW_CAMERA_VIEW_WIDTH, PREVIEW_PLAYERS } from "./preview/world.js";
@@ -8,11 +8,13 @@ import { PREVIEW_CAMERA_VIEW_WIDTH, PREVIEW_PLAYERS } from "./preview/world.js";
  * Dev-only layout preview: the display renders a fixture instead of creating a
  * room, so HUD, overlays and one Phaser frame can be inspected without a server.
  * Fixtures mirror `toDisplayRoomView` output and are parsed by the protocol
- * schema in tests.
+ * schema in tests. The HUD skin is the preview's to choose, so both can be
+ * looked at on any glass without touching a preset.
  */
 export function createPreviewRoomView(
   phase: PreviewPhase,
-  cameraViewWidth: number = PREVIEW_CAMERA_VIEW_WIDTH
+  cameraViewWidth: number = PREVIEW_CAMERA_VIEW_WIDTH,
+  hudSkin: HudSkin = "classic"
 ): DisplayRoomView {
   return {
     roomId: "PREVIEW",
@@ -25,6 +27,6 @@ export function createPreviewRoomView(
     displayConnected: true,
     displayLatencyMs: 18,
     players: [...PREVIEW_PLAYERS],
-    game: phase === "lobby" ? null : createPreviewGame(phase, cameraViewWidth)
+    game: phase === "lobby" ? null : { ...createPreviewGame(phase, cameraViewWidth), hudSkin }
   };
 }
