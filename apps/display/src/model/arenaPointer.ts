@@ -33,3 +33,29 @@ export function isArenaTarget(
   if (target == null || typeof target.closest !== "function") return false;
   return target.closest(ARENA_HOST_SELECTOR) != null;
 }
+
+/** The narrow part of a document the centre is read from, so it can be tested without one. */
+export interface ArenaRoot {
+  querySelector(selector: string): {
+    getBoundingClientRect(): { left: number; top: number; width: number; height: number };
+  } | null;
+}
+
+/**
+ * The middle of the arena on screen: where the ship is drawn, and so where the
+ * mouse's bearing is measured from.
+ *
+ * Off the canvas host for the same reason as the pointer test above. The text
+ * twin `.battlefield-shell` is rendered only by a dev build and the demo, so a
+ * release build found nothing here: the turret ignored the mouse in production
+ * while both buttons still fired, and every stand, served by a dev server, looked
+ * fine.
+ */
+export function readArenaCentre(
+  root: ArenaRoot
+): { readonly x: number; readonly y: number } | null {
+  const host = root.querySelector(ARENA_HOST_SELECTOR);
+  if (host === null) return null;
+  const box = host.getBoundingClientRect();
+  return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+}

@@ -94,7 +94,8 @@ export class AudioBus {
   private context: AudioContext | undefined;
   private sfxGain: GainNode | undefined;
   private readonly buffers = new Map<SoundId, AudioBuffer>();
-  private readonly pending = new Set<SoundId>();
+  /** Loads in flight, so a second caller waits on the same one. */
+  private readonly pending = new Map<SoundId, Promise<void>>();
   private readonly throttle: SoundThrottle = createSoundThrottle({ minGapMs: MIN_GAP_MS });
   /** What is sounding right now, per id and in the order it started. */
   private readonly voices = new Map<SoundId, AudioBufferSourceNode[]>();
@@ -111,16 +112,26 @@ export class AudioBus {
       this.applySettings();
     });
     /*
-     * The first touch of the session is what a browser waits for before it
-     * lets a page make any sound at all. Anything counts - a button, a key,
-     * the stick - so the cheapest place to catch it is the document, once.
+     * The first gesture a browser accepts is what lets a page make any sound.
+     *
+     * Not every press is one. A finger's pointerdown is not: the HTML standard
+     * counts pointerup and touchend for touch, and a phone's browser keeps a
+     * context resumed on the pointerdown silent. Listening once, to pointerdown,
+     * spent the only chance on a touch that could not start anything, and the
+     * fight stayed quiet until the settings gear's own click resumed it. So the
+     * document hears every gesture a browser may accept, and stops only once
+     * the context is actually running.
      */
     if (typeof document !== "undefined") {
+      const gestures = ["pointerdown", "pointerup", "touchend", "click", "keydown"] as const;
       const unlock = () => {
         this.resume();
+        void this.context?.resume().then(() => {
+          if (this.context?.state !== "running") return;
+          for (const gesture of gestures) document.removeEventListener(gesture, unlock);
+        });
       };
-      document.addEventListener("pointerdown", unlock, { once: true });
-      document.addEventListener("keydown", unlock, { once: true });
+      for (const gesture of gestures) document.addEventListener(gesture, unlock);
     }
   }
 
@@ -133,7 +144,7 @@ export class AudioBus {
   resume(): void {
     const context = this.ensureContext();
     if (context.state === "suspended") void context.resume();
-    this.preload();
+    void this.preload();
     const music = this.music;
     if (music?.paused === true) void music.play().catch(() => undefined);
   }
@@ -215,10 +226,10 @@ export class AudioBus {
    * is listening for. The whole catalogue is under two hundred kilobytes, so
    * there is nothing to be clever about.
    */
-  preload(): void {
-    for (const id of SOUND_IDS) {
-      if (!this.buffers.has(id)) void this.load(id);
-    }
+  preload(): Promise<void> {
+    // Settles once every sound has loaded or failed, which is what a lobby waits on.
+    const loads = SOUND_IDS.filter((id) => !this.buffers.has(id)).map((id) => this.load(id));
+    return Promise.all(loads).then(() => undefined);
   }
 
   /**
@@ -295,22 +306,30 @@ export class AudioBus {
     return context;
   }
 
-  private async load(id: SoundId): Promise<void> {
-    if (this.pending.has(id)) return;
-    this.pending.add(id);
+  private load(id: SoundId): Promise<void> {
+    const inFlight = this.pending.get(id);
+    if (inFlight !== undefined) return inFlight;
+    const loading = this.fetchAndDecode(id).finally(() => {
+      this.pending.delete(id);
+    });
+    this.pending.set(id, loading);
+    return loading;
+  }
+
+  private async fetchAndDecode(id: SoundId): Promise<void> {
     try {
       const url = soundUrl(id);
       if (url === undefined) return;
       const response = await fetch(url);
       const bytes = await response.arrayBuffer();
+      // A context the page has not been touched for yet is suspended, and it
+      // decodes all the same; only playing waits for the gesture.
       const buffer = await this.ensureContext().decodeAudioData(bytes);
       this.buffers.set(id, buffer);
     } catch {
       // A sound that will not load is a sound that does not play. The field is
       // still readable without it, and retrying every frame is not.
       this.buffers.delete(id);
-    } finally {
-      this.pending.delete(id);
     }
   }
 }

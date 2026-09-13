@@ -9,6 +9,7 @@ import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
 import { useIsPortrait } from "../../components/RotateNotice/index.js";
 import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
 import { readAimAssistFromDevice } from "../../model/aimAssistPreference.js";
+import { readArenaCentre } from "../../model/arenaPointer.js";
 import { toAimWorld, toPredictionWorld } from "../../model/cockpitWorld.js";
 import { CONTROLLER_URL } from "../../model/environment.js";
 import { useBareControls } from "../../model/hooks/useBareControls.js";
@@ -197,12 +198,7 @@ export function RoomScreen({
    */
   useCockpitKeyboard({
     enabled: session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat",
-    shipScreenPoint: () => {
-      const host = document.querySelector(".battlefield-shell");
-      if (host === null) return null;
-      const box = host.getBoundingClientRect();
-      return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-    },
+    shipScreenPoint: () => readArenaCentre(document),
     ...cockpitControls
   });
 
@@ -401,9 +397,11 @@ export function RoomScreen({
       {view.game === null ? (
         <section id="game-canvas" className="game-stage game-stage--waiting">
           <span>
-            {session?.cockpitPlayer === undefined
-              ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
-              : "Полёт начнётся, когда вы нажмёте «Готов»"}
+            {view.assetsPending
+              ? `Загружаем ресурсы… ${String(view.assetsWaitSecondsRemaining)} с`
+              : session?.cockpitPlayer === undefined
+                ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
+                : "Полёт начнётся, когда вы нажмёте «Готов»"}
           </span>
         </section>
       ) : (

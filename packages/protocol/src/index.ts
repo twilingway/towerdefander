@@ -31,7 +31,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 69 as const;
+export const PROTOCOL_VERSION = 70 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -1097,7 +1097,14 @@ export const controllerRoomViewSchema = z
   .superRefine(refineRoom);
 export type ControllerRoomView = z.infer<typeof controllerRoomViewSchema>;
 export const displayRoomViewSchema = z
-  .object({ ...roomShape, game: displayGameSnapshotSchema.nullable() })
+  .object({
+    ...roomShape,
+    /** The room is holding its start for a screen still loading the fight's assets. */
+    assetsPending: z.boolean(),
+    /** Seconds until it starts without that screen; zero while nothing is waited for. */
+    assetsWaitSecondsRemaining: z.number().int().min(0).max(255),
+    game: displayGameSnapshotSchema.nullable()
+  })
   .strict()
   .superRefine(refineRoom);
 export type DisplayRoomView = z.infer<typeof displayRoomViewSchema>;
@@ -1110,7 +1117,13 @@ export const displayCreateOptionsSchema = z
     /** Which hull to fly. Absent means the preset's own default hull. */
     shipArchetypeId: shipArchetypeIdSchema.optional(),
     /** Testing aid; the server ignores it unless it was started with it on. */
-    startWave: startWaveSchema.optional()
+    startWave: startWaveSchema.optional(),
+    /**
+     * This screen loads what the fight draws and plays, so the room waits for
+     * `client:assets-ready` before a run starts. Absent on a harness client with
+     * nothing to load, which the room does not wait for.
+     */
+    loadsAssets: z.literal(true).optional()
   })
   .strict();
 export type DisplayCreateOptions = z.infer<typeof displayCreateOptionsSchema>;
@@ -1126,7 +1139,9 @@ export const displayJoinOptionsSchema = z
     crewSize: crewSizeSchema.optional(),
     /** Accepted and ignored on a rejoin, like the crew size beside it. */
     shipArchetypeId: shipArchetypeIdSchema.optional(),
-    startWave: startWaveSchema.optional()
+    startWave: startWaveSchema.optional(),
+    /** See `displayCreateOptionsSchema`: this screen loads assets the room waits for. */
+    loadsAssets: z.literal(true).optional()
   })
   .strict();
 export type DisplayJoinOptions = z.infer<typeof displayJoinOptionsSchema>;
@@ -1151,7 +1166,9 @@ export const soloJoinOptionsSchema = z
     crewSize: z.literal(1).optional(),
     playerName: z.string().trim().min(1).max(24),
     shipArchetypeId: shipArchetypeIdSchema.optional(),
-    startWave: startWaveSchema.optional()
+    startWave: startWaveSchema.optional(),
+    /** See `displayCreateOptionsSchema`: this screen loads assets the room waits for. */
+    loadsAssets: z.literal(true).optional()
   })
   .strict();
 export type SoloJoinOptions = z.infer<typeof soloJoinOptionsSchema>;
@@ -1254,6 +1271,16 @@ export const clientLatencyPongSchema = z
   })
   .strict();
 export type ClientLatencyPong = z.infer<typeof clientLatencyPongSchema>;
+/**
+ * A screen that loads what the fight draws and plays says it has. Shaped like
+ * the latency pong: a shared screen holds no seat, so it has no player id.
+ */
+export const clientAssetsReadySchema = z
+  .object({ protocolVersion: z.literal(PROTOCOL_VERSION), roomId: z.string().min(1) })
+  .strict();
+export type ClientAssetsReady = z.infer<typeof clientAssetsReadySchema>;
+/** How long a room holds its start for screens still loading, before it starts without them. */
+export const ASSET_WAIT_SECONDS = 20;
 export const roomClosingReasonSchema = z.enum(ROOM_CLOSING_REASONS);
 export type RoomClosingReason = z.infer<typeof roomClosingReasonSchema>;
 export const roomClosingSchema = z.object({ reason: roomClosingReasonSchema }).strict();
@@ -1311,7 +1338,9 @@ export const clientMessage = {
   upgradeVote: "upgrade:vote",
   /** One radar sweep, asked for by the pilot; the room decides if it is due. */
   arenaScan: "arena:scan",
-  latencyPong: "client:latency-pong"
+  latencyPong: "client:latency-pong",
+  /** A screen that loads the fight's assets has them; see `clientAssetsReadySchema`. */
+  assetsReady: "client:assets-ready"
 } as const;
 export const serverMessage = {
   error: "server:error",
@@ -1366,7 +1395,9 @@ export const arenaLobbySchema = z
     capacity: z.number().int().min(1),
     secondsRemaining: z.number().int().min(0),
     /** True once the wait is over and the match has started. */
-    started: z.boolean()
+    started: z.boolean(),
+    /** The count holds while the player's screen loads the match's assets. */
+    awaitingAssets: z.boolean()
   })
   .strict();
 export type ArenaLobby = z.infer<typeof arenaLobbySchema>;

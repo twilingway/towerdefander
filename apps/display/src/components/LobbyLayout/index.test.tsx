@@ -14,6 +14,8 @@ function view(overrides: Partial<DisplayRoomView> = {}): DisplayRoomView {
     shipArchetypeId: "guardian",
     maintenanceActive: false,
     maintenanceSecondsRemaining: 0,
+    assetsPending: false,
+    assetsWaitSecondsRemaining: 0,
     displayConnected: true,
     displayLatencyMs: 12,
     players: [
@@ -95,7 +97,7 @@ describe("LobbyLayout", () => {
 
     // The renderer is a chunk of its own, and a run that starts before it
     // lands is a run with no world drawn and nothing driving the helm.
-    expect(markup).toContain("Загрузка мира…");
+    expect(markup).toContain("Загрузка ресурсов…");
     expect(markup).toContain('data-world-ready="false"');
     expect(markup).toContain("disabled");
   });

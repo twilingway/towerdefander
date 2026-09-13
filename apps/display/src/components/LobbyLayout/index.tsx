@@ -59,7 +59,11 @@ export function LobbyLayout({ view, joinUrl, cockpit }: LobbyLayoutProps) {
               disabled={cockpit.ready || !cockpit.worldReady}
               data-world-ready={cockpit.worldReady}
             >
-              {!cockpit.worldReady ? "Загрузка мира…" : cockpit.ready ? "Ждём старта…" : "Готов"}
+              {!cockpit.worldReady
+                ? "Загрузка ресурсов…"
+                : cockpit.ready
+                  ? "Ждём старта…"
+                  : "Готов"}
             </button>
             <FullscreenButton />
           </div>

@@ -22,6 +22,7 @@ import {
   ARENA_BOT_FILL_MS,
   ARENA_LOBBY_WAIT_SECONDS,
   ARENA_RESULT_HOLD_MS,
+  ASSET_WAIT_SECONDS,
   CAMERA_VIEW_WIDTH_MAX,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
@@ -29,6 +30,7 @@ import {
   SOLO_INPUT_RANGES,
   SoloInput,
   arenaScanCommandSchema,
+  clientAssetsReadySchema,
   clientLatencyPongSchema,
   clientMessage,
   gunnerInputCommandSchema,
@@ -122,6 +124,13 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private config: ArenaMatchConfig = defaultArenaMatchConfig;
   private match: ArenaMatchState | undefined;
   private bots: ArenaBots | undefined;
+  /**
+   * Whether the seated player's screen has loaded what the match draws and
+   * plays. Undefined with no player, or with one whose screen loads nothing.
+   */
+  private playerAssetsReady: boolean | undefined;
+  /** Seconds of the waiting room the player's loading may still hold still. */
+  private assetWaitSecondsRemaining = 0;
   /**
    * Round trips of every connection, probed the way the campaign probes them.
    *
@@ -510,6 +519,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       const parsed = clientLatencyPongSchema.safeParse(payload);
       if (!parsed.success || parsed.data.roomId !== this.roomId) return;
       this.latency.acceptPong(client.sessionId, parsed.data.probeId, performance.now());
+    },
+    /** The player's screen has loaded what the match draws and plays. */
+    [clientMessage.assetsReady]: (client: Client, payload: unknown) => {
+      const parsed = clientAssetsReadySchema.safeParse(payload);
+      if (!parsed.success || parsed.data.roomId !== this.roomId) return;
+      if (client.sessionId !== this.playerSessionId || this.playerAssetsReady !== false) return;
+      this.playerAssetsReady = true;
+      this.broadcastLobby();
     }
   };
 
@@ -528,7 +545,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
      * on the client looks for before it starts sending: one roster entry, in
      * the pilot role, already ready - a match has no readiness to wait for.
      */
-    const options = unsafeOptions as { role?: unknown; playerName?: unknown } | undefined;
+    const options = unsafeOptions as
+      { role?: unknown; playerName?: unknown; loadsAssets?: unknown } | undefined;
     if (options?.role === "solo") {
       this.playerSessionId = client.sessionId;
       const seat = new PlayerState();
@@ -538,6 +556,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       seat.ready = true;
       seat.connected = true;
       this.state.players.set(client.sessionId, seat);
+      // A screen that loads the match's assets holds the waiting room's count
+      // until they are in, and for twenty seconds at most.
+      const loads = options.loadsAssets === true;
+      this.playerAssetsReady = loads ? false : undefined;
+      this.assetWaitSecondsRemaining = loads ? ASSET_WAIT_SECONDS : 0;
     }
     this.connectionClients.set(client.sessionId, client);
     this.latency.register(client.sessionId);
@@ -563,6 +586,9 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     // nobody is flying is exactly the case the bot layer was written for.
     if (client !== undefined && client.sessionId === this.playerSessionId) {
       this.playerSessionId = undefined;
+      // Nobody left to wait for: the queue counts on as it would without them.
+      this.playerAssetsReady = undefined;
+      this.assetWaitSecondsRemaining = 0;
       this.playerIntent = undefined;
       this.playerHeadingTarget = null;
       this.playerTurretTarget = null;
@@ -591,6 +617,13 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (this.started || this.botsSeated > 0) return;
     if (this.clients.length >= this.config.shipCount) {
       this.startMatch();
+      return;
+    }
+    // The player's screen is still loading what the match draws and plays: the
+    // queue's own count waits for it, but no longer than the asset wait lasts.
+    if (this.playerAssetsReady === false && this.assetWaitSecondsRemaining > 0) {
+      this.assetWaitSecondsRemaining -= 1;
+      this.broadcastLobby();
       return;
     }
     this.waitSecondsRemaining = Math.max(0, this.waitSecondsRemaining - 1);
@@ -641,7 +674,9 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       bots: this.botsSeated,
       capacity: this.config.shipCount,
       secondsRemaining: this.waitSecondsRemaining,
-      started: this.started
+      started: this.started,
+      awaitingAssets:
+        !this.started && this.playerAssetsReady === false && this.assetWaitSecondsRemaining > 0
     };
     this.broadcast(serverMessage.arenaLobby, payload);
   }

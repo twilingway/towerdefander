@@ -73,6 +73,14 @@ button:disabled {
   height: 100dvh;
   min-height: 0;
   /*
+   * Nothing in a fight is text to take away. A drag across the stage or a long
+   * press on a readout selected it and offered to copy it over the game, and on
+   * a phone the press also opened the system's callout.
+   */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /*
    * Scrollable rather than clipped.
    *
    * The field is exactly one screen tall, so on a screen with room there is
@@ -1113,9 +1121,14 @@ p {
     display: none;
   }
 
+  /*
+   * The gear ends this row, so the row's right edge stands a full rem off the
+   * glass. A phone in full screen draws into its rounded corners, which no safe
+   * area reports, and at 0.4rem the gear sat inside the curve.
+   */
   .display-shell--battle > .room-header {
     top: max(0.4rem, env(safe-area-inset-top));
-    right: max(0.4rem, env(safe-area-inset-right));
+    right: max(1rem, env(safe-area-inset-right));
     left: max(0.4rem, env(safe-area-inset-left));
     align-items: start;
   }
@@ -2486,9 +2499,15 @@ p {
      where the scene behind it reads as a scene. Phones keep the ratio, which
      is what fits two tiles on a screen held sideways. */
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 14%);
+  border: 1px solid #68479f;
   border-radius: 1rem;
   background-color: #0a1f22;
+  /*
+   * Sized to the border box, not inside it. From the padding box every layer
+   * repeated under the 1px border, and the darkening gradient's transparent end
+   * wrapped round to the left edge: a bright line of bare art down every tile.
+   */
+  background-origin: border-box;
   background-position: center;
   background-size: cover;
   box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 45%);
@@ -4082,6 +4101,12 @@ p {
    * readouts stand in a column beside the timer.
    */
   .display-shell--cockpit[data-hud-skin="frame"] {
+    /*
+     * The status frame's distance from the top right corner, and with it the
+     * gear's. A phone in full screen draws into its rounded corners, which no safe
+     * area reports; at 0.4rem the gear sat inside the curve and took no press.
+     */
+    --frame-corner-inset: 1rem;
     --frame-info-width: clamp(12rem, 24vw, 13rem);
     /* The info frame is narrower here, so the whole timer can be a little wider. */
     --frame-timer-width: min(18.75rem, 45vw);
@@ -4095,8 +4120,8 @@ p {
     --frame-radar-width: min(
       calc(var(--frame-radar-window) / 0.8168),
       calc(
-        100dvh - max(0.4rem, env(safe-area-inset-top)) - var(--frame-status-width) * 0.5511 -
-          0.25rem - var(--frame-radar-bottom)
+        100dvh - max(var(--frame-corner-inset), env(safe-area-inset-top)) -
+          var(--frame-status-width) * 0.5511 - 0.25rem - var(--frame-radar-bottom)
       )
     );
     /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
@@ -4105,8 +4130,13 @@ p {
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] .status-frame {
-    top: max(0.4rem, env(safe-area-inset-top));
-    right: max(0.4rem, env(safe-area-inset-right));
+    top: max(var(--frame-corner-inset), env(safe-area-inset-top));
+    right: max(var(--frame-corner-inset), env(safe-area-inset-right));
+  }
+
+  /* The row the gear hangs in keeps the frame's right edge, so the gear stays in its cut-out. */
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header {
+    right: max(var(--frame-corner-inset), env(safe-area-inset-right));
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit {
@@ -4181,16 +4211,31 @@ p {
     right: calc(var(--frame-status-width) + 0.25rem);
   }
 
-  /* Centred in the status frame's cut-out, which on a phone is a little smaller than the gear. */
+  /*
+   * Centred in the status frame's cut-out, which on a phone is a little smaller
+   * than the gear. The row stands higher than the frame, by the difference
+   * between their two top insets.
+   */
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings {
     position: absolute;
-    top: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
+    top: calc(
+      max(var(--frame-corner-inset), env(safe-area-inset-top)) -
+        max(0.4rem, env(safe-area-inset-top)) + (var(--frame-status-width) * 0.1941 - 1.6rem) / 2
+    );
     right: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
   }
 
+  /* Drawn at the cut-out's size, pressed at a thumb's: 44 pixels square around it. */
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings__toggle {
+    position: relative;
     width: 1.6rem;
     height: 1.6rem;
+  }
+
+  .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings__toggle::after {
+    position: absolute;
+    inset: -0.575rem;
+    content: "";
   }
 
   /* A frame this narrow leaves a caption forty pixels: smaller type, no tracking, whole words. */

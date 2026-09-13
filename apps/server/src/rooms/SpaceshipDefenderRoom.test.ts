@@ -1,4 +1,5 @@
 import {
+  ASSET_WAIT_SECONDS,
   CREW_ROLES,
   PLAYER_CAPACITY,
   PROTOCOL_VERSION,
@@ -284,6 +285,102 @@ interface RoomInternals {
 function internals(room: SpaceshipDefenderRoom): RoomInternals {
   return room as unknown as RoomInternals;
 }
+
+describe("a start held for a loading screen", () => {
+  function joinLoadingDisplay(room: SpaceshipDefenderRoom): TestClient {
+    const display = createClient("display");
+    room.onJoin(display.client, {
+      role: "display",
+      protocolVersion: PROTOCOL_VERSION,
+      loadsAssets: true
+    });
+    return display;
+  }
+
+  function sayAssetsReady(room: SpaceshipDefenderRoom, screen: TestClient): void {
+    room.handleAssetsReady(screen.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId
+    });
+  }
+
+  function readyCrew(room: SpaceshipDefenderRoom): TestClient[] {
+    const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
+      joinController(room, index)
+    );
+    controllers.forEach((controller) => {
+      ready(room, controller);
+    });
+    return controllers;
+  }
+
+  it("keeps the lobby while the screen loads, and starts once it is in", () => {
+    const room = createRoom();
+    const display = joinLoadingDisplay(room);
+    readyCrew(room);
+
+    expect(room.state.phase).toBe("lobby");
+    expect(room.state.assetsPending).toBe(true);
+    expect(room.state.assetsWaitSecondsRemaining).toBe(ASSET_WAIT_SECONDS);
+
+    sayAssetsReady(room, display);
+    expect(room.state.phase).toBe("active");
+    expect(room.state.assetsPending).toBe(false);
+    expect(room.state.assetsWaitSecondsRemaining).toBe(0);
+  });
+
+  it("starts without the screen once the asset wait has run out", () => {
+    const room = createRoom();
+    joinLoadingDisplay(room);
+    const setInterval = vi.spyOn(room.clock, "setInterval");
+    readyCrew(room);
+    const second = setInterval.mock.calls.at(-1)?.[0] as (() => void) | undefined;
+    if (second === undefined) throw new Error("The room armed no asset wait.");
+
+    for (let elapsed = 1; elapsed < ASSET_WAIT_SECONDS; elapsed += 1) second();
+    expect(room.state.phase).toBe("lobby");
+    expect(room.state.assetsWaitSecondsRemaining).toBe(1);
+
+    second();
+    expect(room.state.phase).toBe("active");
+    expect(room.state.assetsPending).toBe(false);
+  });
+
+  it("does not wait for a screen that loads nothing", () => {
+    const room = createRoom();
+    joinDisplay(room);
+    readyCrew(room);
+
+    expect(room.state.phase).toBe("active");
+    expect(room.state.assetsPending).toBe(false);
+  });
+
+  it("changes nothing when a connection that loads nothing says it has loaded", () => {
+    const room = createRoom();
+    joinLoadingDisplay(room);
+    const controllers = readyCrew(room);
+
+    sayAssetsReady(room, controllerAt(controllers, 0));
+    expect(room.state.phase).toBe("lobby");
+  });
+
+  it("refuses a ready message of another protocol or another shape", () => {
+    const room = createRoom();
+    const display = joinLoadingDisplay(room);
+    readyCrew(room);
+
+    room.handleAssetsReady(display.client, { protocolVersion: 1, roomId: room.roomId });
+    room.handleAssetsReady(display.client, {
+      protocolVersion: PROTOCOL_VERSION,
+      roomId: room.roomId,
+      playerId: "display"
+    });
+
+    expect(countErrors(display, "protocol_mismatch")).toBe(1);
+    expect(countErrors(display, "invalid_message")).toBe(1);
+    expect(room.state.phase).toBe("lobby");
+  });
+});
 
 describe("the seats the room drives itself", () => {
   /**
