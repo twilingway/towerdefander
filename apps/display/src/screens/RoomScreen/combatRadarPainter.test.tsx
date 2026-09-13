@@ -45,7 +45,7 @@ const baseGame: DisplayGameSnapshot = {
     turretAngularVelocity: 0,
     turretTargetAngle: null
   },
-  background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
+  background: { image: "none", parallaxStrength: 1 },
   worldHeight: 4_400,
   arenaRadius: 2_200,
   helm: {

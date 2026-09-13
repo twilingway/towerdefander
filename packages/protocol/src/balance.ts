@@ -8,14 +8,14 @@ import {
 } from "./enemyKinds.ts";
 import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { SOUND_IDS } from "./audioCatalogue.ts";
-import { VISUAL_ASSET_IDS } from "./visualCatalog.ts";
+import { BACKDROP_IMAGES, VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 54 as const;
+export const BALANCE_FILE_VERSION = 55 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53
+  52, 53, 54
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -66,25 +66,22 @@ export const ARENA_RADIUS_MAX = 19_400;
 export const arenaRadiusSchema = z.number().min(ARENA_RADIUS_MIN).max(ARENA_RADIUS_MAX);
 
 /**
- * Parallax space background of the display. Presentation-only, like
- * `cameraViewWidth`: the simulation never reads it, the scene does. Ranges match
- * the reference demo so tuned values carry over as-is.
+ * The sky under the arena. Presentation only, like `cameraViewWidth`: the
+ * simulation never reads it, the scene does. `none` is the empty space colour -
+ * the cheapest sky there is, for the phones the old layers made lag.
  */
-export const NEBULA_PRESETS = ["blue", "gold", "purple", "green"] as const;
-export const nebulaPresetSchema = z.enum(NEBULA_PRESETS);
-export type NebulaPreset = z.infer<typeof nebulaPresetSchema>;
+export const backdropImageSchema = z.enum(BACKDROP_IMAGES);
 
 export const BACKGROUND_PARALLAX_STRENGTH_MAX = 1.6;
-export const BACKGROUND_DRIFT_SPEED_MAX = 3;
 export const backgroundTuningSchema = z
   .object({
-    /** Multiplier of the camera-driven layer shift; zero keeps only the idle drift. */
-    parallaxStrength: z.number().min(0).max(BACKGROUND_PARALLAX_STRENGTH_MAX),
-    /** Idle drift speed in texture pixels per second at full strength. */
-    driftSpeed: z.number().min(0).max(BACKGROUND_DRIFT_SPEED_MAX),
-    /** Opacity of both nebula layers; stars and dust keep their own fixed alpha. */
-    nebulaAlpha: z.number().min(0).max(1),
-    nebulaPreset: nebulaPresetSchema
+    image: backdropImageSchema,
+    /**
+     * How fast the picture moves against the camera across the arena. It never
+     * moves past its own margin, so a larger value only reaches that margin
+     * nearer the centre; zero pins the picture to the screen.
+     */
+    parallaxStrength: z.number().min(0).max(BACKGROUND_PARALLAX_STRENGTH_MAX)
   })
   .strict();
 export type BackgroundTuning = z.infer<typeof backgroundTuningSchema>;

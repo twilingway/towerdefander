@@ -283,10 +283,8 @@ export interface NetworkGameState {
       hasTurretTarget: boolean;
       turretTargetAngle: number;
     };
+    backgroundImage?: string;
     backgroundParallaxStrength?: number;
-    backgroundDriftSpeed?: number;
-    backgroundNebulaAlpha?: number;
-    backgroundNebulaPreset?: string;
     asteroidVisualShape?: string;
     asteroidVisualScale?: number;
     spaceshipVisualShape?: string;

@@ -441,11 +441,9 @@ export class SpaceshipDisplayState extends Schema {
   /** The run's live drive numbers and the pose the client replays from. */
   @type(ShipDriveState) drive = new ShipDriveState();
   @type(ShipPoseState) pose = new ShipPoseState();
-  /** Parallax space background for this run; fixed at run start like the silhouettes. */
+  /** The sky under the arena for this run; fixed at run start like the silhouettes. */
+  @type("string") backgroundImage = "deep-nebula";
   @type("float32") backgroundParallaxStrength = 1;
-  @type("float32") backgroundDriftSpeed = 1;
-  @type("float32") backgroundNebulaAlpha = 0.72;
-  @type("string") backgroundNebulaPreset = "blue";
   /** Empty means the display draws its own rock for the ambient hazard. */
   @type("string") asteroidVisualShape = "";
   @type("float32") asteroidVisualScale = 1;

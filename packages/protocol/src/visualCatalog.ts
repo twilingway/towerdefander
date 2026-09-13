@@ -385,6 +385,15 @@ export type VisualAssetId = (typeof VISUAL_ASSET_IDS)[number];
 export const FALLBACK_VISUAL_ASSET_ID: VisualAssetId = "ship-spear";
 
 /**
+ * Pictures the display can put under the arena, in the order the console lists
+ * them. `none` is the empty sky; every other id is a file in
+ * `@spaceship-defender/sprite-assets`, and `build-sprite-assets.node-test.mjs`
+ * keeps the two lists in step.
+ */
+export const BACKDROP_IMAGES = ["none", "deep-nebula"] as const;
+export type BackdropImage = (typeof BACKDROP_IMAGES)[number];
+
+/**
  * The 70 prototype silhouettes, ported verbatim. Prettier is off for the block so
  * it keeps the one-asset-per-entry shape of the source it was copied from.
  */

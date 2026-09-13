@@ -17,3 +17,16 @@ export interface SpriteArt {
   readonly frameHeight: number;
   readonly frames: number;
 }
+
+/**
+ * A sky picture. One image drawn about screen size and never minified far, so it
+ * keeps its own size: no grid, no power-of-two sides, and no mipmaps - the
+ * mechanism that once drew a moving line across the old tiled sky.
+ */
+export interface BackdropArt {
+  readonly id: string;
+  readonly bytes: number;
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+}

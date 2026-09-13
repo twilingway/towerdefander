@@ -1,7 +1,7 @@
 import {
-  NEBULA_PRESETS,
+  BACKDROP_IMAGES,
+  type BackdropImage,
   type CrewRole,
-  type NebulaPreset,
   type PublicUpgradeVote
 } from "@spaceship-defender/protocol";
 
@@ -151,12 +151,12 @@ export function normalizeProjectileSource(
   return undefined;
 }
 
-/** A preset the display does not ship with falls back to the blue nebula. */
-export function toNebulaPreset(preset: string | undefined): NebulaPreset {
-  if (preset !== undefined && (NEBULA_PRESETS as readonly string[]).includes(preset)) {
-    return preset as NebulaPreset;
+/** A picture this build does not ship falls back to the empty sky, never to a missing texture. */
+export function toBackdropImage(image: string | undefined): BackdropImage {
+  if (image !== undefined && (BACKDROP_IMAGES as readonly string[]).includes(image)) {
+    return image as BackdropImage;
   }
-  return "blue";
+  return "none";
 }
 
 export function toPublicLatency(latencyMs: number | undefined): number | null {

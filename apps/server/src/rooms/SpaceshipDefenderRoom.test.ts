@@ -662,7 +662,7 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.game.shield.active).toBe(false);
   });
 
-  it("publishes the preset's parallax background on the display state at run start", () => {
+  it("publishes the preset's sky on the display state at run start", () => {
     const room = createRoom();
     const controllers = Array.from({ length: PLAYER_CAPACITY }, (_, index) =>
       joinController(room, index)
@@ -673,10 +673,8 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
 
     const background = internals(room).gameConfig.background;
     expect(room.state.game.display).toMatchObject({
-      backgroundParallaxStrength: background.parallaxStrength,
-      backgroundDriftSpeed: background.driftSpeed,
-      backgroundNebulaAlpha: background.nebulaAlpha,
-      backgroundNebulaPreset: background.nebulaPreset
+      backgroundImage: background.image,
+      backgroundParallaxStrength: background.parallaxStrength
     });
   });
 
