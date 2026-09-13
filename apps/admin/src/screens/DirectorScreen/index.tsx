@@ -1,14 +1,13 @@
 import {
-  BACKGROUND_DRIFT_SPEED_MAX,
+  BACKDROP_IMAGES,
   BACKGROUND_PARALLAX_STRENGTH_MAX,
   ARENA_RADIUS_MAX,
   ARENA_RADIUS_MIN,
   CAMERA_VIEW_ASPECT,
   CAMERA_VIEW_WIDTH_MAX,
   CAMERA_VIEW_WIDTH_MIN,
-  NEBULA_PRESETS,
-  type BalanceTuning,
-  type NebulaPreset
+  type BackdropImage,
+  type BalanceTuning
 } from "@spaceship-defender/protocol";
 
 import { AssetPicker } from "../../AssetPicker.js";
@@ -263,6 +262,25 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
 
       <h3 className="card__subtitle">Космический фон</h3>
       <div className="card__grid">
+        <label className="field">
+          <span className="field__caption">Картинка</span>
+          <select
+            className="field__input"
+            value={tuning.background.image}
+            onChange={(event) => {
+              onChange({
+                ...tuning,
+                background: { ...tuning.background, image: event.target.value as BackdropImage }
+              });
+            }}
+          >
+            {BACKDROP_IMAGES.map((image) => (
+              <option key={image} value={image}>
+                {BACKDROP_IMAGE_LABELS[image]}
+              </option>
+            ))}
+          </select>
+        </label>
         <NumberField
           caption="Параллакс от камеры"
           min={0}
@@ -271,57 +289,22 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
           onChange={(parallaxStrength) => {
             onChange({
               ...tuning,
-              background: clampBackground(tuning.background, { parallaxStrength })
+              background: {
+                ...tuning.background,
+                parallaxStrength: Math.min(
+                  BACKGROUND_PARALLAX_STRENGTH_MAX,
+                  Math.max(0, parallaxStrength)
+                )
+              }
             });
           }}
         />
-        <NumberField
-          caption="Дрейф фона, px/с"
-          min={0}
-          step={0.1}
-          value={tuning.background.driftSpeed}
-          onChange={(driftSpeed) => {
-            onChange({ ...tuning, background: clampBackground(tuning.background, { driftSpeed }) });
-          }}
-        />
-        <NumberField
-          caption="Небулы: непрозрачность"
-          min={0}
-          step={0.05}
-          value={tuning.background.nebulaAlpha}
-          onChange={(nebulaAlpha) => {
-            onChange({
-              ...tuning,
-              background: clampBackground(tuning.background, { nebulaAlpha })
-            });
-          }}
-        />
-        <label className="field">
-          <span className="field__caption">Небулы</span>
-          <select
-            className="field__input"
-            value={tuning.background.nebulaPreset}
-            onChange={(event) => {
-              onChange({
-                ...tuning,
-                background: clampBackground(tuning.background, {
-                  nebulaPreset: event.target.value as NebulaPreset
-                })
-              });
-            }}
-          >
-            {NEBULA_PRESETS.map((preset) => (
-              <option key={preset} value={preset}>
-                {NEBULA_PRESET_LABELS[preset]}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <p className="screen__hint">
-        Звёзды, пыль и небулы рисует дисплей под ареной: слои сдвигаются от движения камеры на
-        величину параллакса и медленно дрейфуют сами по себе. Применяется со следующего запуска боя;
-        симуляция эти значения не читает.
+        Туманность со звёздами под ареной. Параллакс — как быстро картинка уходит против камеры: у
+        края арены она упирается в свой запас и пустоту не открывает. «Без фона» — пустой космос,
+        самый лёгкий вариант для слабых телефонов. Применяется со следующего запуска боя; симуляция
+        эти значения не читает.
       </p>
 
       <h3 className="card__subtitle">Лимиты сущностей (только чтение)</h3>
@@ -352,25 +335,7 @@ function clampCameraViewWidth(value: number): number {
   return Math.min(CAMERA_VIEW_WIDTH_MAX, Math.max(CAMERA_VIEW_WIDTH_MIN, Math.round(value)));
 }
 
-const NEBULA_PRESET_LABELS: Record<NebulaPreset, string> = {
-  blue: "синяя",
-  gold: "золотая",
-  purple: "фиолетовая",
-  green: "зелёная"
+const BACKDROP_IMAGE_LABELS: Record<BackdropImage, string> = {
+  none: "без фона",
+  "deep-nebula": "туманность со звёздами"
 };
-
-function clampBackground(
-  background: BalanceTuning["background"],
-  patch: Partial<BalanceTuning["background"]>
-): BalanceTuning["background"] {
-  const next = { ...background, ...patch };
-  return {
-    parallaxStrength: Math.min(
-      BACKGROUND_PARALLAX_STRENGTH_MAX,
-      Math.max(0, next.parallaxStrength)
-    ),
-    driftSpeed: Math.min(BACKGROUND_DRIFT_SPEED_MAX, Math.max(0, next.driftSpeed)),
-    nebulaAlpha: Math.min(1, Math.max(0, next.nebulaAlpha)),
-    nebulaPreset: next.nebulaPreset
-  };
-}

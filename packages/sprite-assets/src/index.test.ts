@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SPRITE_ARTS, getSpriteArt } from "./index.ts";
+import { BACKDROP_ARTS, SPRITE_ARTS, getBackdropArt, getSpriteArt } from "./index.ts";
 
 /**
  * The manifest is generated, so these guard the generator rather than a human.
@@ -28,5 +28,22 @@ describe("sprite manifest", () => {
 
   it("answers undefined for art that was never built", () => {
     expect(getSpriteArt("no-such-sprite")).toBeUndefined();
+  });
+});
+
+describe("sky pictures", () => {
+  it("carries each picture once, with a size and an address", () => {
+    const ids = BACKDROP_ARTS.map((art) => art.id);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const art of BACKDROP_ARTS) {
+      expect(art.width, art.id).toBeGreaterThan(0);
+      expect(art.height, art.id).toBeGreaterThan(0);
+      expect(art.url, art.id).not.toBe("");
+    }
+  });
+
+  it("has no file for the empty sky", () => {
+    expect(getBackdropArt("none")).toBeUndefined();
   });
 });

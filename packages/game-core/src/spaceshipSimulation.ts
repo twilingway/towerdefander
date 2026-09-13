@@ -34,18 +34,12 @@ export interface Vector2 {
   readonly y: number;
 }
 
-/** One of the four nebula textures the display ships with. */
-export type NebulaPreset = "blue" | "gold" | "purple" | "green";
-
-/** Parallax space background; presentation only, like `cameraViewWidth`. */
+/** The sky under the arena; presentation only, like `cameraViewWidth`. */
 export interface BackgroundTuning {
-  /** Multiplier of the camera-driven layer shift; zero keeps only the idle drift. */
+  /** The picture the display draws, or `none` for the empty space colour. */
+  readonly image: "none" | "deep-nebula";
+  /** How far the picture follows the camera; zero pins it to the screen. */
   readonly parallaxStrength: number;
-  /** Idle drift speed in texture pixels per second at full strength. */
-  readonly driftSpeed: number;
-  /** Opacity of both nebula layers; stars and dust keep their own fixed alpha. */
-  readonly nebulaAlpha: number;
-  readonly nebulaPreset: NebulaPreset;
 }
 
 export interface SpaceshipSimulationConfig extends CombatConfig {

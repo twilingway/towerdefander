@@ -21,6 +21,7 @@ import {
   turretMountPoint
 } from "../entityArt.js";
 import { bakeCatalogArt, preloadSpriteArt } from "../catalogTexture.js";
+import { BackdropLayer, preloadBackdrop } from "./backdrop.js";
 
 import { type Point } from "../spaceshipViewModel.js";
 import {
@@ -44,6 +45,7 @@ export class SpaceshipScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
   private spaceshipBody: Phaser.GameObjects.Image | undefined;
   private noseMarker: TurretObject | undefined;
+  private backdrop: BackdropLayer | undefined;
   private turret: TurretObject | undefined;
   private shield: ShieldLayer | undefined;
   private exhaust: ExhaustLayer | undefined;
@@ -124,6 +126,7 @@ export class SpaceshipScene extends Phaser.Scene {
 
   preload(): void {
     preloadSpriteArt(this);
+    preloadBackdrop(this, this.snapshot.background.image);
   }
 
   create(): void {
@@ -139,6 +142,7 @@ export class SpaceshipScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
+    this.backdrop = new BackdropLayer(this, this.snapshot.background.image, this.bake);
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
     this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
@@ -354,6 +358,14 @@ export class SpaceshipScene extends Phaser.Scene {
       this.aiming?.drawBeams(this.snapshot);
     }
     this.camera.focusOn(this, spaceshipPosition);
+    // The sky follows the drawn camera, so it moves with the ship the crew sees.
+    this.backdrop?.update(
+      this,
+      spaceshipPosition,
+      this.snapshot,
+      this.camera.readRendererSize(),
+      this.time.now / 1000
+    );
 
     /*
      * How far behind the newest snapshot playback is meant to run, in seconds.

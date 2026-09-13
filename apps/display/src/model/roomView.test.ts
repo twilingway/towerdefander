@@ -117,10 +117,8 @@ describe("display room view", () => {
           serverStepMs: 0.42,
           purchasedModules: [],
           laserBeams: [],
+          backgroundImage: "deep-nebula",
           backgroundParallaxStrength: 0.8,
-          backgroundDriftSpeed: 2,
-          backgroundNebulaAlpha: 0.5,
-          backgroundNebulaPreset: "gold",
           spaceshipVisualShape: "ship-lancer",
           shieldBandEffect: "plasma-exhaust",
           shieldImpactEffect: "debris-burst",
@@ -247,10 +245,8 @@ describe("display room view", () => {
     expect(view?.game?.encounter.waveSecondsRemaining).toBe(1188);
     expect(view?.runNumber).toBe(2);
     expect(view?.game?.background).toEqual({
-      parallaxStrength: 0.8,
-      driftSpeed: 2,
-      nebulaAlpha: 0.5,
-      nebulaPreset: "gold"
+      image: "deep-nebula",
+      parallaxStrength: 0.8
     });
     expect(view?.game?.arenaRadius).toBe(2200);
     expect(view?.game?.spaceship.hp).toBe(850);

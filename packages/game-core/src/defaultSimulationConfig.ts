@@ -15,7 +15,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   // carries: every barrel is bounded by half its height, and the shell that
   // catalogue counts health in reaches 680.
   cameraViewWidth: 2500,
-  background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
+  background: { image: "deep-nebula", parallaxStrength: 1 },
   spaceshipVisual: null,
   shieldBandEffect: "",
   shieldImpactEffect: "",

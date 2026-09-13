@@ -1322,18 +1322,52 @@ describe("version 1 migration", () => {
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
   });
 
-  it("persists tuned parallax background values to disk", async () => {
+  it("gives a preset from the four-number sky the picture and keeps its parallax", async () => {
+    const filePath = await temporaryPresetPath();
+    const defaults = createDefaultTuning();
+    const warn = vi.fn();
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        version: 54,
+        activePresetId: "operator",
+        presets: [
+          {
+            id: "operator",
+            name: "Operator",
+            tuning: {
+              ...defaults,
+              background: {
+                parallaxStrength: 0.4,
+                driftSpeed: 2,
+                nebulaAlpha: 0.5,
+                nebulaPreset: "gold"
+              }
+            }
+          }
+        ]
+      }),
+      "utf8"
+    );
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    // The old layer fields would fail the strict schema and drop the whole
+    // preset to defaults; they have to be gone, not carried along.
+    expect(warn).not.toHaveBeenCalled();
+    expect(store.getActiveTuning().background).toEqual({
+      image: "deep-nebula",
+      parallaxStrength: 0.4
+    });
+  });
+
+  it("persists the tuned sky to disk", async () => {
     const filePath = await temporaryPresetPath();
     const store = new BalanceStore({ filePath, logger: { warn: vi.fn() } });
     const file = tunedPresetsFile(10);
     const preset = file.presets[0];
     if (preset === undefined) throw new Error("fixture must contain a preset");
-    const background = {
-      parallaxStrength: 1.6,
-      driftSpeed: 2,
-      nebulaAlpha: 0.4,
-      nebulaPreset: "gold" as const
-    };
+    const background = { image: "none" as const, parallaxStrength: 1.6 };
     await store.save({
       ...file,
       presets: [{ ...preset, tuning: { ...preset.tuning, background } }]

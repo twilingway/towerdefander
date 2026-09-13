@@ -5,10 +5,10 @@ import {
 } from "@spaceship-defender/protocol";
 
 import {
+  toBackdropImage,
   toEnemyEffects,
   toEnemySounds,
   toEntityVisual,
-  toNebulaPreset,
   toPoseView,
   toPublicHomingMissile,
   toPublicLatency,
@@ -169,10 +169,8 @@ export function toDisplayRoomView(
             drive: { ...ZERO_DRIVE, ...display.drive },
             pose: toPoseView(display.pose),
             background: {
-              parallaxStrength: display.backgroundParallaxStrength ?? 1,
-              driftSpeed: display.backgroundDriftSpeed ?? 1,
-              nebulaAlpha: display.backgroundNebulaAlpha ?? 0.72,
-              nebulaPreset: toNebulaPreset(display.backgroundNebulaPreset)
+              image: toBackdropImage(display.backgroundImage),
+              parallaxStrength: display.backgroundParallaxStrength ?? 1
             },
             asteroidVisual: toEntityVisual(
               display.asteroidVisualShape,

@@ -12,7 +12,7 @@ import test from "node:test";
 
 // Imported from source, as the effect check imports its catalogue: Node strips
 // the types, and the asset package stays free of a dependency on the protocol.
-import { VISUAL_ASSETS } from "../packages/protocol/src/visualCatalog.ts";
+import { BACKDROP_IMAGES, VISUAL_ASSETS } from "../packages/protocol/src/visualCatalog.ts";
 
 const PACKAGE = fileURLToPath(new URL("../packages/sprite-assets/", import.meta.url));
 const SOURCES = join(PACKAGE, "sources", "sprites");
@@ -24,7 +24,11 @@ const sourceIds = readdirSync(SOURCES)
   .filter((entry) => entry.endsWith(".png"))
   .map((entry) => basename(entry, ".png"))
   .sort();
-const manifest = readFileSync(join(PACKAGE, "src", "manifest.ts"), "utf8");
+const manifestText = readFileSync(join(PACKAGE, "src", "manifest.ts"), "utf8");
+// Two arrays in one generated file: sprites first, then the sky pictures.
+const backdropStart = manifestText.indexOf("export const BACKDROP_ARTS");
+const manifest = backdropStart === -1 ? manifestText : manifestText.slice(0, backdropStart);
+const backdropManifest = backdropStart === -1 ? "" : manifestText.slice(backdropStart);
 
 /** The generated manifest is TypeScript, so read the fields out of its text. */
 const manifestEntries = [...manifest.matchAll(/^ {4}id: "([^"]+)",$/gm)].map((match) => {
@@ -103,4 +107,50 @@ test("the protocol names exactly the sprites that were built, with their frames"
     const entry = manifestEntries.find((candidate) => candidate.id === asset.id);
     assert.equal(entry?.frames, asset.sprite.frames, `${asset.id}: frame counts differ`);
   }
+});
+
+const BACKDROPS = join(PACKAGE, "backdrops");
+const BACKDROP_SOURCES = join(PACKAGE, "sources", "backdrops");
+/** A sky picture is drawn about screen size, so it may weigh more than a sprite - not much more. */
+const MAX_BACKDROP_BYTES = 384 * 1024;
+
+const backdropSourceIds = readdirSync(BACKDROP_SOURCES)
+  .filter((entry) => entry.endsWith(".png"))
+  .map((entry) => basename(entry, ".png"))
+  .sort();
+const backdropEntries = [...backdropManifest.matchAll(/^ {4}id: "([^"]+)",$/gm)].map((match) => {
+  const block = backdropManifest.slice(match.index, backdropManifest.indexOf("\n  }", match.index));
+  const field = (name) => {
+    const found = new RegExp(`${name}: (\\d+)`).exec(block);
+    return found === null ? undefined : Number(found[1]);
+  };
+  return { id: match[1], bytes: field("bytes"), width: field("width"), height: field("height") };
+});
+
+test("the manifest covers exactly the sky pictures", () => {
+  assert.deepEqual(
+    backdropEntries.map((entry) => entry.id).sort(),
+    backdropSourceIds,
+    "run `pnpm sprites:build` - the sky pictures and their sources have drifted apart"
+  );
+});
+
+test("each sky picture matches the file it points at", () => {
+  for (const entry of backdropEntries) {
+    const path = join(BACKDROPS, `${entry.id}.webp`);
+    const stats = statSync(path);
+    assert.equal(stats.size, entry.bytes, `${entry.id}.webp is ${String(stats.size)} bytes`);
+    assert.ok(
+      stats.size <= MAX_BACKDROP_BYTES,
+      `${entry.id}.webp is ${String(Math.round(stats.size / 1024))} KiB, over the ceiling`
+    );
+    const size = webpSize(readFileSync(path));
+    assert.equal(size.width, entry.width, `${entry.id}: width differs from the file`);
+    assert.equal(size.height, entry.height, `${entry.id}: height differs from the file`);
+  }
+});
+
+test("the protocol names exactly the sky pictures that were built", () => {
+  // `none` is the empty sky and has no file; every other picture must have one.
+  assert.deepEqual(BACKDROP_IMAGES.filter((image) => image !== "none").sort(), backdropSourceIds);
 });

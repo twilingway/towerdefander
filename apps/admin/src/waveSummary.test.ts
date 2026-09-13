@@ -276,7 +276,7 @@ function tuning(): BalanceTuning {
     missileInterceptScoreReward: 5,
     arenaRadius: 2200,
     cameraViewWidth: 1600,
-    background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
+    background: { image: "deep-nebula", parallaxStrength: 1 },
     helm: {
       scheme: "tank",
       headingLeadRadians: 0.5,

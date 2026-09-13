@@ -145,7 +145,7 @@ const testGame = {
     turretAngularVelocity: 0,
     turretTargetAngle: null
   },
-  background: { parallaxStrength: 1, driftSpeed: 1, nebulaAlpha: 0.72, nebulaPreset: "blue" },
+  background: { image: "none", parallaxStrength: 1 },
   worldHeight: 4400,
   arenaRadius: 2200,
   helm: {

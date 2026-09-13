@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   AUTOPILOT_LEVELS,
-  BACKGROUND_DRIFT_SPEED_MAX,
   BACKGROUND_PARALLAX_STRENGTH_MAX,
   BALANCE_FILE_VERSION,
   BUILTIN_ENEMY_KINDS,
@@ -287,10 +286,8 @@ function tuning(overrides: Partial<BalanceTuning> = {}): BalanceTuning {
     arenaRadius: 2200,
     cameraViewWidth: 1600,
     background: {
-      parallaxStrength: 1,
-      driftSpeed: 1,
-      nebulaAlpha: 0.72,
-      nebulaPreset: "blue"
+      image: "deep-nebula",
+      parallaxStrength: 1
     },
     helm: {
       scheme: "tank",
@@ -381,28 +378,23 @@ describe("balance tuning schema", () => {
     ).toBe(false);
   });
 
-  it("keeps the background parallax inside its demo-tuned bounds", () => {
+  it("keeps the sky to a known picture and a bounded parallax", () => {
     const background = (overrides: Partial<BalanceTuning["background"]>) =>
       balanceTuningSchema.safeParse({
         ...tuning(),
         background: { ...tuning().background, ...overrides }
       }).success;
+    const raw = (sky: Record<string, unknown>) =>
+      balanceTuningSchema.safeParse({ ...tuning(), background: sky }).success;
 
     expect(background({})).toBe(true);
+    expect(background({ image: "none" })).toBe(true);
     expect(background({ parallaxStrength: BACKGROUND_PARALLAX_STRENGTH_MAX })).toBe(true);
     expect(background({ parallaxStrength: BACKGROUND_PARALLAX_STRENGTH_MAX + 0.1 })).toBe(false);
     expect(background({ parallaxStrength: -0.1 })).toBe(false);
-    expect(background({ driftSpeed: BACKGROUND_DRIFT_SPEED_MAX })).toBe(true);
-    expect(background({ driftSpeed: BACKGROUND_DRIFT_SPEED_MAX + 0.1 })).toBe(false);
-    expect(background({ nebulaAlpha: 0 })).toBe(true);
-    expect(background({ nebulaAlpha: 1.1 })).toBe(false);
-    expect(background({ nebulaPreset: "gold" })).toBe(true);
-    expect(
-      balanceTuningSchema.safeParse({
-        ...tuning(),
-        background: { ...tuning().background, nebulaPreset: "magenta" }
-      }).success
-    ).toBe(false);
+    expect(raw({ image: "gold-nebula", parallaxStrength: 1 })).toBe(false);
+    // The layers the old four numbers described are gone; a field for them is refused.
+    expect(raw({ image: "deep-nebula", parallaxStrength: 1, driftSpeed: 1 })).toBe(false);
   });
 
   it("rejects a non-positive archetype hp", () => {

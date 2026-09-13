@@ -29,7 +29,9 @@ import {
   type MutableFocusCandidate
 } from "./spaceshipViewModel.js";
 import {
-  backgroundTileOffset,
+  backdropShiftShare,
+  starAlpha,
+  starPosition,
   DEVICE_PIXEL_RATIO_CAP,
   getBackgroundCoverRect,
   getBackingStoreSize,
@@ -296,31 +298,58 @@ describe("spaceship view model", () => {
     });
   });
 
-  describe("background tile offset", () => {
-    const nebulaB = { factorX: -0.095, factorY: 0.075, driftX: -7, driftY: 3.2 };
-
-    it("scales the camera term with parallax strength and keeps per-axis factors independent", () => {
-      expect(backgroundTileOffset(nebulaB, 1000, 400, 1, 0)).toEqual({ x: -95, y: 30 });
-      expect(backgroundTileOffset(nebulaB, 1000, 400, 0.5, 0)).toEqual({ x: -47.5, y: 15 });
+  describe("sky picture shift", () => {
+    it("stays centred while the camera sits on the arena centre", () => {
+      const share = backdropShiftShare(2200, 2200, 2200, 2200, 2200, 1);
+      expect(share.x).toBeCloseTo(0);
+      expect(share.y).toBeCloseTo(0);
     });
 
-    it("lets zero parallax strength kill only the camera term while drift keeps living", () => {
-      const offset = backgroundTileOffset(nebulaB, 1000, 400, 0, 3);
-      expect(offset.x).toBeCloseTo(-21);
-      expect(offset.y).toBeCloseTo(9.6);
+    it("moves against the camera, a share of its margin per arena radius", () => {
+      const share = backdropShiftShare(2200 + 1100, 2200 - 550, 2200, 2200, 2200, 1);
+      expect(share.x).toBeCloseTo(-0.5);
+      expect(share.y).toBeCloseTo(0.25);
     });
 
-    it("accumulates drift with elapsed time at the tuned speed without parallax scaling", () => {
-      // driftSeconds = elapsedSeconds * driftSpeed: 40s at speed 1.5.
-      const offset = backgroundTileOffset(nebulaB, 0, 0, 2, 60);
-      expect(offset.x).toBe(-420);
-      expect(offset.y).toBe(192);
+    it("never goes past its margin, even at the rim of the largest field", () => {
+      // The reference's fixed fraction would have walked it hundreds of pixels out here.
+      const share = backdropShiftShare(19_400 * 2, 0, 19_400, 19_400, 19_400, 1.6);
+      expect(share.x).toBe(-1);
+      expect(share.y).toBe(1);
     });
 
-    it("moves nebula B against the camera on X while following it on Y", () => {
-      const offset = backgroundTileOffset(nebulaB, 500, 500, 1, 0);
-      expect(offset.x).toBeLessThan(0);
-      expect(offset.y).toBeGreaterThan(0);
+    it("stays pinned to the screen at zero strength", () => {
+      const share = backdropShiftShare(4000, 100, 2200, 2200, 2200, 0);
+      expect(Math.abs(share.x)).toBe(0);
+      expect(Math.abs(share.y)).toBe(0);
+    });
+  });
+
+  describe("star field", () => {
+    const home = { u: 0.25, v: 0.5, depth: 1 };
+
+    it("puts a star at its home while the camera is at the origin", () => {
+      expect(starPosition(home, 0, 0, 1000, 500, 1)).toEqual({ x: 250, y: 250 });
+    });
+
+    it("shifts nearer stars further against the camera", () => {
+      const near = starPosition(home, 1000, 0, 1000, 500, 1);
+      const far = starPosition({ ...home, depth: 0.2 }, 1000, 0, 1000, 500, 1);
+      expect(250 - near.x).toBeCloseTo(18);
+      expect(250 - far.x).toBeCloseTo(3.6);
+    });
+
+    it("wraps a star that leaves the field back into it", () => {
+      const at = starPosition(home, 100_000, -100_000, 1000, 500, 1);
+      expect(at.x).toBeGreaterThanOrEqual(0);
+      expect(at.x).toBeLessThan(1000);
+      expect(at.y).toBeGreaterThanOrEqual(0);
+      expect(at.y).toBeLessThan(500);
+    });
+
+    it("holds a steady brightness when motion is to be reduced, and twinkles otherwise", () => {
+      expect(starAlpha(0.5, 0, 0, false)).toBe(starAlpha(0.5, 1.3, 42, false));
+      expect(starAlpha(1, 0, Math.PI / 4, true)).not.toBe(starAlpha(1, 0, 0, true));
     });
   });
 

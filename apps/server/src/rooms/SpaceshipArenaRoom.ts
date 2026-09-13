@@ -340,14 +340,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
      * The sky, which the arena was flying without.
      *
      * The campaign projects it with the rest of its display block and a match
-     * never did, so the field came out as an empty black square: no nebula, no
-     * stars, no parallax. Four numbers, fixed for the match like the
-     * silhouettes are.
+     * never did, so the field came out as an empty black square. The picture and
+     * its parallax, fixed for the match like the silhouettes are.
      */
+    display.backgroundImage = ship.background.image;
     display.backgroundParallaxStrength = ship.background.parallaxStrength;
-    display.backgroundDriftSpeed = ship.background.driftSpeed;
-    display.backgroundNebulaAlpha = ship.background.nebulaAlpha;
-    display.backgroundNebulaPreset = ship.background.nebulaPreset;
     display.shieldBandEffect = ship.shieldBandEffect;
     display.shieldImpactEffect = ship.shieldImpactEffect;
     display.shipDeathEffect = ship.shipDeathEffect;

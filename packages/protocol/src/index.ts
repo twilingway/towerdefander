@@ -30,7 +30,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 67 as const;
+export const PROTOCOL_VERSION = 68 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -965,7 +965,7 @@ export const displayGameSnapshotSchema = z
     appliedInputSeq: safeNonnegativeInteger,
     drive: publicShipDriveViewSchema,
     pose: publicShipPoseViewSchema,
-    /** Parallax space background for this run; fixed at run start like the silhouettes. */
+    /** The sky under the arena for this run; fixed at run start like the silhouettes. */
     background: backgroundTuningSchema,
     enemyCatalogue: z.array(publicEnemyCatalogueEntrySchema).max(MAX_ENEMY_ARCHETYPES),
     /** Look of the ambient hazard for this run; null keeps the display's own rock. */

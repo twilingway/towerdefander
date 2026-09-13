@@ -381,11 +381,20 @@ function migrateHelm(tuning: LegacyRecord, defaults: BalanceTuning): LegacyRecor
 }
 
 /**
- * Fills the background section field by field so a document saved before the
- * parallax existed gains defaults instead of failing the strict schema.
+ * The sky as it is now: one picture and how far it follows the camera.
+ *
+ * A file from before the picture carries four numbers for parallax layers that
+ * are gone. Only the parallax strength still means something, so it is kept and
+ * the rest is dropped rather than spread in - a leftover field would fail the
+ * strict schema and take the whole preset down with it. The picture starts on,
+ * as the operator chose when the sky came back.
  */
 function migrateBackground(tuning: LegacyRecord, defaults: BalanceTuning): unknown {
-  return { ...defaults.background, ...readRecord(tuning, "background") };
+  const saved = readRecord(tuning, "background");
+  return {
+    image: saved.image ?? defaults.background.image,
+    parallaxStrength: saved.parallaxStrength ?? defaults.background.parallaxStrength
+  };
 }
 
 /**

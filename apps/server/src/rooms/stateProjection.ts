@@ -93,10 +93,8 @@ export function projectGameState(
   pose.turretAngularVelocity = game.turretAngularVelocity;
   pose.hasTurretTarget = game.turretTargetAngle !== null;
   pose.turretTargetAngle = game.turretTargetAngle ?? 0;
+  target.display.backgroundImage = config.background.image;
   target.display.backgroundParallaxStrength = config.background.parallaxStrength;
-  target.display.backgroundDriftSpeed = config.background.driftSpeed;
-  target.display.backgroundNebulaAlpha = config.background.nebulaAlpha;
-  target.display.backgroundNebulaPreset = config.background.nebulaPreset;
   target.spaceship.x = game.spaceship.x;
   target.spaceship.y = game.spaceship.y;
   target.spaceship.velocityX = game.spaceship.velocity.x;

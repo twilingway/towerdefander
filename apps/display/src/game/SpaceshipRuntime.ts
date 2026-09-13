@@ -106,13 +106,12 @@ export function createSpaceshipRuntime(
       antialias: true,
       roundPixels: false,
       /**
-       * The background is drawn far smaller than it is stored: the frame is
-       * 2500 world units across and the tiles are 512 and 1024 texels, so a
-       * texel lands on a third of a pixel on a phone. Sampled one level deep
-       * that is undersampling, and it reads as the starfield crawling and
-       * sparkling whenever the camera moves. Every one of the six textures is a
-       * power of two, so the whole chain is legal - and trilinear minification
-       * is cheaper than the aliasing it replaces, not dearer.
+       * Trilinear minification for the textures that can have it. Phaser builds
+       * mipmaps only for power-of-two textures, which is why the catalogue's
+       * sprite sheets are cut into 256 cells: a hull is shown at a few dozen
+       * pixels out of its cell, and without a chain it shimmers as it turns.
+       * The sky picture is deliberately not a power of two - it is drawn about
+       * screen size, and a mipmapped tiled sky is what once drew a moving line.
        */
       mipmapFilter: "LINEAR_MIPMAP_LINEAR",
       /** Free on a phone, and picks the discrete GPU on a laptop that has two. */

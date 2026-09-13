@@ -236,33 +236,57 @@ export function getBackgroundCoverRect(
   };
 }
 
-export interface BackgroundLayerMotion {
-  /** Fraction of camera scroll the layer follows, per axis (demo values; may be negative). */
-  readonly factorX: number;
-  readonly factorY: number;
-  /** Idle drift in texture pixels per second at driftSpeed multiplier 1. */
-  readonly driftX: number;
-  readonly driftY: number;
+/**
+ * How far the sky picture is pushed against the camera, as a share of its own margin past the
+ * frame on each axis, from -1 to 1.
+ *
+ * The reference shifted its picture by a fixed fraction of the ship's position, which on a field
+ * ten thousand units across walks it hundreds of pixels past its margin and bares the void at the
+ * rim. Measured in arena radii instead, and clamped, the picture reaches the end of its margin no
+ * nearer the centre than the parallax strength allows and never further than the margin itself.
+ */
+export function backdropShiftShare(
+  cameraX: number,
+  cameraY: number,
+  centerX: number,
+  centerY: number,
+  arenaRadius: number,
+  parallaxStrength: number
+): { readonly x: number; readonly y: number } {
+  const radius = arenaRadius > 0 ? arenaRadius : 1;
+  const share = (delta: number): number =>
+    Math.max(-1, Math.min(1, (delta / radius) * parallaxStrength));
+  return { x: share(centerX - cameraX), y: share(centerY - cameraY) };
 }
 
+/** Share of the camera's travel a star at full depth follows; the reference's number. */
+export const STAR_PARALLAX = 0.018;
+
 /**
- * Tile offset for a screen-fixed parallax layer (scrollFactor 0). The scroll term is the
- * fraction of camera movement the layer follows, scaled by the admin's parallax strength;
- * the drift term keeps the background alive while idle and ignores both zoom and strength.
- * No extra zoom factor: for a scroll-factor-0 sprite texture offsets are world units that the
- * camera already scales on screen, so this keeps the depth ratio at any camera distance.
+ * Where one star sits inside the rectangle the field covers: its home, shifted against the camera
+ * by its depth, wrapped so the field never runs out however far the ship flies.
  */
-export function backgroundTileOffset(
-  layer: BackgroundLayerMotion,
-  scrollX: number,
-  scrollY: number,
-  parallaxStrength: number,
-  driftSeconds: number
+export function starPosition(
+  home: { readonly u: number; readonly v: number; readonly depth: number },
+  cameraX: number,
+  cameraY: number,
+  width: number,
+  height: number,
+  parallaxStrength: number
 ): { readonly x: number; readonly y: number } {
+  const wrap = (value: number, size: number): number => ((value % size) + size) % size;
+  const pull = home.depth * STAR_PARALLAX * parallaxStrength;
   return {
-    x: scrollX * layer.factorX * parallaxStrength + driftSeconds * layer.driftX,
-    y: scrollY * layer.factorY * parallaxStrength + driftSeconds * layer.driftY
+    x: wrap(home.u * width - cameraX * pull, width),
+    y: wrap(home.v * height - cameraY * pull, height)
   };
+}
+
+/** A star's opacity: nearer stars brighter, a slow twinkle unless motion is to be reduced. */
+export function starAlpha(depth: number, phase: number, seconds: number, twinkle: boolean): number {
+  const base = 0.25 + 0.55 * depth;
+  const flicker = twinkle ? 0.1 * Math.sin(seconds * 2 + phase) : 0;
+  return Math.max(0, Math.min(1, base + flicker));
 }
 
 /**
