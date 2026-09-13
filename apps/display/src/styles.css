@@ -3649,7 +3649,7 @@ p {
 }
 
 .timer-frame {
-  top: max(0.5rem, env(safe-area-inset-top));
+  top: var(--frame-timer-top, max(0.5rem, env(safe-area-inset-top)));
   left: 50%;
   width: var(--frame-timer-width, clamp(15rem, 28vw, 28rem));
   aspect-ratio: 2036 / 447;
@@ -3699,8 +3699,8 @@ p {
 /* Under the timer and its caption, while a boss is alive. */
 .display-shell--battle[data-hud-skin="frame"] .boss-health {
   top: calc(
-    max(0.5rem, env(safe-area-inset-top)) + var(--frame-timer-width) *
-      var(--frame-timer-height-share, 0.2195) + 1.6rem
+    var(--frame-timer-top, max(0.5rem, env(safe-area-inset-top))) + var(--frame-timer-width) *
+      0.2195 + 1.6rem
   );
 }
 
@@ -3811,9 +3811,13 @@ p {
   .display-shell--battle[data-hud-skin="frame"] {
     --frame-info-top: max(0.4rem, env(safe-area-inset-top));
     --frame-info-width: clamp(13rem, 28vw, 17rem);
-    /* Only the ring and the stubs of its whiskers: a phone cannot spare the width. */
-    --frame-timer-width: 6rem;
-    --frame-timer-height-share: 0.7842;
+    /*
+     * The whole timer, whiskers and all, against the top edge. Its whiskers run at
+     * 43 percent of its height, level with the info frame's slanted edge, so the
+     * width stops where the left tip clears that edge.
+     */
+    --frame-timer-top: max(0.125rem, env(safe-area-inset-top));
+    --frame-timer-width: min(18.75rem, 40vw);
     --frame-status-width: clamp(12rem, 25vw, 15rem);
     /* Enough to bring the ring pictures wholly onto the glass, with a small margin. */
     --frame-stick-inset: 1.5rem;
@@ -3822,19 +3826,6 @@ p {
   /* Under the room's readouts, which keep their row across the top right here. */
   .status-frame {
     top: max(2.9rem, calc(env(safe-area-inset-top) + 2.5rem));
-  }
-
-  /* The ring's middle 570 texels of the timer's 2036, cut by `cover` rather than drawn whole. */
-  .timer-frame {
-    aspect-ratio: 570 / 447;
-  }
-
-  .timer-frame__art {
-    object-fit: cover;
-  }
-
-  .timer-frame__value {
-    font-size: calc(var(--frame-timer-width) * 0.13);
   }
 }
 
@@ -4064,6 +4055,8 @@ p {
    */
   .display-shell--cockpit[data-hud-skin="frame"] {
     --frame-info-width: clamp(12rem, 24vw, 13rem);
+    /* The info frame is narrower here, so the whole timer can be a little wider. */
+    --frame-timer-width: min(18.75rem, 45vw);
     --frame-status-width: clamp(8rem, 20vw, 8.5rem);
     --frame-radar-window: calc(var(--cockpit-aim-ring) * 1.2);
     /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
@@ -4120,18 +4113,27 @@ p {
     position: static;
   }
 
+  /*
+   * One row over the timer's right whisker, between the ring and the status
+   * frame: the latency just past the ring, the frame counter with its stutters
+   * against the status frame. Above a fifth of the timer's height nothing of the
+   * picture reaches past the ring, so small type keeps the row clear of the
+   * bracket and the whisker's line.
+   */
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator,
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
     position: absolute;
-    left: calc(50% + var(--frame-timer-width) / 2 + 0.4rem);
+    top: -0.1rem;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.5rem;
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator {
-    top: 0;
+    left: calc(50% + var(--frame-timer-width) * 0.15);
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
-    top: 1.1rem;
+    right: calc(var(--frame-status-width) + 0.25rem);
   }
 
   /* Centred in the status frame's cut-out, which on a phone is a little smaller than the gear. */
