@@ -73,6 +73,14 @@ button:disabled {
   height: 100dvh;
   min-height: 0;
   /*
+   * Nothing in a fight is text to take away. A drag across the stage or a long
+   * press on a readout selected it and offered to copy it over the game, and on
+   * a phone the press also opened the system's callout.
+   */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /*
    * Scrollable rather than clipped.
    *
    * The field is exactly one screen tall, so on a screen with room there is
