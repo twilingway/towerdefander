@@ -14,7 +14,7 @@
       `scanRadiusScreens` → `scanRadiusCells`; тест на файле 57 и на сиде
 - [x] 2.2 `crewPolicy.mjs`: `frameRadius`, `sourceIsSpent`, догадка о стрелке через
       `legacyFrameWidth`; `crewPolicy.node-test.mjs` под новую пропорцию
-- [ ] 2.3 Скан по клеткам в `SpaceshipArenaRoom.ts`; тест радиуса; значение состояния по умолчанию
+- [x] 2.3 Скан по клеткам в `SpaceshipArenaRoom.ts`; тест радиуса; значение состояния по умолчанию
 
 Проверка: `pnpm --filter @spaceship-defender/server exec vitest run`,
 `node --test apps/server/scripts/crewPolicy.node-test.mjs`.
@@ -60,4 +60,4 @@
 ## 7. Приёмка
 
 - [x] 7.1 `pnpm check` с перехватом кода возврата; `pnpm spec:validate`
-- [ ] 7.2 Страница «до и после» для оператора; мердж после его приёмки
+- [x] 7.2 Страница «до и после» для оператора; мердж после его приёмки
