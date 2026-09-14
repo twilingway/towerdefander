@@ -12,11 +12,16 @@ Phaser SHALL отображать square bounding world `4400×4400`, одну a
 background grid только внутри arena, распределённые внутри circle декоративные не участвующие в
 collision примитивы, spaceship body, turret, shield arc и projectiles средствами Graphics/Shape без
 bitmap assets. Область за circle SHALL оставаться более тёмным deep-space background. Active
-battlefield SHALL занимать весь CSS viewport без card padding, border, фиксированной 16:9 рамки и
-letterbox. Базовая logical view SHALL быть не меньше `1600×900`; при другом aspect ratio camera
-SHALL расширять видимую область по одной оси без растяжения world/circle и без обрезания базовой
-области. React HUD, room code и connection status SHALL быть overlays и SHALL NOT уменьшать Phaser
-viewport.
+battlefield SHALL занимать весь CSS viewport без card padding и border. Кадр мира SHALL иметь
+пропорцию `19.5:9`: ширина равна authoritative `cameraViewWidth` из display-проекции снапшота,
+высота — `9/19.5` от неё. Мир SHALL показываться без растяжения world/circle. Экран шире 19.5:9
+SHALL показывать высоту кадра и больше мира по бокам без полос, пока его пропорция не шире `21:9`;
+экран шире `21:9` SHALL показывать участок `21:9` той же высоты с полосами по бокам. Экран уже
+19.5:9 SHALL показывать без полос участок своей пропорции той же площади, что кадр, пока его
+пропорция не уже `16:9`; экран уже `16:9` SHALL показывать такой участок `16:9` с полосами сверху и
+снизу. Сервер и боты SHALL видеть базовый кадр 19.5:9 независимо от экранов игроков. Изменение
+authoritative кадра SHALL перенастраивать camera без пересоздания Room/runtime. React HUD, room code
+и connection status SHALL быть overlays и SHALL NOT уменьшать Phaser viewport.
 
 #### Scenario: Матч начинается
 
@@ -33,7 +38,28 @@ viewport.
 
 - **WHEN** active display меняется между `1920×1080`, `1366×768` и `1024×768`
 - **THEN** renderer/camera обновляются без пересоздания Room/runtime, canvas покрывает viewport,
-  arena остаётся кругом и базовая logical область видима
+  arena остаётся кругом, а показанный участок мира следует пропорции экрана
+
+#### Scenario: Телефон 19.5:9 без полос
+
+- **WHEN** display открыт на экране `780×360` в ландшафте
+- **THEN** кадр мира занимает весь экран без полос
+
+#### Scenario: Монитор 16:9 и монитор 21:9
+
+- **WHEN** один и тот же забег показан на `1920×1080` и на `3440×1440`
+- **THEN** оба заполнены без полос: `3440×1440` показывает высоту кадра и по бокам больше мира, а
+  `1920×1080` — участок `16:9` той же площади, что кадр, чуть уже и выше
+
+#### Scenario: Планшет 4:3
+
+- **WHEN** забег показан на `1024×768`
+- **THEN** экран показывает тот же участок `16:9`, что `1920×1080`, с полосами сверху и снизу
+
+#### Scenario: Экран шире 21:9
+
+- **WHEN** забег показан на `5120×1440`
+- **THEN** экран показывает участок мира `21:9` той же высоты с узкими полосами по бокам
 
 ### Requirement: Display интерполирует, но не владеет состоянием
 
@@ -225,9 +251,9 @@ transforms SHALL сохранять дробные coordinates без прину
 
 #### Scenario: Camera использует zoom
 
-- **WHEN** renderer `1920×1080` показывает logical viewport `1600×900` и spaceship находится в
-  центре arena `(2200,2200)`
-- **THEN** camera midpoint совпадает с spaceship, а world-view top-left равен `(1400,1750)` без
+- **WHEN** renderer `1950×900` показывает logical viewport `1950×900` и spaceship находится в центре
+  arena `(2200,2200)`
+- **THEN** camera midpoint совпадает с spaceship, а world-view top-left равен `(1225,1750)` без
   систематического сдвига из-за zoom
 
 ### Requirement: Display показывает authoritative нагрев носового пулемёта
@@ -300,17 +326,23 @@ friendly/hostile projectiles SHALL NOT показываться. Маркеры 
 
 ### Requirement: Боевой радар сохраняет читаемость HUD
 
-Display SHALL показывать один радар снизу по центру поверх Phaser viewport и над основным combat
-HUD. Он SHALL не изменять размер canvas и SHALL учитывать safe area телевизора. Его размер SHALL
-быть адаптивным, форма SHALL оставаться круглой на поддерживаемых aspect ratio, а полупрозрачный
-фон, рамка и маркеры SHALL оставаться различимыми поверх космоса. Радар SHALL NOT перекрывать нижний
-combat HUD, room status и ping участников.
+Display SHALL показывать один радар поверх Phaser viewport там, где его ставит требование
+`hud-skins` «Радар в рамках стоит справа снизу над стиком». Радар SHALL не изменять размер canvas и
+SHALL учитывать safe area телевизора. Его размер SHALL быть адаптивным, форма SHALL оставаться
+круглой на поддерживаемых aspect ratio, а полупрозрачный фон, рамка и маркеры SHALL оставаться
+различимыми поверх космоса. Радар SHALL NOT перекрывать рамки сведений, таймера и состояния, room
+status и ping участников.
 
 #### Scenario: Display меняет размер
 
 - **WHEN** viewport меняется между `1920×1080`, `1366×768` и `1024×768`
-- **THEN** радар остаётся кругом, расположен снизу по центру, целиком виден в safe area и не
-  уменьшает Phaser viewport
+- **THEN** радар остаётся кругом справа снизу, целиком виден в safe area и не уменьшает Phaser
+  viewport
+
+#### Scenario: Оформление рамок
+
+- **WHEN** идёт забег — в рамках, единственном оформлении HUD
+- **THEN** радар не стоит снизу по центру, а занимает место справа снизу, заданное `hud-skins`
 
 ### Requirement: Display показывает срок волны и точную причину поражения
 
