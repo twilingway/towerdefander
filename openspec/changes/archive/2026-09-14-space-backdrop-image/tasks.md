@@ -45,7 +45,7 @@
 ## 5. Приёмка
 
 - [x] 5.1 `pnpm check` с явным перехватом кода возврата; `pnpm spec:validate`
-- [ ] 5.2 `node scripts/bench-panels.mjs --cpu=4 --plain --wave=5` с `none` и с `deep-nebula` на
+- [x] 5.2 `node scripts/bench-panels.mjs --cpu=4 --plain --wave=5` с `none` и с `deep-nebula` на
       одном стенде; числа вписать в design.md до мерджа
 - [x] 5.3 Ручная приёмка: нет полосы у края кадра на краю арены, нет движущейся линии в полёте,
       звёзды мерцают, выключенный фон не грузит картинку, фон на месте после переподключения
