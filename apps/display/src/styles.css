@@ -3023,11 +3023,50 @@ p {
    * very edge of a screen is a thumb the bezel and the system gestures get first.
    */
   --frame-stick-inset: 2rem;
+  --frame-timer-top: max(0.5rem, env(safe-area-inset-top));
+  --frame-status-top: max(0.75rem, env(safe-area-inset-top));
+  /*
+   * Where the world is drawn on the glass. `useWorldFrame` writes the measured
+   * rectangle inline and these stand in until it does. The world is centred, so
+   * its left edge is also each side bar's width and its top each top bar's height.
+   */
+  --world-left: 0px;
+  --world-top: 0px;
+  /* The frames' outer edges: the world's own, and never inside a safe area. */
+  --frame-edge-left: max(calc(var(--world-left) + 0.75rem), env(safe-area-inset-left));
+  --frame-edge-right: max(calc(var(--world-left) + 0.75rem), env(safe-area-inset-right));
+  /*
+   * The widths the frames are drawn at. In a top bar at least 4.5rem tall the row
+   * stands in the bar, each frame no taller than the room between its inset and
+   * the world. A thinner bar would shrink the frames past reading, so there they
+   * keep their widths and lie over the world. The switch is the clamp: under the
+   * threshold it is larger than any frame and max() takes it, over it it is zero.
+   */
+  --frame-bar-switch: clamp(0px, (4.5rem - var(--world-top)) * 1000, 100000px);
+  --frame-info-size: min(
+    var(--frame-info-width),
+    max(var(--world-top) - var(--frame-info-top), var(--frame-bar-switch)) / 0.3164
+  );
+  --frame-timer-size: min(
+    var(--frame-timer-width),
+    max(var(--world-top) - var(--frame-timer-top), var(--frame-bar-switch)) / 0.2195
+  );
+  --frame-status-size: min(
+    var(--frame-status-width),
+    max(var(--world-top) - var(--frame-status-top), var(--frame-bar-switch)) / 0.5511
+  );
+  /* Each frame's top: its bottom edge on the world's top edge, or its inset where the bar is thinner. */
+  --frame-info-y: max(var(--frame-info-top), var(--world-top) - var(--frame-info-size) * 0.3164);
+  --frame-timer-y: max(var(--frame-timer-top), var(--world-top) - var(--frame-timer-size) * 0.2195);
+  --frame-status-y: max(
+    var(--frame-status-top),
+    var(--world-top) - var(--frame-status-size) * 0.5511
+  );
 }
 
 /* The collapsed module tree waits under the info frame instead of on top of it. */
 .display-shell--battle[data-hud-skin="frame"] .module-tree--collapsed {
-  top: calc(var(--frame-info-top) + var(--frame-info-width) * 0.3164 + 0.5rem);
+  top: calc(var(--frame-info-y) + var(--frame-info-size) * 0.3164 + 0.5rem);
 }
 
 .info-frame,
@@ -3047,11 +3086,11 @@ p {
   height: 100%;
 }
 
-/* The top left corner: the fight shows no room code for it to clear. */
+/* The world's top left corner: the fight shows no room code for it to clear. */
 .info-frame {
-  top: var(--frame-info-top, max(0.75rem, env(safe-area-inset-top)));
-  left: max(0.75rem, env(safe-area-inset-left));
-  width: var(--frame-info-width, clamp(17rem, 32vw, 30rem));
+  top: var(--frame-info-y);
+  left: var(--frame-edge-left);
+  width: var(--frame-info-size);
   aspect-ratio: 1767 / 559;
   contain: paint;
 }
@@ -3065,9 +3104,13 @@ p {
   white-space: nowrap;
 }
 
+/*
+ * Type is sized off the frame at a phone's proportions, within a floor and a cap,
+ * so a frame shrunk into a monitor's top bar takes its words down with it.
+ */
 .info-frame__label {
   color: #8fdcff;
-  font-size: clamp(0.55rem, 0.8vw, 0.8rem);
+  font-size: clamp(0.55rem, var(--frame-info-size) * 0.042, 0.8rem);
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -3081,7 +3124,7 @@ p {
 
 .info-frame__capsule strong {
   color: #ffd783;
-  font-size: clamp(0.8rem, 1.2vw, 1.2rem);
+  font-size: clamp(0.8rem, var(--frame-info-size) * 0.061, 1.2rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3090,7 +3133,7 @@ p {
   display: -webkit-box;
   overflow: hidden;
   color: #b6d9e6;
-  font-size: clamp(0.5rem, 0.68vw, 0.7rem);
+  font-size: clamp(0.5rem, var(--frame-info-size) * 0.032, 0.7rem);
   line-height: 1.05;
   white-space: normal;
   -webkit-box-orient: vertical;
@@ -3104,9 +3147,9 @@ p {
 }
 
 .timer-frame {
-  top: var(--frame-timer-top, max(0.5rem, env(safe-area-inset-top)));
+  top: var(--frame-timer-y);
   left: 50%;
-  width: var(--frame-timer-width, clamp(15rem, 28vw, 28rem));
+  width: var(--frame-timer-size);
   aspect-ratio: 2036 / 447;
   transform: translateX(-50%);
 }
@@ -3120,7 +3163,7 @@ p {
   top: 50%;
   left: 50%;
   color: #ffd783;
-  font-size: calc(var(--frame-timer-width, clamp(15rem, 28vw, 28rem)) * 0.038);
+  font-size: calc(var(--frame-timer-size) * 0.038);
   font-variant-numeric: tabular-nums;
   transform: translate(-50%, -50%);
 }
@@ -3134,7 +3177,7 @@ p {
   border-radius: 999px;
   color: #c9f5ff;
   background: rgb(5 25 33 / 70%);
-  font-size: clamp(0.5rem, 0.7vw, 0.68rem);
+  font-size: clamp(0.5rem, var(--frame-timer-size) * 0.027, 0.68rem);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3153,10 +3196,7 @@ p {
 
 /* Under the timer and its caption, while a boss is alive. */
 .display-shell--battle[data-hud-skin="frame"] .boss-health {
-  top: calc(
-    var(--frame-timer-top, max(0.5rem, env(safe-area-inset-top))) + var(--frame-timer-width) *
-      0.2195 + 1.6rem
-  );
+  top: calc(var(--frame-timer-y) + var(--frame-timer-size) * 0.2195 + 1.6rem);
 }
 
 /*
@@ -3164,11 +3204,13 @@ p {
  * and the frame counter stand beside the timer.
  */
 .status-frame {
-  top: max(0.75rem, env(safe-area-inset-top));
-  right: max(0.75rem, env(safe-area-inset-right));
-  width: var(--frame-status-width, clamp(17rem, 24vw, 22rem));
+  top: var(--frame-status-y);
+  right: var(--frame-edge-right);
+  width: var(--frame-status-size);
   aspect-ratio: 1154 / 636;
   contain: paint;
+  /* Its own width decides how its words are written: the query closes the frame rules. */
+  container: status-frame / inline-size;
 }
 
 /* A state is a word first; the colour and the pulse only help it along. */
@@ -3195,7 +3237,11 @@ p {
 .frame-scan {
   position: absolute;
   z-index: 27;
-  right: calc(var(--frame-radar-right) + var(--frame-radar-width) + 0.4rem);
+  /*
+   * A control, so it keeps to the glass's edge where the dial keeps to the world's:
+   * the two differ only past 43:18, where the dial moves in to the world.
+   */
+  right: calc(max(0.25rem, env(safe-area-inset-right)) + var(--frame-radar-width) + 0.4rem);
   bottom: calc(var(--frame-radar-bottom) + var(--frame-radar-width) * 0.354);
   display: grid;
   min-width: 3rem;
@@ -3250,7 +3296,7 @@ p {
   transform: translateY(-50%);
   color: #bcefff;
   font:
-    700 clamp(0.5rem, 0.75vw, 0.72rem) / 1 system-ui,
+    700 clamp(0.5rem, var(--frame-status-size) * 0.034, 0.72rem) / 1 system-ui,
     sans-serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3281,11 +3327,8 @@ p {
     --frame-status-width: clamp(12rem, 25vw, 15rem);
     /* Enough to bring the ring pictures wholly onto the glass, with a small margin. */
     --frame-stick-inset: 1.5rem;
-  }
-
-  /* Under the room's readouts, which keep their row across the top right here. */
-  .status-frame {
-    top: max(2.9rem, calc(env(safe-area-inset-top) + 2.5rem));
+    /* Under the room's readouts, which keep their row across the top right here. */
+    --frame-status-top: max(2.9rem, calc(env(safe-area-inset-top) + 2.5rem));
   }
 }
 
@@ -3297,6 +3340,17 @@ p {
  * would not fit.
  */
 @media (height > 520px) {
+  /* The row stands where the status frame does, so the gear follows it into a bar or beside one. */
+  .display-shell--battle[data-hud-skin="frame"] > .room-header {
+    top: var(--frame-status-y);
+    right: var(--frame-edge-right);
+    left: var(--frame-edge-left);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] .module-tree--collapsed {
+    left: max(calc(var(--world-left) + 1.25rem), env(safe-area-inset-left));
+  }
+
   .display-shell--battle[data-hud-skin="frame"] > .room-header .room-network {
     position: static;
   }
@@ -3304,7 +3358,7 @@ p {
   .display-shell--battle[data-hud-skin="frame"] > .room-header .latency-indicator,
   .display-shell--battle[data-hud-skin="frame"] > .room-header .fps-readout {
     position: absolute;
-    left: calc(50% + var(--frame-timer-width) / 2 + 0.5rem);
+    left: calc(50% + var(--frame-timer-size) / 2 + 0.5rem);
   }
 
   .display-shell--battle[data-hud-skin="frame"] > .room-header .latency-indicator {
@@ -3315,11 +3369,31 @@ p {
     top: 1.75rem;
   }
 
-  /* Centred in the cut-out, a square about a fifth of the frame's width across. */
+  /*
+   * Centred in the cut-out, a square about a fifth of the frame's width across. A
+   * frame shrunk into a bar has a cut-out smaller than the gear, so the gear is
+   * drawn down to it, never under a phone's 1.6rem, and pressed at 44 pixels.
+   */
+  .display-shell--battle[data-hud-skin="frame"] > .room-header {
+    --frame-gear-size: clamp(1.6rem, var(--frame-status-size) * 0.1941 - 0.3rem, 2.4rem);
+  }
+
   .display-shell--battle[data-hud-skin="frame"] > .room-header .settings {
     position: absolute;
-    top: calc((var(--frame-status-width) * 0.1941 - 2.4rem) / 2);
-    right: calc((var(--frame-status-width) * 0.1941 - 2.4rem) / 2);
+    top: calc((var(--frame-status-size) * 0.1941 - var(--frame-gear-size)) / 2);
+    right: calc((var(--frame-status-size) * 0.1941 - var(--frame-gear-size)) / 2);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .settings__toggle {
+    position: relative;
+    width: var(--frame-gear-size);
+    height: var(--frame-gear-size);
+  }
+
+  .display-shell--battle[data-hud-skin="frame"] > .room-header .settings__toggle::after {
+    position: absolute;
+    inset: min(0px, (var(--frame-gear-size) - 44px) / 2);
+    content: "";
   }
 }
 
@@ -3338,7 +3412,7 @@ p {
 .display-shell--battle[data-hud-skin="frame"] {
   --frame-radar-window: clamp(8rem, 12vw, 12rem);
   --frame-radar-width: calc(var(--frame-radar-window) / 0.4571 * 0.7895);
-  --frame-radar-right: max(0.25rem, env(safe-area-inset-right));
+  --frame-radar-right: max(calc(var(--world-left) + 0.25rem), env(safe-area-inset-right));
   --frame-radar-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
@@ -3456,24 +3530,25 @@ p {
     --frame-status-width: clamp(22rem, 22vw, 28rem);
   }
 
+  /* Larger caps, the same proportions: a frame shrunk into a bar still takes its words down. */
   .info-frame__label {
-    font-size: 0.95rem;
+    font-size: clamp(0.55rem, var(--frame-info-size) * 0.042, 0.95rem);
   }
 
   .info-frame__capsule strong {
-    font-size: 1.45rem;
+    font-size: clamp(0.8rem, var(--frame-info-size) * 0.061, 1.45rem);
   }
 
   .info-frame__capsule > small {
-    font-size: 0.85rem;
+    font-size: clamp(0.5rem, var(--frame-info-size) * 0.032, 0.85rem);
   }
 
   .timer-frame__caption {
-    font-size: 0.8rem;
+    font-size: clamp(0.5rem, var(--frame-timer-size) * 0.027, 0.8rem);
   }
 
   .status-frame__label {
-    font-size: 0.9rem;
+    font-size: clamp(0.5rem, var(--frame-status-size) * 0.034, 0.9rem);
   }
 }
 
@@ -3534,22 +3609,22 @@ p {
       calc(var(--frame-radar-window) / 0.8168),
       calc(
         100dvh - max(var(--frame-corner-inset), env(safe-area-inset-top)) -
-          var(--frame-status-width) * 0.5511 - 0.25rem - var(--frame-radar-bottom)
+          var(--frame-status-size) * 0.5511 - 0.25rem - var(--frame-radar-bottom)
       )
     );
     /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
     --frame-stick-bottom: calc(0.625rem + var(--cockpit-aim-ring) * 0.25);
     --frame-radar-bottom: calc(var(--frame-stick-bottom) + var(--cockpit-aim-ring) * 1.25 + 0.5rem);
-  }
-
-  .display-shell--cockpit[data-hud-skin="frame"] .status-frame {
-    top: max(var(--frame-corner-inset), env(safe-area-inset-top));
-    right: max(var(--frame-corner-inset), env(safe-area-inset-right));
+    --frame-status-top: max(var(--frame-corner-inset), env(safe-area-inset-top));
+    --frame-edge-right: max(
+      calc(var(--world-left) + var(--frame-corner-inset)),
+      env(safe-area-inset-right)
+    );
   }
 
   /* The row the gear hangs in keeps the frame's right edge, so the gear stays in its cut-out. */
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header {
-    right: max(var(--frame-corner-inset), env(safe-area-inset-right));
+    right: var(--frame-edge-right);
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] .solo-cockpit {
@@ -3617,11 +3692,11 @@ p {
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .latency-indicator {
-    left: calc(50% + var(--frame-timer-width) * 0.15);
+    left: calc(50% + var(--frame-timer-size) * 0.15);
   }
 
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .fps-readout {
-    right: calc(var(--frame-status-width) + 0.25rem);
+    right: calc(var(--frame-status-size) + 0.25rem);
   }
 
   /*
@@ -3632,10 +3707,10 @@ p {
   .display-shell--cockpit[data-hud-skin="frame"] > .room-header .settings {
     position: absolute;
     top: calc(
-      max(var(--frame-corner-inset), env(safe-area-inset-top)) -
-        max(0.4rem, env(safe-area-inset-top)) + (var(--frame-status-width) * 0.1941 - 1.6rem) / 2
+      var(--frame-status-y) - max(0.4rem, env(safe-area-inset-top)) +
+        (var(--frame-status-size) * 0.1941 - 1.6rem) / 2
     );
-    right: calc((var(--frame-status-width) * 0.1941 - 1.6rem) / 2);
+    right: calc((var(--frame-status-size) * 0.1941 - 1.6rem) / 2);
   }
 
   /* Drawn at the cut-out's size, pressed at a thumb's: 44 pixels square around it. */
@@ -3650,19 +3725,26 @@ p {
     inset: -0.575rem;
     content: "";
   }
+}
 
-  /* A frame this narrow leaves a caption forty pixels: smaller type, no tracking, whole words. */
-  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__label {
-    font-size: 0.45rem;
+/*
+ * A status frame under 14rem across, a phone's or one shrunk into a monitor's top
+ * bar, leaves a caption about forty pixels at a phone's size. Without tracking the
+ * type can take a larger share of the frame, which is what keeps it readable once
+ * the frame is shrunk; even so «ВЫКЛЮЧЕН» was cut to «ВЫКЛЮ…», so the frame shows
+ * its short form.
+ */
+@container status-frame (width < 14rem) {
+  .status-frame__label {
+    font-size: max(0.45rem, 5.2cqi);
     letter-spacing: 0;
   }
 
-  /* Even so «ВЫКЛЮЧЕН» was cut to «ВЫКЛЮ…», so the frame shows its short form. */
-  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__word {
+  .status-frame__word {
     display: none;
   }
 
-  .display-shell--cockpit[data-hud-skin="frame"] .status-frame__word--short {
+  .status-frame__word--short {
     display: inline;
   }
 }

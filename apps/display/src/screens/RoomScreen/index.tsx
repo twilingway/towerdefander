@@ -16,6 +16,7 @@ import { useCockpitKeyboard } from "../../model/hooks/useCockpitKeyboard.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
 import { HUD_FRAME_CSS_VARIABLES } from "../../model/hudFrames.js";
 import { useLiveHeat } from "../../model/hooks/useLiveHeat.js";
+import { useWorldFrame } from "../../model/hooks/useWorldFrame.js";
 import { useShipPrediction } from "../../model/hooks/useShipPrediction.js";
 import { useSoloCockpit, type SoloCockpitControls } from "../../model/hooks/useSoloCockpit.js";
 import { useDevCockpitControls } from "../../model/devControls.js";
@@ -250,6 +251,8 @@ export function RoomScreen({
   );
 
   useLiveHeat(shellReference);
+  // Where the world lands on this glass, for the frame HUD to stand against.
+  useWorldFrame(shellReference, view.game?.cameraViewWidth);
 
   return (
     <main
