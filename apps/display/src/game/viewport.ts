@@ -29,31 +29,39 @@ export interface CameraScrollInput {
 }
 
 /**
- * The frame every crew sees, letterboxed into whatever glass they have.
+ * The frame every crew sees, fitted into whatever glass they have.
  *
- * The zoom is the same fit it always was - the largest that puts the frame
- * inside the screen. What changed is that the visible world is the frame
- * itself, not the screen divided by that zoom: dividing it back out handed the
- * looser axis to the device, so an ultrawide monitor saw a third more arena
- * than a laptop and a 4:3 tablet a third more sky. Thirty per cent more warning
- * about what is flying at you is not a display setting.
+ * The zoom is the largest that puts the whole frame inside the screen, so the
+ * frame's height is everyone's and glass narrower than the frame gets bars above
+ * and below. Glass wider than the frame is not given bars: it is shown more
+ * world across, up to `widestAspect`, and only past that do bars appear at the
+ * sides. Without the cap an ultrawide monitor would see a third more arena than
+ * a phone, and thirty per cent more warning about what is flying at you is not a
+ * display setting; about a tenth, at 21:9, was the operator's call.
  *
- * `screen` is where that frame lands in pixels. Everything outside it is a bar.
+ * Left at its default the cap is the frame's own shape, which is the plain
+ * letterbox: every device shows exactly the frame.
+ *
+ * `width` and `height` are the world the camera shows; `screen` is where that
+ * lands in pixels. Everything outside `screen` is a bar.
  */
 export function getResponsiveViewport(
   actualWidth: number,
   actualHeight: number,
   baseWidth = 1600,
-  baseHeight = 900
+  baseHeight = 900,
+  widestAspect = baseWidth / baseHeight
 ): ResponsiveViewport {
   const safeWidth = Number.isFinite(actualWidth) && actualWidth > 0 ? actualWidth : baseWidth;
   const safeHeight = Number.isFinite(actualHeight) && actualHeight > 0 ? actualHeight : baseHeight;
   const zoom = Math.min(safeWidth / baseWidth, safeHeight / baseHeight);
-  const screenWidth = baseWidth * zoom;
+  const widest = Math.max(baseWidth, baseHeight * widestAspect);
+  const width = Math.min(Math.max(baseWidth, safeWidth / zoom), widest);
+  const screenWidth = width * zoom;
   const screenHeight = baseHeight * zoom;
   return {
     zoom,
-    width: baseWidth,
+    width,
     height: baseHeight,
     screen: {
       x: (safeWidth - screenWidth) / 2,

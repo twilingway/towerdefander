@@ -1,4 +1,4 @@
-import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
+import { legacyFrameWidth, type DisplayGameSnapshot } from "@spaceship-defender/protocol";
 
 import { audioBus } from "../../audio/AudioBus.js";
 import { asSoundId } from "../../audio/catalogue.js";
@@ -35,7 +35,9 @@ export function sceneAudioFor(read: () => DisplayGameSnapshot): SceneAudio {
       y,
       listenerX: snapshot.spaceship.x,
       listenerY: snapshot.spaceship.y,
-      frameWidth: snapshot.cameraViewWidth,
+      // The 16:9 width of the same height: a sound carries as far as it did before
+      // the frame grew across to 19.5:9.
+      frameWidth: legacyFrameWidth(snapshot.cameraViewWidth),
       channel
     };
   };

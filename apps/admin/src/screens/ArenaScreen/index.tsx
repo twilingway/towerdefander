@@ -217,6 +217,11 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
   const patchArena = (values: Partial<BalanceTuning["arena"]>) => {
     onChange({ ...tuning, arena: { ...tuning.arena, ...values } });
   };
+  // The sweep's unit: a cell of the zone sheet, the longer side if the grid is not square.
+  const scanCell = Math.max(
+    (tuning.arena.fieldRadius * 2) / tuning.arena.zoneColumns,
+    (tuning.arena.fieldRadius * 2) / tuning.arena.zoneRows
+  );
 
   const setMark = (index: number, next: ArenaSpawnMark) => {
     onChange({
@@ -415,17 +420,17 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
         <h4 className="card__subtitle">Разведка</h4>
         <p className="screen__hint">
           Поле шире кадра в несколько раз, поэтому радар показывает только то, что нашла развёртка.
-          Радиус задан в экранах, а не в единицах: расширение кадра не должно молча менять дальность
-          скана. Груз виден всем и без скана — он того стоит.
+          Радиус задан в клетках сетки зон — тех, что закрываются по таймеру, — поэтому ширина кадра
+          на дальность скана не влияет. Груз виден всем и без скана — он того стоит.
         </p>
         <div className="arena-controls">
           <NumberField
-            caption="Радиус скана (экранов)"
+            caption="Радиус скана (клеток)"
             min={0.5}
             step={0.5}
-            value={tuning.arena.scanRadiusScreens}
-            onChange={(scanRadiusScreens) => {
-              patchArena({ scanRadiusScreens: Math.max(0.5, scanRadiusScreens) });
+            value={tuning.arena.scanRadiusCells}
+            onChange={(scanRadiusCells) => {
+              patchArena({ scanRadiusCells: Math.max(0.5, scanRadiusCells) });
             }}
           />
           <SecondsField
@@ -443,12 +448,9 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
             }}
           />
           <p className="hint" data-testid="arena-scan-reach">
-            Скан находит всех в{" "}
-            <strong>
-              {String(Math.round(tuning.arena.cameraViewWidth * tuning.arena.scanRadiusScreens))}
-            </strong>{" "}
-            единицах — это {String(round2(tuning.arena.scanRadiusScreens))} экрана при кадре в{" "}
-            {String(Math.round(tuning.arena.cameraViewWidth))}. Найденные держатся на радаре{" "}
+            Скан находит всех в <strong>{String(Math.round(scanCell * tuning.arena.scanRadiusCells))}</strong>{" "}
+            единицах: {String(round2(tuning.arena.scanRadiusCells))} × сторона клетки поля в{" "}
+            {String(Math.round(scanCell))} единиц. Найденные держатся на радаре{" "}
             {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
             {formatTicks(tuning.arena.scanCooldownTicks)}.
           </p>

@@ -6,7 +6,7 @@ import type {
 } from "@spaceship-defender/protocol";
 
 /** Frame the fixtures start at; the preview slider overrides it per render. */
-export const PREVIEW_CAMERA_VIEW_WIDTH = 2200;
+export const PREVIEW_CAMERA_VIEW_WIDTH = 2681;
 
 export const PREVIEW_PLAYERS: DisplayRoomView["players"] = [
   {

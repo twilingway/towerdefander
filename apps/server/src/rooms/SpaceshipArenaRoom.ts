@@ -6,7 +6,7 @@ import {
   ARENA_SHIP_COUNT,
   IDLE_ARENA_INTENT,
   ARENA_SCAN_COOLDOWN_TICKS,
-  ARENA_SCAN_RADIUS_SCREENS,
+  ARENA_SCAN_RADIUS_CELLS,
   ARENA_SCAN_REVEAL_TICKS,
   advanceArenaMatch,
   canonicalizeAngle,
@@ -212,7 +212,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    * revealed is one pilot's knowledge, not the field's.
    */
   private scan = {
-    radiusScreens: ARENA_SCAN_RADIUS_SCREENS,
+    radiusCells: ARENA_SCAN_RADIUS_CELLS,
     cooldownTicks: ARENA_SCAN_COOLDOWN_TICKS,
     revealTicks: ARENA_SCAN_REVEAL_TICKS
   };
@@ -308,7 +308,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     // The sweep is the operator's too, and it is read once for the match like
     // everything else: a console edit lands on the next one.
     this.scan = {
-      radiusScreens: tuning.arena.scanRadiusScreens,
+      radiusCells: tuning.arena.scanRadiusCells,
       cooldownTicks: tuning.arena.scanCooldownTicks,
       revealTicks: tuning.arena.scanRevealTicks
     };
@@ -789,7 +789,11 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match.clock.tick < this.scanReadyTick) return;
 
     const tuning = this.scan;
-    const radius = this.state.game.display.cameraViewWidth * tuning.radiusScreens;
+    // A cell of the zone sheet, the longer side if the grid is not square: the
+    // reach is read off the board, and the camera's width has no say in it.
+    const span = this.config.arenaRadius * 2;
+    const cell = Math.max(span / this.config.zoneColumns, span / this.config.zoneRows);
+    const radius = cell * tuning.radiusCells;
     this.revealed.clear();
     for (const ship of match.ships) {
       if (!ship.alive || ship.slot === PLAYER_SLOT) continue;

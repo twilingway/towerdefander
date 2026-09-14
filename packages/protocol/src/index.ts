@@ -30,7 +30,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 71 as const;
+export const PROTOCOL_VERSION = 72 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -946,7 +946,7 @@ export const displayGameSnapshotSchema = z
      * spells the cycle out, while the panel needs no more than the lock.
      */
     shieldPhase: shieldPhaseSchema,
-    /** Narrowest slice of the world the display frames; height follows as 9/16. */
+    /** Narrowest slice of the world the display frames; height follows as 9/19.5. */
     cameraViewWidth: cameraViewWidthSchema,
     /**
      * Cost of the last simulation step on the host, in milliseconds. An

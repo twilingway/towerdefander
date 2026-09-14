@@ -10,12 +10,12 @@ import { FX_EVENT_EFFECT_IDS, FX_LOOP_EFFECT_IDS } from "./effectCatalogue.ts";
 import { SOUND_IDS } from "./audioCatalogue.ts";
 import { BACKDROP_IMAGES, VISUAL_ASSET_IDS } from "./visualCatalog.ts";
 
-export const BALANCE_FILE_VERSION = 57 as const;
+export const BALANCE_FILE_VERSION = 58 as const;
 /** File versions the store still knows how to migrate forward. */
 export const LEGACY_BALANCE_FILE_VERSIONS = [
   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
   28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  52, 53, 54, 55, 56
+  52, 53, 54, 55, 56, 57
 ] as const;
 export const MAX_ENEMY_WEAPONS = 4;
 export const SPAWN_SECTORS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -37,13 +37,44 @@ export type EnemySpawnPolicy = z.infer<typeof enemySpawnPolicySchema>;
 export const ASTEROID_SPAWN_KIND = "asteroid" as const;
 
 /**
- * World units the display frames at its narrowest; the height follows as 9/16
- * of it. The lower bound keeps the spaceship readable, the upper one is the
- * whole square world, past which there is nothing left to reveal.
+ * World units the display frames across. The frame is 19.5:9 - a phone held
+ * sideways - so the height follows as 9/19.5 of the width. The bounds keep the
+ * height where the 16:9 frame had it, 450 to 2475: the spaceship stays readable
+ * at the low end and the view stays a view at the high one.
  */
-export const CAMERA_VIEW_WIDTH_MIN = 800;
-export const CAMERA_VIEW_WIDTH_MAX = 4400;
-export const CAMERA_VIEW_ASPECT = 9 / 16;
+export const CAMERA_VIEW_WIDTH_MIN = 975;
+export const CAMERA_VIEW_WIDTH_MAX = 5363;
+export const CAMERA_VIEW_ASPECT = 9 / 19.5;
+
+/** The height of a frame this wide. */
+export function cameraViewHeight(width: number): number {
+  return width * CAMERA_VIEW_ASPECT;
+}
+
+/**
+ * The width a 16:9 frame of the same height had.
+ *
+ * The frame went from 16:9 to 19.5:9 with its height kept, and every distance
+ * that was tuned against the frame - how far a bot ranks a target, where it
+ * guesses a hidden shooter, how far a sound carries - was tuned against this
+ * width. Reading it keeps those distances where they were.
+ */
+export function legacyFrameWidth(width: number): number {
+  return (cameraViewHeight(width) * 16) / 9;
+}
+
+/**
+ * The widest glass the view grows to fill.
+ *
+ * A screen wider than 19.5:9 is shown more world across rather than given bars,
+ * up to what is sold as 21:9. That name covers two panels, 2560×1080 (64:27) and
+ * 3440×1440 (43:18), both a little wider than 21:9 itself - so the cap is the
+ * wider of them, or both monitors would keep a sliver of bar. Such a monitor
+ * fills edge to edge and sees about a tenth more to the sides; anything wider,
+ * 32:9, stops there and gets side bars, so the advantage cannot keep growing
+ * with the glass. The height is the same for everyone.
+ */
+export const CAMERA_VIEW_WIDEST_ASPECT = 43 / 18;
 export const cameraViewWidthSchema = z
   .number()
   .min(CAMERA_VIEW_WIDTH_MIN)
@@ -1068,14 +1099,15 @@ export const arenaTuningSchema = z
      */
     shieldAutopilotRaiseRange: nonNegativeFinite,
     /**
-     * The sweep, in screens.
+     * The sweep, in cells of the zone sheet.
      *
      * A match is fought on a field far wider than the camera, so a pilot who
      * cannot look past their own screen is flying blind between fights. The
-     * sweep is stated as a multiple of the framed width rather than in world
-     * units, so widening the camera does not quietly change what a scan finds.
+     * sweep reaches a number of cells of the grid that closes on the timer, so it
+     * is measured against the field it maps, and a wider camera does not quietly
+     * change what a scan finds.
      */
-    scanRadiusScreens: positiveFinite,
+    scanRadiusCells: positiveFinite,
     /** How long a pilot waits between sweeps. */
     scanCooldownTicks: positiveInteger,
     /** How long a hull the sweep found stays on the dial. */

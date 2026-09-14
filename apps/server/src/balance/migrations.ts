@@ -487,7 +487,12 @@ const ARCADE_HELM_FIELDS = [
   "headingAngularBrakingPerSecondSquared"
 ] as const satisfies readonly (keyof BalanceTuning)[];
 
-function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm: boolean): unknown {
+function migratePreset(
+  preset: unknown,
+  defaults: BalanceTuning,
+  takeArcadeHelm: boolean,
+  frameWidthScale: number
+): unknown {
   if (!isRecord(preset)) return preset;
   const tuning = readRecord(preset, "tuning");
   const campaign = readRecord(tuning, "waveCampaign");
@@ -508,7 +513,8 @@ function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm:
       // did rather than gaining a distance nobody chose.
       shieldAutopilotRaiseRange:
         tuning.shieldAutopilotRaiseRange ?? defaults.shieldAutopilotRaiseRange,
-      cameraViewWidth: tuning.cameraViewWidth ?? defaults.cameraViewWidth,
+      cameraViewWidth:
+        scaleFrameWidth(tuning.cameraViewWidth, frameWidthScale) ?? defaults.cameraViewWidth,
       background: migrateBackground(tuning, defaults),
       autopilot: migrateAutopilot(tuning, defaults),
       enemySkill: migrateEnemySkill(tuning, defaults),
@@ -518,7 +524,7 @@ function migratePreset(preset: unknown, defaults: BalanceTuning, takeArcadeHelm:
       helm: migrateHelm(tuning, defaults),
       // A preset written before the arena existed gains the spiral the code
       // used to compute, so nothing about an older file changes how it plays.
-      arena: migrateArena(tuning, defaults),
+      arena: migrateArena(tuning, defaults, frameWidthScale),
       asteroidVisual: tuning.asteroidVisual ?? null,
       // Field by field, like the helm: a preset saved before salvage existed
       // must gain every knob, not fail the strict schema and take the
@@ -601,6 +607,22 @@ const TICK_RATE_BEFORE_60_HZ = 20;
  */
 const FIRST_60_HZ_BALANCE_VERSION = 37;
 
+/**
+ * The first file version written against the 19.5:9 frame.
+ *
+ * Gated on the version for the same reason the tick rescale is: a file already
+ * at 19.5:9 that arrives as legacy must not have its widths grown a second time.
+ * Below it a width was a 16:9 frame's, and the frame keeps its height by growing
+ * across.
+ */
+const FIRST_PHONE_FRAME_BALANCE_VERSION = 58;
+const PHONE_FRAME_WIDTH_SCALE = 19.5 / 16;
+
+/** A width read from the file, grown by the scale; absent stays absent so a default can fill it. */
+function scaleFrameWidth(width: unknown, scale: number): number | undefined {
+  return typeof width === "number" && Number.isFinite(width) ? Math.round(width * scale) : undefined;
+}
+
 export function migrateBalanceDocument(raw: unknown): unknown {
   const version = isRecord(raw) ? raw.version : undefined;
   const isLegacy = LEGACY_BALANCE_FILE_VERSIONS.some((candidate) => candidate === version);
@@ -613,6 +635,12 @@ export function migrateBalanceDocument(raw: unknown): unknown {
   // Only a file older than the arcade drive has its helm taken; see
   // `ARCADE_HELM_FIELDS`.
   const takeArcadeHelm = !(typeof version === "number" && version >= FIRST_ARCADE_HELM_VERSION);
+  // Widths grow only where the file wrote them, for the reason ticks do: the
+  // defaults are already the 19.5:9 frame's.
+  const frameWidthScale =
+    typeof version === "number" && version >= FIRST_PHONE_FRAME_BALANCE_VERSION
+      ? 1
+      : PHONE_FRAME_WIDTH_SCALE;
   return {
     ...raw,
     version: BALANCE_FILE_VERSION,
@@ -620,7 +648,7 @@ export function migrateBalanceDocument(raw: unknown): unknown {
     // already written at the new rate, and scaling them a second time would
     // triple every knob the operator never touched.
     presets: readArray(raw, "presets").map((preset) =>
-      migratePreset(scaleTickFields(preset, tickScale), defaults, takeArcadeHelm)
+      migratePreset(scaleTickFields(preset, tickScale), defaults, takeArcadeHelm, frameWidthScale)
     )
   };
 }
@@ -631,7 +659,11 @@ export function migrateBalanceDocument(raw: unknown): unknown {
  * All or nothing rather than field by field: a partial set of marks is not a
  * layout, and the schema wants exactly sixteen of them.
  */
-function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTuning["arena"] {
+function migrateArena(
+  tuning: LegacyRecord,
+  defaults: BalanceTuning,
+  frameWidthScale: number
+): BalanceTuning["arena"] {
   const arena = tuning.arena;
   if (!isRecord(arena)) return defaults.arena;
   const marks = arena.spawnMarks;
@@ -658,9 +690,10 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
     fieldRadius:
       readNumber(arena, "fieldRadius") ?? readNumber(tuning, "arenaRadius") ?? defaults.arenaRadius,
     cameraViewWidth:
-      readNumber(arena, "cameraViewWidth") ??
-      readNumber(tuning, "cameraViewWidth") ??
-      defaults.cameraViewWidth,
+      scaleFrameWidth(
+        readNumber(arena, "cameraViewWidth") ?? readNumber(tuning, "cameraViewWidth"),
+        frameWidthScale
+      ) ?? defaults.cameraViewWidth,
     // A preset written before the match ship was a setting keeps the hull and
     // the shot it was played with, which is what the built-ins state.
     hullScaling: readNumber(arena, "hullScaling") ?? defaults.arena.hullScaling,
@@ -688,9 +721,10 @@ function migrateArena(tuning: LegacyRecord, defaults: BalanceTuning): BalanceTun
      * added to fix. Keeping one would carry the complaint forward.
      */
     zonesPerClosure: readNumber(arena, "zonesPerClosure") ?? defaults.arena.zonesPerClosure,
-    // The sweep is new ground too: a preset that predates it gains the
-    // built-in rather than a number that means "no scan at all".
-    scanRadiusScreens: readNumber(arena, "scanRadiusScreens") ?? defaults.arena.scanRadiusScreens,
+    // The sweep has been measured in zone cells since version 58. A reach stated
+    // in screens was a multiple of a camera width that no longer means the same
+    // thing, so it is not converted: the preset gains the built-in single cell.
+    scanRadiusCells: readNumber(arena, "scanRadiusCells") ?? defaults.arena.scanRadiusCells,
     scanCooldownTicks: readNumber(arena, "scanCooldownTicks") ?? defaults.arena.scanCooldownTicks,
     scanRevealTicks: readNumber(arena, "scanRevealTicks") ?? defaults.arena.scanRevealTicks,
     // A preset from before the supply run gains it: a field with no drops at

@@ -105,7 +105,8 @@ function world(overrides = {}) {
     tick: 20,
     phase: "combat",
     waveNumber: 1,
-    cameraViewWidth: 1600,
+    // 900 high, as the 16:9 frame of 1600 was: every distance below is tuned to it.
+    cameraViewWidth: 1950,
     arenaRadius: 2200,
     worldWidth: 4400,
     worldHeight: 4400,
@@ -213,27 +214,27 @@ test("the fighting ring is measured against the gun, not written down", () => {
   // that is why a hull that bought a quarter more beam range went on fighting
   // at the four hundred its profile named.
   // Wide enough that the frame is not what decides either answer.
-  const scene = world({ cameraViewWidth: 8_000 });
+  const scene = world({ cameraViewWidth: 9_750 });
   const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 200 };
   assert.equal(effectiveStandoff(scene, profile, 1_000), 800);
   assert.equal(effectiveStandoff(scene, profile, 2_000), 1_600);
 });
 
 test("the profile distance is the floor under the ring, and the frame is the ceiling", () => {
-  const scene = world({ cameraViewWidth: 6_000 });
+  const scene = world({ cameraViewWidth: 7_313 });
   const profile = { ...ACE, standoffShare: 0.8, standoffDistance: 900 };
   // A short barrel does not drag the pilot into the swarm: the floor holds,
   // for as long as the floor is somewhere the barrel can still reach.
   assert.equal(effectiveStandoff(scene, { ...profile, standoffShare: 0.2 }, 2_000), 900);
 
   // And nothing is held further out than the crew can see it happen.
-  const narrow = world({ cameraViewWidth: 1_600 });
+  const narrow = world({ cameraViewWidth: 1_950 });
   const framed = effectiveStandoff(narrow, { ...profile, standoffDistance: 200 }, 5_000);
   assert.ok(framed <= 640, `the frame did not cap the ring: ${String(framed)}`);
 });
 
 test("a profile with no share keeps the distance it names", () => {
-  const scene = world({ cameraViewWidth: 6_000 });
+  const scene = world({ cameraViewWidth: 7_313 });
   const profile = { ...ACE, standoffShare: 0, standoffDistance: 640 };
   assert.equal(effectiveStandoff(scene, profile, 2_000), 640);
 });
@@ -823,24 +824,24 @@ test("the orbiting pilot closes an open range and coasts on station", () => {
 test("the stand-off ring never grows past what the camera frames", () => {
   // Bounded by the frame's height, which is the short way out of the picture:
   // a ring inside it holds whichever way the target sits.
-  const narrow = world({ cameraViewWidth: 800 });
+  const narrow = world({ cameraViewWidth: 975 });
   assert.ok(effectiveStandoff(narrow, ACE) < ACE.standoffDistance);
   assert.ok(Math.abs(effectiveStandoff(narrow, ACE) - 180) < 1e-9);
 
   // A frame wide enough leaves the operator's own number alone.
-  const wide = world({ cameraViewWidth: 4400 });
+  const wide = world({ cameraViewWidth: 5363 });
   assert.equal(effectiveStandoff(wide, ACE), ACE.standoffDistance);
 
   // A target held on the clamped ring stays inside the frame, top to bottom.
-  const framed = world({ cameraViewWidth: 2200 });
-  assert.ok(effectiveStandoff(framed, ACE) < (2200 * CAMERA_VIEW_ASPECT) / 2);
+  const framed = world({ cameraViewWidth: 2681 });
+  assert.ok(effectiveStandoff(framed, ACE) < (2681 * CAMERA_VIEW_ASPECT) / 2);
 });
 
 test("the ring is never held further out than the barrel carries", () => {
   // A floor is there to keep the hull out of the swarm. Left above the reach
   // after the guns were cut it did the opposite: the bot parked at six hundred
   // with a shell that dies at four hundred and ninety, and fired at nothing.
-  const scene = world({ cameraViewWidth: 4_000 });
+  const scene = world({ cameraViewWidth: 4_875 });
   const stubborn = { ...ACE, standoffShare: 0.75, standoffDistance: 600 };
   assert.equal(effectiveStandoff(scene, stubborn, 490), 490);
 

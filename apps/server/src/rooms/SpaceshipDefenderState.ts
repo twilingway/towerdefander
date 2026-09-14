@@ -421,7 +421,7 @@ export class ShipPoseState extends Schema {
 }
 
 export class SpaceshipDisplayState extends Schema {
-  @type("float32") cameraViewWidth = 2200;
+  @type("float32") cameraViewWidth = 2681;
   /**
    * How long the last simulation step took the host, in milliseconds.
    *

@@ -16,7 +16,7 @@ const ARENA: ArenaTuning = {
   shieldAutopilotRaiseRange: 0,
   damageScaling: 0.7,
   zonesPerClosure: 1,
-  scanRadiusScreens: 2.5,
+  scanRadiusCells: 1,
   scanCooldownTicks: 1800,
   scanRevealTicks: 1800,
   lootFirstSpawnTicks: 900,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import {
+  CAMERA_VIEW_ASPECT,
+  CAMERA_VIEW_WIDEST_ASPECT,
   PATCH_INTERVAL_MS,
   PLAYBACK_MAX_LAG_MS,
   PLAYBACK_MIN_LAG_MS
@@ -61,6 +63,52 @@ import {
   SnapshotResetLatch
 } from "./playback.js";
 import type { PlaybackClock } from "./playback.js";
+
+describe("getResponsiveViewport with the phone frame", () => {
+  // A 19.5:9 frame with round numbers: 1950 across, 900 high.
+  const fit = (glassWidth: number, glassHeight: number) =>
+    getResponsiveViewport(glassWidth, glassHeight, 1950, 900, CAMERA_VIEW_WIDEST_ASPECT);
+
+  it("fills a 19.5:9 phone with the frame and nothing else", () => {
+    const view = fit(780, 360);
+    expect(view.screen).toEqual({ x: 0, y: 0, width: 780, height: 360 });
+    expect(view.width).toBe(1950);
+  });
+
+  it("gives a 16:9 monitor bars above and below, and the same world", () => {
+    const view = fit(1920, 1080);
+    expect(view.width).toBe(1950);
+    expect(view.height).toBe(900);
+    expect(view.screen.x).toBeCloseTo(0, 6);
+    expect(view.screen.y).toBeGreaterThan(90);
+  });
+
+  it("fills both panels sold as 21:9 edge to edge, showing more across", () => {
+    for (const [glassWidth, glassHeight] of [
+      [2560, 1080],
+      [3440, 1440]
+    ] as const) {
+      const view = fit(glassWidth, glassHeight);
+      expect(view.screen.x).toBeCloseTo(0, 6);
+      expect(view.screen.width).toBeCloseTo(glassWidth, 6);
+      expect(view.height).toBe(900);
+      expect(view.width).toBeGreaterThan(1950);
+    }
+    // The wider of the two sees about a tenth more than the phone, and no more.
+    expect(fit(3440, 1440).width / 1950).toBeCloseTo(43 / 18 / (19.5 / 9), 6);
+  });
+
+  it("stops growing past the cap and gives 32:9 bars at the sides", () => {
+    const view = fit(5120, 1440);
+    expect(view.width).toBeCloseTo(900 * CAMERA_VIEW_WIDEST_ASPECT, 6);
+    expect(view.screen.x).toBeGreaterThan(0);
+    expect(view.screen.y).toBeCloseTo(0, 6);
+  });
+
+  it("is the plain letterbox when no cap is given", () => {
+    expect(getResponsiveViewport(3440, 1440, 1950, 900).width).toBe(1950);
+  });
+});
 
 describe("nextPixelRatioCap", () => {
   const run = (fps: number, samples = PIXEL_RATIO_FALLBACK_SAMPLES) =>
@@ -137,7 +185,7 @@ describe("getBackingStoreSize", () => {
 
   it("keeps the slice of world the crew is shown", () => {
     // The invariant the whole change rests on: more pixels, same arena.
-    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    const frame = { width: 3047, height: 3047 * CAMERA_VIEW_ASPECT };
     const plain = getResponsiveViewport(844, 390, frame.width, frame.height);
     const dense = getBackingStoreSize({ ...glass, devicePixelRatio: 2 });
     const denser = getResponsiveViewport(dense.width, dense.height, frame.width, frame.height);
@@ -189,8 +237,9 @@ describe("spaceship view model", () => {
     // The whole point: what a crew can see must not depend on the shape of the
     // glass. Measured before this held, on a 2500 by 1406 frame, an ultrawide
     // saw 34% more width than a laptop and a 4:3 tablet 33% more height - which
-    // is thirty per cent more warning about what is flying at you.
-    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    // is thirty per cent more warning about what is flying at you. Without a
+    // wider cap the function still letterboxes every glass to the one frame.
+    const frame = { width: 3047, height: 3047 * CAMERA_VIEW_ASPECT };
     const devices: readonly (readonly [string, number, number])[] = [
       ["1920x1080", 1920, 1080],
       ["2560x1440", 2560, 1440],
@@ -210,7 +259,7 @@ describe("spaceship view model", () => {
   });
 
   it("centres the frame in the glass and leaves the rest as bars", () => {
-    const frame = { width: 2500, height: 2500 * (9 / 16) };
+    const frame = { width: 3900, height: 3900 * CAMERA_VIEW_ASPECT };
     // Ultrawide: the frame is as tall as the screen, so the bars are at the sides.
     const wide = getResponsiveViewport(3440, 1440, frame.width, frame.height);
     expect(wide.screen.height).toBeCloseTo(1440, 6);
@@ -224,21 +273,24 @@ describe("spaceship view model", () => {
     expect(tall.screen.height).toBeLessThan(768);
     expect(tall.screen.y).toBeCloseTo((768 - tall.screen.height) / 2, 6);
 
-    // And a 16:9 screen has no bars at all.
-    const exact = getResponsiveViewport(1920, 1080, frame.width, frame.height);
-    expect(exact.screen).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
+    // And a phone at the frame's own 19.5:9 has no bars at all.
+    const exact = getResponsiveViewport(780, 360, frame.width, frame.height);
+    expect(exact.screen.x).toBeCloseTo(0, 6);
+    expect(exact.screen.y).toBeCloseTo(0, 6);
+    expect(exact.screen.width).toBeCloseTo(780, 6);
+    expect(exact.screen.height).toBeCloseTo(360, 6);
   });
 
   it("frames the tuned camera width instead of the design default", () => {
-    const framed = getResponsiveViewport(1920, 1080, 3200, 3200 * (9 / 16));
+    const framed = getResponsiveViewport(1920, 1080, 3200, 3200 * CAMERA_VIEW_ASPECT);
     expect(framed.zoom).toBeCloseTo(0.6);
     expect(framed.width).toBeCloseTo(3200);
-    expect(framed.height).toBeCloseTo(1800);
+    expect(framed.height).toBeCloseTo(3200 * CAMERA_VIEW_ASPECT);
   });
 
   describe("background cover rect", () => {
     const framedViewport = (rendererWidth: number, rendererHeight: number) =>
-      getResponsiveViewport(rendererWidth, rendererHeight, 2400, 2400 * (9 / 16));
+      getResponsiveViewport(rendererWidth, rendererHeight, 2400, 2400 * CAMERA_VIEW_ASPECT);
     /** How Phaser puts a scroll-factor-0 world coordinate on screen: zoom around the camera origin. */
     const project = (world: number, rendererSize: number, zoom: number): number =>
       (rendererSize / 2) * (1 - zoom) + zoom * world;
