@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import {
   CAMERA_VIEW_ASPECT,
+  CAMERA_VIEW_NARROWEST_ASPECT,
   CAMERA_VIEW_WIDEST_ASPECT,
   PATCH_INTERVAL_MS,
   PLAYBACK_MAX_LAG_MS,
@@ -75,7 +76,7 @@ describe("getResponsiveViewport with the phone frame", () => {
     expect(view.width).toBe(1950);
   });
 
-  it("gives a 16:9 monitor bars above and below, and the same world", () => {
+  it("without the narrow cap gives a 16:9 monitor bars above and below, and the same world", () => {
     const view = fit(1920, 1080);
     expect(view.width).toBe(1950);
     expect(view.height).toBe(900);
@@ -107,6 +108,49 @@ describe("getResponsiveViewport with the phone frame", () => {
 
   it("is the plain letterbox when no cap is given", () => {
     expect(getResponsiveViewport(3440, 1440, 1950, 900).width).toBe(1950);
+  });
+
+  describe("with the narrow cap as well, as the display passes it", () => {
+    const fitBoth = (glassWidth: number, glassHeight: number) =>
+      getResponsiveViewport(
+        glassWidth,
+        glassHeight,
+        1950,
+        900,
+        CAMERA_VIEW_WIDEST_ASPECT,
+        CAMERA_VIEW_NARROWEST_ASPECT
+      );
+
+    it("fills a 16:9 monitor with the frame's area, a little narrower and taller", () => {
+      const view = fitBoth(1920, 1080);
+      expect(view.screen.x).toBeCloseTo(0, 6);
+      expect(view.screen.y).toBeCloseTo(0, 6);
+      expect(view.width * view.height).toBeCloseTo(1950 * 900, 3);
+      expect(view.width / view.height).toBeCloseTo(16 / 9, 9);
+      // About a tenth either way against the phone, and the same factor on both axes.
+      expect(1950 / view.width).toBeCloseTo(Math.sqrt(19.5 / 16), 9);
+      expect(view.height / 900).toBeCloseTo(Math.sqrt(19.5 / 16), 9);
+    });
+
+    it("stops at 16:9 and gives a 4:3 tablet that slice with bars above and below", () => {
+      const tablet = fitBoth(1024, 768);
+      const monitor = fitBoth(1920, 1080);
+      expect(tablet.width).toBeCloseTo(monitor.width, 6);
+      expect(tablet.height).toBeCloseTo(monitor.height, 6);
+      expect(tablet.screen.x).toBeCloseTo(0, 6);
+      expect(tablet.screen.y).toBeCloseTo((768 - (1024 * 9) / 16) / 2, 6);
+    });
+
+    it("meets the frame at 19.5:9 from either side", () => {
+      expect(fitBoth(1949, 900).height).toBeCloseTo(900, 0);
+      expect(fitBoth(1951, 900).height).toBe(900);
+      expect(fitBoth(780, 360).screen).toEqual({ x: 0, y: 0, width: 780, height: 360 });
+    });
+
+    it("leaves the wide side as it was", () => {
+      expect(fitBoth(3440, 1440).width).toBeCloseTo(fit(3440, 1440).width, 9);
+      expect(fitBoth(5120, 1440).screen.x).toBeCloseTo(fit(5120, 1440).screen.x, 9);
+    });
   });
 });
 

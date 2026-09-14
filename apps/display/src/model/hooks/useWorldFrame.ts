@@ -1,4 +1,8 @@
-import { CAMERA_VIEW_ASPECT, CAMERA_VIEW_WIDEST_ASPECT } from "@spaceship-defender/protocol";
+import {
+  CAMERA_VIEW_ASPECT,
+  CAMERA_VIEW_NARROWEST_ASPECT,
+  CAMERA_VIEW_WIDEST_ASPECT
+} from "@spaceship-defender/protocol";
 import { useEffect, type RefObject } from "react";
 
 import { getResponsiveViewport } from "../../game/viewport.js";
@@ -41,7 +45,8 @@ export function useWorldFrame(
         height,
         cameraViewWidth,
         cameraViewWidth * CAMERA_VIEW_ASPECT,
-        CAMERA_VIEW_WIDEST_ASPECT
+        CAMERA_VIEW_WIDEST_ASPECT,
+        CAMERA_VIEW_NARROWEST_ASPECT
       );
       element.style.setProperty("--world-left", `${screen.x.toFixed(2)}px`);
       element.style.setProperty("--world-top", `${screen.y.toFixed(2)}px`);

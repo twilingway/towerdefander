@@ -12,9 +12,9 @@ const previewUrl = `${displayUrl}/?preview=1`;
  * is handed the main camera's size, scroll and zoom - but not where the
  * letterboxed frame sits in the glass, so the glow was drawn from the canvas
  * corner while the hull was drawn from the frame's. The bars are zero only
- * between the 19.5:9 frame and 43:18, which is why the shield sat on the hull
- * on one screen and adrift on the next. The first shape has no bars; the rest
- * have them above and below, deeper still, and at the sides.
+ * between 16:9 and 43:18, which is why the shield sat on the hull on one screen
+ * and adrift on the next. The first two shapes have no bars; a 4:3 tablet has
+ * them above and below, and a glass wider than 43:18 at the sides.
  */
 const devices = [
   { name: "1560x720-phone-frame", width: 1560, height: 720 },
@@ -101,8 +101,8 @@ test("the raised shield is drawn on the hull on every aspect ratio", async ({ br
       // Every device is shown the world with the ship at the centre of its
       // frame, so the shield sits at the same fraction of the frame on all of
       // them. Composited from the canvas corner instead, it moves by the whole
-      // bar: a tenth of the frame on a 16:9 monitor, three tenths on a 4:3
-      // tablet, a fifth at the sides of a glass wider than 43:18.
+      // bar: a sixth of the frame on a 4:3 tablet, a fifth at the sides of a
+      // glass wider than 43:18.
       expect(
         Math.abs(device.measured.x - first.measured.x),
         `${device.name} draws the shield off to the side`

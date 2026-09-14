@@ -72,9 +72,21 @@ export function legacyFrameWidth(width: number): number {
  * wider of them, or both monitors would keep a sliver of bar. Such a monitor
  * fills edge to edge and sees about a tenth more to the sides; anything wider,
  * 32:9, stops there and gets side bars, so the advantage cannot keep growing
- * with the glass. The height is the same for everyone.
+ * with the glass. All of them see the frame's height.
  */
 export const CAMERA_VIEW_WIDEST_ASPECT = 43 / 18;
+
+/**
+ * The narrowest glass the view grows to fill.
+ *
+ * A screen narrower than 19.5:9 is shown a slice of its own shape with the
+ * frame's area, rather than the frame between bars: a 16:9 monitor sees about a
+ * tenth less across and a tenth more of the height than a phone, and its world is
+ * drawn a tenth larger than it was between bars. Narrower glass, a 4:3 tablet,
+ * stops at 16:9 and gets bars above and below, so the extra height cannot keep
+ * growing with the glass either.
+ */
+export const CAMERA_VIEW_NARROWEST_ASPECT = 16 / 9;
 export const cameraViewWidthSchema = z
   .number()
   .min(CAMERA_VIEW_WIDTH_MIN)

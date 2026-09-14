@@ -3053,7 +3053,7 @@ p {
   );
   /*
    * The status frame alone may reach this far onto the world. Held to the bar's
-   * height it came out 154 pixels wide on a 1920 by 1080 monitor, with captions of
+   * height it comes out 152 pixels wide on a 1024 by 768 tablet, with captions of
    * eight; the operator took the overlap for captions of eleven.
    */
   --frame-status-overlap: 1.875rem;
@@ -3738,7 +3738,7 @@ p {
 }
 
 /*
- * A status frame under 17rem across, a phone's or one shrunk into a monitor's top
+ * A status frame under 17rem across, a phone's or one shrunk into a tablet's top
  * bar, leaves a caption about forty pixels at a phone's size. Without tracking the
  * type can take a larger share of the frame, which is what keeps it readable once
  * the frame is shrunk; even so «ВЫКЛЮЧЕН» was cut to «ВЫКЛЮ…», so the frame shows

@@ -19,34 +19,36 @@ interface DisplayCamera {
 }
 
 /**
- * The frame the world is drawn in and the widest view a wide glass may add at
- * its sides: `CAMERA_VIEW_ASPECT` and `CAMERA_VIEW_WIDEST_ASPECT` in the
- * protocol, written out because the e2e project does not build the workspace.
+ * The frame the world is drawn in and the narrowest and widest shapes a glass
+ * fills: `CAMERA_VIEW_ASPECT`, `CAMERA_VIEW_NARROWEST_ASPECT` and
+ * `CAMERA_VIEW_WIDEST_ASPECT` in the protocol, written out because the e2e
+ * project does not build the workspace.
  */
 const FRAME_ASPECT = 19.5 / 9;
+const NARROWEST_ASPECT = 16 / 9;
 const WIDEST_ASPECT = 43 / 18;
 
 const devices = [
-  { name: "1920x1080", width: 1920, height: 1080, bars: "top" },
-  { name: "2560x1440", width: 2560, height: 1440, bars: "top" },
-  { name: "3840x2160", width: 3840, height: 2160, bars: "top" },
+  { name: "1920x1080", width: 1920, height: 1080, bars: "none" },
+  { name: "2560x1440", width: 2560, height: 1440, bars: "none" },
+  { name: "3840x2160", width: 3840, height: 2160, bars: "none" },
   { name: "3440x1440-ultrawide", width: 3440, height: 1440, bars: "none" },
   { name: "5120x1440-superwide", width: 5120, height: 1440, bars: "sides" },
   { name: "iphone-14-landscape", width: 844, height: 390, bars: "none" },
-  { name: "iphone-se-landscape", width: 667, height: 375, bars: "top" },
+  { name: "iphone-se-landscape", width: 667, height: 375, bars: "none" },
   { name: "ipad", width: 1180, height: 820, bars: "top" },
   { name: "ipad-mini-4x3", width: 1024, height: 768, bars: "top" }
 ] as const;
 
 /**
  * How much a crew sees must depend on the shape of their glass as little as it
- * can. Every device is shown the same height of the world. A glass narrower
- * than the 19.5:9 frame is shown the frame with bars above and below; a wider
- * one sees more at its sides instead of wearing bars, up to 43:18 and no
- * further. The camera reports the slice in world units and the rectangle it is
- * drawn in, so both halves are read off it.
+ * can. Glass between 16:9 and 43:18 fills edge to edge. At the 19.5:9 frame or
+ * wider it keeps the frame's height and sees more at its sides, up to 43:18;
+ * narrower it keeps the frame's area, a little narrower and taller, down to
+ * 16:9. Past either cap come bars. The camera reports the slice in world units
+ * and the rectangle it is drawn in, so both halves are read off it.
  */
-test("every device sees the same height of the world, and no more than 43:18 across", async ({
+test("every device sees the frame's height or its area, between 16:9 and 43:18", async ({
   browser
 }) => {
   test.setTimeout(120_000);
@@ -95,14 +97,18 @@ test("every device sees the same height of the world, and no more than 43:18 acr
       expect(bars, `${device.name} wears its bars on the wrong axis`).toBe(device.bars);
     }
 
-    const first = seen[0];
-    expect(first).toBeDefined();
-    if (first === undefined) return;
+    // An ultrawide shows the frame's own height, which fixes the frame for the rest.
+    const reference = seen.find(({ glassAspect }) => glassAspect >= FRAME_ASPECT);
+    expect(reference).toBeDefined();
+    if (reference === undefined) return;
+    const frameHeight = reference.height;
+    const frameArea = frameHeight * frameHeight * FRAME_ASPECT;
     for (const device of seen) {
-      expect(device.height, `${device.name} sees a different height`).toBeCloseTo(first.height, 0);
-      const expected = Math.min(Math.max(device.glassAspect, FRAME_ASPECT), WIDEST_ASPECT);
-      expect(device.width / device.height, `${device.name} sees the wrong width`).toBeCloseTo(
-        expected,
+      const shape = Math.min(Math.max(device.glassAspect, NARROWEST_ASPECT), WIDEST_ASPECT);
+      const height = shape >= FRAME_ASPECT ? frameHeight : Math.sqrt(frameArea / shape);
+      expect(device.height, `${device.name} sees the wrong height`).toBeCloseTo(height, 0);
+      expect(device.width / device.height, `${device.name} sees the wrong shape`).toBeCloseTo(
+        shape,
         2
       );
     }
