@@ -16,6 +16,8 @@ import {
   createSpaceshipSimulationConfig,
   createSpaceshipSimulationState
 } from "@spaceship-defender/game-core";
+import { balancePresetsFileSchema } from "@spaceship-defender/protocol";
+import { tsImport } from "tsx/esm/api";
 
 import {
   createAutopilotMemory,
@@ -170,64 +172,38 @@ export function summarise(values) {
 }
 
 /**
- * The operator's file is read raw here, without the server's migration, so an
- * archetype saved before a setting existed arrives short of it and the config
- * factory rejects the whole catalogue. Layer each saved archetype over the
- * built-in one of the same id — read-only, nothing is written back — so a
- * measurement never fails on a field the operator has simply never seen.
+ * The server's own migrations, so the stand measures a preset the way the room
+ * runs it. The file used to be read raw, and a preset saved before a migration
+ * was measured as if its numbers still meant what they meant then: a camera
+ * width saved for the 16:9 frame, read in the 19.5:9 one, showed the bots a
+ * frame a fifth too short, and the batch said nothing about it. They load
+ * through tsx because they import their siblings with `.js` specifiers, which
+ * plain `node` cannot resolve.
  */
-function backfillArchetypes(saved) {
-  if (saved === undefined) return undefined;
-  const builtin = createSpaceshipSimulationConfig().enemyArchetypes;
-  const fallback = builtin.gunship;
-  return Object.fromEntries(
-    Object.entries(saved).map(([kind, archetype]) => [
-      kind,
-      { ...(builtin[kind] ?? fallback), ...archetype }
-    ])
-  );
+let migrations;
+async function migrate(document) {
+  migrations ??= await tsImport("../src/balance/migrations.ts", import.meta.url);
+  return migrations.migrateBalanceDocument(document);
 }
 
 /**
- * A saved wave predates the schedule and has no start on its groups; the stand
- * reads the preset raw, without the server's migration, so it fills the field
- * the way that migration would. Same shape of trap as the archetypes above.
+ * Every preset in the document, migrated and parsed exactly as the server loads
+ * it, so the batch can sweep them by id. A file the server would refuse is
+ * refused here too, rather than measured.
  */
-/**
- * The stand reads the preset the way it sits on disk, so a field the store
- * would have migrated has to be filled here too. Version 31 sized the repair
- * drop in hit points; the share is the same number against the hull it was
- * tuned on.
- */
-function backfillLoot(tuning) {
-  if (typeof tuning.lootRepairShare === "number") return tuning;
-  const { lootRepairAmount, ...rest } = tuning;
-  const hull = tuning.spaceshipMaxHp;
-  const share =
-    typeof lootRepairAmount === "number" && typeof hull === "number" && hull > 0
-      ? Math.min(1, Math.max(0, lootRepairAmount / hull))
-      : createSpaceshipSimulationConfig().lootRepairShare;
-  return { ...rest, lootRepairShare: share };
-}
-
-function backfillWaves(campaign) {
-  if (campaign?.waves === undefined) return undefined;
-  return {
-    ...campaign,
-    waves: campaign.waves.map((wave) => ({
-      ...wave,
-      entries: (wave.entries ?? []).map((entry) => ({ startDelayTicks: 0, ...entry }))
-    }))
-  };
-}
-
-/** Every preset in the document, so the batch can sweep them by id. */
 export async function readPresets(presetPath) {
   const raw = presetPath ?? defaultPresetPath();
-  const document = JSON.parse(await readFile(raw, "utf8"));
-  const presets = document.presets ?? [];
+  const parsed = balancePresetsFileSchema.safeParse(
+    await migrate(JSON.parse(await readFile(raw, "utf8")))
+  );
+  if (!parsed.success) {
+    throw new Error(
+      `${raw} is not a balance document: ${parsed.error.issues[0]?.message ?? "invalid"}`
+    );
+  }
+  const { activePresetId, presets } = parsed.data;
   if (presets.length === 0) throw new Error(`No presets in ${raw}`);
-  return { activePresetId: document.activePresetId, presets };
+  return { activePresetId, presets };
 }
 
 export async function readTuning(presetPath, presetId) {
@@ -238,17 +214,7 @@ export async function readTuning(presetPath, presetId) {
   if (tuning === undefined) {
     throw new Error(`No preset "${String(wanted)}" with a tuning in ${String(presetPath)}`);
   }
-  const enemyArchetypes = backfillArchetypes(tuning.enemyArchetypes);
-  const waveCampaign = backfillWaves(tuning.waveCampaign);
-  return {
-    presetId: chosen.id,
-    presetName: chosen.name ?? chosen.id,
-    tuning: {
-      ...backfillLoot(tuning),
-      ...(enemyArchetypes === undefined ? {} : { enemyArchetypes }),
-      ...(waveCampaign === undefined ? {} : { waveCampaign })
-    }
-  };
+  return { presetId: chosen.id, presetName: chosen.name ?? chosen.id, tuning };
 }
 
 /**
