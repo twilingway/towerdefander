@@ -11,14 +11,16 @@ const previewUrl = `${displayUrl}/?preview=1`;
  * and Phaser composites a filtered object with a camera of its own. That camera
  * is handed the main camera's size, scroll and zoom - but not where the
  * letterboxed frame sits in the glass, so the glow was drawn from the canvas
- * corner while the hull was drawn from the frame's. The bars are zero only at
- * 16:9, which is why the shield sat on the hull on one monitor and adrift on
- * the next. The two shapes below have bars on the axis 16:9 has none.
+ * corner while the hull was drawn from the frame's. The bars are zero only
+ * between 16:9 and 43:18, which is why the shield sat on the hull on one screen
+ * and adrift on the next. The first two shapes have no bars; a 4:3 tablet has
+ * them above and below, and a glass wider than 43:18 at the sides.
  */
 const devices = [
+  { name: "1560x720-phone-frame", width: 1560, height: 720 },
   { name: "1920x1080", width: 1920, height: 1080 },
   { name: "ipad-mini-4x3", width: 1024, height: 768 },
-  { name: "1720x720-ultrawide", width: 1720, height: 720 }
+  { name: "2400x720-superwide", width: 2400, height: 720 }
 ] as const;
 
 /** A shield a tenth of the frame out of place is already wrong; the bug moves it by a sixth. */
@@ -96,10 +98,11 @@ test("the raised shield is drawn on the hull on every aspect ratio", async ({ br
     expect(first).toBeDefined();
     if (first === undefined) return;
     for (const device of seen) {
-      // Every device is shown the same slice of the world with the ship at its
-      // centre, so the shield sits at the same fraction of the frame on all of
+      // Every device is shown the world with the ship at the centre of its
+      // frame, so the shield sits at the same fraction of the frame on all of
       // them. Composited from the canvas corner instead, it moves by the whole
-      // bar: a sixth of the frame on a 4:3 tablet, an eighth on an ultrawide.
+      // bar: a sixth of the frame on a 4:3 tablet, a fifth at the sides of a
+      // glass wider than 43:18.
       expect(
         Math.abs(device.measured.x - first.measured.x),
         `${device.name} draws the shield off to the side`

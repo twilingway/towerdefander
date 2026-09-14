@@ -1,5 +1,9 @@
 import type Phaser from "phaser";
-import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
+import {
+  CAMERA_VIEW_ASPECT,
+  CAMERA_VIEW_NARROWEST_ASPECT,
+  CAMERA_VIEW_WIDEST_ASPECT
+} from "@spaceship-defender/protocol";
 
 import { type Point } from "../spaceshipViewModel.js";
 import { getPhaserCameraScroll, getResponsiveViewport } from "../viewport.js";
@@ -73,7 +77,9 @@ export class CameraFrame {
       actualWidth,
       actualHeight,
       cameraViewWidth,
-      cameraViewWidth * CAMERA_VIEW_ASPECT
+      cameraViewWidth * CAMERA_VIEW_ASPECT,
+      CAMERA_VIEW_WIDEST_ASPECT,
+      CAMERA_VIEW_NARROWEST_ASPECT
     );
     this.canvasWidth = actualWidth;
     this.canvasHeight = actualHeight;

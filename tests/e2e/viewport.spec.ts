@@ -18,26 +18,42 @@ interface DisplayCamera {
   readonly canvasHeight: number;
 }
 
+/**
+ * The frame the world is drawn in and the narrowest and widest shapes a glass
+ * fills: `CAMERA_VIEW_ASPECT`, `CAMERA_VIEW_NARROWEST_ASPECT` and
+ * `CAMERA_VIEW_WIDEST_ASPECT` in the protocol, written out because the e2e
+ * project does not build the workspace.
+ */
+const FRAME_ASPECT = 19.5 / 9;
+const NARROWEST_ASPECT = 16 / 9;
+const WIDEST_ASPECT = 43 / 18;
+
 const devices = [
-  { name: "1920x1080", width: 1920, height: 1080 },
-  { name: "2560x1440", width: 2560, height: 1440 },
-  { name: "3840x2160", width: 3840, height: 2160 },
-  { name: "3440x1440-ultrawide", width: 3440, height: 1440 },
-  { name: "iphone-14-landscape", width: 844, height: 390 },
-  { name: "iphone-se-landscape", width: 667, height: 375 },
-  { name: "ipad", width: 1180, height: 820 },
-  { name: "ipad-mini-4x3", width: 1024, height: 768 }
+  { name: "1920x1080", width: 1920, height: 1080, bars: "none" },
+  { name: "2560x1440", width: 2560, height: 1440, bars: "none" },
+  { name: "3840x2160", width: 3840, height: 2160, bars: "none" },
+  { name: "3440x1440-ultrawide", width: 3440, height: 1440, bars: "none" },
+  { name: "5120x1440-superwide", width: 5120, height: 1440, bars: "sides" },
+  { name: "iphone-14-landscape", width: 844, height: 390, bars: "none" },
+  { name: "iphone-se-landscape", width: 667, height: 375, bars: "none" },
+  { name: "ipad", width: 1180, height: 820, bars: "top" },
+  { name: "ipad-mini-4x3", width: 1024, height: 768, bars: "top" }
 ] as const;
 
 /**
- * What a crew can see must not depend on the shape of their glass. The camera
- * reports the slice it is showing, in world units; every device has to report
- * the same one, whatever the bars around it look like.
+ * How much a crew sees must depend on the shape of their glass as little as it
+ * can. Glass between 16:9 and 43:18 fills edge to edge. At the 19.5:9 frame or
+ * wider it keeps the frame's height and sees more at its sides, up to 43:18;
+ * narrower it keeps the frame's area, a little narrower and taller, down to
+ * 16:9. Past either cap come bars. The camera reports the slice in world units
+ * and the rectangle it is drawn in, so both halves are read off it.
  */
-test("every device is shown the same slice of the world", async ({ browser }) => {
+test("every device sees the frame's height or its area, between 16:9 and 43:18", async ({
+  browser
+}) => {
   test.setTimeout(120_000);
   const contexts: BrowserContext[] = [];
-  const seen: { name: string; width: number; height: number }[] = [];
+  const seen: { name: string; glassAspect: number; width: number; height: number }[] = [];
   try {
     for (const device of devices) {
       const context = await browser.newContext({
@@ -67,17 +83,34 @@ test("every device is shown the same slice of the world", async ({ browser }) =>
       if (camera === undefined) continue;
       seen.push({
         name: device.name,
+        glassAspect: device.width / device.height,
         width: camera.width / camera.zoom,
         height: camera.height / camera.zoom
       });
+      // A bar is whatever of the canvas the world is not drawn in; under a pixel is rounding.
+      const bars =
+        camera.canvasHeight - camera.height > 1
+          ? "top"
+          : camera.canvasWidth - camera.width > 1
+            ? "sides"
+            : "none";
+      expect(bars, `${device.name} wears its bars on the wrong axis`).toBe(device.bars);
     }
 
-    const first = seen[0];
-    expect(first).toBeDefined();
-    if (first === undefined) return;
+    // An ultrawide shows the frame's own height, which fixes the frame for the rest.
+    const reference = seen.find(({ glassAspect }) => glassAspect >= FRAME_ASPECT);
+    expect(reference).toBeDefined();
+    if (reference === undefined) return;
+    const frameHeight = reference.height;
+    const frameArea = frameHeight * frameHeight * FRAME_ASPECT;
     for (const device of seen) {
-      expect(device.width, `${device.name} sees a different width`).toBeCloseTo(first.width, 0);
-      expect(device.height, `${device.name} sees a different height`).toBeCloseTo(first.height, 0);
+      const shape = Math.min(Math.max(device.glassAspect, NARROWEST_ASPECT), WIDEST_ASPECT);
+      const height = shape >= FRAME_ASPECT ? frameHeight : Math.sqrt(frameArea / shape);
+      expect(device.height, `${device.name} sees the wrong height`).toBeCloseTo(height, 0);
+      expect(device.width / device.height, `${device.name} sees the wrong shape`).toBeCloseTo(
+        shape,
+        2
+      );
     }
   } finally {
     for (const context of contexts) await context.close();

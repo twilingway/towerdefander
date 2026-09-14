@@ -1,4 +1,4 @@
-import { CAMERA_VIEW_ASPECT } from "@spaceship-defender/protocol";
+import { CAMERA_VIEW_ASPECT, legacyFrameWidth } from "@spaceship-defender/protocol";
 
 export function interceptAim(spaceship, target, projectileSpeed = 720) {
   if (target === undefined) return { x: 1, y: 0 };
@@ -470,7 +470,9 @@ function beamReach(archetype) {
  */
 export function rankTargets(world, options = {}) {
   const archetypes = options.archetypes ?? {};
-  const frameRadius = Math.max(world.cameraViewWidth / 2, 1);
+  // Half the 16:9 width of the same height: the ranking was tuned against that
+  // frame, and a bot that sees further across still ranks at the same distances.
+  const frameRadius = Math.max(legacyFrameWidth(world.cameraViewWidth) / 2, 1);
   const scored = [];
   const escortedByBoss = world.enemies.some(
     (enemy) => enemy.kind === "boss" || archetypes[enemy.kind]?.spawnPolicy === "boss"
@@ -961,7 +963,8 @@ function insideArena(world, point) {
  * full eight seconds, into an empty corner or into the rim.
  */
 function sourceIsSpent(world, point) {
-  if (distanceBetween(world.ship, point) > world.cameraViewWidth * FIRE_SOURCE_VISIBLE_SHARE) {
+  const visible = legacyFrameWidth(world.cameraViewWidth) * FIRE_SOURCE_VISIBLE_SHARE;
+  if (distanceBetween(world.ship, point) > visible) {
     return false;
   }
   return !world.enemies.some((enemy) => distanceBetween(enemy, point) <= FIRE_SOURCE_ARRIVAL);
@@ -983,8 +986,8 @@ export function huntVector(world, memory, nowMs) {
     // for the same reason, so a guess that was pulled in is also flown to where
     // it now is rather than along the bearing it came from.
     memory.firedFrom = insideArena(world, {
-      x: world.ship.x + Math.cos(nearest.bearing) * world.cameraViewWidth,
-      y: world.ship.y + Math.sin(nearest.bearing) * world.cameraViewWidth
+      x: world.ship.x + Math.cos(nearest.bearing) * legacyFrameWidth(world.cameraViewWidth),
+      y: world.ship.y + Math.sin(nearest.bearing) * legacyFrameWidth(world.cameraViewWidth)
     });
     memory.firedFromAtMs = nowMs;
     return normalize({

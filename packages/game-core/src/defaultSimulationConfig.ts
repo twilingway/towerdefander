@@ -14,7 +14,7 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   // The frame the campaign is balanced inside, and the same one the console
   // carries: every barrel is bounded by half its height, and the shell that
   // catalogue counts health in reaches 680.
-  cameraViewWidth: 2500,
+  cameraViewWidth: 3047,
   background: { image: "deep-nebula", parallaxStrength: 1 },
   spaceshipVisual: null,
   shieldBandEffect: "",

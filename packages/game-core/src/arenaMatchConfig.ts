@@ -59,10 +59,11 @@ export const ARENA_LOOT_CAPTURE_RADIUS_HULLS = 2;
 /**
  * The radar sweep, as Steel Hunter plays it: a pilot presses for a look around,
  * waits out a cooldown, and what the sweep found stays on the dial for a while
- * after it has moved. Two and a half screens is far enough to plan a route and
- * short enough that the field still holds surprises.
+ * after it has moved. It reaches one cell of the zone sheet - the grid that
+ * closes on the timer - so the reach is read off the board a pilot plans on, and
+ * a later upgrade can buy more cells.
  */
-export const ARENA_SCAN_RADIUS_SCREENS = 2.5;
+export const ARENA_SCAN_RADIUS_CELLS = 1;
 export const ARENA_SCAN_COOLDOWN_TICKS = 1_800;
 export const ARENA_SCAN_REVEAL_TICKS = 1_800;
 export const ARENA_ZONE_WARNING_TICKS = 900;

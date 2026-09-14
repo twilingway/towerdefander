@@ -499,8 +499,11 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(2500);
-    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(2500);
+    // Absent from the file, so the default fills it as it is: already the 19.5:9
+    // frame, and not grown a second time.
+    const framed = createDefaultTuning().cameraViewWidth;
+    expect(store.getState().presets[0]?.tuning.cameraViewWidth).toBe(framed);
+    expect(store.getActiveSimulationConfig().cameraViewWidth).toBe(framed);
   });
 
   it("gives a version 18 document the default arena without touching its waves", async () => {
@@ -1299,6 +1302,8 @@ describe("version 1 migration", () => {
     // Version 15 had no background section at all: the display drew a flat color.
     const legacyTuning: Partial<BalanceTuning> = { ...atLegacyTickRate(defaults) };
     delete legacyTuning.background;
+    // Written against the 16:9 frame: the width that grows into today's default.
+    legacyTuning.cameraViewWidth = Math.round((defaults.cameraViewWidth * 16) / 19.5);
     const document = {
       version: 15,
       activePresetId: "operator",
@@ -1320,6 +1325,34 @@ describe("version 1 migration", () => {
 
     const migratedOnce = migrateBalanceDocument(document);
     expect(migrateBalanceDocument(migratedOnce)).toEqual(migratedOnce);
+  });
+
+  it("grows a version 57 camera frame to 19.5:9 at the height it had", async () => {
+    const filePath = await temporaryPresetPath();
+    const saved = tunedPresetsFile(10);
+    const preset = saved.presets[0];
+    if (preset === undefined) throw new Error("fixture must contain a preset");
+    // A version 57 file framed 16:9: 2500 across is 1406 high, and the 19.5:9
+    // frame of that height is 3047 across. The sweep in screens was a multiple of
+    // that old width, so it has nothing left to mean.
+    const arena: Record<string, unknown> = {
+      ...preset.tuning.arena,
+      cameraViewWidth: 2500,
+      scanRadiusScreens: 2.5
+    };
+    delete arena.scanRadiusCells;
+    const legacy = { ...preset, tuning: { ...preset.tuning, cameraViewWidth: 2500, arena } };
+    await writeFile(filePath, JSON.stringify({ ...saved, version: 57, presets: [legacy] }), "utf8");
+    const warn = vi.fn();
+    const store = new BalanceStore({ filePath, logger: { warn } });
+    await store.load();
+
+    expect(warn).not.toHaveBeenCalled();
+    const tuning = store.getActiveTuning();
+    expect(tuning.cameraViewWidth).toBe(3047);
+    expect(tuning.arena.cameraViewWidth).toBe(3047);
+    expect(tuning.arena.scanRadiusCells).toBe(1);
+    expect(tuning.arena).not.toHaveProperty("scanRadiusScreens");
   });
 
   it("gives a preset from the four-number sky the picture and keeps its parallax", async () => {

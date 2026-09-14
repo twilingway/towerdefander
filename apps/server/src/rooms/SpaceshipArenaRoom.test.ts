@@ -37,6 +37,9 @@ interface ArenaInternals {
   config: ArenaMatchConfig;
   started: boolean;
   publish: () => void;
+  sweep: () => void;
+  scan: { radiusCells: number };
+  revealed: Set<string>;
 }
 
 const openRooms: SpaceshipArenaRoom[] = [];
@@ -299,6 +302,49 @@ describe("the arena's published encounter", () => {
       tuning.arena.cameraViewWidth = before.arenaCameraViewWidth;
       tuning.arena.shieldAutopilotRaiseRange = before.arenaRaiseRange;
     }
+  });
+});
+
+describe("the arena's sweep", () => {
+  /*
+   * The reach is read off the zone sheet, not the camera: a hull just inside a
+   * cell's side of the player is found and one just past it is not. Measured in
+   * screens the same sweep reached two and a half frame widths, which put both
+   * of these on the dial.
+   */
+  it("finds a hull inside one cell of the zone sheet and none past it", () => {
+    const { internals } = arenaRoom();
+    const match = internals.match;
+    if (match === undefined) throw new Error("the room built no match");
+    const player = match.ships[0];
+    const near = match.ships[1];
+    const far = match.ships[2];
+    if (player === undefined || near === undefined || far === undefined) {
+      throw new Error("the match has too few hulls");
+    }
+    const span = internals.config.arenaRadius * 2;
+    const cell = Math.max(span / internals.config.zoneColumns, span / internals.config.zoneRows);
+    const reach = cell * internals.scan.radiusCells;
+    const placed = (offset: number) => ({
+      ...player.spaceship,
+      x: player.spaceship.x + offset,
+      y: player.spaceship.y
+    });
+    internals.match = {
+      ...match,
+      ships: match.ships.map((ship) =>
+        ship.id === near.id
+          ? { ...ship, spaceship: placed(reach - 1) }
+          : ship.id === far.id
+            ? { ...ship, spaceship: placed(-(reach + 1)) }
+            : ship
+      )
+    };
+
+    internals.sweep();
+
+    expect(internals.revealed.has(near.id)).toBe(true);
+    expect(internals.revealed.has(far.id)).toBe(false);
   });
 });
 

@@ -29,32 +29,51 @@ export interface CameraScrollInput {
 }
 
 /**
- * The frame every crew sees, letterboxed into whatever glass they have.
+ * The frame every crew sees, fitted into whatever glass they have.
  *
- * The zoom is the same fit it always was - the largest that puts the frame
- * inside the screen. What changed is that the visible world is the frame
- * itself, not the screen divided by that zoom: dividing it back out handed the
- * looser axis to the device, so an ultrawide monitor saw a third more arena
- * than a laptop and a 4:3 tablet a third more sky. Thirty per cent more warning
- * about what is flying at you is not a display setting.
+ * The slice shown takes the glass's own shape, held between `narrowestAspect`
+ * and `widestAspect`, so glass inside that range fills edge to edge. At the
+ * frame's shape or wider the slice keeps the frame's height and grows across;
+ * past `widestAspect` bars appear at the sides. Narrower than the frame it keeps
+ * the frame's area instead, a little narrower and taller; past `narrowestAspect`
+ * bars appear above and below. Without the caps an ultrawide monitor would see
+ * a third more arena across than a phone and a 4:3 tablet a quarter more of its
+ * height, and that much more warning about what is flying at you is not a
+ * display setting; about a tenth either way, at 21:9 and at 16:9, was the
+ * operator's call.
  *
- * `screen` is where that frame lands in pixels. Everything outside it is a bar.
+ * Left at their defaults both caps are the frame's own shape, which is the plain
+ * letterbox: every device shows exactly the frame.
+ *
+ * `width` and `height` are the world the camera shows; `screen` is where that
+ * lands in pixels. Everything outside `screen` is a bar.
  */
 export function getResponsiveViewport(
   actualWidth: number,
   actualHeight: number,
   baseWidth = 1600,
-  baseHeight = 900
+  baseHeight = 900,
+  widestAspect = baseWidth / baseHeight,
+  narrowestAspect = baseWidth / baseHeight
 ): ResponsiveViewport {
   const safeWidth = Number.isFinite(actualWidth) && actualWidth > 0 ? actualWidth : baseWidth;
   const safeHeight = Number.isFinite(actualHeight) && actualHeight > 0 ? actualHeight : baseHeight;
-  const zoom = Math.min(safeWidth / baseWidth, safeHeight / baseHeight);
-  const screenWidth = baseWidth * zoom;
-  const screenHeight = baseHeight * zoom;
+  const frame = baseWidth / baseHeight;
+  const shape = Math.min(
+    Math.max(safeWidth / safeHeight, Math.min(narrowestAspect, frame)),
+    Math.max(widestAspect, frame)
+  );
+  // The frame's height at its shape or wider, its area when narrower; the frame
+  // itself, to the unit, when the glass has its shape.
+  const height = shape < frame ? Math.sqrt((baseWidth * baseHeight) / shape) : baseHeight;
+  const width = shape === frame ? baseWidth : height * shape;
+  const zoom = Math.min(safeWidth / width, safeHeight / height);
+  const screenWidth = width * zoom;
+  const screenHeight = height * zoom;
   return {
     zoom,
-    width: baseWidth,
-    height: baseHeight,
+    width,
+    height,
     screen: {
       x: (safeWidth - screenWidth) / 2,
       y: (safeHeight - screenHeight) / 2,

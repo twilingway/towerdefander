@@ -254,8 +254,10 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
         />
       </div>
       <p className="screen__hint">
-        Дисплей показывает не меньше этого участка мира, высота — 9/16 от ширины, то есть{" "}
-        {Math.round(tuning.cameraViewWidth * CAMERA_VIEW_ASPECT)} единиц. Чем больше значение, тем
+        Дисплей показывает этот участок мира, высота — 9/19.5 от ширины, то есть{" "}
+        {Math.round(tuning.cameraViewWidth * CAMERA_VIEW_ASPECT)} единиц. Экраны шире 19.5:9 видят
+        по бокам немного больше, но не шире 43:18; экраны уже, до 16:9, — участок той же площади,
+        чуть уже и выше, а планшеты 4:3 — его же с полосами сверху и снизу. Чем больше значение, тем
         дальше камера и тем раньше видно подлетающих врагов. Кадр применяется со следующего запуска
         боя, допустимый диапазон — от {CAMERA_VIEW_WIDTH_MIN} до {CAMERA_VIEW_WIDTH_MAX}.
       </p>
@@ -324,7 +326,7 @@ export function DirectorScreen({ tuning, onChange }: DirectorScreenProps) {
 }
 
 /**
- * The frame is 16:9, so its shorter half is what a target is guaranteed to be
+ * The frame is wider than it is tall, so its shorter half is what a target is guaranteed to be
  * inside; a shooter further out opens fire from beyond the screen edge.
  */
 function clampArenaRadius(value: number): number {
