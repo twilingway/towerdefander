@@ -3051,9 +3051,19 @@ p {
     var(--frame-timer-width),
     max(var(--world-top) - var(--frame-timer-top), var(--frame-bar-switch)) / 0.2195
   );
+  /*
+   * The status frame alone may reach this far onto the world. Held to the bar's
+   * height it came out 154 pixels wide on a 1920 by 1080 monitor, with captions of
+   * eight; the operator took the overlap for captions of eleven.
+   */
+  --frame-status-overlap: 1.875rem;
   --frame-status-size: min(
     var(--frame-status-width),
-    max(var(--world-top) - var(--frame-status-top), var(--frame-bar-switch)) / 0.5511
+    max(
+        var(--world-top) - var(--frame-status-top) + var(--frame-status-overlap),
+        var(--frame-bar-switch)
+      ) /
+      0.5511
   );
   /* Each frame's top: its bottom edge on the world's top edge, or its inset where the bar is thinner. */
   --frame-info-y: max(var(--frame-info-top), var(--world-top) - var(--frame-info-size) * 0.3164);
@@ -3728,13 +3738,13 @@ p {
 }
 
 /*
- * A status frame under 14rem across, a phone's or one shrunk into a monitor's top
+ * A status frame under 17rem across, a phone's or one shrunk into a monitor's top
  * bar, leaves a caption about forty pixels at a phone's size. Without tracking the
  * type can take a larger share of the frame, which is what keeps it readable once
  * the frame is shrunk; even so «ВЫКЛЮЧЕН» was cut to «ВЫКЛЮ…», so the frame shows
  * its short form.
  */
-@container status-frame (width < 14rem) {
+@container status-frame (width < 17rem) {
   .status-frame__label {
     font-size: max(0.45rem, 5.2cqi);
     letter-spacing: 0;
