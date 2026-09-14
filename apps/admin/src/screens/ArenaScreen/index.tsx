@@ -448,8 +448,9 @@ export function ArenaScreen({ tuning, onChange }: ArenaScreenProps) {
             }}
           />
           <p className="hint" data-testid="arena-scan-reach">
-            Скан находит всех в <strong>{String(Math.round(scanCell * tuning.arena.scanRadiusCells))}</strong>{" "}
-            единицах: {String(round2(tuning.arena.scanRadiusCells))} × сторона клетки поля в{" "}
+            Скан находит всех в{" "}
+            <strong>{String(Math.round(scanCell * tuning.arena.scanRadiusCells))}</strong> единицах:{" "}
+            {String(round2(tuning.arena.scanRadiusCells))} × сторона клетки поля в{" "}
             {String(Math.round(scanCell))} единиц. Найденные держатся на радаре{" "}
             {formatTicks(tuning.arena.scanRevealTicks)}, следующий скан через{" "}
             {formatTicks(tuning.arena.scanCooldownTicks)}.

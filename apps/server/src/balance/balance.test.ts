@@ -1342,11 +1342,7 @@ describe("version 1 migration", () => {
     };
     delete arena.scanRadiusCells;
     const legacy = { ...preset, tuning: { ...preset.tuning, cameraViewWidth: 2500, arena } };
-    await writeFile(
-      filePath,
-      JSON.stringify({ ...saved, version: 57, presets: [legacy] }),
-      "utf8"
-    );
+    await writeFile(filePath, JSON.stringify({ ...saved, version: 57, presets: [legacy] }), "utf8");
     const warn = vi.fn();
     const store = new BalanceStore({ filePath, logger: { warn } });
     await store.load();

@@ -620,7 +620,9 @@ const PHONE_FRAME_WIDTH_SCALE = 19.5 / 16;
 
 /** A width read from the file, grown by the scale; absent stays absent so a default can fill it. */
 function scaleFrameWidth(width: unknown, scale: number): number | undefined {
-  return typeof width === "number" && Number.isFinite(width) ? Math.round(width * scale) : undefined;
+  return typeof width === "number" && Number.isFinite(width)
+    ? Math.round(width * scale)
+    : undefined;
 }
 
 export function migrateBalanceDocument(raw: unknown): unknown {
