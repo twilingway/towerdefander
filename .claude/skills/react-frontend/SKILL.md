@@ -65,3 +65,21 @@ bundle, rendering and plain-JS rules apply here, the RSC/server-action ones do n
 
 Ignore the build instructions in that directory's `README.md`; it is vendored content, kept out of
 lint and Prettier on purpose.
+
+## Composition and interface rule sets
+
+Two more vendored Vercel sets sit beside it, pinned to an upstream commit and kept out of Prettier
+the same way:
+
+- `.agents/skills/composition-patterns/` (vercel-labs/agent-skills@063bee9) — component API shape:
+  compound components instead of boolean props, explicit variants, state lifted into a provider,
+  children over render props, and React 19 without `forwardRef`. `SKILL.md` indexes the rules; read
+  the matching file in `rules/` when designing or reviewing a component's props.
+- `.agents/skills/web-interface-guidelines/AGENTS.md` (vercel-labs/web-interface-guidelines@e3d624b)
+  — one MUST/SHOULD/NEVER checklist for keyboard and focus, touch targets, forms, animation,
+  accessibility and layout. Use it when reviewing controller panels and the balance console. It is
+  written for SSR web apps: the hydration section and the Tailwind class names do not apply, and
+  "URL reflects state" yields to the addressing rule in `docs/CODE_STYLE.md`.
+
+To update either set, replace the directory from a newer upstream commit and change the commit in
+this section.
