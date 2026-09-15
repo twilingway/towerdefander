@@ -5,6 +5,8 @@ node_modules/
 apps/display/android/
 pnpm-lock.yaml
 .agents/skills/react-best-practices/
+.agents/skills/composition-patterns/
+.agents/skills/web-interface-guidelines/
 .opencode/
 
 # Snapshots a browser session drops beside the repo; never part of it.

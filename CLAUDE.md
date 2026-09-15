@@ -192,11 +192,12 @@ protocol/room/economy changes). Read the relevant one before changing shared con
 editor, the bake pipeline and the atlas conventions; full text in
 `.agents/skills/arcadia-effects/SKILL.md`), `browser-playwright` (Playwright MCP session, harness
 ports, `tests/e2e` conventions), `react-frontend` (display/controller React rules plus the vendored
-Vercel rule set in `.agents/skills/react-best-practices/`), and `phaser-display` (boundaries; the
-full text stays in `.agents/skills/phaser-display/SKILL.md`, which the other agent runners share),
-and `codex-visual` (Codex CLI as an independent visual consultant and image generator for
-development work). `.mcp.json` declares the `playwright` MCP server so a browser session is
-available without extra setup; it drives a browser only and does not start app servers.
+Vercel rule sets in `.agents/skills/`: `react-best-practices`, `composition-patterns` and
+`web-interface-guidelines`), and `phaser-display` (boundaries; the full text stays in
+`.agents/skills/phaser-display/SKILL.md`, which the other agent runners share), and `codex-visual`
+(Codex CLI as an independent visual consultant and image generator for development work).
+`.mcp.json` declares the `playwright` MCP server so a browser session is available without extra
+setup; it drives a browser only and does not start app servers.
 
 ### How the global rules apply here
 
