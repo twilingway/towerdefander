@@ -3,10 +3,11 @@
  *
  * Lives beside the flying policy rather than inside it: the file is one concern
  * and already long, and the headless stats harness in `apps/server` imports
- * from this directory, so the boundary is paid for. The cost of sitting on the
- * controller side is that `game-core` cannot be imported — hence the local
- * mixer below instead of `deriveDomainSeed`, the same price the flying policy
- * already pays for its own noise stream.
+ * from this directory, so the boundary is paid for. `game-core` is reachable
+ * from here since the controller took it as a dev dependency, yet the local
+ * mixer below stays instead of `deriveDomainSeed`: the two mix a seed
+ * differently, so switching would change which card the bot picks in every run
+ * already measured.
  */
 
 /** Seats in the order a room fills them; mirrors CREW_ROLES on the server. */
