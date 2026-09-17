@@ -9,6 +9,7 @@
       },
       "models": {
         "qwen3.8-27b": {
+          "limit": { "context": 128000, "output": 32000 },
           "modalities": {
             "input": ["text", "image"]
           }
@@ -23,6 +24,7 @@
       },
       "models": {
         "qwen3.8-27b": {
+          "limit": { "context": 128000, "output": 32000 },
           "modalities": {
             "input": ["text", "image"]
           }
