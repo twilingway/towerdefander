@@ -20,6 +20,7 @@
  *   node apps/controller/scripts/production-pacing.mjs --api wss://host [--seconds 60]
  */
 import { Client } from "@colyseus/sdk";
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import {
   PLAYBACK_MIN_LAG_MS,
   PROTOCOL_VERSION,
@@ -104,7 +105,9 @@ function report() {
   console.log(
     `arrivals            ${String(arrivals.length)} over ${(spanMs / 1000).toFixed(1)} s`
   );
-  console.log(`ticks per second    ${(ticks / (spanMs / 1000)).toFixed(2)}  (nominal 20.00)`);
+  console.log(
+    `ticks per second    ${(ticks / (spanMs / 1000)).toFixed(2)}  (nominal ${SIMULATION_TICK_RATE.toFixed(2)})`
+  );
   console.log(
     `arrival gap ms      p50 ${at(0.5).toFixed(1)}  p90 ${at(0.9).toFixed(1)}  p99 ${at(0.99).toFixed(1)}  max ${gaps[gaps.length - 1].toFixed(1)}`
   );
