@@ -1,5 +1,5 @@
 {
-  "version": 56,
+  "version": 58,
   "activePresetId": "default",
   "presets": [
     {
@@ -3119,12 +3119,11 @@
         },
         "missileInterceptScoreReward": 5,
         "arenaRadius": 4400,
-        "cameraViewWidth": 2500,
+        "cameraViewWidth": 3047,
         "background": {
           "image": "deep-nebula",
           "parallaxStrength": 1
         },
-        "hudSkin": "frame",
         "autopilot": {
           "level": "ace",
           "profiles": {
@@ -3432,12 +3431,12 @@
           "zoneRows": 10,
           "matchTickLimit": 19800,
           "fieldRadius": 19400,
-          "cameraViewWidth": 2500,
+          "cameraViewWidth": 3047,
           "hullScaling": 2.5,
           "damageScaling": 0.7,
           "shieldHitCostShare": 0.5,
           "shieldAutopilotRaiseRange": 0,
-          "scanRadiusScreens": 2.5,
+          "scanRadiusCells": 1,
           "scanCooldownTicks": 1800,
           "scanRevealTicks": 900,
           "lootFirstSpawnTicks": 900,
@@ -4815,7 +4814,7 @@
         "spaceshipBrakingPerSecondSquared": 1500,
         "spaceshipReverseSpeedFactor": 0.58,
         "headingMaxAngularSpeedPerSecond": 4.1887902047863905,
-        "headingAngularAccelerationPerSecondSquared": 400,
+        "headingAngularAccelerationPerSecondSquared": 60.21385919380437,
         "headingAngularBrakingPerSecondSquared": 400,
         "friendlyProjectileDamage": 14,
         "fireCooldownTicks": 30,
@@ -7973,12 +7972,11 @@
         "asteroidVisual": null,
         "missileInterceptScoreReward": 5,
         "arenaRadius": 4400,
-        "cameraViewWidth": 2500,
+        "cameraViewWidth": 3047,
         "background": {
           "image": "deep-nebula",
           "parallaxStrength": 1
         },
-        "hudSkin": "classic",
         "autopilot": {
           "level": "ace",
           "profiles": {
@@ -8286,12 +8284,12 @@
           "zoneRows": 10,
           "matchTickLimit": 36000,
           "fieldRadius": 4400,
-          "cameraViewWidth": 2500,
+          "cameraViewWidth": 3047,
           "hullScaling": 2.5,
           "damageScaling": 0.7,
           "shieldHitCostShare": 0.5,
           "shieldAutopilotRaiseRange": 0,
-          "scanRadiusScreens": 2.5,
+          "scanRadiusCells": 1,
           "scanCooldownTicks": 1800,
           "scanRevealTicks": 1800,
           "lootFirstSpawnTicks": 900,
