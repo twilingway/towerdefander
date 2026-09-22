@@ -123,6 +123,15 @@ export function createSpaceshipRuntime(
     // recomputed on every refresh.
     scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.NO_CENTER }
   });
+  /*
+   * The engine, handed to a measuring script under `?diag=1` and nowhere else.
+   * A phone profiled over USB can then hide parts of the scene one at a time
+   * and see what each costs the GPU - the one question no panel can answer from
+   * inside the page.
+   */
+  if (new URLSearchParams(globalThis.location.search).get("diag") === "1") {
+    (globalThis as { __spaceshipGame?: Phaser.Game }).__spaceshipGame = game;
+  }
 
   const applyTarget = (): void => {
     if (!game.isBooted) return;

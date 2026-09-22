@@ -21,7 +21,7 @@ import {
   turretMountPoint
 } from "../entityArt.js";
 import { bakeCatalogArt, preloadSpriteArt } from "../catalogTexture.js";
-import { BackdropLayer, preloadBackdrop } from "./backdrop.js";
+import { BackdropLayer, preloadBackdrop, readSkyLayers } from "./backdrop.js";
 
 import { type Point } from "../spaceshipViewModel.js";
 import {
@@ -143,6 +143,7 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     this.backdrop = new BackdropLayer(this, this.snapshot.background.image, this.bake);
+    this.backdrop.show(readSkyLayers(globalThis.location.search));
     drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
     this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
