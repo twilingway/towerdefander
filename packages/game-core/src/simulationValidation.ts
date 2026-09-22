@@ -1,6 +1,23 @@
 import { validateCombatConfig } from "./combatValidation.ts";
 import { type SpaceshipSimulationConfig } from "./spaceshipSimulation.ts";
+
+/*
+ * Configs that have already passed, by identity.
+ *
+ * Every step validates the config it is given, and the check walks the whole
+ * enemy catalogue - on a phone hosting its own run that was a tenth of the
+ * processor, sixty times a second, to re-prove a fact about an object nobody
+ * had touched. A config is built by spreading into a fresh object and never
+ * edited in place, so an object that passed once still passes; a changed one is
+ * a different object and is checked on first use like any other.
+ *
+ * Memoisation, not state: the answer for a given object never depends on when
+ * it is asked, so the step stays a pure function of its inputs.
+ */
+const validatedConfigs = new WeakSet<SpaceshipSimulationConfig>();
+
 export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationConfig): void {
+  if (validatedConfigs.has(config)) return;
   validateCombatConfig(config);
   /*
    * The step is a duration, not a count.
@@ -121,4 +138,5 @@ export function validateSpaceshipSimulationConfig(config: SpaceshipSimulationCon
   if (config.arenaRadius < config.spaceshipRadius) {
     throw new RangeError("arenaRadius must fit the spaceship radius");
   }
+  validatedConfigs.add(config);
 }
