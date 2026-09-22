@@ -92,7 +92,18 @@ export function CreateRoomScreen({
   // Solo on this very screen is the default, because it is the shortest path
   // from opening the page to flying: no phone, no second person, no waiting.
   const [crewSize, setCrewSize] = useState<CrewSize>(1);
-  const [place, setPlace] = useState<Place>(initialPlace);
+  const [chosenPlace, setPlace] = useState<Place>(initialPlace);
+  /*
+   * A maintenance window closes the server, not the game.
+   *
+   * The server refuses new rooms while one is announced, so the two places that
+   * need a room are switched off - but a run on this device asks the server
+   * nothing, and a window is exactly when somebody opens the page and wants to
+   * play anyway. The choice is held rather than overwritten, so it comes back
+   * when the window does.
+   */
+  const serverClosed = maintenance?.active === true;
+  const place: Place = serverClosed ? "device" : chosenPlace;
   const cockpit = place !== "shared";
   // Named rather than blank: the field is the only thing between a player and
   // the button, and a room needs a roster label more than it needs a choice.
@@ -109,21 +120,6 @@ export function CreateRoomScreen({
   // yet — the button stays disabled rather than opening a room nobody is in.
   const trimmedName = cockpitName.trim();
   const soloName = cockpit && crewSize === 1 && trimmedName.length > 0 ? trimmedName : undefined;
-  // Nothing on this screen works while a window is announced: the server
-  // refuses the room, so a crew size, a hull and a create button would only be
-  // three ways of being told no. The announcement takes their place and says
-  // the one thing that is true.
-  if (maintenance?.active === true) {
-    return (
-      <main className="display-shell display-shell--centered">
-        <section className="hero-card">
-          <p className="eyebrow">Кампания I: Завеса</p>
-          <h1>SpaceShip Defender</h1>
-          <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
-        </section>
-      </main>
-    );
-  }
   return (
     <main className="display-shell display-shell--setup is-campaign" ref={shell}>
       <section className="setup-card">
@@ -135,6 +131,15 @@ export function CreateRoomScreen({
           <h1>Оборона Периметра-7</h1>
           <p className="setup-lede">{crewPitch(cockpit ? 0 : crewSize)}</p>
         </header>
+        {serverClosed && (
+          <>
+            <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
+            <p className="setup-lede">
+              Сетевые режимы закрыты до конца работ. На этом устройстве можно играть — ему сервер не
+              нужен.
+            </p>
+          </>
+        )}
 
         {/*
          * Two questions, not one list. "Solo" and "1" sat side by side and read
@@ -168,6 +173,7 @@ export function CreateRoomScreen({
             className={`place-tile${place === "server" ? " is-selected" : ""}`}
             aria-label="Через сервер"
             aria-pressed={place === "server"}
+            disabled={serverClosed}
             onClick={() => {
               setPlace("server");
               setCrewSize(1);
@@ -183,7 +189,7 @@ export function CreateRoomScreen({
             className={`place-tile${place === "shared" ? " is-selected" : ""}`}
             aria-label="Общий экран"
             aria-pressed={place === "shared"}
-            disabled={!sharedScreen}
+            disabled={serverClosed || !sharedScreen}
             onClick={() => {
               setPlace("shared");
             }}

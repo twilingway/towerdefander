@@ -69,33 +69,38 @@ export function StartScreen({ maintenance, onPick }: StartScreenProps) {
         </p>
         <h1 className="start-title">SpaceShip Defender</h1>
       </header>
-      {maintenance?.active === true ? (
+      {maintenance?.active === true && (
         <section className="hero-card">
           <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
         </section>
-      ) : (
-        <div className="mode-grid">
-          {MODES.map((tile) => (
-            <button
-              type="button"
-              key={tile.mode}
-              className={`mode-tile mode-tile--${tile.mode}`}
-              aria-label={`${tile.eyebrow}: ${tile.title}`}
-              onClick={() => {
-                onPick(tile.mode);
-              }}
-            >
-              <span className="mode-tile__frame">
-                <span className="mode-tile__eyebrow">{tile.eyebrow}</span>
-                <span className="mode-tile__title">{tile.title}</span>
-                <span className="mode-tile__subtitle">{tile.subtitle}</span>
-                <span className="mode-tile__pitch">{tile.pitch}</span>
-                <span className="mode-tile__crew">{tile.crew}</span>
-              </span>
-            </button>
-          ))}
-        </div>
       )}
+      {/*
+       * A window closes the server, not the game: the campaign can still be
+       * played on this device, so only the arena - which is nothing but a
+       * server room - is switched off while one is announced.
+       */}
+      <div className="mode-grid">
+        {MODES.map((tile) => (
+          <button
+            type="button"
+            key={tile.mode}
+            className={`mode-tile mode-tile--${tile.mode}`}
+            aria-label={`${tile.eyebrow}: ${tile.title}`}
+            disabled={tile.mode === "arena" && maintenance?.active === true}
+            onClick={() => {
+              onPick(tile.mode);
+            }}
+          >
+            <span className="mode-tile__frame">
+              <span className="mode-tile__eyebrow">{tile.eyebrow}</span>
+              <span className="mode-tile__title">{tile.title}</span>
+              <span className="mode-tile__subtitle">{tile.subtitle}</span>
+              <span className="mode-tile__pitch">{tile.pitch}</span>
+              <span className="mode-tile__crew">{tile.crew}</span>
+            </span>
+          </button>
+        ))}
+      </div>
       {/* Who made it and which release this is, for a screenshot that has to say both. */}
       <footer className="start-footer" data-testid="start-footer">
         © TwilingGame 2026 · сборка {BUILD_VERSION}
