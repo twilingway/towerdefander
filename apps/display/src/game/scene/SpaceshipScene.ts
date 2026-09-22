@@ -5,7 +5,13 @@ import Phaser from "phaser";
 import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
-import { ArenaZoneLayer, arenaZoneSignature, drawArena, drawDecorations } from "./arena.js";
+import {
+  ArenaZoneLayer,
+  arenaZoneSignature,
+  drawArena,
+  drawDecorations,
+  type ArenaFloor
+} from "./arena.js";
 import { ArenaFleet } from "./arenaFleet.js";
 import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
@@ -109,8 +115,8 @@ export class SpaceshipScene extends Phaser.Scene {
   private vectorsSwitch = true;
   /** What the quality level in force lets this scene draw. */
   private quality: QualitySettings = QUALITY_SETTINGS.high;
-  /** The arena floor's tint, which a lower quality level drops. */
-  private floorFill: Phaser.GameObjects.Image | undefined;
+  /** The floor with its tint and the floor without it; the quality level shows one. */
+  private floor: ArenaFloor = { floorWithFill: undefined, floorLines: undefined };
   private readonly camera = new CameraFrame();
   /** Bound once so a layer can hold it; the scene is the texture cache. */
   private readonly bake = (
@@ -151,9 +157,9 @@ export class SpaceshipScene extends Phaser.Scene {
     this.camera.focusOn(this, this.snapshot.spaceship);
     this.backdrop = new BackdropLayer(this, this.snapshot.background.image, this.bake);
     this.backdrop.show(readSkyLayers(globalThis.location.search));
-    this.floorFill = drawArena(this, this.snapshot, this.tankLook, (key, half, draw) =>
+    this.floor = drawArena(this, this.snapshot, this.tankLook, (key, half, draw) =>
       this.bake(key, half, draw)
-    ).floorFill;
+    );
     this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
 
@@ -543,7 +549,8 @@ export class SpaceshipScene extends Phaser.Scene {
     this.vectorsEnabled = vectors;
     this.shield?.setVisible(vectors);
     this.aiming?.setVisible(vectors);
-    this.floorFill?.setVisible(this.quality.floorFill);
+    this.floor.floorWithFill?.setVisible(this.quality.floorFill);
+    this.floor.floorLines?.setVisible(!this.quality.floorFill);
     this.exhaust?.setEnabled(this.quality.exhaust);
   }
 
