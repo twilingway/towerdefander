@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { resetSessionPeaks, type SessionPeaks } from "../../model/instruments.js";
 import { DiagnosticsPanel } from "../DiagnosticsPanel/index.js";
 import type { ComponentCost } from "../../model/componentCost.js";
 import type { LongTaskMeter } from "../../model/longTasks.js";
@@ -36,6 +37,8 @@ export interface DiagnosticsReadings {
   /** The two rates the room runs at, so a mismatch is read rather than guessed. */
   readonly tickHz: number;
   readonly patchHz: number;
+  /** The worst of the whole fight, which the per-second figures cannot hold. */
+  readonly peaks: SessionPeaks;
   readonly snapshot: WorkMeter | undefined;
   readonly commit: WorkMeter | undefined;
   /** The same React second, split by panel - see `componentCost.ts`. */
@@ -110,6 +113,10 @@ export function DiagnosticsHud({ read, ...controls }: DiagnosticsHudProps) {
     <DiagnosticsPanel
       {...readings}
       {...controls}
+      onResetPeaks={() => {
+        resetSessionPeaks();
+        setReadings(read());
+      }}
       onCollapse={() => {
         setOpen(false);
       }}

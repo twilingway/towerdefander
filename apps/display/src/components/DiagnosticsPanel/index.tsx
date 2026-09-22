@@ -1,4 +1,5 @@
 import type { ComponentCost } from "../../model/componentCost.js";
+import type { SessionPeaks } from "../../model/instruments.js";
 import type { WorkMeter } from "../../model/workMeter.js";
 import type { LongTaskMeter } from "../../model/longTasks.js";
 import type { TrafficMeter } from "../../model/trafficMeter.js";
@@ -33,6 +34,8 @@ export function DiagnosticsPanel({
   longTasks,
   tickHz,
   patchHz,
+  peaks,
+  onResetPeaks,
   worstFrameMs,
   stutterShare,
   sceneMsPerSecond,
@@ -73,6 +76,15 @@ export function DiagnosticsPanel({
   readonly longTasks: LongTaskMeter | undefined;
   readonly tickHz: number;
   readonly patchHz: number;
+  /**
+   * The worst of the whole fight, which the per-second figures cannot hold.
+   *
+   * Everything else here is the last second and is gone before a phone's owner
+   * has looked up from the glass. Comparing two runs needs a number that
+   * survives them, so this one is only reset on the button below.
+   */
+  readonly peaks: SessionPeaks;
+  readonly onResetPeaks: () => void;
   readonly worstFrameMs: number;
   readonly stutterShare: number;
   /** What the Phaser scene's own per-frame work costs, over the last second. */
@@ -167,6 +179,14 @@ export function DiagnosticsPanel({
         <button
           type="button"
           className="diagnostics-panel__toggle"
+          data-testid="diagnostics-reset-peaks"
+          onClick={onResetPeaks}
+        >
+          Сбросить пики
+        </button>
+        <button
+          type="button"
+          className="diagnostics-panel__toggle"
           data-testid="diagnostics-vectors-toggle"
           data-vectors={vectorsEnabled ? "on" : "off"}
           onClick={onToggleVectors}
@@ -196,6 +216,17 @@ export function DiagnosticsPanel({
             {averageFrameMs.toFixed(1)} мс · худший{" "}
             {Number.isFinite(worstFrameMs) ? Math.round(worstFrameMs) : 0} мс · рывки{" "}
             {Math.round(stutterShare * 100)}%
+          </dd>
+        </div>
+        <div>
+          <dt>Худшее за бой</dt>
+          <dd data-testid="diagnostics-peaks">
+            {peaks.durationSeconds < 1
+              ? "нет данных"
+              : `кадр ${Math.round(peaks.worstFrameMs)} мс · сцена ${peaks.worstSceneMs.toFixed(1)} мс · ` +
+                `мин ${Math.round(peaks.lowestFps)} к/с · рывки до ${Math.round(peaks.worstStutterShare * 100)}%` +
+                ` · пик на ${Math.round(peaks.worstFrameAtSecond)} с · тяжёлых секунд ${peaks.heavySeconds}` +
+                ` из ${Math.round(peaks.durationSeconds)}`}
           </dd>
         </div>
         <div>
