@@ -768,7 +768,9 @@ describe("version 1 migration", () => {
    * defaults before `ensure-balance-preset` existed.
    */
   it("keeps the shipped seed loadable", async () => {
-    const seedPath = fileURLToPath(new URL("../../presets/production.json", import.meta.url));
+    const seedPath = fileURLToPath(
+      new URL("../../../../packages/balance-core/presets/production.json", import.meta.url)
+    );
     const filePath = await temporaryPresetPath();
     await writeFile(filePath, await readFile(seedPath, "utf8"), "utf8");
     const warn = vi.fn();

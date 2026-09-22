@@ -196,16 +196,17 @@ IMAGE_TAG=<тег> docker-compose --project-name space \
 
 - **Том `space-api-data`** — то, что читает игра и пишет консоль. Здесь настройка, которую вы
   правите перед сессией.
-- **`apps/server/presets/production.json` в репозитории** — затравка. Из неё поднимается хост, где
-  игры ещё не было, и её же доставляет релиз.
+- **`packages/balance-core/presets/production.json` в репозитории** — затравка. Из неё поднимается
+  хост, где игры ещё не было, и её же доставляет релиз.
 
-Кто из двух главнее, решает число рядом с затравкой — `apps/server/presets/production.revision`.
-Релиз применяет затравку, только когда это число больше записанного на томе, а двигает его одна
-команда, и запускаете её вы:
+Кто из двух главнее, решает число рядом с затравкой —
+`packages/balance-core/presets/production.revision`. Релиз применяет затравку, только когда это
+число больше записанного на томе, а двигает его одна команда, и запускаете её вы:
 
 ```bash
 pnpm balance:promote
-git add apps/server/presets/production.json apps/server/presets/production.revision
+git add packages/balance-core/presets/
+git add packages/balance-core/src/seedRevision.ts
 git commit
 ```
 
@@ -213,6 +214,10 @@ git commit
 Продвижение читает `apps/server/data/balance.json` — файл вашего дев-стенда, — прогоняет его через
 миграции до текущей версии формата и проверяет схемой; стенд при этом может быть выключен. Повторный
 запуск без изменений ничего не делает и ревизию не двигает.
+
+Кроме затравки и её ревизии продвижение переписывает `packages/balance-core/src/seedRevision.ts` —
+то же число, но модулем, который может прочитать сборщик клиента. Он помечен как генерируемый:
+правится командой, не руками.
 
 Всё остальное время том выигрывает. Релиз без продвижения не трогает ни файл баланса, ни сервер,
 поэтому настройка, сохранённая из консоли перед сессией, переживает любое число выкаток.
@@ -244,7 +249,7 @@ printf '0\n' | docker run --rm -i -v space_space-api-data:/data alpine \
 
 ```bash
 scripts/export-balance-seed.sh
-git add apps/server/presets/production.json && git commit
+git add packages/balance-core/presets/production.json && git commit
 ```
 
 Сам файл `apps/server/data/balance.json` в репозиторий не входит: его переписывает целиком консоль,

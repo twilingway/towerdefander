@@ -14,7 +14,7 @@ set -euo pipefail
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${REPO_ROOT}/apps/server/presets/production.json"
+OUT="${REPO_ROOT}/packages/balance-core/presets/production.json"
 VOLUME="${BALANCE_VOLUME:-space_space-api-data}"
 
 while [ $# -gt 0 ]; do

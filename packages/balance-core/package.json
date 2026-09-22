@@ -1,0 +1,22 @@
+{
+  "name": "@spaceship-defender/balance-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./seed": "./src/seed.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@spaceship-defender/game-core": "workspace:*",
+    "@spaceship-defender/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "latest"
+  }
+}

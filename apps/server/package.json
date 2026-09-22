@@ -22,6 +22,7 @@
     "@colyseus/schema": "5.0.27",
     "@colyseus/uwebsockets-transport": "0.18.2",
     "@colyseus/ws-transport": "0.18.2",
+    "@spaceship-defender/balance-core": "workspace:*",
     "@spaceship-defender/game-core": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",
     "colyseus": "0.18.5"

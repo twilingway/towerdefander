@@ -13,7 +13,6 @@ import {
   applyGunnerInput,
   applyPilotInput,
   applyShieldInput,
-  createSpaceshipSimulationConfig,
   createSpaceshipSimulationState
 } from "@spaceship-defender/game-core";
 import { balancePresetsFileSchema } from "@spaceship-defender/protocol";
@@ -180,10 +179,13 @@ export function summarise(values) {
  * through tsx because they import their siblings with `.js` specifiers, which
  * plain `node` cannot resolve.
  */
-let migrations;
-async function migrate(document) {
-  migrations ??= await tsImport("../src/balance/migrations.ts", import.meta.url);
-  return migrations.migrateBalanceDocument(document);
+const { migrateBalanceDocument, toSimulationConfig } = await tsImport(
+  "../../../packages/balance-core/src/index.ts",
+  import.meta.url
+);
+
+function migrate(document) {
+  return migrateBalanceDocument(document);
 }
 
 /**
@@ -234,28 +236,12 @@ export function buildConfig(tuning, options = {}) {
   if (options.enemyOffset !== undefined && options.enemyOffset !== null) {
     overrides.enemySkill = { ...overrides.enemySkill, offset: options.enemyOffset };
   }
-  // `autopilot` and `helm` are console sections the simulation config does not carry.
-  const autopilot = overrides.autopilot;
-  delete overrides.autopilot;
-  delete overrides.helm;
-  // The hull the stand flies. Same resolution the room does: the sparse diff
-  // lands on the flat ship block and the hull's tree becomes the tiers the
-  // offer is built from. A preset written before hulls has neither, and then
-  // the built-in tree stands in — otherwise the crew would buy nothing at all.
-  const hulls = overrides.shipArchetypes;
-  const hullId = options.shipArchetypeId ?? overrides.defaultShipArchetypeId;
-  const hull = hulls?.[hullId] ?? (hulls === undefined ? undefined : Object.values(hulls)[0]);
-  delete overrides.shipArchetypes;
-  delete overrides.defaultShipArchetypeId;
-  if (hull !== undefined) {
-    Object.assign(overrides, hull.overrides?.stats ?? {});
-    if (hull.overrides?.cannonWeaponKind != null)
-      overrides.cannonWeaponKind = hull.overrides.cannonWeaponKind;
-    if (hull.overrides?.mgWeaponKind != null) overrides.mgWeaponKind = hull.overrides.mgWeaponKind;
-    overrides.moduleTiers = hull.tiers;
-    overrides.endlessTier = hull.endlessTier;
-  }
-  return { config: createSpaceshipSimulationConfig(overrides), autopilot };
+  // The autopilot section is the stand's, not the simulation's: the config
+  // factory never sees it, and the policy is handed it separately.
+  return {
+    config: toSimulationConfig(overrides, options.shipArchetypeId),
+    autopilot: overrides.autopilot
+  };
 }
 
 export function profileFor(autopilot, level, turretKind = "kinetic") {

@@ -87,3 +87,24 @@ test("a broken dev file leaves an existing seed and its revision untouched", () 
   assert.equal(readFileSync(seed, "utf8"), before);
   assert.equal(readFileSync(revision, "utf8").trim(), "1");
 });
+
+/*
+ * The release script reads the revision as text; a client bundle reads it as a
+ * generated module. Promotion writes both, and nothing else would notice them
+ * drifting apart -- a device would then tell the operator it carries numbers it
+ * does not have.
+ */
+test("the committed revision and its generated module agree", () => {
+  const seedRevision = fileURLToPath(
+    new URL("../../../packages/balance-core/presets/production.revision", import.meta.url)
+  );
+  const module = fileURLToPath(
+    new URL("../../../packages/balance-core/src/seedRevision.ts", import.meta.url)
+  );
+
+  const text = Number.parseInt(readFileSync(seedRevision, "utf8").trim(), 10);
+  const declared = /SEED_REVISION = (\d+)/.exec(readFileSync(module, "utf8"))?.[1];
+
+  assert.equal(Number.isInteger(text), true);
+  assert.equal(declared, String(text));
+});
