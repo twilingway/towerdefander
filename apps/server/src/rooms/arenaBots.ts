@@ -8,8 +8,13 @@ import {
 import type { AutopilotProfile } from "@spaceship-defender/protocol";
 
 import { ARENA_POLICY_TICK_MS, buildArenaWorld } from "./arenaWorld.js";
-import { createAutopilotMemory, planGunner, planPilot, planShield } from "./crewPolicy.mjs";
-import type { PolicyMemory, PolicyOptions } from "./crewPolicy.d.mts";
+import {
+  createAutopilotMemory,
+  planGunner,
+  planPilot,
+  planShield
+} from "@spaceship-defender/game-runtime/crewPolicy.mjs";
+import type { PolicyMemory, PolicyOptions } from "@spaceship-defender/game-runtime";
 
 /**
  * Fifteen bots, each with its own memory and its own tick.

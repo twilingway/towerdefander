@@ -60,10 +60,10 @@ import { getMaintenanceWindow } from "../maintenance/index.js";
 import { readServerConfig } from "../config.js";
 import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
-import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "./decorations.js";
+import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "@spaceship-defender/game-runtime";
 import { holdSparringStand, openSparringStand } from "./sparringStand.js";
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
-import { createRunSeed } from "./runSeed.js";
+import { createRunSeed } from "@spaceship-defender/game-runtime";
 import { LatencyTracker, type RoomTimer } from "./latencyTracker.js";
 import { LifecycleSchedule } from "./lifecycleSchedule.js";
 /*
@@ -75,20 +75,18 @@ import { LifecycleSchedule } from "./lifecycleSchedule.js";
 import {
   createAutopilotMemory,
   leadSpeedFor,
-  planGunner,
-  planPilot,
-  planShield,
   resolveAutopilotProfile
-} from "./crewPolicy.mjs";
-import type { PolicyMemory, PolicyOptions } from "./crewPolicy.d.mts";
+} from "@spaceship-defender/game-runtime/crewPolicy.mjs";
+import type { PolicyMemory, PolicyOptions } from "@spaceship-defender/game-runtime";
 import type { AutopilotProfile } from "@spaceship-defender/protocol";
-import { buildCrewWorld, POLICY_TICK_MS } from "./crewWorld.js";
-import { projectGameState } from "./stateProjection.js";
+import { driveCrewSeats, POLICY_TICK_MS } from "@spaceship-defender/game-runtime";
+import { projectGameState } from "@spaceship-defender/game-runtime";
+import { SCHEMA_PROJECTION_FACTORIES } from "./projectionFactories.js";
 import {
   upgradeErrorMessage,
   upgradeFingerprint,
   type UpgradeJournalEntry
-} from "./upgradeJournal.js";
+} from "@spaceship-defender/game-runtime";
 import {
   DISPLAY_VIEW_TAG,
   EnemyVisualState,
@@ -1113,11 +1111,30 @@ export class SpaceshipDefenderRoom extends Room<{
     if (game === undefined) {
       return;
     }
-    projectGameState(this.state.game, game, this.gameConfig, this.waveDeadlineAtMs);
+    projectGameState(
+      this.state.game,
+      game,
+      this.gameConfig,
+      this.waveSecondsRemaining(),
+      SCHEMA_PROJECTION_FACTORIES
+    );
     // Not part of the projection: it measures the host, not the simulation
     // frame, and `projectGameState` is state plus config and nothing else.
     this.state.game.display.serverStepMs = this.lastStepMs;
     this.state.game.display.appliedInputSeq = this.appliedSoloSeq;
+  }
+
+  /**
+   * What the crew has left of this wave, by this host's clock.
+   *
+   * The projection is handed the number rather than the moment: a device has no
+   * wall clock to compare a deadline against and counts the run's own ticks
+   * instead, and a `Date.now()` inside a projection would have made it the one
+   * impure thing in an otherwise pure function.
+   */
+  private waveSecondsRemaining(): number {
+    if (this.waveDeadlineAtMs === undefined) return 0;
+    return Math.max(1, Math.ceil((this.waveDeadlineAtMs - Date.now()) / 1_000));
   }
 
   private neutralizeRole(playerId: string): void {
@@ -1240,38 +1257,17 @@ export class SpaceshipDefenderRoom extends Room<{
     // before any of this existed, which is to say nothing happens on it.
     const profile = this.crewProfile;
     if (profile === undefined) return game;
-    const driven = this.roomDrivenRoles();
-    if (driven.length === 0) return game;
 
-    const world = buildCrewWorld(game, this.gameConfig, game.clock.tick * POLICY_TICK_MS);
-    let next = game;
-    if (driven.includes("pilot")) {
-      const plan = planPilot(world, profile, this.crewMemory, this.crewOptions);
-      next = applyPilotInput(next, {
-        vector: plan.vector,
-        turn: plan.turn,
-        thrust: plan.thrust,
-        mgFiring: plan.mgFiring,
-        receivedTick: next.clock.tick
-      });
-    }
-    if (driven.includes("gunner")) {
-      const plan = planGunner(world, profile, this.crewMemory, this.crewOptions);
-      next = applyGunnerInput(next, {
-        vector: plan.aim,
-        firing: plan.firing,
-        receivedTick: next.clock.tick
-      });
-    }
-    if (driven.includes("shield")) {
-      const plan = planShield(world, profile, this.crewMemory, this.crewOptions);
-      next = applyShieldInput(next, {
-        vector: plan.aim,
-        active: plan.active,
-        receivedTick: next.clock.tick
-      });
-    }
-    return next;
+    // The clock this host has always told the policy, kept on purpose: a tick is
+    // really 16.67 ms, and correcting it here would re-baseline every autopilot
+    // measurement the project has. `crewWorld.ts` carries the reasoning.
+    return driveCrewSeats(game, this.gameConfig, {
+      seats: this.roomDrivenRoles(),
+      policyTickMs: POLICY_TICK_MS,
+      profile,
+      memory: this.crewMemory,
+      options: this.crewOptions
+    });
   }
 
   /**

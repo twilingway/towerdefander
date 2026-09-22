@@ -209,6 +209,9 @@ importers:
       '@spaceship-defender/game-core':
         specifier: workspace:*
         version: link:../../packages/game-core
+      '@spaceship-defender/game-runtime':
+        specifier: workspace:*
+        version: link:../../packages/game-runtime
       '@spaceship-defender/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -307,6 +310,25 @@ importers:
       vitest:
         specifier: latest
         version: 4.1.10(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))
+
+  packages/game-runtime:
+    dependencies:
+      '@spaceship-defender/balance-core':
+        specifier: workspace:*
+        version: link:../balance-core
+      '@spaceship-defender/game-core':
+        specifier: workspace:*
+        version: link:../game-core
+      '@spaceship-defender/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      typescript:
+        specifier: 6.0.2
+        version: 6.0.2
+      vitest:
+        specifier: latest
+        version: 5.0.1(@types/node@26.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/protocol:
     dependencies:

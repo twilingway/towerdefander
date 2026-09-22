@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { ArenaBots } from "./arenaBots.js";
 import { getBalanceStore } from "../balance/index.js";
-import { resolveAutopilotProfile } from "./crewPolicy.mjs";
+import { resolveAutopilotProfile } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 import type { AutopilotProfile } from "@spaceship-defender/protocol";
 
 /** A match on the operator's own numbers, which is what the room builds. */

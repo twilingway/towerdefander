@@ -10,9 +10,6 @@ import { fileURLToPath } from "node:url";
 
 import {
   advanceSpaceshipSimulation,
-  applyGunnerInput,
-  applyPilotInput,
-  applyShieldInput,
   createSpaceshipSimulationState
 } from "@spaceship-defender/game-core";
 import { balancePresetsFileSchema } from "@spaceship-defender/protocol";
@@ -21,15 +18,12 @@ import { tsImport } from "tsx/esm/api";
 import {
   createAutopilotMemory,
   leadSpeedFor,
-  resolveAutopilotProfile,
-  planGunner,
-  planPilot,
-  planShield
-} from "../src/rooms/crewPolicy.mjs";
+  resolveAutopilotProfile
+} from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 import { planUpgradeVotes } from "../../controller/scripts/upgrade-vote-policy.mjs";
 // The one place the crew slice is built, so this harness and the room cannot
 // drift into feeding the policy different games.
-import { buildCrewWorld } from "../src/rooms/crewWorld.ts";
+import { driveCrewSeats } from "@spaceship-defender/game-runtime";
 import { castUpgradeVotes } from "./upgrade-votes.mjs";
 import { createRunObserver } from "./stats-observer.mjs";
 
@@ -88,34 +82,22 @@ export function playRun(config, options) {
     if (state.waveNumber > maxWaves) break;
     // Simulation time, never wall clock: that is what makes a run replayable.
     const nowMs = state.clock.tick * TICK_MS;
-    const world = buildCrewWorld(state, config, nowMs);
-
-    const pilot = planPilot(world, profile, memory, { ...policyOptions, nowMs });
-    const gunner = planGunner(world, profile, memory, { ...policyOptions, nowMs });
-
-    state = applyPilotInput(state, {
-      vector: pilot.vector,
-      turn: pilot.turn,
-      thrust: pilot.thrust,
-      mgFiring: pilot.mgFiring,
-      receivedTick: state.clock.tick
-    });
-    state = applyGunnerInput(state, {
-      vector: gunner.aim,
-      firing: gunner.firing,
-      receivedTick: state.clock.tick
-    });
+    // The seats this stand drives, and the clock it has always told the policy:
+    // the real tick length, unlike the room's 50 ms. Both are arguments now, so
+    // the loop itself is the room's - see `driveCrewSeats`.
+    const driven = ["pilot", "gunner"];
     // One policy for the sector whether or not a seat is manned: the room does
     // the same, and a crew of one used to be measured against a second
     // implementation that only it ever ran.
-    if (seats.includes("shield") || state.encounterPhase === "combat") {
-      const shield = planShield(world, profile, memory, policyOptions);
-      state = applyShieldInput(state, {
-        vector: shield.aim,
-        active: shield.active,
-        receivedTick: state.clock.tick
-      });
-    }
+    if (seats.includes("shield") || state.encounterPhase === "combat") driven.push("shield");
+    state = driveCrewSeats(state, config, {
+      seats: driven,
+      policyTickMs: TICK_MS,
+      profile,
+      memory,
+      options: { ...policyOptions, nowMs },
+      nowMs
+    });
 
     if (state.encounterPhase === "intermission") {
       state = castUpgradeVotes(state, {

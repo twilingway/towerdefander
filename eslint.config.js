@@ -27,7 +27,7 @@ export default tseslint.config(
        * inside a rename, and the measurement that proves a move was only a move
        * cannot tell the two apart.
        */
-      "apps/server/src/rooms/crewPolicy.mjs",
+      "packages/game-runtime/src/crewPolicy.mjs",
       "apps/server/scripts/**",
       "apps/display/android/**"
     ]

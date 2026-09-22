@@ -1,0 +1,23 @@
+{
+  "name": "@spaceship-defender/game-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./crewPolicy.mjs": "./src/crewPolicy.mjs"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@spaceship-defender/balance-core": "workspace:*",
+    "@spaceship-defender/game-core": "workspace:*",
+    "@spaceship-defender/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "latest"
+  }
+}

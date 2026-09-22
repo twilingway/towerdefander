@@ -21,7 +21,7 @@ import {
 } from "@spaceship-defender/game-core";
 
 import { ArenaBots } from "../src/rooms/arenaBots.ts";
-import { resolveAutopilotProfile } from "../src/rooms/crewPolicy.mjs";
+import { resolveAutopilotProfile } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 

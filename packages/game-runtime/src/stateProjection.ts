@@ -16,19 +16,17 @@ import type {
 
 import { CREW_ROLES, ENEMY_BEAM_SOURCE, type CrewRole } from "@spaceship-defender/protocol";
 
-import {
-  AsteroidState,
-  EnemyState,
-  HomingMissileState,
-  LaserBeamState,
-  LootDropState,
-  ProjectileState,
-  ShipStatEffectState,
-  UpgradeCardState,
-  UpgradeVoteState,
-  type SpaceshipDefenderState,
-  type SpaceshipGameState
-} from "./SpaceshipDefenderState.js";
+import type {
+  AsteroidTarget,
+  EnemyTarget,
+  HomingMissileTarget,
+  KeyedCollection,
+  LootDropTarget,
+  ProjectileTarget,
+  ProjectionFactories,
+  ProjectionTarget,
+  TeamUpgradeTarget
+} from "./projectionTarget.ts";
 
 /**
  * Mirrors one simulation frame into the Colyseus schema. Kept out of the room so
@@ -36,10 +34,11 @@ import {
  * core state plus config onto the wire representation.
  */
 export function projectGameState(
-  target: SpaceshipGameState,
+  target: ProjectionTarget,
   game: SpaceshipSimulationState,
   config: SpaceshipSimulationConfig,
-  waveDeadlineAtMs: number | undefined
+  waveSecondsRemaining: number,
+  make: ProjectionFactories
 ): void {
   target.tick = game.clock.tick;
   target.elapsedMs = game.clock.elapsedMs;
@@ -157,9 +156,7 @@ export function projectGameState(
       ? Math.max(0, config.intermissionTicks - game.encounterTick)
       : 0;
   target.encounter.waveSecondsRemaining =
-    game.encounterPhase === "combat" && waveDeadlineAtMs !== undefined
-      ? Math.max(1, Math.ceil((waveDeadlineAtMs - Date.now()) / 1_000))
-      : 0;
+    game.encounterPhase === "combat" ? waveSecondsRemaining : 0;
   target.encounter.lootWindowSecondsRemaining =
     game.encounterPhase === "combat"
       ? Math.ceil((game.lootWindowTicksRemaining * config.fixedStepMs) / 1_000)
@@ -174,9 +171,9 @@ export function projectGameState(
     target.display.purchasedModules.splice(0, target.display.purchasedModules.length);
     target.display.purchasedModules.push(...game.purchasedModules);
   }
-  reconcileKeyed(target.display.enemyShips, game.enemies, () => new EnemyState(), syncEnemy);
-  reconcileKeyed(target.display.asteroids, game.asteroids, () => new AsteroidState(), syncAsteroid);
-  reconcileKeyed(target.display.lootDrops, game.lootDrops, () => new LootDropState(), syncLootDrop);
+  reconcileKeyed(target.display.enemyShips, game.enemies, () => make.enemy(), syncEnemy);
+  reconcileKeyed(target.display.asteroids, game.asteroids, () => make.asteroid(), syncAsteroid);
+  reconcileKeyed(target.display.lootDrops, game.lootDrops, () => make.lootDrop(), syncLootDrop);
   // Both sides' pulses ride one collection: a beam is a beam to the display,
   // and the source is what tells it which way to paint the line.
   reconcileKeyed(
@@ -185,7 +182,7 @@ export function projectGameState(
       ...game.laserBeams,
       ...game.hostileBeams.map((beam) => ({ ...beam, source: ENEMY_BEAM_SOURCE }))
     ],
-    () => new LaserBeamState(),
+    () => make.laserBeam(),
     (state, beam) => {
       state.entityId = beam.id;
       state.fromX = beam.previousX;
@@ -198,7 +195,7 @@ export function projectGameState(
   reconcileKeyed(
     target.display.friendlyProjectiles,
     game.projectiles,
-    () => new ProjectileState(),
+    () => make.projectile(),
     (state, projectile) => {
       // Each barrel gets its own look, so a burst reads as two weapons.
       syncProjectile(
@@ -212,7 +209,7 @@ export function projectGameState(
   reconcileKeyed(
     target.display.hostileProjectiles,
     game.hostileProjectiles,
-    () => new ProjectileState(),
+    () => make.projectile(),
     (state, projectile) => {
       syncProjectile(state, projectile, "hostile");
     }
@@ -220,26 +217,20 @@ export function projectGameState(
   reconcileKeyed(
     target.display.homingMissiles,
     game.homingMissiles,
-    () => new HomingMissileState(),
+    () => make.homingMissile(),
     syncHomingMissile
   );
   syncTeamUpgrade(
     target.teamUpgrade,
     game.teamUpgradeOffer,
     game.teamUpgradeVotes,
-    game.teamUpgradeSelection
+    game.teamUpgradeSelection,
+    make
   );
 }
 
-interface KeyedSchemaCollection<T> {
-  get(key: string): T | undefined;
-  set(key: string, value: T): unknown;
-  delete(key: string): boolean;
-  keys(): IterableIterator<string>;
-}
-
 function reconcileKeyed<TCore extends { readonly id: string }, TState>(
-  target: KeyedSchemaCollection<TState>,
+  target: KeyedCollection<TState>,
   source: readonly TCore[],
   create: () => TState,
   update: (target: TState, source: TCore) => void
@@ -261,7 +252,7 @@ function reconcileKeyed<TCore extends { readonly id: string }, TState>(
 /** `EnemyState.shotsFired` is a `uint16`, so the count comes back to zero here. */
 const ENEMY_SHOT_COUNTER_MODULUS = 65_536;
 
-function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
+function syncEnemy(target: EnemyTarget, source: CombatEnemyState): void {
   target.entityId = source.id;
   target.spawnSequence = source.spawnSequence;
   target.kind = source.kind;
@@ -278,7 +269,7 @@ function syncEnemy(target: EnemyState, source: CombatEnemyState): void {
   target.shotsFired = source.shotsFired % ENEMY_SHOT_COUNTER_MODULUS;
 }
 
-function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
+function syncAsteroid(target: AsteroidTarget, source: CoreAsteroidState): void {
   target.entityId = source.id;
   target.origin = source.origin;
   target.spawnSequence = source.spawnSequence;
@@ -291,7 +282,7 @@ function syncAsteroid(target: AsteroidState, source: CoreAsteroidState): void {
   target.maxHp = source.maxHp;
 }
 
-function syncLootDrop(target: LootDropState, source: CoreLootDropState): void {
+function syncLootDrop(target: LootDropTarget, source: CoreLootDropState): void {
   target.entityId = source.id;
   target.kind = source.kind;
   target.spawnSequence = source.spawnSequence;
@@ -304,7 +295,7 @@ function syncLootDrop(target: LootDropState, source: CoreLootDropState): void {
 }
 
 function syncProjectile(
-  target: ProjectileState,
+  target: ProjectileTarget,
   source: CoreProjectileState | HostileProjectileState,
   kind: "friendly" | "hostile",
   friendlyVisual: EntityVisual | null = null
@@ -324,7 +315,7 @@ function syncProjectile(
   target.visualScale = visual?.modelScale ?? 1;
 }
 
-function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissileState): void {
+function syncHomingMissile(target: HomingMissileTarget, source: CoreHomingMissileState): void {
   target.entityId = source.id;
   target.spawnSequence = source.spawnSequence;
   target.x = source.x;
@@ -338,10 +329,11 @@ function syncHomingMissile(target: HomingMissileState, source: CoreHomingMissile
 }
 
 function syncTeamUpgrade(
-  target: SpaceshipDefenderState["game"]["teamUpgrade"],
+  target: TeamUpgradeTarget,
   offer: TeamUpgradeOffer | null,
   votes: Readonly<Record<CrewRole, TeamUpgradeVote | null>>,
-  selection: TeamUpgradeSelection | null
+  selection: TeamUpgradeSelection | null,
+  make: ProjectionFactories
 ): void {
   target.hasOffer = offer !== null;
   if (offer !== null) {
@@ -349,14 +341,15 @@ function syncTeamUpgrade(
     target.offer.waveNumber = offer.waveNumber;
     target.offer.tier = offer.tier;
     for (const [index, source] of offer.cards.entries()) {
-      while (target.offer.cards.length <= index) target.offer.cards.push(new UpgradeCardState());
+      while (target.offer.cards.length <= index) target.offer.cards.push(make.upgradeCard());
       const card = target.offer.cards.at(index);
+      if (card === undefined) continue;
       card.upgradeId = source.upgradeId;
       card.role = source.role;
       card.label = source.label;
       card.effects.splice(0, card.effects.length);
       for (const effect of source.effects) {
-        const mirrored = new ShipStatEffectState();
+        const mirrored = make.statEffect();
         mirrored.target = effect.target;
         mirrored.op = effect.op;
         mirrored.value = effect.value;
@@ -366,13 +359,13 @@ function syncTeamUpgrade(
     }
     while (target.offer.cards.length > offer.cards.length) target.offer.cards.pop();
   } else {
-    target.offer.cards.clear();
+    target.offer.cards.splice(0, target.offer.cards.length);
   }
   target.votes.clear();
   for (const role of CREW_ROLES) {
     const source = votes[role];
     if (source === null) continue;
-    const vote = new UpgradeVoteState();
+    const vote = make.upgradeVote();
     vote.role = source.role;
     vote.upgradeId = source.upgradeId;
     vote.revision = source.revision;
