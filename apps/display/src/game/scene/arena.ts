@@ -131,13 +131,51 @@ export function drawArena(
   );
   scene.add.image(centerX, centerY, floorKey).setDisplaySize(diameter, diameter).setDepth(0);
 
-  // Its own image rather than part of the floor: the rim has to stay above
-  // the obstacles, and they sit between the two.
-  const borderKey = bake(`arena:border:${String(Math.round(radius))}`, side / 2, (graphics) => {
-    graphics.lineStyle(8 * scale, 0x3d6874, 1);
-    graphics.strokeCircle(0, 0, radius * scale);
+  drawBorder(scene, centerX, centerY, radius, bake);
+}
+
+/** The rim line, in world units, and the colour it has always been drawn in. */
+const BORDER_WIDTH = 8;
+const BORDER_COLOR = 0x3d6874;
+/** How long one straight piece of the rim is; at a 4400 radius it bows under 1.2 units. */
+const BORDER_PIECE_LENGTH = 200;
+
+/**
+ * The rim, as a ring of short straight pieces rather than one picture of a circle.
+ *
+ * Its own layer rather than part of the floor: the rim has to stay above the
+ * obstacles, and they sit between the two. It used to be that layer as a whole
+ * texture the size of the arena, which made the GPU blend a full-screen quad
+ * every frame to show a line eight units wide - on a Redmi 4X each full-screen
+ * translucent layer measured at about five frames a second, and swapping the
+ * texture for a 1x1 one saved almost none of it, so the cost was the covered
+ * area and not the picture. The pieces share one tiny texture and stand in a
+ * row, so they batch into a single draw, and the GPU fills only the line.
+ */
+function drawBorder(
+  scene: Phaser.Scene,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  bake: BakeShape
+): void {
+  const piece = bake("arena:border:piece", 2, (graphics) => {
+    graphics.fillStyle(BORDER_COLOR, 1);
+    graphics.fillRect(-2, -2, 4, 4);
   });
-  scene.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
+  const count = Math.max(64, Math.ceil((2 * Math.PI * radius) / BORDER_PIECE_LENGTH));
+  const step = (Math.PI * 2) / count;
+  // A chord, plus a little, so neighbouring pieces overlap instead of leaving a
+  // hairline at every joint on the outside of the curve.
+  const length = 2 * radius * Math.sin(step / 2) + BORDER_WIDTH;
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index + 0.5) * step;
+    scene.add
+      .image(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius, piece)
+      .setDisplaySize(length, BORDER_WIDTH)
+      .setRotation(angle + Math.PI / 2)
+      .setDepth(3);
+  }
 }
 
 /**
