@@ -12,6 +12,7 @@ const base = {
   initialStartWave: 1,
   ships: [],
   defaultShipId: undefined,
+  initialPlace: "device" as const,
   onBack: () => undefined,
   onCreate: () => undefined
 };
@@ -47,5 +48,23 @@ describe("CreateRoomScreen", () => {
     );
     expect(closed).toMatch(tile);
     expect(open).not.toMatch(tile);
+  });
+
+  it("offers the device, the server and the shared screen as three places", () => {
+    const markup = renderToStaticMarkup(<CreateRoomScreen {...base} maintenance={undefined} />);
+    expect(markup).toMatch(/aria-label="Соло"[^>]*aria-pressed="true"/);
+    expect(markup).toMatch(/aria-label="Через сервер"[^>]*aria-pressed="false"/);
+    expect(markup).toContain('aria-label="Общий экран"');
+    // Harnesses find the device tile by a substring of its name, so no other
+    // tile may carry that word.
+    expect(markup.match(/aria-label="[^"]*[Сс]оло[^"]*"/g)).toHaveLength(1);
+  });
+
+  it("arrives on the server tile when the address asks for it", () => {
+    const markup = renderToStaticMarkup(
+      <CreateRoomScreen {...base} initialPlace="server" maintenance={undefined} />
+    );
+    expect(markup).toMatch(/aria-label="Через сервер"[^>]*aria-pressed="true"/);
+    expect(markup).toMatch(/aria-label="Соло"[^>]*aria-pressed="false"/);
   });
 });

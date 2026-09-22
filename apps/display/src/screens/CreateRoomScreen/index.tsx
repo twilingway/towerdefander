@@ -43,6 +43,8 @@ interface CreateRoomScreenProps {
    */
   readonly ships: readonly PublicShip[];
   readonly defaultShipId: string | undefined;
+  /** The tile selected on arrival; `?online` asks for the server one. */
+  readonly initialPlace: Place;
   /** Back to the mode grid: the campaign is one of two games, not the only one. */
   readonly onBack: () => void;
   readonly onCreate: (
@@ -54,9 +56,22 @@ interface CreateRoomScreenProps {
      * takes the seat itself instead of waiting for a phone to join; absent, it
      * opens the room the way it always has.
      */
-    cockpitPlayerName: string | undefined
+    cockpitPlayerName: string | undefined,
+    /** Whether this page steps the run itself rather than a server room. */
+    hostedLocally: boolean
   ) => void;
 }
+
+/**
+ * Where the fight happens, which is three games rather than two.
+ *
+ * The device tile and the server tile draw the same cockpit on the same screen;
+ * what differs is who steps the simulation. Both are on offer because both are
+ * played: the device run needs no network and answers the hand at once, the
+ * server run is the networked game with one crew member, and it is how a room
+ * bug gets reproduced without three phones.
+ */
+export type Place = "device" | "server" | "shared";
 
 /** Shown until a room exists: the pitch, the crew size and the button that opens one. */
 export function CreateRoomScreen({
@@ -69,6 +84,7 @@ export function CreateRoomScreen({
   initialStartWave,
   ships,
   defaultShipId,
+  initialPlace,
   onBack,
   onCreate
 }: CreateRoomScreenProps) {
@@ -76,7 +92,8 @@ export function CreateRoomScreen({
   // Solo on this very screen is the default, because it is the shortest path
   // from opening the page to flying: no phone, no second person, no waiting.
   const [crewSize, setCrewSize] = useState<CrewSize>(1);
-  const [cockpit, setCockpit] = useState(true);
+  const [place, setPlace] = useState<Place>(initialPlace);
+  const cockpit = place !== "shared";
   // Named rather than blank: the field is the only thing between a player and
   // the button, and a room needs a roster label more than it needs a choice.
   const [cockpitName, setCockpitName] = useState("Пилот");
@@ -128,27 +145,47 @@ export function CreateRoomScreen({
         <div className="place-grid" role="group" aria-label="Где играете">
           <button
             type="button"
-            className={`place-tile${cockpit ? " is-selected" : ""}`}
+            className={`place-tile${place === "device" ? " is-selected" : ""}`}
             aria-label="Соло"
-            aria-pressed={cockpit}
+            aria-pressed={place === "device"}
             onClick={() => {
-              setCockpit(true);
+              setPlace("device");
               setCrewSize(1);
             }}
           >
             <span className="place-tile__title">На этом устройстве</span>
             <span className="place-tile__caption">
-              Экран становится кокпитом: арена снизу, стики поверх неё. Телефон не нужен.
+              Экран становится кокпитом: арена снизу, стики поверх неё. Телефон и сеть не нужны.
+            </span>
+          </button>
+          {/*
+           * Its accessible name must not contain "Соло": the harnesses find the
+           * device tile by that name, and a role query matches a substring, so a
+           * second tile carrying it would make every one of them ambiguous.
+           */}
+          <button
+            type="button"
+            className={`place-tile${place === "server" ? " is-selected" : ""}`}
+            aria-label="Через сервер"
+            aria-pressed={place === "server"}
+            onClick={() => {
+              setPlace("server");
+              setCrewSize(1);
+            }}
+          >
+            <span className="place-tile__title">На этом устройстве, через сервер</span>
+            <span className="place-tile__caption">
+              Тот же кокпит, но бой считает сервер, как в сетевой игре. Нужна сеть.
             </span>
           </button>
           <button
             type="button"
-            className={`place-tile${cockpit ? "" : " is-selected"}`}
+            className={`place-tile${place === "shared" ? " is-selected" : ""}`}
             aria-label="Общий экран"
-            aria-pressed={!cockpit}
+            aria-pressed={place === "shared"}
             disabled={!sharedScreen}
             onClick={() => {
-              setCockpit(false);
+              setPlace("shared");
             }}
           >
             <span className="place-tile__title">Общий экран и телефоны</span>
@@ -237,7 +274,7 @@ export function CreateRoomScreen({
           type="button"
           className="setup-go"
           onClick={() => {
-            onCreate(crewSize, shipId, startWave, soloName);
+            onCreate(crewSize, shipId, startWave, soloName, place === "device");
           }}
           disabled={status === "connecting" || (cockpit && soloName === undefined)}
         >

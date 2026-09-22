@@ -135,15 +135,15 @@ export function DisplayApp() {
       initialStartWave={flags.initialStartWave}
       ships={shipCatalogue?.ships ?? []}
       defaultShipId={flags.shipArchetypeId ?? shipCatalogue?.defaultShipId}
-      onCreate={(crewSize, shipArchetypeId, startWave, cockpitPlayerName) => {
+      initialPlace={flags.online ? "server" : "device"}
+      onCreate={(crewSize, shipArchetypeId, startWave, cockpitPlayerName, hostedLocally) => {
         /*
-         * Playing on this device no longer means opening a room for one.
-         *
-         * The run is hosted by the page, so the tile goes to its address and
-         * nothing is asked of a server. `?online` keeps the old way: the solo
-         * spec covers it, and a room-side bug is reproduced from a bookmark.
+         * The device tile is hosted by the page, so it goes to its own address
+         * and asks nothing of a server. The server tile opens a room for one,
+         * the way solo always used to play; `?online` preselects it, so a
+         * room-side bug is still reproduced from a bookmark.
          */
-        if (cockpitPlayerName !== undefined && !flags.online) {
+        if (cockpitPlayerName !== undefined && hostedLocally) {
           rememberPilotName(cockpitPlayerName);
           void navigate({
             pathname: "/solo",
@@ -224,7 +224,22 @@ export function DisplayApp() {
             }
       }
       preview={undefined}
-      onCloseRoom={() => void session.closeRoom()}
+      onCloseRoom={() => {
+        /*
+         * Back to the campaign's lobby with the same hull, as a local run does:
+         * whoever closed a room wants the next one, and the lobby is where the
+         * crew, the place and the ship are chosen. An arena room goes back to
+         * its own queue instead. Read before closing - the session forgets both.
+         */
+        const lobby = session.arenaLobby === undefined ? "/campaign" : "/arena";
+        const search = withRunParameters(readDisplaySearch(), {
+          shipArchetypeId: session.view?.shipArchetypeId,
+          startWave: 1
+        });
+        void session.closeRoom().then(() => {
+          void navigate({ pathname: lobby, search }, { replace: true });
+        });
+      }}
       onLeaveRoom={() => {
         // Back to the queue rather than to the front door: somebody who has
         // just been shot down wants the next match, not the mode grid.

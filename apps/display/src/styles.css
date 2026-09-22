@@ -2667,9 +2667,10 @@ p {
   grid-template-columns: 1fr;
 }
 
+/* As many columns as there are tiles: two on the arena setup, three on the campaign's. */
 @media (min-width: 36rem) {
   .place-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   }
 }
 
