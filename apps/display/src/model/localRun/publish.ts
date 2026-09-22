@@ -31,9 +31,17 @@ export function createLocalPublisher(
       // nothing useful to draw from a refused one, and pushing `undefined`
       // through the sinks would blank a screen mid-fight.
       if (view === undefined) return;
-      setLiveView(view);
-      publishWorld(view);
-      offer(view, performance.now());
+      deliverView(view, offer);
     }
   };
+}
+
+/** The three sinks, in the room's order; shared by the in-tab run and the worker's. */
+export function deliverView(
+  view: DisplayRoomView,
+  offer: (view: DisplayRoomView, now: number) => void
+): void {
+  setLiveView(view);
+  publishWorld(view);
+  offer(view, performance.now());
 }

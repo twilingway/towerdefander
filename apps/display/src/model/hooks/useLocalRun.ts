@@ -1,19 +1,13 @@
-import {
-  PATCH_INTERVAL_MS,
-  type DisplayRoomView,
-  type UpgradeId
-} from "@spaceship-defender/protocol";
+import { type DisplayRoomView, type UpgradeId } from "@spaceship-defender/protocol";
 import { useEffect, useRef, useState } from "react";
 
-import { createStepClock } from "../localRun/clock.js";
-import { createLocalDriver } from "../localRun/driver.js";
-import { createLocalPublisher } from "../localRun/publish.js";
+import { IDLE_INTENT, type LocalIntent } from "../localRun/engine.js";
 import {
-  createLocalRun,
-  IDLE_INTENT,
-  type LocalIntent,
-  type LocalRun
-} from "../localRun/engine.js";
+  createInTabHost,
+  createWorkerHost,
+  shouldUseRunWorker,
+  type RunHost
+} from "../localRun/hosts.js";
 import type { PredictionDriver } from "../shipPrediction.js";
 import { useViewPublisher } from "./useViewPublisher.js";
 import { resetWorld } from "../worldStore.js";
@@ -24,10 +18,10 @@ import type { BalanceTuning } from "@spaceship-defender/protocol";
 /**
  * A run this page owns, for as long as the page is on screen.
  *
- * The scene drives it: `driver.drive()` is called at the top of every painted
- * frame and is where stepping happens. What is left here is the part the scene
- * cannot know about - when the page is not being looked at, and how often React
- * should be told.
+ * Stepped by a worker where the page can have one, or inside the frame that
+ * draws it where it cannot (`hosts.ts`). What is left here is the part neither
+ * host can know about - when the page is not being looked at, how often React
+ * should be told, and when the page leaves.
  */
 export interface LocalRunSession {
   readonly view: DisplayRoomView | undefined;
@@ -50,7 +44,6 @@ export interface LocalRunOptions {
 export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   const [view, setView] = useState<DisplayRoomView | undefined>(undefined);
   const [paused, setPaused] = useState(false);
-  const runReference = useRef<LocalRun | undefined>(undefined);
   const latest = useRef(options);
   latest.current = options;
 
@@ -58,53 +51,32 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   const publisherReference = useRef(publisher);
   publisherReference.current = publisher;
 
-  const driverReference = useRef<PredictionDriver | undefined>(undefined);
-  const pausedReference = useRef(false);
-
-  runReference.current ??= createLocalRun({
-    config: options.config,
-    tuning: options.tuning,
-    shipArchetypeId: options.shipArchetypeId,
-    playerName: options.playerName,
-    startWave: options.startWave,
-    waveTtlSeconds: options.waveTtlSeconds
-  });
-  const run = runReference.current;
-
-  if (driverReference.current === undefined) {
-    const clock = createStepClock(options.config.fixedStepMs);
-    const publish = createLocalPublisher(run, (published, now) => {
-      publisherReference.current.offer(published, now);
-    });
-    let publishedAt = 0;
-    /*
-     * The first frame before anything is drawn.
-     *
-     * Without it the screen renders a lobby - a view with no game - for as long
-     * as it takes the first animation frame to arrive, and a lobby on a page
-     * that hosts its own run offers a "Готов" button that waits for a crew
-     * nobody is coming to join.
-     */
-    publish.publish(0);
-    driverReference.current = createLocalDriver({
-      run,
-      clock,
+  /*
+   * Made once, in render, so the scene has a driver on its first frame.
+   *
+   * Either host publishes its first frame at once: without one the screen
+   * renders a lobby - a view with no game - and a lobby on a page that hosts its
+   * own run offers a "Готов" button that waits for a crew nobody will bring.
+   */
+  const hostReference = useRef<RunHost | undefined>(undefined);
+  if (hostReference.current === undefined) {
+    const hostOptions = {
+      config: options.config,
+      tuning: options.tuning,
+      shipArchetypeId: options.shipArchetypeId,
+      playerName: options.playerName,
+      startWave: options.startWave,
+      waveTtlSeconds: options.waveTtlSeconds,
       readIntent: () => latest.current.readIntent(),
-      paused: () => pausedReference.current,
-      onStepped: (_steps, costMs) => {
-        const now = performance.now();
-        /*
-         * Thirty a second, the rate the scene's playback clock was tuned
-         * against. It measures the spacing between arrivals to size its buffer,
-         * so handing it a different cadence here would change how the world is
-         * interpolated for no reason other than the host having changed.
-         */
-        if (now - publishedAt < PATCH_INTERVAL_MS) return;
-        publishedAt = now;
-        publish.publish(costMs);
+      offer: (published: DisplayRoomView, now: number) => {
+        publisherReference.current.offer(published, now);
       }
-    });
+    };
+    hostReference.current = shouldUseRunWorker(globalThis.location.search)
+      ? createWorkerHost(hostOptions)
+      : createInTabHost(hostOptions);
   }
+  const host = hostReference.current;
 
   /*
    * A hidden tab pauses rather than races.
@@ -116,7 +88,7 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   useEffect(() => {
     const sync = () => {
       const hidden = document.visibilityState === "hidden";
-      pausedReference.current = hidden;
+      host.setPaused(hidden);
       setPaused(hidden);
     };
     sync();
@@ -128,60 +100,47 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
       window.removeEventListener("blur", sync);
       window.removeEventListener("focus", sync);
     };
-  }, []);
+  }, [host]);
 
   /*
-   * The scene is the one that steps, and it arrives in its own chunk - so for
+   * The scene is the one that drives, and it arrives in its own chunk - so for
    * the first moments of a page there is nobody to call `drive()`. This keeps
-   * the run alive until it takes over, and stands down as soon as it does.
+   * the run alive until it takes over.
    */
   useEffect(() => {
     let frame = 0;
     let lastDriven = performance.now();
-    const driver = driverReference.current;
-    if (driver === undefined) return undefined;
 
     const tick = () => {
       frame = requestAnimationFrame(tick);
       const now = performance.now();
       if (now - lastDriven < STALE_DRIVE_MS) return;
       lastDriven = now;
-      driver.drive();
+      host.idleTick();
     };
     frame = requestAnimationFrame(tick);
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [host]);
 
   useEffect(
     () => () => {
-      // The page is leaving: nothing downstream should keep drawing its world.
+      // The page is leaving: stop the run - a worker keeps running, and so is
+      // never collected, until it is told to stop - and draw its world no more.
+      host.dispose();
       setLiveView(undefined);
       resetWorld();
     },
-    []
+    [host]
   );
-
-  const driver = driverReference.current;
 
   return {
     view,
-    driver,
+    driver: host.driver,
     paused,
-    vote(upgradeId) {
-      const game = run.mirror.game;
-      run.vote({
-        role: "pilot",
-        waveNumber: game.encounter.waveNumber,
-        offerId: game.teamUpgrade.offer.offerId,
-        upgradeId,
-        revision: 1
-      });
-    },
-    restart() {
-      run.restart();
-    }
+    vote: host.vote,
+    restart: host.restart
   };
 }
 
