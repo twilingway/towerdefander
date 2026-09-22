@@ -223,10 +223,12 @@ export function DiagnosticsPanel({
           <dd data-testid="diagnostics-peaks">
             {peaks.durationSeconds < 1
               ? "нет данных"
-              : `кадр ${Math.round(peaks.worstFrameMs)} мс · сцена ${peaks.worstSceneMs.toFixed(1)} мс · ` +
-                `мин ${Math.round(peaks.lowestFps)} к/с · рывки до ${Math.round(peaks.worstStutterShare * 100)}%` +
-                ` · пик на ${Math.round(peaks.worstFrameAtSecond)} с · тяжёлых секунд ${peaks.heavySeconds}` +
-                ` из ${Math.round(peaks.durationSeconds)}`}
+              : `кадр ${String(Math.round(peaks.worstFrameMs))} мс · ` +
+                `сцена ${peaks.worstSceneMs.toFixed(1)} мс · ` +
+                `мин ${String(Math.round(peaks.lowestFps))} к/с · ` +
+                `рывки до ${String(Math.round(peaks.worstStutterShare * 100))}% · ` +
+                `пик на ${String(Math.round(peaks.worstFrameAtSecond))} с · ` +
+                `тяжёлых секунд ${String(peaks.heavySeconds)} из ${String(Math.round(peaks.durationSeconds))}`}
           </dd>
         </div>
         <div>
