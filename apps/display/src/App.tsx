@@ -8,7 +8,8 @@ import { useRoomSession } from "./model/hooks/useRoomSession.js";
 import { useAssetWarmup } from "./model/hooks/useAssetWarmup.js";
 import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
 import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
-import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
+import { readPilotName, rememberPilotName } from "./model/pilotName.js";
+import { readDisplaySearch, readDisplayUrlFlags, withRunParameters } from "./model/urlFlags.js";
 import { ArenaSetupScreen } from "./screens/ArenaSetupScreen/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
 import { LocalRunRoute } from "./screens/RoomScreen/LocalRunRoute.js";
@@ -135,6 +136,21 @@ export function DisplayApp() {
       ships={shipCatalogue?.ships ?? []}
       defaultShipId={flags.shipArchetypeId ?? shipCatalogue?.defaultShipId}
       onCreate={(crewSize, shipArchetypeId, startWave, cockpitPlayerName) => {
+        /*
+         * Playing on this device no longer means opening a room for one.
+         *
+         * The run is hosted by the page, so the tile goes to its address and
+         * nothing is asked of a server. `?online` keeps the old way: the solo
+         * spec covers it, and a room-side bug is reproduced from a bookmark.
+         */
+        if (cockpitPlayerName !== undefined && !flags.online) {
+          rememberPilotName(cockpitPlayerName);
+          void navigate({
+            pathname: "/solo",
+            search: withRunParameters(readDisplaySearch(), { shipArchetypeId, startWave })
+          });
+          return;
+        }
         void session
           .createRoom(crewSize, shipArchetypeId, startWave, cockpitPlayerName)
           .then((roomId) => {
@@ -163,7 +179,7 @@ export function DisplayApp() {
       switches={switches}
       worldReady={worldReady}
       shipArchetypeId={flags.shipArchetypeId}
-      playerName="Пилот"
+      playerName={readPilotName()}
       startWave={flags.initialStartWave}
       onLeave={() => {
         void navigate({ pathname: "/campaign", search: readDisplaySearch() });
