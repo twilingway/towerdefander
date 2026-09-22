@@ -5,6 +5,7 @@ import { DiagnosticsHud } from "../../components/DiagnosticsHud/index.js";
 import { RotateNotice } from "../../components/RotateNotice/index.js";
 import { recordComponentCommit } from "../../model/componentCost.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
+import { useLocalRecord } from "../../model/hooks/useLocalRecord.js";
 import { readDiagnostics, recordCommitWork, writeFrameStats } from "../../model/instruments.js";
 import { readLiveGame } from "../../model/liveView.js";
 import type { ModuleTree } from "../../model/moduleTree.js";
@@ -99,6 +100,16 @@ export function BattleStage({
   useEffect(() => {
     void enterFullscreenIfWanted();
   }, []);
+  /*
+   * A run this page hosted has no server to hold its record, so the device
+   * holds it. Read here rather than in the overlay because the overlay is also
+   * how a networked run ends, and that one is not this device's to score.
+   */
+  const record = useLocalRecord(
+    cockpit.hostedLocally === true && view.game.encounter.phase === "result",
+    view.game.encounter.score,
+    view.game.encounter.waveNumber
+  );
   return (
     <MeasuredWhenAsked
       measuring={diagnostics}
@@ -227,6 +238,7 @@ export function BattleStage({
               closing={closingRoom}
               onClose={onCloseRoom}
               {...(cockpit.hostedLocally === true ? { closeLabel: LOCAL_CLOSE_LABEL } : {})}
+              {...(record === null ? {} : { record })}
               {...(!cockpit.seated
                 ? {}
                 : {

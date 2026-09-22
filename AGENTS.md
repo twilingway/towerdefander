@@ -15,8 +15,12 @@ computer browsers as pilot, gunner, and shield operator.
   documentation and OpenSpec artifacts may be in Russian.
 - Use pnpm workspaces. Do not introduce Turborepo or another task runner unless an accepted OpenSpec
   change requires it.
-- Treat the Node.js/Colyseus server as authoritative. Clients send intents; they never mutate
-  trusted game state directly.
+- **Whoever steps the simulation is the authority for that run.** In a networked run that is the
+  server: clients send intents, and a client's own step is a prediction it is obliged to reconcile —
+  it never mutates trusted state directly. In a local run the device is the authority, because there
+  is no server to be one, and nothing it computed reaches a server-held record without the server
+  recomputing it. The rule the two share is the one that matters: a run has exactly one authority,
+  and it is the host that owns the tick.
 - Keep simulation code in `packages/game-core` free of Phaser, React, DOM, timers, networking, and
   nondeterministic randomness.
 - Keep shared messages and versioned schemas in `packages/protocol`.

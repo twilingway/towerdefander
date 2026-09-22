@@ -1,5 +1,7 @@
 import type { CrewSize, DefeatReason, TerminalOutcome } from "@spaceship-defender/protocol";
 
+import type { LocalRecord } from "../../model/localRun/personalBest.js";
+
 interface RunResultOverlayProps {
   readonly outcome: TerminalOutcome;
   readonly defeatReason: DefeatReason | null;
@@ -25,6 +27,12 @@ interface RunResultOverlayProps {
     readonly ready: boolean;
     readonly onReady: () => void;
   };
+  /**
+   * Present when this device hosted the run itself. A networked run has the
+   * server's records to measure against; a local one has only what this browser
+   * profile remembers, and saying so is the honest version of a leaderboard.
+   */
+  readonly record?: LocalRecord;
 }
 
 export function RunResultOverlay({
@@ -37,7 +45,8 @@ export function RunResultOverlay({
   closing,
   onClose,
   closeLabel = { idle: "Закрыть комнату", busy: "Закрываем комнату…" },
-  cockpit
+  cockpit,
+  record
 }: RunResultOverlayProps) {
   return (
     <div
@@ -48,6 +57,13 @@ export function RunResultOverlay({
       <h2>{resultTitle(outcome, defeatReason)}</h2>
       <strong>Волна {waveNumber}</strong>
       <p>Итоговый счёт: {score}</p>
+      {record !== undefined && (
+        <p className="local-record" data-testid="local-record">
+          {record.improved
+            ? `Новый рекорд устройства: ${String(record.best.score)}`
+            : `Рекорд устройства: ${String(record.best.score)} — волна ${String(record.best.waveNumber)}`}
+        </p>
+      )}
       <p className="rematch-readiness" aria-live="polite">
         Готовы сыграть ещё: {readyCount}/{crewSize}
       </p>

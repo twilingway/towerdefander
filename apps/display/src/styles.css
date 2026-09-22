@@ -665,6 +665,12 @@ p {
   font-weight: 800;
 }
 
+/* The device's own record, which is the only record a hostless run has. */
+.local-record {
+  color: #8fe6c0;
+  font-weight: 700;
+}
+
 .room-close-button {
   justify-self: center;
   color: #fff4f2;

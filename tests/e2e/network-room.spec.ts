@@ -52,18 +52,7 @@ test("three browser controllers fly, fire and shield one spaceship", async ({ br
      */
     await expect(display.locator(".phase-badge")).toHaveCount(0);
     await expect(display.getByTestId("spaceship-world")).toBeVisible();
-    await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
-      "data-arena-radius",
-      "2200"
-    );
-    await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
-      "data-world-width",
-      "4400"
-    );
-    await expect(display.getByTestId("spaceship-world")).toHaveAttribute(
-      "data-world-height",
-      "4400"
-    );
+    await assertSquareWorldAroundArena(display.getByTestId("spaceship-world"));
     await expect(display.locator(".battlefield-canvas canvas")).toBeVisible();
     // The bar is a positioned cluster of cells inside the status frame with no box
     // of its own, so the frame is what is visible and the bar is what carries heat.
@@ -552,6 +541,31 @@ async function assertFullscreenHud(display: Page): Promise<void> {
   expect(hudBounds.y).toBeGreaterThanOrEqual(0);
   expect(hudBounds.x + hudBounds.width).toBeLessThanOrEqual(viewport.width);
   expect(hudBounds.y + hudBounds.height).toBeLessThanOrEqual(viewport.height);
+}
+
+/**
+ * The relation, not the numbers.
+ *
+ * The arena radius is an authored balance value and the world is built around
+ * it, so pinning the pair the code defaults happened to carry made this spec
+ * fail the day the defaults became the committed seed - on a preset that broke
+ * nothing. What the display owes is a square world circumscribing the arena,
+ * which is exactly what every measurement below takes its centre from.
+ *
+ * It polls because the attributes arrive with the first published frame, and
+ * the world is on screen slightly before that.
+ */
+async function assertSquareWorldAroundArena(world: Locator): Promise<void> {
+  await expect(async () => {
+    const [worldWidth, worldHeight, arenaRadius] = await Promise.all([
+      readNumericAttribute(world, "data-world-width"),
+      readNumericAttribute(world, "data-world-height"),
+      readNumericAttribute(world, "data-arena-radius")
+    ]);
+    expect(arenaRadius).toBeGreaterThan(0);
+    expect(worldWidth).toBe(arenaRadius * 2);
+    expect(worldHeight).toBe(arenaRadius * 2);
+  }).toPass({ timeout: 5_000 });
 }
 
 async function assertSpaceshipInsideCircularArena(world: Locator): Promise<void> {
