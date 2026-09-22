@@ -75,7 +75,7 @@ export function drawArena(
   snapshot: DisplayGameSnapshot,
   tankLook: boolean,
   bake: BakeShape
-): void {
+): { readonly floorFill: Phaser.GameObjects.Image | undefined } {
   const centerX = snapshot.worldWidth / 2;
   const centerY = snapshot.worldHeight / 2;
   const radius = snapshot.arenaRadius;
@@ -93,45 +93,105 @@ export function drawArena(
       drawTankArenaRim(graphics, radius * scale, scale);
     });
     scene.add.image(centerX, centerY, rim).setDisplaySize(diameter, diameter).setDepth(3);
-    return;
+    return { floorFill: undefined };
   }
 
   scene.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
 
-  const band = getRimBandStroke(radius, snapshot.rimBandWidth);
+  /*
+   * The floor's tint, alone in its texture.
+   *
+   * It is the one part of the floor that has to cover the whole arena, so it is
+   * a full-screen translucent layer whatever it is drawn from - on a Redmi 4X
+   * that is about five frames a second. It is kept apart so a lower quality
+   * level can drop it and keep what a pilot reads off the floor.
+   */
+  const fillKey = bake(`arena:fill:${String(Math.round(radius))}`, side / 2, (graphics) => {
+    graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
+    graphics.fillCircle(0, 0, radius * scale);
+  });
+  const fill = scene.add
+    .image(centerX, centerY, fillKey)
+    .setDisplaySize(diameter, diameter)
+    .setDepth(0);
 
-  const floorKey = bake(
-    `arena:floor:${String(Math.round(radius))}:${String(Math.round(snapshot.rimBandWidth))}`,
-    side / 2,
-    (graphics) => {
-      graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
-      graphics.fillCircle(0, 0, radius * scale);
-      // The band the rim slows a hull in, under the rings so those stay readable.
-      if (band !== null) {
-        graphics.lineStyle(band.thickness * scale, RIM_BAND_COLOR, RIM_BAND_ALPHA);
-        graphics.strokeCircle(0, 0, band.radius * scale);
-      }
-      // Rings and spokes rather than a square grid: on a round arena what a
-      // pilot reads off the floor is the distance to the rim and the bearing,
-      // and a square mesh states neither.
-      graphics.lineStyle(2 * scale, 0x163746, 0.75);
-      for (const ringRadius of getArenaRingRadii(radius)) {
-        graphics.strokeCircle(0, 0, ringRadius * scale);
-      }
-      graphics.lineStyle(2 * scale, 0x14303d, 0.5);
-      for (const spoke of getArenaSpokes(0, 0, radius)) {
-        graphics.lineBetween(
-          spoke.from.x * scale,
-          spoke.from.y * scale,
-          spoke.to.x * scale,
-          spoke.to.y * scale
-        );
-      }
-    }
-  );
-  scene.add.image(centerX, centerY, floorKey).setDisplaySize(diameter, diameter).setDepth(0);
+  // The band the rim slows a hull in, under the rings so those stay readable.
+  const band = getRimBandStroke(radius, snapshot.rimBandWidth);
+  if (band !== null) {
+    drawRingRope(
+      scene,
+      centerX,
+      centerY,
+      band.radius,
+      band.thickness,
+      RIM_BAND_COLOR,
+      RIM_BAND_ALPHA
+    );
+  }
+  // Rings and spokes rather than a square grid: on a round arena what a pilot
+  // reads off the floor is the distance to the rim and the bearing, and a
+  // square mesh states neither.
+  for (const ringRadius of getArenaRingRadii(radius)) {
+    drawRingRope(scene, centerX, centerY, ringRadius, 2, 0x163746, 0.75);
+  }
+  const spokeKey = bakeRect(scene, "arena:spoke:piece", 4, 4, (graphics) => {
+    graphics.fillStyle(0x14303d, 1);
+    graphics.fillRect(0, 0, 4, 4);
+  });
+  for (const spoke of getArenaSpokes(centerX, centerY, radius)) {
+    const dx = spoke.to.x - spoke.from.x;
+    const dy = spoke.to.y - spoke.from.y;
+    scene.add
+      .image((spoke.from.x + spoke.to.x) / 2, (spoke.from.y + spoke.to.y) / 2, spokeKey)
+      .setDisplaySize(Math.hypot(dx, dy), 2)
+      .setRotation(Math.atan2(dy, dx))
+      .setAlpha(0.5)
+      .setDepth(0);
+  }
 
   drawBorder(scene, centerX, centerY, radius, bake);
+  return { floorFill: fill };
+}
+
+/** How far apart the points of a floor ring are along it, in world units. */
+const RING_POINT_SPACING = 100;
+
+/**
+ * A ring on the floor, as one continuous strip bent round the circle.
+ *
+ * Pieces will not do here. A translucent ring cut into pieces shows every
+ * joint: where neighbours overlap the alpha doubles, where they do not the
+ * antialiased edges leave a hairline - on the phone both read as ticks across
+ * the rim band. A `Rope` is one strip of triangles through points on the
+ * circle, closed on itself, so there is no joint to show, it is a single draw,
+ * and the GPU fills only the ring.
+ *
+ * The strip takes its thickness from its texture's height, so the texture is a
+ * column of the ring's colour with one clear pixel above and below: the strip
+ * is two units wider than asked, and those two units are what filtering turns
+ * into a soft edge instead of a jagged one.
+ */
+function drawRingRope(
+  scene: Phaser.Scene,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  thickness: number,
+  color: number,
+  alpha: number
+): void {
+  const height = Math.max(1, Math.round(thickness)) + 2;
+  const key = `arena:ring:${String(height)}:${color.toString(16)}`;
+  bakeRect(scene, key, 2, height, (graphics) => {
+    graphics.fillStyle(color, 1);
+    graphics.fillRect(0, 1, 2, height - 2);
+  });
+  const count = Math.max(64, Math.ceil((2 * Math.PI * radius) / RING_POINT_SPACING));
+  const points = Array.from({ length: count + 1 }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+  });
+  scene.add.rope(centerX, centerY, key, undefined, points, true).setAlpha(alpha).setDepth(0);
 }
 
 /** The rim line, in world units, and the colour it has always been drawn in. */

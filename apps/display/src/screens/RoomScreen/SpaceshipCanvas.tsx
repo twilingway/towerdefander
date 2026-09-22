@@ -1,5 +1,18 @@
 import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+import {
+  AUTO_START,
+  nextAutoQuality,
+  QUALITY_FALLBACK_SAMPLES,
+  type QualityChoice,
+  type QualityLevel
+} from "../../game/quality.js";
+import {
+  qualityChoice,
+  setActiveQuality,
+  subscribeToQuality
+} from "../../model/graphicsQuality.js";
 
 import { getCurrentWaveUpgrade } from "../../model/combatHudViewModel.js";
 import { readPixelRatioCap } from "../../game/devicePixels.js";
@@ -167,6 +180,8 @@ export function SpaceshipCanvas({
           // The scene loads asynchronously, so the switch may already have been
           // thrown while it was still arriving.
           runtimeReference.current.setVectorsEnabled(latestVectorsEnabled.current);
+          appliedQuality.current = undefined;
+          applyQuality(runtimeReference.current, qualityLevelFor(qualityChoice()));
           // A stable adapter over a prop that changes: the scene is handed this
           // once, and every call finds whatever the cockpit currently has.
           runtimeReference.current.setSnapshotSource(() => latestReadGame.current?.());
@@ -227,6 +242,30 @@ export function SpaceshipCanvas({
     runtimeReference.current?.setVectorsEnabled(vectorsEnabled);
   }, [vectorsEnabled]);
 
+  /*
+   * The graphics quality: the level an automatic choice has stepped down to, the
+   * samples it is stepping on, and the level last handed to the runtime.
+   * Automatic starts every canvas at `high` and walks down within it.
+   */
+  const autoQuality = useRef<QualityLevel>(AUTO_START);
+  const qualityWindow = useRef<number[]>([]);
+  const appliedQuality = useRef<QualityLevel | undefined>(undefined);
+  const qualityLevelFor = (choice: QualityChoice): QualityLevel =>
+    choice === "auto" ? autoQuality.current : choice;
+  const applyQuality = (runtime: SpaceshipRuntime, level: QualityLevel): void => {
+    if (appliedQuality.current === level) return;
+    appliedQuality.current = level;
+    runtime.setQuality(level);
+    setActiveQuality(level);
+  };
+  const choice = useSyncExternalStore(subscribeToQuality, qualityChoice, () => "auto" as const);
+  useEffect(() => {
+    qualityWindow.current.length = 0;
+    const runtime = runtimeReference.current;
+    if (runtime !== undefined) applyQuality(runtime, qualityLevelFor(choice));
+    // `applyQuality` and `qualityLevelFor` read refs only.
+  }, [choice]);
+
   const onFrameStatsReference = useRef(onFrameStats);
   onFrameStatsReference.current = onFrameStats;
   const fpsWindow = useRef<number[]>([]);
@@ -258,6 +297,24 @@ export function SpaceshipCanvas({
         pixelRatioCap.current = next;
         window.length = 0;
         runtimeReference.current?.setPixelRatioCap(next);
+      }
+      /*
+       * The quality ladder, on the same samples and the same terms: down only,
+       * and only on a run of them. It steps before the density ladder does - it
+       * reacts under fifty frames a second, that one under thirty - so a phone
+       * that judders loses the flashes long before it loses sharpness.
+       */
+      const runtime = runtimeReference.current;
+      if (runtime !== undefined && fps > 0 && qualityChoice() === "auto") {
+        const samples = qualityWindow.current;
+        samples.push(fps);
+        if (samples.length > QUALITY_FALLBACK_SAMPLES) samples.shift();
+        const stepped = nextAutoQuality(autoQuality.current, samples);
+        if (stepped !== autoQuality.current) {
+          autoQuality.current = stepped;
+          samples.length = 0;
+          applyQuality(runtime, stepped);
+        }
       }
     };
     const timer = globalThis.setInterval(sample, FPS_SAMPLE_INTERVAL_MS);

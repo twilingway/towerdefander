@@ -13,6 +13,20 @@ import {
   subscribeToFullscreen,
   toggleFullscreen
 } from "../../model/fullscreen.js";
+import type { QualityChoice, QualityLevel } from "../../game/quality.js";
+import {
+  activeQuality,
+  qualityChoice,
+  setQualityChoice,
+  subscribeToQuality
+} from "../../model/graphicsQuality.js";
+
+/** What each level is called where a player picks it. */
+const QUALITY_LABELS: Readonly<Record<QualityLevel, string>> = {
+  high: "Высокое",
+  mid: "Среднее",
+  low: "Низкое, 30 к/с"
+};
 
 /** A way out, when the screen that opened this panel has one to offer. */
 export interface SettingsAction {
@@ -38,6 +52,8 @@ export function SettingsPanel({ action }: { readonly action?: SettingsAction }) 
   // screen, and the button has to come back saying so.
   const full = useSyncExternalStore(subscribeToFullscreen, isFullscreen, () => false);
   const auto = useSyncExternalStore(subscribeToAutoFullscreen, autoFullscreenEnabled, () => true);
+  const quality = useSyncExternalStore(subscribeToQuality, qualityChoice, () => "auto" as const);
+  const activeLevel = useSyncExternalStore(subscribeToQuality, activeQuality, () => undefined);
   const [open, setOpen] = useState(false);
 
   /*
@@ -124,6 +140,24 @@ export function SettingsPanel({ action }: { readonly action?: SettingsAction }) 
               {settings.musicMuted ? "🔇" : "🔊"}
             </button>
           </div>
+          <label className="settings__row">
+            <span>Графика</span>
+            <select
+              className="settings__select"
+              data-testid="settings-quality"
+              value={quality}
+              onChange={(event) => {
+                setQualityChoice(event.target.value as QualityChoice);
+              }}
+            >
+              <option value="auto">
+                {activeLevel === undefined ? "Авто" : `Авто (${QUALITY_LABELS[activeLevel]})`}
+              </option>
+              <option value="high">{QUALITY_LABELS.high}</option>
+              <option value="mid">{QUALITY_LABELS.mid}</option>
+              <option value="low">{QUALITY_LABELS.low}</option>
+            </select>
+          </label>
           <label className="settings__check">
             <input
               type="checkbox"

@@ -4,6 +4,7 @@ import Phaser from "phaser";
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH } from "./scene/camera.js";
 import { getBackingStoreSize } from "./viewport.js";
+import { QUALITY_SETTINGS, type QualityLevel } from "./quality.js";
 import { SpaceshipScene } from "./scene/SpaceshipScene.js";
 import type { ScenePrediction } from "./scene/entities.js";
 
@@ -51,7 +52,64 @@ export interface SpaceshipRuntime {
    * see `nextPixelRatioCap`.
    */
   setPixelRatioCap(cap: number): void;
+  /** What the scene draws and how often; see `quality.ts`. */
+  setQuality(level: QualityLevel): void;
   destroy(): void;
+}
+
+/**
+ * Draws the game on every Nth display frame, evenly.
+ *
+ * Phaser's own limit accumulates time and fires when a whole period has
+ * passed, carrying the remainder. On a phone the frame timestamps wobble by a
+ * fraction of a millisecond, so two frames of 16.6 fall short of 33.3 and the
+ * draw slips to the third - measured on a Redmi 4X, a quarter of the frames at
+ * 40 to 60 ms under a limit of 30, which is the judder the limit was meant to
+ * remove. This counts display frames instead and decides with half a frame of
+ * slack, so a wobble cannot move a draw: 86-92% of the draws started exactly
+ * two display frames apart on the same phone.
+ *
+ * While capped it holds Phaser's own loop stopped every frame, because the game
+ * starts that loop itself when it finishes booting - possibly after a cap was
+ * set - and two loops would step the game twice.
+ */
+function createFramePacer(loop: Phaser.Core.TimeStep): {
+  setCap(cap: 60 | 30): void;
+  stop(): void;
+} {
+  let frame = 0;
+  let capped = false;
+  let threshold = 0;
+  let last = 0;
+  const tick = (now: number): void => {
+    frame = requestAnimationFrame(tick);
+    if (loop.raf.isRunning) loop.raf.stop();
+    if (!loop.running || now - last < threshold) return;
+    last = now;
+    loop.step(now);
+  };
+  return {
+    setCap(cap) {
+      if (cap >= 60) {
+        if (!capped) return;
+        capped = false;
+        cancelAnimationFrame(frame);
+        if (loop.running && !loop.raf.isRunning) {
+          loop.raf.start(loop.step.bind(loop), loop.forceSetTimeOut, 0);
+        }
+        return;
+      }
+      // Half a 60 Hz frame of slack either side of the target period.
+      threshold = 1000 / cap - 1000 / 120;
+      if (capped) return;
+      capped = true;
+      last = 0;
+      frame = requestAnimationFrame(tick);
+    },
+    stop() {
+      cancelAnimationFrame(frame);
+    }
+  };
 }
 
 export interface SpaceshipRuntimeOptions {
@@ -151,6 +209,7 @@ export function createSpaceshipRuntime(
   const observer = new ResizeObserver(applyTarget);
   observer.observe(host);
   const unwatchRatio = watchDevicePixelRatio(applyTarget);
+  const pacer = createFramePacer(game.loop);
 
   return {
     update(snapshot) {
@@ -197,7 +256,13 @@ export function createSpaceshipRuntime(
       currentCap = cap;
       applyTarget();
     },
+    setQuality(level) {
+      const settings = QUALITY_SETTINGS[level];
+      scene.setQuality(settings);
+      pacer.setCap(settings.frameCap);
+    },
     destroy() {
+      pacer.stop();
       observer.disconnect();
       unwatchRatio();
       game.destroy(true);
