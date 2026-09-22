@@ -74,12 +74,17 @@ import { LifecycleSchedule } from "./lifecycleSchedule.js";
  */
 import {
   createAutopilotMemory,
-  leadSpeedFor,
   resolveAutopilotProfile
 } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 import type { PolicyMemory, PolicyOptions } from "@spaceship-defender/game-runtime";
 import type { AutopilotProfile } from "@spaceship-defender/protocol";
-import { driveCrewSeats, POLICY_TICK_MS } from "@spaceship-defender/game-runtime";
+import {
+  createCrewPolicyOptions,
+  driveCrewSeats,
+  publishEnemyCatalogue,
+  toHelmView,
+  POLICY_TICK_MS
+} from "@spaceship-defender/game-runtime";
 import { projectGameState } from "@spaceship-defender/game-runtime";
 import { SCHEMA_PROJECTION_FACTORIES } from "./projectionFactories.js";
 import {
@@ -972,43 +977,8 @@ export class SpaceshipDefenderRoom extends Room<{
       this.gameConfig.cannonWeaponKind
     );
     // Seeded below, from the run's own seed, once that seed exists.
-    this.crewOptions = {
-      archetypes: this.gameConfig.enemyArchetypes,
-      cannonSpeed: leadSpeedFor(
-        this.gameConfig.cannonWeaponKind,
-        this.gameConfig.projectileSpeedPerSecond
-      ),
-      mgSpeed: leadSpeedFor(
-        this.gameConfig.mgWeaponKind,
-        this.gameConfig.mgProjectileSpeedPerSecond
-      ),
-      turretRate: this.gameConfig.turretMaxAngularSpeedPerSecond,
-      shieldRaiseRange: this.gameConfig.shieldAutopilotRaiseRange,
-      shieldDrain: this.gameConfig.shieldDrainPerSecond
-    };
-    const helm = tuning.helm;
-    this.state.game.helm.scheme = helm.scheme;
-    this.state.game.helm.headingLeadRadians = helm.headingLeadRadians;
-    this.state.game.helm.stopDampening = helm.stopDampening;
-    this.state.game.helm.rotateInPlaceThrottle = helm.rotateInPlaceThrottle;
-    this.state.game.helm.driveDeadzoneShare = helm.driveDeadzoneShare;
-    this.state.game.helm.aimDeadzoneShare = helm.aimDeadzoneShare;
-    this.state.game.helm.driveZoneShare = helm.driveZoneShare;
-    this.state.game.helm.aimProjectionShare = helm.aimProjectionShare;
-    this.state.game.helm.headingDeadbandRadians = helm.headingDeadbandRadians;
-    this.state.game.helm.headingFilterSeconds = helm.headingFilterSeconds;
-    this.state.game.helm.turretLeadRadians = helm.turretLeadRadians;
-    this.state.game.helm.hullAngularBrakingPerSecondSquared =
-      this.gameConfig.headingAngularBrakingPerSecondSquared;
-    this.state.game.helm.hullAngularMaxSpeed = this.gameConfig.headingMaxAngularSpeedPerSecond;
-    this.state.game.helm.hullAngularAcceleration =
-      this.gameConfig.headingAngularAccelerationPerSecondSquared;
-    this.state.game.helm.turretAngularMaxSpeed = this.gameConfig.turretMaxAngularSpeedPerSecond;
-    this.state.game.helm.turretAngularAcceleration =
-      this.gameConfig.turretAngularAccelerationPerSecondSquared;
-    this.state.game.helm.turretAngularBraking =
-      this.gameConfig.turretAngularBrakingPerSecondSquared;
-    this.state.game.helm.turretMountedOnHull = this.gameConfig.turretMountedOnHull;
+    this.crewOptions = createCrewPolicyOptions(this.gameConfig);
+    Object.assign(this.state.game.helm, toHelmView(tuning, this.gameConfig));
     const runSeed = createRunSeed(previousSeed);
     // The bot's own stream comes off the run's seed, so replaying a seed replays
     // the bot with it. A fresh memory per run also drops the target it had
@@ -1043,50 +1013,7 @@ export class SpaceshipDefenderRoom extends Room<{
 
   /** The catalogue is fixed for the run, so the display receives it once at start. */
   private publishEnemyCatalogue(): void {
-    const display = this.state.game.display;
-    display.asteroidVisualShape = this.gameConfig.asteroidVisual?.shape ?? "";
-    display.asteroidVisualScale = this.gameConfig.asteroidVisual?.modelScale ?? 1;
-    display.spaceshipVisualShape = this.gameConfig.spaceshipVisual?.shape ?? "";
-    display.shieldBandEffect = this.gameConfig.shieldBandEffect;
-    display.shieldImpactEffect = this.gameConfig.shieldImpactEffect;
-    display.shipDeathEffect = this.gameConfig.shipDeathEffect;
-    display.shipMuzzleEffect = this.gameConfig.shipMuzzleEffect;
-    display.shipCannonSound = this.gameConfig.shipCannonSound;
-    display.shipMgSound = this.gameConfig.shipMgSound;
-    display.shipHitSound = this.gameConfig.shipHitSound;
-    display.shipDeathSound = this.gameConfig.shipDeathSound;
-    display.spaceshipVisualScale = this.gameConfig.spaceshipVisual?.modelScale ?? 1;
-    display.turretVisualShape = this.gameConfig.turretVisual?.shape ?? "";
-    display.turretVisualScale = this.gameConfig.turretVisual?.modelScale ?? 1;
-    display.turretMountX = this.gameConfig.turretVisual?.mountX ?? 0;
-    display.turretMountY = this.gameConfig.turretVisual?.mountY ?? 0;
-    display.turretPivotX = this.gameConfig.turretVisual?.pivotX ?? 0;
-    display.turretPivotY = this.gameConfig.turretVisual?.pivotY ?? 0;
-    display.machineGunVisualShape = this.gameConfig.machineGunVisual?.shape ?? "";
-    display.machineGunVisualScale = this.gameConfig.machineGunVisual?.modelScale ?? 1;
-    display.machineGunMountX = this.gameConfig.machineGunVisual?.mountX ?? 0;
-    display.machineGunMountY = this.gameConfig.machineGunVisual?.mountY ?? 0;
-    display.machineGunPivotX = this.gameConfig.machineGunVisual?.pivotX ?? 0;
-    display.machineGunPivotY = this.gameConfig.machineGunVisual?.pivotY ?? 0;
-    display.shieldRadius = this.gameConfig.shieldRadius;
-    const catalogue = display.enemyCatalogue;
-    catalogue.clear();
-    for (const [kind, archetype] of Object.entries(this.gameConfig.enemyArchetypes)) {
-      const entry = new EnemyVisualState();
-      entry.kind = kind;
-      entry.label = archetype.label;
-      entry.shape = archetype.visual.shape;
-      entry.modelScale = archetype.visual.modelScale;
-      entry.showHealthBar = archetype.visual.showHealthBar;
-      entry.isBoss = archetype.spawnPolicy === "boss";
-      entry.effectDeath = archetype.visual.effects?.death ?? "";
-      entry.effectHit = archetype.visual.effects?.hit ?? "";
-      entry.effectShot = archetype.visual.effects?.shot ?? "";
-      entry.soundDeath = archetype.visual.sounds?.death ?? "";
-      entry.soundHit = archetype.visual.sounds?.hit ?? "";
-      entry.soundShot = archetype.visual.sounds?.shot ?? "";
-      catalogue.set(kind, entry);
-    }
+    publishEnemyCatalogue(this.state.game.display, this.gameConfig, () => new EnemyVisualState());
   }
 
   private initializeDecorations(): void {

@@ -28,3 +28,7 @@ export type {
 export * from "./projectionTarget.ts";
 export * from "./stateProjection.ts";
 export * from "./crewAutopilot.ts";
+export * from "./localMirror.ts";
+export * from "./enemyCatalogue.ts";
+export * from "./waveDeadline.ts";
+export * from "./runSetup.ts";
