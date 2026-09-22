@@ -50,20 +50,30 @@ export function createLocalDriver({
         onStepped(steps, performance.now() - now);
       }
 
-      const pose = run.mirror.game.display.pose;
+      /*
+       * Off the run, not off the mirror.
+       *
+       * The mirror is the published frame and it is written thirty times a
+       * second, so reading the pose from it drew the hull at the publish rate
+       * however fast the panel was - a step the hand had already made would sit
+       * unseen for up to a frame and a half, then arrive all at once. That is
+       * judder, and it is worst exactly where the eye tracks the hull against
+       * something else: reversing, or holding an angle while firing sideways.
+       */
+      const game = run.state();
       return {
-        x: pose.x,
-        y: pose.y,
-        velocityX: pose.velocityX,
-        velocityY: pose.velocityY,
-        heading: pose.heading,
-        turretAngle: pose.turretAngle,
-        headingAngularVelocity: pose.headingAngularVelocity,
-        hasHeadingTarget: pose.hasHeadingTarget,
-        headingTargetAngle: pose.headingTargetAngle,
-        turretAngularVelocity: pose.turretAngularVelocity,
-        hasTurretTarget: pose.hasTurretTarget,
-        turretTargetAngle: pose.turretTargetAngle
+        x: game.spaceship.x,
+        y: game.spaceship.y,
+        velocityX: game.spaceship.velocity.x,
+        velocityY: game.spaceship.velocity.y,
+        heading: game.spaceshipHeading,
+        turretAngle: game.turretAngle,
+        headingAngularVelocity: game.headingAngularVelocity,
+        hasHeadingTarget: game.headingTargetAngle !== null,
+        headingTargetAngle: game.headingTargetAngle ?? 0,
+        turretAngularVelocity: game.turretAngularVelocity,
+        hasTurretTarget: game.turretTargetAngle !== null,
+        turretTargetAngle: game.turretTargetAngle ?? 0
       };
     },
 
