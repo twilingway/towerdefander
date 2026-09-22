@@ -59,7 +59,9 @@ function inputAt(frame: number): PredictedInputFrame {
     aimX: Math.cos(frame * 0.11),
     aimY: Math.sin(frame * 0.11),
     hasAimTurn: false,
-    aimTurn: 0
+    aimTurn: 0,
+    mgFiring: false,
+    firing: false
   };
 }
 

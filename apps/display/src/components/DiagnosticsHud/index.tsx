@@ -23,7 +23,7 @@ export interface DiagnosticsReadings {
   readonly sceneMsPerSecond: number;
   readonly worstSceneMs: number;
   readonly serverStepMs: number;
-  readonly pingMs: number;
+  readonly pingMs: number | null;
   readonly entityCount: number;
   readonly liveDrawn: number;
   readonly offscreen: number;

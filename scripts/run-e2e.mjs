@@ -67,7 +67,10 @@ try {
   const result = await runProcess(packageRunner, ["exec", "playwright", "test", ...passthrough], {
     E2E_EXTERNAL_SERVERS: "1",
     E2E_DISPLAY_URL: `http://127.0.0.1:${String(displayPort)}`,
-    E2E_CONTROLLER_URL: `http://127.0.0.1:${String(controllerPort)}`
+    E2E_CONTROLLER_URL: `http://127.0.0.1:${String(controllerPort)}`,
+    // The local-solo spec proves a run needs no server by cutting it off, and
+    // it can only cut off a port it was told about.
+    E2E_SERVER_PORT: String(serverPort)
   });
   process.exitCode = result;
 } finally {

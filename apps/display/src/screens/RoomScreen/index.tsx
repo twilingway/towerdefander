@@ -1,6 +1,6 @@
-import type { DisplayRoomView, PublicShip } from "@spaceship-defender/protocol";
+import type { DisplayRoomView, PublicPlayerView, PublicShip } from "@spaceship-defender/protocol";
 import { formatLatency, type PreviewPhase } from "@spaceship-defender/client-shared";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { readLiveGame } from "../../model/liveView.js";
 import { PolledFpsReadout } from "../../components/FpsReadout/index.js";
@@ -24,7 +24,7 @@ import type { RoomSession } from "../../model/hooks/useRoomSession.js";
 import { readFrameStats, writePlaybackDelay, writePredictionLag } from "../../model/instruments.js";
 import { selectModuleTree } from "../../model/moduleTree.js";
 import { createControllerJoinUrl } from "../../model/roomView.js";
-import type { PredictionDriver } from "../../model/shipPrediction.js";
+import type { PredictedInputFrame, PredictionDriver } from "../../model/shipPrediction.js";
 import { BattleStage } from "./BattleStage.js";
 import { SettingsPanel } from "./SettingsPanel.js";
 import { PreviewControls } from "./PreviewControls.js";
@@ -37,6 +37,29 @@ export interface RoomPreview {
   readonly onCameraViewWidthChange: (cameraViewWidth: number) => void;
 }
 
+/**
+ * Who is flying this page, for a screen that no longer cares where the run is
+ * hosted: a seat in a room or a simulation stepping in this very tab.
+ */
+export interface CockpitSource {
+  readonly playerId: string;
+  /** Restarts the input sequence the room watermarks; a local run has none. */
+  readonly generation: number;
+  readonly seat: PublicPlayerView | undefined;
+  /** Absent on a local run: there is nowhere to send an intent to. */
+  readonly send?: (type: string, payload: unknown) => void;
+  /** Present on a local run: the scene steps the simulation through it. */
+  readonly driver?: PredictionDriver | undefined;
+  /**
+   * Hands the cockpit's reader back to whoever is hosting the run.
+   *
+   * A networked cockpit sends its intents and needs nobody to ask; a local run
+   * has to pull one every step, and the controls are mounted here rather than
+   * above. So the screen offers them upward instead of the host reaching in.
+   */
+  readonly onControls?: (read: () => PredictedInputFrame) => void;
+}
+
 interface RoomScreenProps {
   readonly view: DisplayRoomView;
   readonly diagnostics: boolean;
@@ -46,6 +69,15 @@ interface RoomScreenProps {
   readonly ships: readonly PublicShip[] | undefined;
   /** Absent in the layout preview: there is no room to talk to. */
   readonly session: RoomSession | undefined;
+  /**
+   * Whether this page is flying the ship, and what drives it when it is.
+   *
+   * Asked rather than derived, because the answer no longer comes from one
+   * place: a networked cockpit holds a seat in a room, and a local run has no
+   * room at all. Everything below used to ask the session ten times over, which
+   * made "is this page flying" and "is there a connection" the same question.
+   */
+  readonly cockpit: CockpitSource | undefined;
   /** Present only in the layout preview; its presence *is* "this is a fixture". */
   readonly preview: RoomPreview | undefined;
   readonly onCloseRoom: () => void;
@@ -74,6 +106,7 @@ export function RoomScreen({
   worldReady,
   ships,
   session,
+  cockpit: cockpitSource,
   preview,
   onCloseRoom,
   onLeaveRoom,
@@ -105,7 +138,7 @@ export function RoomScreen({
    * connection restarts the sequences the room watermarks.
    */
   const cockpitControls: SoloCockpitControls = useSoloCockpit({
-    enabled: session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat",
+    enabled: cockpitSource !== undefined && view.game?.encounter.phase === "combat",
     /*
      * The switch itself, not the combat-gated one below.
      *
@@ -116,7 +149,7 @@ export function RoomScreen({
      * That is the frozen world with a ship still flying: the socket was gone
      * and prediction carried on alone.
      */
-    streaming: session?.cockpitPlayer !== undefined,
+    streaming: cockpitSource !== undefined,
     /*
      * Off on every device while the assist is reworked. Its toggle left the
      * cockpit on 2026-09-13, and a device that still had the help on - every
@@ -125,11 +158,11 @@ export function RoomScreen({
     aimAssistEnabled: false,
     world: toAimWorld(view.game),
     roomId: view.roomId,
-    playerId: session?.sessionId ?? "",
+    playerId: cockpitSource?.playerId ?? "",
     runNumber: view.runNumber,
-    generation: `${String(view.runNumber)}:${String(session?.connectionEpoch ?? 0)}`,
+    generation: `${String(view.runNumber)}:${String(cockpitSource?.generation ?? 0)}`,
     send: (type, payload) => {
-      session?.room?.send(type, payload);
+      cockpitSource?.send?.(type, payload);
     }
   });
 
@@ -152,13 +185,22 @@ export function RoomScreen({
    * With the interface off there is nothing left to steer with, and a ship
    * standing still measures nothing. The canvas becomes the stick.
    */
+  /*
+   * The host asked to read the hand itself: a local run has no stream to send
+   * intents down and pulls one per simulation step instead.
+   */
+  const offerControls = cockpitSource?.onControls;
+  useEffect(() => {
+    offerControls?.(() => cockpitControls.readIntent());
+  }, [offerControls, cockpitControls]);
+
   useBareControls(
     shellReference,
     cockpitControls,
-    !switches.interfaceEnabled && session?.cockpitPlayer !== undefined
+    !switches.interfaceEnabled && cockpitSource !== undefined
   );
 
-  const streaming = session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat";
+  const streaming = cockpitSource !== undefined && view.game?.encounter.phase === "combat";
   useShipPrediction({
     room: session?.room,
     enabled: streaming,
@@ -194,7 +236,7 @@ export function RoomScreen({
    * has to be measured from.
    */
   useCockpitKeyboard({
-    enabled: session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat",
+    enabled: cockpitSource !== undefined && view.game?.encounter.phase === "combat",
     shipScreenPoint: () => readArenaCentre(document),
     ...cockpitControls
   });
@@ -206,7 +248,7 @@ export function RoomScreen({
    */
   useDevCockpitControls(
     cockpitControls,
-    session?.cockpitPlayer !== undefined && view.game?.encounter.phase === "combat"
+    cockpitSource !== undefined && view.game?.encounter.phase === "combat"
   );
 
   const joinUrl = useMemo(() => createControllerJoinUrl(CONTROLLER_URL, view.roomId), [view]);
@@ -257,7 +299,7 @@ export function RoomScreen({
   return (
     <main
       ref={shellReference}
-      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${session?.cockpitPlayer === undefined ? "" : " display-shell--cockpit"}`}
+      className={`display-shell ${view.game === null ? "" : "display-shell--battle"}${cockpitSource === undefined ? "" : " display-shell--cockpit"}`}
       data-panels={switches.opaquePanels ? "opaque" : "glass"}
       /*
        * A fight is always in the frames. The attribute stays, constant, because
@@ -368,11 +410,11 @@ export function RoomScreen({
       <LobbyLayout
         view={view}
         joinUrl={joinUrl}
-        {...(session?.cockpitPlayer === undefined
+        {...(cockpitSource === undefined
           ? {}
           : {
               cockpit: {
-                ready: session.cockpitSeat?.ready === true,
+                ready: cockpitSource.seat?.ready === true,
                 onReady,
                 worldReady
               }
@@ -384,7 +426,7 @@ export function RoomScreen({
           <span>
             {view.assetsPending
               ? `Загружаем ресурсы… ${String(view.assetsWaitSecondsRemaining)} с`
-              : session?.cockpitPlayer === undefined
+              : cockpitSource === undefined
                 ? "Полёт начнётся, когда pilot, gunner и shield нажмут «Готов»"
                 : "Полёт начнётся, когда вы нажмёте «Готов»"}
           </span>
@@ -401,10 +443,10 @@ export function RoomScreen({
           moduleTree={moduleTree}
           readRadarGame={readRadarGame}
           cockpit={{
-            seated: session?.cockpitPlayer !== undefined,
-            seat: session?.cockpitSeat,
+            seated: cockpitSource !== undefined,
+            seat: cockpitSource?.seat,
             controls: cockpitControls,
-            driver: predictionDriverReference.current,
+            driver: cockpitSource?.driver ?? predictionDriverReference.current,
             onVote: onVote,
             onReady: onReady
           }}

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useNavigate } from "react-router";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 
 import { GAME_SERVER_URL } from "./model/environment.js";
 import { useDiagnosticsMeters } from "./model/hooks/useDiagnosticsMeters.js";
@@ -10,6 +10,7 @@ import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.
 import { readDisplaySearch, readDisplayUrlFlags } from "./model/urlFlags.js";
 import { ArenaSetupScreen } from "./screens/ArenaSetupScreen/index.js";
 import { CreateRoomScreen } from "./screens/CreateRoomScreen/index.js";
+import { LocalRunRoute } from "./screens/RoomScreen/LocalRunRoute.js";
 import { PreviewRoomRoute } from "./screens/RoomScreen/PreviewRoomRoute.js";
 import { RoomScreen } from "./screens/RoomScreen/index.js";
 import { StartScreen } from "./screens/StartScreen/index.js";
@@ -29,8 +30,17 @@ export function DisplayApp() {
   const assetsWarm = useAssetWarmup();
   const worldReady = runtimeReady && assetsWarm;
   const session = useRoomSession(flags.visibleDemo, assetsWarm);
-  const shipCatalogue = useShipCatalogue(GAME_SERVER_URL);
-  const maintenance = useMaintenance(GAME_SERVER_URL, session.status === "connected");
+  /*
+   * A page hosting its own run asks the server nothing at all - not the hull
+   * catalogue, not the maintenance window. It has a preset of its own, and a
+   * mode that plays without a server must not depend on one answering.
+   */
+  const hostedLocally = useLocation().pathname === "/solo";
+  const shipCatalogue = useShipCatalogue(GAME_SERVER_URL, !hostedLocally);
+  const maintenance = useMaintenance(
+    GAME_SERVER_URL,
+    hostedLocally || session.status === "connected"
+  );
   useDiagnosticsMeters({
     enabled: flags.diagnostics,
     readSocket: session.readSocket,
@@ -130,6 +140,26 @@ export function DisplayApp() {
     />
   );
 
+  /*
+   * The campaign hosted by this page. Its own address rather than a room's:
+   * `/room/:code` names a room on a server, and this run has neither.
+   */
+  const soloRoute = (
+    <LocalRunRoute
+      diagnostics={flags.diagnostics}
+      visibleDemo={flags.visibleDemo}
+      switches={switches}
+      worldReady={worldReady}
+      ships={shipCatalogue?.ships}
+      shipArchetypeId={flags.shipArchetypeId}
+      playerName="Пилот"
+      startWave={flags.initialStartWave}
+      onLeave={() => {
+        void navigate({ pathname: "/campaign", search: readDisplaySearch() });
+      }}
+    />
+  );
+
   const previewRoute = (
     <PreviewRoomRoute
       diagnostics={flags.diagnostics}
@@ -152,6 +182,18 @@ export function DisplayApp() {
       worldReady={worldReady}
       ships={shipCatalogue?.ships}
       session={session}
+      cockpit={
+        session.cockpitPlayer === undefined
+          ? undefined
+          : {
+              playerId: session.sessionId,
+              generation: session.connectionEpoch,
+              seat: session.cockpitSeat,
+              send: (type, payload) => {
+                session.room?.send(type, payload);
+              }
+            }
+      }
       preview={undefined}
       onCloseRoom={() => void session.closeRoom()}
       onLeaveRoom={() => {
@@ -175,6 +217,7 @@ export function DisplayApp() {
       <Route path="/campaign" element={flags.preview ? previewRoute : createRoute} />
       <Route path="/arena" element={flags.preview ? previewRoute : arenaRoute} />
       <Route path="/preview" element={flags.preview ? previewRoute : createRoute} />
+      <Route path="/solo" element={soloRoute} />
       <Route path="/room/:code" element={roomRoute} />
       <Route
         path="*"

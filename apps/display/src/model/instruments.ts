@@ -178,7 +178,8 @@ export interface DiagnosticsReadings extends FrameStats {
   readonly sceneMsPerSecond: number;
   readonly worstSceneMs: number;
   readonly serverStepMs: number;
-  readonly pingMs: number;
+  /** Null on a device that has nobody to ping; the panel prints a dash. */
+  readonly pingMs: number | null;
   readonly entityCount: number;
   readonly playbackDelayMs: number;
   readonly patchIntervalMs: number;
@@ -202,7 +203,7 @@ export function readDiagnostics(): DiagnosticsReadings {
     sceneMsPerSecond: frame.updateMsPerSecond,
     worstSceneMs: frame.worstUpdateMs,
     serverStepMs: view?.game?.serverStepMs ?? 0,
-    pingMs: view?.displayLatencyMs ?? 0,
+    pingMs: view?.displayLatencyMs ?? null,
     entityCount: view?.game == null ? 0 : countDrawnEntities(view.game),
     playbackDelayMs,
     patchIntervalMs,

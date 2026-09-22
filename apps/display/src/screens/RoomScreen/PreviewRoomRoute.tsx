@@ -51,6 +51,7 @@ export function PreviewRoomRoute({
       worldReady={worldReady}
       ships={ships}
       session={undefined}
+      cockpit={undefined}
       preview={{
         phase,
         onPhaseChange: setPhase,
