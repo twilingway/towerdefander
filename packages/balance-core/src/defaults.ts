@@ -1,5 +1,3 @@
-import SEED_DOCUMENT from "../presets/production.json";
-
 import {
   ARENA_SPAWN_MARKS,
   BALANCE_FILE_VERSION,
@@ -38,6 +36,18 @@ import {
 
 import { DEFAULT_SHIP_ARCHETYPES, DEFAULT_SHIP_ARCHETYPE_ID } from "./shipCatalogue.ts";
 import { migrateBalanceDocument } from "./migrations.ts";
+
+/*
+ * The one place the committed document is read, and the attribute is not
+ * optional here: Node refuses a JSON module without it, and the server runs
+ * this file as plain ESM out of its bundle. A bundler accepts it on a *static*
+ * import - it was the dynamic one that could not carry it, because a dev server
+ * hands the file over as a JavaScript module and the attribute then reads as a
+ * media-type mismatch.
+ */
+import SEED_DOCUMENT from "../presets/production.json" with { type: "json" };
+
+export { SEED_DOCUMENT };
 
 export const DEFAULT_PRESET_ID = "default";
 

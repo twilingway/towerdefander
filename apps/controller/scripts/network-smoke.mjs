@@ -481,9 +481,22 @@ function assertUniqueSequences() {
     throw new Error("Dynamic entities published duplicate spawn sequences.");
 }
 
+/*
+ * The relation, not the numbers. The arena radius is an authored balance value
+ * and the world is built around it, so a preset is free to move it -- pinning
+ * the pair that the code defaults happened to carry made this smoke fail on a
+ * balance edit that broke nothing. What must hold is that the world is a square
+ * circumscribing the arena, because every check below measures against its
+ * centre.
+ */
 function assertArenaContract() {
   const game = display.state.game;
-  if (game.worldWidth !== 4_400 || game.worldHeight !== 4_400 || game.arenaRadius !== 2_200) {
+  const expectedSide = game.arenaRadius * 2;
+  if (
+    !(game.arenaRadius > 0) ||
+    game.worldWidth !== expectedSide ||
+    game.worldHeight !== expectedSide
+  ) {
     throw new Error(
       `Unexpected arena geometry: ${String(game.worldWidth)}x${String(game.worldHeight)}, radius ${String(game.arenaRadius)}.`
     );
