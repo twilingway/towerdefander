@@ -3,6 +3,7 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
 import { getFxEffect, type FxEffect } from "@spaceship-defender/fx-assets";
 
 import type { ShieldPose } from "./shieldImpact.js";
+import { ADDITIVE_DEPTH } from "./bursts.js";
 import {
   getShieldArcRange,
   getShieldBandAlpha,
@@ -15,9 +16,13 @@ import {
 
 /** What a run plays when its hull names nothing. */
 export const DEFAULT_SHIELD_BAND_EFFECT = "shield-band";
-/** The crescent's own depth, unchanged, and the band right over it. */
+/**
+ * The crescent's own depth, and the band with every other additive thing: over
+ * the crescent still, and in one run with the bursts so the GPU switches into
+ * additive blending once a frame rather than once per effect (see `bursts.ts`).
+ */
 const CRESCENT_DEPTH = 14;
-const BAND_DEPTH = 15;
+const BAND_DEPTH = ADDITIVE_DEPTH;
 /**
  * How thick the barrier is drawn, in world units.
  *
