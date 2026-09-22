@@ -2,6 +2,8 @@ import { PATCH_INTERVAL_MS, type DisplayGameSnapshot } from "@spaceship-defender
 import { useEffect, useRef } from "react";
 
 import { drawCombatRadar, easeRing, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
+import { toRadarFrame } from "./radarFrame.js";
+import type { ToRadarWorker } from "./radarWorker.js";
 
 /**
  * The radar, on the canvas and on the frame clock.
@@ -65,6 +67,28 @@ function radarAttributes(game: DisplayGameSnapshot): RadarAttributes {
   };
 }
 
+function writeRadarAttributes(shell: HTMLElement, game: DisplayGameSnapshot): void {
+  const attributes = radarAttributes(game);
+  for (const name of Object.keys(attributes) as (keyof RadarAttributes)[]) {
+    const value = attributes[name];
+    if (shell.getAttribute(name) !== value) shell.setAttribute(name, value);
+  }
+}
+
+/**
+ * Whether the dial is drawn on a worker's thread.
+ *
+ * Wherever the browser can hand a canvas to a worker, unless `?radar=main`
+ * keeps it on the page - the way the two are compared on a phone, and the way
+ * back if a device draws off-thread canvases badly.
+ */
+function shouldDrawRadarOffThread(search: string, element: HTMLCanvasElement): boolean {
+  if (typeof Worker === "undefined" || typeof element.transferControlToOffscreen !== "function") {
+    return false;
+  }
+  return new URLSearchParams(search).get("radar") !== "main";
+}
+
 /**
  * The dial itself.
  *
@@ -78,11 +102,40 @@ export function PolledCombatRadar({
 }) {
   const host = useRef<HTMLElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
+  /*
+   * The worker that draws the dial, once the canvas has been handed to it.
+   *
+   * Held for the component's whole life rather than per effect run: a canvas
+   * can be transferred exactly once, so a worker torn down on a re-run would
+   * take the dial with it for good.
+   */
+  const radarWorker = useRef<Worker | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      // A running worker is never collected; leaving the fight has to stop it.
+      radarWorker.current?.terminate();
+      radarWorker.current = undefined;
+    },
+    []
+  );
 
   useEffect(() => {
     let frame = 0;
     let backingSide = 0;
     let paintedAt = 0;
+    const element = canvas.current;
+    if (
+      radarWorker.current === undefined &&
+      element !== null &&
+      shouldDrawRadarOffThread(globalThis.location.search, element)
+    ) {
+      const worker = new Worker(new URL("./radarWorker.ts", import.meta.url), { type: "module" });
+      const offscreen = element.transferControlToOffscreen();
+      const handOver: ToRadarWorker = { type: "canvas", canvas: offscreen };
+      worker.postMessage(handOver, [offscreen]);
+      radarWorker.current = worker;
+    }
     // Where the two arcs currently stand; the numbers beside them are exact.
     let shownRings: { hull: number; shield: number } | undefined;
     let context: CanvasRenderingContext2D | null = null;
@@ -112,6 +165,18 @@ export function PolledCombatRadar({
       const box = element.clientWidth || element.getBoundingClientRect().width;
       const side = Math.round(box * ratio);
       if (side <= 0) return;
+      const offThread = radarWorker.current;
+      if (offThread !== undefined) {
+        const message: ToRadarWorker = {
+          type: "frame",
+          frame: toRadarFrame(game),
+          side,
+          elapsedMs
+        };
+        offThread.postMessage(message);
+        writeRadarAttributes(shell, game);
+        return;
+      }
       if (side !== backingSide) {
         element.width = side;
         element.height = side;
@@ -135,12 +200,7 @@ export function PolledCombatRadar({
       const scale = side / RADAR_UNITS;
       context.setTransform(scale, 0, 0, scale, 0, 0);
       drawCombatRadar(context, game, shownRings);
-
-      const attributes = radarAttributes(game);
-      for (const name of Object.keys(attributes) as (keyof RadarAttributes)[]) {
-        const value = attributes[name];
-        if (shell.getAttribute(name) !== value) shell.setAttribute(name, value);
-      }
+      writeRadarAttributes(shell, game);
     };
 
     frame = requestAnimationFrame(paint);

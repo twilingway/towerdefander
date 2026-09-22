@@ -1,4 +1,4 @@
-import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
+import type { RadarFrame } from "./radarFrame.js";
 
 import { createRadarProjection, projectWorldToRadar } from "../../model/combatHudViewModel.js";
 
@@ -213,7 +213,7 @@ function scaleLabel(context: RadarContext, radius: number, angle: number, text: 
  */
 export function drawCombatRadar(
   context: RadarContext,
-  game: DisplayGameSnapshot,
+  game: RadarFrame,
   rings: RingFractions = {
     hull: ringFraction(game.spaceship.hp, game.spaceship.maxHp),
     shield: ringFraction(game.shield.energy, game.shield.capacity)
