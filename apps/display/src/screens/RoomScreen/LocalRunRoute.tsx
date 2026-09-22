@@ -93,7 +93,10 @@ export function LocalRunRoute({
       onCloseRoom={onLeave}
       onLeaveRoom={onLeave}
       onScan={() => undefined}
-      onReady={() => undefined}
+      onReady={() => {
+        // The only thing readiness can mean here: play another one.
+        local.restart();
+      }}
       onVote={(upgradeId) => {
         local.vote(upgradeId);
       }}

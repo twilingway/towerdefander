@@ -77,6 +77,15 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
       publisherReference.current.offer(published, now);
     });
     let publishedAt = 0;
+    /*
+     * The first frame before anything is drawn.
+     *
+     * Without it the screen renders a lobby - a view with no game - for as long
+     * as it takes the first animation frame to arrive, and a lobby on a page
+     * that hosts its own run offers a "Готов" button that waits for a crew
+     * nobody is coming to join.
+     */
+    publish.publish(0);
     driverReference.current = createLocalDriver({
       run,
       clock,

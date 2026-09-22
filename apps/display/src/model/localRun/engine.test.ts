@@ -101,6 +101,31 @@ describe("createLocalRun", () => {
     expect(local.state().defeatReason).toBe("wave_timeout");
   });
 
+  /*
+   * Readiness on a device means "play another one", not "waiting for the crew":
+   * left permanently true it disabled the only button the result screen has.
+   */
+  it("reports the seat as ready while a run is on and not once it is over", () => {
+    const local = createLocalRun({
+      config,
+      tuning,
+      shipArchetypeId: tuning.defaultShipArchetypeId,
+      playerName: "Пилот",
+      startWave: 1,
+      waveTtlSeconds: 1
+    });
+
+    local.step(IDLE_INTENT);
+    local.project(0);
+    expect(local.mirror.players.get("local-pilot")?.ready).toBe(true);
+
+    for (let index = 0; index < 120; index += 1) local.step(IDLE_INTENT);
+    local.project(0);
+
+    expect(local.state().outcome).not.toBeNull();
+    expect(local.mirror.players.get("local-pilot")?.ready).toBe(false);
+  });
+
   it("starts a fresh run on restart, with a new number", () => {
     const local = run();
     for (let index = 0; index < 60; index += 1) local.step(IDLE_INTENT);

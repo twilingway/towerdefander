@@ -227,6 +227,14 @@ export function createLocalRun(options: LocalRunOptions): LocalRun {
     },
 
     project(stepCostMs) {
+      /*
+       * Readiness means "waiting for the others" and there are none, so it
+       * tracks the run instead: true while one is being played, false once it
+       * is over - which is what puts "Играть ещё" back on the result screen
+       * rather than leaving it disabled under "Ждём старта…".
+       */
+      const seat = mirror.players.get("local-pilot");
+      if (seat !== undefined) seat.ready = game.outcome === null;
       projectGameState(
         mirror.game,
         game,
