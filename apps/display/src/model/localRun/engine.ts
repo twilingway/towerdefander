@@ -32,7 +32,7 @@ import {
   type SpaceshipSimulationState,
   type UpgradeVoteCommand
 } from "@spaceship-defender/game-core";
-import type { AutopilotProfile, BalanceTuning } from "@spaceship-defender/protocol";
+import type { AutopilotProfile, BalanceTuning, CrewRole } from "@spaceship-defender/protocol";
 
 import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "@spaceship-defender/game-runtime";
 
@@ -73,6 +73,12 @@ export interface LocalRunOptions {
   readonly playerName: string;
   readonly startWave: number;
   readonly waveTtlSeconds: number;
+  /**
+   * Seats the bot flies. A crew of one owns the pilot seat and the gunner's
+   * stream with it, so only the shield is left - but a harness that wants a
+   * whole wave played out hands over all three.
+   */
+  readonly botSeats?: readonly CrewRole[];
 }
 
 export interface LocalRun {
@@ -91,7 +97,15 @@ export interface LocalRun {
 const SALVAGE_SLACK_TICKS = 120;
 
 export function createLocalRun(options: LocalRunOptions): LocalRun {
-  const { config, tuning, shipArchetypeId, playerName, startWave, waveTtlSeconds } = options;
+  const {
+    config,
+    tuning,
+    shipArchetypeId,
+    playerName,
+    startWave,
+    waveTtlSeconds,
+    botSeats = ["shield"]
+  } = options;
   const mirror = createLocalMirror();
   const policyOptions: PolicyOptions = createCrewPolicyOptions(config);
   const profile: AutopilotProfile | undefined = resolveAutopilotProfile(
@@ -199,7 +213,7 @@ export function createLocalRun(options: LocalRunOptions): LocalRun {
        */
       if (profile !== undefined && game.encounterPhase === "combat") {
         game = driveCrewSeats(game, config, {
-          seats: ["shield"],
+          seats: botSeats,
           policyTickMs: POLICY_TICK_MS,
           profile,
           memory,
@@ -211,9 +225,16 @@ export function createLocalRun(options: LocalRunOptions): LocalRun {
         game = failWaveByTimeout(game);
       }
 
-      const wasWave = game.waveNumber;
+      const wasPhase = game.encounterPhase;
       game = advanceSpaceshipSimulation(game, config);
-      if (game.waveNumber !== wasWave && game.encounterPhase === "combat") {
+      /*
+       * On entering combat, not on a change of wave number.
+       *
+       * The number goes up while the crew is still in the break, so arming on
+       * it would leave the next wave holding the previous one's expiry - and a
+       * wave that starts already expired is lost on its first step.
+       */
+      if (wasPhase !== "combat" && game.encounterPhase === "combat") {
         deadline = armWaveDeadline(game.clock.tick, waveTtlSeconds, config.fixedStepMs);
       }
       if (game.lootWindowTicksRemaining > 0) {

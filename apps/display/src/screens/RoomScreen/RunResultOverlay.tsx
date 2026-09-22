@@ -11,6 +11,12 @@ interface RunResultOverlayProps {
   readonly closing: boolean;
   readonly onClose: () => void;
   /**
+   * What leaving is called here. A run hosted by this page has no room to
+   * close, and telling its player they are closing one - for whom? - is the
+   * networked wording leaking into a mode that has no network.
+   */
+  readonly closeLabel?: { readonly idle: string; readonly busy: string };
+  /**
    * Present when this screen is also the pilot. Rematch is a controller
    * gesture, and a cockpit is not one, so without this the only way out of a
    * finished solo run was to close the room.
@@ -30,6 +36,7 @@ export function RunResultOverlay({
   crewSize,
   closing,
   onClose,
+  closeLabel = { idle: "Закрыть комнату", busy: "Закрываем комнату…" },
   cockpit
 }: RunResultOverlayProps) {
   return (
@@ -57,7 +64,7 @@ export function RunResultOverlay({
         </button>
       )}
       <button type="button" className="room-close-button" onClick={onClose} disabled={closing}>
-        {closing ? "Закрываем комнату…" : "Закрыть комнату"}
+        {closing ? closeLabel.busy : closeLabel.idle}
       </button>
     </div>
   );

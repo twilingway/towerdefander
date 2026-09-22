@@ -1,6 +1,12 @@
-import { createDefaultTuning, toSimulationConfig } from "@spaceship-defender/balance-core";
-import type { DisplayRoomView, PublicShip } from "@spaceship-defender/protocol";
-import { useMemo, useRef } from "react";
+import {
+  createDefaultTuning,
+  loadBalanceDocument,
+  toPublicShipCatalogue,
+  toSimulationConfig
+} from "@spaceship-defender/balance-core";
+import { loadBalanceSeed } from "@spaceship-defender/balance-core/seed";
+import type { BalanceTuning, DisplayRoomView } from "@spaceship-defender/protocol";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
 import { useLocalRun } from "../../model/hooks/useLocalRun.js";
@@ -22,7 +28,6 @@ interface LocalRunRouteProps {
   readonly visibleDemo: boolean;
   readonly switches: DisplaySwitches;
   readonly worldReady: boolean;
-  readonly ships: readonly PublicShip[] | undefined;
   readonly shipArchetypeId: string | undefined;
   readonly playerName: string;
   readonly startWave: number;
@@ -32,27 +37,76 @@ interface LocalRunRouteProps {
 /** What the room gives a wave before it is lost; the same number, locally. */
 const WAVE_TTL_SECONDS = 180;
 
-export function LocalRunRoute({
+export function LocalRunRoute(props: LocalRunRouteProps) {
+  /*
+   * The numbers this device plays: the operator's promoted seed, which the
+   * build carries, and the code's defaults only if that cannot be read. The run
+   * is not started until they are in hand - a run keeps the balance it began
+   * with, and beginning on the wrong one would mean a fight whose numbers
+   * change under it.
+   */
+  const [tuning, setTuning] = useState<BalanceTuning | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadBalanceSeed()
+      .then((raw) => {
+        const loaded = loadBalanceDocument(raw);
+        if (cancelled) return;
+        if (!loaded.ok) {
+          console.error(`Затравка баланса непригодна (${loaded.reason}): ${loaded.detail}`);
+          setTuning(createDefaultTuning());
+          return;
+        }
+        const preset =
+          loaded.document.presets.find(({ id }) => id === loaded.document.activePresetId) ??
+          loaded.document.presets[0];
+        setTuning(preset?.tuning ?? createDefaultTuning());
+      })
+      .catch((error: unknown) => {
+        /*
+         * Loudly, because the quiet version cost an evening: the seed failed to
+         * load, the run fell back to the code's defaults, and the game played
+         * on with a different cannon, a different helm and no sprites at all -
+         * looking for all the world like the preset simply was not being read.
+         */
+        console.error("Локальный прогон не смог прочитать затравку баланса", error);
+        if (!cancelled) setTuning(createDefaultTuning());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (tuning === undefined) return null;
+  return <LocalRunStage {...props} tuning={tuning} />;
+}
+
+function LocalRunStage({
   diagnostics,
   visibleDemo,
   switches,
   worldReady,
-  ships,
   shipArchetypeId,
   playerName,
   startWave,
-  onLeave
-}: LocalRunRouteProps) {
-  /*
-   * The balance this device carries. Built once: a run keeps the numbers it
-   * started with, exactly as the room's does, so nothing can change under a
-   * fight in progress.
-   */
-  const { config, tuning, hullId } = useMemo(() => {
-    const built = createDefaultTuning();
-    const hull = shipArchetypeId ?? built.defaultShipArchetypeId;
-    return { config: toSimulationConfig(built, hull), tuning: built, hullId: hull };
-  }, [shipArchetypeId]);
+  onLeave,
+  tuning
+}: LocalRunRouteProps & { readonly tuning: BalanceTuning }) {
+  const { config, hullId, hulls } = useMemo(() => {
+    const hull = shipArchetypeId ?? tuning.defaultShipArchetypeId;
+    return {
+      config: toSimulationConfig(tuning, hull),
+      hullId: hull,
+      /*
+       * The hull catalogue off the same preset the run plays, because `/ships`
+       * is a server route and this page asks the server nothing. It is not
+       * decoration: the module tree the fight shows is read from it, so without
+       * it the ship's own tree has no button at all.
+       */
+      hulls: toPublicShipCatalogue(tuning).ships
+    };
+  }, [shipArchetypeId, tuning]);
 
   /*
    * The cockpit's reader, as the screen fills it in. A ref because the screen
@@ -78,11 +132,12 @@ export function LocalRunRoute({
       visibleDemo={visibleDemo}
       switches={switches}
       worldReady={worldReady}
-      ships={ships}
+      ships={hulls}
       session={undefined}
       cockpit={{
         playerId: "local-pilot",
         generation: 0,
+        local: true,
         seat: local.view?.players[0],
         driver: local.driver,
         onControls: (controls) => {

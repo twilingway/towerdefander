@@ -48,6 +48,8 @@ export interface CockpitSource {
   readonly seat: PublicPlayerView | undefined;
   /** Absent on a local run: there is nowhere to send an intent to. */
   readonly send?: (type: string, payload: unknown) => void;
+  /** True when this page hosts the run itself, so there is no room to close. */
+  readonly local?: boolean;
   /** Present on a local run: the scene steps the simulation through it. */
   readonly driver?: PredictionDriver | undefined;
   /**
@@ -443,6 +445,7 @@ export function RoomScreen({
           moduleTree={moduleTree}
           readRadarGame={readRadarGame}
           cockpit={{
+            hostedLocally: cockpitSource?.local === true,
             seated: cockpitSource !== undefined,
             seat: cockpitSource?.seat,
             controls: cockpitControls,

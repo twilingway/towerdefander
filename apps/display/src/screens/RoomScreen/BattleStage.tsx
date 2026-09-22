@@ -33,6 +33,8 @@ import {
 
 /** What the fight needs to know about this page's own seat, if it holds one. */
 export interface BattleCockpit {
+  /** This page hosts the run, so leaving it closes nothing for anyone else. */
+  readonly hostedLocally?: boolean;
   readonly seated: boolean;
   readonly seat: DisplayRoomView["players"][number] | undefined;
   readonly controls: SoloCockpitControls;
@@ -67,6 +69,9 @@ interface BattleStageProps {
  * over both, in the reference prototype's order. Nothing above the canvas is
  * re-rendered or re-attributed while the arena is drawing.
  */
+/** A page hosting its own run leaves it; there is no room to close. */
+const LOCAL_CLOSE_LABEL = { idle: "Выйти", busy: "Выходим…" } as const;
+
 export function BattleStage({
   view,
   diagnostics,
@@ -221,6 +226,7 @@ export function BattleStage({
               crewSize={view.crewSize}
               closing={closingRoom}
               onClose={onCloseRoom}
+              {...(cockpit.hostedLocally === true ? { closeLabel: LOCAL_CLOSE_LABEL } : {})}
               {...(!cockpit.seated
                 ? {}
                 : {

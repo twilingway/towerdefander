@@ -136,3 +136,48 @@ describe("createLocalRun", () => {
     expect(local.mirror.runNumber).toBe(2);
   });
 });
+
+/*
+ * The wave clock across a break.
+ *
+ * A run that cleared a wave goes quiet for the intermission and then fights
+ * again, and the deadline has to be re-armed for that next wave. Armed on a
+ * change of wave number instead, it would still be holding the previous wave's
+ * expiry when the next one starts - and a wave that starts already expired is
+ * lost on its first step.
+ */
+describe("a run that reaches the intermission", () => {
+  it("clears a wave, breaks, and fights the next one without losing it at once", () => {
+    const local = createLocalRun({
+      config,
+      tuning,
+      shipArchetypeId: tuning.defaultShipArchetypeId,
+      playerName: "Пилот",
+      startWave: 1,
+      waveTtlSeconds: 180,
+      // The bot flies the whole ship here, so the wave is actually cleared
+      // rather than waited out.
+      botSeats: ["pilot", "gunner", "shield"]
+    });
+
+    let sawIntermission = false;
+    let foughtAgain = false;
+    for (let index = 0; index < 60 * 60 * 10; index += 1) {
+      local.step(IDLE_INTENT);
+      const phase = local.state().encounterPhase;
+      if (phase === "intermission") sawIntermission = true;
+      if (sawIntermission && phase === "combat") {
+        foughtAgain = true;
+        break;
+      }
+      if (local.state().outcome !== null) break;
+    }
+
+    expect(local.state().outcome, "the crew died before clearing a wave").toBeNull();
+    expect(sawIntermission, "no intermission was reached").toBe(true);
+    expect(foughtAgain).toBe(true);
+    // And the new wave is not already over the moment it begins.
+    local.step(IDLE_INTENT);
+    expect(local.state().outcome).toBeNull();
+  });
+});

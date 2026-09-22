@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 
 import { GAME_SERVER_URL } from "./model/environment.js";
@@ -36,6 +37,7 @@ export function DisplayApp() {
    * mode that plays without a server must not depend on one answering.
    */
   const hostedLocally = useLocation().pathname === "/solo";
+
   const shipCatalogue = useShipCatalogue(GAME_SERVER_URL, !hostedLocally);
   const maintenance = useMaintenance(
     GAME_SERVER_URL,
@@ -52,6 +54,16 @@ export function DisplayApp() {
   const seated =
     (session.status === "connected" || session.status === "reconnecting") &&
     session.view !== undefined;
+  /*
+   * A page that hosts its own run holds no room.
+   *
+   * Leaving one behind is not idle: the create screen sends anyone with a live
+   * session straight back into it, so "Выйти" from a local run landed the
+   * player in a networked room they had opened minutes ago.
+   */
+  useEffect(() => {
+    if (hostedLocally && seated) void session.leaveRoom();
+  }, [hostedLocally, seated, session]);
 
   // The mode grid is the front door, and the campaign setup is a screen of its
   // own behind it: two games, not one game with a switch on it.
@@ -150,7 +162,6 @@ export function DisplayApp() {
       visibleDemo={flags.visibleDemo}
       switches={switches}
       worldReady={worldReady}
-      ships={shipCatalogue?.ships}
       shipArchetypeId={flags.shipArchetypeId}
       playerName="Пилот"
       startWave={flags.initialStartWave}
