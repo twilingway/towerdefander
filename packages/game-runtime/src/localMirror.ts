@@ -17,7 +17,6 @@ import type {
   ProjectileTarget,
   ProjectionFactories,
   ShipStatEffectTarget,
-  UpgradeCardTarget,
   UpgradeVoteTarget
 } from "./projectionTarget.ts";
 
@@ -127,7 +126,7 @@ export interface LocalGame {
       offerId: string;
       waveNumber: number;
       tier: number;
-      cards: UpgradeCardTarget[];
+      cards: LocalUpgradeCard[];
     };
     votes: Map<string, UpgradeVoteTarget>;
     hasSelection: boolean;
@@ -176,6 +175,21 @@ export interface LocalEnemyVisual {
   soundDeath: string;
   soundHit: string;
   soundShot: string;
+}
+
+/**
+ * A card with its effects as a plain array.
+ *
+ * The projection only ever pushes into them, so its own contract asks for the
+ * narrow list; the view adapter reads them back with `values()`. An array
+ * answers both, and saying so here is what lets one tree serve both sides.
+ */
+export interface LocalUpgradeCard {
+  upgradeId: UpgradeId;
+  role: CrewRole;
+  label: string;
+  effects: ShipStatEffectTarget[];
+  price: number;
 }
 
 export interface LocalObstacle {
@@ -307,7 +321,8 @@ export const PLAIN_PROJECTION_FACTORIES: ProjectionFactories = {
     radius: 0,
     amount: 0
   }),
-  laserBeam: () => ({ entityId: "", fromX: 0, fromY: 0, toX: 0, toY: 0, source: "" }),
+  // Overwritten the moment it is filled; "cannon" only has to be a valid side.
+  laserBeam: () => ({ entityId: "", fromX: 0, fromY: 0, toX: 0, toY: 0, source: "cannon" }),
   projectile: () => ({
     entityId: "",
     spawnSequence: 0,
@@ -333,7 +348,7 @@ export const PLAIN_PROJECTION_FACTORIES: ProjectionFactories = {
     visualShape: "",
     visualScale: 1
   }),
-  upgradeCard: (): UpgradeCardTarget => ({
+  upgradeCard: (): LocalUpgradeCard => ({
     upgradeId: "",
     role: "pilot",
     label: "",

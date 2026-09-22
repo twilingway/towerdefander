@@ -133,6 +133,9 @@ importers:
       '@spaceship-defender/audio-assets':
         specifier: workspace:*
         version: link:../../packages/audio-assets
+      '@spaceship-defender/balance-core':
+        specifier: workspace:*
+        version: link:../../packages/balance-core
       '@spaceship-defender/client-shared':
         specifier: workspace:*
         version: link:../../packages/client-shared
@@ -142,6 +145,9 @@ importers:
       '@spaceship-defender/game-core':
         specifier: workspace:*
         version: link:../../packages/game-core
+      '@spaceship-defender/game-runtime':
+        specifier: workspace:*
+        version: link:../../packages/game-runtime
       '@spaceship-defender/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

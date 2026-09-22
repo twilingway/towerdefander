@@ -41,7 +41,16 @@ export function projectGameState(
   make: ProjectionFactories
 ): void {
   target.tick = game.clock.tick;
-  target.elapsedMs = game.clock.elapsedMs;
+  /*
+   * Whole milliseconds, stated rather than inherited.
+   *
+   * Sixty steps a second is 16.666..., so the core's elapsed total is never
+   * whole - and the protocol asks for an integer. On the wire the schema's
+   * `uint32` truncated it as a side effect, so nobody noticed; a target of
+   * ordinary objects has no such accident, and the view would be refused by its
+   * own schema. Rounding here keeps both hosts publishing the same number.
+   */
+  target.elapsedMs = Math.trunc(game.clock.elapsedMs);
   target.worldWidth = config.worldWidth;
   target.worldHeight = config.worldHeight;
   target.arenaRadius = config.arenaRadius;

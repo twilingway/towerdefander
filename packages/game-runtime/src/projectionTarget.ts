@@ -5,6 +5,7 @@ import type {
   EncounterPhase,
   EnemyKind,
   LootKind,
+  ProjectileSource,
   ShieldPhase,
   TerminalOutcome,
   UpgradeId
@@ -86,7 +87,8 @@ export interface LaserBeamTarget {
   fromY: number;
   toX: number;
   toY: number;
-  source: string;
+  /** Both sides ride one collection, so this names the side as well. */
+  source: ProjectileSource;
 }
 
 export interface ProjectileTarget {
