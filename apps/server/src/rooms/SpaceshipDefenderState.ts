@@ -8,6 +8,7 @@ import type {
   EncounterPhase,
   EnemyKind,
   HelmScheme,
+  ProjectileSource,
   RoomPhase,
   ShieldPhase,
   TerminalOutcome,
@@ -291,7 +292,13 @@ export class LaserBeamState extends Schema {
   @type("float32") fromY = 0;
   @type("float32") toX = 0;
   @type("float32") toY = 0;
-  @type("string") source = "";
+  /*
+   * A string on the wire and one of three sides in the types: both halves ride
+   * this one collection, so the field names which. Declared rather than left
+   * open, because the projection is shared with a host whose target is plain
+   * objects and has no schema to blur it.
+   */
+  @type("string") source: ProjectileSource = "cannon";
 }
 
 export class ProjectileState extends Schema {
