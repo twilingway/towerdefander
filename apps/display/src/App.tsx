@@ -182,6 +182,8 @@ export function DisplayApp() {
       playerName={readPilotName()}
       startWave={flags.initialStartWave}
       onLeave={() => {
+        // Back to the campaign setup, hull kept, by the operator's call on
+        // 2026-09-22: leaving a run is a step back, not a return to the modes.
         void navigate({ pathname: "/campaign", search: readDisplaySearch() });
       }}
     />
