@@ -545,13 +545,18 @@ describe("version 1 migration", () => {
 
     expect(warn).not.toHaveBeenCalled();
     expect(store.getState().version).toBe(BALANCE_FILE_VERSION);
-    expect(store.getState().presets[0]?.tuning.arenaRadius).toBe(2200);
+    // Whatever the defaults carry, which is the committed seed rather than a
+    // second set of numbers written in code.
+    const defaultArena = createDefaultTuning().arenaRadius;
+    expect(store.getState().presets[0]?.tuning.arenaRadius).toBe(defaultArena);
     expect(store.getState().presets[0]?.tuning.waveCampaign.waves).toHaveLength(1);
     // The world is derived, so the circle stays inscribed by construction.
     const config = store.getActiveSimulationConfig();
-    expect(config.arenaRadius).toBe(2200);
-    expect(config.worldWidth).toBe(4400);
-    expect(config.worldHeight).toBe(4400);
+    expect(config.arenaRadius).toBe(defaultArena);
+    // Derived from the radius rather than stored beside it, which is what keeps
+    // the circle inscribed whatever the arena is set to.
+    expect(config.worldWidth).toBe(defaultArena * 2);
+    expect(config.worldHeight).toBe(defaultArena * 2);
   });
 
   it("gives a version 19 document the shield timings without touching its waves", async () => {
@@ -1567,9 +1572,15 @@ describe("version 1 migration", () => {
     await store.load();
 
     expect(warn).not.toHaveBeenCalled();
-    expect(store.getActiveTuning().turretVisual).toBeNull();
-    expect(store.getActiveTuning().projectileVisual).toBeNull();
-    expect(store.getActiveTuning().mgProjectileVisual).toBeNull();
+    /*
+     * A preset written before the looks existed gets whatever the defaults
+     * carry for them - which is the seed's art now, not the empty slot the code
+     * used to hold. What the migration must not do is invent a third answer.
+     */
+    const withLooks = createDefaultTuning();
+    expect(store.getActiveTuning().turretVisual).toEqual(withLooks.turretVisual);
+    expect(store.getActiveTuning().projectileVisual).toEqual(withLooks.projectileVisual);
+    expect(store.getActiveTuning().mgProjectileVisual).toEqual(withLooks.mgProjectileVisual);
   });
 
   it("gives a gun chosen before the pivot existed no offset at all", async () => {

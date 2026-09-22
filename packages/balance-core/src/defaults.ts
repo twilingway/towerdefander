@@ -1,6 +1,9 @@
+import SEED_DOCUMENT from "../presets/production.json";
+
 import {
   ARENA_SPAWN_MARKS,
   BALANCE_FILE_VERSION,
+  balancePresetsFileSchema,
   balanceTuningSchema,
   type AutopilotLevel,
   type AutopilotLevelProfiles,
@@ -34,6 +37,7 @@ import {
 } from "@spaceship-defender/game-core";
 
 import { DEFAULT_SHIP_ARCHETYPES, DEFAULT_SHIP_ARCHETYPE_ID } from "./shipCatalogue.ts";
+import { migrateBalanceDocument } from "./migrations.ts";
 
 export const DEFAULT_PRESET_ID = "default";
 
@@ -256,7 +260,44 @@ export const DEFAULT_CAMPAIGN_AUTHORING = {
   bossFloorSeconds: 30
 } as const;
 
+/**
+ * The numbers a host falls back to, which are the operator's own.
+ *
+ * They used to be a second set written in code, and they had drifted a long way
+ * from the game being played: a cannon that overheated in six shots against
+ * twenty, three times the rate of fire, no sprites, no effects, no sounds. That
+ * was invisible while only a server ran the game, because a server always has a
+ * preset - but a device starts on the defaults, and a hermetic test run plays
+ * them on purpose. Both were measuring a game nobody plays.
+ *
+ * So the defaults are the committed seed, parsed once. Promoting a balance now
+ * moves them with it, and there is no second set to keep in step by hand. The
+ * code's own values survive underneath as `createBuiltInTuning`, for the case
+ * where the seed cannot be read at all.
+ */
 export function createDefaultTuning(): BalanceTuning {
+  const seeded = seededTuning();
+  return seeded ?? createBuiltInTuning();
+}
+
+let cachedSeed: BalanceTuning | null | undefined;
+
+function seededTuning(): BalanceTuning | null {
+  if (cachedSeed !== undefined) return cachedSeed;
+  try {
+    const document = balancePresetsFileSchema.parse(migrateBalanceDocument(SEED_DOCUMENT));
+    const preset =
+      document.presets.find(({ id }) => id === document.activePresetId) ?? document.presets[0];
+    cachedSeed = preset?.tuning ?? null;
+  } catch {
+    // A seed that cannot be read is a broken build, not a reason to refuse to
+    // start: the built-in numbers still make a playable game.
+    cachedSeed = null;
+  }
+  return cachedSeed;
+}
+
+export function createBuiltInTuning(): BalanceTuning {
   const config = createSpaceshipSimulationConfig();
   return balanceTuningSchema.parse({
     enemyArchetypes: config.enemyArchetypes,

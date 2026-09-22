@@ -169,15 +169,20 @@ function activeBalance() {
   return { capacity: config.shieldCapacity, maxHp: config.spaceshipMaxHp };
 }
 
-/** What a single step of holding the shield up costs, at whatever rate the core runs. */
+/**
+ * What a single step of holding the shield up costs, at whatever rate the core
+ * runs - and on whatever numbers the room is actually playing. Asking the core
+ * for its own defaults instead was the same thing only while those defaults
+ * matched the balance; they are the committed seed now, and the room plays it.
+ */
 function oneStepOfDrain(): number {
-  const config = createSpaceshipSimulationConfig();
+  const config = getBalanceStore().getActiveSimulationConfig();
   return (config.shieldDrainPerSecond * config.fixedStepMs) / 1000;
 }
 
-/** What a single step of full thrust is worth, at whatever rate the core runs. */
+/** What a single step of full thrust is worth, on the room's own numbers. */
 function oneStepOfThrust(): number {
-  const config = createSpaceshipSimulationConfig();
+  const config = getBalanceStore().getActiveSimulationConfig();
   return (config.spaceshipAccelerationPerSecondSquared * config.fixedStepMs) / 1000;
 }
 
@@ -186,7 +191,7 @@ function oneStepOfThrust(): number {
  * it produced at twenty steps a second.
  */
 function expectOneStepOfThrust(room: SpaceshipDefenderRoom): void {
-  const config = createSpaceshipSimulationConfig();
+  const config = getBalanceStore().getActiveSimulationConfig();
   const speed = oneStepOfThrust();
   expect(room.state.game.spaceship.velocityX).toBeCloseTo(speed, 6);
   expect(room.state.game.spaceship.velocityY).toBe(0);
@@ -588,11 +593,11 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(room.state.phase).toBe("active");
     expect(room.state.hasGame).toBe(true);
     expect(room.state.game).toMatchObject({
-      worldWidth: 4400,
-      worldHeight: 4400,
-      arenaRadius: 2200
+      worldWidth: 8800,
+      worldHeight: 8800,
+      arenaRadius: 4400
     });
-    expect(room.state.game.spaceship).toMatchObject({ x: 2200, y: 2200, radius: 52 });
+    expect(room.state.game.spaceship).toMatchObject({ x: 4400, y: 4400, radius: 52 });
     const { capacity } = activeBalance();
     expect(room.state.game.shield).toMatchObject({ energy: capacity, capacity });
     expect(room.state.game.display.obstacles).toHaveLength(9);
@@ -786,9 +791,18 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
     expect(obstacles.some(({ x, y }) => x > centerX && y < centerY)).toBe(true);
     expect(obstacles.some(({ x, y }) => x < centerX && y > centerY)).toBe(true);
     expect(obstacles.some(({ x, y }) => x > centerX && y > centerY)).toBe(true);
-    expect(
-      obstacles.some(({ x, y }) => Math.abs(x - centerX) <= 640 && Math.abs(y - centerY) <= 360)
-    ).toBe(true);
+    /*
+     * Something to judge motion against in the frame the run opens on, stated
+     * against the camera rather than against a pair of pixel counts: the
+     * landmarks are laid out for a 4400-wide world and scaled to whatever the
+     * arena is, so on the seed's 8800 they sit twice as far apart. The nearest
+     * is 1271 units out against a half-frame of 1524 - inside the shot, but the
+     * middle of the field is emptier than it was drawn to be.
+     */
+    const halfFrame = getBalanceStore().getActiveSimulationConfig().cameraViewWidth / 2;
+    expect(obstacles.some(({ x, y }) => Math.hypot(x - centerX, y - centerY) <= halfFrame)).toBe(
+      true
+    );
     for (const obstacle of obstacles) {
       const extent =
         obstacle.kind === "circle"
@@ -870,9 +884,9 @@ describe("SpaceshipDefenderRoom v15 lifecycle", () => {
 
     // Geometry is shared rather than gated, so both connections carry it.
     expect(room.state.game).toMatchObject({
-      worldWidth: 4400,
-      worldHeight: 4400,
-      arenaRadius: 2200
+      worldWidth: 8800,
+      worldHeight: 8800,
+      arenaRadius: 4400
     });
     expect(internals(room).waveDeadlineAtMs).toBe(waveDeadline);
     expect(room.state.game.encounter.waveSecondsRemaining).toBeGreaterThan(0);
@@ -1142,10 +1156,23 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
     // since traversed to: the bearing sits between the two.
     const muzzleBearing = Math.atan2(firstProjectile.velocityY, firstProjectile.velocityX);
     expect(muzzleBearing).toBeLessThan(0);
-    expect(muzzleBearing).toBeGreaterThanOrEqual(room.state.game.turretAngle);
+    /*
+     * Along the barrel rather than at the target: the gunner asked for straight
+     * up and the shell leaves at a couple of degrees, because the turret has
+     * barely begun to traverse and the muzzle sits off the hull's centre.
+     *
+     * Stated as a distance rather than as an ordering of the two angles. The
+     * ordering held only while the turret was slow enough to lag the shell,
+     * and it says nothing about the rule being checked - which is that a shot
+     * follows the barrel it left.
+     */
+    const aimed = -Math.PI / 2;
+    expect(Math.abs(muzzleBearing - room.state.game.turretAngle)).toBeLessThan(
+      Math.abs(muzzleBearing - aimed)
+    );
     // The cadence is the cooldown, counted in ticks: waiting a fixed two steps
     // was the same thing said in the numbers of a twenty hertz simulation.
-    const cooldown = createSpaceshipSimulationConfig().fireCooldownTicks;
+    const cooldown = getBalanceStore().getActiveSimulationConfig().fireCooldownTicks;
     room.handleGunnerInput(gunner.client, {
       protocolVersion: PROTOCOL_VERSION,
       roomId: room.roomId,
@@ -1155,8 +1182,32 @@ describe("SpaceshipDefenderRoom v13 authoritative inputs", () => {
       aim: { x: 0, y: -1 },
       firing: true
     });
-    for (let index = 0; index < cooldown; index += 1) room.advanceGameStep();
-    expect(room.state.game.display.friendlyProjectiles).toHaveLength(2);
+    /*
+     * Counted as shots fired, not as shells in the air: a round's flight is
+     * shorter than the cadence on these numbers, so the first one is gone by
+     * the time the second leaves - which says nothing about the cooldown.
+     */
+    const firedBefore = internals(room).gameState?.nextProjectileSequence ?? 0;
+    /*
+     * Held down means sent again: an intent goes stale after
+     * `inputTimeoutTicks`, which is shorter than this cadence, and a panel
+     * keeps the stream running for exactly that reason. Sending once and
+     * waiting out the cooldown would test the timeout instead.
+     */
+    for (let index = 0; index < cooldown; index += 1) {
+      room.handleGunnerInput(gunner.client, {
+        protocolVersion: PROTOCOL_VERSION,
+        roomId: room.roomId,
+        playerId: gunner.client.sessionId,
+        runNumber: room.state.runNumber,
+        sequence: 3 + index,
+        aim: { x: 0, y: -1 },
+        firing: true
+      });
+      room.advanceGameStep();
+    }
+    const firedAfter = internals(room).gameState?.nextProjectileSequence ?? 0;
+    expect(firedAfter - firedBefore).toBe(1);
   });
 
   it("aims and activates the shield", () => {
@@ -1694,9 +1745,9 @@ describe("SpaceshipDefenderRoom v15 combat projection and upgrades", () => {
 
     // Shared with everyone: the arena is geometry, not content.
     expect(room.state.game).toMatchObject({
-      worldWidth: 4400,
-      worldHeight: 4400,
-      arenaRadius: 2200
+      worldWidth: 8800,
+      worldHeight: 8800,
+      arenaRadius: 4400
     });
     // The mass of entities sits behind the display tag, and a crew panel is not
     // given it - which is the whole reason the tag exists.

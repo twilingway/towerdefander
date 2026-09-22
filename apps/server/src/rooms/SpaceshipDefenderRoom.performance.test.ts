@@ -1,3 +1,4 @@
+import { getBalanceStore } from "../balance/index.js";
 import { Decoder, StateView, type Encoder } from "@colyseus/schema";
 import { dynamicEntityCount, type SpaceshipSimulationState } from "@spaceship-defender/game-core";
 import { PLAYER_CAPACITY, PROTOCOL_VERSION } from "@spaceship-defender/protocol";
@@ -44,10 +45,24 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
   it("encodes latency and one keyed entity change without resending unchanged collections", () => {
     const { room } = startGame();
     const runtime = internals(room);
-    runtime.gameState = createWorstCaseCombatFixture();
+    runtime.gameState = createWorstCaseCombatFixture(getBalanceStore().getActiveSimulationConfig());
     room.advanceGameStep();
 
-    expect(schemaEntityCount(room.state)).toBe(208);
+    /*
+     * Every cap filled, counted from the caps rather than written out: the
+     * fixture fills each collection to its limit, and the limits belong to the
+     * balance the room is playing. A number spelled here was the same thing
+     * only while the code's defaults and the played preset agreed.
+     */
+    const { caps } = getBalanceStore().getActiveSimulationConfig();
+    const capacity =
+      caps.enemyShips +
+      caps.asteroids +
+      caps.hostileProjectiles +
+      caps.homingMissiles +
+      caps.friendlyProjectiles +
+      caps.lootDrops;
+    expect(schemaEntityCount(room.state)).toBe(capacity);
     // The room owns this state and its encoder; a second encoder over the same
     // state is a second root, and schema 5 addresses view membership by the root
     // that issued the view - so patches raised on one are invisible to the other.
@@ -106,7 +121,7 @@ describe("SpaceshipDefenderRoom cap traffic", () => {
   it("accepts 20-Hz role controls and a latency pong while 208 entities are simulated", () => {
     const { room, controllers } = startGame();
     const runtime = internals(room);
-    const fixture = createWorstCaseCombatFixture();
+    const fixture = createWorstCaseCombatFixture(getBalanceStore().getActiveSimulationConfig());
     runtime.gameState = fixture;
     const pilot = controllerAt(controllers, 0);
     const gunner = controllerAt(controllers, 1);
