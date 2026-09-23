@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 
 import { DisplayApp } from "./App.js";
+import { watchInstallOffer } from "./model/appInstall.js";
 import { armAutoFullscreen } from "./model/fullscreen.js";
 import "./styles.css";
 
@@ -13,6 +14,9 @@ if (!(rootElement instanceof HTMLElement)) {
 
 // A phone takes the whole screen at the first touch; see `armAutoFullscreen`.
 armAutoFullscreen();
+
+// Early: the browser may offer installation before any screen has mounted.
+watchInstallOffer();
 
 // Production only: a service worker on a dev port outlives the dev server.
 if (import.meta.env.PROD) {
