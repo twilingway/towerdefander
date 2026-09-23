@@ -14,7 +14,6 @@ function props(overrides: Partial<SoloCockpitProps> = {}): SoloCockpitProps {
     onAimRelease: () => undefined,
     onMachineGunHold: () => undefined,
     onCannonFromStick: () => undefined,
-    machineGunHeat: 0,
     machineGunOverheated: false,
     ...overrides
   };
@@ -63,19 +62,5 @@ describe("SoloCockpit", () => {
 
     expect(markup).not.toContain("cockpit-assist");
     expect(markup).not.toContain("Помощь");
-  });
-
-  it("draws the heat bar as a share of the barrel's capacity", () => {
-    const markup = renderToStaticMarkup(<SoloCockpit {...props({ machineGunHeat: 0.5 })} />);
-
-    expect(markup).toContain("scaleY(0.5)");
-  });
-
-  it("clamps a heat reading that arrived out of range", () => {
-    const tooHot = renderToStaticMarkup(<SoloCockpit {...props({ machineGunHeat: 4 })} />);
-    const belowZero = renderToStaticMarkup(<SoloCockpit {...props({ machineGunHeat: -1 })} />);
-
-    expect(tooHot).toContain("scaleY(1)");
-    expect(belowZero).toContain("scaleY(0)");
   });
 });

@@ -19,12 +19,6 @@ import type { DisplayGameSnapshot } from "@spaceship-defender/protocol";
  * them to static markup, which a ref-carrying prop would have made impossible.
  */
 
-/** A whole percent is the finest thing either gauge can show. */
-function percent(heat: number, capacity: number): number {
-  if (!Number.isFinite(capacity) || capacity <= 0) return 0;
-  return Math.max(0, Math.min(100, Math.round((heat / capacity) * 100)));
-}
-
 /** Only the three numbers a gauge is made of; the barrels differ in the rest. */
 interface HeatReading {
   readonly heat: number;
@@ -50,10 +44,6 @@ function writeTrigger(button: Element | null, weapon: HeatReading): void {
   const overheated = String(weapon.overheated);
   if (button.getAttribute("data-overheated") !== overheated) {
     button.setAttribute("data-overheated", overheated);
-  }
-  const fill = button.querySelector(".cockpit-trigger__heat");
-  if (fill instanceof HTMLElement) {
-    fill.style.transform = `scaleY(${(percent(weapon.heat, weapon.capacity) / 100).toFixed(4)})`;
   }
 }
 

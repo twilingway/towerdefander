@@ -1498,7 +1498,7 @@ p {
   height: min(12vh, 3.5rem);
   border-radius: 0.9rem;
   border: 1px solid rgba(126, 214, 255, 0.4);
-  background: rgba(8, 24, 36, 0.6);
+  background: #08181f;
   color: #d6f2ff;
   font: inherit;
   font-weight: 600;
@@ -1508,7 +1508,7 @@ p {
 
 .cockpit-trigger[aria-pressed="true"] {
   border-color: rgba(126, 214, 255, 0.9);
-  background: rgba(22, 62, 88, 0.75);
+  background: #163e58;
 }
 
 /* Overheat is the one state worth shouting: the trigger is inert until it
@@ -1516,21 +1516,6 @@ p {
 .cockpit-trigger[data-overheated="true"] {
   border-color: rgba(255, 138, 96, 0.9);
   color: #ffd0be;
-}
-
-.cockpit-trigger__heat {
-  position: absolute;
-  inset: 0;
-  transform-origin: bottom;
-  background: rgba(255, 138, 96, 0.28);
-  /* Heat is compared in steps of four percent so the panel is not re-rendered
-     on every patch; the slide is what makes those steps invisible. */
-  transition: transform 100ms linear;
-  pointer-events: none;
-}
-
-.cockpit-trigger__label {
-  position: relative;
 }
 
 /*
