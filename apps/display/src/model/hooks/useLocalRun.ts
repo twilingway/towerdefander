@@ -11,7 +11,7 @@ import {
 import type { PredictionDriver } from "../shipPrediction.js";
 import { useViewPublisher } from "./useViewPublisher.js";
 import { resetWorld } from "../worldStore.js";
-import { setLiveView } from "../liveView.js";
+import { readLiveView, setLiveView } from "../liveView.js";
 import type { SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
 import type { BalanceTuning } from "@spaceship-defender/protocol";
 
@@ -47,7 +47,12 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   const latest = useRef(options);
   latest.current = options;
 
-  const publisher = useViewPublisher(setView, () => view);
+  /*
+   * The trailing publish reads the view that last arrived, not the one React
+   * last rendered: reading `view` here republished the rendered frame on every
+   * timer, which froze the intermission countdown until the phase changed.
+   */
+  const publisher = useViewPublisher(setView, readLiveView);
   const publisherReference = useRef(publisher);
   publisherReference.current = publisher;
 
