@@ -14,6 +14,13 @@ if (!(rootElement instanceof HTMLElement)) {
 // A phone takes the whole screen at the first touch; see `armAutoFullscreen`.
 armAutoFullscreen();
 
+// Production only: a service worker on a dev port outlives the dev server.
+if (import.meta.env.PROD) {
+  void import("./model/serviceWorker.js").then(({ startServiceWorker }) =>
+    startServiceWorker(window.location.search)
+  );
+}
+
 createRoot(rootElement).render(
   <BrowserRouter>
     <DisplayApp />

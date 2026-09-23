@@ -1,6 +1,7 @@
 import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+import { UpdateNotice } from "../../components/UpdateNotice/index.js";
 import { MENU_THEME } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
 
@@ -130,6 +131,7 @@ export function CreateRoomScreen({
           <p className="eyebrow">Кампания I: Завеса</p>
           <h1>Оборона Периметра-7</h1>
           <p className="setup-lede">{crewPitch(cockpit ? 0 : crewSize)}</p>
+          <UpdateNotice />
         </header>
         {serverClosed && (
           <>

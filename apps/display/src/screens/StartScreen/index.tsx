@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+import { UpdateNotice } from "../../components/UpdateNotice/index.js";
 import { SettingsPanel } from "../RoomScreen/SettingsPanel.js";
 import { MENU_THEME } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
@@ -68,6 +69,7 @@ export function StartScreen({ maintenance, onPick }: StartScreenProps) {
           <span>Выберите режим</span>
         </p>
         <h1 className="start-title">SpaceShip Defender</h1>
+        <UpdateNotice />
       </header>
       {maintenance?.active === true && (
         <section className="hero-card">

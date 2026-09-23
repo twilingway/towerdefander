@@ -3852,3 +3852,19 @@ p {
     aspect-ratio: 16 / 9;
   }
 }
+
+/*
+ * A new build waiting for the player's word, on the screens between fights.
+ * Loud enough to be seen at a glance, and a button rather than a banner: the
+ * whole point is that nothing happens until it is pressed.
+ */
+.update-notice {
+  margin-top: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  border: 1px solid rgba(126, 240, 255, 0.6);
+  border-radius: 0.75rem;
+  background: #0c2a3a;
+  color: #cfe6ff;
+  font: inherit;
+  font-weight: 600;
+}
