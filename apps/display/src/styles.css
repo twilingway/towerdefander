@@ -2925,6 +2925,18 @@ p {
   min-width: 4rem;
 }
 
+/* Dressed like the window's buttons; a native white box read as a form from another page. */
+.settings__select {
+  grid-column: 2 / -1;
+  min-height: 0;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.78rem;
+  color: rgb(226 240 255 / 88%);
+  background: rgb(14 28 46 / 78%);
+  border: 1px solid rgb(120 190 255 / 28%);
+  border-radius: 0.45rem;
+}
+
 .settings__check {
   display: flex;
   gap: 0.45rem;
