@@ -24,8 +24,8 @@ import {
 /** What each level is called where a player picks it. */
 const QUALITY_LABELS: Readonly<Record<QualityLevel, string>> = {
   high: "Высокое",
-  mid: "Среднее",
-  low: "Низкое, 30 к/с"
+  mid: "Среднее, 30 к/с",
+  low: "Низкое, без эффектов, 30 к/с"
 };
 
 /** A way out, when the screen that opened this panel has one to offer. */

@@ -11,27 +11,28 @@ import {
 const slow = Array.from({ length: QUALITY_FALLBACK_SAMPLES }, () => 38);
 
 describe("quality levels", () => {
-  it("keeps everything on high and paces only low", () => {
-    expect(QUALITY_SETTINGS.high).toEqual({
+  it("keeps every effect on high and mid, and paces mid and low", () => {
+    const everything = {
       vectors: true,
       muzzleFlashes: true,
       exhaust: true,
-      floorFill: true,
-      frameCap: 60
-    });
-    expect(QUALITY_SETTINGS.mid.frameCap).toBe(60);
+      floorFill: true
+    };
+    expect(QUALITY_SETTINGS.high).toEqual({ ...everything, frameCap: 60 });
+    expect(QUALITY_SETTINGS.mid).toEqual({ ...everything, frameCap: 30 });
     expect(QUALITY_SETTINGS.low.frameCap).toBe(30);
+    expect(QUALITY_SETTINGS.low.muzzleFlashes).toBe(false);
   });
 
   it("steps down one level after a run of slow samples", () => {
     expect(nextAutoQuality("high", slow)).toBe("mid");
-    expect(nextAutoQuality("mid", slow)).toBe("low");
+    expect(nextAutoQuality("mid", slow.map(() => 20))).toBe("low");
   });
 
-  it("leaves mid alone near fifty, where low measured no smoother", () => {
-    const nearFifty = slow.map(() => 47);
-    expect(nextAutoQuality("high", nearFifty)).toBe("mid");
-    expect(nextAutoQuality("mid", nearFifty)).toBe("mid");
+  it("leaves a mid that holds its paced 30 alone", () => {
+    const paced = slow.map(() => 28.5);
+    expect(nextAutoQuality("high", paced)).toBe("mid");
+    expect(nextAutoQuality("mid", paced)).toBe("mid");
   });
 
   it("never steps below low, whose rate is paced on purpose", () => {

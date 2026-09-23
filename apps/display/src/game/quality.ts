@@ -7,13 +7,14 @@
  * steps below drop the ones that cost the most and carry the least of the game:
  *
  * - `high`: everything, at the display's own rate.
- * - `mid`: without the per-frame vector overlays (aim envelope, focus rings,
- *   shield sector, beams), the muzzle flashes and the exhaust, and the arena
- *   floor's translucent fill - its rings, spokes and rim band stay. On the
- *   phone this took 38 fps with 45% stutter to 52 fps with 13%.
- * - `low`: `mid`, paced to an even 30 frames a second. A device that cannot
- *   hold 60 alternates 16 and 33 ms frames, which reads as judder; every
- *   second frame, evenly, reads as smooth.
+ * - `mid`: everything still, paced to an even 30 frames a second. A device
+ *   that cannot hold 60 alternates 16 and 33 ms frames, which reads as judder;
+ *   every second frame, evenly, reads as smooth - and the picture keeps every
+ *   effect, which the operator asked for over a higher rate.
+ * - `low`: `mid` without the per-frame vector overlays (aim envelope, focus
+ *   rings, shield sector, beams), the muzzle flashes and the exhaust, and the
+ *   arena floor's translucent fill - its rings, spokes and rim band stay. The
+ *   last resort, for a device that cannot hold even 30 with everything drawn.
  */
 export type QualityLevel = "high" | "mid" | "low";
 
@@ -31,7 +32,7 @@ export interface QualitySettings {
 
 export const QUALITY_SETTINGS: Readonly<Record<QualityLevel, QualitySettings>> = {
   high: { vectors: true, muzzleFlashes: true, exhaust: true, floorFill: true, frameCap: 60 },
-  mid: { vectors: false, muzzleFlashes: false, exhaust: false, floorFill: false, frameCap: 60 },
+  mid: { vectors: true, muzzleFlashes: true, exhaust: true, floorFill: true, frameCap: 30 },
   low: { vectors: false, muzzleFlashes: false, exhaust: false, floorFill: false, frameCap: 30 }
 };
 
@@ -79,18 +80,18 @@ export const AUTO_START: QualityLevel = "high";
  *
  * `high` goes at fifty rather than the density ladder's thirty: that ladder is
  * about a phone that cannot run the game at all, this one about a phone that
- * runs it with a judder - 35 to 45 fps on a 60 Hz panel is exactly that.
+ * runs it with a judder - 35 to 45 fps on a 60 Hz panel is exactly that. The
+ * Redmi 4X draws everything at 48-51, so it lands on `mid`: the same picture,
+ * evenly paced.
  *
- * `mid` goes only at forty. On the Redmi 4X `mid` settles around 49-51 with
- * two thirds of its frames on time, and `low`'s even 30 measured no better
- * there - a fifth of its frames still missed a refresh - so a phone near fifty
- * is left where it is, and `low` is kept for one that `mid` still leaves
- * juddering.
+ * `mid` is paced to 30 and reads 28-30 when it keeps up, so it goes only under
+ * twenty-five - a device that cannot hold even the paced rate with every effect
+ * drawn, which is what `low`'s cuts are for.
  *
  * Ten samples at the canvas's half-second clock is five seconds, long enough
  * that one crowded moment does not cost a player the flashes for the run.
  */
-export const QUALITY_FALLBACK_FPS: Readonly<Record<"high" | "mid", number>> = { high: 50, mid: 40 };
+export const QUALITY_FALLBACK_FPS: Readonly<Record<"high" | "mid", number>> = { high: 50, mid: 25 };
 export const QUALITY_FALLBACK_SAMPLES = 10;
 
 const LADDER: readonly QualityLevel[] = ["high", "mid", "low"];
