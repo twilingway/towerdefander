@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  drawRateCap,
   nextAutoQuality,
   QUALITY_FALLBACK_SAMPLES,
   QUALITY_SETTINGS,
@@ -52,5 +53,17 @@ describe("quality levels", () => {
     expect(readQualityChoice("?quality=low", "high")).toBe("low");
     expect(readQualityChoice("", "mid")).toBe("mid");
     expect(readQualityChoice("?quality=ultra", "nonsense")).toBe("auto");
+  });
+});
+
+describe("the draw rate", () => {
+  it("holds a device without a mouse to 60, and leaves a computer its panel's rate", () => {
+    expect(drawRateCap(QUALITY_SETTINGS.high, false)).toBe(60);
+    expect(drawRateCap(QUALITY_SETTINGS.high, true)).toBeUndefined();
+  });
+
+  it("keeps the low level's 30 on every device", () => {
+    expect(drawRateCap(QUALITY_SETTINGS.low, false)).toBe(30);
+    expect(drawRateCap(QUALITY_SETTINGS.low, true)).toBe(30);
   });
 });

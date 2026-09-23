@@ -22,7 +22,10 @@ export interface QualitySettings {
   readonly muzzleFlashes: boolean;
   readonly exhaust: boolean;
   readonly floorFill: boolean;
-  /** Frames a second the scene is drawn at; 60 means the display's own rate. */
+  /**
+   * Frames a second the scene is drawn at; 60 means the display's own rate,
+   * held to 60 on a device without a mouse - see `drawRateCap`.
+   */
   readonly frameCap: 60 | 30;
 }
 
@@ -31,6 +34,22 @@ export const QUALITY_SETTINGS: Readonly<Record<QualityLevel, QualitySettings>> =
   mid: { vectors: false, muzzleFlashes: false, exhaust: false, floorFill: false, frameCap: 60 },
   low: { vectors: false, muzzleFlashes: false, exhaust: false, floorFill: false, frameCap: 30 }
 };
+
+/**
+ * How often the scene may draw on this device, or `undefined` for as often as
+ * the display refreshes.
+ *
+ * A phone, a tablet or a television never draws past 60: their 90 and 120 Hz
+ * panels would double the GPU's work for a picture the weak ones cannot hold
+ * anyway, and would halve the frame budget the measurements on this page were
+ * taken against. A device with a mouse or a trackpad - a computer - keeps its
+ * panel's own rate. `finePointer` is `(any-pointer: fine)`, which a laptop with
+ * a touch screen also matches.
+ */
+export function drawRateCap(settings: QualitySettings, finePointer: boolean): number | undefined {
+  if (settings.frameCap < 60) return settings.frameCap;
+  return finePointer ? undefined : 60;
+}
 
 /** What the player picked: a level, or leaving it to the measurement. */
 export type QualityChoice = "auto" | QualityLevel;

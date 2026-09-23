@@ -5,7 +5,7 @@ import { watchDevicePixelRatio } from "./devicePixels.js";
 import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH } from "./scene/camera.js";
 import { getBackingStoreSize } from "./viewport.js";
 import { announceSceneFrame } from "../model/sceneFrames.js";
-import { QUALITY_SETTINGS, type QualityLevel } from "./quality.js";
+import { drawRateCap, QUALITY_SETTINGS, type QualityLevel } from "./quality.js";
 import { SpaceshipScene } from "./scene/SpaceshipScene.js";
 import type { ScenePrediction } from "./scene/entities.js";
 
@@ -82,7 +82,8 @@ export interface SpaceshipRuntime {
  * set - and two loops would step the game twice.
  */
 function createFramePacer(loop: Phaser.Core.TimeStep): {
-  setCap(cap: 60 | 30): void;
+  /** Draws at most `cap` times a second, or at the display's rate when undefined. */
+  setCap(cap: number | undefined): void;
   stop(): void;
 } {
   let frame = 0;
@@ -98,7 +99,7 @@ function createFramePacer(loop: Phaser.Core.TimeStep): {
   };
   return {
     setCap(cap) {
-      if (cap >= 60) {
+      if (cap === undefined) {
         if (!capped) return;
         capped = false;
         cancelAnimationFrame(frame);
@@ -107,8 +108,10 @@ function createFramePacer(loop: Phaser.Core.TimeStep): {
         }
         return;
       }
-      // Half a 60 Hz frame of slack either side of the target period.
-      threshold = 1000 / cap - 1000 / 120;
+      // A quarter of the period short of it: a 60 Hz panel's frames under a cap
+      // of 30 and a 120 Hz panel's under a cap of 60 both land half a display
+      // frame clear of the line, so a wobbling timestamp cannot move a draw.
+      threshold = (1000 / cap) * 0.75;
       if (capped) return;
       capped = true;
       last = 0;
@@ -240,6 +243,7 @@ export function createSpaceshipRuntime(
   observer.observe(host);
   const unwatchRatio = watchDevicePixelRatio(applyTarget);
   const pacer = createFramePacer(game.loop);
+  const finePointer = globalThis.matchMedia("(any-pointer: fine)").matches;
 
   return {
     update(snapshot) {
@@ -289,7 +293,7 @@ export function createSpaceshipRuntime(
     setQuality(level) {
       const settings = QUALITY_SETTINGS[level];
       scene.setQuality(settings);
-      pacer.setCap(settings.frameCap);
+      pacer.setCap(drawRateCap(settings, finePointer));
     },
     setResting(value) {
       if (value === resting) return;
