@@ -70,6 +70,16 @@ const pwa = VitePWA({
 
 export default defineConfig({
   envDir: "../..",
+  build: {
+    /*
+     * Old enough for the Redmi 4X's Chrome 101 and a television's WebView. The
+     * default target let the minifier rewrite every media query into range
+     * syntax - `(width>=34rem)` - which Chrome reads only from 104: the phone
+     * silently dropped every responsive rule, and the start screen stacked its
+     * tiles and scrolled its footer away.
+     */
+    cssTarget: ["chrome87", "safari14"]
+  },
   optimizeDeps: {
     include: ["phaser"]
   },
