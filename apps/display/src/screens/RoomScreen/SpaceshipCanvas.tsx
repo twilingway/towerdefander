@@ -71,6 +71,8 @@ interface SpaceshipCanvasProps {
 
 /** Twice a second: faster than this and the digits blur into noise. */
 const FPS_SAMPLE_INTERVAL_MS = 500;
+/** Long enough for the hull's own explosion to play out before the scene rests. */
+const RESULT_REST_DELAY_MS = 2_500;
 /** The world as text, for tests and the demo bot; nothing on screen reads it. */
 const READABLE_SAMPLE_INTERVAL_MS = 100;
 
@@ -270,6 +272,25 @@ export function SpaceshipCanvas({
     // `applyQuality` and `qualityLevelFor` read refs only.
   }, [choice]);
 
+  /*
+   * Nothing on the field moves once the run is over, but the scene kept
+   * drawing it under the result screen - on a phone, a quarter of the main
+   * thread spent on a still picture, and the panel over it stuttering for it.
+   * It rests after the wreck has had time to burn out, and wakes on any other
+   * phase, which is what "Играть ещё" brings.
+   */
+  const phase = game.encounter.phase;
+  useEffect(() => {
+    if (phase !== "result") return;
+    const timer = globalThis.setTimeout(() => {
+      runtimeReference.current?.setResting(true);
+    }, RESULT_REST_DELAY_MS);
+    return () => {
+      globalThis.clearTimeout(timer);
+      runtimeReference.current?.setResting(false);
+    };
+  }, [phase]);
+
   const onFrameStatsReference = useRef(onFrameStats);
   onFrameStatsReference.current = onFrameStats;
   // Read at render, and the component tests render without a document at all -
@@ -279,6 +300,8 @@ export function SpaceshipCanvas({
   );
   useEffect(() => {
     const sample = () => {
+      // Asleep on purpose, so its counter holds the last second it drew.
+      if (runtimeReference.current?.isResting() === true) return;
       const fps = runtimeReference.current?.readFps() ?? 0;
       onFrameStatsReference.current?.({
         fps,

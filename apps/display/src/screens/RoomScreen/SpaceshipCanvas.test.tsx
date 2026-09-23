@@ -42,6 +42,8 @@ describe("SpaceshipCanvas", () => {
       setPredictionDriver: vi.fn(),
       setPixelRatioCap: vi.fn(),
       setQuality: vi.fn(),
+      setResting: vi.fn(),
+      isResting: vi.fn(() => false),
       destroy: vi.fn()
     };
     const snapshot = { tick: 42 } as DisplayGameSnapshot;

@@ -54,6 +54,13 @@ export interface SpaceshipRuntime {
   setPixelRatioCap(cap: number): void;
   /** What the scene draws and how often; see `quality.ts`. */
   setQuality(level: QualityLevel): void;
+  /**
+   * Stops drawing while nothing on the field can move - the result screen -
+   * and starts again when it can. The last frame stays on the glass.
+   */
+  setResting(resting: boolean): void;
+  /** Whether the scene is resting, so its frame counter is not read as a verdict. */
+  isResting(): boolean;
   destroy(): void;
 }
 
@@ -191,6 +198,24 @@ export function createSpaceshipRuntime(
     (globalThis as { __spaceshipGame?: Phaser.Game }).__spaceshipGame = game;
   }
 
+  /*
+   * Resting is Phaser's own sleep, which stops its loop without touching the
+   * pause it takes for a hidden tab, and which the pacer already honours: it
+   * steps only a running loop. Waking starts from a fresh delta, so the time
+   * spent asleep is not handed to the next frame as one enormous step.
+   */
+  let resting = false;
+  const drawOnce = (): void => {
+    if (!game.isRunning) return;
+    game.loop.resetDelta();
+    game.loop.wake();
+    game.loop.sleep();
+  };
+  // The loop starts itself after the game boots - after `READY`, even - which
+  // may come after a rest was asked for; the first frame it draws puts it back.
+  game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+    if (resting) game.loop.sleep();
+  });
   const applyTarget = (): void => {
     if (!game.isBooted) return;
     const next = target();
@@ -201,6 +226,8 @@ export function createSpaceshipRuntime(
     }
     scene.setPixelRatio(next.ratio);
     game.scale.resize(next.width, next.height);
+    // A resized canvas is a cleared one; a resting scene still owes it a frame.
+    if (resting) drawOnce();
   };
   // Two watchers, and they are not the same one twice: the observer hears the
   // box change - rotation, fullscreen, the HUD reflowing around it - and the
@@ -260,6 +287,21 @@ export function createSpaceshipRuntime(
       const settings = QUALITY_SETTINGS[level];
       scene.setQuality(settings);
       pacer.setCap(settings.frameCap);
+    },
+    setResting(value) {
+      if (value === resting) return;
+      resting = value;
+      if (value) {
+        game.loop.sleep();
+        return;
+      }
+      // Before the game starts its loop, starting it is the game's business.
+      if (!game.isRunning) return;
+      game.loop.resetDelta();
+      game.loop.wake();
+    },
+    isResting() {
+      return resting;
     },
     destroy() {
       pacer.stop();
