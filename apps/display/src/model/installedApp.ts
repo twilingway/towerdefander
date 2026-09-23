@@ -1,17 +1,30 @@
 /**
  * The page running as the installed game rather than in a browser tab.
  *
- * Read once, at load. An installed app fills the screen with no element in the
- * browser's full screen; a tab our own auto-fullscreen expanded has one - and
- * after the first tap inside the app that same request makes the two look
- * alike, so asking later would get it wrong.
+ * Marked by the address the app is launched at (`start_url` in the manifest,
+ * `?app=1`), which every screen carries on, and kept for the session in case a
+ * screen ever drops it. Display modes alone are not enough: a tab our own
+ * auto-fullscreen expanded stays in full screen across a navigation and then
+ * looks exactly like the app - a Redmi 4X's tab showed an exit button that
+ * could never work there.
  */
-const installed =
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  (window.matchMedia("(display-mode: standalone)").matches ||
-    (window.matchMedia("(display-mode: fullscreen)").matches &&
-      document.fullscreenElement === null));
+const SESSION_KEY = "spaceship-defender:installed";
+
+function detectInstalled(): boolean {
+  if (typeof window === "undefined") return false;
+  const launched = new URLSearchParams(window.location.search).get("app") === "1";
+  const standalone =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(display-mode: standalone)").matches;
+  try {
+    if (launched || standalone) window.sessionStorage.setItem(SESSION_KEY, "1");
+    return launched || standalone || window.sessionStorage.getItem(SESSION_KEY) === "1";
+  } catch {
+    return launched || standalone;
+  }
+}
+
+const installed = detectInstalled();
 
 export function runningInstalled(): boolean {
   return installed;

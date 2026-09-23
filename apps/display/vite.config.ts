@@ -29,7 +29,9 @@ const pwa = VitePWA({
     name: "SpaceShip Defender",
     short_name: "SpaceShip Defender",
     lang: "ru",
-    start_url: "/",
+    // The mark `runningInstalled` reads: a browser tab can look installed - full
+    // screen, no bars - but only the installed app is launched at this address.
+    start_url: "/?app=1",
     display: "fullscreen",
     orientation: "landscape",
     background_color: SPACE_DARK,
