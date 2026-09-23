@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { defaultSpaceshipSimulationConfig } from "./defaultSimulationConfig.ts";
-import { aimPoint, resolveEnemySkill } from "./enemySkill.ts";
+import { aimPoint, assignedBearing, resolveEnemySkill } from "./enemySkill.ts";
 import { getEnemyArchetype } from "./combatValidation.ts";
 import {
   advanceSpaceshipSimulation,
@@ -157,6 +157,34 @@ describe("a wing that spreads instead of stacking", () => {
     }
     expect(tightestBearingGap(spread)).toBeGreaterThan(tightestBearingGap(massed));
     expect(tightestBearingGap(spread)).toBeGreaterThan(Math.PI / 12);
+  });
+
+  it("settles on its own sector instead of twitching opposite it", () => {
+    // One enemy, so nothing but the flank decides where it goes. The sign used
+    // to be inverted: it circled away from its sector to the far side, where
+    // the short way round flipped every step and the hull shook in place.
+    let state: SpaceshipSimulationState = {
+      ...stackedWing(),
+      enemies: [clusteredGunship(config, 1, centerX + 700, centerY)]
+    };
+    const settle = Math.round(10_000 / config.fixedStepMs);
+    for (let step = 0; step < settle; step += 1) state = advanceSpaceshipSimulation(state, config);
+    let reversals = 0;
+    let sign = state.enemies[0]?.orbitSign;
+    const watch = Math.round(5_000 / config.fixedStepMs);
+    for (let step = 0; step < watch; step += 1) {
+      state = advanceSpaceshipSimulation(state, config);
+      const enemy = state.enemies[0];
+      if (enemy !== undefined && enemy.orbitSign !== sign) reversals += 1;
+      sign = enemy?.orbitSign;
+    }
+    const enemy = state.enemies[0];
+    if (enemy === undefined) throw new Error("the enemy left the field");
+    const bearing = Math.atan2(enemy.y - centerY, enemy.x - centerX);
+    const offset = assignedBearing(enemy) - bearing;
+    expect(Math.abs(Math.atan2(Math.sin(offset), Math.cos(offset)))).toBeLessThan(Math.PI / 4);
+    // A sway across the sector turns round a few times; a twitch, every step.
+    expect(reversals).toBeLessThan(watch / 20);
   });
 });
 
