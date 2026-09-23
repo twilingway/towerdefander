@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import type { MaintenanceState, PublicShipCatalogue } from "@spaceship-defender/protocol";
+import type { PublicShipCatalogue } from "@spaceship-defender/protocol";
 
-import { fetchMaintenance } from "../serverStatus.js";
+import { fetchServerStatus, UNKNOWN_SERVER, type ServerStatus } from "../serverStatus.js";
 import { fetchShipCatalogue } from "../shipCatalogue.js";
 
 /**
@@ -35,32 +35,34 @@ export function useShipCatalogue(
 }
 
 /**
- * Asked repeatedly, unlike the hull catalogue: a window can be announced while
- * a crew is still deciding on the create screen, and the countdown has to move
- * once it has. Only while no room is open - inside one the room's own state
- * carries it.
+ * Asked repeatedly, unlike the hull catalogue: a window can be announced, the
+ * network can drop or a release can land while a crew is still deciding on the
+ * create screen, and the screen has to follow. Asked again at once when the
+ * device gains or loses its network, rather than up to fifteen seconds later.
+ * Only while no room is open - inside one the room's own state carries it.
  */
-export function useMaintenance(
-  gameServerUrl: string,
-  paused: boolean
-): MaintenanceState | undefined {
-  const [maintenance, setMaintenance] = useState<MaintenanceState | undefined>(undefined);
+export function useServerStatus(gameServerUrl: string, paused: boolean): ServerStatus {
+  const [status, setStatus] = useState<ServerStatus>(UNKNOWN_SERVER);
 
   useEffect(() => {
     if (paused) return undefined;
     const controller = new AbortController();
     const poll = (): void => {
-      void fetchMaintenance(gameServerUrl, controller.signal).then((state) => {
-        if (!controller.signal.aborted) setMaintenance(state);
+      void fetchServerStatus(gameServerUrl, controller.signal).then((next) => {
+        if (!controller.signal.aborted) setStatus(next);
       });
     };
     poll();
     const timer = setInterval(poll, 15_000);
+    globalThis.addEventListener("online", poll);
+    globalThis.addEventListener("offline", poll);
     return () => {
       controller.abort();
       clearInterval(timer);
+      globalThis.removeEventListener("online", poll);
+      globalThis.removeEventListener("offline", poll);
     };
   }, [gameServerUrl, paused]);
 
-  return maintenance;
+  return status;
 }

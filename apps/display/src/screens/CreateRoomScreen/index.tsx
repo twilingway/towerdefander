@@ -14,6 +14,8 @@ import {
 } from "@spaceship-defender/protocol";
 
 import { ShipTile } from "../../components/ShipTile/index.js";
+import { NetworkNotice } from "../../components/NetworkNotice/index.js";
+import { networkClosure, type ServerReach } from "../../model/serverStatus.js";
 import { useRemoteNavigation } from "../../model/hooks/useRemoteNavigation.js";
 import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
 import { defaultUnlockedShipId, isShipUnlocked } from "../../model/shipAccess.js";
@@ -23,6 +25,8 @@ interface CreateRoomScreenProps {
   readonly error: string;
   /** The announced maintenance window, if the server told us about one. */
   readonly maintenance: MaintenanceState | undefined;
+  /** Whether the server can be reached at all; see `ServerReach`. */
+  readonly serverReach?: ServerReach;
   readonly visibleDemo: boolean;
   /**
    * Whether the shared-screen tile works. Players find it switched off while
@@ -79,6 +83,7 @@ export function CreateRoomScreen({
   status,
   error,
   maintenance,
+  serverReach = "unknown",
   visibleDemo,
   sharedScreen,
   allowStartWave,
@@ -103,7 +108,10 @@ export function CreateRoomScreen({
    * play anyway. The choice is held rather than overwritten, so it comes back
    * when the window does.
    */
-  const serverClosed = maintenance?.active === true;
+  const closure = networkClosure(maintenance, serverReach);
+  // The same for a device with no network, a server that does not answer and one
+  // on a newer protocol: the network places are dimmed, and the notice says why.
+  const serverClosed = closure !== undefined;
   const place: Place = serverClosed ? "device" : chosenPlace;
   const cockpit = place !== "shared";
   // Named rather than blank: the field is the only thing between a player and
@@ -133,7 +141,10 @@ export function CreateRoomScreen({
           <p className="setup-lede">{crewPitch(cockpit ? 0 : crewSize)}</p>
           <UpdateNotice />
         </header>
-        {serverClosed && (
+        {closure !== undefined && closure !== "maintenance" && (
+          <NetworkNotice closure={closure} screen="campaign" />
+        )}
+        {closure === "maintenance" && maintenance !== undefined && (
           <>
             <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
             <p className="setup-lede">

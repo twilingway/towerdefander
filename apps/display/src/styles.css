@@ -3882,3 +3882,34 @@ p {
   font: inherit;
   font-weight: 600;
 }
+
+/*
+ * Why the network places are dimmed: a line and, for a newer server, the way
+ * out. It sits where the maintenance notice does, above the tiles it explains.
+ */
+.network-notice {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgb(255 196 120 / 45%);
+  border-radius: 0.75rem;
+  background: rgb(40 26 8 / 70%);
+  color: #ffe2b8;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.network-notice p {
+  margin: 0;
+}
+
+/* A mode that cannot be played from here reads as switched off, not as busy. */
+.mode-tile:disabled,
+.place-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}

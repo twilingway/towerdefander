@@ -16,7 +16,7 @@ import { useDisplaySwitches } from "./model/hooks/useDisplaySwitches.js";
 import { useRoomSession } from "./model/hooks/useRoomSession.js";
 import { useAssetWarmup } from "./model/hooks/useAssetWarmup.js";
 import { useRuntimePreload } from "./model/hooks/useRuntimePreload.js";
-import { useMaintenance, useShipCatalogue } from "./model/hooks/useServerStatus.js";
+import { useServerStatus, useShipCatalogue } from "./model/hooks/useServerStatus.js";
 import { readPilotName, rememberPilotName } from "./model/pilotName.js";
 import { readDisplaySearch, readDisplayUrlFlags, withRunParameters } from "./model/urlFlags.js";
 import { ArenaSetupScreen } from "./screens/ArenaSetupScreen/index.js";
@@ -49,10 +49,8 @@ export function DisplayApp() {
   const hostedLocally = useLocation().pathname === "/solo";
 
   const shipCatalogue = useShipCatalogue(GAME_SERVER_URL, !hostedLocally);
-  const maintenance = useMaintenance(
-    GAME_SERVER_URL,
-    hostedLocally || session.status === "connected"
-  );
+  const server = useServerStatus(GAME_SERVER_URL, hostedLocally || session.status === "connected");
+  const maintenance = server.maintenance;
   useDiagnosticsMeters({
     enabled: flags.diagnostics,
     readSocket: session.readSocket,
@@ -93,6 +91,7 @@ export function DisplayApp() {
   ) : (
     <StartScreen
       maintenance={maintenance}
+      serverReach={server.reach}
       onPick={(mode) => {
         void navigate({
           pathname: mode === "arena" ? "/arena" : "/campaign",
@@ -141,6 +140,7 @@ export function DisplayApp() {
   ) : (
     <CreateRoomScreen
       maintenance={maintenance}
+      serverReach={server.reach}
       onBack={() => {
         void navigate({ pathname: "/", search: readDisplaySearch() });
       }}
