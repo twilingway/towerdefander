@@ -49,6 +49,25 @@ interface StarField {
 }
 
 /**
+ * Which parts of the sky to draw, from `?sky=` - a measuring switch, like `?tanks`.
+ *
+ * `none` drops the picture and the parallax stars, `picture` keeps only the
+ * picture, `stars` only the stars; anything else, or no flag, draws both. It
+ * exists to price the sky on a weak phone, where the question is what one
+ * full-screen texture and three star batches cost a frame.
+ */
+export function readSkyLayers(search: string): {
+  readonly picture: boolean;
+  readonly stars: boolean;
+} {
+  const sky = new URLSearchParams(search).get("sky");
+  if (sky === "none") return { picture: false, stars: false };
+  if (sky === "picture") return { picture: true, stars: false };
+  if (sky === "stars") return { picture: false, stars: true };
+  return { picture: true, stars: true };
+}
+
+/**
  * The sky: one picture and three layers of stars, all fixed to the screen and under the arena.
  *
  * Nothing here is drawn per frame. The picture is an image of a loaded texture and each layer of
@@ -109,6 +128,12 @@ export class BackdropLayer {
         globalThis as { matchMedia?: (query: string) => { readonly matches: boolean } }
       ).matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
     );
+  }
+
+  /** Hides what `?sky=` left out; a hidden object is skipped by the renderer entirely. */
+  show(layers: { readonly picture: boolean; readonly stars: boolean }): void {
+    this.picture?.setVisible(layers.picture);
+    for (const field of this.fields) field.blitter.setVisible(layers.stars);
   }
 
   /** Called every frame with the drawn camera focus; lays out again only when the frame changed. */

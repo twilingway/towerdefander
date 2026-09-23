@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@colyseus/sdk": "0.18.2",
-    "@spaceship-defender/client-shared": "workspace:*",
     "@spaceship-defender/audio-assets": "workspace:*",
+    "@spaceship-defender/balance-core": "workspace:*",
+    "@spaceship-defender/client-shared": "workspace:*",
     "@spaceship-defender/fx-assets": "workspace:*",
     "@spaceship-defender/game-core": "workspace:*",
+    "@spaceship-defender/game-runtime": "workspace:*",
     "@spaceship-defender/protocol": "workspace:*",
     "@spaceship-defender/sprite-assets": "workspace:*",
     "phaser": "4.2.1",

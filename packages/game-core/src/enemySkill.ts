@@ -124,6 +124,13 @@ export function assignedBearing(enemy: CombatEnemyState): number {
 }
 
 /**
+ * How far off its sector an enemy drifts before it turns round. It keeps
+ * circling the way it was going inside this band, so it sways across its sector
+ * at a pace the eye reads as flying, rather than reversing on every step.
+ */
+const FLANK_HOLD_RADIANS = Math.PI / 12;
+
+/**
  * Which way round the ship to circle so the enemy converges on its own sector.
  * Returns the sign it already had when the profile does not spread, which is
  * what keeps a rookie wing piling onto one side the way it always did.
@@ -137,10 +144,17 @@ export function flankOrbitSign(
   const bearing = Math.atan2(enemy.y - believed.y, enemy.x - believed.x);
   const offset = assignedBearing(enemy) - bearing;
   const delta = Math.atan2(Math.sin(offset), Math.cos(offset));
-  // Full spread commits to the short way round at any offset; a partial one
-  // only bothers once the enemy is well away from the sector it was given.
-  if (Math.abs(delta) < (1 - profile.flankSpread) * Math.PI) return enemy.orbitSign;
-  return delta >= 0 ? 1 : -1;
+  // Full spread commits to the short way round once the enemy is off its
+  // sector at all; a partial one only bothers once it is well away. Never
+  // closer than the hold band, or an enemy sitting on its sector would pick a
+  // side every tick.
+  const hold = Math.max((1 - profile.flankSpread) * Math.PI, FLANK_HOLD_RADIANS);
+  if (Math.abs(delta) < hold) return enemy.orbitSign;
+  // A positive sign circles clockwise (`moveEnemy` steers along (-dy, dx) from
+  // the enemy to the ship), which lowers the bearing. Returning +1 for a sector
+  // ahead used to drive every enemy to the point opposite its sector, where the
+  // short way round flips each tick - an enemy twitching back and forth.
+  return delta >= 0 ? -1 : 1;
 }
 
 /**

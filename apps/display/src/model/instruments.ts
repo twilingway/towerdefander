@@ -52,8 +52,89 @@ let longTasks: LongTaskMeter | undefined;
 let snapshot = createWorkMeter();
 let commit = createWorkMeter();
 
+/**
+ * The worst of everything since the last reset, which the per-second numbers
+ * cannot answer.
+ *
+ * `FrameMeter` publishes a fresh second and throws the window away, so a spike
+ * is gone from the panel before anyone reading it on a phone has looked up.
+ * Comparing two runs - a flag on against off, one device against another - needs
+ * the peak of a whole fight, so it is kept here rather than in the scene: this
+ * module already holds what the panel reads, and the scene stays about drawing.
+ */
+export interface SessionPeaks {
+  readonly durationSeconds: number;
+  readonly worstFrameMs: number;
+  readonly worstSceneMs: number;
+  readonly lowestFps: number;
+  readonly worstStutterShare: number;
+  /**
+   * When the worst frame happened, and how many seconds carried one like it.
+   *
+   * A single 1.5-second stall at second two is a warm-up - a shader compiled, an
+   * atlas decoded - and is fixed by doing that work before the fight. The same
+   * number with forty heavy seconds behind it is the game stuttering all the way
+   * through, which is a different problem entirely. The peak alone cannot tell
+   * them apart, and on a phone nobody is watching the panel at the moment it
+   * happens.
+   */
+  readonly worstFrameAtSecond: number;
+  readonly heavySeconds: number;
+}
+
+/** A second whose worst frame was this long counts as heavy. */
+const HEAVY_FRAME_MS = 100;
+
+let peaks = {
+  startedAt: 0,
+  worstFrameMs: 0,
+  worstFrameAtSecond: 0,
+  heavySeconds: 0,
+  worstSceneMs: 0,
+  lowestFps: Number.POSITIVE_INFINITY,
+  worstStutterShare: 0
+};
+
+export function resetSessionPeaks(now = performance.now()): void {
+  peaks = {
+    startedAt: now,
+    worstFrameMs: 0,
+    worstFrameAtSecond: 0,
+    heavySeconds: 0,
+    worstSceneMs: 0,
+    lowestFps: Number.POSITIVE_INFINITY,
+    worstStutterShare: 0
+  };
+}
+
+export function readSessionPeaks(now = performance.now()): SessionPeaks {
+  return {
+    durationSeconds: peaks.startedAt === 0 ? 0 : Math.max(0, (now - peaks.startedAt) / 1000),
+    worstFrameMs: peaks.worstFrameMs,
+    worstSceneMs: peaks.worstSceneMs,
+    lowestFps: Number.isFinite(peaks.lowestFps) ? peaks.lowestFps : 0,
+    worstStutterShare: peaks.worstStutterShare,
+    worstFrameAtSecond: peaks.worstFrameAtSecond,
+    heavySeconds: peaks.heavySeconds
+  };
+}
+
 export function writeFrameStats(stats: FrameStats): void {
+  const wasWorst = stats.worstFrameMs;
+  const previous = frame.worstFrameMs;
   Object.assign(frame, stats);
+  if (peaks.startedAt === 0) peaks.startedAt = performance.now();
+  // A published second, not a frame: the meter hands over a fresh window each
+  // time, so a value that changed is a second that ended.
+  if (wasWorst !== previous && wasWorst >= HEAVY_FRAME_MS) peaks.heavySeconds += 1;
+  if (stats.worstFrameMs > peaks.worstFrameMs) {
+    peaks.worstFrameMs = stats.worstFrameMs;
+    peaks.worstFrameAtSecond = Math.max(0, (performance.now() - peaks.startedAt) / 1000);
+  }
+  if (stats.worstUpdateMs > peaks.worstSceneMs) peaks.worstSceneMs = stats.worstUpdateMs;
+  if (stats.stutterShare > peaks.worstStutterShare) peaks.worstStutterShare = stats.stutterShare;
+  // A zero here is the boot frame, not a stall the player would have seen.
+  if (stats.fps > 0 && stats.fps < peaks.lowestFps) peaks.lowestFps = stats.fps;
 }
 
 /** The three numbers the corner readout shows, pulled rather than pushed. */
@@ -97,7 +178,8 @@ export interface DiagnosticsReadings extends FrameStats {
   readonly sceneMsPerSecond: number;
   readonly worstSceneMs: number;
   readonly serverStepMs: number;
-  readonly pingMs: number;
+  /** Null on a device that has nobody to ping; the panel prints a dash. */
+  readonly pingMs: number | null;
   readonly entityCount: number;
   readonly playbackDelayMs: number;
   readonly patchIntervalMs: number;
@@ -110,6 +192,7 @@ export interface DiagnosticsReadings extends FrameStats {
   readonly snapshot: WorkMeter;
   readonly commit: WorkMeter;
   readonly components: ReturnType<typeof readComponentCosts>;
+  readonly peaks: SessionPeaks;
 }
 
 /** Every instrument, read at the moment the panel asks. */
@@ -120,7 +203,7 @@ export function readDiagnostics(): DiagnosticsReadings {
     sceneMsPerSecond: frame.updateMsPerSecond,
     worstSceneMs: frame.worstUpdateMs,
     serverStepMs: view?.game?.serverStepMs ?? 0,
-    pingMs: view?.displayLatencyMs ?? 0,
+    pingMs: view?.displayLatencyMs ?? null,
     entityCount: view?.game == null ? 0 : countDrawnEntities(view.game),
     playbackDelayMs,
     patchIntervalMs,
@@ -132,6 +215,7 @@ export function readDiagnostics(): DiagnosticsReadings {
     patchHz: Math.round(1000 / PATCH_INTERVAL_MS),
     snapshot,
     commit,
-    components: readComponentCosts(performance.now())
+    components: readComponentCosts(performance.now()),
+    peaks: readSessionPeaks()
   };
 }

@@ -10,7 +10,7 @@ import {
 } from "@spaceship-defender/game-core";
 import type { ShipArchetype, ShipModule } from "@spaceship-defender/protocol";
 
-import { DEFAULT_SHIP_ARCHETYPES } from "./shipCatalogue.js";
+import { DEFAULT_SHIP_ARCHETYPES } from "./shipCatalogue.ts";
 
 /**
  * Stats a ship wants less of. Everything not named here is better larger, and

@@ -6,14 +6,16 @@ interface CockpitTriggerProps {
   readonly label: string;
   readonly onHoldChange: (held: boolean) => void;
   readonly enabled: boolean;
-  /** Filled share of the heat bar drawn behind the label, on `[0, 1]`. */
-  readonly heat: number;
   readonly overheated: boolean;
   readonly testId: string;
 }
 
 /**
- * A hold trigger. Its own pointer cycle, so a thumb here and a thumb on a stick
+ * A hold trigger: a plain opaque disc, named for a screen reader and wordless on
+ * the glass. Heat is read off the status frame, which already carries it; a
+ * gauge here was a second copy, redrawn fifteen times a second over the arena.
+ *
+ * Its own pointer cycle, so a thumb here and a thumb on a stick
  * are two independent touches — which is the whole point of a cockpit that
  * drives and shoots at once.
  */
@@ -21,7 +23,6 @@ export function CockpitTrigger({
   label,
   onHoldChange,
   enabled,
-  heat,
   overheated,
   testId
 }: CockpitTriggerProps) {
@@ -89,12 +90,6 @@ export function CockpitTrigger({
       onLostPointerCapture={(event) => {
         stop(event.pointerId);
       }}
-    >
-      <span
-        className="cockpit-trigger__heat"
-        style={{ transform: `scaleY(${String(Math.max(0, Math.min(1, heat)))})` }}
-      />
-      <span className="cockpit-trigger__label">{label}</span>
-    </button>
+    />
   );
 }

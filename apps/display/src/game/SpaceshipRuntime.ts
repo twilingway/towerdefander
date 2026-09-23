@@ -4,6 +4,8 @@ import Phaser from "phaser";
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH } from "./scene/camera.js";
 import { getBackingStoreSize } from "./viewport.js";
+import { announceSceneFrame } from "../model/sceneFrames.js";
+import { drawRateCap, QUALITY_SETTINGS, type QualityLevel } from "./quality.js";
 import { SpaceshipScene } from "./scene/SpaceshipScene.js";
 import type { ScenePrediction } from "./scene/entities.js";
 
@@ -51,7 +53,74 @@ export interface SpaceshipRuntime {
    * see `nextPixelRatioCap`.
    */
   setPixelRatioCap(cap: number): void;
+  /** What the scene draws and how often; see `quality.ts`. */
+  setQuality(level: QualityLevel): void;
+  /**
+   * Stops drawing while nothing on the field can move - the result screen -
+   * and starts again when it can. The last frame stays on the glass.
+   */
+  setResting(resting: boolean): void;
+  /** Whether the scene is resting, so its frame counter is not read as a verdict. */
+  isResting(): boolean;
   destroy(): void;
+}
+
+/**
+ * Draws the game on every Nth display frame, evenly.
+ *
+ * Phaser's own limit accumulates time and fires when a whole period has
+ * passed, carrying the remainder. On a phone the frame timestamps wobble by a
+ * fraction of a millisecond, so two frames of 16.6 fall short of 33.3 and the
+ * draw slips to the third - measured on a Redmi 4X, a quarter of the frames at
+ * 40 to 60 ms under a limit of 30, which is the judder the limit was meant to
+ * remove. This counts display frames instead and decides with half a frame of
+ * slack, so a wobble cannot move a draw: 86-92% of the draws started exactly
+ * two display frames apart on the same phone.
+ *
+ * While capped it holds Phaser's own loop stopped every frame, because the game
+ * starts that loop itself when it finishes booting - possibly after a cap was
+ * set - and two loops would step the game twice.
+ */
+function createFramePacer(loop: Phaser.Core.TimeStep): {
+  /** Draws at most `cap` times a second, or at the display's rate when undefined. */
+  setCap(cap: number | undefined): void;
+  stop(): void;
+} {
+  let frame = 0;
+  let capped = false;
+  let threshold = 0;
+  let last = 0;
+  const tick = (now: number): void => {
+    frame = requestAnimationFrame(tick);
+    if (loop.raf.isRunning) loop.raf.stop();
+    if (!loop.running || now - last < threshold) return;
+    last = now;
+    loop.step(now);
+  };
+  return {
+    setCap(cap) {
+      if (cap === undefined) {
+        if (!capped) return;
+        capped = false;
+        cancelAnimationFrame(frame);
+        if (loop.running && !loop.raf.isRunning) {
+          loop.raf.start(loop.step.bind(loop), loop.forceSetTimeOut, 0);
+        }
+        return;
+      }
+      // A quarter of the period short of it: a 60 Hz panel's frames under a cap
+      // of 30 and a 120 Hz panel's under a cap of 60 both land half a display
+      // frame clear of the line, so a wobbling timestamp cannot move a draw.
+      threshold = (1000 / cap) * 0.75;
+      if (capped) return;
+      capped = true;
+      last = 0;
+      frame = requestAnimationFrame(tick);
+    },
+    stop() {
+      cancelAnimationFrame(frame);
+    }
+  };
 }
 
 export interface SpaceshipRuntimeOptions {
@@ -123,7 +192,36 @@ export function createSpaceshipRuntime(
     // recomputed on every refresh.
     scale: { mode: Phaser.Scale.NONE, autoCenter: Phaser.Scale.NO_CENTER }
   });
+  /*
+   * The engine, handed to a measuring script under `?diag=1` and nowhere else.
+   * A phone profiled over USB can then hide parts of the scene one at a time
+   * and see what each costs the GPU - the one question no panel can answer from
+   * inside the page.
+   */
+  if (new URLSearchParams(globalThis.location.search).get("diag") === "1") {
+    (globalThis as { __spaceshipGame?: Phaser.Game }).__spaceshipGame = game;
+  }
 
+  /*
+   * Resting is Phaser's own sleep, which stops its loop without touching the
+   * pause it takes for a hidden tab, and which the pacer already honours: it
+   * steps only a running loop. Waking starts from a fresh delta, so the time
+   * spent asleep is not handed to the next frame as one enormous step.
+   */
+  let resting = false;
+  const drawOnce = (): void => {
+    if (!game.isRunning) return;
+    game.loop.resetDelta();
+    game.loop.wake();
+    game.loop.sleep();
+  };
+  // The loop starts itself after the game boots - after `READY`, even - which
+  // may come after a rest was asked for; the first frame it draws puts it back.
+  game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+    if (resting) game.loop.sleep();
+  });
+  // Before the scene updates, so what the HUD writes lands in the frame it draws.
+  game.events.on(Phaser.Core.Events.PRE_STEP, announceSceneFrame);
   const applyTarget = (): void => {
     if (!game.isBooted) return;
     const next = target();
@@ -134,6 +232,8 @@ export function createSpaceshipRuntime(
     }
     scene.setPixelRatio(next.ratio);
     game.scale.resize(next.width, next.height);
+    // A resized canvas is a cleared one; a resting scene still owes it a frame.
+    if (resting) drawOnce();
   };
   // Two watchers, and they are not the same one twice: the observer hears the
   // box change - rotation, fullscreen, the HUD reflowing around it - and the
@@ -142,6 +242,8 @@ export function createSpaceshipRuntime(
   const observer = new ResizeObserver(applyTarget);
   observer.observe(host);
   const unwatchRatio = watchDevicePixelRatio(applyTarget);
+  const pacer = createFramePacer(game.loop);
+  const finePointer = globalThis.matchMedia("(any-pointer: fine)").matches;
 
   return {
     update(snapshot) {
@@ -188,7 +290,28 @@ export function createSpaceshipRuntime(
       currentCap = cap;
       applyTarget();
     },
+    setQuality(level) {
+      const settings = QUALITY_SETTINGS[level];
+      scene.setQuality(settings);
+      pacer.setCap(drawRateCap(settings, finePointer));
+    },
+    setResting(value) {
+      if (value === resting) return;
+      resting = value;
+      if (value) {
+        game.loop.sleep();
+        return;
+      }
+      // Before the game starts its loop, starting it is the game's business.
+      if (!game.isRunning) return;
+      game.loop.resetDelta();
+      game.loop.wake();
+    },
+    isResting() {
+      return resting;
+    },
     destroy() {
+      pacer.stop();
       observer.disconnect();
       unwatchRatio();
       game.destroy(true);

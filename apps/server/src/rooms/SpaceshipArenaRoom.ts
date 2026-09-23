@@ -45,7 +45,7 @@ import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { ArenaBots } from "./arenaBots.js";
 import { LatencyTracker } from "./latencyTracker.js";
-import { createRunSeed } from "./runSeed.js";
+import { createRunSeed } from "@spaceship-defender/game-runtime";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
 import {
@@ -57,7 +57,10 @@ import {
   ProjectileState,
   SpaceshipDefenderState
 } from "./SpaceshipDefenderState.js";
-import { leadSpeedFor, resolveAutopilotProfile } from "./crewPolicy.mjs";
+import {
+  leadSpeedFor,
+  resolveAutopilotProfile
+} from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 
 /**
  * How long a wreck stays published after it stops flying.

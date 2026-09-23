@@ -5,7 +5,13 @@ import Phaser from "phaser";
 import { bakeShape } from "../bake.js";
 import { FrameMeter } from "./frameMeter.js";
 import { AimingLayer } from "./aiming.js";
-import { ArenaZoneLayer, arenaZoneSignature, drawArena, drawDecorations } from "./arena.js";
+import {
+  ArenaZoneLayer,
+  arenaZoneSignature,
+  drawArena,
+  drawDecorations,
+  type ArenaFloor
+} from "./arena.js";
 import { ArenaFleet } from "./arenaFleet.js";
 import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
@@ -21,7 +27,7 @@ import {
   turretMountPoint
 } from "../entityArt.js";
 import { bakeCatalogArt, preloadSpriteArt } from "../catalogTexture.js";
-import { BackdropLayer, preloadBackdrop } from "./backdrop.js";
+import { BackdropLayer, preloadBackdrop, readSkyLayers } from "./backdrop.js";
 
 import { type Point } from "../spaceshipViewModel.js";
 import {
@@ -40,6 +46,7 @@ import {
   type PointTrack
 } from "../playback.js";
 import { drawTankHull, readTankLook, TANK_ART_HALF } from "../tankArt.js";
+import { QUALITY_SETTINGS, type QualitySettings } from "../quality.js";
 
 export class SpaceshipScene extends Phaser.Scene {
   private snapshot: DisplayGameSnapshot;
@@ -104,6 +111,12 @@ export class SpaceshipScene extends Phaser.Scene {
    * pixel ratio - which is exactly why `dpr=1` changed nothing.
    */
   private vectorsEnabled = true;
+  /** The diagnostics switch for the overlays; the quality level can also turn them off. */
+  private vectorsSwitch = true;
+  /** What the quality level in force lets this scene draw. */
+  private quality: QualitySettings = QUALITY_SETTINGS.high;
+  /** The floor with its tint and the floor without it; the quality level shows one. */
+  private floor: ArenaFloor = { floorWithFill: undefined, floorLines: undefined };
   private readonly camera = new CameraFrame();
   /** Bound once so a layer can hold it; the scene is the texture cache. */
   private readonly bake = (
@@ -143,7 +156,10 @@ export class SpaceshipScene extends Phaser.Scene {
     });
     this.camera.focusOn(this, this.snapshot.spaceship);
     this.backdrop = new BackdropLayer(this, this.snapshot.background.image, this.bake);
-    drawArena(this, this.snapshot, this.tankLook, (key, half, draw) => this.bake(key, half, draw));
+    this.backdrop.show(readSkyLayers(globalThis.location.search));
+    this.floor = drawArena(this, this.snapshot, this.tankLook, (key, half, draw) =>
+      this.bake(key, half, draw)
+    );
     this.zones.sync(this, this.snapshot, (key, half, draw) => this.bake(key, half, draw));
     drawDecorations(this, this.snapshot, this.bake);
 
@@ -213,6 +229,8 @@ export class SpaceshipScene extends Phaser.Scene {
     this.snapToSnapshot(this.snapshot, tick);
     this.drawShield();
     this.reconcile(tick, true);
+    // A level chosen while the scene was still loading reaches its objects now.
+    this.applyQuality();
   }
 
   override update(time: number, deltaMs: number): void {
@@ -287,7 +305,8 @@ export class SpaceshipScene extends Phaser.Scene {
     // From the numbers just drawn, not from the snapshot: that is what keeps the
     // flash on the visible barrel however fast the hull is moving.
     placeOwnShots(
-      this.bursts,
+      // Without flashes the shots are still heard: the sound goes its own way.
+      this.quality.muzzleFlashes ? this.bursts : undefined,
       this.ownShots,
       {
         mount,
@@ -515,9 +534,24 @@ export class SpaceshipScene extends Phaser.Scene {
   }
 
   setVectorsEnabled(enabled: boolean): void {
-    this.vectorsEnabled = enabled;
-    this.shield?.setVisible(enabled);
-    this.aiming?.setVisible(enabled);
+    this.vectorsSwitch = enabled;
+    this.applyQuality();
+  }
+
+  /** Applies a quality level; safe before `create`, which applies it again. */
+  setQuality(settings: QualitySettings): void {
+    this.quality = settings;
+    this.applyQuality();
+  }
+
+  private applyQuality(): void {
+    const vectors = this.vectorsSwitch && this.quality.vectors;
+    this.vectorsEnabled = vectors;
+    this.shield?.setVisible(vectors);
+    this.aiming?.setVisible(vectors);
+    this.floor.floorWithFill?.setVisible(this.quality.floorFill);
+    this.floor.floorLines?.setVisible(!this.quality.floorFill);
+    this.exhaust?.setEnabled(this.quality.exhaust);
   }
 
   /**

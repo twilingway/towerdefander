@@ -102,6 +102,8 @@ apps/server     Colyseus room, lifecycle timers, /health, /stats/rooms, /admin/b
 apps/admin      React balance console: waves, enemy catalogue, director, camera frame, batch statistics
 packages/protocol       zod schemas, message names, shared constants (source of truth)
 packages/game-core      pure deterministic simulation
+packages/balance-core   what understands a preset: defaults, migrations, hull catalogue, the
+                        simulation config it folds into, and the committed seed behind `./seed`
 packages/client-shared  what display and controller both need: preview shell, latency and role
                         formatting, environment reads, shared control and upgrade pieces
 packages/config         shared TypeScript, ESLint and Prettier configuration
@@ -109,8 +111,10 @@ packages/fx-assets      baked sprite atlases: effect sources, the committed PNGs
 packages/sprite-assets  raster art of the visual catalogue: source PNGs, built WebP sheets, manifest
 ```
 
-`protocol`, `game-core` and `client-shared` export `./src/index.ts` directly — apps consume
-TypeScript source, and only the server is bundled (tsup, `noExternal: game-core`).
+`protocol`, `game-core`, `balance-core` and `client-shared` export `./src/index.ts` directly — apps
+consume TypeScript source, and only the server is bundled (tsup, `noExternal: game-core`). The file
+half of the balance store stays in `apps/server`: `balance-core` never imports `node:`, because a
+browser build has to read the same preset.
 
 Every client app routes with `react-router`: `App.tsx` holds the route table and nothing else, and a
 screen never calls a router hook — see `docs/CODE_STYLE.md`, "Адрес: путь называет экран, запрос

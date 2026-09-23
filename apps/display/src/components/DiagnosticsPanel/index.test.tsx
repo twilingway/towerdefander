@@ -18,6 +18,16 @@ function render(overrides: Partial<Parameters<typeof DiagnosticsPanel>[0]> = {})
       entityCount={208}
       averageFrameMs={6.1}
       tickHz={60}
+      peaks={{
+        durationSeconds: 92,
+        worstFrameMs: 84,
+        worstFrameAtSecond: 3.4,
+        heavySeconds: 0,
+        worstSceneMs: 21.4,
+        lowestFps: 29,
+        worstStutterShare: 0.42
+      }}
+      onResetPeaks={() => undefined}
       components={[]}
       onCollapse={() => undefined}
       patchHz={30}
@@ -110,5 +120,39 @@ describe("diagnostics formatting", () => {
     expect(formatStepMs(0)).toBe("—");
     expect(formatPing(null)).toBe("—");
     expect(formatPing(-1)).toBe("—");
+  });
+
+  /*
+   * The per-second figures are gone before anyone reading them on a phone has
+   * looked up, so comparing two runs needs a number that survives the fight.
+   */
+  it("reports the worst of the fight beside the last second", () => {
+    const markup = render();
+
+    expect(markup).toContain('data-testid="diagnostics-peaks"');
+    expect(markup).toContain("кадр 84 мс");
+    expect(markup).toContain("мин 29 к/с");
+    expect(markup).toContain("рывки до 42%");
+    // When it happened and how often, which is what tells a warm-up spike from
+    // a game that stutters the whole way through.
+    expect(markup).toContain("пик на 3 с");
+    expect(markup).toContain("тяжёлых секунд 0 из 92");
+    expect(markup).toContain('data-testid="diagnostics-reset-peaks"');
+  });
+
+  it("says so before a fight has produced any", () => {
+    const markup = render({
+      peaks: {
+        durationSeconds: 0,
+        worstFrameMs: 0,
+        worstFrameAtSecond: 0,
+        heavySeconds: 0,
+        worstSceneMs: 0,
+        lowestFps: 0,
+        worstStutterShare: 0
+      }
+    });
+
+    expect(markup).toContain("нет данных");
   });
 });

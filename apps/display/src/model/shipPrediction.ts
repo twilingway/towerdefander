@@ -29,6 +29,13 @@ export interface PredictedInputFrame {
   readonly aimY: number;
   readonly hasAimTurn: boolean;
   readonly aimTurn: number;
+  /**
+   * Both triggers, which the cockpit has always put in this frame and this
+   * declaration left out. A networked run reads them off the streams instead,
+   * so nothing noticed; a local run has no streams and reads the frame.
+   */
+  readonly mgFiring: boolean;
+  readonly firing: boolean;
 }
 
 /** The pose as it travels, flat, with a flag beside each nullable bearing. */

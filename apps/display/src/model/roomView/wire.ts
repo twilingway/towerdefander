@@ -7,6 +7,7 @@ import type {
   HelmScheme,
   LootKind,
   ProjectileKind,
+  ProjectileSource,
   DisplayRoomView,
   PublicSpaceshipView,
   ShieldPhase,
@@ -119,7 +120,12 @@ export interface NetworkLaserBeamState {
   fromY: number;
   toX: number;
   toY: number;
-  source: "cannon" | "machineGun";
+  /**
+   * Both sides' pulses ride one collection, so an enemy beam arrives here too -
+   * which this declaration used to leave out. Nothing caught it because the
+   * schema hands the field over as a plain string.
+   */
+  source: ProjectileSource;
 }
 
 export interface NetworkLootDropState extends NetworkCombatEntityState {

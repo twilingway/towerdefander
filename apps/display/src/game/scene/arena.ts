@@ -70,12 +70,18 @@ type BakeShape = (
  * pixels and shown at four thousand units returns a line twice as thick as it
  * was written.
  */
+/** The two floors a quality level chooses between; absent under `?tanks=1`. */
+export interface ArenaFloor {
+  readonly floorWithFill: Phaser.GameObjects.Image | undefined;
+  readonly floorLines: Phaser.GameObjects.Image | undefined;
+}
+
 export function drawArena(
   scene: Phaser.Scene,
   snapshot: DisplayGameSnapshot,
   tankLook: boolean,
   bake: BakeShape
-): void {
+): ArenaFloor {
   const centerX = snapshot.worldWidth / 2;
   const centerY = snapshot.worldHeight / 2;
   const radius = snapshot.arenaRadius;
@@ -93,51 +99,108 @@ export function drawArena(
       drawTankArenaRim(graphics, radius * scale, scale);
     });
     scene.add.image(centerX, centerY, rim).setDisplaySize(diameter, diameter).setDepth(3);
-    return;
+    return { floorWithFill: undefined, floorLines: undefined };
   }
 
   scene.cameras.main.setBackgroundColor(OUTSIDE_SPACE_COLOR);
 
+  /*
+   * The floor, as two whole pictures, of which a quality level shows one.
+   *
+   * Everything on the floor has to be one texture: drawn as pieces or as ropes,
+   * its rings cost more than the full-screen layer they replaced - Phaser
+   * transforms every vertex on the CPU every frame, and on a Redmi 4X the four
+   * ropes alone measured at five frames a second. So `high` shows the tint with
+   * the lines on it, one layer, and `mid` and `low` show the lines on their own,
+   * also one layer: a quality level never pays for two floors.
+   */
   const band = getRimBandStroke(radius, snapshot.rimBandWidth);
-
-  const floorKey = bake(
-    `arena:floor:${String(Math.round(radius))}:${String(Math.round(snapshot.rimBandWidth))}`,
-    side / 2,
-    (graphics) => {
-      graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
-      graphics.fillCircle(0, 0, radius * scale);
-      // The band the rim slows a hull in, under the rings so those stay readable.
-      if (band !== null) {
-        graphics.lineStyle(band.thickness * scale, RIM_BAND_COLOR, RIM_BAND_ALPHA);
-        graphics.strokeCircle(0, 0, band.radius * scale);
-      }
-      // Rings and spokes rather than a square grid: on a round arena what a
-      // pilot reads off the floor is the distance to the rim and the bearing,
-      // and a square mesh states neither.
-      graphics.lineStyle(2 * scale, 0x163746, 0.75);
-      for (const ringRadius of getArenaRingRadii(radius)) {
-        graphics.strokeCircle(0, 0, ringRadius * scale);
-      }
-      graphics.lineStyle(2 * scale, 0x14303d, 0.5);
-      for (const spoke of getArenaSpokes(0, 0, radius)) {
-        graphics.lineBetween(
-          spoke.from.x * scale,
-          spoke.from.y * scale,
-          spoke.to.x * scale,
-          spoke.to.y * scale
-        );
-      }
+  const tag = `${String(Math.round(radius))}:${String(Math.round(snapshot.rimBandWidth))}`;
+  const drawLines = (graphics: Phaser.GameObjects.Graphics): void => {
+    // The band the rim slows a hull in, under the rings so those stay readable.
+    if (band !== null) {
+      graphics.lineStyle(band.thickness * scale, RIM_BAND_COLOR, RIM_BAND_ALPHA);
+      graphics.strokeCircle(0, 0, band.radius * scale);
     }
-  );
-  scene.add.image(centerX, centerY, floorKey).setDisplaySize(diameter, diameter).setDepth(0);
-
-  // Its own image rather than part of the floor: the rim has to stay above
-  // the obstacles, and they sit between the two.
-  const borderKey = bake(`arena:border:${String(Math.round(radius))}`, side / 2, (graphics) => {
-    graphics.lineStyle(8 * scale, 0x3d6874, 1);
-    graphics.strokeCircle(0, 0, radius * scale);
+    // Rings and spokes rather than a square grid: on a round arena what a pilot
+    // reads off the floor is the distance to the rim and the bearing, and a
+    // square mesh states neither.
+    graphics.lineStyle(2 * scale, 0x163746, 0.75);
+    for (const ringRadius of getArenaRingRadii(radius)) {
+      graphics.strokeCircle(0, 0, ringRadius * scale);
+    }
+    graphics.lineStyle(2 * scale, 0x14303d, 0.5);
+    for (const spoke of getArenaSpokes(0, 0, radius)) {
+      graphics.lineBetween(
+        spoke.from.x * scale,
+        spoke.from.y * scale,
+        spoke.to.x * scale,
+        spoke.to.y * scale
+      );
+    }
+  };
+  const fullKey = bake(`arena:floor:${tag}`, side / 2, (graphics) => {
+    graphics.fillStyle(ARENA_SPACE_COLOR, ARENA_FILL_ALPHA);
+    graphics.fillCircle(0, 0, radius * scale);
+    drawLines(graphics);
   });
-  scene.add.image(centerX, centerY, borderKey).setDisplaySize(diameter, diameter).setDepth(3);
+  const linesKey = bake(`arena:lines:${tag}`, side / 2, drawLines);
+  const floorWithFill = scene.add
+    .image(centerX, centerY, fullKey)
+    .setDisplaySize(diameter, diameter)
+    .setDepth(0);
+  const floorLines = scene.add
+    .image(centerX, centerY, linesKey)
+    .setDisplaySize(diameter, diameter)
+    .setDepth(0)
+    .setVisible(false);
+
+  drawBorder(scene, centerX, centerY, radius, bake);
+  return { floorWithFill, floorLines };
+}
+
+/** The rim line, in world units, and the colour it has always been drawn in. */
+const BORDER_WIDTH = 8;
+const BORDER_COLOR = 0x3d6874;
+/** How long one straight piece of the rim is; at a 4400 radius it bows under 1.2 units. */
+const BORDER_PIECE_LENGTH = 200;
+
+/**
+ * The rim, as a ring of short straight pieces rather than one picture of a circle.
+ *
+ * Its own layer rather than part of the floor: the rim has to stay above the
+ * obstacles, and they sit between the two. It used to be that layer as a whole
+ * texture the size of the arena, which made the GPU blend a full-screen quad
+ * every frame to show a line eight units wide - on a Redmi 4X each full-screen
+ * translucent layer measured at about five frames a second, and swapping the
+ * texture for a 1x1 one saved almost none of it, so the cost was the covered
+ * area and not the picture. The pieces share one tiny texture and stand in a
+ * row, so they batch into a single draw, and the GPU fills only the line.
+ */
+function drawBorder(
+  scene: Phaser.Scene,
+  centerX: number,
+  centerY: number,
+  radius: number,
+  bake: BakeShape
+): void {
+  const piece = bake("arena:border:piece", 2, (graphics) => {
+    graphics.fillStyle(BORDER_COLOR, 1);
+    graphics.fillRect(-2, -2, 4, 4);
+  });
+  const count = Math.max(64, Math.ceil((2 * Math.PI * radius) / BORDER_PIECE_LENGTH));
+  const step = (Math.PI * 2) / count;
+  // A chord, plus a little, so neighbouring pieces overlap instead of leaving a
+  // hairline at every joint on the outside of the curve.
+  const length = 2 * radius * Math.sin(step / 2) + BORDER_WIDTH;
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index + 0.5) * step;
+    scene.add
+      .image(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius, piece)
+      .setDisplaySize(length, BORDER_WIDTH)
+      .setRotation(angle + Math.PI / 2)
+      .setDepth(3);
+  }
 }
 
 /**

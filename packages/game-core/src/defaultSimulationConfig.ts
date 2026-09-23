@@ -116,7 +116,17 @@ export const defaultSpaceshipSimulationConfig: SpaceshipSimulationConfig = {
   enemySpawnIntervalTicks: 36,
   ambientAsteroidIntervalMinTicks: 120,
   ambientAsteroidIntervalMaxTicks: 300,
-  intermissionTicks: 1800,
+  /*
+   * Ten seconds, which is what the wire can carry.
+   *
+   * The protocol publishes what is left of a break as a number capped at 600
+   * ticks, and this default stood at 1800 - so a run played on the code's own
+   * defaults produced a frame its own schema refused, and the screen simply
+   * stopped updating at the first intermission. Nothing on the server ever met
+   * it: every preset carries 600, so the default was only ever used where
+   * nobody looked. A host without a preset is exactly where a device starts.
+   */
+  intermissionTicks: 600,
   // The campaign the console shows, not a second one: an empty table left the
   // director improvising every wave, and a server without a preset played a
   // different game from the one that was tuned.

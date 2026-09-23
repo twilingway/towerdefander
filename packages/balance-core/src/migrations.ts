@@ -17,7 +17,7 @@ import {
 
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 
-import { createDefaultTuning } from "./store.js";
+import { createDefaultTuning } from "./defaults.ts";
 
 type LegacyRecord = Record<string, unknown>;
 function isRecord(value: unknown): value is LegacyRecord {

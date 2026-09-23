@@ -126,11 +126,21 @@ const PIXEL_RATIO_STEPS = [3, 2, 1] as const;
  * back and drop again on the next one, and a picture that keeps changing its
  * mind is the worst of both.
  */
-export function nextPixelRatioCap(currentCap: number, recentFps: readonly number[]): number {
+export function nextPixelRatioCap(
+  currentCap: number,
+  recentFps: readonly number[],
+  frameCap = 60
+): number {
   if (recentFps.length < PIXEL_RATIO_FALLBACK_SAMPLES) return currentCap;
   const window = recentFps.slice(-PIXEL_RATIO_FALLBACK_SAMPLES);
+  /*
+   * Judged against the rate the scene is paced to, not the display's: a scene
+   * held to an even 30 on purpose reads 29-30 fps, and against the plain
+   * threshold that walked the low quality level down to one pixel a pixel.
+   */
+  const threshold = (PIXEL_RATIO_FALLBACK_FPS * frameCap) / 60;
   // A zero is a scene that has not started rather than one that is struggling.
-  if (!window.every((fps) => fps > 0 && fps < PIXEL_RATIO_FALLBACK_FPS)) return currentCap;
+  if (!window.every((fps) => fps > 0 && fps < threshold)) return currentCap;
   const lower = PIXEL_RATIO_STEPS.filter((step) => step < currentCap);
   return lower[0] ?? currentCap;
 }

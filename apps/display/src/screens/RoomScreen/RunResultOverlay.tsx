@@ -1,5 +1,7 @@
 import type { CrewSize, DefeatReason, TerminalOutcome } from "@spaceship-defender/protocol";
 
+import type { LocalRecord } from "../../model/localRun/personalBest.js";
+
 interface RunResultOverlayProps {
   readonly outcome: TerminalOutcome;
   readonly defeatReason: DefeatReason | null;
@@ -11,6 +13,12 @@ interface RunResultOverlayProps {
   readonly closing: boolean;
   readonly onClose: () => void;
   /**
+   * What leaving is called here. A run hosted by this page has no room to
+   * close, and telling its player they are closing one - for whom? - is the
+   * networked wording leaking into a mode that has no network.
+   */
+  readonly closeLabel?: { readonly idle: string; readonly busy: string };
+  /**
    * Present when this screen is also the pilot. Rematch is a controller
    * gesture, and a cockpit is not one, so without this the only way out of a
    * finished solo run was to close the room.
@@ -19,6 +27,12 @@ interface RunResultOverlayProps {
     readonly ready: boolean;
     readonly onReady: () => void;
   };
+  /**
+   * Present when this device hosted the run itself. A networked run has the
+   * server's records to measure against; a local one has only what this browser
+   * profile remembers, and saying so is the honest version of a leaderboard.
+   */
+  readonly record?: LocalRecord;
 }
 
 export function RunResultOverlay({
@@ -30,7 +44,9 @@ export function RunResultOverlay({
   crewSize,
   closing,
   onClose,
-  cockpit
+  closeLabel = { idle: "Закрыть комнату", busy: "Закрываем комнату…" },
+  cockpit,
+  record
 }: RunResultOverlayProps) {
   return (
     <div
@@ -41,6 +57,13 @@ export function RunResultOverlay({
       <h2>{resultTitle(outcome, defeatReason)}</h2>
       <strong>Волна {waveNumber}</strong>
       <p>Итоговый счёт: {score}</p>
+      {record !== undefined && (
+        <p className="local-record" data-testid="local-record">
+          {record.improved
+            ? `Новый рекорд устройства: ${String(record.best.score)}`
+            : `Рекорд устройства: ${String(record.best.score)} — волна ${String(record.best.waveNumber)}`}
+        </p>
+      )}
       <p className="rematch-readiness" aria-live="polite">
         Готовы сыграть ещё: {readyCount}/{crewSize}
       </p>
@@ -57,7 +80,7 @@ export function RunResultOverlay({
         </button>
       )}
       <button type="button" className="room-close-button" onClick={onClose} disabled={closing}>
-        {closing ? "Закрываем комнату…" : "Закрыть комнату"}
+        {closing ? closeLabel.busy : closeLabel.idle}
       </button>
     </div>
   );

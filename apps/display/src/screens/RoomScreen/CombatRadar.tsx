@@ -2,6 +2,9 @@ import { PATCH_INTERVAL_MS, type DisplayGameSnapshot } from "@spaceship-defender
 import { useEffect, useRef } from "react";
 
 import { drawCombatRadar, easeRing, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
+import { toRadarFrame } from "./radarFrame.js";
+import type { ToRadarWorker } from "./radarWorker.js";
+import { onSceneFrame, sceneFramesFlowing } from "../../model/sceneFrames.js";
 
 /**
  * The radar, on the canvas and on the frame clock.
@@ -37,6 +40,7 @@ const MAX_PIXEL_RATIO = 2.5;
  * to fifty milliseconds late is the one thing on this dial a crew notices.
  */
 const REDRAW_INTERVAL_MS = PATCH_INTERVAL_MS;
+const FRAME_SLACK_MS = 1000 / 120;
 
 interface RadarAttributes {
   readonly "data-enemy-count": string;
@@ -65,6 +69,28 @@ function radarAttributes(game: DisplayGameSnapshot): RadarAttributes {
   };
 }
 
+function writeRadarAttributes(shell: HTMLElement, game: DisplayGameSnapshot): void {
+  const attributes = radarAttributes(game);
+  for (const name of Object.keys(attributes) as (keyof RadarAttributes)[]) {
+    const value = attributes[name];
+    if (shell.getAttribute(name) !== value) shell.setAttribute(name, value);
+  }
+}
+
+/**
+ * Whether the dial is drawn on a worker's thread.
+ *
+ * Wherever the browser can hand a canvas to a worker, unless `?radar=main`
+ * keeps it on the page - the way the two are compared on a phone, and the way
+ * back if a device draws off-thread canvases badly.
+ */
+function shouldDrawRadarOffThread(search: string, element: HTMLCanvasElement): boolean {
+  if (typeof Worker === "undefined" || typeof element.transferControlToOffscreen !== "function") {
+    return false;
+  }
+  return new URLSearchParams(search).get("radar") !== "main";
+}
+
 /**
  * The dial itself.
  *
@@ -78,19 +104,73 @@ export function PolledCombatRadar({
 }) {
   const host = useRef<HTMLElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
+  /*
+   * The worker that draws the dial, once the canvas has been handed to it.
+   *
+   * Held for the component's whole life rather than per effect run: a canvas
+   * can be transferred exactly once, so a worker torn down on a re-run would
+   * take the dial with it for good.
+   */
+  const radarWorker = useRef<Worker | undefined>(undefined);
+
+  useEffect(
+    () => () => {
+      // A running worker is never collected; leaving the fight has to stop it.
+      radarWorker.current?.terminate();
+      radarWorker.current = undefined;
+    },
+    []
+  );
 
   useEffect(() => {
     let frame = 0;
     let backingSide = 0;
     let paintedAt = 0;
+    const element = canvas.current;
+    if (
+      radarWorker.current === undefined &&
+      element !== null &&
+      shouldDrawRadarOffThread(globalThis.location.search, element)
+    ) {
+      const worker = new Worker(new URL("./radarWorker.ts", import.meta.url), { type: "module" });
+      const offscreen = element.transferControlToOffscreen();
+      const handOver: ToRadarWorker = { type: "canvas", canvas: offscreen };
+      worker.postMessage(handOver, [offscreen]);
+      radarWorker.current = worker;
+    }
     // Where the two arcs currently stand; the numbers beside them are exact.
     let shownRings: { hull: number; shield: number } | undefined;
     let context: CanvasRenderingContext2D | null = null;
+    /*
+     * The box, kept by an observer rather than read on every paint.
+     *
+     * Reading `clientWidth` makes the browser finish any layout the page has
+     * pending, then and there - and between two paints the HUD and React have
+     * always touched something. On a Redmi 4X that forced layout was most of
+     * the 0.6 ms a frame this dial still cost after its drawing moved to a
+     * worker. The observer reports the same number, only when it changes: a
+     * rotated phone, a resized window.
+     */
+    let box = element?.clientWidth ?? 0;
+    const observer =
+      element === null || typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver((entries) => {
+            const entry = entries.at(-1);
+            if (entry !== undefined) box = entry.contentRect.width;
+          });
+    if (element !== null) observer?.observe(element);
 
+    const paintOnOwnClock = (): void => {
+      frame = requestAnimationFrame(paintOnOwnClock);
+      // While the scene draws, the radar paints in its frames instead; see `sceneFrames.ts`.
+      if (!sceneFramesFlowing()) paint();
+    };
     const paint = (): void => {
-      frame = requestAnimationFrame(paint);
       const now = performance.now();
-      if (now - paintedAt < REDRAW_INTERVAL_MS) return;
+      // Half a 60 Hz frame of slack: paints that arrive on frames 33.3 ms apart
+      // must not measure 33.2 and skip every other one.
+      if (now - paintedAt < REDRAW_INTERVAL_MS - FRAME_SLACK_MS) return;
       // How long the arcs have had to move, which is not the same as how long
       // they were meant to have: a busy frame delays this paint, and the arcs
       // have to cover that time rather than a fixed step.
@@ -109,9 +189,20 @@ export function PolledCombatRadar({
        * soft.
        */
       const ratio = Math.min(MAX_PIXEL_RATIO, Math.max(1, globalThis.devicePixelRatio || 1));
-      const box = element.clientWidth || element.getBoundingClientRect().width;
       const side = Math.round(box * ratio);
       if (side <= 0) return;
+      const offThread = radarWorker.current;
+      if (offThread !== undefined) {
+        const message: ToRadarWorker = {
+          type: "frame",
+          frame: toRadarFrame(game),
+          side,
+          elapsedMs
+        };
+        offThread.postMessage(message);
+        writeRadarAttributes(shell, game);
+        return;
+      }
       if (side !== backingSide) {
         element.width = side;
         element.height = side;
@@ -135,17 +226,15 @@ export function PolledCombatRadar({
       const scale = side / RADAR_UNITS;
       context.setTransform(scale, 0, 0, scale, 0, 0);
       drawCombatRadar(context, game, shownRings);
-
-      const attributes = radarAttributes(game);
-      for (const name of Object.keys(attributes) as (keyof RadarAttributes)[]) {
-        const value = attributes[name];
-        if (shell.getAttribute(name) !== value) shell.setAttribute(name, value);
-      }
+      writeRadarAttributes(shell, game);
     };
 
-    frame = requestAnimationFrame(paint);
+    frame = requestAnimationFrame(paintOnOwnClock);
+    const unsubscribe = onSceneFrame(paint);
     return () => {
+      unsubscribe();
       cancelAnimationFrame(frame);
+      observer?.disconnect();
     };
   }, [read]);
 

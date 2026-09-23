@@ -207,8 +207,8 @@ apply_balance_seed() {
 # newer version, never reaches a playing crew on its own. Promoting live tuning
 # back into the seed stays a separate act -- see scripts/export-balance-seed.sh.
 seed_balance_volume() {
-  local seed="${REPO_DIR}/apps/server/presets/production.json"
-  local revision_file="${REPO_DIR}/apps/server/presets/production.revision"
+  local seed="${REPO_DIR}/packages/balance-core/presets/production.json"
+  local revision_file="${REPO_DIR}/packages/balance-core/presets/production.revision"
   local volume="${COMPOSE_PROJECT}_space-api-data"
   if [ ! -f "${seed}" ]; then
     log "No seed preset in the checkout; the server will start on packaged defaults."

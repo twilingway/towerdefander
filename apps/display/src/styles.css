@@ -14,6 +14,31 @@
   background: #081313;
   font-family: Inter, system-ui, sans-serif;
   font-synthesis: none;
+
+  /*
+   * The height of the glass, in one place.
+   *
+   * `100dvh` is the height that actually exists on a phone - `100vh` counts the
+   * browser chrome the page never gets - but the unit only arrived in Chrome
+   * 108, and an engine older than that throws the whole declaration away. The
+   * battle shell has no other height, so on such a phone it collapsed to its
+   * content and the canvas came out 640 by zero: the run was simulated, the
+   * guns were audible, and nothing was drawn. Measured on a Redmi with an
+   * Adreno 505, where WebGL 2 and the textures were fine all along.
+   *
+   * Two declarations of the same property would have been the usual answer, and
+   * they do not survive: the minifier deduplicates them and the built sheet
+   * came out with `dvh` alone. A custom property behind `@supports` is a rule
+   * the minifier cannot fold into the other, and it keeps the fallback in one
+   * place rather than at seven call sites.
+   */
+  --viewport-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-height: 100dvh;
+  }
 }
 
 * {
@@ -70,7 +95,8 @@ button:disabled {
   position: relative;
   display: block;
   width: 100vw;
-  height: 100dvh;
+  /* The only height this shell has; see `--viewport-height`. */
+  height: var(--viewport-height);
   min-height: 0;
   /*
    * Nothing in a fight is text to take away. A drag across the stage or a long
@@ -536,7 +562,7 @@ p {
    * off both ends at once - and the button it was asking about goes with the
    * bottom one. Scrolling inside it is the only way that button comes back.
    */
-  max-height: calc(100dvh - 1.5rem);
+  max-height: calc(var(--viewport-height) - 1.5rem);
   overflow-y: auto;
   gap: 0.7rem;
   padding: clamp(0.9rem, 4vw, 3rem);
@@ -637,6 +663,12 @@ p {
 .rematch-readiness {
   color: #ffd783;
   font-weight: 800;
+}
+
+/* The device's own record, which is the only record a hostless run has. */
+.local-record {
+  color: #8fe6c0;
+  font-weight: 700;
 }
 
 .room-close-button {
@@ -1184,8 +1216,15 @@ p {
  * The display is a landscape instrument: its frame is 16:9 and every crew is
  * given the same slice of arena out of it. Portrait cannot hold that frame, so
  * the screen asks to be turned rather than playing a worse game.
+ *
+ * Over the whole page, not in the canvas's place: the HUD frames are laid out
+ * for a wide glass and in portrait they pile onto each other and onto this very
+ * notice, which then could not be read.
  */
 .rotate-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1215,6 +1254,17 @@ p {
   margin: 0;
   max-width: 28ch;
   opacity: 0.75;
+}
+
+.rotate-notice__turn {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid rgba(126, 240, 255, 0.6);
+  border-radius: 0.75rem;
+  background: #0c2a3a;
+  color: #cfe6ff;
+  font: inherit;
+  font-weight: 600;
 }
 
 @keyframes rotate-notice-turn {
@@ -1466,7 +1516,7 @@ p {
   height: min(12vh, 3.5rem);
   border-radius: 0.9rem;
   border: 1px solid rgba(126, 214, 255, 0.4);
-  background: rgba(8, 24, 36, 0.6);
+  background: #08181f;
   color: #d6f2ff;
   font: inherit;
   font-weight: 600;
@@ -1476,7 +1526,7 @@ p {
 
 .cockpit-trigger[aria-pressed="true"] {
   border-color: rgba(126, 214, 255, 0.9);
-  background: rgba(22, 62, 88, 0.75);
+  background: #163e58;
 }
 
 /* Overheat is the one state worth shouting: the trigger is inert until it
@@ -1484,21 +1534,6 @@ p {
 .cockpit-trigger[data-overheated="true"] {
   border-color: rgba(255, 138, 96, 0.9);
   color: #ffd0be;
-}
-
-.cockpit-trigger__heat {
-  position: absolute;
-  inset: 0;
-  transform-origin: bottom;
-  background: rgba(255, 138, 96, 0.28);
-  /* Heat is compared in steps of four percent so the panel is not re-rendered
-     on every patch; the slide is what makes those steps invisible. */
-  transition: transform 100ms linear;
-  pointer-events: none;
-}
-
-.cockpit-trigger__label {
-  position: relative;
 }
 
 /*
@@ -1635,7 +1670,7 @@ p {
    * `100dvh` is the height that exists.
    */
   body {
-    min-height: 100dvh;
+    min-height: var(--viewport-height);
   }
 
   /*
@@ -1647,7 +1682,7 @@ p {
    * hidden` answers that by hiding the bottom of the lobby, buttons included.
    */
   .display-shell:not(.display-shell--battle) {
-    min-height: 100dvh;
+    min-height: var(--viewport-height);
     gap: 0.4rem;
     padding: 0.5rem;
     overflow-y: auto;
@@ -2298,7 +2333,7 @@ p {
   display: grid;
   gap: 0.35rem;
   width: min(58rem, 100%);
-  max-height: calc(100dvh - 1.5rem);
+  max-height: calc(var(--viewport-height) - 1.5rem);
   overflow-y: auto;
   padding: clamp(1rem, 3vw, 2rem);
   border: 1px solid rgb(255 255 255 / 16%);
@@ -2635,9 +2670,10 @@ p {
   grid-template-columns: 1fr;
 }
 
+/* As many columns as there are tiles: two on the arena setup, three on the campaign's. */
 @media (min-width: 36rem) {
   .place-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   }
 }
 
@@ -2890,6 +2926,18 @@ p {
 .settings__row input[type="range"] {
   width: 100%;
   min-width: 4rem;
+}
+
+/* Dressed like the window's buttons; a native white box read as a form from another page. */
+.settings__select {
+  grid-column: 2 / -1;
+  min-height: 0;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.78rem;
+  color: rgb(226 240 255 / 88%);
+  background: rgb(14 28 46 / 78%);
+  border: 1px solid rgb(120 190 255 / 28%);
+  border-radius: 0.45rem;
 }
 
 .settings__check {
@@ -3618,10 +3666,11 @@ p {
     --frame-radar-width: min(
       calc(var(--frame-radar-window) / 0.8168),
       calc(
-        100dvh - max(var(--frame-corner-inset), env(safe-area-inset-top)) -
+        var(--viewport-height) - max(var(--frame-corner-inset), env(safe-area-inset-top)) -
           var(--frame-status-size) * 0.5511 - 0.25rem - var(--frame-radar-bottom)
       )
     );
+
     /* The aim ring's bottom edge: its picture overhangs the ring by a quarter. */
     --frame-stick-bottom: calc(0.625rem + var(--cockpit-aim-ring) * 0.25);
     --frame-radar-bottom: calc(var(--frame-stick-bottom) + var(--cockpit-aim-ring) * 1.25 + 0.5rem);

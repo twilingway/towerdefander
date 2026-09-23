@@ -37,6 +37,7 @@ export class ExhaustLayer {
   private readonly effect: FxEffect | undefined;
   private sprite: Phaser.GameObjects.Sprite | undefined;
   private disposed = false;
+  private enabled = true;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -80,7 +81,7 @@ export class ExhaustLayer {
   ): void {
     const sprite = this.sprite;
     const effect = this.effect;
-    if (sprite === undefined || effect === undefined) return;
+    if (sprite === undefined || effect === undefined || !this.enabled) return;
     // Velocity is only ever the last snapshot's: the predicted pose carries
     // position and heading but no velocity, so under the solo cockpit the plume
     // trails the hull by about a patch. At the width of a flame that does not
@@ -109,6 +110,21 @@ export class ExhaustLayer {
       )
       .setAlpha(plume.alpha);
     sprite.anims.timeScale = plume.timeScale;
+  }
+
+  /**
+   * Off hides the plume and stops its animation, which a hidden sprite would
+   * otherwise keep advancing every frame; a lower quality level does without it.
+   */
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    const sprite = this.sprite;
+    if (sprite === undefined) return;
+    if (enabled) sprite.anims.resume();
+    else {
+      sprite.setVisible(false);
+      sprite.anims.pause();
+    }
   }
 
   private dispose(): void {
@@ -140,5 +156,7 @@ export class ExhaustLayer {
       .setDepth(DEPTH)
       .setVisible(false);
     this.sprite.play(ANIMATION_KEY);
+    // Switched off before the atlas landed: arrive paused.
+    if (!this.enabled) this.sprite.anims.pause();
   }
 }

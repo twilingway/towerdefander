@@ -13,7 +13,6 @@ export interface SoloCockpitProps {
   readonly onAimRelease: () => void;
   readonly onMachineGunHold: (held: boolean) => void;
   readonly onCannonFromStick: (held: boolean) => void;
-  readonly machineGunHeat: number;
   readonly machineGunOverheated: boolean;
 }
 
@@ -38,7 +37,6 @@ export function SoloCockpit({
   onAimRelease,
   onMachineGunHold,
   onCannonFromStick,
-  machineGunHeat,
   machineGunOverheated
 }: SoloCockpitProps) {
   return (
@@ -66,7 +64,6 @@ export function SoloCockpit({
             testId="cockpit-trigger-mg"
             label="Нос"
             enabled={enabled}
-            heat={machineGunHeat}
             overheated={machineGunOverheated}
             onHoldChange={onMachineGunHold}
           />

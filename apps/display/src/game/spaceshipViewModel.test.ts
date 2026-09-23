@@ -177,6 +177,12 @@ describe("nextPixelRatioCap", () => {
   it("stops at the bottom of the ladder", () => {
     expect(nextPixelRatioCap(1, run(12))).toBe(1);
   });
+
+  it("reads a scene paced to thirty against thirty, not against the panel", () => {
+    // The low quality level holds an even 30 on purpose; that is not a struggle.
+    expect(nextPixelRatioCap(3, run(29.5), 30)).toBe(3);
+    expect(nextPixelRatioCap(3, run(12), 30)).toBe(2);
+  });
 });
 
 describe("getBackingStoreSize", () => {

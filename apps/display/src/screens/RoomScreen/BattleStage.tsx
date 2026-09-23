@@ -2,9 +2,9 @@ import type { DisplayRoomView, UpgradeId } from "@spaceship-defender/protocol";
 import { Profiler, useEffect, type ReactNode } from "react";
 
 import { DiagnosticsHud } from "../../components/DiagnosticsHud/index.js";
-import { RotateNotice } from "../../components/RotateNotice/index.js";
 import { recordComponentCommit } from "../../model/componentCost.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
+import { useLocalRecord } from "../../model/hooks/useLocalRecord.js";
 import { readDiagnostics, recordCommitWork, writeFrameStats } from "../../model/instruments.js";
 import { readLiveGame } from "../../model/liveView.js";
 import type { ModuleTree } from "../../model/moduleTree.js";
@@ -33,6 +33,8 @@ import {
 
 /** What the fight needs to know about this page's own seat, if it holds one. */
 export interface BattleCockpit {
+  /** This page hosts the run, so leaving it closes nothing for anyone else. */
+  readonly hostedLocally?: boolean;
   readonly seated: boolean;
   readonly seat: DisplayRoomView["players"][number] | undefined;
   readonly controls: SoloCockpitControls;
@@ -67,6 +69,9 @@ interface BattleStageProps {
  * over both, in the reference prototype's order. Nothing above the canvas is
  * re-rendered or re-attributed while the arena is drawing.
  */
+/** A page hosting its own run leaves it; there is no room to close. */
+const LOCAL_CLOSE_LABEL = { idle: "Выйти", busy: "Выходим…" } as const;
+
 export function BattleStage({
   view,
   diagnostics,
@@ -94,6 +99,16 @@ export function BattleStage({
   useEffect(() => {
     void enterFullscreenIfWanted();
   }, []);
+  /*
+   * A run this page hosted has no server to hold its record, so the device
+   * holds it. Read here rather than in the overlay because the overlay is also
+   * how a networked run ends, and that one is not this device's to score.
+   */
+  const record = useLocalRecord(
+    cockpit.hostedLocally === true && view.game.encounter.phase === "result",
+    view.game.encounter.score,
+    view.game.encounter.waveNumber
+  );
   return (
     <MeasuredWhenAsked
       measuring={diagnostics}
@@ -109,9 +124,8 @@ export function BattleStage({
           re-attributed while the arena is drawing.
         */}
         <MeteredPanel id="сцена" measuring={diagnostics}>
-          {portrait ? (
-            <RotateNotice />
-          ) : (
+          {/* Upright, the screen shows only the request to turn it; see `RoomScreen`. */}
+          {portrait ? null : (
             <SpaceshipCanvas
               game={view.game}
               /*
@@ -221,6 +235,8 @@ export function BattleStage({
               crewSize={view.crewSize}
               closing={closingRoom}
               onClose={onCloseRoom}
+              {...(cockpit.hostedLocally === true ? { closeLabel: LOCAL_CLOSE_LABEL } : {})}
+              {...(record === null ? {} : { record })}
               {...(!cockpit.seated
                 ? {}
                 : {

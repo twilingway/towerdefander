@@ -52,16 +52,22 @@ const SPAN: Record<FxCategory, number> = {
  */
 const MUZZLE_MIN_UNITS = 40;
 
-/** Above the enemies it happens to (7), below the player's hull (10). */
-const DEPTH = 8;
 /**
- * Where a category is drawn instead, when the default is wrong for it.
+ * The one depth every additive thing in the scene is drawn at: every burst and
+ * flash, and the shield's band.
  *
- * A splash on the shield has to sit over the barrier it lands on (15), and the
- * barrier is over the hull - so the one depth that suits every blast and flash
- * does not suit this one.
+ * Above everything else, and all together, because on a tiling mobile GPU the
+ * switch into additive blending and back is what costs, not the blending.
+ * Measured on a Redmi 4X: the fight made six blend switches a frame with the
+ * flashes under the hull (8) and the band over it (15), and it ran at 33.5 fps;
+ * the same flashes, still additive, gathered at one depth over everything ran
+ * at 43.5 - drawn with normal blending instead, 48.7. So a flash now lies over
+ * the hull it leaves rather than under it, which at the size of a muzzle flash
+ * is the smaller price by far.
  */
-const CATEGORY_DEPTH: Partial<Record<FxCategory, number>> = { shield: 16 };
+export const ADDITIVE_DEPTH = 30;
+const DEPTH = ADDITIVE_DEPTH;
+const CATEGORY_DEPTH: Partial<Record<FxCategory, number>> = {};
 
 /**
  * Beyond this many at once the screen is already unreadable, and a burst nobody

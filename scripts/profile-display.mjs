@@ -12,7 +12,7 @@
  * top of every profile ever taken.
  *
  * Usage (the stand has to be up):
- *   node scripts/profile-display.mjs --cpu=4 --seconds=10
+ *   node scripts/profile-display.mjs --cpu=4 --seconds=10 [--place=server]
  */
 
 import { chromium } from "@playwright/test";
@@ -30,6 +30,14 @@ const url = process.env.BENCH_URL ?? "http://127.0.0.1:5193/";
 const startWave = Number(
   process.argv.find((argument) => argument.startsWith("--wave="))?.slice(7) ?? 0
 );
+/**
+ * Who steps the fight: `device` (the default) is the run this tab hosts,
+ * `server` the room for one. Both draw the same picture, so comparing the two
+ * is how the cost of hosting the simulation on the page gets measured.
+ */
+const place =
+  process.argv.find((argument) => argument.startsWith("--place="))?.slice(8) ?? "device";
+if (place !== "device" && place !== "server") throw new Error("--place is device or server");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -38,7 +46,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(url, { waitUntil: "load" });
 
 await page.getByRole("button", { name: "Кампания I: Завеса" }).click();
-await page.getByRole("button", { name: "Соло" }).click();
+await page.getByRole("button", { name: place === "server" ? "Через сервер" : "Соло" }).click();
 if (startWave > 1) {
   const field = page.getByLabel("Начать с волны (для тестов)");
   if ((await field.count()) === 0) {
@@ -103,7 +111,7 @@ for (const [id, count] of selfSamples) {
 rows.sort((left, right) => right.share - left.share);
 
 console.log("");
-console.log(`профиль: ${url}`);
+console.log(`профиль: ${url} (${place === "server" ? "через сервер" : "на устройстве"})`);
 console.log(
   `${seconds} с, ${String(totalSamples)} проб` +
     (cpuThrottle > 1 ? `, процессор замедлен в ${cpuThrottle} раз` : "")

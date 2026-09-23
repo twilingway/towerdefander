@@ -2,6 +2,8 @@ import type { Request, RequestHandler, Response } from "express";
 
 import { balancePresetsFileSchema, type PublicShipCatalogue } from "@spaceship-defender/protocol";
 
+import { toPublicShipCatalogue } from "@spaceship-defender/balance-core";
+
 import { isStatsRequestAuthorized } from "../stats/access.js";
 import { assertTuningIsPlayable, createDefaultPresetsFile, type BalanceStore } from "./store.js";
 
@@ -163,19 +165,7 @@ export function createBalanceSaveHandler(options: BalanceRouteOptions): RequestH
  */
 export function createShipCatalogueHandler(options: BalanceRouteOptions): RequestHandler {
   return (_request: Request, response: Response): void => {
-    const tuning = options.store.getActiveTuning();
-    const catalogue: PublicShipCatalogue = {
-      ships: Object.entries(tuning.shipArchetypes).map(([id, hull]) => ({
-        id,
-        label: hull.label,
-        description: hull.description,
-        visual: hull.visual,
-        unlockedAtWave: hull.unlockedAtWave,
-        tiers: hull.tiers,
-        endlessTier: hull.endlessTier
-      })),
-      defaultShipId: tuning.defaultShipArchetypeId
-    };
+    const catalogue: PublicShipCatalogue = toPublicShipCatalogue(options.store.getActiveTuning());
     applyNoStoreHeaders(response);
     response.setHeader("Access-Control-Allow-Origin", "*");
     response.json(catalogue);

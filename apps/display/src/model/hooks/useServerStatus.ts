@@ -9,10 +9,19 @@ import { fetchShipCatalogue } from "../shipCatalogue.js";
  * display that cannot reach the route still creates rooms, on the preset's own
  * default hull.
  */
-export function useShipCatalogue(gameServerUrl: string): PublicShipCatalogue | undefined {
+/**
+ * `enabled` is false on a page that hosts its own run: it has a preset of its
+ * own, and asking a server for hulls it will not play would make "plays with no
+ * server" mean "plays as long as the server answers".
+ */
+export function useShipCatalogue(
+  gameServerUrl: string,
+  enabled = true
+): PublicShipCatalogue | undefined {
   const [catalogue, setCatalogue] = useState<PublicShipCatalogue | undefined>(undefined);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const controller = new AbortController();
     void fetchShipCatalogue(gameServerUrl, controller.signal).then((next) => {
       if (!controller.signal.aborted) setCatalogue(next);
@@ -20,7 +29,7 @@ export function useShipCatalogue(gameServerUrl: string): PublicShipCatalogue | u
     return () => {
       controller.abort();
     };
-  }, [gameServerUrl]);
+  }, [gameServerUrl, enabled]);
 
   return catalogue;
 }

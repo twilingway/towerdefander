@@ -391,7 +391,6 @@ export function CockpitPanel({
     | "enabled"
     | "driveDeadzoneShare"
     | "aimDeadzoneShare"
-    | "machineGunHeat"
     | "machineGunOverheated"
     | "cannonHeat"
     | "cannonOverheated"
@@ -404,7 +403,6 @@ export function CockpitPanel({
       enabled={game.encounter.phase === "combat"}
       driveDeadzoneShare={game.helm.driveDeadzoneShare}
       aimDeadzoneShare={game.helm.aimDeadzoneShare}
-      machineGunHeat={game.machineGun.heat / game.machineGun.capacity}
       machineGunOverheated={game.machineGun.overheated}
       {...controls}
     />
