@@ -1,8 +1,8 @@
 ## 1. Сборка и манифест
 
 - [ ] 1.1 Добавить `vite-plugin-pwa` в `apps/display` и собрать `generateSW` с манифестом,
-      `registerType: "prompt"`, precache без музыки и runtime-кэшем музыки. Проверка: `pnpm build`,
-      в `apps/display/dist` есть `sw.js` и `manifest.webmanifest`, в списке precache нет
+      `registerType: "prompt"`, precache без музыки, музыка мимо воркера. Проверка: `pnpm build`, в
+      `apps/display/dist` есть `sw.js` и `manifest.webmanifest`, в списке precache нет
       `.mp3`/`.ogg`.
 - [ ] 1.2 Иконки 192, 512 и maskable из утверждённой оператором картинки, ссылки в `index.html`.
       Проверка: манифест в DevTools без ошибок на боевой сборке через `vite preview`.
