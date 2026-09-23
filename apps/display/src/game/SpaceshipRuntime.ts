@@ -4,6 +4,7 @@ import Phaser from "phaser";
 import { watchDevicePixelRatio } from "./devicePixels.js";
 import { BASE_VIEWPORT_HEIGHT, BASE_VIEWPORT_WIDTH } from "./scene/camera.js";
 import { getBackingStoreSize } from "./viewport.js";
+import { announceSceneFrame } from "../model/sceneFrames.js";
 import { QUALITY_SETTINGS, type QualityLevel } from "./quality.js";
 import { SpaceshipScene } from "./scene/SpaceshipScene.js";
 import type { ScenePrediction } from "./scene/entities.js";
@@ -216,6 +217,8 @@ export function createSpaceshipRuntime(
   game.events.once(Phaser.Core.Events.POST_RENDER, () => {
     if (resting) game.loop.sleep();
   });
+  // Before the scene updates, so what the HUD writes lands in the frame it draws.
+  game.events.on(Phaser.Core.Events.PRE_STEP, announceSceneFrame);
   const applyTarget = (): void => {
     if (!game.isBooted) return;
     const next = target();

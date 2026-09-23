@@ -102,6 +102,13 @@ export function createInTabHost(options: RunHostOptions): RunHost {
 /** How long a running worker may be silent before the page says so. */
 const SILENT_WORKER_MS = 1_000;
 
+/**
+ * How long an arrived view may wait for a drawn frame before it is handed over
+ * anyway: the scene is not always drawing - not yet loaded, resting under the
+ * result screen - and the panels must not wait on it then.
+ */
+const VIEW_WAIT_FOR_DRAW_MS = 50;
+
 /** The run on a thread of its own; this side only relays. */
 export function createWorkerHost(options: RunHostOptions): RunHost {
   const worker = new Worker(new URL("./runWorker.ts", import.meta.url), { type: "module" });
@@ -114,6 +121,25 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
   let heardAt = performance.now();
   let reportedSilence = false;
 
+  /*
+   * A view is handed to the page in the frame the scene draws, not when it
+   * arrives.
+   *
+   * Handing it over writes the panels, and a write between two draws makes
+   * the browser compose a frame of its own - under a 30 fps cap, in exactly
+   * the refresh the cap was meant to leave free (see `sceneFrames.ts`). The
+   * fallback timer covers a scene that is not drawing.
+   */
+  let pendingView: DisplayRoomView | undefined;
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  const flushView = (): void => {
+    if (flushTimer !== undefined) clearTimeout(flushTimer);
+    flushTimer = undefined;
+    const view = pendingView;
+    pendingView = undefined;
+    if (view !== undefined) deliverView(view, options.offer);
+  };
+
   worker.onmessage = (event: MessageEvent<FromRunWorker>) => {
     heardAt = performance.now();
     reportedSilence = false;
@@ -121,7 +147,8 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
     if (message.type === "pose") pose = message.pose;
     else if (message.type === "view") {
       lastView = message.view;
-      deliverView(message.view, options.offer);
+      pendingView = message.view;
+      flushTimer ??= setTimeout(flushView, VIEW_WAIT_FOR_DRAW_MS);
     } else console.error(`[local run] the worker failed: ${message.message}`);
   };
   worker.onerror = (event) => {
@@ -157,7 +184,15 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
   };
 
   return {
-    driver: createRemoteDriver({ latestPose: () => pose, sendIntent, paused: () => paused }),
+    driver: createRemoteDriver({
+      latestPose: () => pose,
+      sendIntent: () => {
+        sendIntent();
+        // `drive` runs inside the frame the scene draws.
+        flushView();
+      },
+      paused: () => paused
+    }),
     idleTick: sendIntent,
     vote(upgradeId) {
       const game = lastView?.game;
@@ -184,6 +219,7 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
     },
     dispose: () => {
       clearInterval(watchdog);
+      if (flushTimer !== undefined) clearTimeout(flushTimer);
       worker.onmessage = null;
       worker.terminate();
     }

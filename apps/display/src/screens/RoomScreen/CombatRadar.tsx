@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { drawCombatRadar, easeRing, RADAR_UNITS, ringFraction } from "./combatRadarPainter.js";
 import { toRadarFrame } from "./radarFrame.js";
 import type { ToRadarWorker } from "./radarWorker.js";
+import { onSceneFrame, sceneFramesFlowing } from "../../model/sceneFrames.js";
 
 /**
  * The radar, on the canvas and on the frame clock.
@@ -39,6 +40,7 @@ const MAX_PIXEL_RATIO = 2.5;
  * to fifty milliseconds late is the one thing on this dial a crew notices.
  */
 const REDRAW_INTERVAL_MS = PATCH_INTERVAL_MS;
+const FRAME_SLACK_MS = 1000 / 120;
 
 interface RadarAttributes {
   readonly "data-enemy-count": string;
@@ -159,10 +161,16 @@ export function PolledCombatRadar({
           });
     if (element !== null) observer?.observe(element);
 
+    const paintOnOwnClock = (): void => {
+      frame = requestAnimationFrame(paintOnOwnClock);
+      // While the scene draws, the radar paints in its frames instead; see `sceneFrames.ts`.
+      if (!sceneFramesFlowing()) paint();
+    };
     const paint = (): void => {
-      frame = requestAnimationFrame(paint);
       const now = performance.now();
-      if (now - paintedAt < REDRAW_INTERVAL_MS) return;
+      // Half a 60 Hz frame of slack: paints that arrive on frames 33.3 ms apart
+      // must not measure 33.2 and skip every other one.
+      if (now - paintedAt < REDRAW_INTERVAL_MS - FRAME_SLACK_MS) return;
       // How long the arcs have had to move, which is not the same as how long
       // they were meant to have: a busy frame delays this paint, and the arcs
       // have to cover that time rather than a fixed step.
@@ -221,8 +229,10 @@ export function PolledCombatRadar({
       writeRadarAttributes(shell, game);
     };
 
-    frame = requestAnimationFrame(paint);
+    frame = requestAnimationFrame(paintOnOwnClock);
+    const unsubscribe = onSceneFrame(paint);
     return () => {
+      unsubscribe();
       cancelAnimationFrame(frame);
       observer?.disconnect();
     };
