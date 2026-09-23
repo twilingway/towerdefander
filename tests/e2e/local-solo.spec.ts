@@ -51,6 +51,11 @@ test("a campaign run plays on the device with no server", async ({ page }) => {
   // Nothing about a room, because there is none.
   await expect(page.locator(".room-code")).toHaveCount(0);
   await expect(page.getByTestId("diagnostics-ping")).toHaveText("—");
+  // The way out leaves the run; there is no room to close for anybody else.
+  await page.getByRole("button", { name: "Настройки" }).click();
+  const window = page.getByTestId("settings-window");
+  await expect(window.getByRole("button", { name: "Выйти", exact: true })).toBeVisible();
+  await expect(window.getByText("Закрыть комнату")).toHaveCount(0);
 
   expect(blocked, "the page reached for the game server").toEqual([]);
 });

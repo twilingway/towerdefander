@@ -256,6 +256,7 @@ export function RoomScreen({
   const joinUrl = useMemo(() => createControllerJoinUrl(CONTROLLER_URL, view.roomId), [view]);
   /** Sixteen published hulls is a match and nothing else has them. */
   const match = (view.game?.arenaShips.length ?? 0) > 0;
+  const hostedLocally = cockpitSource?.local === true;
   const moduleTree = selectModuleTree(ships, view.shipArchetypeId, preview !== undefined);
 
   /**
@@ -379,22 +380,25 @@ export function RoomScreen({
            * the other thing they came to change.
            *
            * Leaving a match is not closing a room: the fifteen other hulls go
-           * on fighting, and the room lives until the match is decided.
+           * on fighting, and the room lives until the match is decided. A run
+           * this device hosts has no room at all, and nobody else to close it for.
            */}
           <SettingsPanel
             action={{
               label:
                 session?.closingRoom === true
-                  ? match
+                  ? match || hostedLocally
                     ? "Выходим…"
                     : "Закрываем комнату…"
                   : match
                     ? "Выйти из боя"
-                    : "Закрыть комнату",
-              confirmLabel: match ? "Точно выйти?" : "Закрыть для всех?",
+                    : hostedLocally
+                      ? "Выйти"
+                      : "Закрыть комнату",
+              confirmLabel: match || hostedLocally ? "Точно выйти?" : "Закрыть для всех?",
               disabled: session?.closingRoom === true,
               onClick: () => {
-                if (match) onLeaveRoom();
+                if (match || hostedLocally) onLeaveRoom();
                 else onCloseRoom();
               }
             }}
