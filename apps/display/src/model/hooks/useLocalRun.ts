@@ -12,6 +12,7 @@ import type { PredictionDriver } from "../shipPrediction.js";
 import { useViewPublisher } from "./useViewPublisher.js";
 import { resetWorld } from "../worldStore.js";
 import { readLiveView, setLiveView } from "../liveView.js";
+import { onSceneFrame } from "../sceneFrames.js";
 import type { SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
 import type { BalanceTuning } from "@spaceship-defender/protocol";
 
@@ -23,6 +24,9 @@ import type { BalanceTuning } from "@spaceship-defender/protocol";
  * host can know about - when the page is not being looked at, how often React
  * should be told, and when the page leaves.
  */
+
+/** How long a run waits for the arena's first frame before it starts regardless. */
+const SCENE_WAIT_MS = 10_000;
 export interface LocalRunSession {
   readonly view: DisplayRoomView | undefined;
   readonly driver: PredictionDriver;
@@ -94,17 +98,34 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
    */
   useEffect(() => {
     const upright = globalThis.matchMedia("(orientation: portrait)");
+    /*
+     * And it waits for the arena's first frame. The pictures and sounds are
+     * loaded before the lobby lets anyone in, but the scene itself boots only
+     * once the run is showing: on a Redmi 4X that took half a second, and the
+     * first enemy was already on the field when the picture arrived. Not for
+     * ever, though - a device whose renderer never draws still gets its fight.
+     */
+    let awaitingScene = true;
     const sync = () => {
-      const hidden = document.visibilityState === "hidden" || upright.matches;
+      const hidden = document.visibilityState === "hidden" || upright.matches || awaitingScene;
       host.setPaused(hidden);
       setPaused(hidden);
     };
+    const sceneArrived = () => {
+      if (!awaitingScene) return;
+      awaitingScene = false;
+      sync();
+    };
+    const stopWaiting = onSceneFrame(sceneArrived);
+    const giveUp = setTimeout(sceneArrived, SCENE_WAIT_MS);
     sync();
     upright.addEventListener("change", sync);
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("blur", sync);
     window.addEventListener("focus", sync);
     return () => {
+      stopWaiting();
+      clearTimeout(giveUp);
       upright.removeEventListener("change", sync);
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("blur", sync);
