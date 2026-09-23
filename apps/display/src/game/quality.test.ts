@@ -26,7 +26,12 @@ describe("quality levels", () => {
 
   it("steps down one level after a run of slow samples", () => {
     expect(nextAutoQuality("high", slow)).toBe("mid");
-    expect(nextAutoQuality("mid", slow.map(() => 20))).toBe("low");
+    expect(
+      nextAutoQuality(
+        "mid",
+        slow.map(() => 20)
+      )
+    ).toBe("low");
   });
 
   it("leaves a mid that holds its paced 30 alone", () => {
