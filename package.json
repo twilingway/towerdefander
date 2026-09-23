@@ -27,6 +27,7 @@
     "dev:bots": "cross-env ALLOW_BOT_CREW=true ALLOW_START_WAVE=true node scripts/run-dev.mjs",
     "watch:bots": "node scripts/watch-bot-crew.mjs",
     "demo:visible": "node scripts/run-visible-demo.mjs",
+    "pwa:check": "node scripts/check-pwa.mjs",
     "demo:verify": "cross-env DEMO_HEADLESS=1 DEMO_VERIFY=1 DEMO_BOT_LEVEL=rookie node scripts/run-visible-demo.mjs",
     "demo:guardian": "cross-env DEMO_SHIP=guardian node scripts/run-visible-demo.mjs",
     "demo:blade": "cross-env DEMO_SHIP=blade node scripts/run-visible-demo.mjs",

@@ -51,6 +51,7 @@ Workspace names: `@spaceship-defender/{server,display,controller,admin,game-core
 | `pnpm watch:bots`                        | Real Chrome on a room the room itself flies; reuses a running stand or starts one  |
 | `pnpm demo:visible`                      | Opens real Chrome, three SDK auto-crew controllers play a run (ports 36567/36173)  |
 | `pnpm demo:verify`                       | Headless assertion pass over the same demo; deliberately outside `pnpm check`      |
+| `pnpm pwa:check`                         | The display's service worker end to end on a production build (port 36480)         |
 | `pnpm benchmark:combat`                  | Worst-case combat room stepping benchmark                                          |
 | `pnpm stats:autopilot`                   | One headless measurement cell: N bot runs on one preset, level and crew            |
 | `pnpm stats:batch --out <dir>`           | The whole matrix — levels x enemy offsets x crew sizes x presets — into a report   |
