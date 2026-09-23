@@ -111,6 +111,32 @@ try {
     firstReading !== null && (await timer.textContent()) !== firstReading,
     "offline: the solo run's clock is running"
   );
+  // The music plays through an `<audio>` element, which asks for byte ranges.
+  const musicUrl = await page.evaluate(
+    () =>
+      performance
+        .getEntriesByType("resource")
+        .map((entry) => entry.name)
+        .find((name) => /\/theme-[^/]+\.(mp3|ogg)$/.test(name)) ?? null
+  );
+  const playedMs = await page.evaluate(async (url) => {
+    if (url === null) return -1;
+    const track = new Audio(url);
+    track.muted = true;
+    try {
+      await track.play();
+    } catch {
+      return -2;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const at = track.currentTime;
+    track.pause();
+    return Math.round(at * 1000);
+  }, musicUrl);
+  check(
+    playedMs > 500,
+    `offline: the music plays from the cache (${String(playedMs)} ms of ${musicUrl ?? "no track found"})`
+  );
   await context.setOffline(false);
 
   // 3. A release arrives mid-fight.
@@ -129,6 +155,10 @@ try {
     "a new build is not offered in a fight"
   );
   await page.goto(`${base}/`, { waitUntil: "load" });
+  check(
+    ((await page.getByTestId("start-footer").textContent()) ?? "").includes("pwa-check-2"),
+    "a plain load online brings the new build, without pressing anything"
+  );
   await askForUpdate(page);
   const notice = page.getByTestId("update-notice");
   const offered = await notice

@@ -1,9 +1,9 @@
 ## 1. Сборка и манифест
 
 - [x] 1.1 Добавить `vite-plugin-pwa` в `apps/display` и собрать `generateSW` с манифестом,
-      `registerType: "prompt"`, precache без музыки, музыка мимо воркера. Проверка: `pnpm build`, в
-      `apps/display/dist` есть `sw.js` и `manifest.webmanifest`, в списке precache нет
-      `.mp3`/`.ogg`.
+      `registerType: "prompt"`, precache всей сборки с музыкой, `directoryIndex: null`. Проверка:
+      `pnpm build`, в `apps/display/dist` есть `sw.js` и `manifest.webmanifest`; `pnpm pwa:check` —
+      музыка играет без сети, обычная загрузка главной при сети приносит новую сборку.
 - [x] 1.2 Иконки 192, 512 и maskable из утверждённой оператором картинки, ссылки в `index.html`.
       Проверка: `pnpm pwa:check` — манифест найден и разбирается без ошибок (`Page.getAppManifest`,
       то же, что показывает DevTools).

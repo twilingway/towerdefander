@@ -46,14 +46,16 @@ const pwa = VitePWA({
     ]
   },
   workbox: {
-    // Everything a solo fight needs without a network. Music stays out: an
-    // `<audio>` element asks for it in ranges, which the cache cannot answer.
-    globPatterns: ["**/*.{js,css,html,json,webp,png,jpg,svg,woff2,mp3}"],
-    globIgnores: ["**/theme-*"],
+    // Everything a solo fight needs without a network, the music included.
+    globPatterns: ["**/*.{js,css,html,json,webp,png,jpg,svg,woff2,mp3,ogg}"],
     cleanupOutdatedCaches: true,
     // Pages from the network first, so a release arrives with the first load
     // online; the cached shell only when there is no network at all.
     navigateFallback: null,
+    // Workbox answers "/" from the precache by mapping it to index.html, before
+    // the network-first route below ever sees it - the start screen then came
+    // from the old build on every load, whatever the server held.
+    directoryIndex: null,
     runtimeCaching: [
       {
         urlPattern: ({ request }) => request.mode === "navigate",
