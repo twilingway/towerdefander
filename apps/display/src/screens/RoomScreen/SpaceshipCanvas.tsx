@@ -5,6 +5,7 @@ import {
   AUTO_START,
   nextAutoQuality,
   QUALITY_FALLBACK_SAMPLES,
+  QUALITY_SETTINGS,
   type QualityChoice,
   type QualityLevel
 } from "../../game/quality.js";
@@ -250,11 +251,14 @@ export function SpaceshipCanvas({
   const autoQuality = useRef<QualityLevel>(AUTO_START);
   const qualityWindow = useRef<number[]>([]);
   const appliedQuality = useRef<QualityLevel | undefined>(undefined);
+  const fpsWindow = useRef<number[]>([]);
   const qualityLevelFor = (choice: QualityChoice): QualityLevel =>
     choice === "auto" ? autoQuality.current : choice;
   const applyQuality = (runtime: SpaceshipRuntime, level: QualityLevel): void => {
     if (appliedQuality.current === level) return;
     appliedQuality.current = level;
+    // Samples taken at another level's pace say nothing about this one.
+    fpsWindow.current.length = 0;
     runtime.setQuality(level);
     setActiveQuality(level);
   };
@@ -268,7 +272,6 @@ export function SpaceshipCanvas({
 
   const onFrameStatsReference = useRef(onFrameStats);
   onFrameStatsReference.current = onFrameStats;
-  const fpsWindow = useRef<number[]>([]);
   // Read at render, and the component tests render without a document at all -
   // the types say `location` is always there, the renderer says otherwise.
   const pixelRatioCap = useRef(
@@ -292,7 +295,8 @@ export function SpaceshipCanvas({
       const window = fpsWindow.current;
       window.push(fps);
       if (window.length > PIXEL_RATIO_FALLBACK_SAMPLES) window.shift();
-      const next = nextPixelRatioCap(pixelRatioCap.current, window);
+      const frameCap = QUALITY_SETTINGS[appliedQuality.current ?? AUTO_START].frameCap;
+      const next = nextPixelRatioCap(pixelRatioCap.current, window, frameCap);
       if (next !== pixelRatioCap.current) {
         pixelRatioCap.current = next;
         window.length = 0;
