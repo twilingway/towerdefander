@@ -1,7 +1,16 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  type NavigateOptions,
+  type To
+} from "react-router";
 
 import { GAME_SERVER_URL } from "./model/environment.js";
+import { runningInstalled } from "./model/installedApp.js";
 import { useDiagnosticsMeters } from "./model/hooks/useDiagnosticsMeters.js";
 import { useDisplaySwitches } from "./model/hooks/useDisplaySwitches.js";
 import { useRoomSession } from "./model/hooks/useRoomSession.js";
@@ -51,7 +60,15 @@ export function DisplayApp() {
     status: session.status
   });
 
-  const navigate = useNavigate();
+  const routerNavigate = useNavigate();
+  /*
+   * The installed app moves between screens without growing its history: the
+   * system back then leaves the app or opens the pause (`SettingsPanel`), and
+   * `closeApp` keeps working - Chrome closes a window by script only while it
+   * holds one entry.
+   */
+  const navigate = (to: To, options?: NavigateOptions) =>
+    routerNavigate(to, runningInstalled() ? { ...options, replace: true } : options);
   const seated =
     (session.status === "connected" || session.status === "reconnecting") &&
     session.view !== undefined;

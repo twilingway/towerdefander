@@ -3,6 +3,7 @@ import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
 import { InstallButton } from "../../components/InstallButton/index.js";
+import { closeApp, runningInstalled } from "../../model/installedApp.js";
 import { UpdateNotice } from "../../components/UpdateNotice/index.js";
 import { SettingsPanel } from "../RoomScreen/SettingsPanel.js";
 import { MENU_THEME } from "../../audio/themes.js";
@@ -65,6 +66,16 @@ export function StartScreen({ maintenance, onPick }: StartScreenProps) {
       <div className="start-settings">
         <SettingsPanel />
       </div>
+      {/*
+       * The way out of the installed app, in the corner opposite the gear: it is
+       * always there, and in the header it pushed the tiles off a short screen.
+       * Only where it can work - a script may close the installed app, never a tab.
+       */}
+      {runningInstalled() && (
+        <button type="button" className="start-exit" data-testid="close-app" onClick={closeApp}>
+          Выйти из игры
+        </button>
+      )}
       <header className="start-header">
         <p className="start-rule">
           <span>Выберите режим</span>

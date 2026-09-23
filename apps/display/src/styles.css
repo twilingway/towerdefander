@@ -2997,6 +2997,20 @@ p {
 }
 
 /* The start screen has no header to hang it in, so it gets the corner. */
+.start-exit {
+  position: absolute;
+  z-index: 40;
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: max(0.75rem, env(safe-area-inset-left));
+  padding: 0.5rem 0.9rem;
+  border: 1px solid rgb(126 214 255 / 40%);
+  border-radius: 0.75rem;
+  background: #08181f;
+  color: #cfe6ff;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
 .start-settings {
   position: absolute;
   z-index: 40;

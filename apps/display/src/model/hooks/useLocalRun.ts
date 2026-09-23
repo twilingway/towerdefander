@@ -13,6 +13,7 @@ import { useViewPublisher } from "./useViewPublisher.js";
 import { resetWorld } from "../worldStore.js";
 import { readLiveView, setLiveView } from "../liveView.js";
 import { onSceneFrame } from "../sceneFrames.js";
+import { settingsOpen, subscribeToSettingsWindow } from "../settingsWindow.js";
 import type { SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
 import type { BalanceTuning } from "@spaceship-defender/protocol";
 
@@ -107,7 +108,9 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
      */
     let awaitingScene = true;
     const sync = () => {
-      const hidden = document.visibilityState === "hidden" || upright.matches || awaitingScene;
+      // The settings window is the pause: nothing read there should cost the fight.
+      const hidden =
+        document.visibilityState === "hidden" || upright.matches || awaitingScene || settingsOpen();
       host.setPaused(hidden);
       setPaused(hidden);
     };
@@ -117,6 +120,7 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
       sync();
     };
     const stopWaiting = onSceneFrame(sceneArrived);
+    const stopWatchingSettings = subscribeToSettingsWindow(sync);
     const giveUp = setTimeout(sceneArrived, SCENE_WAIT_MS);
     sync();
     upright.addEventListener("change", sync);
@@ -125,6 +129,7 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
     window.addEventListener("focus", sync);
     return () => {
       stopWaiting();
+      stopWatchingSettings();
       clearTimeout(giveUp);
       upright.removeEventListener("change", sync);
       document.removeEventListener("visibilitychange", sync);
