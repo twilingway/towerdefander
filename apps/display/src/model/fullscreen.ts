@@ -33,6 +33,37 @@ function lockLandscape(): void {
   void orientation.lock("landscape").catch(() => undefined);
 }
 
+/**
+ * Whether this page can turn the phone by itself: a touch device whose browser
+ * gives both full screen and an orientation lock. Chrome on Android does; iOS
+ * Safari gives neither, and a desktop has nothing to turn.
+ */
+export function canTurnToLandscape(): boolean {
+  if (typeof window === "undefined" || !fullscreenSupported()) return false;
+  const orientation = (globalThis as { screen?: Screen }).screen?.orientation;
+  return typeof orientation?.lock === "function" && window.matchMedia("(pointer: coarse)").matches;
+}
+
+/**
+ * Turns the phone from a press: takes the whole screen if the page does not
+ * hold it yet - the lock is granted only in full screen - then locks it wide.
+ *
+ * Needed beside the automatic entry because that one fires once per session:
+ * a page opened upright, or one that left full screen by a swipe, has already
+ * spent it, and without this the notice could only ask.
+ */
+export async function turnToLandscape(): Promise<void> {
+  if (typeof document === "undefined") return;
+  if (document.fullscreenElement === null) {
+    const granted = await document.documentElement.requestFullscreen().then(
+      () => true,
+      () => false
+    );
+    if (!granted) return;
+  }
+  lockLandscape();
+}
+
 /** Toggles, and swallows a refusal: a browser may say no and it is not an error. */
 export function toggleFullscreen(): void {
   if (typeof document === "undefined") return;

@@ -1256,6 +1256,17 @@ p {
   opacity: 0.75;
 }
 
+.rotate-notice__turn {
+  margin-top: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid rgba(126, 240, 255, 0.6);
+  border-radius: 0.75rem;
+  background: #0c2a3a;
+  color: #cfe6ff;
+  font: inherit;
+  font-weight: 600;
+}
+
 @keyframes rotate-notice-turn {
   0%,
   60%,

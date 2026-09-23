@@ -7,6 +7,7 @@ import { PolledFpsReadout } from "../../components/FpsReadout/index.js";
 import { LobbyLayout } from "../../components/LobbyLayout/index.js";
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
 import { RotateNotice, useIsPortrait } from "../../components/RotateNotice/index.js";
+import { canTurnToLandscape, turnToLandscape } from "../../model/fullscreen.js";
 import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
 import { readArenaCentre } from "../../model/arenaPointer.js";
 import { toAimWorld, toPredictionWorld } from "../../model/cockpitWorld.js";
@@ -477,7 +478,17 @@ export function RoomScreen({
        * the HUD, the result screen and the instruments - all laid out for a wide
        * glass, and piled onto each other upright.
        */}
-      {portrait && view.game !== null && <RotateNotice />}
+      {portrait && view.game !== null && (
+        <RotateNotice
+          {...(canTurnToLandscape()
+            ? {
+                onTurn: () => {
+                  void turnToLandscape();
+                }
+              }
+            : {})}
+        />
+      )}
     </main>
   );
 }

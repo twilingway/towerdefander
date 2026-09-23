@@ -24,7 +24,13 @@ export function useIsPortrait(): boolean {
   return portrait;
 }
 
-export function RotateNotice() {
+/**
+ * The request to turn the glass, and - where the browser lets a page do it -
+ * a button that turns it. Full screen and an orientation lock are granted only
+ * from a press, so the button is the press; without `onTurn` the notice can
+ * only ask.
+ */
+export function RotateNotice({ onTurn }: { readonly onTurn?: () => void }) {
   return (
     <div className="rotate-notice" data-testid="rotate-notice" role="alert">
       <div className="rotate-notice__icon" aria-hidden="true">
@@ -32,6 +38,16 @@ export function RotateNotice() {
       </div>
       <h2>Поверните устройство</h2>
       <p>Поле боя рисуется в ландшафтной ориентации — в портрете виден не весь бой.</p>
+      {onTurn !== undefined && (
+        <button
+          type="button"
+          className="rotate-notice__turn"
+          data-testid="rotate-notice-turn"
+          onClick={onTurn}
+        >
+          Повернуть экран
+        </button>
+      )}
     </div>
   );
 }

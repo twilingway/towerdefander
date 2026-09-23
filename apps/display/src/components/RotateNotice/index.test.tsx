@@ -10,5 +10,13 @@ describe("RotateNotice", () => {
     expect(markup).toContain("Поверните устройство");
     // An alert, because it replaces the battlefield rather than decorating it.
     expect(markup).toContain('role="alert"');
+    // Where the page cannot turn the phone, it only asks.
+    expect(markup).not.toContain("Повернуть экран");
+  });
+
+  it("offers to turn the screen where the browser lets it", () => {
+    const markup = renderToStaticMarkup(<RotateNotice onTurn={() => undefined} />);
+    expect(markup).toContain('data-testid="rotate-notice-turn"');
+    expect(markup).toContain("Повернуть экран");
   });
 });
