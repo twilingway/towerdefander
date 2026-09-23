@@ -134,7 +134,9 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
    * loud - once per silence, and never while paused, when silence is correct.
    */
   const watchdog = setInterval(() => {
-    if (paused || reportedSilence) return;
+    // A finished run goes quiet on purpose; see `settled` in the worker.
+    const outcome = lastView?.game?.encounter.outcome;
+    if (paused || reportedSilence || (outcome !== undefined && outcome !== null)) return;
     const silentFor = performance.now() - heardAt;
     if (silentFor < SILENT_WORKER_MS) return;
     reportedSilence = true;
