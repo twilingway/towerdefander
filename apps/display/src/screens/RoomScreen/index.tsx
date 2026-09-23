@@ -6,7 +6,7 @@ import { readLiveGame } from "../../model/liveView.js";
 import { PolledFpsReadout } from "../../components/FpsReadout/index.js";
 import { LobbyLayout } from "../../components/LobbyLayout/index.js";
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
-import { useIsPortrait } from "../../components/RotateNotice/index.js";
+import { RotateNotice, useIsPortrait } from "../../components/RotateNotice/index.js";
 import { VisibleDemoOverlay } from "../../components/VisibleDemoOverlay/index.js";
 import { readArenaCentre } from "../../model/arenaPointer.js";
 import { toAimWorld, toPredictionWorld } from "../../model/cockpitWorld.js";
@@ -471,6 +471,13 @@ export function RoomScreen({
           snapshotTick={view.game?.tick}
         />
       ) : null}
+      {/*
+       * Last, and at the shell's level rather than in the canvas's place: the
+       * stage is a stacking context of its own, so a notice inside it lay under
+       * the HUD, the result screen and the instruments - all laid out for a wide
+       * glass, and piled onto each other upright.
+       */}
+      {portrait && view.game !== null && <RotateNotice />}
     </main>
   );
 }

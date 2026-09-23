@@ -20,6 +20,19 @@ export function isFullscreen(): boolean {
   return document.fullscreenElement !== null;
 }
 
+/**
+ * Turns the phone for the player, once the page holds the whole screen.
+ *
+ * A browser grants an orientation lock only to a page in full screen (Chrome on
+ * Android), and not at all on iOS; a refusal is fine - the rotate notice asks
+ * instead.
+ */
+function lockLandscape(): void {
+  const orientation = (globalThis as { screen?: Screen }).screen?.orientation;
+  if (orientation === undefined || typeof orientation.lock !== "function") return;
+  void orientation.lock("landscape").catch(() => undefined);
+}
+
 /** Toggles, and swallows a refusal: a browser may say no and it is not an error. */
 export function toggleFullscreen(): void {
   if (typeof document === "undefined") return;
@@ -27,7 +40,10 @@ export function toggleFullscreen(): void {
     void document.exitFullscreen().catch(() => undefined);
     return;
   }
-  void document.documentElement.requestFullscreen().catch(() => undefined);
+  void document.documentElement
+    .requestFullscreen()
+    .then(lockLandscape)
+    .catch(() => undefined);
 }
 
 /** Fires whenever the browser enters or leaves it, including by its own gesture. */
@@ -100,6 +116,7 @@ export async function enterFullscreenIfWanted(): Promise<boolean> {
     .requestFullscreen()
     .then(() => {
       entered = true;
+      lockLandscape();
       return true;
     })
     .catch(() => false);

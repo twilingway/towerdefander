@@ -84,23 +84,28 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   const host = hostReference.current;
 
   /*
-   * A hidden tab pauses rather than races.
+   * A hidden tab pauses rather than races, and so does a phone held upright.
    *
    * The cockpit already zeroes every input on blur, so a run that kept stepping
    * would fly hands-off into a wave. Browsers stop animation frames in a hidden
-   * tab anyway; what this adds is that coming back does not spend the gap.
+   * tab anyway; what this adds is that coming back does not spend the gap. In
+   * portrait the screen shows only the request to turn it - no arena, no sticks
+   * - and a fight nobody can see must not go on being lost.
    */
   useEffect(() => {
+    const upright = globalThis.matchMedia("(orientation: portrait)");
     const sync = () => {
-      const hidden = document.visibilityState === "hidden";
+      const hidden = document.visibilityState === "hidden" || upright.matches;
       host.setPaused(hidden);
       setPaused(hidden);
     };
     sync();
+    upright.addEventListener("change", sync);
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("blur", sync);
     window.addEventListener("focus", sync);
     return () => {
+      upright.removeEventListener("change", sync);
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("blur", sync);
       window.removeEventListener("focus", sync);

@@ -2,7 +2,6 @@ import type { DisplayRoomView, UpgradeId } from "@spaceship-defender/protocol";
 import { Profiler, useEffect, type ReactNode } from "react";
 
 import { DiagnosticsHud } from "../../components/DiagnosticsHud/index.js";
-import { RotateNotice } from "../../components/RotateNotice/index.js";
 import { recordComponentCommit } from "../../model/componentCost.js";
 import type { DisplaySwitches } from "../../model/hooks/useDisplaySwitches.js";
 import { useLocalRecord } from "../../model/hooks/useLocalRecord.js";
@@ -125,9 +124,8 @@ export function BattleStage({
           re-attributed while the arena is drawing.
         */}
         <MeteredPanel id="сцена" measuring={diagnostics}>
-          {portrait ? (
-            <RotateNotice />
-          ) : (
+          {/* Upright, the screen shows only the request to turn it; see `RoomScreen`. */}
+          {portrait ? null : (
             <SpaceshipCanvas
               game={view.game}
               /*

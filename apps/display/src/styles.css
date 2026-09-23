@@ -1216,8 +1216,15 @@ p {
  * The display is a landscape instrument: its frame is 16:9 and every crew is
  * given the same slice of arena out of it. Portrait cannot hold that frame, so
  * the screen asks to be turned rather than playing a worse game.
+ *
+ * Over the whole page, not in the canvas's place: the HUD frames are laid out
+ * for a wide glass and in portrait they pile onto each other and onto this very
+ * notice, which then could not be read.
  */
 .rotate-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   align-items: center;

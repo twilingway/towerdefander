@@ -76,6 +76,35 @@ test("the ship answers the keyboard, locally", async ({ page }) => {
   await page.keyboard.up("KeyA");
 });
 
+test("an upright phone is asked to turn, over everything, and the run waits", async ({ page }) => {
+  test.setTimeout(60_000);
+  await cutTheServerOff(page);
+
+  await page.goto(`${displayUrl}/solo?diag=1`);
+  const timer = page.getByTestId("timer-frame");
+  await expect(timer).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const notice = page.getByTestId("rotate-notice");
+  await expect(notice).toBeVisible();
+  // Over the HUD, the instruments and the result screen, not under them.
+  const onTop = await page.evaluate(() => {
+    const shown = document.querySelector('[data-testid="rotate-notice"]');
+    const hit = document.elementFromPoint(innerWidth / 2, innerHeight / 2);
+    return shown !== null && hit !== null && shown.contains(hit);
+  });
+  expect(onTop, "the notice is the topmost thing on the screen").toBe(true);
+
+  // A fight nobody can see is not being lost: the clock holds.
+  const held = await timer.textContent();
+  await page.waitForTimeout(2_500);
+  expect(await timer.textContent()).toBe(held);
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(notice).toHaveCount(0);
+  await expect.poll(async () => await timer.textContent(), { timeout: 10_000 }).not.toBe(held);
+});
+
 async function readHeading(world: ReturnType<Page["getByTestId"]>): Promise<number> {
   const raw = await world.getAttribute("data-spaceship-heading");
   return Number(raw ?? "0");
