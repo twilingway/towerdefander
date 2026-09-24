@@ -48,6 +48,13 @@ test("a campaign run plays on the device with no server", async ({ page }) => {
     .poll(async () => (await timer.textContent()) ?? "", { timeout: 10_000 })
     .not.toBe(firstReading);
 
+  // A dev server never gets a service worker: one would outlive it on this port
+  // and serve a stale build there (openspec/changes/pwa-shell).
+  const workers = await page.evaluate(
+    async () => (await navigator.serviceWorker.getRegistrations()).length
+  );
+  expect(workers, "a service worker registered on the dev server").toBe(0);
+
   // Nothing about a room, because there is none.
   await expect(page.locator(".room-code")).toHaveCount(0);
   await expect(page.getByTestId("diagnostics-ping")).toHaveText("—");

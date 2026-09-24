@@ -2,6 +2,11 @@ import { useRef } from "react";
 import type { MaintenanceState } from "@spaceship-defender/protocol";
 
 import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+import { InstallButton } from "../../components/InstallButton/index.js";
+import { NetworkNotice } from "../../components/NetworkNotice/index.js";
+import { networkClosure, type ServerReach } from "../../model/serverStatus.js";
+import { closeApp, runningInstalled } from "../../model/installedApp.js";
+import { UpdateNotice } from "../../components/UpdateNotice/index.js";
 import { SettingsPanel } from "../RoomScreen/SettingsPanel.js";
 import { MENU_THEME } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
@@ -12,6 +17,8 @@ export type GameMode = "campaign" | "arena";
 
 interface StartScreenProps {
   readonly maintenance: MaintenanceState | undefined;
+  /** Whether the server can be reached at all; see `ServerReach`. */
+  readonly serverReach?: ServerReach;
   readonly onPick: (mode: GameMode) => void;
 }
 
@@ -51,7 +58,9 @@ const MODES: readonly ModeTile[] = [
 ];
 
 /** The first screen: what game are we playing tonight. */
-export function StartScreen({ maintenance, onPick }: StartScreenProps) {
+export function StartScreen({ maintenance, serverReach = "unknown", onPick }: StartScreenProps) {
+  // The arena is nothing but a server room: whatever closes the network closes it.
+  const closure = networkClosure(maintenance, serverReach);
   useMusicTrack(MENU_THEME);
   const shell = useRef<HTMLElement | null>(null);
   useRemoteNavigation(shell);
@@ -63,16 +72,31 @@ export function StartScreen({ maintenance, onPick }: StartScreenProps) {
       <div className="start-settings">
         <SettingsPanel />
       </div>
+      {/*
+       * The way out of the installed app, in the corner opposite the gear: it is
+       * always there, and in the header it pushed the tiles off a short screen.
+       * Only where it can work - a script may close the installed app, never a tab.
+       */}
+      {runningInstalled() && (
+        <button type="button" className="start-exit" data-testid="close-app" onClick={closeApp}>
+          Выйти из игры
+        </button>
+      )}
       <header className="start-header">
         <p className="start-rule">
           <span>Выберите режим</span>
         </p>
         <h1 className="start-title">SpaceShip Defender</h1>
+        <UpdateNotice />
+        <InstallButton />
       </header>
-      {maintenance?.active === true && (
+      {closure === "maintenance" && maintenance !== undefined && (
         <section className="hero-card">
           <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
         </section>
+      )}
+      {closure !== undefined && closure !== "maintenance" && (
+        <NetworkNotice closure={closure} screen="start" />
       )}
       {/*
        * A window closes the server, not the game: the campaign can still be
@@ -86,7 +110,7 @@ export function StartScreen({ maintenance, onPick }: StartScreenProps) {
             key={tile.mode}
             className={`mode-tile mode-tile--${tile.mode}`}
             aria-label={`${tile.eyebrow}: ${tile.title}`}
-            disabled={tile.mode === "arena" && maintenance?.active === true}
+            disabled={tile.mode === "arena" && closure !== undefined}
             onClick={() => {
               onPick(tile.mode);
             }}

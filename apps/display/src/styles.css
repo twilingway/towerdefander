@@ -2997,6 +2997,20 @@ p {
 }
 
 /* The start screen has no header to hang it in, so it gets the corner. */
+.start-exit {
+  position: absolute;
+  z-index: 40;
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: max(0.75rem, env(safe-area-inset-left));
+  padding: 0.5rem 0.9rem;
+  border: 1px solid rgb(126 214 255 / 40%);
+  border-radius: 0.75rem;
+  background: #08181f;
+  color: #cfe6ff;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
 .start-settings {
   position: absolute;
   z-index: 40;
@@ -3851,4 +3865,51 @@ p {
   .mode-tile {
     aspect-ratio: 16 / 9;
   }
+}
+
+/*
+ * A new build waiting for the player's word, on the screens between fights.
+ * Loud enough to be seen at a glance, and a button rather than a banner: the
+ * whole point is that nothing happens until it is pressed.
+ */
+.update-notice {
+  margin-top: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  border: 1px solid rgba(126, 240, 255, 0.6);
+  border-radius: 0.75rem;
+  background: #0c2a3a;
+  color: #cfe6ff;
+  font: inherit;
+  font-weight: 600;
+}
+
+/*
+ * Why the network places are dimmed: a line and, for a newer server, the way
+ * out. It sits where the maintenance notice does, above the tiles it explains.
+ */
+.network-notice {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgb(255 196 120 / 45%);
+  border-radius: 0.75rem;
+  background: rgb(40 26 8 / 70%);
+  color: #ffe2b8;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.network-notice p {
+  margin: 0;
+}
+
+/* A mode that cannot be played from here reads as switched off, not as busy. */
+.mode-tile:disabled,
+.place-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.7);
 }

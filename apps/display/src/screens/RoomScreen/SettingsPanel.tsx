@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { audioBus } from "../../audio/AudioBus.js";
 import { ConfirmButton } from "./ConfirmButton.js";
@@ -14,6 +14,12 @@ import {
   toggleFullscreen
 } from "../../model/fullscreen.js";
 import type { QualityChoice, QualityLevel } from "../../game/quality.js";
+import { runningInstalled, watchBack } from "../../model/installedApp.js";
+import {
+  setSettingsOpen,
+  settingsOpen,
+  subscribeToSettingsWindow
+} from "../../model/settingsWindow.js";
 import {
   activeQuality,
   qualityChoice,
@@ -54,7 +60,26 @@ export function SettingsPanel({ action }: { readonly action?: SettingsAction }) 
   const auto = useSyncExternalStore(subscribeToAutoFullscreen, autoFullscreenEnabled, () => true);
   const quality = useSyncExternalStore(subscribeToQuality, qualityChoice, () => "auto" as const);
   const activeLevel = useSyncExternalStore(subscribeToQuality, activeQuality, () => undefined);
-  const [open, setOpen] = useState(false);
+  const open = useSyncExternalStore(subscribeToSettingsWindow, settingsOpen, () => false);
+  // A screen left with the window open must not hand it to the next one.
+  useEffect(
+    () => () => {
+      setSettingsOpen(false);
+    },
+    []
+  );
+  /*
+   * In the installed app the system back is the pause: it opens this window
+   * where there is a way out to offer - a fight, a lobby - and closes it again.
+   * On the start screen it is left alone, and closes the app.
+   */
+  const offersWayOut = action !== undefined;
+  useEffect(() => {
+    if (!offersWayOut || !runningInstalled()) return undefined;
+    return watchBack(() => {
+      setSettingsOpen(!settingsOpen());
+    });
+  }, [offersWayOut]);
 
   /*
    * Every press is also the gesture the browser is waiting for: a page may not
@@ -76,7 +101,7 @@ export function SettingsPanel({ action }: { readonly action?: SettingsAction }) 
         aria-label="Настройки"
         data-testid="settings-toggle"
         onClick={() => {
-          setOpen((was) => !was);
+          setSettingsOpen(!open);
           audioBus().resume();
         }}
       >
