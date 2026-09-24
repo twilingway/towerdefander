@@ -17,6 +17,24 @@ set -euo pipefail
 # launchd hands a job a minimal PATH, and this script needs docker, git and pnpm.
 PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH}"
 
+# Node and pnpm come from nvm's default version, the one the operator uses in a
+# terminal. launchd loads no shell profile, so without this the script saw only
+# Homebrew's Node - and once Homebrew moved it to 25, which no longer ships
+# corepack, there was no pnpm at all: the smoke check failed to install and
+# every release rolled back. nvm reads unset variables, so strict mode waits.
+NVM_DIR="${NVM_DIR:-${HOME}/.nvm}"
+if [ -s "${NVM_DIR}/nvm.sh" ]; then
+  set +eu
+  # shellcheck disable=SC1091
+  . "${NVM_DIR}/nvm.sh" --no-use
+  nvm_node="$(nvm which default 2>/dev/null)"
+  set -eu
+  if [ -n "${nvm_node}" ] && [ -x "$(dirname "${nvm_node}")/pnpm" ]; then
+    PATH="$(dirname "${nvm_node}"):${PATH}"
+  fi
+fi
+export PATH
+
 SPACE_PROD_DIR="${SPACE_PROD_DIR:-$HOME/space-prod}"
 ENV_FILE="${SPACE_PROD_DIR}/.env.production"
 REPO_DIR="${SPACE_PROD_DIR}/repo"
