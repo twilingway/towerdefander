@@ -20,8 +20,14 @@ COPY packages/audio-assets/package.json packages/audio-assets/
 COPY packages/sprite-assets/package.json packages/sprite-assets/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/game-core/package.json packages/game-core/
+COPY packages/balance-core/package.json packages/balance-core/
+COPY packages/game-runtime/package.json packages/game-runtime/
+COPY packages/fx-assets/package.json packages/fx-assets/
 COPY packages/client-shared/package.json packages/client-shared/
 COPY packages/config/package.json packages/config/
+# Every workspace package an app reaches needs its manifest here, before the
+# install: a package without one gets no links of its own, and the build then
+# fails inside it - `balance-core` could not resolve `protocol`.
 RUN pnpm install --frozen-lockfile --filter "@spaceship-defender/${APP_NAME}..."
 
 FROM deps AS build

@@ -23,6 +23,8 @@ COPY apps/controller/package.json apps/controller/
 COPY apps/admin/package.json apps/admin/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/game-core/package.json packages/game-core/
+COPY packages/balance-core/package.json packages/balance-core/
+COPY packages/game-runtime/package.json packages/game-runtime/
 COPY packages/client-shared/package.json packages/client-shared/
 COPY packages/config/package.json packages/config/
 
@@ -32,6 +34,8 @@ COPY tsconfig.base.json tsconfig.json ./
 COPY packages/config packages/config
 COPY packages/protocol packages/protocol
 COPY packages/game-core packages/game-core
+COPY packages/balance-core packages/balance-core
+COPY packages/game-runtime packages/game-runtime
 COPY apps/server apps/server
 RUN pnpm --filter @spaceship-defender/server build
 
@@ -50,6 +54,11 @@ COPY --from=prod-deps /app /app
 COPY --from=build /app/apps/server/dist apps/server/dist
 COPY --from=build /app/packages/protocol/src packages/protocol/src
 COPY --from=build /app/packages/game-core/src packages/game-core/src
+# Kept external by tsup like `protocol`, so they run from source as well; the
+# balance seed is read from `presets/` beside `src/`.
+COPY --from=build /app/packages/balance-core/src packages/balance-core/src
+COPY --from=build /app/packages/balance-core/presets packages/balance-core/presets
+COPY --from=build /app/packages/game-runtime/src packages/game-runtime/src
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=2567
 EXPOSE 2567
 # `pnpm start` would add `--env-file-if-exists=../../.env.local`; configuration
