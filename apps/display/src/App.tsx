@@ -116,6 +116,8 @@ export function DisplayApp() {
         status={session.status}
         error={session.error}
         lobby={session.arenaLobby}
+        maintenance={maintenance}
+        serverReach={server.reach}
         sharedScreen={flags.sharedScreen}
         onBack={() => {
           void navigate({ pathname: "/", search: readDisplaySearch() });
@@ -129,6 +131,12 @@ export function DisplayApp() {
           // bot flies my ship" - the room seated nobody and the sticks never
           // armed, because neither side had been told anyone was flying.
           void session.createArenaMatch(cockpitPlayerName);
+        }}
+        onTraining={(pilotName) => {
+          // Hosted by this page, so it goes to its own address and asks the
+          // server nothing, the way the campaign's device tile does.
+          rememberPilotName(pilotName);
+          void navigate({ pathname: "/arena/training", search: readDisplaySearch() });
         }}
       />
     );

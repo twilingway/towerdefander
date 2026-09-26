@@ -59,7 +59,7 @@ const MODES: readonly ModeTile[] = [
 
 /** The first screen: what game are we playing tonight. */
 export function StartScreen({ maintenance, serverReach = "unknown", onPick }: StartScreenProps) {
-  // The arena is nothing but a server room: whatever closes the network closes it.
+  // Only the notice depends on it: both modes can be played on this device.
   const closure = networkClosure(maintenance, serverReach);
   useMusicTrack(MENU_THEME);
   const shell = useRef<HTMLElement | null>(null);
@@ -99,9 +99,9 @@ export function StartScreen({ maintenance, serverReach = "unknown", onPick }: St
         <NetworkNotice closure={closure} screen="start" />
       )}
       {/*
-       * A window closes the server, not the game: the campaign can still be
-       * played on this device, so only the arena - which is nothing but a
-       * server room - is switched off while one is announced.
+       * A window closes the server, not the game: the campaign and the arena's
+       * training both play on this device, so no tile is switched off here -
+       * each mode's own screen dims its network places.
        */}
       <div className="mode-grid">
         {MODES.map((tile) => (
@@ -110,7 +110,6 @@ export function StartScreen({ maintenance, serverReach = "unknown", onPick }: St
             key={tile.mode}
             className={`mode-tile mode-tile--${tile.mode}`}
             aria-label={`${tile.eyebrow}: ${tile.title}`}
-            disabled={tile.mode === "arena" && closure !== undefined}
             onClick={() => {
               onPick(tile.mode);
             }}

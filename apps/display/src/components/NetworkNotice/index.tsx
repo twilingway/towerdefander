@@ -12,12 +12,13 @@ const CAUSES: Readonly<Record<NetworkProblem, string>> = {
 
 /**
  * What is still open, said in the terms of the screen: the start screen offers
- * modes, of which the campaign is the one that needs no server; the campaign
- * screen offers places, of which this device is that one.
+ * modes, both of which play on this device without a server; the campaign and
+ * arena screens offer places, of which this device is that one.
  */
 const STILL_OPEN = {
-  start: "доступна только кампания",
-  campaign: "играть можно только на этом устройстве"
+  start: "играть можно только на этом устройстве",
+  campaign: "играть можно только на этом устройстве",
+  arena: "доступна только тренировка на этом устройстве"
 } as const;
 
 /**
