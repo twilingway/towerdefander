@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Room, type Client } from "colyseus";
-import { StateView, type MapSchema } from "@colyseus/schema";
+import { StateView } from "@colyseus/schema";
 import {
   ARENA_SHIP_COUNT,
   IDLE_ARENA_INTENT,
@@ -11,8 +11,7 @@ import {
   createArenaMatch,
   defaultArenaMatchConfig,
   type ArenaMatchConfig,
-  type ArenaMatchState,
-  type ArenaShipState
+  type ArenaMatchState
 } from "@spaceship-defender/game-core";
 import {
   ARENA_BOT_FILL_MS,
@@ -40,12 +39,14 @@ import { getBalanceStore } from "../balance/index.js";
 import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { LatencyTracker } from "./latencyTracker.js";
+import { SCHEMA_ARENA_PROJECTION_FACTORIES } from "./projectionFactories.js";
 import {
-  ARENA_PLAYER_SLOT,
   arenaIntentFromCockpit,
   createArenaBots,
+  createArenaProjectionMemo,
   createArenaSeats,
   createRunSeed,
+  projectArenaMatch,
   stepArenaMatch,
   sweepArena,
   toArenaMatchConfig,
@@ -55,25 +56,9 @@ import {
 } from "@spaceship-defender/game-runtime";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
-import {
-  ArenaLootView,
-  ArenaShipView,
-  ArenaZoneView,
-  DISPLAY_VIEW_TAG,
-  PlayerState,
-  ProjectileState,
-  SpaceshipDefenderState
-} from "./SpaceshipDefenderState.js";
+import { DISPLAY_VIEW_TAG, PlayerState, SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 import { leadSpeedFor } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 
-/**
- * How long a wreck stays published after it stops flying.
- *
- * Long enough for the display to notice, play the explosion and let the health
- * bar be seen reaching zero; short enough that a match's collection is the
- * living field plus whatever just stopped being part of it.
- */
-const WRECK_HOLD_TICKS = 120;
 /**
  * How long a started match is kept after the last person leaves.
  *
@@ -173,8 +158,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private readonly createdAtMs = Date.now();
   private statsStatus: RoomStatsStatus = "lobby";
   private statusChangedAtMs = Date.now();
-  /** The last sheet published, as a string; see `publishZones`. */
-  private zoneSignature = "";
+  /** What the projection remembers between two publishes. */
+  private readonly projection = createArenaProjectionMemo();
   /**
    * What the seated player is asking for right now.
    *
@@ -746,272 +731,29 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.appliedSoloSeq = frame.seq;
   }
 
-  /**
-   * The sheet, published only when it actually changed.
-   *
-   * Sixteen rectangles that move a few times a match have no business being
-   * rebuilt sixty times a second: the signature is the states in order, and an
-   * unchanged signature means the clients already have it. Colyseus would have
-   * sent nothing either way - it diffs - but rebuilding the array would have
-   * made it think everything changed.
-   */
-  private publishZones(match: ArenaMatchState): void {
-    const signature = match.zones
-      .map(
-        (zone) => `${String(zone.id)}:${zone.state}:${String(Math.ceil(zone.ticksRemaining / 60))}`
-      )
-      .join("|");
-    if (signature === this.zoneSignature) return;
-    this.zoneSignature = signature;
-
-    const target = this.state.game.display.arenaZones;
-    target.clear();
-    for (const zone of match.zones) {
-      const view = new ArenaZoneView();
-      view.zoneId = zone.id;
-      view.x = zone.x;
-      view.y = zone.y;
-      view.width = zone.width;
-      view.height = zone.height;
-      view.state = zone.state;
-      view.secondsRemaining = Math.ceil(
-        (zone.ticksRemaining * this.config.ship.fixedStepMs) / 1_000
-      );
-      target.push(view);
-    }
-  }
-
   /** Mirrors the match into the campaign-shaped state, by id. */
   private publish(): void {
     const match = this.match;
     if (match === undefined) return;
     const game = this.state.game;
-
-    const player = match.ships[ARENA_PLAYER_SLOT];
-
-    game.tick = match.clock.tick;
-    game.elapsedMs = Math.round(match.clock.elapsedMs);
     // Where the cockpit's replay starts. Left at zero it would count every
     // frame it ever sent as still in flight, and replay all of them.
     game.display.appliedInputSeq = this.appliedSoloSeq;
-    game.arenaRadius = Math.round(this.config.arenaRadius);
-    /*
-     * A match ends for a player when their hull does, not when the field is
-     * down to one.
-     *
-     * Fifteen bots go on fighting after a human is shot down, and the room is
-     * right to keep stepping them - but the person watching has lost, and
-     * holding the picture in "combat" until the last bot falls is why the
-     * result only ever arrived with the room closing. The flags matter as much
-     * as the values: the view reads `outcome` as absent unless `hasOutcome`
-     * says otherwise, so an outcome written without them is an outcome nobody
-     * is shown.
-     */
-    const eliminated = this.playerSessionId !== undefined && player !== undefined && !player.alive;
-    game.encounter.phase = match.phase === "result" || eliminated ? "result" : "combat";
-    game.encounter.encounterTick = match.clock.tick;
-    /*
-     * Kills, carried on the field the campaign calls a score.
-     *
-     * The arena publishes through the campaign's shape on purpose, and "how
-     * well did I do" is what this field is for in both modes - it is a count of
-     * wrecks with my name on them here and a count of points there. Counted
-     * from `eliminatedBy` rather than tallied as it happens, because the match
-     * already records who ended whom and a second tally could disagree with it.
-     */
-    game.encounter.score =
-      player === undefined
-        ? 0
-        : match.ships.filter((ship) => !ship.alive && ship.eliminatedBy === player.id).length;
-    /*
-     * The clock, and only while there is one.
-     *
-     * The contract wants a positive countdown during combat and none outside
-     * it - "only combat may publish a wave countdown" - and a match kept
-     * publishing its own after the fight was decided. That is a refusal, not a
-     * warning: the view stops parsing and the screen holds its last good
-     * snapshot, which is a frozen picture at the exact moment of winning.
-     */
-    game.encounter.waveSecondsRemaining =
-      game.encounter.phase === "combat"
-        ? Math.max(
-            1,
-            Math.ceil(
-              ((this.config.matchTickLimit - match.clock.tick) * this.config.ship.fixedStepMs) /
-                1_000
-            )
-          )
-        : 0;
-    // The room stays "active": a finished match is an encounter outcome, and
-    // the room phase only knows lobby and active.
-    if (eliminated) {
-      game.encounter.hasOutcome = true;
-      game.encounter.outcome = "defeat";
-      game.encounter.hasDefeatReason = true;
-      game.encounter.defeatReason = "spaceship_destroyed";
-    } else if (match.phase === "result") {
-      // Somebody winning is not the same as this somebody winning: with a
-      // player in the field the outcome is theirs, and only an unmanned screen
-      // reports the match's own.
-      const won =
-        this.playerSessionId === undefined
-          ? match.winnerShipId !== null
-          : match.winnerShipId === player?.id;
-      game.encounter.hasOutcome = true;
-      game.encounter.outcome = won ? "victory" : "defeat";
-      /*
-       * A defeat has to say why, and the contract enforces it both ways: a
-       * reason without a defeat is refused as loudly as a defeat without one,
-       * and a refusal freezes the screen on its last good snapshot. Reaching
-       * this branch alive means the clock ran out - being shot down is the
-       * branch above.
-       */
-      game.encounter.hasDefeatReason = !won;
-      game.encounter.defeatReason = "wave_timeout";
-    }
-
-    /*
-     * The sweep's two clocks, in seconds because that is what a button shows.
-     * The marks are cleared rather than left to rot: a stale reveal would put a
-     * hull on the dial in a place it left a minute ago.
-     */
-    const fresh = match.clock.tick < this.scanRevealedUntilTick;
-    if (!fresh && this.revealed.size > 0) this.revealed.clear();
-    const secondsOf = (ticks: number): number =>
-      Math.max(0, Math.ceil((ticks * this.config.ship.fixedStepMs) / 1_000));
-    game.display.scanReadySeconds = secondsOf(this.scanReadyTick - match.clock.tick);
-    game.display.scanRevealSecondsRemaining = secondsOf(
-      this.scanRevealedUntilTick - match.clock.tick
-    );
-
-    this.publishZones(match);
-
-    if (player !== undefined) mirrorPlayerShip(player, game);
-
-    /*
-     * Every hull, whole.
-     *
-     * The rivals used to travel as enemy entities, which is what the campaign
-     * has room for - a position, a heading and a health bar. They are not
-     * enemies: each is a copy of the crew's own ship, shield and turret
-     * included, flown by the same autopilot, and the display has to be able to
-     * draw them that way.
-     */
-    /*
-     * Wrecks travel too, for a while.
-     *
-     * Dropping a hull the instant it died meant its health bar never reached
-     * zero and the ship blinked out instead of dying - the last rival of a
-     * match simply ceased to exist, which is no way to learn that you won. It
-     * stays on the wire with `alive` false until the display has played the
-     * wreck, and the room lets go of it a couple of seconds later.
-     */
-    const fleet = new Map(
-      match.ships
-        .filter(
-          (ship) =>
-            ship.alive ||
-            ship.eliminatedAtTick === null ||
-            match.clock.tick - ship.eliminatedAtTick <= WRECK_HOLD_TICKS
-        )
-        .map((ship) => [ship.id, ship])
-    );
-    reconcile(
-      game.display.arenaShips,
-      fleet,
-      (ship) => {
-        const view = new ArenaShipView();
-        view.entityId = ship.id;
-        view.isSelf = ship.slot === ARENA_PLAYER_SLOT;
-        return view;
+    projectArenaMatch(
+      game,
+      match,
+      this.config,
+      {
+        seated: this.playerSessionId !== undefined,
+        scan: {
+          readyTick: this.scanReadyTick,
+          revealedUntilTick: this.scanRevealedUntilTick,
+          revealed: this.revealed
+        }
       },
-      (view, ship) => {
-        view.x = ship.spaceship.x;
-        view.y = ship.spaceship.y;
-        view.velocityX = ship.spaceship.velocity.x;
-        view.velocityY = ship.spaceship.velocity.y;
-        view.radius = ship.stats.spaceshipRadius;
-        view.heading = ship.heading;
-        view.turretAngle = ship.turretAngle;
-        view.hp = ship.hp;
-        view.maxHp = ship.maxHp;
-        view.shieldAngle = ship.shieldAngle;
-        view.shieldActive = ship.shieldActive;
-        view.shieldRadius = ship.stats.shieldRadius;
-        view.shieldArcHalfAngle = ship.stats.shieldArcRadians / 2;
-        view.shieldEnergy = ship.shieldEnergy;
-        view.shieldCapacity = ship.stats.shieldCapacity;
-        view.revealed = fresh && this.revealed.has(ship.id);
-        view.alive = ship.alive;
-        // Narrowed to the wire's counter, which wraps; the display compares
-        // against what it last drew, so a wrap costs one missed flash.
-        view.shotsFired = ship.shotsFired % 65_536;
-        view.shieldBlocks = ship.shieldBlocks % 65_536;
-      }
+      this.projection,
+      SCHEMA_ARENA_PROJECTION_FACTORIES
     );
-
-    /*
-     * The field's drops, reconciled by id like everything else.
-     *
-     * Position never changes once a drop is put down, so this is a create and a
-     * delete and nothing in between - the update writes the same numbers back
-     * and Colyseus sends none of them.
-     */
-    reconcile(
-      game.display.arenaLoot,
-      new Map(match.loot.map((drop) => [drop.id, drop] as const)),
-      (drop, id) => {
-        const view = new ArenaLootView();
-        view.entityId = id;
-        view.kind = drop.kind;
-        view.x = drop.x;
-        view.y = drop.y;
-        return view;
-      },
-      (view, drop) => {
-        view.x = drop.x;
-        view.y = drop.y;
-        /*
-         * The heavy drop is on every dial from the moment it lands.
-         *
-         * It is worth crossing the field for, which only works if everyone
-         * knows it is there: a cargo nobody can see is a prize one lucky sweep
-         * collects, and a cargo everyone can see is a fight with a time and a
-         * place. The common two stay behind the sweep, which is what the sweep
-         * is for.
-         */
-        view.revealed = drop.kind === "cargo" || (fresh && this.revealed.has(drop.id));
-        // The circle and how much of the hold is served: the display draws a
-        // ring from the pair, and neither is worth computing twice.
-        view.captureRadius = this.config.ship.spaceshipRadius * this.config.lootCaptureRadiusHulls;
-        view.captureShare = Math.max(
-          0,
-          Math.min(1, drop.captureTicks / Math.max(1, this.config.lootCaptureTicks))
-        );
-      }
-    );
-
-    const mine = new Map(
-      match.projectiles
-        .filter((shot) => shot.ownerShipId === player?.id)
-        .map((shot) => [shot.id, shot] as const)
-    );
-    const theirs = new Map(
-      match.projectiles
-        .filter((shot) => shot.ownerShipId !== player?.id)
-        .map((shot) => [shot.id, shot] as const)
-    );
-    /*
-     * Both sides fire the same ship, so both sides fire the same shell: a
-     * match is sixteen copies of the crew's own hull, and a rival's tracer
-     * being a different colour from yours would be a lie about the weapon.
-     */
-    const look = {
-      cannon: this.config.ship.projectileVisual,
-      machineGun: this.config.ship.mgProjectileVisual
-    };
-    mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly", look);
-    mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile", look);
   }
 }
 
@@ -1019,118 +761,4 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 function bearingOf(vector: { readonly x: number; readonly y: number }): number | null {
   if (vector.x === 0 && vector.y === 0) return null;
   return Math.atan2(vector.y, vector.x);
-}
-
-function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["game"]): void {
-  // The arena already thinks in world coordinates, the same ones the display
-  // draws in, so nothing is translated here any more.
-  game.spaceship.x = ship.spaceship.x;
-  game.spaceship.y = ship.spaceship.y;
-  game.spaceship.velocityX = ship.spaceship.velocity.x;
-  game.spaceship.velocityY = ship.spaceship.velocity.y;
-  game.spaceship.radius = ship.stats.spaceshipRadius;
-  game.spaceship.hp = ship.hp;
-  game.spaceship.maxHp = ship.maxHp;
-  game.spaceship.heading = ship.heading;
-  game.turretAngle = ship.turretAngle;
-  game.shield.angle = ship.shieldAngle;
-  game.shield.active = ship.shieldActive;
-  game.shield.energy = ship.shieldEnergy;
-  game.shield.capacity = ship.stats.shieldCapacity;
-  game.shield.arcHalfAngle = ship.stats.shieldArcRadians / 2;
-  game.cannon.heat = ship.cannonHeat;
-  game.cannon.capacity = ship.stats.cannonHeatCapacity;
-  game.cannon.overheated = ship.cannonOverheated;
-  game.machineGun.heat = ship.mgHeat;
-  game.machineGun.capacity = ship.stats.mgHeatCapacity;
-  game.machineGun.overheated = ship.mgOverheated;
-  game.display.shieldRadius = ship.stats.shieldRadius;
-  game.display.shieldPhase = ship.shieldPhase;
-  const pose = game.display.pose;
-  pose.x = game.spaceship.x;
-  pose.y = game.spaceship.y;
-  pose.velocityX = ship.spaceship.velocity.x;
-  pose.velocityY = ship.spaceship.velocity.y;
-  pose.heading = ship.heading;
-  pose.turretAngle = ship.turretAngle;
-}
-
-/** A shell's drawn look, as narrow as this file needs it: a shape and a size. */
-type ShellLook = { readonly shape: string; readonly modelScale: number } | null;
-
-function mirrorProjectiles(
-  target: MapSchema<ProjectileState>,
-  source: ReadonlyMap<
-    string,
-    {
-      x: number;
-      y: number;
-      velocity: { x: number; y: number };
-      radius: number;
-      spawnSequence: number;
-      source: "cannon" | "machineGun";
-    }
-  >,
-  kind: "friendly" | "hostile",
-  /** The look each barrel's shell is drawn with, as the console chose it. */
-  look: { readonly cannon: ShellLook; readonly machineGun: ShellLook }
-): void {
-  reconcile(
-    target,
-    source,
-    (shot, id) => {
-      const entity = new ProjectileState();
-      entity.entityId = id;
-      entity.spawnSequence = shot.spawnSequence;
-      entity.kind = kind;
-      /*
-       * Set once at spawn, like the campaign does it: a shell's look never
-       * changes, so it costs nothing per tick - and without it every shot in a
-       * match came out as the display's own fallback dot rather than the
-       * sprite the operator chose on the player screen.
-       */
-      /*
-       * Whose barrel this came out of, and only when it is ours.
-       *
-       * The display reads this field to place the crew's own muzzle flash: a
-       * shell that arrives naming a barrel is a shell this ship just fired. A
-       * match publishes fifteen other hulls' shots as well, and naming their
-       * barrels too drew a flash on the player's own gun for every shot anyone
-       * on the field took - which is a muzzle that never stops firing. The
-       * campaign's own mirror has always emptied it for hostile shells.
-       */
-      entity.source = kind === "friendly" ? shot.source : "";
-      const visual = shot.source === "machineGun" ? look.machineGun : look.cannon;
-      entity.visualShape = visual?.shape ?? "";
-      entity.visualScale = visual?.modelScale ?? 1;
-      return entity;
-    },
-    (entity, shot) => {
-      entity.x = shot.x;
-      entity.y = shot.y;
-      entity.velocityX = shot.velocity.x;
-      entity.velocityY = shot.velocity.y;
-      entity.radius = shot.radius;
-    }
-  );
-}
-
-/** Create, update and delete by id - the same shape the campaign room syncs with. */
-function reconcile<TEntity, TSource>(
-  target: MapSchema<TEntity>,
-  source: ReadonlyMap<string, TSource>,
-  create: (item: TSource, id: string) => TEntity,
-  update: (entity: TEntity, item: TSource) => void
-): void {
-  for (const [id, item] of source) {
-    let entity = target.get(id);
-    if (entity === undefined) {
-      entity = create(item, id);
-      target.set(id, entity);
-    }
-    update(entity, item);
-  }
-  for (const id of [...target.keys()]) {
-    if (!source.has(id)) target.delete(id);
-  }
 }

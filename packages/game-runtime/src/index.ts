@@ -37,3 +37,4 @@ export * from "./arenaWorld.ts";
 export * from "./arenaSetup.ts";
 export * from "./arenaScan.ts";
 export * from "./arenaRun.ts";
+export * from "./arenaProjection.ts";

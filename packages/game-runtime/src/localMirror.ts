@@ -19,6 +19,7 @@ import type {
   ShipStatEffectTarget,
   UpgradeVoteTarget
 } from "./projectionTarget.ts";
+import type { ArenaLootTarget, ArenaShipTarget, ArenaZoneTarget } from "./arenaProjection.ts";
 
 /**
  * The room's state as ordinary objects, for a host that has no wire.
@@ -269,10 +270,10 @@ export interface LocalDisplay {
   shieldRadius: number;
   enemyCatalogue: Map<string, LocalEnemyVisual>;
   obstacles: LocalObstacle[];
-  /** The campaign publishes none of these; the arena is not played locally yet. */
-  arenaZones: never[];
-  arenaShips: never[];
-  arenaLoot: never[];
+  /** A match's own collections; the campaign leaves them empty. */
+  arenaZones: ArenaZoneTarget[];
+  arenaShips: Map<string, ArenaShipTarget>;
+  arenaLoot: Map<string, ArenaLootTarget>;
   enemyShips: Map<string, EnemyTarget>;
   asteroids: Map<string, AsteroidTarget>;
   lootDrops: Map<string, LootDropTarget>;
@@ -518,8 +519,8 @@ export function createLocalMirror(): LocalMirror {
         enemyCatalogue: new Map(),
         obstacles: [],
         arenaZones: [],
-        arenaShips: [],
-        arenaLoot: [],
+        arenaShips: new Map(),
+        arenaLoot: new Map(),
         enemyShips: new Map(),
         asteroids: new Map(),
         lootDrops: new Map(),
