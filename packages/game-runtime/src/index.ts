@@ -32,3 +32,5 @@ export * from "./localMirror.ts";
 export * from "./enemyCatalogue.ts";
 export * from "./waveDeadline.ts";
 export * from "./runSetup.ts";
+export * from "./arenaBots.ts";
+export * from "./arenaWorld.ts";

@@ -43,9 +43,8 @@ import {
 import { getBalanceStore } from "../balance/index.js";
 import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
-import { ArenaBots } from "./arenaBots.js";
 import { LatencyTracker } from "./latencyTracker.js";
-import { createRunSeed } from "@spaceship-defender/game-runtime";
+import { ArenaBots, createRunSeed } from "@spaceship-defender/game-runtime";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
 import {

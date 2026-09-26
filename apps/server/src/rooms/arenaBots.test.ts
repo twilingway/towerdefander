@@ -7,8 +7,8 @@ import {
 } from "@spaceship-defender/game-core";
 import { describe, expect, it } from "vitest";
 
-import { ArenaBots } from "./arenaBots.js";
 import { getBalanceStore } from "../balance/index.js";
+import { ArenaBots } from "@spaceship-defender/game-runtime";
 import { resolveAutopilotProfile } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 import type { AutopilotProfile } from "@spaceship-defender/protocol";
 
