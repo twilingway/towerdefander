@@ -8,14 +8,10 @@ import {
   ARENA_SCAN_COOLDOWN_TICKS,
   ARENA_SCAN_RADIUS_CELLS,
   ARENA_SCAN_REVEAL_TICKS,
-  advanceArenaMatch,
-  canonicalizeAngle,
   createArenaMatch,
   defaultArenaMatchConfig,
-  normalizeVector,
   type ArenaMatchConfig,
   type ArenaMatchState,
-  type ArenaShipSeat,
   type ArenaShipState
 } from "@spaceship-defender/game-core";
 import {
@@ -44,7 +40,19 @@ import { getBalanceStore } from "../balance/index.js";
 import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
 import { LatencyTracker } from "./latencyTracker.js";
-import { ArenaBots, createRunSeed } from "@spaceship-defender/game-runtime";
+import {
+  ARENA_PLAYER_SLOT,
+  arenaIntentFromCockpit,
+  createArenaBots,
+  createArenaSeats,
+  createRunSeed,
+  stepArenaMatch,
+  sweepArena,
+  toArenaMatchConfig,
+  toArenaScanTuning,
+  type ArenaBots,
+  type ArenaScanTuning
+} from "@spaceship-defender/game-runtime";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
 import {
@@ -56,10 +64,7 @@ import {
   ProjectileState,
   SpaceshipDefenderState
 } from "./SpaceshipDefenderState.js";
-import {
-  leadSpeedFor,
-  resolveAutopilotProfile
-} from "@spaceship-defender/game-runtime/crewPolicy.mjs";
+import { leadSpeedFor } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 
 /**
  * How long a wreck stays published after it stops flying.
@@ -80,9 +85,6 @@ const WRECK_HOLD_TICKS = 120;
  * sitting on a stand.
  */
 const EMPTY_MATCH_HOLD_MS = 30_000;
-
-/** The slot the human takes. It flies on autopilot until a cockpit claims it. */
-const PLAYER_SLOT = 0;
 
 /**
  * A match of sixteen hulls, published through the campaign's own state.
@@ -213,14 +215,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    * to move into `ArenaShipState` and be published per client - what is
    * revealed is one pilot's knowledge, not the field's.
    */
-  private scan = {
+  private scan: ArenaScanTuning = {
     radiusCells: ARENA_SCAN_RADIUS_CELLS,
     cooldownTicks: ARENA_SCAN_COOLDOWN_TICKS,
     revealTicks: ARENA_SCAN_REVEAL_TICKS
   };
   private scanReadyTick = 0;
   private scanRevealedUntilTick = 0;
-  private readonly revealed = new Set<string>();
+  private revealed = new Set<string>();
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -236,100 +238,17 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
     const balance = getBalanceStore();
     const tuning = balance.getActiveTuning();
-    /*
-     * The campaign's ship on the arena's field.
-     *
-     * Everything about the hull comes from the console's player screen, and
-     * everything about the ground comes from the arena's own: the two modes
-     * shared one radius until now, so a field wide enough for sixteen hulls
-     * dragged the campaign onto it. The world is derived from the radius and
-     * the core validates that it is, so all three move together.
-     */
-    const fieldRadius = tuning.arena.fieldRadius;
     const hull = balance.getActiveSimulationConfig(tuning.defaultShipArchetypeId);
-    const ship = {
-      ...hull,
-      arenaRadius: fieldRadius,
-      worldWidth: fieldRadius * 2,
-      worldHeight: fieldRadius * 2,
-      /*
-       * The frame is the arena's too, because it is what a seat can see.
-       *
-       * `buildArenaWorld` cuts every hull's slice of the match to this width,
-       * and the screen is drawn at `tuning.arena.cameraViewWidth`. Leaving the
-       * campaign's number here made those two different frames: the sector the
-       * autopilot holds for a seated player stopped tracking a rival that was
-       * still plainly on screen, because the policy had already been told the
-       * rival was out of sight.
-       */
-      cameraViewWidth: Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth),
-      /*
-       * And the sector's reason to come up is the match's own number.
-       *
-       * The campaign's answer to "is anything armed in reach" is the enemy
-       * archetype's weapon range, and a match has no archetypes to ask - so
-       * the two modes read the same zero differently and needed two settings.
-       */
-      shieldAutopilotRaiseRange: tuning.arena.shieldAutopilotRaiseRange
-    };
+    this.config = toArenaMatchConfig(tuning, hull);
+    const ship = this.config.ship;
     this.state.shipArchetypeId = tuning.defaultShipArchetypeId;
-    this.config = {
-      ...defaultArenaMatchConfig,
-      ship,
-      arenaRadius: fieldRadius,
-      // The spawn disc is the field's, held off the wall by room to turn.
-      spawnRadius: fieldRadius - 160,
-      // The operator's layout, edited on the console's arena screen. Absent
-      // marks would mean the built-in spiral, which is what they started as.
-      spawnMarks: tuning.arena.spawnMarks,
-      // The sheet is the operator's too: its rectangles are sized from the
-      // radius, so a wider arena keeps the same number of closures.
-      zoneColumns: tuning.arena.zoneColumns,
-      zoneRows: tuning.arena.zoneRows,
-      // How long the fight is allowed to last, straight from the console: the
-      // sheet and the clock are one setting in two halves, and a match shorter
-      // than the sheet ends with ground still safe.
-      matchTickLimit: tuning.arena.matchTickLimit,
-      // The campaign's ship, stretched for a sixteen-way fight by two numbers
-      // the operator owns rather than by constants nobody can reach.
-      shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
-      shieldHitCostShare: tuning.arena.shieldHitCostShare,
-      zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
-      zonesPerClosure: tuning.arena.zonesPerClosure,
-      // The supply run's clocks are the operator's; its caps are the code's.
-      lootFirstSpawnTicks: tuning.arena.lootFirstSpawnTicks,
-      lootIntervalTicks: tuning.arena.lootIntervalTicks,
-      lootCargoIntervalTicks: tuning.arena.lootCargoIntervalTicks,
-      zoneWarningTicks: tuning.arena.zoneWarningTicks,
-      zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
-      // The operator decides how many beats a full hull takes; the simulation
-      // takes one over that, of the maximum, on each of them.
-      zoneDamageShareOfMaxHp: 1 / tuning.arena.zoneBitesToKill
-    };
-
     // The sweep is the operator's too, and it is read once for the match like
     // everything else: a console edit lands on the next one.
-    this.scan = {
-      radiusCells: tuning.arena.scanRadiusCells,
-      cooldownTicks: tuning.arena.scanCooldownTicks,
-      revealTicks: tuning.arena.scanRevealTicks
-    };
+    this.scan = toArenaScanTuning(tuning);
 
-    const seats: readonly ArenaShipSeat[] = Array.from(
-      { length: this.config.shipCount },
-      (_unused, slot): ArenaShipSeat => ({
-        // The player's slot is marked human at creation; the bot layer skips
-        // it, and an empty one is simply a human who never turned up, which
-        // the step handles by leaving the hull on its own autopilot.
-        control: slot === PLAYER_SLOT ? "human" : "bot",
-        botLevel: tuning.autopilot.level
-      })
-    );
+    const seats = createArenaSeats(this.config, tuning.autopilot.level);
     this.match = createArenaMatch(this.config, createRunSeed(undefined), seats);
-    this.bots = new ArenaBots(
-      this.config,
-      resolveAutopilotProfile(tuning.autopilot, tuning.autopilot.level, ship.cannonWeaponKind)
-    );
+    this.bots = createArenaBots(tuning, this.config);
 
     this.state.game.worldWidth = ship.worldWidth;
     this.state.game.worldHeight = ship.worldHeight;
@@ -750,27 +669,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match.phase === "result") return;
 
     const started = performance.now();
-    const intents = new Map(bots.intentsFor(match, this.config));
-    const player = match.ships[PLAYER_SLOT];
-    // The seated player's own frame wins over whatever the bot wanted for that
-    // hull, and an empty seat keeps flying itself.
-    if (this.playerSessionId !== undefined && player !== undefined) {
+    // An empty seat keeps flying itself; a seated player's frame wins over
+    // whatever the bot wanted for that hull.
+    let player: ArenaShipIntent | null = null;
+    if (this.playerSessionId !== undefined) {
       this.takeCockpitFrame(this.playerSessionId);
-      const autopilot = intents.get(player.id) ?? IDLE_ARENA_INTENT;
-      intents.set(player.id, {
-        ...(this.playerIntent ?? IDLE_ARENA_INTENT),
-        /*
-         * The shield stays with the autopilot, because the cockpit has no
-         * control for it. A solo seat in the campaign is helm and gun - the
-         * sector is a third pair of hands, and an empty crew seat is what the
-         * policy layer exists to fill. Taking it away here would simply mean
-         * nobody ever raises it.
-         */
-        shieldTargetAngle: autopilot.shieldTargetAngle,
-        shieldActive: autopilot.shieldActive
-      });
+      player = this.playerIntent ?? IDLE_ARENA_INTENT;
     }
-    this.match = advanceArenaMatch(match, intents, this.config);
+    this.match = stepArenaMatch(match, this.config, bots, player);
     this.holdForResult(this.match);
     this.state.game.display.serverStepMs = performance.now() - started;
     this.publish();
@@ -786,39 +692,12 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    */
   private sweep(): void {
     const match = this.match;
-    const player = match?.ships[PLAYER_SLOT];
-    if (match === undefined || player === undefined) return;
-    if (match.clock.tick < this.scanReadyTick) return;
-
-    const tuning = this.scan;
-    // A cell of the zone sheet, the longer side if the grid is not square: the
-    // reach is read off the board, and the camera's width has no say in it.
-    const span = this.config.arenaRadius * 2;
-    const cell = Math.max(span / this.config.zoneColumns, span / this.config.zoneRows);
-    const radius = cell * tuning.radiusCells;
-    this.revealed.clear();
-    for (const ship of match.ships) {
-      if (!ship.alive || ship.slot === PLAYER_SLOT) continue;
-      const distance = Math.hypot(
-        ship.spaceship.x - player.spaceship.x,
-        ship.spaceship.y - player.spaceship.y
-      );
-      if (distance <= radius) this.revealed.add(ship.id);
-    }
-    /*
-     * And what the field has put out within the same reach.
-     *
-     * A sweep answers one question - what is around me - and a crate is as much
-     * a part of that answer as a hull: the route a pilot picks after a sweep is
-     * usually toward a drop rather than toward a fight. Same set, because both
-     * fade on the same clock.
-     */
-    for (const drop of match.loot) {
-      const distance = Math.hypot(drop.x - player.spaceship.x, drop.y - player.spaceship.y);
-      if (distance <= radius) this.revealed.add(drop.id);
-    }
-    this.scanReadyTick = match.clock.tick + tuning.cooldownTicks;
-    this.scanRevealedUntilTick = match.clock.tick + tuning.revealTicks;
+    if (match === undefined) return;
+    const found = sweepArena(match, this.config, this.scan, this.scanReadyTick);
+    if (found === undefined) return;
+    this.revealed = found.revealed;
+    this.scanReadyTick = found.readyTick;
+    this.scanRevealedUntilTick = found.revealedUntilTick;
   }
 
   /**
@@ -849,31 +728,21 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     const frame = this.soloInputs.get(sessionId).next();
     if (frame === undefined) return;
 
-    const drive = { x: frame.vectorX, y: frame.vectorY };
-    const helmTurn = frame.hasHelm ? frame.turn : null;
-    const aimTurn = frame.hasAimTurn ? frame.aimTurn : null;
-    this.playerHeadingTarget = heldTarget(drive, helmTurn, this.playerHeadingTarget);
-    this.playerTurretTarget = heldTarget(
-      { x: frame.aimX, y: frame.aimY },
-      aimTurn,
-      this.playerTurretTarget
+    const cockpit = arenaIntentFromCockpit(
+      {
+        vector: { x: frame.vectorX, y: frame.vectorY },
+        turn: frame.hasHelm ? frame.turn : null,
+        thrust: frame.hasHelm ? frame.thrust : null,
+        mgFiring: frame.mgFiring,
+        aim: { x: frame.aimX, y: frame.aimY },
+        aimTurn: frame.hasAimTurn ? frame.aimTurn : null,
+        firing: frame.firing
+      },
+      { heading: this.playerHeadingTarget, turret: this.playerTurretTarget }
     );
-
-    this.playerIntent = {
-      // Normalised the way the room stores it, so both sides step the same
-      // vector rather than one a fraction longer.
-      driveVector: normalizeVector(drive),
-      turn: helmTurn,
-      thrust: frame.hasHelm ? frame.thrust : null,
-      headingTargetAngle: this.playerHeadingTarget,
-      turretTargetAngle: this.playerTurretTarget,
-      turretTurn: aimTurn,
-      firing: frame.firing,
-      mgFiring: frame.mgFiring,
-      // Filled from the autopilot by the caller; the cockpit has no sector.
-      shieldTargetAngle: null,
-      shieldActive: false
-    };
+    this.playerHeadingTarget = cockpit.held.heading;
+    this.playerTurretTarget = cockpit.held.turret;
+    this.playerIntent = cockpit.intent;
     this.appliedSoloSeq = frame.seq;
   }
 
@@ -918,7 +787,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match === undefined) return;
     const game = this.state.game;
 
-    const player = match.ships[PLAYER_SLOT];
+    const player = match.ships[ARENA_PLAYER_SLOT];
 
     game.tick = match.clock.tick;
     game.elapsedMs = Math.round(match.clock.elapsedMs);
@@ -1053,7 +922,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
       (ship) => {
         const view = new ArenaShipView();
         view.entityId = ship.id;
-        view.isSelf = ship.slot === PLAYER_SLOT;
+        view.isSelf = ship.slot === ARENA_PLAYER_SLOT;
         return view;
       },
       (view, ship) => {
@@ -1150,24 +1019,6 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 function bearingOf(vector: { readonly x: number; readonly y: number }): number | null {
   if (vector.x === 0 && vector.y === 0) return null;
   return Math.atan2(vector.y, vector.x);
-}
-
-/**
- * The bearing a stick names, or the one it named last.
- *
- * The client's own replay resolves it exactly this way, and it has to: a rate
- * command names no bearing at all, and a released stick sends a zero vector,
- * which is not "point north" but "keep going where you were pointed".
- */
-function heldTarget(
-  vector: { readonly x: number; readonly y: number },
-  turn: number | null,
-  previous: number | null
-): number | null {
-  if (turn !== null) return null;
-  const normalized = normalizeVector(vector);
-  const bearing = bearingOf(normalized);
-  return bearing === null ? previous : canonicalizeAngle(bearing);
 }
 
 function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["game"]): void {

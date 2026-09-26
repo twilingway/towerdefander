@@ -34,3 +34,6 @@ export * from "./waveDeadline.ts";
 export * from "./runSetup.ts";
 export * from "./arenaBots.ts";
 export * from "./arenaWorld.ts";
+export * from "./arenaSetup.ts";
+export * from "./arenaScan.ts";
+export * from "./arenaRun.ts";
