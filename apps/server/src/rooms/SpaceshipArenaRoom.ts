@@ -18,7 +18,6 @@ import {
   ARENA_LOBBY_WAIT_SECONDS,
   ARENA_RESULT_HOLD_MS,
   ASSET_WAIT_SECONDS,
-  CAMERA_VIEW_WIDTH_MAX,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
   SOLO_INPUT_BUFFER_SIZE,
@@ -46,6 +45,7 @@ import {
   createArenaProjectionMemo,
   createArenaSeats,
   createRunSeed,
+  projectArenaFixtures,
   projectArenaMatch,
   stepArenaMatch,
   sweepArena,
@@ -57,7 +57,6 @@ import {
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
 import { DISPLAY_VIEW_TAG, PlayerState, SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
-import { leadSpeedFor } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 
 /**
  * How long a started match is kept after the last person leaves.
@@ -235,117 +234,7 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     this.match = createArenaMatch(this.config, createRunSeed(undefined), seats);
     this.bots = createArenaBots(tuning, this.config);
 
-    this.state.game.worldWidth = ship.worldWidth;
-    this.state.game.worldHeight = ship.worldHeight;
-    this.state.game.encounter.phase = "combat";
-    this.state.game.encounter.waveNumber = 1;
-    /*
-     * The same frame the campaign is played in, from the same setting.
-     *
-     * It used to frame the whole disc, which made a hull a third of the size it
-     * is in the campaign and every distance a different distance: a player who
-     * has learned one mode was handed another camera in the other. The field is
-     * the radar's job - the whole point of putting it over the stick - and the
-     * frame's job is to make a ship the size a ship is.
-     */
-    const display = this.state.game.display;
-    display.cameraViewWidth = Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth);
-    /*
-     * The hull as the console draws it, whole.
-     *
-     * Only the silhouette travelled before, so every ship in a match - the
-     * player's included - flew with the fallback turret rather than the one
-     * chosen in the catalogue, and the mount and pivot the operator set were
-     * nowhere. Sixteen copies of our own ship have to look like our own ship.
-     */
-    display.spaceshipVisualShape = ship.spaceshipVisual?.shape ?? "";
-    display.spaceshipVisualScale = ship.spaceshipVisual?.modelScale ?? 1;
-    display.turretVisualShape = ship.turretVisual?.shape ?? "";
-    display.turretVisualScale = ship.turretVisual?.modelScale ?? 1;
-    display.turretMountX = ship.turretVisual?.mountX ?? 0;
-    display.turretMountY = ship.turretVisual?.mountY ?? 0;
-    display.turretPivotX = ship.turretVisual?.pivotX ?? 0;
-    display.turretPivotY = ship.turretVisual?.pivotY ?? 0;
-    display.machineGunVisualShape = ship.machineGunVisual?.shape ?? "";
-    display.machineGunVisualScale = ship.machineGunVisual?.modelScale ?? 1;
-    display.machineGunMountX = ship.machineGunVisual?.mountX ?? 0;
-    display.machineGunMountY = ship.machineGunVisual?.mountY ?? 0;
-    display.machineGunPivotX = ship.machineGunVisual?.pivotX ?? 0;
-    display.machineGunPivotY = ship.machineGunVisual?.pivotY ?? 0;
-    display.asteroidVisualShape = ship.asteroidVisual?.shape ?? "";
-    display.asteroidVisualScale = ship.asteroidVisual?.modelScale ?? 1;
-    /*
-     * The sky, which the arena was flying without.
-     *
-     * The campaign projects it with the rest of its display block and a match
-     * never did, so the field came out as an empty black square. The picture and
-     * its parallax, fixed for the match like the silhouettes are.
-     */
-    display.backgroundImage = ship.background.image;
-    display.backgroundParallaxStrength = ship.background.parallaxStrength;
-    display.shieldBandEffect = ship.shieldBandEffect;
-    display.shieldImpactEffect = ship.shieldImpactEffect;
-    display.shipDeathEffect = ship.shipDeathEffect;
-    display.shipMuzzleEffect = ship.shipMuzzleEffect;
-    /*
-     * Every hull in a match is this hull, so one set of sounds covers the
-     * field: what the player is heard firing is what fifteen rivals are heard
-     * firing, which is also what a kill of any of them sounds like.
-     */
-    display.shipCannonSound = ship.shipCannonSound;
-    display.shipMgSound = ship.shipMgSound;
-    display.shipHitSound = ship.shipHitSound;
-    display.shipDeathSound = ship.shipDeathSound;
-    display.shieldRadius = ship.shieldRadius;
-    // The drive block is what a predicting client replays from; the arena does
-    // not predict yet, but the contract asks for real numbers and they exist.
-    const drive = this.state.game.display.drive;
-    drive.speedPerSecond = ship.spaceshipSpeedPerSecond;
-    drive.accelerationPerSecondSquared = ship.spaceshipAccelerationPerSecondSquared;
-    drive.brakingPerSecondSquared = ship.spaceshipBrakingPerSecondSquared;
-    drive.reverseSpeedFactor = ship.spaceshipReverseSpeedFactor;
-    drive.headingMaxAngularSpeed = ship.headingMaxAngularSpeedPerSecond;
-    drive.headingAngularAcceleration = ship.headingAngularAccelerationPerSecondSquared;
-    drive.headingAngularBraking = ship.headingAngularBrakingPerSecondSquared;
-    drive.turretMaxAngularSpeed = ship.turretMaxAngularSpeedPerSecond;
-    drive.turretAngularAcceleration = ship.turretAngularAccelerationPerSecondSquared;
-    drive.turretAngularBraking = ship.turretAngularBrakingPerSecondSquared;
-    drive.hullRadius = ship.spaceshipRadius;
-
-    /*
-     * The helm block, which only a cockpit reads.
-     *
-     * Without it the sticks fall back on the schema's defaults, and the two
-     * that matter most are zero there: the dead zones. A thumb is never still,
-     * and two pixels of slip on the ring is a couple of degrees of commanded
-     * heading - the tremble the preset's dead zone exists to absorb. The mount
-     * flag belongs here for the same reason: it decides what a stick bearing
-     * means, and the client replays with it.
-     */
-    const helm = this.state.game.helm;
-    helm.scheme = tuning.helm.scheme;
-    helm.headingLeadRadians = tuning.helm.headingLeadRadians;
-    helm.stopDampening = tuning.helm.stopDampening;
-    helm.rotateInPlaceThrottle = tuning.helm.rotateInPlaceThrottle;
-    helm.driveDeadzoneShare = tuning.helm.driveDeadzoneShare;
-    helm.aimDeadzoneShare = tuning.helm.aimDeadzoneShare;
-    helm.driveZoneShare = tuning.helm.driveZoneShare;
-    helm.aimProjectionShare = tuning.helm.aimProjectionShare;
-    helm.headingDeadbandRadians = tuning.helm.headingDeadbandRadians;
-    helm.headingFilterSeconds = tuning.helm.headingFilterSeconds;
-    helm.turretLeadRadians = tuning.helm.turretLeadRadians;
-    helm.hullAngularBrakingPerSecondSquared = ship.headingAngularBrakingPerSecondSquared;
-    helm.hullAngularMaxSpeed = ship.headingMaxAngularSpeedPerSecond;
-    helm.hullAngularAcceleration = ship.headingAngularAccelerationPerSecondSquared;
-    helm.turretAngularMaxSpeed = ship.turretMaxAngularSpeedPerSecond;
-    helm.turretAngularAcceleration = ship.turretAngularAccelerationPerSecondSquared;
-    helm.turretAngularBraking = ship.turretAngularBrakingPerSecondSquared;
-    helm.turretMountedOnHull = ship.turretMountedOnHull;
-    this.state.game.cannon.kind = ship.cannonWeaponKind;
-    this.state.game.cannon.reach = leadSpeedFor(
-      ship.cannonWeaponKind,
-      ship.projectileSpeedPerSecond
-    );
+    projectArenaFixtures(this.state.game, tuning, this.config);
     this.patchRate = PATCH_INTERVAL_MS;
     this.setFixedTimestep(
       () => {
