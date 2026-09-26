@@ -10,11 +10,11 @@
       "models": {
         "qwen3.8-27b": {
           "limit": {
-            "context": 128000,
+            "context": 140000,
             "output": 32000
           },
           "modalities": {
-            "input": ["text", "image"]
+            "input": ["text"]
           }
         },
         "qwen3.8-27b-uncensored": {

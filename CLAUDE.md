@@ -199,10 +199,12 @@ editor, the bake pipeline and the atlas conventions; full text in
 ports, `tests/e2e` conventions), `react-frontend` (display/controller React rules plus the vendored
 Vercel rule sets in `.agents/skills/`: `react-best-practices`, `composition-patterns` and
 `web-interface-guidelines`), and `phaser-display` (boundaries; the full text stays in
-`.agents/skills/phaser-display/SKILL.md`, which the other agent runners share), and `codex-visual`
-(Codex CLI as an independent visual consultant and image generator for development work).
-`.mcp.json` declares the `playwright` MCP server so a browser session is available without extra
-setup; it drives a browser only and does not start app servers.
+`.agents/skills/phaser-display/SKILL.md`, which the other agent runners share), `codex-visual`
+(Codex CLI as an independent visual consultant and image generator for development work), and
+`codex-worker` (which agent gets which task — Codex CLI, the Codex plugin, local Qwen through
+opencode — and how a delegated diff is isolated, measured and accepted). `.mcp.json` declares the
+`playwright` MCP server so a browser session is available without extra setup; it drives a browser
+only and does not start app servers.
 
 ### How the global rules apply here
 
@@ -231,6 +233,13 @@ project differs:
   makes every decision. Inside that loop, screenshots of the running app are in scope. Codex may
   read local dev-stand keys but never production credentials. The procedure and command templates
   are in `.claude/skills/codex-visual/SKILL.md`.
+- **Implementation can be delegated; acceptance cannot.** Claude keeps specs, contracts and review,
+  and may hand a bounded task with scripted checks to Codex `gpt-6-sol` (or to local Qwen through
+  opencode when the ChatGPT window is spent) in its own worktree under `td-agents/`. Green checks
+  are not acceptance: every delegated diff gets a fresh review against the spec, because in the
+  2026-09-26 comparison two executors passed every check without solving the task. The global
+  token-economy rule applies: one task per session. Routing, commands and settings are in
+  `.claude/skills/codex-worker/SKILL.md`.
 
 ## Conventions
 
