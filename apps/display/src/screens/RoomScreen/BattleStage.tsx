@@ -102,10 +102,14 @@ export function BattleStage({
   /*
    * A run this page hosted has no server to hold its record, so the device
    * holds it. Read here rather than in the overlay because the overlay is also
-   * how a networked run ends, and that one is not this device's to score.
+   * how a networked run ends, and that one is not this device's to score. A
+   * training match is hosted here too, but its score is kills, not points:
+   * scoring it into the campaign's record would compare two different things.
    */
   const record = useLocalRecord(
-    cockpit.hostedLocally === true && view.game.encounter.phase === "result",
+    cockpit.hostedLocally === true &&
+      view.game.arenaShips.length === 0 &&
+      view.game.encounter.phase === "result",
     view.game.encounter.score,
     view.game.encounter.waveNumber
   );
@@ -220,7 +224,10 @@ export function BattleStage({
               survivors={view.game.arenaShips.filter((ship) => !ship.isSelf && ship.alive).length}
               fieldSize={ARENA_SHIP_COUNT}
               leaving={closingRoom}
-              onLeave={onLeaveRoom}
+              // A training match on this device starts again where it stands;
+              // a server match goes back to the queue for the next one.
+              actionLabel={cockpit.hostedLocally === true ? "Играть ещё" : "Искать новый бой"}
+              onLeave={cockpit.hostedLocally === true ? cockpit.onReady : onLeaveRoom}
             />
           )}
         {view.game.encounter.phase === "result" &&

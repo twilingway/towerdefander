@@ -15,7 +15,7 @@ import type { PredictedInputFrame } from "../../model/shipPrediction.js";
 import { RoomScreen } from "./index.js";
 
 /**
- * The campaign, hosted by this page.
+ * The campaign, or a training match, hosted by this page.
  *
  * Structurally the preview route's twin: it renders the real `RoomScreen`
  * without a session, and hands it a world it made itself. The difference is
@@ -24,6 +24,8 @@ import { RoomScreen } from "./index.js";
  */
 
 interface LocalRunRouteProps {
+  /** A campaign run, or an arena match against bots on the preset's own hull. */
+  readonly kind: "campaign" | "arena";
   readonly diagnostics: boolean;
   readonly visibleDemo: boolean;
   readonly switches: DisplaySwitches;
@@ -83,6 +85,7 @@ export function LocalRunRoute(props: LocalRunRouteProps) {
 }
 
 function LocalRunStage({
+  kind,
   diagnostics,
   visibleDemo,
   switches,
@@ -115,15 +118,21 @@ function LocalRunStage({
    */
   const readFrame = useRef<(() => PredictedInputFrame) | undefined>(undefined);
 
-  const local = useLocalRun({
-    config,
-    tuning,
-    shipArchetypeId: hullId,
-    playerName,
-    startWave,
-    waveTtlSeconds: WAVE_TTL_SECONDS,
-    readIntent: () => toLocalIntent(readFrame.current?.())
-  });
+  const readIntent = () => toLocalIntent(readFrame.current?.());
+  const local = useLocalRun(
+    kind === "arena"
+      ? { kind, tuning, playerName, readIntent }
+      : {
+          kind,
+          config,
+          tuning,
+          shipArchetypeId: hullId,
+          playerName,
+          startWave,
+          waveTtlSeconds: WAVE_TTL_SECONDS,
+          readIntent
+        }
+  );
 
   return (
     <RoomScreen
@@ -147,7 +156,7 @@ function LocalRunStage({
       preview={undefined}
       onCloseRoom={onLeave}
       onLeaveRoom={onLeave}
-      onScan={() => undefined}
+      onScan={local.scan}
       onReady={() => {
         // The only thing readiness can mean here: play another one.
         local.restart();
