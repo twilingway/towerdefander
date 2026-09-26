@@ -1,6 +1,7 @@
 import type { SpaceshipSimulationState } from "@spaceship-defender/game-core";
 
 import type { PredictionDriver, PredictedPoseFrame } from "../shipPrediction.js";
+import type { LocalArena } from "./arenaEngine.js";
 import type { LocalIntent, LocalRun } from "./engine.js";
 import type { StepClock } from "./clock.js";
 
@@ -20,7 +21,7 @@ import type { StepClock } from "./clock.js";
  * page produced itself.
  */
 export interface LocalDriverOptions {
-  readonly run: LocalRun;
+  readonly run: LocalRun | LocalArena;
   readonly clock: StepClock;
   readonly readIntent: () => LocalIntent;
   /** Publishing is the host's business; the driver only says a frame happened. */
@@ -62,7 +63,7 @@ export function createLocalDriver({
        * judder, and it is worst exactly where the eye tracks the hull against
        * something else: reversing, or holding an angle while firing sideways.
        */
-      return poseOf(run.state());
+      return run.pose();
     },
 
     bind: () => undefined,

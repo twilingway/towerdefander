@@ -71,6 +71,7 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   const hostReference = useRef<RunHost | undefined>(undefined);
   if (hostReference.current === undefined) {
     const hostOptions = {
+      kind: "campaign" as const,
       config: options.config,
       tuning: options.tuning,
       shipArchetypeId: options.shipArchetypeId,
