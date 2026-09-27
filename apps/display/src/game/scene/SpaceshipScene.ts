@@ -16,13 +16,18 @@ import { ArenaFleet } from "./arenaFleet.js";
 import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
 import { createNoseGun, createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
-import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
+import {
+  reconcileCombatVisuals,
+  retireCombatVisual,
+  type CombatVisual,
+  type ScenePrediction
+} from "./entities.js";
 import { sceneAudioFor, type SceneAudio } from "./sceneAudio.js";
 import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
 import { createShellProbe, probeFrame } from "./shellProbe.js";
-import { placeShell, type ShellClocks } from "./shellClock.js";
+import { placeShell, shellMayRetire } from "./shellClock.js";
 import {
   DEFAULT_SPACESHIP_HULL_ASSET_ID,
   drawSpaceshipHull,
@@ -77,6 +82,8 @@ export class SpaceshipScene extends Phaser.Scene {
   private readonly frames = new FrameMeter();
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
+  /** This frame's shell clocks, one object reused: see `shellClock.ts`. */
+  private readonly shellClocks = { present: 0, world: 0, own: 0 };
   /** What was drawn, for a browser spec to measure; undefined unless `?diag=1`. */
   private readonly shellProbe = createShellProbe(
     globalThis.location.search,
@@ -407,10 +414,10 @@ export class SpaceshipScene extends Phaser.Scene {
     const reported = this.prediction?.readShellClock();
     const ownTick = reported?.own ?? playbackTick;
     const room = reported?.room;
-    const shellClocks: ShellClocks =
-      room === undefined
-        ? { present: ownTick, world: playbackTick, own: ownTick }
-        : { present: room.present, world: room.world, own: ownTick };
+    const shellClocks = this.shellClocks;
+    shellClocks.present = room === undefined ? ownTick : room.present;
+    shellClocks.world = room === undefined ? playbackTick : room.world;
+    shellClocks.own = ownTick;
     const elapsedTicks = deltaMs / (1000 / SIMULATION_TICK_RATE);
     let liveDrawn = 0;
     let offscreen = 0;
@@ -420,14 +427,53 @@ export class SpaceshipScene extends Phaser.Scene {
     const renderer = this.camera.readRendererSize();
     const viewRight = viewLeft + renderer.width;
     const viewBottom = viewTop + renderer.height;
-    for (const visual of this.combatVisuals.values()) {
+    for (const [entityId, visual] of this.combatVisuals) {
+      const flight = visual.shell;
+      if (flight !== undefined) {
+        /*
+         * Bound, a shell is read raw off the decoded state at the decoded tick;
+         * otherwise from the newest sample its track holds. A shell the room
+         * has dropped reads neither - the decoded object may already be reused -
+         * and flies on from its own copy until its clock reaches where it left.
+         */
+        const live =
+          flight.retireAtTick === undefined && visual.live !== undefined && room !== undefined
+            ? this.prediction?.read(visual.live)
+            : undefined;
+        if (live !== undefined) liveDrawn += 1;
+        placeShell(
+          visual,
+          flight,
+          live ?? visual.position.current.to,
+          live !== undefined && room !== undefined
+            ? room.sampleTick
+            : visual.position.current.toTick,
+          shellClocks,
+          elapsedTicks
+        );
+        if (shellMayRetire(flight, shellClocks.present)) {
+          retireCombatVisual(
+            entityId,
+            visual,
+            {
+              visuals: this.combatVisuals,
+              snapshot: this.snapshot,
+              shieldPose: this.shield.pose(),
+              bursts: this.bursts,
+              sounds: this.sounds
+            },
+            false
+          );
+        }
+        continue;
+      }
       /*
-       * One clock for the whole picture when there is a cockpit driving it.
+       * One clock for the whole world when there is a cockpit driving it.
        *
-       * The predictor smooths and reckons every entity it was given, so reading
-       * through it puts the world where the ship already is. Without one - the
-       * shared display, the preview - the tracks below still do the job they
-       * always did.
+       * The predictor interpolates every hull it was given on the delay it
+       * measured, so reading through it puts the world on the clock its shells
+       * are born on. Without one - the shared display, the preview - the tracks
+       * below still do the job they always did.
        */
       // A rock tumbles on the shared playback clock instead of facing its course.
       const spinAngle =
@@ -435,21 +481,6 @@ export class SpaceshipScene extends Phaser.Scene {
           ? undefined
           : visual.spin.phase + visual.spin.rate * (playbackTick / SIMULATION_TICK_RATE);
       const live = visual.live === undefined ? undefined : this.prediction?.read(visual.live);
-      if (visual.shell !== undefined) {
-        // Bound, a shell is read raw off the decoded state at the decoded tick;
-        // otherwise from the newest sample its track holds.
-        const bound = live !== undefined && room !== undefined;
-        if (bound) liveDrawn += 1;
-        placeShell(
-          visual,
-          visual.shell,
-          bound ? live : visual.position.current.to,
-          bound ? room.sampleTick : visual.position.current.toTick,
-          shellClocks,
-          elapsedTicks
-        );
-        continue;
-      }
       if (live !== undefined) {
         liveDrawn += 1;
         visual.object.setPosition(live.x, live.y);

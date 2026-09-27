@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+
+import { openCampaign } from "./openCampaign.js";
 
 import {
   drawnSpeedRatios,
@@ -13,6 +15,7 @@ import {
 
 const testHost = process.env.E2E_HOST?.trim() ?? "127.0.0.1";
 const displayUrl = process.env.E2E_DISPLAY_URL ?? `http://${testHost}:5173`;
+const controllerUrl = process.env.E2E_CONTROLLER_URL ?? `http://${testHost}:5174`;
 
 /*
  * A shell leaves the barrel that is drawn firing it.
@@ -79,13 +82,16 @@ test("the gap arithmetic tells a shell on the barrel's clock from one a lead beh
   expect(ownShellGaps(frames(leadMs))[0]).toBeCloseTo((shellSpeed * leadMs) / 1000, 0);
 });
 
-/** Flies a wide weaving circle with both guns firing, the cannon off to one side. */
-async function flyAndFire(page: Page, durationMs: number): Promise<void> {
+/**
+ * Flies a wide weaving circle with the nose gun firing - and, from a cockpit on
+ * the drawing page itself, the cannon too, off to one side.
+ */
+async function flyAndFire(page: Page, durationMs: number, withCannon = true): Promise<void> {
   const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
   await page.mouse.move(viewport.width * 0.85, viewport.height * 0.3);
   await page.keyboard.down("KeyW");
   await page.keyboard.down("Space");
-  await page.mouse.down();
+  if (withCannon) await page.mouse.down();
   const until = Date.now() + durationMs;
   while (Date.now() < until) {
     await page.keyboard.down("KeyA");
@@ -93,7 +99,7 @@ async function flyAndFire(page: Page, durationMs: number): Promise<void> {
     await page.keyboard.up("KeyA");
     await page.waitForTimeout(700);
   }
-  await page.mouse.up();
+  if (withCannon) await page.mouse.up();
   await page.keyboard.up("Space");
   await page.keyboard.up("KeyW");
 }
@@ -101,9 +107,13 @@ async function flyAndFire(page: Page, durationMs: number): Promise<void> {
 async function measure(
   page: Page,
   label: string,
-  durationMs: number
+  durationMs: number,
+  /** The page whose keys fly the ship, when it is not the one drawing it. */
+  pilot: Page = page
 ): Promise<{ own: GapSummary; foreign: GapSummary; speed: GapSummary; low: number }> {
-  const frames = await recordFrames(page, durationMs, () => flyAndFire(page, durationMs));
+  const frames = await recordFrames(page, durationMs, () =>
+    flyAndFire(pilot, durationMs, pilot === page)
+  );
   if (process.env.SHELL_PROBE_DUMP) {
     const { writeFileSync } = await import("node:fs");
     writeFileSync(
@@ -178,4 +188,39 @@ test("local arena training: shells leave the drawn barrels", async ({ page }) =>
   await expect(page.getByTestId("spaceship-world")).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(3_000);
   expectOnTheBarrel(await measure(page, "local arena", 9_000), true);
+});
+
+test("shared screen: shells leave the drawn barrels", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const contexts: BrowserContext[] = [];
+  try {
+    const displayContext = await browser.newContext();
+    contexts.push(displayContext);
+    const display = await displayContext.newPage();
+    await display.goto(`${displayUrl}/?shared&diag=1`);
+    await openCampaign(display, 1);
+    const roomCode = (await display.locator(".room-code").textContent({ timeout: 30_000 }))?.trim();
+    if (!roomCode) throw new Error("the display published no room code");
+
+    // One phone flies it; the display draws everything, its crew's ship
+    // included, on its own playback clock.
+    const pilotContext = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+      hasTouch: true,
+      isMobile: true
+    });
+    contexts.push(pilotContext);
+    const pilot = await pilotContext.newPage();
+    await pilot.goto(`${controllerUrl}/?room=${encodeURIComponent(roomCode)}`);
+    await pilot.getByLabel("Имя").fill("Соло");
+    await pilot.getByRole("button", { name: "Подключиться" }).click();
+    await expect(pilot.locator(".connection")).toHaveText("В сети");
+    await pilot.getByRole("button", { name: "Готов" }).click();
+
+    await expect(display.getByTestId("spaceship-world")).toBeVisible({ timeout: 45_000 });
+    await display.waitForTimeout(3_000);
+    expectOnTheBarrel(await measure(display, "shared screen", 12_000, pilot), false);
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
 });

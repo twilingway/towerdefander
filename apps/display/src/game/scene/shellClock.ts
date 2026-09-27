@@ -93,30 +93,65 @@ export interface PlacedShell {
   readonly velocity: { readonly x: number; readonly y: number } | undefined;
 }
 
+/** A shell's flight as the scene keeps it between frames. */
+export interface ShellFlight {
+  readonly own: boolean;
+  readonly spawnTick: number;
+  readonly clock: ShellClockState;
+  lastX: number;
+  lastY: number;
+  lastTick: number;
+  drawnTick: number | undefined;
+  /** Set once the room has dropped the shell; it then flies on from `last*`. */
+  retireAtTick: number | undefined;
+}
+
 /**
  * Draws one shell for this frame: hidden until its shooter's clock reaches its
  * birth, then carried from its newest authoritative sample to its own clock.
+ * A shell the room has dropped flies on from the last sample it had.
+ *
+ * Returns the tick it was drawn at, or undefined while it is not yet born.
  */
 export function placeShell(
   shell: PlacedShell,
-  trace: { readonly own: boolean; readonly spawnTick: number; readonly clock: ShellClockState },
+  flight: ShellFlight,
   sample: { readonly x: number; readonly y: number },
   sampleTick: number,
   clocks: ShellClocks,
   elapsedTicks: number
-): void {
-  const tick = advanceShellClock(trace.clock, trace.own, trace.spawnTick, clocks, elapsedTicks);
+): number | undefined {
+  if (flight.retireAtTick === undefined) {
+    flight.lastX = sample.x;
+    flight.lastY = sample.y;
+    flight.lastTick = sampleTick;
+  }
+  const tick = advanceShellClock(flight.clock, flight.own, flight.spawnTick, clocks, elapsedTicks);
+  flight.drawnTick = tick;
   if (tick === undefined) {
     shell.object.setVisible(false);
-    return;
+    return undefined;
   }
   // Inline rather than through `shellPositionAt`: this runs per shell per frame,
   // and an object each time is a steady trickle of garbage for nothing.
   const vx = shell.velocity?.x ?? 0;
   const vy = shell.velocity?.y ?? 0;
-  const seconds = (tick - sampleTick) / SIMULATION_TICK_RATE;
+  const seconds = (tick - flight.lastTick) / SIMULATION_TICK_RATE;
   shell.object.setVisible(true);
-  shell.object.setPosition(sample.x + vx * seconds, sample.y + vy * seconds);
+  shell.object.setPosition(flight.lastX + vx * seconds, flight.lastY + vy * seconds);
   // A shell points where it is going, and that never changes while it flies.
   shell.object.rotation = Math.atan2(vy, vx);
+  return tick;
+}
+
+/**
+ * Whether a dropped shell may leave now: its clock has reached the last tick
+ * the room had it at - or it has lingered a second past the present, which no
+ * warp this side of the protocol takes, so it is stuck and goes anyway.
+ */
+export function shellMayRetire(flight: ShellFlight, present: number): boolean {
+  const until = flight.retireAtTick;
+  if (until === undefined) return false;
+  if (present - until > SIMULATION_TICK_RATE) return true;
+  return flight.drawnTick !== undefined && flight.drawnTick >= until;
 }

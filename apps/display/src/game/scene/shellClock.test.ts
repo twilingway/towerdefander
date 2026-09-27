@@ -5,8 +5,11 @@ import {
   SHELL_CLOCK_WARP_RATE,
   advanceShellClock,
   createShellClockState,
+  placeShell,
+  shellMayRetire,
   shellPositionAt,
-  type ShellClocks
+  type ShellClocks,
+  type ShellFlight
 } from "./shellClock.js";
 
 const at = (present: number, world: number, own: number): ShellClocks => ({
@@ -84,5 +87,74 @@ describe("shellPositionAt", () => {
     const velocity = { x: SIMULATION_TICK_RATE * 3, y: -SIMULATION_TICK_RATE };
     expect(shellPositionAt(sample, 40, velocity, 42.5)).toEqual({ x: 107.5, y: 197.5 });
     expect(shellPositionAt(sample, 40, velocity, 38)).toEqual({ x: 94, y: 202 });
+  });
+});
+
+describe("a shell the room has dropped", () => {
+  const sprite = () => {
+    const drawn = { x: 0, y: 0, visible: false, rotation: 0 };
+    return {
+      drawn,
+      object: {
+        setPosition: (x: number, y: number) => {
+          drawn.x = x;
+          drawn.y = y;
+        },
+        setVisible: (visible: boolean) => {
+          drawn.visible = visible;
+        },
+        rotation: 0
+      },
+      velocity: { x: SIMULATION_TICK_RATE * 10, y: 0 }
+    };
+  };
+  const flight = (): ShellFlight => ({
+    own: false,
+    spawnTick: 100,
+    clock: createShellClockState(false),
+    lastX: 0,
+    lastY: 0,
+    lastTick: 0,
+    drawnTick: undefined,
+    retireAtTick: undefined
+  });
+
+  it("flies on from its last sample until its clock reaches where it left", () => {
+    const shell = sprite();
+    const state = flight();
+    // Seen at tick 110 at x = 100; the world is drawn six ticks behind.
+    placeShell(shell, state, { x: 100, y: 0 }, 110, at(110, 104, 112), 1);
+    expect(shell.drawn.x).toBe(40);
+    // The room drops it; its sample would now be meaningless, so it is ignored.
+    state.retireAtTick = 110;
+    placeShell(shell, state, { x: 9_999, y: 0 }, 111, at(111, 105, 113), 1);
+    expect(shell.drawn.x).toBeCloseTo(100 - 10 * (6 - SHELL_CLOCK_WARP_RATE - 1));
+    expect(shellMayRetire(state, 111)).toBe(false);
+    for (let present = 112; present < 120; present += 1) {
+      placeShell(
+        shell,
+        state,
+        { x: 9_999, y: 0 },
+        present,
+        at(present, present - 6, present + 2),
+        1
+      );
+    }
+    // Five and a quarter ticks behind at 1.25 a tick: at tick 110 by now.
+    expect(state.drawnTick).toBeGreaterThanOrEqual(110);
+    expect(shellMayRetire(state, 119)).toBe(true);
+  });
+
+  it("goes anyway once it has lingered a second past the present", () => {
+    const state = flight();
+    state.retireAtTick = 50;
+    expect(shellMayRetire(state, 50 + SIMULATION_TICK_RATE)).toBe(false);
+    expect(shellMayRetire(state, 51 + SIMULATION_TICK_RATE)).toBe(true);
+  });
+
+  it("is never retired while the room still has it", () => {
+    const state = flight();
+    state.drawnTick = 10_000;
+    expect(shellMayRetire(state, 10_000)).toBe(false);
   });
 });

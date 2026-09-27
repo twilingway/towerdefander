@@ -36,11 +36,19 @@ export function createLocalDriver({
   onStepped,
   paused
 }: LocalDriverOptions): PredictionDriver {
-  let drawnTick: number | undefined;
+  /*
+   * The step the hull was last drawn on. Kept through a pause rather than
+   * cleared: shells in the air are drawn against it, and dropping it would throw
+   * every one of them back onto the playback clock for as long as the pause
+   * lasts. One object, handed out every frame.
+   */
+  const shellClock: { own: number | undefined; room: undefined } = {
+    own: undefined,
+    room: undefined
+  };
   return {
     drive(): PredictedPoseFrame | undefined {
       const now = performance.now();
-      drawnTick = undefined;
       if (paused()) {
         // Not a step of zero: the gap has to be forgotten, or coming back would
         // spend it as a burst of catch-up.
@@ -65,7 +73,7 @@ export function createLocalDriver({
        * judder, and it is worst exactly where the eye tracks the hull against
        * something else: reversing, or holding an angle while firing sideways.
        */
-      drawnTick = run.tick();
+      shellClock.own = run.tick();
       return run.pose();
     },
 
@@ -74,7 +82,7 @@ export function createLocalDriver({
     angleOf: () => 0,
     // The hull is drawn on the run's newest step, whole; the world the scene
     // plays back itself, so there is no room clock to report.
-    readShellClock: () => ({ own: drawnTick, room: undefined })
+    readShellClock: () => shellClock
   };
 }
 
@@ -115,19 +123,22 @@ export function createRemoteDriver({
   readonly sendIntent: () => void;
   readonly paused: () => boolean;
 }): PredictionDriver {
-  let drawnTick: number | undefined;
+  // Kept through a pause and handed out as one object, as in the tab's driver.
+  const shellClock: { own: number | undefined; room: undefined } = {
+    own: undefined,
+    room: undefined
+  };
   return {
     drive(): PredictedPoseFrame | undefined {
-      drawnTick = undefined;
       if (paused()) return undefined;
       sendIntent();
       const latest = latestPose();
-      drawnTick = latest?.tick;
+      if (latest !== undefined) shellClock.own = latest.tick;
       return latest?.pose;
     },
     bind: () => undefined,
     read: () => ({ x: 0, y: 0, rotation: 0 }),
     angleOf: () => 0,
-    readShellClock: () => ({ own: drawnTick, room: undefined })
+    readShellClock: () => shellClock
   };
 }

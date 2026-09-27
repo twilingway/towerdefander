@@ -398,8 +398,10 @@ export function useShipPrediction<
        * The drawn pose is the state before the newest sent frame, eased toward
        * it by this fraction of a step - so the tick the hull is drawn at is the
        * decoded tick plus the frames still in flight, less one, plus this. The
-       * SDK keeps the fraction private; the rule it follows is the fixed-step
-       * accumulator's, fed the same timestamps, so it is kept here beside it.
+       * SDK keeps the fraction private (`RollbackController.renderAcc`), so its
+       * rule is repeated here on the same timestamps: grown by frame time,
+       * consumed a step per frame sent, snapped to zero when a consume overshoots
+       * and folded back into one step when it still holds more.
        */
       let stepCarry = 0;
       let drawnOwn: number | undefined;
@@ -408,7 +410,6 @@ export function useShipPrediction<
         if (lastDrivenAt > 0) stepCarry += now - lastDrivenAt;
         lastDrivenAt = now;
         const steps = predict.tick(now);
-        stepCarry = steps >= MAX_STEPS_PER_FRAME ? 0 : Math.max(0, stepCarry - steps * STEP_MS);
         drawnOwn = undefined;
         const { source: live, enabled: on, predicting, world } = latest.current;
         for (let step = 0; step < steps; step += 1) {
@@ -428,6 +429,9 @@ export function useShipPrediction<
           input.data.seq = ++seq;
           input.data.driveRevision = world?.drive.revision ?? 0;
           input.send();
+          stepCarry -= STEP_MS;
+          if (stepCarry < 0) stepCarry = 0;
+          else if (stepCarry >= STEP_MS) stepCarry %= STEP_MS;
         }
         latest.current.onPending?.(input.pendingCount, reconciler.drift.ema);
         /*
@@ -489,21 +493,27 @@ export function useShipPrediction<
        * `serverNow - delay - rtt/2` - so a shell born on it leaves the hull the
        * library just drew.
        */
+      // Reused every frame, like the placements above.
+      const roomClocks = { present: 0, world: 0, sampleTick: 0 };
+      const shellClock: { own: number | undefined; room: typeof roomClocks | undefined } = {
+        own: undefined,
+        room: undefined
+      };
       const readShellClock = (): DriverShellClock => {
         const clock = room.clock;
         const stamp = clock.lastServerTime();
         const decodedTick = room.state.game?.tick;
-        if (stamp <= 0 || decodedTick === undefined) return { own: drawnOwn, room: undefined };
-        const presentMs = clock.renderNow();
+        shellClock.own = drawnOwn;
+        if (stamp <= 0 || decodedTick === undefined) {
+          shellClock.room = undefined;
+          return shellClock;
+        }
         const worldMs = clock.serverNow() - publishedDelayMs - clock.smoothedRtt() / 2;
-        return {
-          own: drawnOwn,
-          room: {
-            present: decodedTick + (presentMs - stamp) / STEP_MS,
-            world: decodedTick + (worldMs - stamp) / STEP_MS,
-            sampleTick: decodedTick
-          }
-        };
+        roomClocks.present = decodedTick + (clock.renderNow() - stamp) / STEP_MS;
+        roomClocks.world = decodedTick + (worldMs - stamp) / STEP_MS;
+        roomClocks.sampleTick = decodedTick;
+        shellClock.room = roomClocks;
+        return shellClock;
       };
       latest.current.onDriver({ drive, bind, read, angleOf, readShellClock });
 
@@ -525,8 +535,6 @@ export function useShipPrediction<
       const STALE_DRIVE_MS = 40;
       /** The room's step, which is also the step the predictor's accumulator counts in. */
       const STEP_MS = 1000 / SIMULATION_TICK_RATE;
-      /** The predictor's own cap on steps a frame; past it the leftover is dropped. */
-      const MAX_STEPS_PER_FRAME = 5;
       /** Growth is an emergency: the stream already arrived later than the buffer. */
       const DELAY_GROW_MS = 6;
       /** Giving it back is not, so it takes a step nobody can mistake for jitter. */

@@ -82,7 +82,11 @@ export interface ShieldImpactWorld {
  */
 export function resolveShieldImpact(
   threat: {
-    /** Where the scene drew it, which for a shell is the freshest point there is. */
+    /**
+     * Where the scene drew it last. A dropped shell is retired only once its own
+     * clock reaches the last tick the room had it at, so this is within a patch
+     * of the contact.
+     */
     readonly x: number;
     readonly y: number;
     readonly velocity: { readonly x: number; readonly y: number };

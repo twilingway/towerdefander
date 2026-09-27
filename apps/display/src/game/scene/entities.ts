@@ -337,6 +337,14 @@ export interface ShellTrace {
   readonly birthY: number;
   /** Which clock it is drawn on this frame; see `shellClock.ts`. */
   readonly clock: ShellClockState;
+  /** The newest authoritative sample, copied: a dropped shell flies on from it. */
+  lastX: number;
+  lastY: number;
+  lastTick: number;
+  /** The tick it was drawn at last frame, or undefined while not yet born. */
+  drawnTick: number | undefined;
+  /** Set once the room has dropped it: the tick its clock must reach before it goes. */
+  retireAtTick: number | undefined;
 }
 
 function traceShell(entity: CombatEntity, tick: number, snap: boolean): ShellTrace | undefined {
@@ -349,7 +357,12 @@ function traceShell(entity: CombatEntity, tick: number, snap: boolean): ShellTra
     birthX: entity.x - entity.velocityX * back,
     birthY: entity.y - entity.velocityY * back,
     // A hydration finds shells already in the air: they were never seen firing.
-    clock: createShellClockState(snap)
+    clock: createShellClockState(snap),
+    lastX: entity.x,
+    lastY: entity.y,
+    lastTick: tick,
+    drawnTick: undefined,
+    retireAtTick: undefined
   };
 }
 
@@ -404,6 +417,59 @@ interface ReconcileRequest {
   readonly sounds: SceneAudio | undefined;
 }
 
+/** What taking a visual off the field needs: where it lives, and what it may set off. */
+export interface RetireContext {
+  readonly visuals: Map<string, CombatVisual>;
+  readonly snapshot: DisplayGameSnapshot;
+  readonly shieldPose: ShieldPose | undefined;
+  readonly bursts: BurstLayer | undefined;
+  readonly sounds: SceneAudio | undefined;
+}
+
+/**
+ * Takes one visual off the field, with whatever its leaving means: a wreck, a
+ * sound, a splash on the barrier. Silent when `quiet` - a hydration or a fresh
+ * run is not a wave of deaths, and bursting there would carpet the screen on
+ * every reconnect.
+ */
+export function retireCombatVisual(
+  entityId: string,
+  leaving: CombatVisual,
+  { visuals, snapshot, shieldPose, bursts, sounds }: RetireContext,
+  quiet: boolean
+): void {
+  if (!quiet && leaving.deathEffect !== undefined) {
+    bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
+  }
+  // The same event, heard: a wreck off the side of the screen is the one
+  // thing a pilot has no other way of learning about.
+  if (!quiet) {
+    sounds?.play(leaving.deathSound, leaving.object.x, leaving.object.y, "enemyDeath");
+  }
+  if (!quiet && leaving.blockEffect !== undefined && leaving.velocity !== undefined) {
+    /*
+     * The point the scene drew. A shell is retired once its own clock has
+     * reached the last tick the room had it at, so that point is within a patch
+     * of the contact - which is what the window either side of it is for. The
+     * authoritative track is no substitute: a bound shell deliberately stops
+     * having its track extended, and reading `position.current.to` handed back
+     * where the shell was *born*, which threw away 125 of 127 blocks in a
+     * measured fight.
+     */
+    const impact = resolveShieldImpact(
+      { x: leaving.object.x, y: leaving.object.y, velocity: leaving.velocity },
+      snapshot,
+      shieldPose
+    );
+    if (impact !== undefined) {
+      // The barrier's radius, not the shell's: see `SPAN.shield`.
+      bursts?.spawn(leaving.blockEffect, impact.x, impact.y, snapshot.shieldRadius, impact.normal);
+    }
+  }
+  leaving.object.destroy();
+  visuals.delete(entityId);
+}
+
 export function reconcileCombatVisuals({
   scene,
   visuals,
@@ -423,45 +489,25 @@ export function reconcileCombatVisuals({
   const plan = reconcileStableIds(visuals.keys(), incomingById.keys());
   for (const entityId of plan.remove) {
     const leaving = visuals.get(entityId);
-    // A snapping reconcile is a hydration or a fresh run, not a wave of deaths:
-    // bursting here would carpet the screen on every reconnect.
-    if (!snap && leaving?.deathEffect !== undefined) {
-      bursts?.spawn(leaving.deathEffect, leaving.object.x, leaving.object.y, leaving.radius);
-    }
-    // The same event, heard: a wreck off the side of the screen is the one
-    // thing a pilot has no other way of learning about.
-    if (!snap && leaving !== undefined) {
-      sounds?.play(leaving.deathSound, leaving.object.x, leaving.object.y, "enemyDeath");
-    }
-    if (!snap && leaving?.blockEffect !== undefined && leaving.velocity !== undefined) {
-      /*
-       * The point the scene drew, which for a shell is the freshest there is.
-       * The authoritative track is not: a shell is bound to the predictor, and a
-       * bound entity deliberately stops having its track extended - reading
-       * `position.current.to` therefore hands back where the shell was *born*,
-       * hundreds of units away, and that threw away 125 of 127 blocks in a
-       * measured fight. What the mixed clock costs instead is a contact up to a
-       * patch or two of travel behind the drawn shell, which is what the
-       * window either side of it is for.
-       */
-      const impact = resolveShieldImpact(
-        { x: leaving.object.x, y: leaving.object.y, velocity: leaving.velocity },
-        snapshot,
-        shieldPose
-      );
-      if (impact !== undefined) {
-        // The barrier's radius, not the shell's: see `SPAN.shield`.
-        bursts?.spawn(
-          leaving.blockEffect,
-          impact.x,
-          impact.y,
-          snapshot.shieldRadius,
-          impact.normal
-        );
+    if (leaving === undefined) continue;
+    /*
+     * A shell the room has dropped may still be short of the moment it left,
+     * on the clock it is drawn on: a foreign one is born behind the present and
+     * catches up, and a shared screen draws everything behind the newest patch.
+     * Taking it off now would end it short of whatever it hit - and the shield
+     * splash is resolved from the drawn point, so the splash would go too. It
+     * flies on to its last authoritative tick and leaves there; the scene
+     * retires it then. A hydration is not a wave of hits and waits for nothing.
+     */
+    const trace = leaving.shell;
+    if (!snap && trace !== undefined) {
+      if (trace.retireAtTick !== undefined) continue;
+      if (trace.drawnTick === undefined || trace.drawnTick < trace.lastTick) {
+        trace.retireAtTick = trace.lastTick;
+        continue;
       }
     }
-    leaving?.object.destroy();
-    visuals.delete(entityId);
+    retireCombatVisual(entityId, leaving, { visuals, snapshot, shieldPose, bursts, sounds }, snap);
   }
   for (const entityId of [...plan.create, ...plan.update]) {
     const entity = incomingById.get(entityId);

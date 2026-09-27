@@ -33,9 +33,11 @@ describe("local drivers report the step of the pose they drew", () => {
     expect(driver.drive()).toBe(pose);
     expect(driver.readShellClock()).toEqual({ own: 42, room: undefined });
 
+    // Paused, the hull is not handed out, but shells in the air still need the
+    // step it was last drawn on - or they jump back to the playback clock.
     paused = true;
     expect(driver.drive()).toBeUndefined();
-    expect(driver.readShellClock().own).toBeUndefined();
+    expect(driver.readShellClock().own).toBe(42);
   });
 
   it("from a worker: the step the posted pose belongs to", () => {

@@ -36,5 +36,8 @@
 - [x] 4.1 e2e-спецификации с порогами из спеки: свои и чужие снаряды, сеть и локально, на ходу.
       Проверка: `pnpm test:e2e tests/e2e/shell-timeline.spec.ts` на этой машине (GPU) — 5/5.
 - [x] 4.2 Измерения после изменения записаны рядом с базовой линией в `design.md`.
-- [ ] 4.3 `pnpm check`, `pnpm spec:validate`, `pnpm demo:verify`; свежий проход `code-reviewer` по
+- [x] 4.3 Замечания ревью: выбывание снаряда на своих часах (всплеск щита, общий экран), зеркало
+      `renderAcc`, тик позы на паузе, переиспользуемые объекты часов, комментарии, e2e общего
+      экрана. Проверка: `shellClock.test.ts`, `driver.test.ts`, `shell-timeline.spec.ts` 6/6.
+- [ ] 4.4 `pnpm check`, `pnpm spec:validate`, `pnpm demo:verify`; свежий проход `code-reviewer` по
       диффу.
