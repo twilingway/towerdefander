@@ -6,10 +6,13 @@ import { NetworkNotice } from "./index.js";
 describe("NetworkNotice", () => {
   it("says what went wrong and what is still open, in the screen's own terms", () => {
     expect(renderToStaticMarkup(<NetworkNotice closure="unreachable" screen="start" />)).toContain(
-      "Сервер игры не отвечает, доступна только кампания."
+      "Сервер игры не отвечает, играть можно только на этом устройстве."
     );
     expect(renderToStaticMarkup(<NetworkNotice closure="offline" screen="campaign" />)).toContain(
       "Нет подключения к интернету, играть можно только на этом устройстве."
+    );
+    expect(renderToStaticMarkup(<NetworkNotice closure="offline" screen="arena" />)).toContain(
+      "Нет подключения к интернету, доступна только тренировка на этом устройстве."
     );
   });
 

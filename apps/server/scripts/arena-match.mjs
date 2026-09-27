@@ -20,7 +20,7 @@ import {
   defaultArenaMatchConfig
 } from "@spaceship-defender/game-core";
 
-import { ArenaBots } from "../src/rooms/arenaBots.ts";
+import { ArenaBots } from "@spaceship-defender/game-runtime";
 import { resolveAutopilotProfile } from "@spaceship-defender/game-runtime/crewPolicy.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));

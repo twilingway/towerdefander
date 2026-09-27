@@ -6,7 +6,8 @@ import {
   createInTabHost,
   createWorkerHost,
   shouldUseRunWorker,
-  type RunHost
+  type RunHost,
+  type RunHostOptions
 } from "../localRun/hosts.js";
 import type { PredictionDriver } from "../shipPrediction.js";
 import { useViewPublisher } from "./useViewPublisher.js";
@@ -34,17 +35,27 @@ export interface LocalRunSession {
   readonly paused: boolean;
   readonly vote: (upgradeId: UpgradeId) => void;
   readonly restart: () => void;
+  readonly scan: () => void;
 }
 
-export interface LocalRunOptions {
-  readonly config: SpaceshipSimulationConfig;
+interface LocalRunCommonOptions {
   readonly tuning: BalanceTuning;
-  readonly shipArchetypeId: string;
   readonly playerName: string;
-  readonly startWave: number;
-  readonly waveTtlSeconds: number;
   readonly readIntent: () => LocalIntent;
 }
+
+/** A campaign run, or a training match on the arena's own hull and field. */
+export type LocalRunOptions = LocalRunCommonOptions &
+  (
+    | {
+        readonly kind: "campaign";
+        readonly config: SpaceshipSimulationConfig;
+        readonly shipArchetypeId: string;
+        readonly startWave: number;
+        readonly waveTtlSeconds: number;
+      }
+    | { readonly kind: "arena" }
+  );
 
 export function useLocalRun(options: LocalRunOptions): LocalRunSession {
   const [view, setView] = useState<DisplayRoomView | undefined>(undefined);
@@ -70,18 +81,25 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
    */
   const hostReference = useRef<RunHost | undefined>(undefined);
   if (hostReference.current === undefined) {
-    const hostOptions = {
-      config: options.config,
+    const common = {
       tuning: options.tuning,
-      shipArchetypeId: options.shipArchetypeId,
       playerName: options.playerName,
-      startWave: options.startWave,
-      waveTtlSeconds: options.waveTtlSeconds,
       readIntent: () => latest.current.readIntent(),
       offer: (published: DisplayRoomView, now: number) => {
         publisherReference.current.offer(published, now);
       }
     };
+    const hostOptions: RunHostOptions =
+      options.kind === "arena"
+        ? { ...common, kind: "arena" }
+        : {
+            ...common,
+            kind: "campaign",
+            config: options.config,
+            shipArchetypeId: options.shipArchetypeId,
+            startWave: options.startWave,
+            waveTtlSeconds: options.waveTtlSeconds
+          };
     hostReference.current = shouldUseRunWorker(globalThis.location.search)
       ? createWorkerHost(hostOptions)
       : createInTabHost(hostOptions);
@@ -176,7 +194,8 @@ export function useLocalRun(options: LocalRunOptions): LocalRunSession {
     driver: host.driver,
     paused,
     vote: host.vote,
-    restart: host.restart
+    restart: host.restart,
+    scan: host.scan
   };
 }
 

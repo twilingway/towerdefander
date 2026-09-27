@@ -3,7 +3,7 @@ import { PATCH_INTERVAL_MS } from "@spaceship-defender/protocol";
 
 import { toDisplayRoomView } from "../roomView.js";
 import { createStepClock, type StepClock } from "./clock.js";
-import { poseOf } from "./driver.js";
+import { createLocalArena, type LocalArena } from "./arenaEngine.js";
 import { createLocalRun, IDLE_INTENT, type LocalIntent, type LocalRun } from "./engine.js";
 import type { FromRunWorker, ToRunWorker } from "./workerProtocol.js";
 
@@ -29,7 +29,7 @@ const scope = globalThis as unknown as {
 /** How often the worker looks at the clock. Under a step, so no step waits a whole one. */
 const POLL_MS = 4;
 
-let run: LocalRun | undefined;
+let run: LocalRun | LocalArena | undefined;
 let clock: StepClock | undefined;
 let intent: LocalIntent = IDLE_INTENT;
 let paused = false;
@@ -55,7 +55,7 @@ function publish(): void {
   // mid-fight would be worse than holding the last good frame.
   if (view !== undefined) post({ type: "view", view });
   publishedAt = performance.now();
-  settled = run.state().outcome !== null;
+  settled = run.settled();
 }
 
 function tick(): void {
@@ -67,7 +67,7 @@ function tick(): void {
     if (steps > 0) {
       for (let index = 0; index < steps; index += 1) run.step(intent);
       lastStepCostMs = performance.now() - now;
-      post({ type: "pose", pose: poseOf(run.state()) });
+      post({ type: "pose", pose: run.pose() });
     }
     if (now - publishedAt >= PATCH_INTERVAL_MS) publish();
   } catch (error) {
@@ -80,17 +80,26 @@ scope.onmessage = (event) => {
   try {
     switch (message.type) {
       case "start": {
-        const config = toSimulationConfig(message.tuning, message.shipArchetypeId);
-        run = createLocalRun({
-          config,
-          tuning: message.tuning,
-          shipArchetypeId: message.shipArchetypeId,
-          playerName: message.playerName,
-          startWave: message.startWave,
-          waveTtlSeconds: message.waveTtlSeconds
-        });
-        clock = createStepClock(config.fixedStepMs);
-        post({ type: "pose", pose: poseOf(run.state()) });
+        if (message.kind === "arena") {
+          const arena = createLocalArena({
+            tuning: message.tuning,
+            playerName: message.playerName
+          });
+          run = arena;
+          clock = createStepClock(arena.fixedStepMs);
+        } else {
+          const config = toSimulationConfig(message.tuning, message.shipArchetypeId);
+          run = createLocalRun({
+            config,
+            tuning: message.tuning,
+            shipArchetypeId: message.shipArchetypeId,
+            playerName: message.playerName,
+            startWave: message.startWave,
+            waveTtlSeconds: message.waveTtlSeconds
+          });
+          clock = createStepClock(config.fixedStepMs);
+        }
+        post({ type: "pose", pose: run.pose() });
         publish();
         return;
       }
@@ -103,7 +112,13 @@ scope.onmessage = (event) => {
         if (!paused) clock?.reset(performance.now());
         return;
       case "vote":
-        run?.vote(message.command);
+        if (run?.kind !== "campaign") return;
+        run.vote(message.command);
+        publish();
+        return;
+      case "scan":
+        if (run?.kind !== "arena") return;
+        run.scan();
         publish();
         return;
       case "restart":

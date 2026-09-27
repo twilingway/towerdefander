@@ -46,7 +46,8 @@ export function DisplayApp() {
    * catalogue, not the maintenance window. It has a preset of its own, and a
    * mode that plays without a server must not depend on one answering.
    */
-  const hostedLocally = useLocation().pathname === "/solo";
+  const pathname = useLocation().pathname;
+  const hostedLocally = pathname === "/solo" || pathname === "/arena/training";
 
   const shipCatalogue = useShipCatalogue(GAME_SERVER_URL, !hostedLocally);
   const server = useServerStatus(GAME_SERVER_URL, hostedLocally || session.status === "connected");
@@ -115,6 +116,8 @@ export function DisplayApp() {
         status={session.status}
         error={session.error}
         lobby={session.arenaLobby}
+        maintenance={maintenance}
+        serverReach={server.reach}
         sharedScreen={flags.sharedScreen}
         onBack={() => {
           void navigate({ pathname: "/", search: readDisplaySearch() });
@@ -128,6 +131,12 @@ export function DisplayApp() {
           // bot flies my ship" - the room seated nobody and the sticks never
           // armed, because neither side had been told anyone was flying.
           void session.createArenaMatch(cockpitPlayerName);
+        }}
+        onTraining={(pilotName) => {
+          // Hosted by this page, so it goes to its own address and asks the
+          // server nothing, the way the campaign's device tile does.
+          rememberPilotName(pilotName);
+          void navigate({ pathname: "/arena/training", search: readDisplaySearch() });
         }}
       />
     );
@@ -191,6 +200,7 @@ export function DisplayApp() {
    */
   const soloRoute = (
     <LocalRunRoute
+      kind="campaign"
       diagnostics={flags.diagnostics}
       visibleDemo={flags.visibleDemo}
       switches={switches}
@@ -202,6 +212,26 @@ export function DisplayApp() {
         // Back to the campaign setup, hull kept, by the operator's call on
         // 2026-09-22: leaving a run is a step back, not a return to the modes.
         void navigate({ pathname: "/campaign", search: readDisplaySearch() });
+      }}
+    />
+  );
+
+  /*
+   * A training match hosted by this page: bots only, so nothing about it needs
+   * a server. Leaving goes back to the arena screen, where the next one starts.
+   */
+  const trainingRoute = (
+    <LocalRunRoute
+      kind="arena"
+      diagnostics={flags.diagnostics}
+      visibleDemo={flags.visibleDemo}
+      switches={switches}
+      worldReady={worldReady}
+      shipArchetypeId={undefined}
+      playerName={readPilotName()}
+      startWave={1}
+      onLeave={() => {
+        void navigate({ pathname: "/arena", search: readDisplaySearch() });
       }}
     />
   );
@@ -279,6 +309,7 @@ export function DisplayApp() {
       <Route path="/arena" element={flags.preview ? previewRoute : arenaRoute} />
       <Route path="/preview" element={flags.preview ? previewRoute : createRoute} />
       <Route path="/solo" element={soloRoute} />
+      <Route path="/arena/training" element={trainingRoute} />
       <Route path="/room/:code" element={roomRoute} />
       <Route
         path="*"

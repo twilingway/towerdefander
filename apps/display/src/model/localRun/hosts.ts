@@ -9,6 +9,7 @@ import type { SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
 import type { PredictedPoseFrame, PredictionDriver } from "../shipPrediction.js";
 import { createStepClock } from "./clock.js";
 import { createLocalDriver, createRemoteDriver } from "./driver.js";
+import { createLocalArena } from "./arenaEngine.js";
 import { createLocalRun, type LocalIntent } from "./engine.js";
 import { createLocalPublisher, deliverView } from "./publish.js";
 import type { FromRunWorker, ToRunWorker } from "./workerProtocol.js";
@@ -25,21 +26,32 @@ export interface RunHost {
   readonly idleTick: () => void;
   readonly vote: (upgradeId: UpgradeId) => void;
   readonly restart: () => void;
+  /** The arena's sweep; a campaign has nothing to sweep and ignores it. */
+  readonly scan: () => void;
   readonly setPaused: (paused: boolean) => void;
   /** Stops everything this host started. A worker is not collected while it runs. */
   readonly dispose: () => void;
 }
 
-export interface RunHostOptions {
-  readonly config: SpaceshipSimulationConfig;
+interface RunHostCommonOptions {
   readonly tuning: BalanceTuning;
-  readonly shipArchetypeId: string;
   readonly playerName: string;
-  readonly startWave: number;
-  readonly waveTtlSeconds: number;
   readonly readIntent: () => LocalIntent;
   readonly offer: (view: DisplayRoomView, now: number) => void;
 }
+
+/** A campaign run, or a training match on the arena's own hull and field. */
+export type RunHostOptions = RunHostCommonOptions &
+  (
+    | {
+        readonly kind: "campaign";
+        readonly config: SpaceshipSimulationConfig;
+        readonly shipArchetypeId: string;
+        readonly startWave: number;
+        readonly waveTtlSeconds: number;
+      }
+    | { readonly kind: "arena" }
+  );
 
 /**
  * Whether this page should hand its run to a worker.
@@ -55,8 +67,8 @@ export function shouldUseRunWorker(search: string): boolean {
 
 /** The run stepped inside the frame that draws it, on the main thread. */
 export function createInTabHost(options: RunHostOptions): RunHost {
-  const run = createLocalRun(options);
-  const clock = createStepClock(options.config.fixedStepMs);
+  const run = options.kind === "arena" ? createLocalArena(options) : createLocalRun(options);
+  const clock = createStepClock(run.kind === "arena" ? run.fixedStepMs : run.config.fixedStepMs);
   const publish = createLocalPublisher(run, options.offer);
   let paused = false;
   let publishedAt = 0;
@@ -80,6 +92,7 @@ export function createInTabHost(options: RunHostOptions): RunHost {
       driver.drive();
     },
     vote(upgradeId) {
+      if (run.kind !== "campaign") return;
       const game = run.mirror.game;
       run.vote({
         role: "pilot",
@@ -91,6 +104,9 @@ export function createInTabHost(options: RunHostOptions): RunHost {
     },
     restart: () => {
       run.restart();
+    },
+    scan: () => {
+      if (run.kind === "arena") run.scan();
     },
     setPaused: (value) => {
       paused = value;
@@ -170,14 +186,19 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
     console.error(`[local run] the worker has been silent for ${String(Math.round(silentFor))} ms`);
   }, SILENT_WORKER_MS);
 
-  send({
-    type: "start",
-    tuning: options.tuning,
-    shipArchetypeId: options.shipArchetypeId,
-    playerName: options.playerName,
-    startWave: options.startWave,
-    waveTtlSeconds: options.waveTtlSeconds
-  });
+  send(
+    options.kind === "arena"
+      ? { type: "start", kind: "arena", tuning: options.tuning, playerName: options.playerName }
+      : {
+          type: "start",
+          kind: "campaign",
+          tuning: options.tuning,
+          shipArchetypeId: options.shipArchetypeId,
+          playerName: options.playerName,
+          startWave: options.startWave,
+          waveTtlSeconds: options.waveTtlSeconds
+        }
+  );
 
   const sendIntent = (): void => {
     send({ type: "intent", intent: options.readIntent() });
@@ -211,6 +232,9 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
     },
     restart: () => {
       send({ type: "restart" });
+    },
+    scan: () => {
+      send({ type: "scan" });
     },
     setPaused: (value) => {
       paused = value;

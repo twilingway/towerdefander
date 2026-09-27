@@ -36,6 +36,9 @@ import type { AutopilotProfile, BalanceTuning, CrewRole } from "@spaceship-defen
 
 import { DECORATION_REFERENCE_WORLD, DECORATIVE_OBSTACLES } from "@spaceship-defender/game-runtime";
 
+import type { PredictedPoseFrame } from "../shipPrediction.js";
+import { poseOf } from "./driver.js";
+
 /**
  * A campaign run hosted by this tab.
  *
@@ -82,6 +85,7 @@ export interface LocalRunOptions {
 }
 
 export interface LocalRun {
+  readonly kind: "campaign";
   readonly mirror: LocalMirror;
   readonly config: SpaceshipSimulationConfig;
   /** Advances one fixed step with the intent the hand is holding. */
@@ -91,6 +95,10 @@ export interface LocalRun {
   readonly vote: (command: UpgradeVoteCommand) => void;
   readonly restart: () => void;
   readonly state: () => SpaceshipSimulationState;
+  /** The hull as the scene draws it this frame, read straight off the run. */
+  readonly pose: () => PredictedPoseFrame;
+  /** Over: nothing moves until a restart. */
+  readonly settled: () => boolean;
 }
 
 /** The slack a salvage window gets beyond its own ticks, as the room gives it. */
@@ -183,9 +191,12 @@ export function createLocalRun(options: LocalRunOptions): LocalRun {
   start();
 
   return {
+    kind: "campaign",
     mirror,
     config,
     state: () => game,
+    pose: () => poseOf(game),
+    settled: () => game.outcome !== null,
 
     step(intent) {
       if (game.outcome !== null) return;

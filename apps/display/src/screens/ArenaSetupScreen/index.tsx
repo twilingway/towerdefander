@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import type { ArenaLobby, PublicShip } from "@spaceship-defender/protocol";
+import type { ArenaLobby, MaintenanceState, PublicShip } from "@spaceship-defender/protocol";
 
 import { CatalogAssetShape } from "@spaceship-defender/client-shared";
 import { MENU_THEME } from "../../audio/themes.js";
 import { useMusicTrack } from "../../audio/useMusicTrack.js";
 import { getVisualAsset } from "@spaceship-defender/protocol";
 
+import { MaintenanceNotice } from "../../components/MaintenanceNotice/index.js";
+import { NetworkNotice } from "../../components/NetworkNotice/index.js";
 import { ShipTile } from "../../components/ShipTile/index.js";
+import { networkClosure, type ServerReach } from "../../model/serverStatus.js";
 import { useRemoteNavigation } from "../../model/hooks/useRemoteNavigation.js";
 import { defaultUnlockedShipId, isShipUnlocked } from "../../model/shipAccess.js";
 
@@ -17,6 +20,9 @@ interface ArenaSetupScreenProps {
   readonly error: string;
   /** The waiting room, once one is open: who is in it and how long it waits. */
   readonly lobby: ArenaLobby | undefined;
+  readonly maintenance: MaintenanceState | undefined;
+  /** Whether the game server can be played through; unknown until it answers. */
+  readonly serverReach?: ServerReach;
   readonly onBack: () => void;
   /**
    * Whether the shared-screen tile works. Players find it switched off while
@@ -25,7 +31,12 @@ interface ArenaSetupScreenProps {
   readonly sharedScreen: boolean;
   /** Cockpit means this device flies the match as well as showing it. */
   readonly onStart: (cockpitPlayerName: string | undefined) => void;
+  /** A training match against bots, hosted by this device with no server. */
+  readonly onTraining: (pilotName: string) => void;
 }
+
+/** Where the match is played: this device alone, or a server match seated from here. */
+type ArenaPlace = "training" | "server" | "shared";
 
 /**
  * The arena's own setup: a hull, a name, and nothing else.
@@ -40,9 +51,12 @@ export function ArenaSetupScreen({
   status,
   error,
   lobby,
+  maintenance,
+  serverReach = "unknown",
   onBack,
   sharedScreen,
-  onStart
+  onStart,
+  onTraining
 }: ArenaSetupScreenProps) {
   useMusicTrack(MENU_THEME);
   const queue = useRef<HTMLDivElement | null>(null);
@@ -62,9 +76,17 @@ export function ArenaSetupScreen({
   }, [lobby === undefined]);
   const [pickedShipId, setPickedShipId] = useState<string | undefined>(undefined);
   const [pilotName, setPilotName] = useState("Пилот");
-  // Solo on this screen by default, like the campaign: it is the shortest path
-  // from opening the page to flying.
-  const [cockpit, setCockpit] = useState(true);
+  /*
+   * Training by default, like the campaign's device tile: it is the shortest
+   * path from opening the page to flying, and the one that always works. The
+   * network places go dark on the same closures the campaign's do, and the
+   * choice is held rather than overwritten, so it comes back with the network.
+   */
+  const [chosenPlace, setPlace] = useState<ArenaPlace>("training");
+  const closure = networkClosure(maintenance, serverReach);
+  const serverClosed = closure !== undefined;
+  const place: ArenaPlace = serverClosed ? "training" : chosenPlace;
+  const cockpit = place !== "shared";
   const shell = useRef<HTMLElement | null>(null);
   useRemoteNavigation(shell, { onBack });
   const shipId = pickedShipId ?? defaultUnlockedShipId(ships, defaultShipId);
@@ -80,35 +102,61 @@ export function ArenaSetupScreen({
           <p className="eyebrow">Арена</p>
           <h1>Талос: зона отчуждения</h1>
           <p className="setup-lede">
-            Шестнадцать кораблей на одной арене, пятнадцать из них ведёт сервер. Кольцо сжимается,
+            Шестнадцать кораблей на одной арене, свободные места занимают боты. Кольцо сжимается,
             побеждает последний живой.
           </p>
         </header>
+        {closure !== undefined && closure !== "maintenance" && (
+          <NetworkNotice closure={closure} screen="arena" />
+        )}
+        {closure === "maintenance" && maintenance !== undefined && (
+          <MaintenanceNotice active secondsRemaining={maintenance.secondsRemaining} prominent />
+        )}
 
         <h2 className="setup-step">Где играете</h2>
         <div className="place-grid" role="group" aria-label="Где играете">
+          {/*
+           * Its name must not contain "Соло" or "Общий экран": the harnesses
+           * find the server tiles by those, and a role query matches a substring.
+           */}
           <button
             type="button"
-            className={`place-tile${cockpit ? " is-selected" : ""}`}
-            aria-label="Соло"
-            aria-pressed={cockpit}
+            className={`place-tile${place === "training" ? " is-selected" : ""}`}
+            aria-label="Тренировка"
+            aria-pressed={place === "training"}
             onClick={() => {
-              setCockpit(true);
+              setPlace("training");
             }}
           >
-            <span className="place-tile__title">На этом устройстве</span>
+            <span className="place-tile__title">На этом устройстве — тренировка</span>
             <span className="place-tile__caption">
-              Экран становится кокпитом: матч идёт здесь же, телефон не нужен.
+              Против ботов, прямо здесь и сразу: без очереди, сети и сервера.
             </span>
           </button>
           <button
             type="button"
-            className={`place-tile${cockpit ? "" : " is-selected"}`}
-            aria-label="Общий экран"
-            aria-pressed={!cockpit}
-            disabled={!sharedScreen}
+            className={`place-tile${place === "server" ? " is-selected" : ""}`}
+            aria-label="Соло"
+            aria-pressed={place === "server"}
+            disabled={serverClosed}
             onClick={() => {
-              setCockpit(false);
+              setPlace("server");
+            }}
+          >
+            <span className="place-tile__title">На этом устройстве, через сервер</span>
+            <span className="place-tile__caption">
+              Матч считает сервер: очередь ждёт живых игроков, свободные места займут боты. Нужна
+              сеть.
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`place-tile${place === "shared" ? " is-selected" : ""}`}
+            aria-label="Общий экран"
+            aria-pressed={place === "shared"}
+            disabled={serverClosed || !sharedScreen}
+            onClick={() => {
+              setPlace("shared");
             }}
           >
             <span className="place-tile__title">Общий экран и телефон</span>
@@ -155,8 +203,9 @@ export function ArenaSetupScreen({
         {lobby === undefined ? (
           <>
             <p className="hint">
-              Прототип: все шестнадцать кораблей ведёт автопилот — тот же, что водит пустые места в
-              кампании. Ваш корабль пока летит сам, экран показывает бой.
+              {place === "training"
+                ? "Свой корабль ведёте вы, остальные пятнадцать — боты на автопилоте кампании."
+                : "Прототип: все шестнадцать кораблей ведёт автопилот — тот же, что водит пустые места в кампании. Ваш корабль пока летит сам, экран показывает бой."}
             </p>
             {error.length > 0 && <p className="error-message">{error}</p>}
             <button
@@ -164,7 +213,8 @@ export function ArenaSetupScreen({
               className="setup-go"
               disabled={status === "connecting" || (cockpit && pilotName.trim().length === 0)}
               onClick={() => {
-                onStart(cockpit ? pilotName.trim() : undefined);
+                if (place === "training") onTraining(pilotName.trim());
+                else onStart(cockpit ? pilotName.trim() : undefined);
               }}
             >
               {status === "connecting" ? "Открываем матч…" : "В бой"}

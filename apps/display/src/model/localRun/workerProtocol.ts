@@ -18,16 +18,26 @@ import type { LocalIntent } from "./engine.js";
 export type ToRunWorker =
   | {
       readonly type: "start";
+      readonly kind: "campaign";
       readonly tuning: BalanceTuning;
       readonly shipArchetypeId: string;
       readonly playerName: string;
       readonly startWave: number;
       readonly waveTtlSeconds: number;
     }
+  /** A training match: the arena's own hull and field, so no hull or wave. */
+  | {
+      readonly type: "start";
+      readonly kind: "arena";
+      readonly tuning: BalanceTuning;
+      readonly playerName: string;
+    }
   | { readonly type: "intent"; readonly intent: LocalIntent }
   | { readonly type: "paused"; readonly paused: boolean }
   | { readonly type: "vote"; readonly command: UpgradeVoteCommand }
-  | { readonly type: "restart" };
+  | { readonly type: "restart" }
+  /** A press of the arena's sweep; a campaign has nothing to sweep. */
+  | { readonly type: "scan" };
 
 export type FromRunWorker =
   /** After every step batch: where the hull is, for the frame about to be drawn. */

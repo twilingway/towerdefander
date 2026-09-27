@@ -11,7 +11,7 @@ import type {
   ArenaShipState
 } from "@spaceship-defender/game-core";
 
-import type { PolicyEntity, PolicyWorld } from "@spaceship-defender/game-runtime";
+import type { PolicyEntity, PolicyWorld } from "./crewPolicy.d.mts";
 
 /** The same tick the crew policy is measured on; see `crewWorld.ts`. */
 export const ARENA_POLICY_TICK_MS = 50;

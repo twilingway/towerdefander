@@ -1,29 +1,23 @@
 import { randomUUID } from "node:crypto";
 
 import { Room, type Client } from "colyseus";
-import { StateView, type MapSchema } from "@colyseus/schema";
+import { StateView } from "@colyseus/schema";
 import {
   ARENA_SHIP_COUNT,
   IDLE_ARENA_INTENT,
   ARENA_SCAN_COOLDOWN_TICKS,
   ARENA_SCAN_RADIUS_CELLS,
   ARENA_SCAN_REVEAL_TICKS,
-  advanceArenaMatch,
-  canonicalizeAngle,
   createArenaMatch,
   defaultArenaMatchConfig,
-  normalizeVector,
   type ArenaMatchConfig,
-  type ArenaMatchState,
-  type ArenaShipSeat,
-  type ArenaShipState
+  type ArenaMatchState
 } from "@spaceship-defender/game-core";
 import {
   ARENA_BOT_FILL_MS,
   ARENA_LOBBY_WAIT_SECONDS,
   ARENA_RESULT_HOLD_MS,
   ASSET_WAIT_SECONDS,
-  CAMERA_VIEW_WIDTH_MAX,
   PATCH_INTERVAL_MS,
   PROTOCOL_VERSION,
   SOLO_INPUT_BUFFER_SIZE,
@@ -43,33 +37,27 @@ import {
 import { getBalanceStore } from "../balance/index.js";
 import { getServerRecords } from "../stats/index.js";
 import type { RoomStatsMetadata, RoomStatsStatus } from "../stats/types.js";
-import { ArenaBots } from "./arenaBots.js";
 import { LatencyTracker } from "./latencyTracker.js";
-import { createRunSeed } from "@spaceship-defender/game-runtime";
+import { SCHEMA_ARENA_PROJECTION_FACTORIES } from "./projectionFactories.js";
+import {
+  arenaIntentFromCockpit,
+  createArenaBots,
+  createArenaProjectionMemo,
+  createArenaSeats,
+  createRunSeed,
+  projectArenaFixtures,
+  projectArenaMatch,
+  stepArenaMatch,
+  sweepArena,
+  toArenaMatchConfig,
+  toArenaScanTuning,
+  type ArenaBots,
+  type ArenaScanTuning
+} from "@spaceship-defender/game-runtime";
 import type { ArenaShipIntent } from "@spaceship-defender/game-core";
 
-import {
-  ArenaLootView,
-  ArenaShipView,
-  ArenaZoneView,
-  DISPLAY_VIEW_TAG,
-  PlayerState,
-  ProjectileState,
-  SpaceshipDefenderState
-} from "./SpaceshipDefenderState.js";
-import {
-  leadSpeedFor,
-  resolveAutopilotProfile
-} from "@spaceship-defender/game-runtime/crewPolicy.mjs";
+import { DISPLAY_VIEW_TAG, PlayerState, SpaceshipDefenderState } from "./SpaceshipDefenderState.js";
 
-/**
- * How long a wreck stays published after it stops flying.
- *
- * Long enough for the display to notice, play the explosion and let the health
- * bar be seen reaching zero; short enough that a match's collection is the
- * living field plus whatever just stopped being part of it.
- */
-const WRECK_HOLD_TICKS = 120;
 /**
  * How long a started match is kept after the last person leaves.
  *
@@ -81,9 +69,6 @@ const WRECK_HOLD_TICKS = 120;
  * sitting on a stand.
  */
 const EMPTY_MATCH_HOLD_MS = 30_000;
-
-/** The slot the human takes. It flies on autopilot until a cockpit claims it. */
-const PLAYER_SLOT = 0;
 
 /**
  * A match of sixteen hulls, published through the campaign's own state.
@@ -172,8 +157,8 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
   private readonly createdAtMs = Date.now();
   private statsStatus: RoomStatsStatus = "lobby";
   private statusChangedAtMs = Date.now();
-  /** The last sheet published, as a string; see `publishZones`. */
-  private zoneSignature = "";
+  /** What the projection remembers between two publishes. */
+  private readonly projection = createArenaProjectionMemo();
   /**
    * What the seated player is asking for right now.
    *
@@ -214,14 +199,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    * to move into `ArenaShipState` and be published per client - what is
    * revealed is one pilot's knowledge, not the field's.
    */
-  private scan = {
+  private scan: ArenaScanTuning = {
     radiusCells: ARENA_SCAN_RADIUS_CELLS,
     cooldownTicks: ARENA_SCAN_COOLDOWN_TICKS,
     revealTicks: ARENA_SCAN_REVEAL_TICKS
   };
   private scanReadyTick = 0;
   private scanRevealedUntilTick = 0;
-  private readonly revealed = new Set<string>();
+  private revealed = new Set<string>();
 
   override onCreate(): void {
     this.state = new SpaceshipDefenderState();
@@ -237,212 +222,19 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 
     const balance = getBalanceStore();
     const tuning = balance.getActiveTuning();
-    /*
-     * The campaign's ship on the arena's field.
-     *
-     * Everything about the hull comes from the console's player screen, and
-     * everything about the ground comes from the arena's own: the two modes
-     * shared one radius until now, so a field wide enough for sixteen hulls
-     * dragged the campaign onto it. The world is derived from the radius and
-     * the core validates that it is, so all three move together.
-     */
-    const fieldRadius = tuning.arena.fieldRadius;
     const hull = balance.getActiveSimulationConfig(tuning.defaultShipArchetypeId);
-    const ship = {
-      ...hull,
-      arenaRadius: fieldRadius,
-      worldWidth: fieldRadius * 2,
-      worldHeight: fieldRadius * 2,
-      /*
-       * The frame is the arena's too, because it is what a seat can see.
-       *
-       * `buildArenaWorld` cuts every hull's slice of the match to this width,
-       * and the screen is drawn at `tuning.arena.cameraViewWidth`. Leaving the
-       * campaign's number here made those two different frames: the sector the
-       * autopilot holds for a seated player stopped tracking a rival that was
-       * still plainly on screen, because the policy had already been told the
-       * rival was out of sight.
-       */
-      cameraViewWidth: Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth),
-      /*
-       * And the sector's reason to come up is the match's own number.
-       *
-       * The campaign's answer to "is anything armed in reach" is the enemy
-       * archetype's weapon range, and a match has no archetypes to ask - so
-       * the two modes read the same zero differently and needed two settings.
-       */
-      shieldAutopilotRaiseRange: tuning.arena.shieldAutopilotRaiseRange
-    };
+    this.config = toArenaMatchConfig(tuning, hull);
+    const ship = this.config.ship;
     this.state.shipArchetypeId = tuning.defaultShipArchetypeId;
-    this.config = {
-      ...defaultArenaMatchConfig,
-      ship,
-      arenaRadius: fieldRadius,
-      // The spawn disc is the field's, held off the wall by room to turn.
-      spawnRadius: fieldRadius - 160,
-      // The operator's layout, edited on the console's arena screen. Absent
-      // marks would mean the built-in spiral, which is what they started as.
-      spawnMarks: tuning.arena.spawnMarks,
-      // The sheet is the operator's too: its rectangles are sized from the
-      // radius, so a wider arena keeps the same number of closures.
-      zoneColumns: tuning.arena.zoneColumns,
-      zoneRows: tuning.arena.zoneRows,
-      // How long the fight is allowed to last, straight from the console: the
-      // sheet and the clock are one setting in two halves, and a match shorter
-      // than the sheet ends with ground still safe.
-      matchTickLimit: tuning.arena.matchTickLimit,
-      // The campaign's ship, stretched for a sixteen-way fight by two numbers
-      // the operator owns rather than by constants nobody can reach.
-      shipScaling: { hull: tuning.arena.hullScaling, damage: tuning.arena.damageScaling },
-      shieldHitCostShare: tuning.arena.shieldHitCostShare,
-      zoneIntervalTicks: tuning.arena.zoneIntervalTicks,
-      zonesPerClosure: tuning.arena.zonesPerClosure,
-      // The supply run's clocks are the operator's; its caps are the code's.
-      lootFirstSpawnTicks: tuning.arena.lootFirstSpawnTicks,
-      lootIntervalTicks: tuning.arena.lootIntervalTicks,
-      lootCargoIntervalTicks: tuning.arena.lootCargoIntervalTicks,
-      zoneWarningTicks: tuning.arena.zoneWarningTicks,
-      zoneDamageIntervalTicks: tuning.arena.zoneDamageIntervalTicks,
-      // The operator decides how many beats a full hull takes; the simulation
-      // takes one over that, of the maximum, on each of them.
-      zoneDamageShareOfMaxHp: 1 / tuning.arena.zoneBitesToKill
-    };
-
     // The sweep is the operator's too, and it is read once for the match like
     // everything else: a console edit lands on the next one.
-    this.scan = {
-      radiusCells: tuning.arena.scanRadiusCells,
-      cooldownTicks: tuning.arena.scanCooldownTicks,
-      revealTicks: tuning.arena.scanRevealTicks
-    };
+    this.scan = toArenaScanTuning(tuning);
 
-    const seats: readonly ArenaShipSeat[] = Array.from(
-      { length: this.config.shipCount },
-      (_unused, slot): ArenaShipSeat => ({
-        // The player's slot is marked human at creation; the bot layer skips
-        // it, and an empty one is simply a human who never turned up, which
-        // the step handles by leaving the hull on its own autopilot.
-        control: slot === PLAYER_SLOT ? "human" : "bot",
-        botLevel: tuning.autopilot.level
-      })
-    );
+    const seats = createArenaSeats(this.config, tuning.autopilot.level);
     this.match = createArenaMatch(this.config, createRunSeed(undefined), seats);
-    this.bots = new ArenaBots(
-      this.config,
-      resolveAutopilotProfile(tuning.autopilot, tuning.autopilot.level, ship.cannonWeaponKind)
-    );
+    this.bots = createArenaBots(tuning, this.config);
 
-    this.state.game.worldWidth = ship.worldWidth;
-    this.state.game.worldHeight = ship.worldHeight;
-    this.state.game.encounter.phase = "combat";
-    this.state.game.encounter.waveNumber = 1;
-    /*
-     * The same frame the campaign is played in, from the same setting.
-     *
-     * It used to frame the whole disc, which made a hull a third of the size it
-     * is in the campaign and every distance a different distance: a player who
-     * has learned one mode was handed another camera in the other. The field is
-     * the radar's job - the whole point of putting it over the stick - and the
-     * frame's job is to make a ship the size a ship is.
-     */
-    const display = this.state.game.display;
-    display.cameraViewWidth = Math.min(CAMERA_VIEW_WIDTH_MAX, tuning.arena.cameraViewWidth);
-    /*
-     * The hull as the console draws it, whole.
-     *
-     * Only the silhouette travelled before, so every ship in a match - the
-     * player's included - flew with the fallback turret rather than the one
-     * chosen in the catalogue, and the mount and pivot the operator set were
-     * nowhere. Sixteen copies of our own ship have to look like our own ship.
-     */
-    display.spaceshipVisualShape = ship.spaceshipVisual?.shape ?? "";
-    display.spaceshipVisualScale = ship.spaceshipVisual?.modelScale ?? 1;
-    display.turretVisualShape = ship.turretVisual?.shape ?? "";
-    display.turretVisualScale = ship.turretVisual?.modelScale ?? 1;
-    display.turretMountX = ship.turretVisual?.mountX ?? 0;
-    display.turretMountY = ship.turretVisual?.mountY ?? 0;
-    display.turretPivotX = ship.turretVisual?.pivotX ?? 0;
-    display.turretPivotY = ship.turretVisual?.pivotY ?? 0;
-    display.machineGunVisualShape = ship.machineGunVisual?.shape ?? "";
-    display.machineGunVisualScale = ship.machineGunVisual?.modelScale ?? 1;
-    display.machineGunMountX = ship.machineGunVisual?.mountX ?? 0;
-    display.machineGunMountY = ship.machineGunVisual?.mountY ?? 0;
-    display.machineGunPivotX = ship.machineGunVisual?.pivotX ?? 0;
-    display.machineGunPivotY = ship.machineGunVisual?.pivotY ?? 0;
-    display.asteroidVisualShape = ship.asteroidVisual?.shape ?? "";
-    display.asteroidVisualScale = ship.asteroidVisual?.modelScale ?? 1;
-    /*
-     * The sky, which the arena was flying without.
-     *
-     * The campaign projects it with the rest of its display block and a match
-     * never did, so the field came out as an empty black square. The picture and
-     * its parallax, fixed for the match like the silhouettes are.
-     */
-    display.backgroundImage = ship.background.image;
-    display.backgroundParallaxStrength = ship.background.parallaxStrength;
-    display.shieldBandEffect = ship.shieldBandEffect;
-    display.shieldImpactEffect = ship.shieldImpactEffect;
-    display.shipDeathEffect = ship.shipDeathEffect;
-    display.shipMuzzleEffect = ship.shipMuzzleEffect;
-    /*
-     * Every hull in a match is this hull, so one set of sounds covers the
-     * field: what the player is heard firing is what fifteen rivals are heard
-     * firing, which is also what a kill of any of them sounds like.
-     */
-    display.shipCannonSound = ship.shipCannonSound;
-    display.shipMgSound = ship.shipMgSound;
-    display.shipHitSound = ship.shipHitSound;
-    display.shipDeathSound = ship.shipDeathSound;
-    display.shieldRadius = ship.shieldRadius;
-    // The drive block is what a predicting client replays from; the arena does
-    // not predict yet, but the contract asks for real numbers and they exist.
-    const drive = this.state.game.display.drive;
-    drive.speedPerSecond = ship.spaceshipSpeedPerSecond;
-    drive.accelerationPerSecondSquared = ship.spaceshipAccelerationPerSecondSquared;
-    drive.brakingPerSecondSquared = ship.spaceshipBrakingPerSecondSquared;
-    drive.reverseSpeedFactor = ship.spaceshipReverseSpeedFactor;
-    drive.headingMaxAngularSpeed = ship.headingMaxAngularSpeedPerSecond;
-    drive.headingAngularAcceleration = ship.headingAngularAccelerationPerSecondSquared;
-    drive.headingAngularBraking = ship.headingAngularBrakingPerSecondSquared;
-    drive.turretMaxAngularSpeed = ship.turretMaxAngularSpeedPerSecond;
-    drive.turretAngularAcceleration = ship.turretAngularAccelerationPerSecondSquared;
-    drive.turretAngularBraking = ship.turretAngularBrakingPerSecondSquared;
-    drive.hullRadius = ship.spaceshipRadius;
-
-    /*
-     * The helm block, which only a cockpit reads.
-     *
-     * Without it the sticks fall back on the schema's defaults, and the two
-     * that matter most are zero there: the dead zones. A thumb is never still,
-     * and two pixels of slip on the ring is a couple of degrees of commanded
-     * heading - the tremble the preset's dead zone exists to absorb. The mount
-     * flag belongs here for the same reason: it decides what a stick bearing
-     * means, and the client replays with it.
-     */
-    const helm = this.state.game.helm;
-    helm.scheme = tuning.helm.scheme;
-    helm.headingLeadRadians = tuning.helm.headingLeadRadians;
-    helm.stopDampening = tuning.helm.stopDampening;
-    helm.rotateInPlaceThrottle = tuning.helm.rotateInPlaceThrottle;
-    helm.driveDeadzoneShare = tuning.helm.driveDeadzoneShare;
-    helm.aimDeadzoneShare = tuning.helm.aimDeadzoneShare;
-    helm.driveZoneShare = tuning.helm.driveZoneShare;
-    helm.aimProjectionShare = tuning.helm.aimProjectionShare;
-    helm.headingDeadbandRadians = tuning.helm.headingDeadbandRadians;
-    helm.headingFilterSeconds = tuning.helm.headingFilterSeconds;
-    helm.turretLeadRadians = tuning.helm.turretLeadRadians;
-    helm.hullAngularBrakingPerSecondSquared = ship.headingAngularBrakingPerSecondSquared;
-    helm.hullAngularMaxSpeed = ship.headingMaxAngularSpeedPerSecond;
-    helm.hullAngularAcceleration = ship.headingAngularAccelerationPerSecondSquared;
-    helm.turretAngularMaxSpeed = ship.turretMaxAngularSpeedPerSecond;
-    helm.turretAngularAcceleration = ship.turretAngularAccelerationPerSecondSquared;
-    helm.turretAngularBraking = ship.turretAngularBrakingPerSecondSquared;
-    helm.turretMountedOnHull = ship.turretMountedOnHull;
-    this.state.game.cannon.kind = ship.cannonWeaponKind;
-    this.state.game.cannon.reach = leadSpeedFor(
-      ship.cannonWeaponKind,
-      ship.projectileSpeedPerSecond
-    );
+    projectArenaFixtures(this.state.game, tuning, this.config);
     this.patchRate = PATCH_INTERVAL_MS;
     this.setFixedTimestep(
       () => {
@@ -751,27 +543,14 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     if (match.phase === "result") return;
 
     const started = performance.now();
-    const intents = new Map(bots.intentsFor(match, this.config));
-    const player = match.ships[PLAYER_SLOT];
-    // The seated player's own frame wins over whatever the bot wanted for that
-    // hull, and an empty seat keeps flying itself.
-    if (this.playerSessionId !== undefined && player !== undefined) {
+    // An empty seat keeps flying itself; a seated player's frame wins over
+    // whatever the bot wanted for that hull.
+    let player: ArenaShipIntent | null = null;
+    if (this.playerSessionId !== undefined) {
       this.takeCockpitFrame(this.playerSessionId);
-      const autopilot = intents.get(player.id) ?? IDLE_ARENA_INTENT;
-      intents.set(player.id, {
-        ...(this.playerIntent ?? IDLE_ARENA_INTENT),
-        /*
-         * The shield stays with the autopilot, because the cockpit has no
-         * control for it. A solo seat in the campaign is helm and gun - the
-         * sector is a third pair of hands, and an empty crew seat is what the
-         * policy layer exists to fill. Taking it away here would simply mean
-         * nobody ever raises it.
-         */
-        shieldTargetAngle: autopilot.shieldTargetAngle,
-        shieldActive: autopilot.shieldActive
-      });
+      player = this.playerIntent ?? IDLE_ARENA_INTENT;
     }
-    this.match = advanceArenaMatch(match, intents, this.config);
+    this.match = stepArenaMatch(match, this.config, bots, player);
     this.holdForResult(this.match);
     this.state.game.display.serverStepMs = performance.now() - started;
     this.publish();
@@ -787,39 +566,12 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
    */
   private sweep(): void {
     const match = this.match;
-    const player = match?.ships[PLAYER_SLOT];
-    if (match === undefined || player === undefined) return;
-    if (match.clock.tick < this.scanReadyTick) return;
-
-    const tuning = this.scan;
-    // A cell of the zone sheet, the longer side if the grid is not square: the
-    // reach is read off the board, and the camera's width has no say in it.
-    const span = this.config.arenaRadius * 2;
-    const cell = Math.max(span / this.config.zoneColumns, span / this.config.zoneRows);
-    const radius = cell * tuning.radiusCells;
-    this.revealed.clear();
-    for (const ship of match.ships) {
-      if (!ship.alive || ship.slot === PLAYER_SLOT) continue;
-      const distance = Math.hypot(
-        ship.spaceship.x - player.spaceship.x,
-        ship.spaceship.y - player.spaceship.y
-      );
-      if (distance <= radius) this.revealed.add(ship.id);
-    }
-    /*
-     * And what the field has put out within the same reach.
-     *
-     * A sweep answers one question - what is around me - and a crate is as much
-     * a part of that answer as a hull: the route a pilot picks after a sweep is
-     * usually toward a drop rather than toward a fight. Same set, because both
-     * fade on the same clock.
-     */
-    for (const drop of match.loot) {
-      const distance = Math.hypot(drop.x - player.spaceship.x, drop.y - player.spaceship.y);
-      if (distance <= radius) this.revealed.add(drop.id);
-    }
-    this.scanReadyTick = match.clock.tick + tuning.cooldownTicks;
-    this.scanRevealedUntilTick = match.clock.tick + tuning.revealTicks;
+    if (match === undefined) return;
+    const found = sweepArena(match, this.config, this.scan, this.scanReadyTick);
+    if (found === undefined) return;
+    this.revealed = found.revealed;
+    this.scanReadyTick = found.readyTick;
+    this.scanRevealedUntilTick = found.revealedUntilTick;
   }
 
   /**
@@ -850,67 +602,22 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     const frame = this.soloInputs.get(sessionId).next();
     if (frame === undefined) return;
 
-    const drive = { x: frame.vectorX, y: frame.vectorY };
-    const helmTurn = frame.hasHelm ? frame.turn : null;
-    const aimTurn = frame.hasAimTurn ? frame.aimTurn : null;
-    this.playerHeadingTarget = heldTarget(drive, helmTurn, this.playerHeadingTarget);
-    this.playerTurretTarget = heldTarget(
-      { x: frame.aimX, y: frame.aimY },
-      aimTurn,
-      this.playerTurretTarget
+    const cockpit = arenaIntentFromCockpit(
+      {
+        vector: { x: frame.vectorX, y: frame.vectorY },
+        turn: frame.hasHelm ? frame.turn : null,
+        thrust: frame.hasHelm ? frame.thrust : null,
+        mgFiring: frame.mgFiring,
+        aim: { x: frame.aimX, y: frame.aimY },
+        aimTurn: frame.hasAimTurn ? frame.aimTurn : null,
+        firing: frame.firing
+      },
+      { heading: this.playerHeadingTarget, turret: this.playerTurretTarget }
     );
-
-    this.playerIntent = {
-      // Normalised the way the room stores it, so both sides step the same
-      // vector rather than one a fraction longer.
-      driveVector: normalizeVector(drive),
-      turn: helmTurn,
-      thrust: frame.hasHelm ? frame.thrust : null,
-      headingTargetAngle: this.playerHeadingTarget,
-      turretTargetAngle: this.playerTurretTarget,
-      turretTurn: aimTurn,
-      firing: frame.firing,
-      mgFiring: frame.mgFiring,
-      // Filled from the autopilot by the caller; the cockpit has no sector.
-      shieldTargetAngle: null,
-      shieldActive: false
-    };
+    this.playerHeadingTarget = cockpit.held.heading;
+    this.playerTurretTarget = cockpit.held.turret;
+    this.playerIntent = cockpit.intent;
     this.appliedSoloSeq = frame.seq;
-  }
-
-  /**
-   * The sheet, published only when it actually changed.
-   *
-   * Sixteen rectangles that move a few times a match have no business being
-   * rebuilt sixty times a second: the signature is the states in order, and an
-   * unchanged signature means the clients already have it. Colyseus would have
-   * sent nothing either way - it diffs - but rebuilding the array would have
-   * made it think everything changed.
-   */
-  private publishZones(match: ArenaMatchState): void {
-    const signature = match.zones
-      .map(
-        (zone) => `${String(zone.id)}:${zone.state}:${String(Math.ceil(zone.ticksRemaining / 60))}`
-      )
-      .join("|");
-    if (signature === this.zoneSignature) return;
-    this.zoneSignature = signature;
-
-    const target = this.state.game.display.arenaZones;
-    target.clear();
-    for (const zone of match.zones) {
-      const view = new ArenaZoneView();
-      view.zoneId = zone.id;
-      view.x = zone.x;
-      view.y = zone.y;
-      view.width = zone.width;
-      view.height = zone.height;
-      view.state = zone.state;
-      view.secondsRemaining = Math.ceil(
-        (zone.ticksRemaining * this.config.ship.fixedStepMs) / 1_000
-      );
-      target.push(view);
-    }
   }
 
   /** Mirrors the match into the campaign-shaped state, by id. */
@@ -918,232 +625,24 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
     const match = this.match;
     if (match === undefined) return;
     const game = this.state.game;
-
-    const player = match.ships[PLAYER_SLOT];
-
-    game.tick = match.clock.tick;
-    game.elapsedMs = Math.round(match.clock.elapsedMs);
     // Where the cockpit's replay starts. Left at zero it would count every
     // frame it ever sent as still in flight, and replay all of them.
     game.display.appliedInputSeq = this.appliedSoloSeq;
-    game.arenaRadius = Math.round(this.config.arenaRadius);
-    /*
-     * A match ends for a player when their hull does, not when the field is
-     * down to one.
-     *
-     * Fifteen bots go on fighting after a human is shot down, and the room is
-     * right to keep stepping them - but the person watching has lost, and
-     * holding the picture in "combat" until the last bot falls is why the
-     * result only ever arrived with the room closing. The flags matter as much
-     * as the values: the view reads `outcome` as absent unless `hasOutcome`
-     * says otherwise, so an outcome written without them is an outcome nobody
-     * is shown.
-     */
-    const eliminated = this.playerSessionId !== undefined && player !== undefined && !player.alive;
-    game.encounter.phase = match.phase === "result" || eliminated ? "result" : "combat";
-    game.encounter.encounterTick = match.clock.tick;
-    /*
-     * Kills, carried on the field the campaign calls a score.
-     *
-     * The arena publishes through the campaign's shape on purpose, and "how
-     * well did I do" is what this field is for in both modes - it is a count of
-     * wrecks with my name on them here and a count of points there. Counted
-     * from `eliminatedBy` rather than tallied as it happens, because the match
-     * already records who ended whom and a second tally could disagree with it.
-     */
-    game.encounter.score =
-      player === undefined
-        ? 0
-        : match.ships.filter((ship) => !ship.alive && ship.eliminatedBy === player.id).length;
-    /*
-     * The clock, and only while there is one.
-     *
-     * The contract wants a positive countdown during combat and none outside
-     * it - "only combat may publish a wave countdown" - and a match kept
-     * publishing its own after the fight was decided. That is a refusal, not a
-     * warning: the view stops parsing and the screen holds its last good
-     * snapshot, which is a frozen picture at the exact moment of winning.
-     */
-    game.encounter.waveSecondsRemaining =
-      game.encounter.phase === "combat"
-        ? Math.max(
-            1,
-            Math.ceil(
-              ((this.config.matchTickLimit - match.clock.tick) * this.config.ship.fixedStepMs) /
-                1_000
-            )
-          )
-        : 0;
-    // The room stays "active": a finished match is an encounter outcome, and
-    // the room phase only knows lobby and active.
-    if (eliminated) {
-      game.encounter.hasOutcome = true;
-      game.encounter.outcome = "defeat";
-      game.encounter.hasDefeatReason = true;
-      game.encounter.defeatReason = "spaceship_destroyed";
-    } else if (match.phase === "result") {
-      // Somebody winning is not the same as this somebody winning: with a
-      // player in the field the outcome is theirs, and only an unmanned screen
-      // reports the match's own.
-      const won =
-        this.playerSessionId === undefined
-          ? match.winnerShipId !== null
-          : match.winnerShipId === player?.id;
-      game.encounter.hasOutcome = true;
-      game.encounter.outcome = won ? "victory" : "defeat";
-      /*
-       * A defeat has to say why, and the contract enforces it both ways: a
-       * reason without a defeat is refused as loudly as a defeat without one,
-       * and a refusal freezes the screen on its last good snapshot. Reaching
-       * this branch alive means the clock ran out - being shot down is the
-       * branch above.
-       */
-      game.encounter.hasDefeatReason = !won;
-      game.encounter.defeatReason = "wave_timeout";
-    }
-
-    /*
-     * The sweep's two clocks, in seconds because that is what a button shows.
-     * The marks are cleared rather than left to rot: a stale reveal would put a
-     * hull on the dial in a place it left a minute ago.
-     */
-    const fresh = match.clock.tick < this.scanRevealedUntilTick;
-    if (!fresh && this.revealed.size > 0) this.revealed.clear();
-    const secondsOf = (ticks: number): number =>
-      Math.max(0, Math.ceil((ticks * this.config.ship.fixedStepMs) / 1_000));
-    game.display.scanReadySeconds = secondsOf(this.scanReadyTick - match.clock.tick);
-    game.display.scanRevealSecondsRemaining = secondsOf(
-      this.scanRevealedUntilTick - match.clock.tick
-    );
-
-    this.publishZones(match);
-
-    if (player !== undefined) mirrorPlayerShip(player, game);
-
-    /*
-     * Every hull, whole.
-     *
-     * The rivals used to travel as enemy entities, which is what the campaign
-     * has room for - a position, a heading and a health bar. They are not
-     * enemies: each is a copy of the crew's own ship, shield and turret
-     * included, flown by the same autopilot, and the display has to be able to
-     * draw them that way.
-     */
-    /*
-     * Wrecks travel too, for a while.
-     *
-     * Dropping a hull the instant it died meant its health bar never reached
-     * zero and the ship blinked out instead of dying - the last rival of a
-     * match simply ceased to exist, which is no way to learn that you won. It
-     * stays on the wire with `alive` false until the display has played the
-     * wreck, and the room lets go of it a couple of seconds later.
-     */
-    const fleet = new Map(
-      match.ships
-        .filter(
-          (ship) =>
-            ship.alive ||
-            ship.eliminatedAtTick === null ||
-            match.clock.tick - ship.eliminatedAtTick <= WRECK_HOLD_TICKS
-        )
-        .map((ship) => [ship.id, ship])
-    );
-    reconcile(
-      game.display.arenaShips,
-      fleet,
-      (ship) => {
-        const view = new ArenaShipView();
-        view.entityId = ship.id;
-        view.isSelf = ship.slot === PLAYER_SLOT;
-        return view;
+    projectArenaMatch(
+      game,
+      match,
+      this.config,
+      {
+        seated: this.playerSessionId !== undefined,
+        scan: {
+          readyTick: this.scanReadyTick,
+          revealedUntilTick: this.scanRevealedUntilTick,
+          revealed: this.revealed
+        }
       },
-      (view, ship) => {
-        view.x = ship.spaceship.x;
-        view.y = ship.spaceship.y;
-        view.velocityX = ship.spaceship.velocity.x;
-        view.velocityY = ship.spaceship.velocity.y;
-        view.radius = ship.stats.spaceshipRadius;
-        view.heading = ship.heading;
-        view.turretAngle = ship.turretAngle;
-        view.hp = ship.hp;
-        view.maxHp = ship.maxHp;
-        view.shieldAngle = ship.shieldAngle;
-        view.shieldActive = ship.shieldActive;
-        view.shieldRadius = ship.stats.shieldRadius;
-        view.shieldArcHalfAngle = ship.stats.shieldArcRadians / 2;
-        view.shieldEnergy = ship.shieldEnergy;
-        view.shieldCapacity = ship.stats.shieldCapacity;
-        view.revealed = fresh && this.revealed.has(ship.id);
-        view.alive = ship.alive;
-        // Narrowed to the wire's counter, which wraps; the display compares
-        // against what it last drew, so a wrap costs one missed flash.
-        view.shotsFired = ship.shotsFired % 65_536;
-        view.shieldBlocks = ship.shieldBlocks % 65_536;
-      }
+      this.projection,
+      SCHEMA_ARENA_PROJECTION_FACTORIES
     );
-
-    /*
-     * The field's drops, reconciled by id like everything else.
-     *
-     * Position never changes once a drop is put down, so this is a create and a
-     * delete and nothing in between - the update writes the same numbers back
-     * and Colyseus sends none of them.
-     */
-    reconcile(
-      game.display.arenaLoot,
-      new Map(match.loot.map((drop) => [drop.id, drop] as const)),
-      (drop, id) => {
-        const view = new ArenaLootView();
-        view.entityId = id;
-        view.kind = drop.kind;
-        view.x = drop.x;
-        view.y = drop.y;
-        return view;
-      },
-      (view, drop) => {
-        view.x = drop.x;
-        view.y = drop.y;
-        /*
-         * The heavy drop is on every dial from the moment it lands.
-         *
-         * It is worth crossing the field for, which only works if everyone
-         * knows it is there: a cargo nobody can see is a prize one lucky sweep
-         * collects, and a cargo everyone can see is a fight with a time and a
-         * place. The common two stay behind the sweep, which is what the sweep
-         * is for.
-         */
-        view.revealed = drop.kind === "cargo" || (fresh && this.revealed.has(drop.id));
-        // The circle and how much of the hold is served: the display draws a
-        // ring from the pair, and neither is worth computing twice.
-        view.captureRadius = this.config.ship.spaceshipRadius * this.config.lootCaptureRadiusHulls;
-        view.captureShare = Math.max(
-          0,
-          Math.min(1, drop.captureTicks / Math.max(1, this.config.lootCaptureTicks))
-        );
-      }
-    );
-
-    const mine = new Map(
-      match.projectiles
-        .filter((shot) => shot.ownerShipId === player?.id)
-        .map((shot) => [shot.id, shot] as const)
-    );
-    const theirs = new Map(
-      match.projectiles
-        .filter((shot) => shot.ownerShipId !== player?.id)
-        .map((shot) => [shot.id, shot] as const)
-    );
-    /*
-     * Both sides fire the same ship, so both sides fire the same shell: a
-     * match is sixteen copies of the crew's own hull, and a rival's tracer
-     * being a different colour from yours would be a lie about the weapon.
-     */
-    const look = {
-      cannon: this.config.ship.projectileVisual,
-      machineGun: this.config.ship.mgProjectileVisual
-    };
-    mirrorProjectiles(game.display.friendlyProjectiles, mine, "friendly", look);
-    mirrorProjectiles(game.display.hostileProjectiles, theirs, "hostile", look);
   }
 }
 
@@ -1151,136 +650,4 @@ export class SpaceshipArenaRoom extends Room<{ state: SpaceshipDefenderState }> 
 function bearingOf(vector: { readonly x: number; readonly y: number }): number | null {
   if (vector.x === 0 && vector.y === 0) return null;
   return Math.atan2(vector.y, vector.x);
-}
-
-/**
- * The bearing a stick names, or the one it named last.
- *
- * The client's own replay resolves it exactly this way, and it has to: a rate
- * command names no bearing at all, and a released stick sends a zero vector,
- * which is not "point north" but "keep going where you were pointed".
- */
-function heldTarget(
-  vector: { readonly x: number; readonly y: number },
-  turn: number | null,
-  previous: number | null
-): number | null {
-  if (turn !== null) return null;
-  const normalized = normalizeVector(vector);
-  const bearing = bearingOf(normalized);
-  return bearing === null ? previous : canonicalizeAngle(bearing);
-}
-
-function mirrorPlayerShip(ship: ArenaShipState, game: SpaceshipDefenderState["game"]): void {
-  // The arena already thinks in world coordinates, the same ones the display
-  // draws in, so nothing is translated here any more.
-  game.spaceship.x = ship.spaceship.x;
-  game.spaceship.y = ship.spaceship.y;
-  game.spaceship.velocityX = ship.spaceship.velocity.x;
-  game.spaceship.velocityY = ship.spaceship.velocity.y;
-  game.spaceship.radius = ship.stats.spaceshipRadius;
-  game.spaceship.hp = ship.hp;
-  game.spaceship.maxHp = ship.maxHp;
-  game.spaceship.heading = ship.heading;
-  game.turretAngle = ship.turretAngle;
-  game.shield.angle = ship.shieldAngle;
-  game.shield.active = ship.shieldActive;
-  game.shield.energy = ship.shieldEnergy;
-  game.shield.capacity = ship.stats.shieldCapacity;
-  game.shield.arcHalfAngle = ship.stats.shieldArcRadians / 2;
-  game.cannon.heat = ship.cannonHeat;
-  game.cannon.capacity = ship.stats.cannonHeatCapacity;
-  game.cannon.overheated = ship.cannonOverheated;
-  game.machineGun.heat = ship.mgHeat;
-  game.machineGun.capacity = ship.stats.mgHeatCapacity;
-  game.machineGun.overheated = ship.mgOverheated;
-  game.display.shieldRadius = ship.stats.shieldRadius;
-  game.display.shieldPhase = ship.shieldPhase;
-  const pose = game.display.pose;
-  pose.x = game.spaceship.x;
-  pose.y = game.spaceship.y;
-  pose.velocityX = ship.spaceship.velocity.x;
-  pose.velocityY = ship.spaceship.velocity.y;
-  pose.heading = ship.heading;
-  pose.turretAngle = ship.turretAngle;
-}
-
-/** A shell's drawn look, as narrow as this file needs it: a shape and a size. */
-type ShellLook = { readonly shape: string; readonly modelScale: number } | null;
-
-function mirrorProjectiles(
-  target: MapSchema<ProjectileState>,
-  source: ReadonlyMap<
-    string,
-    {
-      x: number;
-      y: number;
-      velocity: { x: number; y: number };
-      radius: number;
-      spawnSequence: number;
-      source: "cannon" | "machineGun";
-    }
-  >,
-  kind: "friendly" | "hostile",
-  /** The look each barrel's shell is drawn with, as the console chose it. */
-  look: { readonly cannon: ShellLook; readonly machineGun: ShellLook }
-): void {
-  reconcile(
-    target,
-    source,
-    (shot, id) => {
-      const entity = new ProjectileState();
-      entity.entityId = id;
-      entity.spawnSequence = shot.spawnSequence;
-      entity.kind = kind;
-      /*
-       * Set once at spawn, like the campaign does it: a shell's look never
-       * changes, so it costs nothing per tick - and without it every shot in a
-       * match came out as the display's own fallback dot rather than the
-       * sprite the operator chose on the player screen.
-       */
-      /*
-       * Whose barrel this came out of, and only when it is ours.
-       *
-       * The display reads this field to place the crew's own muzzle flash: a
-       * shell that arrives naming a barrel is a shell this ship just fired. A
-       * match publishes fifteen other hulls' shots as well, and naming their
-       * barrels too drew a flash on the player's own gun for every shot anyone
-       * on the field took - which is a muzzle that never stops firing. The
-       * campaign's own mirror has always emptied it for hostile shells.
-       */
-      entity.source = kind === "friendly" ? shot.source : "";
-      const visual = shot.source === "machineGun" ? look.machineGun : look.cannon;
-      entity.visualShape = visual?.shape ?? "";
-      entity.visualScale = visual?.modelScale ?? 1;
-      return entity;
-    },
-    (entity, shot) => {
-      entity.x = shot.x;
-      entity.y = shot.y;
-      entity.velocityX = shot.velocity.x;
-      entity.velocityY = shot.velocity.y;
-      entity.radius = shot.radius;
-    }
-  );
-}
-
-/** Create, update and delete by id - the same shape the campaign room syncs with. */
-function reconcile<TEntity, TSource>(
-  target: MapSchema<TEntity>,
-  source: ReadonlyMap<string, TSource>,
-  create: (item: TSource, id: string) => TEntity,
-  update: (entity: TEntity, item: TSource) => void
-): void {
-  for (const [id, item] of source) {
-    let entity = target.get(id);
-    if (entity === undefined) {
-      entity = create(item, id);
-      target.set(id, entity);
-    }
-    update(entity, item);
-  }
-  for (const id of [...target.keys()]) {
-    if (!source.has(id)) target.delete(id);
-  }
 }

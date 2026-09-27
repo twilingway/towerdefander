@@ -6,6 +6,8 @@ interface ArenaResultOverlayProps {
   readonly survivors: number;
   readonly fieldSize: number;
   readonly leaving: boolean;
+  /** What the one button offers: a new search on a server, another round locally. */
+  readonly actionLabel: string;
   readonly onLeave: () => void;
 }
 
@@ -26,6 +28,7 @@ export function ArenaResultOverlay({
   survivors,
   fieldSize,
   leaving,
+  actionLabel,
   onLeave
 }: ArenaResultOverlayProps) {
   const place = Math.max(1, survivors + 1);
@@ -50,7 +53,7 @@ export function ArenaResultOverlay({
         onClick={onLeave}
         disabled={leaving}
       >
-        {leaving ? "Выходим…" : "Искать новый бой"}
+        {leaving ? "Выходим…" : actionLabel}
       </button>
     </div>
   );

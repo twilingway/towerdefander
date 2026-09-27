@@ -3,6 +3,7 @@ import type { DisplayRoomView } from "@spaceship-defender/protocol";
 import { setLiveView } from "../liveView.js";
 import { publishWorld } from "../worldStore.js";
 import { toDisplayRoomView } from "../roomView.js";
+import type { LocalArena } from "./arenaEngine.js";
 import type { LocalRun } from "./engine.js";
 
 /**
@@ -20,7 +21,7 @@ export interface LocalPublisher {
 }
 
 export function createLocalPublisher(
-  run: LocalRun,
+  run: LocalRun | LocalArena,
   offer: (view: DisplayRoomView, now: number) => void
 ): LocalPublisher {
   return {

@@ -1,6 +1,12 @@
-import type { ProjectionFactories } from "@spaceship-defender/game-runtime";
+import type {
+  ArenaProjectionFactories,
+  ProjectionFactories
+} from "@spaceship-defender/game-runtime";
 
 import {
+  ArenaLootView,
+  ArenaShipView,
+  ArenaZoneView,
   AsteroidState,
   EnemyState,
   HomingMissileState,
@@ -29,4 +35,12 @@ export const SCHEMA_PROJECTION_FACTORIES: ProjectionFactories = {
   upgradeCard: () => new UpgradeCardState(),
   upgradeVote: () => new UpgradeVoteState(),
   statEffect: () => new ShipStatEffectState()
+};
+
+/** The same, for a match: its hulls, drops and sheet are schema classes too. */
+export const SCHEMA_ARENA_PROJECTION_FACTORIES: ArenaProjectionFactories = {
+  ship: () => new ArenaShipView(),
+  loot: () => new ArenaLootView(),
+  zone: () => new ArenaZoneView(),
+  projectile: () => new ProjectileState()
 };
