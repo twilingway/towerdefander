@@ -4,6 +4,7 @@ import type { PredictionDriver, PredictedPoseFrame } from "../shipPrediction.js"
 import type { LocalArena } from "./arenaEngine.js";
 import type { LocalIntent, LocalRun } from "./engine.js";
 import type { StepClock } from "./clock.js";
+import { createPoseTrack, type PoseTrack } from "./poseTrack.js";
 
 /**
  * The run stepped inside the frame that draws it.
@@ -37,7 +38,7 @@ export function createLocalDriver({
   paused
 }: LocalDriverOptions): PredictionDriver {
   /*
-   * The step the hull was last drawn on. Kept through a pause rather than
+   * The tick the hull was last drawn at. Kept through a pause rather than
    * cleared: shells in the air are drawn against it, and dropping it would throw
    * every one of them back onto the playback clock for as long as the pause
    * lasts. One object, handed out every frame.
@@ -46,6 +47,8 @@ export function createLocalDriver({
     own: undefined,
     room: undefined
   };
+  const track = createPoseTrack();
+  let heldTick: number | undefined;
   return {
     drive(): PredictedPoseFrame | undefined {
       const now = performance.now();
@@ -72,16 +75,23 @@ export function createLocalDriver({
        * unseen for up to a frame and a half, then arrive all at once. That is
        * judder, and it is worst exactly where the eye tracks the hull against
        * something else: reversing, or holding an angle while firing sideways.
+       *
+       * And between steps, not on the newest one: see `poseTrack.ts`.
        */
-      shellClock.own = run.tick();
-      return run.pose();
+      const tick = run.tick();
+      if (tick !== heldTick) {
+        heldTick = tick;
+        track.push(tick, run.pose());
+      }
+      const drawn = track.sample(tick - clock.ahead());
+      shellClock.own = drawn?.tick;
+      return drawn?.pose;
     },
 
     bind: () => undefined,
     read: () => ({ x: 0, y: 0, rotation: 0 }),
     angleOf: () => 0,
-    // The hull is drawn on the run's newest step, whole; the world the scene
-    // plays back itself, so there is no room clock to report.
+    // The world the scene plays back itself, so there is no room clock to report.
     readShellClock: () => shellClock
   };
 }
@@ -107,19 +117,22 @@ export function poseOf(game: SpaceshipSimulationState): PredictedPoseFrame {
 /**
  * The scene's driver when the run lives in a worker.
  *
- * Nothing is stepped here: the worker keeps its own time. What the frame gets is
- * the last pose the worker posted, which is at most one step old - and the
- * frame is also where the hand is read, so the intent leaves for the worker at
- * the same moment the picture is drawn.
+ * Nothing is stepped here: the worker keeps its own time and posts every step
+ * batch's pose ahead of when it is due. What the frame gets is the hull between
+ * the posted steps, at the tick the frame's instant falls on - and the frame is
+ * also where the hand is read, so the intent leaves for the worker at the same
+ * moment the picture is drawn.
  */
 export function createRemoteDriver({
-  latestPose,
+  track,
+  tickAt,
   sendIntent,
   paused
 }: {
-  /** The last pose the worker posted, with the step it belongs to. */
-  readonly latestPose: () =>
-    { readonly pose: PredictedPoseFrame; readonly tick: number } | undefined;
+  /** The poses the worker posted. */
+  readonly track: PoseTrack;
+  /** The run's tick at the page's `now`, or undefined before the worker said anything. */
+  readonly tickAt: (now: number) => number | undefined;
   readonly sendIntent: () => void;
   readonly paused: () => boolean;
 }): PredictionDriver {
@@ -132,9 +145,10 @@ export function createRemoteDriver({
     drive(): PredictedPoseFrame | undefined {
       if (paused()) return undefined;
       sendIntent();
-      const latest = latestPose();
-      if (latest !== undefined) shellClock.own = latest.tick;
-      return latest?.pose;
+      const tick = tickAt(performance.now());
+      const drawn = tick === undefined ? undefined : track.sample(tick);
+      if (drawn !== undefined) shellClock.own = drawn.tick;
+      return drawn?.pose;
     },
     bind: () => undefined,
     read: () => ({ x: 0, y: 0, rotation: 0 }),

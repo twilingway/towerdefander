@@ -405,7 +405,7 @@ export class SpaceshipScene extends Phaser.Scene {
      *
      * A cockpit on a room reports the room's own: the present its shells
      * settle on, and the instant the library draws the world at. A device run
-     * reports only the step its hull is drawn on, which is also the freshest
+     * reports only the tick its hull is drawn at, which is also the freshest
      * state there is - no round trip stands between it and the simulation - so
      * its shells settle there. A shared screen reports nothing and draws
      * everything, its own ship included, on the playback clock, so its shells

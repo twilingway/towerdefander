@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import { hullMotion, type HullMotion } from "./hullMotion.js";
 import { openCampaign } from "./openCampaign.js";
 
 import {
@@ -29,6 +30,14 @@ const OWN_MEDIAN_LIMIT = 15;
 const FOREIGN_MEDIAN_LIMIT = 20;
 /** The clock is brought to the present at a quarter of real time, plus frame-timing slack. */
 const SPEED_RATIO_BAND = { low: 0.7, high: 1.3 };
+/**
+ * The hulls themselves, in units per second squared (`hullMotion.ts`). A device
+ * run drew its own hull on whole steps, and on a 165 Hz panel the camera took
+ * the whole screen with it: 270,000 for the own hull and for every rival on the
+ * glass, against a few thousand once the hull is drawn between steps
+ * (`openspec/changes/local-run-hull-smoothness`).
+ */
+const HULL_ACCELERATION_MEDIAN_LIMIT = 30_000;
 
 test("the gap arithmetic tells a shell on the barrel's clock from one a lead behind", () => {
   const hullSpeed = 600;
@@ -110,7 +119,13 @@ async function measure(
   durationMs: number,
   /** The page whose keys fly the ship, when it is not the one drawing it. */
   pilot: Page = page
-): Promise<{ own: GapSummary; foreign: GapSummary; speed: GapSummary; low: number }> {
+): Promise<{
+  own: GapSummary;
+  foreign: GapSummary;
+  speed: GapSummary;
+  low: number;
+  hulls: HullMotion;
+}> {
   const frames = await recordFrames(page, durationMs, () =>
     flyAndFire(pilot, durationMs, pilot === page)
   );
@@ -127,7 +142,8 @@ async function measure(
     foreign: summarize(foreignShellGaps(frames)),
     speed: summarize(ratios),
     // The tenth percentile: the slowest a shell is drawn, bar the odd outlier.
-    low: -summarize(ratios.map((ratio) => -ratio)).p90
+    low: -summarize(ratios.map((ratio) => -ratio)).p90,
+    hulls: hullMotion(frames)
   };
   // The numbers are the deliverable; they go into the change's design notes.
   console.log(`[shell-timeline] ${label}: ${JSON.stringify({ frames: frames.length, ...result })}`);
@@ -147,6 +163,13 @@ function expectOnTheBarrel(result: Awaited<ReturnType<typeof measure>>, needsFor
   }
   expect(result.low).toBeGreaterThanOrEqual(SPEED_RATIO_BAND.low);
   expect(result.speed.p90).toBeLessThanOrEqual(SPEED_RATIO_BAND.high);
+}
+
+/** The own hull and the rivals around it move on the glass without stepping. */
+function expectSmoothHulls(result: Awaited<ReturnType<typeof measure>>) {
+  expect(result.hulls.rivalsOnScreen.count, "rival hulls measured").toBeGreaterThan(100);
+  expect(result.hulls.own.median).toBeLessThanOrEqual(HULL_ACCELERATION_MEDIAN_LIMIT);
+  expect(result.hulls.rivalsOnScreen.median).toBeLessThanOrEqual(HULL_ACCELERATION_MEDIAN_LIMIT);
 }
 
 test("network arena: shells leave the drawn barrels", async ({ page }) => {
@@ -179,7 +202,9 @@ test("local campaign: shells leave the drawn barrels", async ({ page }) => {
   await page.goto(`${displayUrl}/solo?diag=1`);
   await expect(page.getByTestId("spaceship-world")).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(3_000);
-  expectOnTheBarrel(await measure(page, "local campaign", 14_000), false);
+  const result = await measure(page, "local campaign", 14_000);
+  expectOnTheBarrel(result, false);
+  expectSmoothHulls(result);
 });
 
 test("local arena training: shells leave the drawn barrels", async ({ page }) => {
@@ -187,7 +212,9 @@ test("local arena training: shells leave the drawn barrels", async ({ page }) =>
   await page.goto(`${displayUrl}/arena/training?diag=1`);
   await expect(page.getByTestId("spaceship-world")).toBeVisible({ timeout: 30_000 });
   await page.waitForTimeout(3_000);
-  expectOnTheBarrel(await measure(page, "local arena", 9_000), true);
+  const result = await measure(page, "local arena", 9_000);
+  expectOnTheBarrel(result, true);
+  expectSmoothHulls(result);
 });
 
 test("shared screen: shells leave the drawn barrels", async ({ browser }) => {

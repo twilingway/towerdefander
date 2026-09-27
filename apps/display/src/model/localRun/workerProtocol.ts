@@ -40,8 +40,18 @@ export type ToRunWorker =
   | { readonly type: "scan" };
 
 export type FromRunWorker =
-  /** After every step batch: where the hull is, for the frame about to be drawn. */
-  | { readonly type: "pose"; readonly pose: PredictedPoseFrame; readonly tick: number }
+  /**
+   * After every step batch: where the hull is at `tick`, and when that tick is
+   * due - `performance.timeOrigin + performance.now()`, the one clock a worker
+   * and its page share. The run steps ahead of real time, so `due` is usually
+   * still to come when the pose arrives.
+   */
+  | {
+      readonly type: "pose";
+      readonly pose: PredictedPoseFrame;
+      readonly tick: number;
+      readonly due: number;
+    }
   /** At the patch rate: the whole frame, already adapted and checked. */
   | { readonly type: "view"; readonly view: DisplayRoomView }
   /** Anything thrown inside the worker, said out loud on the page. */

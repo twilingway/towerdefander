@@ -795,6 +795,67 @@ describe("spaceship view model", () => {
     expect(frozenFrames).toBe(0);
   });
 
+  it("keeps the drawn point moving when arrivals jitter as a device run's do", () => {
+    /*
+     * A run in a worker publishes a view once PATCH_INTERVAL_MS has passed, as
+     * seen by a 4 ms poll, and the page hands it to the scene in a drawn
+     * frame. Arrivals then come 30-48 ms apart carrying two or three ticks,
+     * the lateness that buys pushes the lag to 60-70 ms - about four ticks - and
+     * a track of two segments, about four ticks long, is left behind by it a
+     * tenth of the time: the hull stands on its oldest sample and jumps a
+     * segment forward with every arrival.
+     */
+    const frameMs = 1000 / 165;
+    const stepMs = 1000 / SIMULATION_TICK_RATE;
+    // A fixed sequence standing in for timer and main-thread jitter, so the
+    // case is the same on every run.
+    let seed = 7;
+    const jitter = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    const positionAt = (tick: number) => ({ x: tick * 10, y: 0 });
+    let clock = createPlaybackClock(0);
+    let track = createPointTrack(positionAt(0), 0);
+    let latestTick = 0;
+    let publishedAt = 0;
+    let pollAt = 0;
+    let lastArrivalAt = 0;
+    // Views on their way to the scene, with the frame they are pulled in.
+    const inFlight: { tick: number; frame: number }[] = [];
+    let previousX = -1;
+    let frozenFrames = 0;
+
+    for (let frame = 1; frame < 1650; frame += 1) {
+      const now = frame * frameMs;
+      const arrived = inFlight.filter((view) => view.frame <= frame);
+      inFlight.splice(0, arrived.length);
+      // A 4 ms poll that a busy thread sometimes stretches to 8.
+      for (; pollAt <= now; pollAt += 4 + 4 * jitter()) {
+        if (pollAt - publishedAt < PATCH_INTERVAL_MS) continue;
+        publishedAt = pollAt;
+        // Handed over in the next drawn frame or the one after, pulled a frame later.
+        inFlight.push({
+          tick: Math.floor(pollAt / stepMs),
+          frame: frame + 1 + Math.round(jitter())
+        });
+      }
+      for (const { tick } of arrived) {
+        if (tick <= latestTick) continue;
+        track = extendPointTrack(track, positionAt(tick), tick);
+        clock = observePlaybackTick(clock, tick, now - lastArrivalAt);
+        latestTick = tick;
+        lastArrivalAt = now;
+      }
+      clock = advancePlayback(clock, frameMs);
+      const drawn = samplePointTrack(track, clock.tick);
+      if (frame > 165 && drawn.x <= previousX) frozenFrames += 1;
+      previousX = drawn.x;
+    }
+
+    expect(frozenFrames).toBe(0);
+  });
+
   it("re-anchors on a tick that moved backwards instead of freezing", () => {
     let clock = createPlaybackClock(0);
     clock = observePlaybackTick(clock, 400, 50);

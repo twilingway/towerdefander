@@ -38,7 +38,7 @@ describe("createStepClock", () => {
    * nobody else's clock disagrees with.
    */
   it("drops the remainder after a long stall instead of replaying it", () => {
-    const clock = createStepClock(STEP_MS, 5);
+    const clock = createStepClock(STEP_MS, { maxSteps: 5 });
     clock.stepsFor(0);
 
     expect(clock.stepsFor(2000)).toBe(5);
@@ -54,5 +54,37 @@ describe("createStepClock", () => {
 
     expect(clock.stepsFor(5008)).toBe(0);
     expect(clock.stepsFor(5017)).toBe(1);
+  });
+
+  /*
+   * One step of lead is what lets a fast panel draw the hull between its two
+   * newest steps at the instant the frame is for: the step it moves towards is
+   * already taken, and the frame sits `ahead` steps behind it.
+   */
+  it("steps a lead early and says how far the newest step is ahead", () => {
+    const clock = createStepClock(STEP_MS, { leadMs: STEP_MS });
+    clock.stepsFor(0);
+    expect(clock.ahead()).toBe(0);
+
+    // One step is taken at once - the one this frame moves towards.
+    expect(clock.stepsFor(4)).toBe(1);
+    expect(clock.ahead()).toBeCloseTo(1 - 4 / STEP_MS, 9);
+    expect(clock.stepsFor(12)).toBe(0);
+    expect(clock.ahead()).toBeCloseTo(1 - 12 / STEP_MS, 9);
+    // The next is taken as the frame reaches the one before it.
+    expect(clock.stepsFor(17)).toBe(1);
+    expect(clock.ahead()).toBeCloseTo(1 - (17 - STEP_MS) / STEP_MS, 9);
+  });
+
+  it("resumes after a pause where the frame stood, a fraction of a step included", () => {
+    const clock = createStepClock(STEP_MS, { leadMs: STEP_MS });
+    clock.stepsFor(0);
+    clock.stepsFor(10);
+    const before = clock.ahead();
+
+    clock.reset(60_000);
+
+    expect(clock.ahead()).toBe(before);
+    expect(clock.stepsFor(60_001)).toBe(0);
   });
 });

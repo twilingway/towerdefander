@@ -29,6 +29,13 @@ const scope = globalThis as unknown as {
 /** How often the worker looks at the clock. Under a step, so no step waits a whole one. */
 const POLL_MS = 4;
 
+/**
+ * How far ahead of real time the run is stepped: one step for the page to draw
+ * the hull towards (`clock.ts`), plus a poll and a message's crossing, so the
+ * step is on the page by the time the frame needs it rather than just after.
+ */
+const LEAD_BEYOND_STEP_MS = POLL_MS + 2;
+
 let run: LocalRun | LocalArena | undefined;
 let clock: StepClock | undefined;
 let intent: LocalIntent = IDLE_INTENT;
@@ -45,6 +52,21 @@ let settled = false;
 
 function post(message: FromRunWorker): void {
   scope.postMessage(message);
+}
+
+function postPose(now: number): void {
+  if (run === undefined || clock === undefined) return;
+  const stepMs = run.kind === "arena" ? run.fixedStepMs : run.config.fixedStepMs;
+  post({
+    type: "pose",
+    pose: run.pose(),
+    tick: run.tick(),
+    due: performance.timeOrigin + now + clock.ahead() * stepMs
+  });
+}
+
+function createLeadingClock(stepMs: number): StepClock {
+  return createStepClock(stepMs, { leadMs: stepMs + LEAD_BEYOND_STEP_MS });
 }
 
 function publish(): void {
@@ -67,7 +89,7 @@ function tick(): void {
     if (steps > 0) {
       for (let index = 0; index < steps; index += 1) run.step(intent);
       lastStepCostMs = performance.now() - now;
-      post({ type: "pose", pose: run.pose(), tick: run.tick() });
+      postPose(now);
     }
     if (now - publishedAt >= PATCH_INTERVAL_MS) publish();
   } catch (error) {
@@ -86,7 +108,7 @@ scope.onmessage = (event) => {
             playerName: message.playerName
           });
           run = arena;
-          clock = createStepClock(arena.fixedStepMs);
+          clock = createLeadingClock(arena.fixedStepMs);
         } else {
           const config = toSimulationConfig(message.tuning, message.shipArchetypeId);
           run = createLocalRun({
@@ -97,9 +119,9 @@ scope.onmessage = (event) => {
             startWave: message.startWave,
             waveTtlSeconds: message.waveTtlSeconds
           });
-          clock = createStepClock(config.fixedStepMs);
+          clock = createLeadingClock(config.fixedStepMs);
         }
-        post({ type: "pose", pose: run.pose(), tick: run.tick() });
+        postPose(performance.now());
         publish();
         return;
       }
@@ -108,8 +130,14 @@ scope.onmessage = (event) => {
         return;
       case "paused":
         paused = message.paused;
-        // Forget the gap rather than spending it as a burst of catch-up.
-        if (!paused) clock?.reset(performance.now());
+        // Forget the gap rather than spending it as a burst of catch-up - and
+        // say when the held step is due now, or the page would place it a pause
+        // in the past and hold it until the next step arrived.
+        if (!paused) {
+          const now = performance.now();
+          clock?.reset(now);
+          postPose(now);
+        }
         return;
       case "vote":
         if (run?.kind !== "campaign") return;
@@ -123,8 +151,14 @@ scope.onmessage = (event) => {
         return;
       case "restart":
         run?.restart();
-        // The clock stood still while the run was settled; that gap is not owed.
-        clock?.reset(performance.now());
+        {
+          // The clock stood still while the run was settled; that gap is not owed.
+          const now = performance.now();
+          clock?.reset(now);
+          // The new run's first pose, so the page does not hold the old run's
+          // last one until the first step.
+          postPose(now);
+        }
         publish();
         return;
     }

@@ -4,11 +4,15 @@ import {
   type DisplayRoomView,
   type UpgradeId
 } from "@spaceship-defender/protocol";
-import type { SpaceshipSimulationConfig } from "@spaceship-defender/game-core";
+import {
+  SIMULATION_TICK_RATE,
+  type SpaceshipSimulationConfig
+} from "@spaceship-defender/game-core";
 
-import type { PredictedPoseFrame, PredictionDriver } from "../shipPrediction.js";
+import type { PredictionDriver } from "../shipPrediction.js";
 import { createStepClock } from "./clock.js";
 import { createLocalDriver, createRemoteDriver } from "./driver.js";
+import { createPoseTrack } from "./poseTrack.js";
 import { createLocalArena } from "./arenaEngine.js";
 import { createLocalRun, type LocalIntent } from "./engine.js";
 import { createLocalPublisher, deliverView } from "./publish.js";
@@ -68,7 +72,9 @@ export function shouldUseRunWorker(search: string): boolean {
 /** The run stepped inside the frame that draws it, on the main thread. */
 export function createInTabHost(options: RunHostOptions): RunHost {
   const run = options.kind === "arena" ? createLocalArena(options) : createLocalRun(options);
-  const clock = createStepClock(run.kind === "arena" ? run.fixedStepMs : run.config.fixedStepMs);
+  const stepMs = run.kind === "arena" ? run.fixedStepMs : run.config.fixedStepMs;
+  // A step early, so the frame always has a step to draw the hull towards.
+  const clock = createStepClock(stepMs, { leadMs: stepMs });
   const publish = createLocalPublisher(run, options.offer);
   let paused = false;
   let publishedAt = 0;
@@ -115,6 +121,9 @@ export function createInTabHost(options: RunHostOptions): RunHost {
   };
 }
 
+/** A step of the run, which every preset steps at the one simulation rate. */
+const STEP_MS = 1000 / SIMULATION_TICK_RATE;
+
 /** How long a running worker may be silent before the page says so. */
 const SILENT_WORKER_MS = 1_000;
 
@@ -131,7 +140,10 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
   const send = (message: ToRunWorker): void => {
     worker.postMessage(message);
   };
-  let pose: { readonly pose: PredictedPoseFrame; readonly tick: number } | undefined;
+  const poses = createPoseTrack();
+  /** The newest posted step and when it is due, in this page's `performance.now()`. */
+  let anchor: { readonly tick: number; readonly due: number } | undefined;
+  let pausedAt: number | undefined;
   let lastView: DisplayRoomView | undefined;
   let paused = false;
   let heardAt = performance.now();
@@ -160,8 +172,10 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
     heardAt = performance.now();
     reportedSilence = false;
     const message = event.data;
-    if (message.type === "pose") pose = { pose: message.pose, tick: message.tick };
-    else if (message.type === "view") {
+    if (message.type === "pose") {
+      poses.push(message.tick, message.pose);
+      anchor = { tick: message.tick, due: message.due - performance.timeOrigin };
+    } else if (message.type === "view") {
       lastView = message.view;
       pendingView = message.view;
       flushTimer ??= setTimeout(flushView, VIEW_WAIT_FOR_DRAW_MS);
@@ -206,7 +220,9 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
 
   return {
     driver: createRemoteDriver({
-      latestPose: () => pose,
+      track: poses,
+      tickAt: (now) =>
+        anchor === undefined ? undefined : anchor.tick + (now - anchor.due) / STEP_MS,
       sendIntent: () => {
         sendIntent();
         // `drive` runs inside the frame the scene draws.
@@ -237,8 +253,19 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
       send({ type: "scan" });
     },
     setPaused: (value) => {
+      const now = performance.now();
+      if (value && !paused) pausedAt = now;
+      /*
+       * The worker forgets the pause and posts when its held step is due now,
+       * but that answer can land after the first frame drawn on resume. Moved
+       * by the pause here, the old anchor already agrees with it, instead of
+       * putting that frame a whole pause ahead.
+       */
+      if (!value && paused && anchor !== undefined && pausedAt !== undefined) {
+        anchor = { tick: anchor.tick, due: anchor.due + (now - pausedAt) };
+      }
       paused = value;
-      heardAt = performance.now();
+      heardAt = now;
       send({ type: "paused", paused: value });
     },
     dispose: () => {
