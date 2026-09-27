@@ -161,6 +161,7 @@ export function createPreviewGame(
         {
           entityId: "preview-friendly-1",
           spawnSequence: 4,
+          spawnTick: 0,
           x: 2440,
           y: 2020,
           velocityX: 420,
@@ -173,6 +174,7 @@ export function createPreviewGame(
         {
           entityId: "preview-friendly-2",
           spawnSequence: 5,
+          spawnTick: 0,
           x: 2330,
           y: 2110,
           velocityX: 380,
@@ -187,6 +189,7 @@ export function createPreviewGame(
         {
           entityId: "preview-hostile-1",
           spawnSequence: 6,
+          spawnTick: 0,
           x: 2660,
           y: 1960,
           velocityX: -300,

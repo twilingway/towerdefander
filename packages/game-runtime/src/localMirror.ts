@@ -327,6 +327,7 @@ export const PLAIN_PROJECTION_FACTORIES: ProjectionFactories = {
   projectile: () => ({
     entityId: "",
     spawnSequence: 0,
+    spawnTick: 0,
     kind: "friendly" as const,
     x: 0,
     y: 0,

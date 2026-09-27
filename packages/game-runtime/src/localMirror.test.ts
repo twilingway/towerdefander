@@ -50,6 +50,34 @@ describe("createLocalMirror", () => {
   });
 
   /*
+   * The display draws a shell on its shooter's clock and hides it until that
+   * clock reaches the tick it was born on, so the tick has to be the core's own
+   * and has to survive every later projection unchanged.
+   */
+  it("publishes each shell's birth tick and keeps it for the shell's life", () => {
+    const mirror = createLocalMirror();
+    let game = createCleanSpaceshipRun(config, 11, 1);
+    for (let index = 0; index < 4_000 && game.hostileProjectiles.length === 0; index += 1) {
+      game = advanceSpaceshipSimulation(game, config);
+    }
+    expect(game.hostileProjectiles.length).toBeGreaterThan(0);
+    projectGameState(mirror.game, game, config, 60, PLAIN_PROJECTION_FACTORIES);
+    for (const shell of game.hostileProjectiles) {
+      expect(mirror.game.display.hostileProjectiles.get(shell.id)?.spawnTick).toBe(
+        shell.spawnedTick
+      );
+    }
+
+    const survivor = game.hostileProjectiles[0];
+    if (survivor === undefined) throw new Error("no shell to follow");
+    game = advanceSpaceshipSimulation(game, config);
+    projectGameState(mirror.game, game, config, 60, PLAIN_PROJECTION_FACTORIES);
+    const followed = mirror.game.display.hostileProjectiles.get(survivor.id);
+    if (followed !== undefined) expect(followed.spawnTick).toBe(survivor.spawnedTick);
+    expect(survivor.spawnedTick).toBeLessThanOrEqual(game.clock.tick);
+  });
+
+  /*
    * The adapter reads collections through `values()` and the projection writes
    * them through `get`/`set`/`delete`/`keys`. A `Map` answers both, which is
    * the whole reason the device needs no second description of the world.

@@ -94,6 +94,7 @@ export interface LaserBeamTarget {
 export interface ProjectileTarget {
   entityId: string;
   spawnSequence: number;
+  spawnTick: number;
   kind: "friendly" | "hostile";
   x: number;
   y: number;

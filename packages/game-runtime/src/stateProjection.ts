@@ -311,6 +311,7 @@ function syncProjectile(
 ): void {
   target.entityId = source.id;
   target.spawnSequence = source.spawnSequence;
+  target.spawnTick = source.spawnedTick;
   target.kind = kind;
   target.x = source.x;
   target.y = source.y;

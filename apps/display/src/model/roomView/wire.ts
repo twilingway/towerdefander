@@ -135,6 +135,7 @@ export interface NetworkLootDropState extends NetworkCombatEntityState {
 
 export interface NetworkProjectileState extends NetworkCombatEntityState {
   kind: ProjectileKind;
+  spawnTick: number;
   source?: string;
   visualShape?: string;
   visualScale?: number;

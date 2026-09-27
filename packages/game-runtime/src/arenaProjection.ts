@@ -180,6 +180,7 @@ export const PLAIN_ARENA_PROJECTION_FACTORIES: ArenaProjectionFactories = {
   projectile: () => ({
     entityId: "",
     spawnSequence: 0,
+    spawnTick: 0,
     kind: "friendly",
     x: 0,
     y: 0,
@@ -646,6 +647,7 @@ function projectShots(
       velocity: { x: number; y: number };
       radius: number;
       spawnSequence: number;
+      spawnedTick: number;
       source: "cannon" | "machineGun";
     }
   >,
@@ -661,6 +663,7 @@ function projectShots(
       const entity = factories.projectile();
       entity.entityId = id;
       entity.spawnSequence = shot.spawnSequence;
+      entity.spawnTick = shot.spawnedTick;
       entity.kind = kind;
       /*
        * Set once at spawn, like the campaign does it: a shell's look never
