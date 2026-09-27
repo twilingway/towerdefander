@@ -30,6 +30,13 @@ describe("ArenaSetupScreen", () => {
     expect(markup.match(/aria-label="[^"]*Общий экран[^"]*"/g)).toHaveLength(1);
   });
 
+  it("tells a training pilot the ship is theirs to fly", () => {
+    const markup = renderToStaticMarkup(<ArenaSetupScreen {...base} serverReach="online" />);
+
+    expect(markup).toContain("Свой корабль ведёте вы");
+    expect(markup).not.toContain("летит сам");
+  });
+
   it("dims the network places with no network and keeps training open", () => {
     const markup = renderToStaticMarkup(<ArenaSetupScreen {...base} serverReach="offline" />);
 
