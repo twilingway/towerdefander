@@ -30,7 +30,7 @@ import {
   visualAssetIdSchema
 } from "./balance.ts";
 
-export const PROTOCOL_VERSION = 72 as const;
+export const PROTOCOL_VERSION = 73 as const;
 export const ROOM_TYPE = "spaceship_defender" as const;
 /**
  * The arena's own room type. A second type rather than a flag on the first:
@@ -629,6 +629,12 @@ export const publicProjectileViewSchema = z
   .object({
     ...entityShape,
     kind: projectileKindSchema,
+    /**
+     * The simulation tick the shell was created on. It never changes, so it
+     * crosses the wire once, with the add; the display needs it to draw a shell
+     * on its shooter's clock and to keep it hidden until that clock reaches it.
+     */
+    spawnTick: safeNonnegativeInteger,
     source: projectileSourceSchema.optional(),
     /** Set once from the firing weapon; null means the display draws its default. */
     visual: entityVisualSchema

@@ -109,6 +109,7 @@ export function toPublicProjectile(projectile: NetworkProjectileState) {
   const base = {
     entityId: projectile.entityId,
     spawnSequence: projectile.spawnSequence,
+    spawnTick: projectile.spawnTick,
     kind: projectile.kind,
     x: projectile.x,
     y: projectile.y,

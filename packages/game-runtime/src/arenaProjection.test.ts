@@ -59,6 +59,35 @@ describe("projectArenaMatch into the local mirror", () => {
     expect(mirror.game.encounter.waveSecondsRemaining).toBeGreaterThan(0);
   });
 
+  it("publishes each shell's birth tick as the match stamped it", () => {
+    const run = trainingAfter(240);
+    // The player's own guns, so the field is not waiting on a bot's decision.
+    for (let tick = 0; tick < 30; tick += 1) run.step({ ...IDLE, mgFiring: true, firing: true });
+    const mirror = createLocalMirror();
+    const match = run.state();
+
+    projectArenaMatch(
+      mirror.game,
+      match,
+      run.config,
+      { seated: true, scan: run.scanState() },
+      createArenaProjectionMemo(),
+      PLAIN_ARENA_PROJECTION_FACTORIES
+    );
+
+    // Otherwise an empty field would satisfy the loop below.
+    expect(match.projectiles.length).toBeGreaterThan(0);
+    const published = new Map(
+      [
+        ...mirror.game.display.friendlyProjectiles.values(),
+        ...mirror.game.display.hostileProjectiles.values()
+      ].map((shell) => [shell.entityId, shell.spawnTick])
+    );
+    for (const shot of match.projectiles) {
+      expect(published.get(shot.id)).toBe(shot.spawnedTick);
+    }
+  });
+
   it("marks what a sweep found, and only while the reveal lasts", () => {
     const run = trainingAfter(10);
     const match = run.state();

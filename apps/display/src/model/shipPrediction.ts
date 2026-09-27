@@ -231,4 +231,23 @@ export interface PredictionDriver {
    * the same clock as its position or they twitch against it.
    */
   angleOf(entity: LiveEntity, field: string): number;
+  /**
+   * The clocks shells are drawn against this frame, in fractional ticks; see
+   * `shellClock.ts`. Read after `drive`, which is what moves them.
+   */
+  readShellClock(): DriverShellClock;
+}
+
+/** What a driver knows about the clocks of the frame it just drove. */
+export interface DriverShellClock {
+  /** The tick of the hull this driver handed the scene, or undefined if it handed none. */
+  readonly own: number | undefined;
+  /**
+   * A room's own clocks, when the shells are read off its decoded state: the
+   * present shells settle on, the moment its interpolated hulls are drawn at,
+   * and the tick the decoded positions belong to. Undefined on a device run,
+   * whose world the scene plays back itself.
+   */
+  readonly room:
+    { readonly present: number; readonly world: number; readonly sampleTick: number } | undefined;
 }

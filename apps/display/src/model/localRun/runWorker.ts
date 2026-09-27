@@ -67,7 +67,7 @@ function tick(): void {
     if (steps > 0) {
       for (let index = 0; index < steps; index += 1) run.step(intent);
       lastStepCostMs = performance.now() - now;
-      post({ type: "pose", pose: run.pose() });
+      post({ type: "pose", pose: run.pose(), tick: run.tick() });
     }
     if (now - publishedAt >= PATCH_INTERVAL_MS) publish();
   } catch (error) {
@@ -99,7 +99,7 @@ scope.onmessage = (event) => {
           });
           clock = createStepClock(config.fixedStepMs);
         }
-        post({ type: "pose", pose: run.pose() });
+        post({ type: "pose", pose: run.pose(), tick: run.tick() });
         publish();
         return;
       }

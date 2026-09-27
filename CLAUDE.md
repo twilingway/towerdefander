@@ -153,7 +153,7 @@ tests step explicitly rather than waiting on timers.
 
 ### Protocol and client views
 
-`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 72) as a `z.literal` inside join
+`packages/protocol/src/index.ts` pins `PROTOCOL_VERSION` (currently 73) as a `z.literal` inside join
 options and every command envelope, so any breaking change means bumping that constant and defining
 mismatch behavior — clients then get `protocol_mismatch` instead of silent drift.
 `packages/protocol/src/balance.ts` holds the balance schemas the console and the preset file share;

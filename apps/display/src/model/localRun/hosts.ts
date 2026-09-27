@@ -131,7 +131,7 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
   const send = (message: ToRunWorker): void => {
     worker.postMessage(message);
   };
-  let pose: PredictedPoseFrame | undefined;
+  let pose: { readonly pose: PredictedPoseFrame; readonly tick: number } | undefined;
   let lastView: DisplayRoomView | undefined;
   let paused = false;
   let heardAt = performance.now();
@@ -160,7 +160,7 @@ export function createWorkerHost(options: RunHostOptions): RunHost {
     heardAt = performance.now();
     reportedSilence = false;
     const message = event.data;
-    if (message.type === "pose") pose = message.pose;
+    if (message.type === "pose") pose = { pose: message.pose, tick: message.tick };
     else if (message.type === "view") {
       lastView = message.view;
       pendingView = message.view;

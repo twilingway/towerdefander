@@ -304,6 +304,8 @@ export class LaserBeamState extends Schema {
 export class ProjectileState extends Schema {
   @type("string") entityId = "";
   @type("uint32") spawnSequence = 0;
+  /** Set once at spawn, so it rides the add and never a per-tick patch. */
+  @type("uint32") spawnTick = 0;
   @type("string") kind: "friendly" | "hostile" = "friendly";
   @type("float32") x = 0;
   @type("float32") y = 0;

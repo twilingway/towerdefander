@@ -430,6 +430,14 @@ export class ArenaFleet {
     if (barriers !== undefined) this.lendBands(barriers.scene, barriers.view, barriers.effect);
   }
 
+  /** Every rival hull as drawn this frame, flat - for the measurement probe only. */
+  appendDrawnHulls(into: number[]): void {
+    for (const parts of this.hulls.values()) {
+      if (parts.wrecked || parts.isSelf) continue;
+      into.push(parts.hull.x, parts.hull.y, parts.radius);
+    }
+  }
+
   destroy(): void {
     for (const parts of this.hulls.values()) destroyHull(parts);
     this.hulls.clear();

@@ -16,11 +16,18 @@ import { ArenaFleet } from "./arenaFleet.js";
 import { ArenaLootLayer } from "./arenaLoot.js";
 import { CameraFrame } from "./camera.js";
 import { createNoseGun, createTurret, snapShipToSnapshot, type TurretObject } from "./ship.js";
-import { reconcileCombatVisuals, type CombatVisual, type ScenePrediction } from "./entities.js";
+import {
+  reconcileCombatVisuals,
+  retireCombatVisual,
+  type CombatVisual,
+  type ScenePrediction
+} from "./entities.js";
 import { sceneAudioFor, type SceneAudio } from "./sceneAudio.js";
 import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
+import { createShellProbe, probeFrame } from "./shellProbe.js";
+import { placeShell, shellMayRetire } from "./shellClock.js";
 import {
   DEFAULT_SPACESHIP_HULL_ASSET_ID,
   drawSpaceshipHull,
@@ -75,6 +82,13 @@ export class SpaceshipScene extends Phaser.Scene {
   private readonly frames = new FrameMeter();
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
+  /** This frame's shell clocks, one object reused: see `shellClock.ts`. */
+  private readonly shellClocks = { present: 0, world: 0, own: 0 };
+  /** What was drawn, for a browser spec to measure; undefined unless `?diag=1`. */
+  private readonly shellProbe = createShellProbe(
+    globalThis.location.search,
+    1000 / SIMULATION_TICK_RATE
+  );
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
   /**
    * The prototype's picture instead of ours; see `readTankLook`. Read once at
@@ -387,20 +401,24 @@ export class SpaceshipScene extends Phaser.Scene {
     );
 
     /*
-     * How far behind the newest snapshot playback is meant to run, in seconds.
-     * Shells are carried forward by exactly this much - to server present,
-     * never past it, so nothing is invented.
+     * The three clocks a shell can be drawn on this frame; see `shellClock.ts`.
      *
-     * The lag the clock decided on rather than the gap this frame happens to
-     * show. The newest tick arrives two at a time thirty times a second while
-     * playback advances every frame, so the instantaneous difference sawtooths
-     * between a patch and the next: subtracting it from a shell that is already
-     * being interpolated forward cancels most of the motion and then returns it
-     * in a lurch. Measured on the stand, a shell drawn from the raw difference
-     * stepped 4 to 6 units a frame and then 20 or 30, at 2.21 times the spread
-     * of its own interpolated track.
+     * A cockpit on a room reports the room's own: the present its shells
+     * settle on, and the instant the library draws the world at. A device run
+     * reports only the step its hull is drawn on, which is also the freshest
+     * state there is - no round trip stands between it and the simulation - so
+     * its shells settle there. A shared screen reports nothing and draws
+     * everything, its own ship included, on the playback clock, so its shells
+     * are born and stay there.
      */
-    const behindSeconds = (this.playback.lagTicks * this.playback.msPerTick) / 1000;
+    const reported = this.prediction?.readShellClock();
+    const ownTick = reported?.own ?? playbackTick;
+    const room = reported?.room;
+    const shellClocks = this.shellClocks;
+    shellClocks.present = room === undefined ? ownTick : room.present;
+    shellClocks.world = room === undefined ? playbackTick : room.world;
+    shellClocks.own = ownTick;
+    const elapsedTicks = deltaMs / (1000 / SIMULATION_TICK_RATE);
     let liveDrawn = 0;
     let offscreen = 0;
     const camera = this.cameras.main;
@@ -409,14 +427,53 @@ export class SpaceshipScene extends Phaser.Scene {
     const renderer = this.camera.readRendererSize();
     const viewRight = viewLeft + renderer.width;
     const viewBottom = viewTop + renderer.height;
-    for (const visual of this.combatVisuals.values()) {
+    for (const [entityId, visual] of this.combatVisuals) {
+      const flight = visual.shell;
+      if (flight !== undefined) {
+        /*
+         * Bound, a shell is read raw off the decoded state at the decoded tick;
+         * otherwise from the newest sample its track holds. A shell the room
+         * has dropped reads neither - the decoded object may already be reused -
+         * and flies on from its own copy until its clock reaches where it left.
+         */
+        const live =
+          flight.retireAtTick === undefined && visual.live !== undefined && room !== undefined
+            ? this.prediction?.read(visual.live)
+            : undefined;
+        if (live !== undefined) liveDrawn += 1;
+        placeShell(
+          visual,
+          flight,
+          live ?? visual.position.current.to,
+          live !== undefined && room !== undefined
+            ? room.sampleTick
+            : visual.position.current.toTick,
+          shellClocks,
+          elapsedTicks
+        );
+        if (shellMayRetire(flight, shellClocks.present)) {
+          retireCombatVisual(
+            entityId,
+            visual,
+            {
+              visuals: this.combatVisuals,
+              snapshot: this.snapshot,
+              shieldPose: this.shield.pose(),
+              bursts: this.bursts,
+              sounds: this.sounds
+            },
+            false
+          );
+        }
+        continue;
+      }
       /*
-       * One clock for the whole picture when there is a cockpit driving it.
+       * One clock for the whole world when there is a cockpit driving it.
        *
-       * The predictor smooths and reckons every entity it was given, so reading
-       * through it puts the world where the ship already is. Without one - the
-       * shared display, the preview - the tracks below still do the job they
-       * always did.
+       * The predictor interpolates every hull it was given on the delay it
+       * measured, so reading through it puts the world on the clock its shells
+       * are born on. Without one - the shared display, the preview - the tracks
+       * below still do the job they always did.
        */
       // A rock tumbles on the shared playback clock instead of facing its course.
       const spinAngle =
@@ -432,14 +489,7 @@ export class SpaceshipScene extends Phaser.Scene {
         continue;
       }
       const sampled = samplePointTrack(visual.position, playbackTick);
-      const carried =
-        visual.velocity === undefined || behindSeconds === 0
-          ? sampled
-          : {
-              x: sampled.x + visual.velocity.x * behindSeconds,
-              y: sampled.y + visual.velocity.y * behindSeconds
-            };
-      visual.object.setPosition(carried.x, carried.y);
+      visual.object.setPosition(sampled.x, sampled.y);
       visual.object.rotation = spinAngle ?? sampleAngleTrack(visual.angle, playbackTick);
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
@@ -449,6 +499,25 @@ export class SpaceshipScene extends Phaser.Scene {
       if (x < viewLeft || x > viewRight || y < viewTop || y > viewBottom) offscreen += 1;
     }
     this.frames.recordDrawn(liveDrawn, offscreen);
+    const turretRotation = this.turret.rotation;
+    this.shellProbe?.record(() =>
+      probeFrame(
+        time,
+        {
+          x: spaceshipPosition.x,
+          y: spaceshipPosition.y,
+          heading: spaceshipHeading,
+          mountX: mount.x,
+          mountY: mount.y,
+          turretRotation,
+          hullRadius: this.snapshot.spaceship.radius
+        },
+        this.combatVisuals,
+        (into) => {
+          this.fleet.appendDrawnHulls(into);
+        }
+      )
+    );
   }
 
   /** The scene's own stopwatch, for whoever publishes its numbers. */

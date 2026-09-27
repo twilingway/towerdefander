@@ -19,7 +19,7 @@ import { getCurrentWaveUpgrade } from "../../model/combatHudViewModel.js";
 import { readPixelRatioCap } from "../../game/devicePixels.js";
 import { nextPixelRatioCap, PIXEL_RATIO_FALLBACK_SAMPLES } from "../../game/viewport.js";
 import type { SpaceshipRuntime } from "../../game/SpaceshipRuntime.js";
-import type { PredictionDriver } from "../../model/shipPrediction.js";
+import type { DriverShellClock, PredictionDriver } from "../../model/shipPrediction.js";
 import {
   findNearestVisibleDemoTarget,
   findNearestVisibleDemoThreat
@@ -70,6 +70,8 @@ interface SpaceshipCanvasProps {
 }
 
 /** Twice a second: faster than this and the digits blur into noise. */
+/** What the scene hears when no driver is set: no own hull, no room clock. */
+const NO_SHELL_CLOCK: DriverShellClock = { own: undefined, room: undefined };
 const FPS_SAMPLE_INTERVAL_MS = 500;
 /** Long enough for the hull's own explosion to play out before the scene rests. */
 const RESULT_REST_DELAY_MS = 2_500;
@@ -192,7 +194,8 @@ export function SpaceshipCanvas({
             drive: () => latestPrediction.current?.drive(),
             bind: (entityId, kind) => latestPrediction.current?.bind(entityId, kind),
             read: (entity) => latestPrediction.current?.read(entity),
-            angleOf: (entity, field) => latestPrediction.current?.angleOf(entity, field) ?? 0
+            angleOf: (entity, field) => latestPrediction.current?.angleOf(entity, field) ?? 0,
+            readShellClock: () => latestPrediction.current?.readShellClock() ?? NO_SHELL_CLOCK
           });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;

@@ -97,6 +97,8 @@ export interface LocalRun {
   readonly state: () => SpaceshipSimulationState;
   /** The hull as the scene draws it this frame, read straight off the run. */
   readonly pose: () => PredictedPoseFrame;
+  /** The step that pose belongs to; the clock the page's own shells are born on. */
+  readonly tick: () => number;
   /** Over: nothing moves until a restart. */
   readonly settled: () => boolean;
 }
@@ -196,6 +198,7 @@ export function createLocalRun(options: LocalRunOptions): LocalRun {
     config,
     state: () => game,
     pose: () => poseOf(game),
+    tick: () => game.clock.tick,
     settled: () => game.outcome !== null,
 
     step(intent) {

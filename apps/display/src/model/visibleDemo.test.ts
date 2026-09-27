@@ -94,7 +94,12 @@ describe("visible demo helpers", () => {
         enemyShips: [],
         asteroids: [],
         hostileProjectiles: [
-          { ...moving("bullet-off-screen", 1, 2200, 2660), kind: "hostile", visual: null }
+          {
+            ...moving("bullet-off-screen", 1, 2200, 2660),
+            kind: "hostile",
+            spawnTick: 0,
+            visual: null
+          }
         ],
         homingMissiles: [missile("missile-on-screen", 2, 2900, 2200)]
       })
@@ -107,7 +112,9 @@ describe("visible demo helpers", () => {
       spaceship: { x: 100, y: 100 },
       enemyShips: [enemy("enemy", 1, 200, 100)],
       asteroids: [],
-      hostileProjectiles: [{ ...moving("bullet", 2, 110, 100), kind: "hostile", visual: null }],
+      hostileProjectiles: [
+        { ...moving("bullet", 2, 110, 100), kind: "hostile", spawnTick: 0, visual: null }
+      ],
       homingMissiles: []
     });
 
@@ -252,7 +259,12 @@ describe("visible demo world picture", () => {
 });
 
 function projectile(entityId: string, spawnSequence: number, x: number, y: number) {
-  return { ...moving(entityId, spawnSequence, x, y), kind: "hostile" as const, visual: null };
+  return {
+    ...moving(entityId, spawnSequence, x, y),
+    kind: "hostile" as const,
+    spawnTick: 0,
+    visual: null
+  };
 }
 
 function worldGame(overrides: Record<string, unknown> = {}) {

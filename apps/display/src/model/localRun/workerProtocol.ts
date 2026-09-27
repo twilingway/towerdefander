@@ -41,7 +41,7 @@ export type ToRunWorker =
 
 export type FromRunWorker =
   /** After every step batch: where the hull is, for the frame about to be drawn. */
-  | { readonly type: "pose"; readonly pose: PredictedPoseFrame }
+  | { readonly type: "pose"; readonly pose: PredictedPoseFrame; readonly tick: number }
   /** At the patch rate: the whole frame, already adapted and checked. */
   | { readonly type: "view"; readonly view: DisplayRoomView }
   /** Anything thrown inside the worker, said out loud on the page. */

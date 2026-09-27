@@ -176,6 +176,7 @@ describe("display room view", () => {
             {
               entityId: "projectile-0",
               spawnSequence: 3,
+              spawnTick: 0,
               kind: "friendly",
               x: 2300,
               y: 2200,
@@ -187,6 +188,7 @@ describe("display room view", () => {
             {
               entityId: "projectile-1",
               spawnSequence: 4,
+              spawnTick: 0,
               kind: "friendly",
               x: 2350,
               y: 2200,
@@ -200,6 +202,7 @@ describe("display room view", () => {
             {
               entityId: "hostile-0",
               spawnSequence: 5,
+              spawnTick: 0,
               kind: "hostile",
               x: 2100,
               y: 2200,
