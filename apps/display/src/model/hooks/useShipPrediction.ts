@@ -495,6 +495,19 @@ export function useShipPrediction<
        */
       // Reused every frame, like the placements above.
       const roomClocks = { present: 0, world: 0, sampleTick: 0 };
+      /*
+       * Which tick the room was on at server time zero, filtered.
+       *
+       * A patch is stamped when it is encoded, and the tick it carries was
+       * stepped up to a step before that - the patch timer and the fixed step
+       * are not in phase. Anchoring the clocks on each patch's own pair moved
+       * them by up to a step every patch, which drew a settled shell at 0.56 to
+       * 1.2 of its speed over fifty-millisecond windows. The stamp is never
+       * earlier than the step, so the largest anchor seen is the truest; it is
+       * let slip slowly so a room whose steps fall behind its clock is followed.
+       */
+      let tickAnchor: number | undefined;
+      let anchorAt = 0;
       const shellClock: { own: number | undefined; room: typeof roomClocks | undefined } = {
         own: undefined,
         room: undefined
@@ -508,9 +521,19 @@ export function useShipPrediction<
           shellClock.room = undefined;
           return shellClock;
         }
+        const now = performance.now();
+        const sampled = decodedTick - stamp / STEP_MS;
+        const slipped =
+          tickAnchor === undefined
+            ? sampled
+            : tickAnchor - (ANCHOR_SLIP_TICKS_PER_SECOND * (now - anchorAt)) / 1000;
+        // A reconnect restarts the room's clock; follow it rather than wait.
+        tickAnchor =
+          Math.abs(sampled - slipped) > ANCHOR_RESET_TICKS ? sampled : Math.max(sampled, slipped);
+        anchorAt = now;
         const worldMs = clock.serverNow() - publishedDelayMs - clock.smoothedRtt() / 2;
-        roomClocks.present = decodedTick + (clock.renderNow() - stamp) / STEP_MS;
-        roomClocks.world = decodedTick + (worldMs - stamp) / STEP_MS;
+        roomClocks.present = tickAnchor + clock.renderNow() / STEP_MS;
+        roomClocks.world = tickAnchor + worldMs / STEP_MS;
         roomClocks.sampleTick = decodedTick;
         shellClock.room = roomClocks;
         return shellClock;
@@ -535,6 +558,10 @@ export function useShipPrediction<
       const STALE_DRIVE_MS = 40;
       /** The room's step, which is also the step the predictor's accumulator counts in. */
       const STEP_MS = 1000 / SIMULATION_TICK_RATE;
+      /** How fast the tick anchor may fall behind its best sample. */
+      const ANCHOR_SLIP_TICKS_PER_SECOND = 0.5;
+      /** A disagreement this large is a restarted clock, not jitter. */
+      const ANCHOR_RESET_TICKS = 30;
       /** Growth is an emergency: the stream already arrived later than the buffer. */
       const DELAY_GROW_MS = 6;
       /** Giving it back is not, so it takes a step nobody can mistake for jitter. */
