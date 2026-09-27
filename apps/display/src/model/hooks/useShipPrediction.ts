@@ -1,4 +1,7 @@
-import { createSpaceshipSimulationConfig } from "@spaceship-defender/game-core";
+import {
+  createSpaceshipSimulationConfig,
+  SIMULATION_TICK_RATE
+} from "@spaceship-defender/game-core";
 import { Predict, type Room } from "@colyseus/sdk";
 import { SoloInput } from "@spaceship-defender/protocol";
 import { useEffect, useRef } from "react";
@@ -16,6 +19,7 @@ import {
   type LiveEntityKind,
   type LivePlacement,
   type PredictedInputFrame,
+  type DriverShellClock,
   type PredictedPoseFrame,
   type PredictionDriver
 } from "../shipPrediction.js";
@@ -67,7 +71,9 @@ export interface PredictionWorld {
 }
 
 export function useShipPrediction<
-  TState extends { game?: { display?: DecodedDisplay | undefined } | undefined }
+  TState extends {
+    game?: { tick?: number; display?: DecodedDisplay | undefined } | undefined;
+  }
 >({
   room,
   enabled,
@@ -301,30 +307,7 @@ export function useShipPrediction<
         predict.attachAll(collections, "lootDrops", {
           mode: "lerp",
           fields: ["x", "y"]
-        }),
-        /*
-         * Shells are dead reckoned, and they are the only thing here that earns
-         * it. An interpolated entity is drawn between the two newest snapshots,
-         * which is to say in the past: at a hundred-millisecond buffer and a
-         * thousand units a second, a shell was drawn a hundred units behind
-         * where the room had it, which is what "the bullets come out of the
-         * wrong place" was. A shell has no driver - constant velocity along a
-         * fixed bearing, both already on the wire - so carrying it to server
-         * present is arithmetic rather than a guess. Smoothing stays off: a
-         * constant-step projectile rebases exactly, and easing it would put back
-         * the very lag this removes.
-         */
-        ...(["friendlyProjectiles", "hostileProjectiles"] as const).map((key) =>
-          predict.attachAll(collections, key, {
-            mode: "reckon",
-            fields: ["x", "y"],
-            step: (shell: DecodedEntity & { x: number; y: number }, dt: number) => {
-              shell.x += shell.velocityX * dt;
-              shell.y += shell.velocityY * dt;
-            },
-            smoothMs: 0
-          })
-        )
+        })
       ];
 
       const bind = (entityId: string, kind: LiveEntityKind): LiveEntity | undefined => {
@@ -358,8 +341,15 @@ export function useShipPrediction<
       } as PredictedPoseFrame;
       const read = (entity: LiveEntity): LivePlacement => {
         const ref = entity.ref as DecodedEntity;
-        placement.x = predict.value(ref, "x");
-        placement.y = predict.value(ref, "y");
+        /*
+         * A shell is read raw: the decoded place at the decoded tick. The scene
+         * carries it to whichever clock its shooter is drawn on (`shellClock.ts`),
+         * and that needs the sample itself rather than one already carried to
+         * the room's present.
+         */
+        const raw = entity.kind === "projectile";
+        placement.x = raw ? ref.x : predict.value(ref, "x");
+        placement.y = raw ? ref.y : predict.value(ref, "y");
         // A shell publishes no bearing because it does not need one: it points
         // where it is going, and that never changes while it flies.
         placement.rotation = LIVE_KINDS_WITH_HEADING.has(entity.kind)
@@ -402,9 +392,24 @@ export function useShipPrediction<
 
       let seq = 0;
       let lastDrivenAt = 0;
+      /*
+       * The step leftover the reconciler draws the hull with, mirrored.
+       *
+       * The drawn pose is the state before the newest sent frame, eased toward
+       * it by this fraction of a step - so the tick the hull is drawn at is the
+       * decoded tick plus the frames still in flight, less one, plus this. The
+       * SDK keeps the fraction private; the rule it follows is the fixed-step
+       * accumulator's, fed the same timestamps, so it is kept here beside it.
+       */
+      let stepCarry = 0;
+      let drawnOwn: number | undefined;
       const drive = (): PredictedPoseFrame | undefined => {
-        lastDrivenAt = performance.now();
-        const steps = predict.tick();
+        const now = performance.now();
+        if (lastDrivenAt > 0) stepCarry += now - lastDrivenAt;
+        lastDrivenAt = now;
+        const steps = predict.tick(now);
+        stepCarry = steps >= MAX_STEPS_PER_FRAME ? 0 : Math.max(0, stepCarry - steps * STEP_MS);
+        drawnOwn = undefined;
         const { source: live, enabled: on, predicting, world } = latest.current;
         for (let step = 0; step < steps; step += 1) {
           if (!on) break;
@@ -462,6 +467,11 @@ export function useShipPrediction<
         // pose spread into a new object every frame is a pose allocated sixty
         // times a second to be read once.
         const state = reconciler.state as PredictedPoseFrame;
+        const decodedTick = room.state.game?.tick;
+        drawnOwn =
+          decodedTick === undefined
+            ? undefined
+            : decodedTick + input.pendingCount - 1 + Math.min(1, stepCarry / STEP_MS);
         drawnPose.x = reconciler.value("x");
         drawnPose.y = reconciler.value("y");
         drawnPose.heading = state.heading;
@@ -472,7 +482,30 @@ export function useShipPrediction<
       };
       const angleOf = (entity: LiveEntity, field: string): number =>
         predict.value(entity.ref as DecodedHull, field as "heading");
-      latest.current.onDriver({ drive, bind, read, angleOf });
+      /*
+       * The room's clocks in ticks, anchored on the decoded tick at the moment
+       * of the newest patch. `present` is the instant the SDK reckons to (its
+       * render timeline); `world` is exactly where its interpolation samples -
+       * `serverNow - delay - rtt/2` - so a shell born on it leaves the hull the
+       * library just drew.
+       */
+      const readShellClock = (): DriverShellClock => {
+        const clock = room.clock;
+        const stamp = clock.lastServerTime();
+        const decodedTick = room.state.game?.tick;
+        if (stamp <= 0 || decodedTick === undefined) return { own: drawnOwn, room: undefined };
+        const presentMs = clock.renderNow();
+        const worldMs = clock.serverNow() - publishedDelayMs - clock.smoothedRtt() / 2;
+        return {
+          own: drawnOwn,
+          room: {
+            present: decodedTick + (presentMs - stamp) / STEP_MS,
+            world: decodedTick + (worldMs - stamp) / STEP_MS,
+            sampleTick: decodedTick
+          }
+        };
+      };
+      latest.current.onDriver({ drive, bind, read, angleOf, readShellClock });
 
       /*
        * A driver of last resort, for the seconds before there is a scene.
@@ -490,6 +523,10 @@ export function useShipPrediction<
        * would be one input frame too many.
        */
       const STALE_DRIVE_MS = 40;
+      /** The room's step, which is also the step the predictor's accumulator counts in. */
+      const STEP_MS = 1000 / SIMULATION_TICK_RATE;
+      /** The predictor's own cap on steps a frame; past it the leftover is dropped. */
+      const MAX_STEPS_PER_FRAME = 5;
       /** Growth is an emergency: the stream already arrived later than the buffer. */
       const DELAY_GROW_MS = 6;
       /** Giving it back is not, so it takes a step nobody can mistake for jitter. */

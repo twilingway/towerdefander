@@ -21,6 +21,8 @@ import { sceneAudioFor, type SceneAudio } from "./sceneAudio.js";
 import { ShieldLayer } from "./shield.js";
 import { BurstLayer, placeOwnShots, type OwnShot } from "./bursts.js";
 import { ExhaustLayer } from "./exhaust.js";
+import { createShellProbe, probeFrame } from "./shellProbe.js";
+import { placeShell, type ShellClocks } from "./shellClock.js";
 import {
   DEFAULT_SPACESHIP_HULL_ASSET_ID,
   drawSpaceshipHull,
@@ -75,6 +77,11 @@ export class SpaceshipScene extends Phaser.Scene {
   private readonly frames = new FrameMeter();
   private readonly snapshotReset = new SnapshotResetLatch();
   private readonly combatVisuals = new Map<string, CombatVisual>();
+  /** What was drawn, for a browser spec to measure; undefined unless `?diag=1`. */
+  private readonly shellProbe = createShellProbe(
+    globalThis.location.search,
+    1000 / SIMULATION_TICK_RATE
+  );
   /** Off makes the layers invisible and stops their per-frame arithmetic. */
   /**
    * The prototype's picture instead of ours; see `readTankLook`. Read once at
@@ -387,20 +394,24 @@ export class SpaceshipScene extends Phaser.Scene {
     );
 
     /*
-     * How far behind the newest snapshot playback is meant to run, in seconds.
-     * Shells are carried forward by exactly this much - to server present,
-     * never past it, so nothing is invented.
+     * The three clocks a shell can be drawn on this frame; see `shellClock.ts`.
      *
-     * The lag the clock decided on rather than the gap this frame happens to
-     * show. The newest tick arrives two at a time thirty times a second while
-     * playback advances every frame, so the instantaneous difference sawtooths
-     * between a patch and the next: subtracting it from a shell that is already
-     * being interpolated forward cancels most of the motion and then returns it
-     * in a lurch. Measured on the stand, a shell drawn from the raw difference
-     * stepped 4 to 6 units a frame and then 20 or 30, at 2.21 times the spread
-     * of its own interpolated track.
+     * A cockpit on a room reports the room's own: the present its shells
+     * settle on, and the instant the library draws the world at. A device run
+     * reports only the step its hull is drawn on, which is also the freshest
+     * state there is - no round trip stands between it and the simulation - so
+     * its shells settle there. A shared screen reports nothing and draws
+     * everything, its own ship included, on the playback clock, so its shells
+     * are born and stay there.
      */
-    const behindSeconds = (this.playback.lagTicks * this.playback.msPerTick) / 1000;
+    const reported = this.prediction?.readShellClock();
+    const ownTick = reported?.own ?? playbackTick;
+    const room = reported?.room;
+    const shellClocks: ShellClocks =
+      room === undefined
+        ? { present: ownTick, world: playbackTick, own: ownTick }
+        : { present: room.present, world: room.world, own: ownTick };
+    const elapsedTicks = deltaMs / (1000 / SIMULATION_TICK_RATE);
     let liveDrawn = 0;
     let offscreen = 0;
     const camera = this.cameras.main;
@@ -424,6 +435,21 @@ export class SpaceshipScene extends Phaser.Scene {
           ? undefined
           : visual.spin.phase + visual.spin.rate * (playbackTick / SIMULATION_TICK_RATE);
       const live = visual.live === undefined ? undefined : this.prediction?.read(visual.live);
+      if (visual.shell !== undefined) {
+        // Bound, a shell is read raw off the decoded state at the decoded tick;
+        // otherwise from the newest sample its track holds.
+        const bound = live !== undefined && room !== undefined;
+        if (bound) liveDrawn += 1;
+        placeShell(
+          visual,
+          visual.shell,
+          bound ? live : visual.position.current.to,
+          bound ? room.sampleTick : visual.position.current.toTick,
+          shellClocks,
+          elapsedTicks
+        );
+        continue;
+      }
       if (live !== undefined) {
         liveDrawn += 1;
         visual.object.setPosition(live.x, live.y);
@@ -432,14 +458,7 @@ export class SpaceshipScene extends Phaser.Scene {
         continue;
       }
       const sampled = samplePointTrack(visual.position, playbackTick);
-      const carried =
-        visual.velocity === undefined || behindSeconds === 0
-          ? sampled
-          : {
-              x: sampled.x + visual.velocity.x * behindSeconds,
-              y: sampled.y + visual.velocity.y * behindSeconds
-            };
-      visual.object.setPosition(carried.x, carried.y);
+      visual.object.setPosition(sampled.x, sampled.y);
       visual.object.rotation = spinAngle ?? sampleAngleTrack(visual.angle, playbackTick);
       // Keep the bar level while the hull it belongs to turns.
       if (visual.healthBar !== undefined) visual.healthBar.rotation = -visual.object.rotation;
@@ -449,6 +468,25 @@ export class SpaceshipScene extends Phaser.Scene {
       if (x < viewLeft || x > viewRight || y < viewTop || y > viewBottom) offscreen += 1;
     }
     this.frames.recordDrawn(liveDrawn, offscreen);
+    const turretRotation = this.turret.rotation;
+    this.shellProbe?.record(() =>
+      probeFrame(
+        time,
+        {
+          x: spaceshipPosition.x,
+          y: spaceshipPosition.y,
+          heading: spaceshipHeading,
+          mountX: mount.x,
+          mountY: mount.y,
+          turretRotation,
+          hullRadius: this.snapshot.spaceship.radius
+        },
+        this.combatVisuals,
+        (into) => {
+          this.fleet.appendDrawnHulls(into);
+        }
+      )
+    );
   }
 
   /** The scene's own stopwatch, for whoever publishes its numbers. */

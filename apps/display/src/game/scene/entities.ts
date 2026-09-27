@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
 import type {
   DisplayGameSnapshot,
   PublicAsteroidView,
@@ -8,11 +9,17 @@ import type {
   PublicProjectileView
 } from "@spaceship-defender/protocol";
 
-import type { LiveEntity, LiveEntityKind, LivePlacement } from "../../model/shipPrediction.js";
+import type {
+  DriverShellClock,
+  LiveEntity,
+  LiveEntityKind,
+  LivePlacement
+} from "../../model/shipPrediction.js";
 import { deathEffectFor, mayPlayHitEffect, type BurstLayer, type OwnShot } from "./bursts.js";
 import { deathSoundFor, shotSoundFor, type SceneAudio } from "./sceneAudio.js";
 import { reconcileStableIds } from "../spaceshipViewModel.js";
 import { resolveShieldImpact, SHIELD_BLOCK_EFFECT, type ShieldPose } from "./shieldImpact.js";
+import { createShellClockState, type ShellClockState } from "./shellClock.js";
 import {
   createAngleTrack,
   createPointTrack,
@@ -241,6 +248,7 @@ export function createCombatVisual(
 }
 
 export interface CombatVisual {
+  readonly kind: CombatEntity["visualKind"];
   readonly object: Phaser.GameObjects.Container;
   readonly healthBar: Phaser.GameObjects.Container | undefined;
   /**
@@ -267,6 +275,8 @@ export interface CombatVisual {
    * reads exactly as bullets coming out of nowhere.
    */
   velocity: { readonly x: number; readonly y: number } | undefined;
+  /** A shell's fixed facts, resolved once when the sprite is made; nothing else has any. */
+  readonly shell: ShellTrace | undefined;
   /**
    * How a rock tumbles, from its id; only asteroids carry one. The simulation
    * never turns a rock, so its heading track would hold it frozen along its
@@ -311,6 +321,36 @@ export interface CombatVisual {
   drawnShots: number;
   /** When the hit effect last played, so a beam cannot strobe the hull. */
   hitEffectTick: number | undefined;
+}
+
+/**
+ * What a shell is for the rest of its life: whose it is, when it was born and
+ * where. A shell flies straight at a constant speed, so one authoritative sample
+ * carried back along its velocity is its birth point exactly.
+ */
+export interface ShellTrace {
+  /** Fired by the hull this page draws as its own - the crew's ship, or the seat's. */
+  readonly own: boolean;
+  readonly source: string;
+  readonly spawnTick: number;
+  readonly birthX: number;
+  readonly birthY: number;
+  /** Which clock it is drawn on this frame; see `shellClock.ts`. */
+  readonly clock: ShellClockState;
+}
+
+function traceShell(entity: CombatEntity, tick: number, snap: boolean): ShellTrace | undefined {
+  if (entity.visualKind !== "projectile") return undefined;
+  const back = (tick - entity.spawnTick) / SIMULATION_TICK_RATE;
+  return {
+    own: entity.kind === "friendly",
+    source: entity.source ?? "",
+    spawnTick: entity.spawnTick,
+    birthX: entity.x - entity.velocityX * back,
+    birthY: entity.y - entity.velocityY * back,
+    // A hydration finds shells already in the air: they were never seen firing.
+    clock: createShellClockState(snap)
+  };
 }
 
 /**
@@ -440,6 +480,7 @@ export function reconcileCombatVisuals({
       created.object.setPosition(entity.x, entity.y);
       created.object.rotation = heading;
       visuals.set(entityId, {
+        kind: entity.visualKind,
         object: created.object,
         healthBar: created.healthBar,
         live: prediction?.bind(entityId, entity.visualKind),
@@ -449,6 +490,7 @@ export function reconcileCombatVisuals({
         position: createPointTrack(entity, toTick),
         angle: createAngleTrack(heading, toTick),
         velocity: reckonableVelocity(entity),
+        shell: traceShell(entity, toTick, snap),
         spin: entity.visualKind === "asteroid" ? asteroidSpinFor(entity.entityId) : undefined,
         deathEffect: deathEffectFor(
           entity.visualKind,
@@ -607,6 +649,8 @@ export interface ScenePrediction {
    * against the ship it is drawn on.
    */
   angleOf(entity: LiveEntity, field: string): number;
+  /** The clocks shells are drawn against this frame; read after `drive`. */
+  readShellClock(): DriverShellClock;
 }
 
 /**

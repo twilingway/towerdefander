@@ -36,9 +36,11 @@ export function createLocalDriver({
   onStepped,
   paused
 }: LocalDriverOptions): PredictionDriver {
+  let drawnTick: number | undefined;
   return {
     drive(): PredictedPoseFrame | undefined {
       const now = performance.now();
+      drawnTick = undefined;
       if (paused()) {
         // Not a step of zero: the gap has to be forgotten, or coming back would
         // spend it as a burst of catch-up.
@@ -63,12 +65,16 @@ export function createLocalDriver({
        * judder, and it is worst exactly where the eye tracks the hull against
        * something else: reversing, or holding an angle while firing sideways.
        */
+      drawnTick = run.tick();
       return run.pose();
     },
 
     bind: () => undefined,
     read: () => ({ x: 0, y: 0, rotation: 0 }),
-    angleOf: () => 0
+    angleOf: () => 0,
+    // The hull is drawn on the run's newest step, whole; the world the scene
+    // plays back itself, so there is no room clock to report.
+    readShellClock: () => ({ own: drawnTick, room: undefined })
   };
 }
 
@@ -103,18 +109,25 @@ export function createRemoteDriver({
   sendIntent,
   paused
 }: {
-  readonly latestPose: () => PredictedPoseFrame | undefined;
+  /** The last pose the worker posted, with the step it belongs to. */
+  readonly latestPose: () =>
+    { readonly pose: PredictedPoseFrame; readonly tick: number } | undefined;
   readonly sendIntent: () => void;
   readonly paused: () => boolean;
 }): PredictionDriver {
+  let drawnTick: number | undefined;
   return {
     drive(): PredictedPoseFrame | undefined {
+      drawnTick = undefined;
       if (paused()) return undefined;
       sendIntent();
-      return latestPose();
+      const latest = latestPose();
+      drawnTick = latest?.tick;
+      return latest?.pose;
     },
     bind: () => undefined,
     read: () => ({ x: 0, y: 0, rotation: 0 }),
-    angleOf: () => 0
+    angleOf: () => 0,
+    readShellClock: () => ({ own: drawnTick, room: undefined })
   };
 }

@@ -44,6 +44,8 @@ export interface LocalArena {
   readonly restart: () => void;
   /** The player's hull as the scene draws it this frame. */
   readonly pose: () => PredictedPoseFrame;
+  /** The step that pose belongs to; the clock the page's own shells are born on. */
+  readonly tick: () => number;
   /** Over for the player: shot down, or the match decided. Nothing moves after. */
   readonly settled: () => boolean;
 }
@@ -138,6 +140,8 @@ export function createLocalArena(options: LocalArenaOptions): LocalArena {
       run.restart();
       start();
     },
+
+    tick: () => run.state().clock.tick,
 
     pose() {
       const hull = player();

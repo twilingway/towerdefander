@@ -192,7 +192,9 @@ export function SpaceshipCanvas({
             drive: () => latestPrediction.current?.drive(),
             bind: (entityId, kind) => latestPrediction.current?.bind(entityId, kind),
             read: (entity) => latestPrediction.current?.read(entity),
-            angleOf: (entity, field) => latestPrediction.current?.angleOf(entity, field) ?? 0
+            angleOf: (entity, field) => latestPrediction.current?.angleOf(entity, field) ?? 0,
+            readShellClock: () =>
+              latestPrediction.current?.readShellClock() ?? { own: undefined, room: undefined }
           });
           lastRuntimeTickReference.current = latestGame.current.tick;
           lastRuntimeCameraViewWidthReference.current = latestGame.current.cameraViewWidth;
