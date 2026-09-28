@@ -2,8 +2,8 @@ import {
   createSpaceshipSimulationConfig,
   SIMULATION_TICK_RATE
 } from "@spaceship-defender/game-core";
-import { Predict, type Room } from "@colyseus/sdk";
-import { SoloInput } from "@spaceship-defender/protocol";
+import { Predict, type Room, type RoomClockLike } from "@colyseus/sdk";
+import { PATCH_INTERVAL_MS, SoloInput } from "@spaceship-defender/protocol";
 import { useEffect, useRef } from "react";
 
 import {
@@ -182,6 +182,112 @@ export function useShipPrediction<
           delay: publishedDelayMs
         }
       );
+
+      /*
+       * Which tick the room was on at server time zero, filtered.
+       *
+       * A patch is stamped when it is encoded, and the tick it carries was
+       * stepped up to a step before that - the patch timer and the fixed step
+       * are not in phase. Anchoring the clocks on each patch's own pair moved
+       * them by up to a step every patch, which drew a settled shell at 0.56 to
+       * 1.2 of its speed over fifty-millisecond windows. The stamp is never
+       * earlier than the step, so the largest anchor seen is the truest.
+       *
+       * Largest over the last second of patches rather than ever: a room that
+       * stalls longer than its step loop will catch up drops the rest, and its
+       * ticks then lag its clock for good. An all-time maximum let down by half
+       * a tick a second took a quarter of a minute to follow a 200 ms stall,
+       * and the world drawn on it ran past its newest sample all that time.
+       *
+       * Read by the shell clocks every frame and by the world clock below on
+       * every decoded sample, so both put a tick at the same instant; worked
+       * out once per patch, since the SDK asks on every read.
+       */
+      /** The room's step, which is also the step the predictor's accumulator counts in. */
+      const STEP_MS = 1000 / SIMULATION_TICK_RATE;
+      /** How far back, in server milliseconds, a patch still votes on the anchor. */
+      const ANCHOR_WINDOW_MS = 1_000;
+      /** A disagreement this large is a restarted clock, not jitter. */
+      const ANCHOR_RESET_TICKS = 30;
+      /** What the world clock advertises as the patch interval; see `worldClock`. */
+      const WORLD_PATCH_INTERVAL_MS = 2 * PATCH_INTERVAL_MS;
+      const anchorVotes: { stamp: number; anchor: number }[] = [];
+      let tickAnchor: number | undefined;
+      let anchorStamp = 0;
+      let anchorTick: number | undefined;
+      const readTickAnchor = (): number | undefined => {
+        const stamp = room.clock.lastServerTime();
+        const decodedTick = room.state.game?.tick;
+        if (stamp <= 0 || decodedTick === undefined) return undefined;
+        if (stamp === anchorStamp && decodedTick === anchorTick) return tickAnchor;
+        anchorStamp = stamp;
+        anchorTick = decodedTick;
+        const sampled = decodedTick - stamp / STEP_MS;
+        // A reconnect restarts the room's clock; follow it rather than wait.
+        if (tickAnchor !== undefined && Math.abs(sampled - tickAnchor) > ANCHOR_RESET_TICKS) {
+          anchorVotes.length = 0;
+        }
+        anchorVotes.push({ stamp, anchor: sampled });
+        while ((anchorVotes[0]?.stamp ?? stamp) < stamp - ANCHOR_WINDOW_MS) anchorVotes.shift();
+        tickAnchor = sampled;
+        for (const vote of anchorVotes) tickAnchor = Math.max(tickAnchor, vote.anchor);
+        return tickAnchor;
+      };
+
+      /*
+       * The clock the interpolated world is sampled on: the room's, except
+       * that a sample is stamped with the instant of its tick.
+       *
+       * The SDK stamps every sample with the patch's encode time, which lags
+       * the tick the patch carries by anything up to a step at a random phase,
+       * so samples sat unevenly in time and the drawn speed changed at each
+       * one. Worse, it treats a gap longer than one and a half patches as a
+       * field that stopped changing and holds the entity through it - and the
+       * patch timer and the step timer beat against each other, so an ordinary
+       * patch carrying three or four ticks arrives fifty to sixty-seven
+       * milliseconds after the last one and froze a flying hull for up to two
+       * frames of a 60 Hz panel. Advertising two patch intervals puts that
+       * rule at a hundred milliseconds: six ticks, past any ordinary patch,
+       * short of any stop worth drawing as a stop.
+       *
+       * The playback delay rides on `serverNow` rather than on the predictor's
+       * `delay`: `attachAll` copies the delay into each group's own profile
+       * when it attaches, and `setDefaults` never reaches those, so the world
+       * was drawn on the first guess of the buffer for the whole fight while
+       * the shells followed the measured one. The groups attach with no delay
+       * and this clock is simply that far in the past.
+       *
+       * The target the SDK interpolates at, `serverNow - delay - rtt/2`, is
+       * then exactly the shells' world tick, so a shell still leaves the hull
+       * drawn firing it. The own ship keeps the room's clock: its reconciler
+       * works on acknowledgements, not on samples.
+       */
+      const worldClock: RoomClockLike = {
+        now: () => room.clock.now(),
+        serverNow: () => room.clock.serverNow() - publishedDelayMs,
+        renderNow: () => room.clock.renderNow(),
+        rtt: () => room.clock.rtt(),
+        smoothedRtt: () => room.clock.smoothedRtt(),
+        jitter: () => room.clock.jitter(),
+        lastServerTime: () => {
+          const anchor = readTickAnchor();
+          const decodedTick = room.state.game?.tick;
+          return anchor === undefined || decodedTick === undefined
+            ? 0
+            : (decodedTick - anchor) * STEP_MS;
+        },
+        patchInterval: () => WORLD_PATCH_INTERVAL_MS,
+        // The room feeds its own clock; this one only reads it.
+        sample: () => undefined
+      };
+      const world: PredictHandle = Predict.get(
+        room as unknown as Parameters<typeof Predict.get>[0],
+        {
+          mode: "lerp",
+          delay: 0,
+          clock: worldClock
+        }
+      );
       /*
        * Grown at once, given back slowly, and never for a small amount.
        *
@@ -215,6 +321,8 @@ export function useShipPrediction<
           return;
         }
         publishedDelayMs = wanted;
+        // The world reads `publishedDelayMs` through its clock; this is for the
+        // input's lag compensation, bound to the reconciler's predictor.
         predict.setDefaults({ delay: wanted });
         latest.current.onDelay?.(wanted, delayEstimate.intervalMs);
       };
@@ -260,16 +368,16 @@ export function useShipPrediction<
        */
       const collections = display as unknown as Record<string, never>;
       const detachers = [
-        predict.attachAll(collections, "enemyShips", {
+        world.attachAll(collections, "enemyShips", {
           mode: "lerp",
           fields: ["x", "y"]
         }),
-        predict.attachAll(collections, "enemyShips", {
+        world.attachAll(collections, "enemyShips", {
           mode: "lerp",
           fields: ["heading"],
           angle: true
         }),
-        predict.attachAll(collections, "homingMissiles", {
+        world.attachAll(collections, "homingMissiles", {
           mode: "lerp",
           fields: ["x", "y"]
         }),
@@ -281,16 +389,16 @@ export function useShipPrediction<
          * a match draws all three and each has to ride the same clock as the
          * position or it twitches against it.
          */
-        predict.attachAll(collections, "arenaShips", {
+        world.attachAll(collections, "arenaShips", {
           mode: "lerp",
           fields: ["x", "y"]
         }),
-        predict.attachAll(collections, "arenaShips", {
+        world.attachAll(collections, "arenaShips", {
           mode: "lerp",
           fields: ["heading", "turretAngle", "shieldAngle"],
           angle: true
         }),
-        predict.attachAll(collections, "homingMissiles", {
+        world.attachAll(collections, "homingMissiles", {
           mode: "lerp",
           fields: ["heading"],
           angle: true
@@ -300,11 +408,11 @@ export function useShipPrediction<
          * they bounce off the hull and off each other, so they are interpolated
          * like anything whose next move is not ours to know.
          */
-        predict.attachAll(collections, "asteroids", {
+        world.attachAll(collections, "asteroids", {
           mode: "lerp",
           fields: ["x", "y"]
         }),
-        predict.attachAll(collections, "lootDrops", {
+        world.attachAll(collections, "lootDrops", {
           mode: "lerp",
           fields: ["x", "y"]
         })
@@ -348,12 +456,12 @@ export function useShipPrediction<
          * the room's present.
          */
         const raw = entity.kind === "projectile";
-        placement.x = raw ? ref.x : predict.value(ref, "x");
-        placement.y = raw ? ref.y : predict.value(ref, "y");
+        placement.x = raw ? ref.x : world.value(ref, "x");
+        placement.y = raw ? ref.y : world.value(ref, "y");
         // A shell publishes no bearing because it does not need one: it points
         // where it is going, and that never changes while it flies.
         placement.rotation = LIVE_KINDS_WITH_HEADING.has(entity.kind)
-          ? predict.value(ref as DecodedHull, "heading")
+          ? world.value(ref as DecodedHull, "heading")
           : Math.atan2(ref.velocityY, ref.velocityX);
         return placement;
       };
@@ -485,7 +593,7 @@ export function useShipPrediction<
         return drawnPose;
       };
       const angleOf = (entity: LiveEntity, field: string): number =>
-        predict.value(entity.ref as DecodedHull, field as "heading");
+        world.value(entity.ref as DecodedHull, field as "heading");
       /*
        * The room's clocks in ticks, anchored on the decoded tick at the moment
        * of the newest patch. `present` is the instant the SDK reckons to (its
@@ -495,45 +603,22 @@ export function useShipPrediction<
        */
       // Reused every frame, like the placements above.
       const roomClocks = { present: 0, world: 0, sampleTick: 0 };
-      /*
-       * Which tick the room was on at server time zero, filtered.
-       *
-       * A patch is stamped when it is encoded, and the tick it carries was
-       * stepped up to a step before that - the patch timer and the fixed step
-       * are not in phase. Anchoring the clocks on each patch's own pair moved
-       * them by up to a step every patch, which drew a settled shell at 0.56 to
-       * 1.2 of its speed over fifty-millisecond windows. The stamp is never
-       * earlier than the step, so the largest anchor seen is the truest; it is
-       * let slip slowly so a room whose steps fall behind its clock is followed.
-       */
-      let tickAnchor: number | undefined;
-      let anchorAt = 0;
       const shellClock: { own: number | undefined; room: typeof roomClocks | undefined } = {
         own: undefined,
         room: undefined
       };
       const readShellClock = (): DriverShellClock => {
         const clock = room.clock;
-        const stamp = clock.lastServerTime();
         const decodedTick = room.state.game?.tick;
+        const anchor = readTickAnchor();
         shellClock.own = drawnOwn;
-        if (stamp <= 0 || decodedTick === undefined) {
+        if (anchor === undefined || decodedTick === undefined) {
           shellClock.room = undefined;
           return shellClock;
         }
-        const now = performance.now();
-        const sampled = decodedTick - stamp / STEP_MS;
-        const slipped =
-          tickAnchor === undefined
-            ? sampled
-            : tickAnchor - (ANCHOR_SLIP_TICKS_PER_SECOND * (now - anchorAt)) / 1000;
-        // A reconnect restarts the room's clock; follow it rather than wait.
-        tickAnchor =
-          Math.abs(sampled - slipped) > ANCHOR_RESET_TICKS ? sampled : Math.max(sampled, slipped);
-        anchorAt = now;
         const worldMs = clock.serverNow() - publishedDelayMs - clock.smoothedRtt() / 2;
-        roomClocks.present = tickAnchor + clock.renderNow() / STEP_MS;
-        roomClocks.world = tickAnchor + worldMs / STEP_MS;
+        roomClocks.present = anchor + clock.renderNow() / STEP_MS;
+        roomClocks.world = anchor + worldMs / STEP_MS;
         roomClocks.sampleTick = decodedTick;
         shellClock.room = roomClocks;
         return shellClock;
@@ -556,12 +641,6 @@ export function useShipPrediction<
        * would be one input frame too many.
        */
       const STALE_DRIVE_MS = 40;
-      /** The room's step, which is also the step the predictor's accumulator counts in. */
-      const STEP_MS = 1000 / SIMULATION_TICK_RATE;
-      /** How fast the tick anchor may fall behind its best sample. */
-      const ANCHOR_SLIP_TICKS_PER_SECOND = 0.5;
-      /** A disagreement this large is a restarted clock, not jitter. */
-      const ANCHOR_RESET_TICKS = 30;
       /** Growth is an emergency: the stream already arrived later than the buffer. */
       const DELAY_GROW_MS = 6;
       /** Giving it back is not, so it takes a step nobody can mistake for jitter. */
@@ -581,6 +660,7 @@ export function useShipPrediction<
         latest.current.onDriver(undefined);
         room.onStateChange.remove(noteArrival);
         for (const detach of detachers) detach();
+        world.dispose();
       };
     }
   }, [room]);
