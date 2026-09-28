@@ -9,8 +9,17 @@
 export interface StepClock {
   /** Whole steps owed for the time since the last call. */
   readonly stepsFor: (now: number) => number;
-  /** Forget the gap: used after a pause, so it is not replayed as a burst. */
+  /**
+   * Forget the gap: used after a pause, so it is not replayed as a burst. The
+   * part of a step already carried is kept, so the drawn hull resumes where it
+   * stood rather than a fraction of a step back.
+   */
   readonly reset: (now: number) => void;
+  /**
+   * How far the newest step is ahead of the last `now`, in steps: the frame is
+   * drawn at the run's tick minus this. See `leadMs`.
+   */
+  readonly ahead: () => number;
 }
 
 /**
@@ -24,9 +33,28 @@ export interface StepClock {
  */
 const MAX_STEPS_PER_FRAME = 5;
 
-export function createStepClock(stepMs: number, maxSteps = MAX_STEPS_PER_FRAME): StepClock {
+export interface StepClockOptions {
+  readonly maxSteps?: number;
+  /**
+   * How far ahead of real time the run is stepped.
+   *
+   * A panel faster than the step draws two or three frames per step, and a hull
+   * drawn on its newest step stands still for those frames and then jumps - the
+   * camera with it, so the whole screen shakes. Drawing it between its two
+   * newest steps needs a step that is not yet due; stepping one step early
+   * gives it one, at the instant the frame is for, so smoothing the hull costs
+   * no input latency. A run in a worker adds the time a step takes to reach
+   * the page.
+   */
+  readonly leadMs?: number;
+}
+
+export function createStepClock(stepMs: number, options: StepClockOptions = {}): StepClock {
+  const maxSteps = options.maxSteps ?? MAX_STEPS_PER_FRAME;
+  const leadMs = options.leadMs ?? 0;
   let last: number | undefined;
-  let carried = 0;
+  // The lead is owed from the start: the first step comes that much early.
+  let carried = leadMs;
 
   return {
     stepsFor(now) {
@@ -48,7 +76,7 @@ export function createStepClock(stepMs: number, maxSteps = MAX_STEPS_PER_FRAME):
     },
     reset(now) {
       last = now;
-      carried = 0;
-    }
+    },
+    ahead: () => (leadMs - carried) / stepMs
   };
 }

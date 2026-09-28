@@ -1,5 +1,9 @@
 import { SIMULATION_TICK_RATE } from "@spaceship-defender/game-core";
-import { PLAYBACK_MAX_LAG_MS, PLAYBACK_MIN_LAG_MS } from "@spaceship-defender/protocol";
+import {
+  PATCH_INTERVAL_MS,
+  PLAYBACK_MAX_LAG_MS,
+  PLAYBACK_MIN_LAG_MS
+} from "@spaceship-defender/protocol";
 
 import { clamp, type Point } from "./spaceshipViewModel.js";
 
@@ -69,48 +73,99 @@ export function createSnappedVisualTransitions(
 }
 
 /**
- * Two contiguous segments rather than one. Playback runs behind the newest
- * tick, and a patch that carried several ticks shortens the segment that
- * follows it, so a single segment leaves playback with nothing to draw and the
- * picture stands still. Keeping the displaced segment covers those excursions.
+ * Contiguous segments back from the newest sample, as far as playback can sit.
+ *
+ * Playback runs behind the newest tick by its lag, and a segment is one
+ * arrival long. At 20 Hz a patch carried one tick and two segments were a
+ * tenth of a second; at 60 Hz a patch carries two ticks, two segments are
+ * about four, and a lag that lateness had grown past that - 60-70 ms was
+ * ordinary on a device run - fell off the back of the track. The hull then
+ * stood on the oldest sample and jumped a segment forward with every arrival.
+ * So the track keeps what the largest lag can reach.
  */
 export interface PointTrack {
   readonly previous: PointTransition;
   readonly current: PointTransition;
+  /** Segments before `previous`, newest first. */
+  readonly older: readonly PointTransition[];
 }
 
 export interface AngleTrack {
   readonly previous: AngleTransition;
   readonly current: AngleTransition;
+  readonly older: readonly AngleTransition[];
 }
+
+/**
+ * How far back a track reaches, in ticks: the largest lag playback aims for,
+ * plus one arrival for the segment playback is still inside when the next one
+ * lands.
+ */
+export const TRACK_HISTORY_TICKS = Math.ceil(
+  (PLAYBACK_MAX_LAG_MS + PATCH_INTERVAL_MS) / (1000 / SIMULATION_TICK_RATE)
+);
 
 export function createPointTrack(value: Point, tick: number): PointTrack {
   const segment = createPointTransition(value, value, tick, tick);
-  return { previous: segment, current: segment };
+  return { previous: segment, current: segment, older: [] };
 }
 
 export function createAngleTrack(value: number, tick: number): AngleTrack {
   const segment = createAngleTransition(value, value, tick, tick);
-  return { previous: segment, current: segment };
+  return { previous: segment, current: segment, older: [] };
 }
 
-/** Adds the newest authoritative sample, displacing the oldest segment. */
+/** Adds the newest authoritative sample, dropping what playback can no longer reach. */
 export function extendPointTrack(track: PointTrack, to: Point, toTick: number): PointTrack {
   return {
     previous: track.current,
-    current: createPointTransition(track.current.to, to, track.current.toTick, toTick)
+    current: createPointTransition(track.current.to, to, track.current.toTick, toTick),
+    older: keptHistory(track.previous, track.older, toTick)
   };
 }
 
 export function extendAngleTrack(track: AngleTrack, to: number, toTick: number): AngleTrack {
   return {
     previous: track.current,
-    current: createAngleTransition(track.current.to, to, track.current.toTick, toTick)
+    current: createAngleTransition(track.current.to, to, track.current.toTick, toTick),
+    older: keptHistory(track.previous, track.older, toTick)
   };
 }
 
+interface Segment {
+  readonly fromTick: number;
+  readonly toTick: number;
+}
+
+function keptHistory<T extends Segment>(
+  displaced: T,
+  older: readonly T[],
+  newestTick: number
+): readonly T[] {
+  const reach = newestTick - TRACK_HISTORY_TICKS;
+  const kept = [displaced];
+  for (const segment of older) {
+    if (segment.toTick <= reach) break;
+    kept.push(segment);
+  }
+  return kept;
+}
+
+/** The segment playback is inside, or the oldest one when it sits behind all of them. */
+function segmentAt<T extends Segment>(
+  track: { readonly previous: T; readonly current: T; readonly older: readonly T[] },
+  playbackTick: number
+): T {
+  if (playbackTick >= track.current.fromTick) return track.current;
+  if (playbackTick >= track.previous.fromTick) return track.previous;
+  for (const segment of track.older) {
+    if (playbackTick >= segment.fromTick) return segment;
+  }
+  return track.older.at(-1) ?? track.previous;
+}
+
 export function samplePointTrack(track: PointTrack, playbackTick: number): Point {
-  const segment = playbackTick < track.current.fromTick ? track.previous : track.current;
+  const segment = segmentAt(track, playbackTick);
   return interpolatePoint(
     segment.from,
     segment.to,
@@ -119,7 +174,7 @@ export function samplePointTrack(track: PointTrack, playbackTick: number): Point
 }
 
 export function sampleAngleTrack(track: AngleTrack, playbackTick: number): number {
-  const segment = playbackTick < track.current.fromTick ? track.previous : track.current;
+  const segment = segmentAt(track, playbackTick);
   return interpolateAngle(
     segment.from,
     segment.to,

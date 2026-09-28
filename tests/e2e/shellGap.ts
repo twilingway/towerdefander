@@ -141,8 +141,9 @@ export function foreignShellGaps(frames: readonly ProbedFrame[]): number[] {
  * little slow or a little fast; the spec bounds by how much.
  *
  * Windowed rather than frame to frame: a clock that advances in whole steps -
- * the device run draws its hull that way - moves a shell on one frame in three
- * of a 165 Hz panel, and a per-frame ratio would read that as a stopped shell.
+ * the device run drew its hull that way until `local-run-hull-smoothness` -
+ * moves a shell on one frame in three of a 165 Hz panel, and a per-frame ratio
+ * would read that as a stopped shell.
  */
 const WINDOW_MS = 50;
 
